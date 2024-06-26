@@ -1,0 +1,112 @@
+{
+  "touch_channels": [
+    0,
+    1
+  ],
+  "task_clusters": [],
+  "queue": [],
+  "reward_schedule": {
+    "schedules": [
+      [
+        0
+      ]
+    ],
+    "index": 0
+  },
+  "nodes": [
+    {
+      "name": "handengine",
+      "type": "HAND_ENGINE",
+      "Running": false,
+      "Address": "localhost:9000",
+      "View": false,
+      "Amplitude": 5.0,
+      "Duration (ms)": 16
+    },
+    {
+      "name": "HeartRate",
+      "type": "NIDAQ",
+      "Running": true,
+      "Sample Rate": 1000.0,
+      "Poll Interval": 16,
+      "Channel": "Dev1/ai1",
+      "View": false
+    },
+    {
+      "name": "storage",
+      "type": "STORAGE",
+      "Running": false,
+      "Sources": "HeartRate,handengine",
+      "Output File": "test.tha",
+      "View": false
+    },
+    {
+      "name": "runner",
+      "type": "RUNNER",
+      "Running": false,
+      "Targets": "HeartRate,handengine,storage"
+    }
+  ],
+  "eye_scaling": {
+    "I": {
+      "x": 1,
+      "y": 1
+    },
+    "II": {
+      "x": 1,
+      "y": 1
+    },
+    "III": {
+      "x": 1,
+      "y": 1
+    },
+    "IV": {
+      "x": 1,
+      "y": 1
+    }
+  },
+  "status": "",
+  "thalamus_view_geometry": [
+    1279,
+    0,
+    1278,
+    651
+  ],
+  "data_views": [
+    {
+      "view_geometry": [
+        1279,
+        689,
+        1278,
+        651
+      ],
+      "rows": 1,
+      "columns": 1,
+      "views": [
+        {
+          "row": 0,
+          "column": 0,
+          "selected_node": "HeartRate",
+          "selected_channel": "Dev1/ai1",
+          "view_type": "Time Series",
+          "draw_value": false,
+          "static_range": false,
+          "range_min": 0,
+          "range_max": 10
+        }
+      ]
+    }
+  ],
+  "node_widgets": [
+    {
+      "node": "runner",
+      "dock_area": "right",
+      "view_geometry": [
+        1114,
+        26,
+        164,
+        625
+      ]
+    }
+  ]
+}
