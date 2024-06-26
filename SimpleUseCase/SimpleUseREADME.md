@@ -10,14 +10,13 @@ Motion Capture Sensor: Connected using the HAND_ENGINE node.
 Heart Rate Monitor: Connected using the NIDAQ node. The monitor was plugged into an analog-in port on the NIDAQ.
 Thalamus was configured to integrate data from both sensors:
 
-Nodes Used:
+Nodes
 HAND_ENGINE: Captures data from the motion capture sensor.
 NIDAQ: Receives data from the heart rate monitor via NIDAQ. Configuration included specifying the local host address and port numbers for data streaming.
 STORAGE: Saves collected data to a designated file path.
 RUNNER: Synchronizes all nodes to ensure simultaneous data collection.
 
 Execution
-To execute this use case:
 1. Configure Thalamus nodes (HAND_ENGINE, NIDAQ, STORAGE, RUNNER) as described.
 2. Connect and ensure proper functioning of motion capture sensor and heart rate monitor.
 3. Start Thalamus to initiate data collection and synchronization.
