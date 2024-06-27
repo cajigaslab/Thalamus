@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+import "util.proto";
+
+package ophanim_grpc;
+
+// The greeting service definition.
+service Ophanim {
+  // Sends multiple greetings
+  rpc oculomatic (OculomaticRequest) returns (stream Gaze) {}
+  rpc images (ImagesRequest) returns (stream Image) {}
+  rpc play_all(util_grpc.Empty) returns (util_grpc.Empty) {}
+  rpc stop_all(util_grpc.Empty) returns (util_grpc.Empty) {}
+}
+
+message OculomaticRequest {
+}
+
+message ImagesRequest {
+  string topic = 1;
+}
+
+message Image {
+  enum Encoding {
+    NONE = 0;
+    PNG = 1;
+    JPEG = 2;
+  }
+  util_grpc.Header header = 1;
+  Encoding encoding = 2;
+  uint32 width = 3;
+  uint32 height = 4;
+  bytes data = 5;
+}
+
+message Gaze {
+  util_grpc.Header header = 1;
+  float x = 2;
+  float y = 3;
+  uint32 og_height = 4;
+  uint32 og_width = 5;
+  uint32 i = 6;
+  uint32 diameter = 7;
+}

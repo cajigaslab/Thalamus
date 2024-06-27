@@ -1,0 +1,2 @@
+echo b2 cxxflags=%1 linkflags=%2 --build-dir=%3 --with-atomic --with-chrono --with-thread --with-filesystem --with-date_time --with-system --with-program_options --with-log --with-container debug-symbols=on link=static cxxstd=20 %4
+b2 cxxflags=%1 linkflags=%2 toolset=clang --build-dir=%3 --with-atomic --with-chrono --with-thread --with-filesystem --with-date_time --with-system --with-program_options --with-log --with-container address-model=64 debug-symbols=on link=static cxxstd=20 %4

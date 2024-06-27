@@ -1,0 +1,2 @@
+echo COMMAND b2 cflags=/FS cxxflags=%1 linkflags=%2 --build-dir=%3 --with-filesystem --with-date_time --with-system --with-program_options --with-log --with-json --with-container debug-symbols=on debug-store=database runtime-link=static link=static cxxstd=20 %4
+b2 cflags=/FS cxxflags=%1 linkflags=%2 --build-dir=%3 --with-atomic --with-chrono --with-thread --with-filesystem --with-date_time --with-system --with-program_options --with-log --with-json --with-container address-model=64 debug-symbols=on debug-store=database runtime-link=static link=static cxxstd=20 %4

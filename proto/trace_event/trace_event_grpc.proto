@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+service TraceEvent {
+  rpc trace (stream TraceEventRequest) returns (TraceEventReply) {}
+}
+
+message TraceEventArg {
+  string key = 1;
+  enum Type {
+    DOUBLE = 0;
+    INT32 = 1;
+    UINT32 = 2;
+    INT64 = 3;
+    UINT64 = 4;
+    BOOL = 5;
+    STRING = 6;
+  }
+  Type type = 2;
+  double a_double = 3;
+  int32 a_int32 = 4;
+  uint32 a_uint32 = 5;
+  int64 a_int64 = 6;
+  uint64 a_uint64 = 7;
+  bool a_bool = 8;
+  string a_string = 9;
+}
+
+message TraceEventRequest {
+  string name = 1;
+  string cat = 2;
+  string ph = 3;
+  double ts = 4;
+  uint32 pid = 5;
+  uint32 tid = 6;
+  uint32 id = 7;
+  repeated TraceEventArg args = 8;
+}
+
+message TraceEventReply {
+}
