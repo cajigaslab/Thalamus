@@ -1,0 +1,8 @@
+file(GLOB ARCHIVES "${FILES}")
+message("FILES ${FILES} ${ARCHIVES}")
+foreach(archive ${ARCHIVES})
+  get_filename_component(new_archive_name "${archive}" NAME_WE)
+  get_filename_component(new_archive_dir "${archive}" DIRECTORY)
+  message("${archive} ${new_archive_dir}/${new_archive_name}.lib")
+  file(COPY_FILE "${archive}" "${new_archive_dir}/${new_archive_name}.lib")
+endforeach()
