@@ -18,6 +18,7 @@ from .util import (
   assert_behav_result_has
 )
 from .. import task_controller_pb2
+from ..config import ObservableCollection
 
 LOGGER = logging.getLogger(__name__)
 

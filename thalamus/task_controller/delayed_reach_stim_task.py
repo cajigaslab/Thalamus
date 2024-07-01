@@ -23,6 +23,7 @@ from . import task_context
 from .widgets import Form, ListAsTabsWidget
 from .util import wait_for, wait_for_hold, RenderOutput, animate, create_task_with_exc_handling
 from .. import task_controller_pb2
+from ..config import ObservableCollection
 
 LOGGER = logging.getLogger(__name__)
 

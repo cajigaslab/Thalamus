@@ -3,7 +3,7 @@
 #include <fstream>
 #include <string>
 #include <chrono>
-#include <bmbi_config.h>
+#include <thalamus_config.h>
 #include <thalamus.pb.h>
 #include <optional>
 #ifdef _WIN32

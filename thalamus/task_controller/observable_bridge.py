@@ -7,8 +7,8 @@ import asyncio
 from ..qt import *
 from ..config import ObservableCollection, ObservableDict, ObservableList
 from .. import util_pb2
-from . import thalamus_pb2
-from . import thalamus_pb2_grpc
+from .. import thalamus_pb2
+from .. import thalamus_pb2_grpc
 from ..util import IterableQueue
 from .util import create_task_with_exc_handling
 

@@ -126,11 +126,11 @@ include_directories(${CMAKE_BINARY_DIR})
 
 if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
   set_target_properties(boost PROPERTIES VS_GLOBAL_IntDir "boost_intermediate/x64/$(Configuration)/")
-  set_target_properties(yaml PROPERTIES VS_GLOBAL_IntDir "yaml_intermediate/x64/$(Configuration)/")
+  #set_target_properties(yaml PROPERTIES VS_GLOBAL_IntDir "yaml_intermediate/x64/$(Configuration)/")
   #set_target_properties(qt PROPERTIES VS_GLOBAL_IntDir "qt_intermediate/x64/$(Configuration)/")
   set_target_properties(opencv PROPERTIES VS_GLOBAL_IntDir "opencv_intermediate/x64/$(Configuration)/")
   set_target_properties(zlib_processed PROPERTIES VS_GLOBAL_IntDir "zlib_processed_intermediate/x64/$(Configuration)/")
-  set_target_properties(prometheus PROPERTIES VS_GLOBAL_IntDir "prometheus_intermediate/x64/$(Configuration)/")
+  #set_target_properties(prometheus PROPERTIES VS_GLOBAL_IntDir "prometheus_intermediate/x64/$(Configuration)/")
   set_target_properties(ffmpeg PROPERTIES VS_GLOBAL_IntDir "ffmpeg_intermediate/x64/$(Configuration)/")
 endif()
 
@@ -189,19 +189,15 @@ target_link_libraries(hydrate boost protoc_generated grpc++ hdf5-static)
 target_compile_definitions(hydrate PRIVATE _USE_MATH_DEFINES NOMINMAX WIN32_LEAN_AND_MEAN)
 target_include_directories(hydrate PRIVATE "${CMAKE_SOURCE_DIR}/src")
   
-add_library(thalamus "${CMAKE_SOURCE_DIR}/src/main.cpp"
+add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/node_graph_impl.h"
                      "${CMAKE_SOURCE_DIR}/src/node_graph_impl.cpp"
                      "${CMAKE_SOURCE_DIR}/src/state.h"
                      "${CMAKE_SOURCE_DIR}/src/state.cpp"
                      "${CMAKE_SOURCE_DIR}/src/base_node.h"
                      "${CMAKE_SOURCE_DIR}/src/base_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/input_node.h"
-                     "${CMAKE_SOURCE_DIR}/src/input_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/alpha_omega_node.h"
                      "${CMAKE_SOURCE_DIR}/src/alpha_omega_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/intan_node.h"
-                     "${CMAKE_SOURCE_DIR}/src/task_node.h"
                      "${CMAKE_SOURCE_DIR}/src/grpc_impl.h"
                      "${CMAKE_SOURCE_DIR}/src/grpc_impl.cpp"
                      "${CMAKE_SOURCE_DIR}/src/util.h"
@@ -263,27 +259,27 @@ endif()
 
 target_compile_definitions(thalamus PRIVATE _USE_MATH_DEFINES)
 target_include_directories(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(thalamus opencv hdf5-static zlib_processed lua
+target_link_libraries(thalamus opencv hdf5-static zlib_processed lua kfr
   tracing webrtc boost protoc_generated grpc++ grpc++_reflection absl::str_format_internal absl::strings absl::str_format ffmpeg)
 
-add_library(bmbi_native_lib SHARED thalamus/plugin.cpp)
-target_include_directories(bmbi_native_lib PRIVATE "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(bmbi_native_lib 
+add_library(native_lib SHARED src/plugin.cpp)
+target_include_directories(native_lib PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(native_lib 
   thalamus 
   hydrate
   tracing webrtc ffmpeg sdl protoc_generated kfr lua)
 
 if(WIN32)
-  target_compile_definitions(bmbi_native_lib PRIVATE _WIN32_WINNT=0x0A00)
+  target_compile_definitions(native_lib PRIVATE _WIN32_WINNT=0x0A00)
 endif()
 
-add_executable(bmbi_native src/main.cpp)
+add_executable(native src/main.cpp)
 
 if(ENABLE_SWIG)
-  add_custom_command(TARGET bmbi_native POST_BUILD COMMAND cmake -E copy "$<TARGET_FILE:bmbi_native>" "${FINAL_DIRECTORY}" 
-                                                        && cmake -E copy "$<TARGET_FILE:bmbi_native>" "${CMAKE_SOURCE_DIR}/bmbi")
+  add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "$<TARGET_FILE:native>" "${FINAL_DIRECTORY}" 
+                                                        && cmake -E copy "$<TARGET_FILE:native>" "${CMAKE_SOURCE_DIR}/thalamus")
 else()
-  add_custom_command(TARGET bmbi_native POST_BUILD COMMAND cmake -E copy "$<TARGET_FILE:bmbi_native>" "${CMAKE_SOURCE_DIR}/bmbi")
-  add_custom_command(TARGET bmbi_native_lib POST_BUILD COMMAND cmake -E copy "$<TARGET_FILE:bmbi_native_lib>" "${CMAKE_SOURCE_DIR}/bmbi")
+  add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "$<TARGET_FILE:native>" "${CMAKE_SOURCE_DIR}/thalamus")
+  add_custom_command(TARGET native_lib POST_BUILD COMMAND cmake -E copy "$<TARGET_FILE:native_lib>" "${CMAKE_SOURCE_DIR}/thalamus")
 endif()
 

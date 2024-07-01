@@ -83,7 +83,7 @@ async def async_main() -> None:
     if 'Running' in node:
       node['Running'] = False
   
-  bmbi_native_filename = resource_filename('thalamus', 'bmbi_native' + ('.exe' if sys.platform == 'win32' else ''))
+  bmbi_native_filename = resource_filename('thalamus', 'native' + ('.exe' if sys.platform == 'win32' else ''))
   bmbi_native_proc = None
   bmbi_native_proc = await asyncio.create_subprocess_exec(
         bmbi_native_filename, 'thalamus', '--port', str(arguments.port), '--slave', *(['--trace'] if arguments.trace else []))

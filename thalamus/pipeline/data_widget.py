@@ -12,7 +12,7 @@ from ..config import *
 
 from ..util import open_preferred_app
 from ..util import MeteredUpdater
-from . import thalamus_pb2
+from .. import thalamus_pb2
 
 from ..qt import *
 
