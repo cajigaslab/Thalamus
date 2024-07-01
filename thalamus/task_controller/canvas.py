@@ -36,8 +36,8 @@ from .util import CanvasPainterProtocol, RenderOutput, voidptr, TaskContextProto
 from .. import util_pb2
 from .. import ophanim_pb2
 from .. import ophanim_pb2_grpc
-from . import recorder2_pb2
-from . import recorder2_pb2_grpc
+#from .. import recorder2_pb2
+#from .. import recorder2_pb2_grpc
 
 LOGGER = logging.getLogger(__name__)
 
@@ -451,7 +451,7 @@ class Canvas(PyQt5.QtWidgets.QOpenGLWidget):
   The QWidget the task will render on and that will generate mouse events on touch input
   """
   def __init__(self, config: ObservableCollection,
-               recorder: recorder2_pb2_grpc.RecorderStub,
+               recorder: typing.Any,
                ophanim: ophanim_pb2_grpc.OphanimStub,
                port: typing.Optional[int] = None,
                mock_sleep: typing.Optional[typing.Callable[[float], 'asyncio.Future[None]']] = None) -> None:
@@ -792,7 +792,7 @@ class Canvas(PyQt5.QtWidgets.QOpenGLWidget):
     #if self.websockets:
     #  await asyncio.wait([w.drain() for w in self.websockets])
 
-  async def on_ros_touch(self, messages: typing.AsyncIterable[recorder2_pb2.NIDAQAIChunk]) -> None:
+  async def on_ros_touch(self, messages: typing.Any) -> None:
     """
     Translates touch events into mouse input
     """

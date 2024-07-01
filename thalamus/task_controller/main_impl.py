@@ -14,9 +14,9 @@ import yaml
 
 import PyQt5.QtWidgets
 
-from . import task_context
+from . import task_context as task_context_module
 from . import tasks
-from . import window
+from . import window as task_window
 from ..config import *
 
 from pkg_resources import resource_string, resource_filename
@@ -29,7 +29,7 @@ from .. import ophanim_pb2_grpc
 from .. import thalamus_pb2_grpc
 from .servicer import TaskControllerServicer
 from .observable_bridge import ObservableBridge
-from ..thalamus_window import ThalamusWindow
+from ..pipeline.thalamus_window import ThalamusWindow
 
 UNHANDLED_EXCEPTION: typing.List[Exception] = []
 
@@ -99,7 +99,7 @@ async def async_main() -> None:
     if 'Running' in node:
       node['Running'] = False
   
-  bmbi_native_filename = resource_filename('bmbi', 'bmbi_native' + ('.exe' if sys.platform == 'win32' else ''))
+  bmbi_native_filename = resource_filename('thalamus', 'native' + ('.exe' if sys.platform == 'win32' else ''))
   bmbi_native_proc = None
   bmbi_native_proc = await asyncio.create_subprocess_exec(
         bmbi_native_filename, 'thalamus', '--slave', *(['--trace'] if arguments.trace else []))
@@ -147,7 +147,7 @@ async def async_main() -> None:
     else:
       recorder_stub = None
 
-    window = window.Window(config, done_future, recorder_stub, ophanim_stub, arguments.port)
+    window = task_window.Window(config, done_future, recorder_stub, ophanim_stub, arguments.port)
     #node.create_timer(1/60, PyQt5.QtWidgets.QApplication.processEvents)
 
     window.resize(1024, 768)
@@ -158,7 +158,7 @@ async def async_main() -> None:
     window.setWindowTitle('Touch Task')
     window.show()
 
-  task_context = task_context.TaskContext(config,
+  task_context = task_context_module.TaskContext(config,
                                           window.get_canvas() if window else None,
                                           tasks.DESCRIPTIONS_MAP, servicer)
   servicer.task_context = task_context

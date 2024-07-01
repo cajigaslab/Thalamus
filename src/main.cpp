@@ -5,7 +5,7 @@
 #include <iostream>
 #include <functional>
 #include <filesystem>
-#include <bmbi_config.h>
+#include <thalamus_config.h>
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -14,7 +14,7 @@
 #endif
 
 const auto HELP = 
-"Native bmbi program, version " GIT_COMMIT_HASH "\n"
+"Thalamus native program, version " GIT_COMMIT_HASH "\n"
 "  thalamus         Signal tool\n"
 "  hydrate          Thalamus capture parsing\n";
 
@@ -59,7 +59,7 @@ int main(int argc, char * argv[]) {
     }
   } while(count == path.size());
   path.resize(count);
-  path = (std::filesystem::path(path).parent_path() /  "bmbi_native_lib.dll").string();
+  path = (std::filesystem::path(path).parent_path() /  "native_lib.dll").string();
   std::cout << "Loading " << path << std::endl;
   library_handle = LoadLibrary(path.c_str());
 #else
@@ -74,7 +74,7 @@ int main(int argc, char * argv[]) {
     }
   } while(count == path.size());
   path.resize(count);
-  path = (std::filesystem::path(path).parent_path() /  "libbmbi_native_lib.so").string();
+  path = (std::filesystem::path(path).parent_path() /  "libnative_lib.so").string();
   std::cout << "Loading " << path << std::endl;
 	library_handle = dlopen(path.c_str(), RTLD_NOW);
 #endif

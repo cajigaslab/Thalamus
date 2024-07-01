@@ -8,7 +8,7 @@
 #ifdef _WIN32
 #include <timeapi.h>
 #endif
-#include <bmbi_config.h>
+#include <thalamus_config.h>
 #include <fstream>
 #include <chrono>
 #include <absl/strings/str_format.h>

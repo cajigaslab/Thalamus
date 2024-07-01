@@ -21,7 +21,8 @@ from PyQt5.QtMultimedia import QSound
 from . import task_context
 from .widgets import Form, ListAsTabsWidget
 from .util import wait_for, wait_for_hold, RenderOutput, animate
-from bmbi import task_controller_pb2
+from .. import task_controller_pb2
+from ..config import ObservableCollection
 
 LOGGER = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ class TargetWidget(PyQt5.QtWidgets.QWidget):
   '''
   Widget for managing a target config
   '''
-  def __init__(self, config: bmbi.config.ObservableCollection) -> None:
+  def __init__(self, config: ObservableCollection) -> None:
     super().__init__()
     if 'name' not in config:
       config['name'] = 'Untitled'
@@ -101,7 +102,7 @@ class TargetWidget(PyQt5.QtWidgets.QWidget):
     )
     layout.addWidget(random_form, 1, 3, 1, 2)
 
-def create_widget(task_config: bmbi.config.ObservableCollection) -> PyQt5.QtWidgets.QWidget:
+def create_widget(task_config: ObservableCollection) -> PyQt5.QtWidgets.QWidget:
   """
   Creates a widget for configuring the context dependent reach task
   """

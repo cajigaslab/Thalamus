@@ -31,8 +31,8 @@ from .channel_viewer import ChannelViewerWidget
 from .xsens_widget import XsensEditorWidget
 from .lua_widget import LuaWidget
 from ..util import NodeSelector
-from . import thalamus_pb2
-from . import thalamus_pb2_grpc
+from .. import thalamus_pb2
+from .. import thalamus_pb2_grpc
 from .data_widget import DataWidget
 import OpenGL.GL
 

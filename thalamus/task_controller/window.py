@@ -12,7 +12,7 @@ import PyQt5.QtCore
 
 from .canvas import Canvas
 from ..config import ObservableCollection
-from .. import recorder2_pb2_grpc
+#from .. import recorder2_pb2_grpc
 from .. import ophanim_pb2_grpc
 from .util import TaskContextProtocol
 
@@ -46,7 +46,7 @@ class Window(PyQt5.QtWidgets.QMainWindow):
   The window that the task will render in
   """
   def __init__(self, config: ObservableCollection, done_future: asyncio.Future,
-               recorder: recorder2_pb2_grpc.RecorderStub,
+               recorder: typing.Any,#recorder2_pb2_grpc.RecorderStub,
                ophanim: ophanim_pb2_grpc.OphanimStub,
                port: typing.Optional[int] = None) -> None:
     super().__init__()

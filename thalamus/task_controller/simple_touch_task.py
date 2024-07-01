@@ -23,6 +23,8 @@ from . import task_context
 from .widgets import Form, ListAsTabsWidget
 from .util import wait_for, wait_for_hold, RenderOutput, animate
 from .. import task_controller_pb2
+from .. import config
+from . import task_context
 
 LOGGER = logging.getLogger(__name__)
 
@@ -43,7 +45,7 @@ class TargetWidget(PyQt5.QtWidgets.QWidget):
   '''
   Widget for managing a target config
   '''
-  def __init__(self, config: bmbi.config.ObservableCollection) -> None:
+  def __init__(self, config: config.ObservableCollection) -> None:
     super().__init__()
     if 'name' not in config:
       config['name'] = 'Untitled'
@@ -97,7 +99,7 @@ class TargetWidget(PyQt5.QtWidgets.QWidget):
     )
     layout.addWidget(random_form, 1, 3, 1, 2)
 
-def create_widget(task_config: bmbi.config.ObservableCollection) -> PyQt5.QtWidgets.QWidget:
+def create_widget(task_config: config.ObservableCollection) -> PyQt5.QtWidgets.QWidget:
   """
   Creates a widget for configuring the simple task
   """
@@ -191,7 +193,7 @@ async def stamp_msg(context, msg):
   return msg
 
 @animate(30)
-async def run(context: bmbi.task_controller.task_context.TaskContextProtocol) -> bmbi.task_controller.task_context.TaskResult: #pylint: disable=too-many-statements
+async def run(context: task_context.TaskContextProtocol) -> task_context.TaskResult: #pylint: disable=too-many-statements
   """
   Implementation of the state machine for the simple task
   """
@@ -391,7 +393,7 @@ async def run(context: bmbi.task_controller.task_context.TaskContextProtocol) ->
   if not success:
     await fail_trial()
     await context.sleep(config.fail_timeout)
-    return bmbi.task_controller.task_context.TaskResult(False)
+    return task_context.TaskResult(False)
 
   """
   The trial's outcome (success or failure) at this point is decided, and now
@@ -421,5 +423,5 @@ async def run(context: bmbi.task_controller.task_context.TaskContextProtocol) ->
   
 
   context.behav_result = behav_result
-  return bmbi.task_controller.task_context.TaskResult(True)
+  return task_context.TaskResult(True)
     
