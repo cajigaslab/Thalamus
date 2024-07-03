@@ -10,10 +10,6 @@
 namespace thalamus {
   using namespace std::chrono_literals;
 
-  static const double AOUT_MIN = -10;
-  static const double AOUT_MAX = 10;
-  static const double AOUT_RANGE = AOUT_MAX - AOUT_MIN;
-
   void ThreadPool::thread_target(std::string thread_name) {
     tracing::SetCurrentThreadName(thread_name);
     while(true) {
@@ -61,15 +57,15 @@ namespace thalamus {
     std::chrono::steady_clock::time_point last_time;
     std::chrono::steady_clock::time_point _start_time;
     thalamus::vector<double> buffer;
-    boost::asio::steady_timer timer;
 
     ThreadPool& pool;
+    boost::asio::steady_timer timer;
     AnalogNodeImpl analog_impl;
 
     Impl(ObservableDictPtr state, boost::asio::io_context& io_context, ThreadPoolNode* outer, NodeGraph* graph)
-      : state(state)
+      : io_context(io_context)
+      , state(state)
       , outer(outer)
-      , io_context(io_context)
       , graph(graph)
       , pool(graph->get_thread_pool())
       , timer(io_context) {
@@ -119,7 +115,7 @@ namespace thalamus {
       timer.async_wait(std::bind(&Impl::on_timer, this, _1));
     }
 
-    void on_change(ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
+    void on_change(ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value&) {
       auto key_str = std::get<std::string>(k);
     }
   };

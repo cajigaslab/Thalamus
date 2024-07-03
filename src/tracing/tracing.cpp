@@ -274,7 +274,7 @@ namespace tracing
     std::wstring wname(name.begin(), name.end());
     SetThreadDescription(GetCurrentThread(), wname.c_str());
 #else
-    prctl(PR_SET_NAME,thread_name.c_str(),0,0,0);
+    prctl(PR_SET_NAME,name.c_str(),0,0,0);
 #endif
   }
 

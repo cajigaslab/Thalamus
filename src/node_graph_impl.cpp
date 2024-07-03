@@ -260,7 +260,7 @@ namespace thalamus {
       auto connection = new boost::signals2::scoped_connection(impl->signals.back().second.connect(callback));
       return NodeConnection(connection, [this] (boost::signals2::scoped_connection* c) {
         delete c;
-        impl->notify([] (auto& arg) { return false; },
+        impl->notify([] (auto&) { return false; },
                      std::weak_ptr<Node>());
       });
     }

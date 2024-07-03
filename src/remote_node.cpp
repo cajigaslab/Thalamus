@@ -187,7 +187,7 @@ struct RemoteNode::Impl {
             condition.wait(lock, [&] { return ready; });
             ready = false;
 
-            boost::asio::post(io_context, [this, now, ping_time, ping_interval] {
+            boost::asio::post(io_context, [this, now, ping_time] {
               std::lock_guard<std::mutex> lock(mutex);
 
               this->time = now.time_since_epoch();
@@ -214,7 +214,7 @@ struct RemoteNode::Impl {
             ready = false;
 
             auto channels_changed = false;
-            if(names.size() != analog_response.spans_size()+2) {
+            if(names.size() != static_cast<size_t>(analog_response.spans_size())+2) {
               channels_changed = true;
             }
 
@@ -297,7 +297,7 @@ struct RemoteNode::Impl {
     } else if (key_str == "Node") {
       remote_node_name = std::get<std::string>(v);
     } else if (key_str == "Probe Frequency") {
-      ping_interval = std::chrono::milliseconds(std::max(size_t(1000/std::get<double>(v)), 1ull));
+      ping_interval = std::chrono::milliseconds(std::max(size_t(1000/std::get<double>(v)), size_t(1)));
     } else if (key_str == "Probe Size") {
       probe_size = std::get<long long>(v);
     } else if (key_str == "Running") {
@@ -343,7 +343,7 @@ std::string_view RemoteNode::name(int channel) const {
 std::chrono::nanoseconds RemoteNode::time() const {
   return impl->time;
 }
-void RemoteNode::inject(const thalamus::vector<std::span<double const>>& data, const thalamus::vector<std::chrono::nanoseconds>& sample_intervals, const thalamus::vector<std::string_view>& names) {
+void RemoteNode::inject(const thalamus::vector<std::span<double const>>&, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&) {
   THALAMUS_ASSERT(false, "RemoteNode::inject unimplemented.");
 }
 
@@ -357,7 +357,7 @@ std::span<MotionCaptureNode::Segment const> RemoteNode::segments() const {
 const std::string& RemoteNode::pose_name() const {
   return impl->pose_name;
 }
-void RemoteNode::inject(const std::span<Segment const>& segments) {
+void RemoteNode::inject(const std::span<Segment const>&) {
   THALAMUS_ASSERT(false, "RemoteNode::inject unimplemented.");
 }
 bool RemoteNode::has_motion_data() const {

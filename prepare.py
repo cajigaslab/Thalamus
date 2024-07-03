@@ -209,9 +209,7 @@ def main():
                           
     _, clang_is_current = is_up_to_date('clang++', r'clang version (\d+).(\d+).(\d+)', (10, 0, 0))
     if not clang_is_current:
-      subprocess.check_call(['sudo', 'apt', 'install', '-y', 'clang-10'])
-      subprocess.check_call(['sudo', 'update-alternatives', '--install', '/usr/bin/clang', 'clang', '/usr/bin/clang-10', '10'])
-      subprocess.check_call(['sudo', 'update-alternatives', '--install', '/usr/bin/clang++', 'clang++', '/usr/bin/clang++-10', '10'])
+      subprocess.check_call(['sudo', 'apt', 'install', '-y', 'clang'])
     clang_version, _ = is_up_to_date('clang++', r'clang version (\d+).(\d+).(\d+)', (10, 0, 0))
     subprocess.check_call(['sudo', 'apt', 'install', '-y', f'libclang-{clang_version[0]}-dev', ])
 
@@ -233,7 +231,6 @@ def main():
       with open(str(home_path / '.bashrc'), 'a') as bashrc:
         bashrc.write(f'\nsource ~/.thalamusrc\n')
         
-    loop = asyncio.get_event_loop()
   if reboot_required:
     print("""
   _____      _                 _          

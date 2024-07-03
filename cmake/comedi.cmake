@@ -19,8 +19,8 @@ add_custom_command(OUTPUT "${comedi_BINARY_DIR}/$<CONFIG>/Makefile"
                    COMMAND 
                    cmake -E env 
                       "CC=${CMAKE_C_COMPILER}"
-                      "CFLAGS=${ALL_COMPILE_OPTIONS_SPACED}"
-                      "LDFLAGS=${ALL_LINK_OPTIONS_SPACED}"
+		      "CFLAGS=${ALL_C_COMPILE_OPTIONS_SPACED}"
+		      "LDFLAGS=${ALL_C_LINK_OPTIONS_SPACED}"
                       "${comedi_SOURCE_DIR}/configure"
                       "--prefix=${comedi_BINARY_DIR}/$<CONFIG>/install"
                       --enable-shared=no --enable-static=yes
