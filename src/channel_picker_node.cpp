@@ -29,9 +29,9 @@ namespace thalamus {
     ObservableListPtr channels;
     NodeGraph* graph;
     std::vector<std::weak_ptr<AnalogNode>> sources;
-    unsigned long long _max_channels = std::numeric_limits<unsigned long long>::max();
+    size_t _max_channels = std::numeric_limits<size_t>::max();
   public:
-    Impl(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph, ChannelPickerNode* outer)
+    Impl(ObservableDictPtr state, boost::asio::io_context&, NodeGraph* graph, ChannelPickerNode* outer)
       : state(state)
       , outer(outer)
       , graph(graph) {
@@ -45,10 +45,10 @@ namespace thalamus {
     std::set<AnalogNode*> names_collected;
     AnalogNode* current_node;
 
-    void on_source_mapping_change(std::weak_ptr<AnalogNode> node, long long in_channel, ObservableDictPtr mapping_dict, ObservableCollection::Action a, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
+    void on_source_mapping_change(std::weak_ptr<AnalogNode> node, long long in_channel, ObservableDictPtr mapping_dict, ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
       auto k_str = std::get<std::string>(k);
       if(k_str == "Out Channel") {
-        auto v_int = std::get<long long>(v);
+        size_t v_int = std::get<long long>(v);
         if(mappings.size() < v_int+1) {
           mappings.resize(v_int+1);
         }
@@ -63,7 +63,7 @@ namespace thalamus {
         if (!mapping_dict->contains("Out Channel")) {
           return;
         }
-        long long out_channel = mapping_dict->at("Out Channel");
+        size_t out_channel = mapping_dict->at("Out Channel");
         if (mappings.size() < out_channel + 1) {
           mappings.resize(out_channel + 1);
         }
@@ -84,7 +84,7 @@ namespace thalamus {
       }
     }
 
-    void on_sources_change(ObservableDictPtr sources_dict, ObservableCollection::Action a, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
+    void on_sources_change(ObservableCollection::Action a, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
       auto node_name = std::get<std::string>(k);
       if(a == ObservableCollection::Action::Set) {
         auto v_list = std::get<ObservableListPtr>(v);
@@ -99,12 +99,12 @@ namespace thalamus {
           source_mapping_connections[node_name] = v_list->changed.connect(std::bind(&Impl::on_source_mappings_change, this, weak_analog, _1, _2, _3));
           v_list->recap(std::bind(&Impl::on_source_mappings_change, this, weak_analog, _1, _2, _3));
 
-          sources_connections[node_name].first = analog_node->channels_changed.connect([&,weak_analog](auto n) {
+          sources_connections[node_name].first = analog_node->channels_changed.connect([&,weak_analog](auto) {
               auto locked = weak_analog.lock().get();
               names_collected.erase(locked);
               outer->channels_changed(outer);
           });
-          sources_connections[node_name].second = locked_source->ready.connect([&,node_name,v_list,weak_analog](auto n) {
+          sources_connections[node_name].second = locked_source->ready.connect([&,node_name,v_list,weak_analog](auto) {
             current_node = weak_analog.lock().get();
             if(!current_node->has_analog_data()) {
               return;
@@ -115,7 +115,7 @@ namespace thalamus {
                   auto channel_name_view = current_node->name(i);
                   std::string channel_name(channel_name_view.data(), channel_name_view.size());
                   auto sample_interval = current_node->sample_interval(i);
-                  if(i >= v_list->size()) {
+                  if(static_cast<size_t>(i) >= v_list->size()) {
                     auto new_row = std::make_shared<ObservableDict>();
                     (*new_row)["Name"].assign(channel_name);
                     (*new_row)["Out Channel"].assign(static_cast<long long>(mappings.size()));
@@ -152,8 +152,8 @@ namespace thalamus {
         auto sources_dict = std::get<ObservableDictPtr>(v);
         sources_connections.clear();
         sources.clear();
-        sources_state_connection = sources_dict->changed.connect(std::bind(&Impl::on_sources_change, this, sources_dict, _1, _2, _3));
-        sources_dict->recap(std::bind(&Impl::on_sources_change, this, sources_dict, _1, _2, _3));
+        sources_state_connection = sources_dict->changed.connect(std::bind(&Impl::on_sources_change, this, _1, _2, _3));
+        sources_dict->recap(std::bind(&Impl::on_sources_change, this, _1, _2, _3));
       } else if (key_str == "Max Channels") {
         _max_channels = std::get<long long>(v);
       }
@@ -205,7 +205,7 @@ namespace thalamus {
     return std::get<std::chrono::nanoseconds>(pair);
   }
 
-  void ChannelPickerNode::inject(const thalamus::vector<std::span<double const>>& spans, const thalamus::vector<std::chrono::nanoseconds>& sample_intervals, const thalamus::vector<std::string_view>& names) {
+  void ChannelPickerNode::inject(const thalamus::vector<std::span<double const>>&, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&) {
     THALAMUS_ASSERT(false);
   }
    

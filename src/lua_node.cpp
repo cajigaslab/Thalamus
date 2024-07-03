@@ -89,7 +89,7 @@ namespace thalamus {
         return 1;
       }
       auto channel_sample_interval = source->sample_interval(channel);
-      auto index = current->sample_index*current->sample_interval.count()/channel_sample_interval.count();
+      size_t index = current->sample_index*current->sample_interval.count()/channel_sample_interval.count();
       index = std::min(index, span.size()-1);
       lua_pushnumber(L, span[index]);
       return 1;
@@ -189,13 +189,13 @@ namespace thalamus {
           if(!source) {
             return;
           }
-          channels_connection = source->channels_changed.connect([&] (auto n) {
+          channels_connection = source->channels_changed.connect([&] (auto) {
             channels_changed = true;
             outer->channels_changed(outer);
           });
           channels_changed = true;
           outer->channels_changed(outer);
-          source_connection = locked->ready.connect([&] (auto n) {
+          source_connection = locked->ready.connect([&] (auto) {
             if(!source->has_analog_data()) {
               return;
             }
@@ -215,17 +215,17 @@ namespace thalamus {
               if(equation_list) {
                 auto num_equations = equation_list->size();
                 if (num_equations) {
-                  for (auto i = num_equations - 1; i >= num_channels; --i) {
+                  for (int i = num_equations - 1; i >= num_channels; --i) {
                     equation_list->erase(i);
                     --num_equations;
                   }
                 }
-                for(auto i = 0;i < num_equations;++i) {
+                for(size_t i = 0;i < num_equations;++i) {
                   auto name = source->name(i);
                   ObservableDictPtr dict = equation_list->at(i);
                   (*dict)["Name"].assign(std::string(name.begin(), name.end()));
                 }
-                for(auto i = num_equations;i < num_channels;++i) {
+                for(int i = num_equations;i < num_channels;++i) {
                   auto name = source->name(i);
                   auto dict = std::make_shared<ObservableDict>();
                   (*dict)["Equation"].assign("");
@@ -262,7 +262,7 @@ namespace thalamus {
                   lua_pop(L, 1);
                 }
               } else {
-                for(auto j = 0;j < transformed.size();++j) {
+                for(size_t j = 0;j < transformed.size();++j) {
                   sample_index = j;
                   auto& from = transformed.at(j);
                   last_data[i] = from;
@@ -317,7 +317,7 @@ namespace thalamus {
   }
 
   std::span<const double> LuaNode::data(int channel) const {
-    if(channel < impl->data.size()) {
+    if(static_cast<size_t>(channel) < impl->data.size()) {
       auto& data = impl->data.at(channel);
       return std::span<const double>(data.begin(), data.end());
     } else {
@@ -330,7 +330,7 @@ namespace thalamus {
   }
 
   std::string_view LuaNode::name(int channel) const {
-    if(channel < impl->channel_names.size()) {
+    if(size_t(channel) < impl->channel_names.size()) {
       return impl->channel_names.at(channel);
     } else {
       return "";
@@ -345,7 +345,7 @@ namespace thalamus {
     return impl->sample_intervals.at(channel);
   }
 
-  void LuaNode::inject(const thalamus::vector<std::span<double const>>& spans, const thalamus::vector<std::chrono::nanoseconds>& sample_intervals, const thalamus::vector<std::string_view>&) {
+  void LuaNode::inject(const thalamus::vector<std::span<double const>>&, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&) {
     THALAMUS_ASSERT(false);
   }
    

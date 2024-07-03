@@ -11,10 +11,6 @@
 namespace thalamus {
   using namespace std::chrono_literals;
 
-  static const double AOUT_MIN = -10;
-  static const double AOUT_MAX = 10;
-  static const double AOUT_RANGE = AOUT_MAX - AOUT_MIN;
-
   struct DistortionNode::Impl {
     std::shared_ptr<ThreadPool> pool_ref;
     boost::asio::io_context& io_context;
@@ -59,11 +55,11 @@ namespace thalamus {
     std::set<cv::Mat*> mat_pool;
 
     struct Result {
-      cv::Mat image;
-      std::chrono::nanoseconds interval;
-      bool has_image;
-      bool has_analog;
-      double latency;
+      cv::Mat image = cv::Mat();
+      std::chrono::nanoseconds interval = 0ns;
+      bool has_image = false;
+      bool has_analog = false;
+      double latency = 0;
     };
     std::map<size_t, Result> output_frames;
     Result current_result;
@@ -75,11 +71,10 @@ namespace thalamus {
     bool busy = false;
 
     Impl(ObservableDictPtr state, boost::asio::io_context& io_context, DistortionNode* outer, NodeGraph* graph)
-      : state(state)
+      : io_context(io_context)
+      , state(state)
       , outer(outer)
-      , io_context(io_context)
       , graph(graph)
-      , current_result(Result{cv::Mat(), 0ns})
       , pool(graph->get_thread_pool()) {
       using namespace std::placeholders;
 
@@ -98,7 +93,7 @@ namespace thalamus {
     }
 
     void on_data(Node*) {
-      if(image_source->format() != ImageNode::Format::Gray || pool.full() || busy && collecting) {
+      if(image_source->format() != ImageNode::Format::Gray || pool.full() || (busy && collecting)) {
         return;
       }
 
@@ -115,9 +110,7 @@ namespace thalamus {
       //auto out = *mat_pool.begin();
       //mat_pool.erase(out);
 
-      pool.push([width=source_width,
-                  height=source_height,
-                  frame_id=next_input_frame++,
+      pool.push([frame_id=next_input_frame++,
                   &busy=this->busy,
                   //out,
                   state=this->state,
@@ -136,10 +129,7 @@ namespace thalamus {
                   //&mat_pool=this->mat_pool,
                   &output_frames=this->output_frames,
                   &next_output_frame=this->next_output_frame,
-                  &ready=outer->ready,
                   &io_context=io_context,
-                  x_gain=this->x_gain,
-                  y_gain=this->y_gain,
                   threshold=this->threshold,
                   in=std::move(in),
                   outer=outer->shared_from_this()] {
@@ -205,7 +195,6 @@ namespace thalamus {
         boost::asio::post(io_context, [undistorted, elapsed,
                                        //&mat_pool,
                                        &busy,
-                                       collecting,
                                        frame_id,
                                        &output_frames,
                                        &next_output_frame,
@@ -252,10 +241,10 @@ namespace thalamus {
                       width=this->source_width,
                       height=this->source_height] {
             std::vector<std::vector<cv::Point3f>> object_points;
-            for(const auto& comp : local_computations) {
+            for(const auto& _ : local_computations) {
               object_points.emplace_back();
-              for(auto y = 0;y < rows;++y) {
-                for(auto x = 0;x < columns;++x) {
+              for(size_t y = 0;y < rows;++y) {
+                for(size_t x = 0;x < columns;++x) {
                   object_points.back().emplace_back(static_cast<float>(x), static_cast<float>(y), 0.0f);
                 }
               }
@@ -265,10 +254,7 @@ namespace thalamus {
             std::vector<double> distortion_coefficients;
             cv::calibrateCamera(object_points, local_computations, cv::Size(width, height),
                                 camera_matrix, distortion_coefficients,
-                                rvecs, tvecs, 0, cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 30, DBL_EPSILON),
-                                [] (const std::string& log) {
-                                  THALAMUS_LOG(info) << "Calibration Status: " << log;
-                                });
+                                rvecs, tvecs, 0, cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 30, DBL_EPSILON));
             THALAMUS_LOG(info) << "Calibration Done";
             auto camera_matrix_state = std::make_shared<ObservableList>();
             for(auto r = 0;r < camera_matrix.rows;++r) {
@@ -301,12 +287,12 @@ namespace thalamus {
         ObservableListPtr row0 = rows->at(0);
         ObservableListPtr row1 = rows->at(1);
         ObservableListPtr row2 = rows->at(2);
-        auto update_matrix = [&](ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
+        auto update_matrix = [&](ObservableCollection::Action, const ObservableCollection::Key&, const ObservableCollection::Value&) {
           ObservableListPtr rows = state->at("Camera Matrix");
           this->camera_matrix = cv::Mat::zeros(3, 3, CV_64FC1);
-          for(auto r = 0;r < rows->size();++r) {
+          for(size_t r = 0;r < rows->size();++r) {
             ObservableListPtr row = rows->at(r);
-            for(auto c = 0;c < row->size();++c) {
+            for(size_t c = 0;c < row->size();++c) {
               camera_matrix.at<double>(r, c) = row->at(c);
             }
           }
@@ -318,10 +304,10 @@ namespace thalamus {
         update_matrix(a, k, v);
       } else if(key_str == "Distortion Coefficients") {
         auto list = std::get<ObservableListPtr>(v);
-        auto update_distortion = [&](ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
+        auto update_distortion = [&](ObservableCollection::Action, const ObservableCollection::Key&, const ObservableCollection::Value&) {
           ObservableListPtr list = state->at("Distortion Coefficients");
           this->distortion_coefficients.clear();
-          for(auto i = 0;i < list->size();++i) {
+          for(size_t i = 0;i < list->size();++i) {
             distortion_coefficients.push_back(list->at(i));
           }
         };
@@ -355,7 +341,7 @@ namespace thalamus {
     return "DISTORTION";
   }
 
-  ImageNode::Plane DistortionNode::plane(int i) const {
+  ImageNode::Plane DistortionNode::plane(int) const {
     auto image = impl->current_result.image;
     return ImageNode::Plane(image.data, image.data+image.rows*image.cols*image.channels());
   }
@@ -406,24 +392,24 @@ namespace thalamus {
     return boost::json::value();
   }
 
-  std::span<const double> DistortionNode::data(int channel) const {
+  std::span<const double> DistortionNode::data(int) const {
     return std::span<const double>(&impl->current_result.latency, &impl->current_result.latency+1);
   }
   int DistortionNode::num_channels() const {
     return 1;
   }
-  std::chrono::nanoseconds DistortionNode::sample_interval(int channel) const {
+  std::chrono::nanoseconds DistortionNode::sample_interval(int) const {
     return impl->current_result.interval;
   }
   static std::string LATENCY = "Latency";
 
-  std::string_view DistortionNode::name(int channel) const {
+  std::string_view DistortionNode::name(int) const {
     return LATENCY;
   }
   std::span<const std::string> DistortionNode::get_recommended_channels() const {
     return std::span<const std::string>(&LATENCY, &LATENCY+1);
   }
-  void DistortionNode::inject(const thalamus::vector<std::span<double const>>& data, const thalamus::vector<std::chrono::nanoseconds>& interval, const thalamus::vector<std::string_view>& names)  {
+  void DistortionNode::inject(const thalamus::vector<std::span<double const>>& data, const thalamus::vector<std::chrono::nanoseconds>& interval, const thalamus::vector<std::string_view>&)  {
     THALAMUS_ASSERT(data.size() >= 1);
     THALAMUS_ASSERT(data[0].size() >= 1);
     THALAMUS_ASSERT(interval.size() >= 1);

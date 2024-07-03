@@ -1,7 +1,7 @@
 FetchContent_Declare(
   ffmpeg 
-  GIT_REPOSITORY https://Killamanjarl:ATBBeJrsn9LYrVtLMPayDv9kUZ4607A4599C@bitbucket.org/bijanlab/ffmpeg.git
-  GIT_TAG        pesaran/6.1
+  GIT_REPOSITORY https://github.com/FFmpeg/FFmpeg.git
+  GIT_TAG        n6.1
 )
 FetchContent_Populate(ffmpeg)
 file(MAKE_DIRECTORY "${ffmpeg_BINARY_DIR}/Debug/Modules")
@@ -50,7 +50,7 @@ else()
     DEPENDS zlib_processed sdl
     COMMAND cmake -E env 
     "PKG_CONFIG_PATH=${ZLIB_PKG_CONFIG_DIR}:${SDL_PKG_CONFIG_DIR}"
-    "${ffmpeg_SOURCE_DIR}/configure" --cc=clang "--extra-cflags=${FFMPEG_COMPILE_OPTIONS_SPACED} ${OSX_TARGET_PARAMETER}" --arch=x86_64 --enable-static --disable-shared $<IF:$<CONFIG:Debug>,--enable-debug,> --prefix=${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install
+    "${ffmpeg_SOURCE_DIR}/configure" --cc=clang "--extra-cflags=${FFMPEG_COMPILE_OPTIONS_SPACED} ${OSX_TARGET_PARAMETER}" --arch=x86_64 --enable-static --disable-shared --enable-pic --disable-sndio $<IF:$<CONFIG:Debug>,--enable-debug,> --prefix=${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install
     && cmake -E touch_nocreate "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
     WORKING_DIRECTORY "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>")
   set(FFMPEG_MAKE_COMMAND make -j ${CPU_COUNT} && make install)

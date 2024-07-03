@@ -1,7 +1,7 @@
 FetchContent_Declare(
   opencv
-  GIT_REPOSITORY git@bitbucket.org:bijanlab/opencv.git
-  GIT_TAG pesaran/4.8.1)
+  GIT_REPOSITORY https://github.com/opencv/opencv.git
+  GIT_TAG 4.8.1)
 FetchContent_Populate(opencv)
 file(MAKE_DIRECTORY ${opencv_BINARY_DIR}/Debug)
 file(MAKE_DIRECTORY ${opencv_BINARY_DIR}/Release)

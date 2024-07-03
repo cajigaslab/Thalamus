@@ -54,7 +54,7 @@ if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
   list(APPEND ALL_COMPILE_OPTIONS /Zi /MP)
   list(APPEND ALL_LINK_OPTIONS /DEBUG)
 else()
-  list(APPEND ALL_COMPILE_OPTIONS -g)
+  list(APPEND ALL_COMPILE_OPTIONS -g -fPIC)
 endif()
   
 if("${SANITIZER}" STREQUAL thread)
@@ -71,13 +71,19 @@ elseif("${SANITIZER}" STREQUAL memory)
   list(APPEND ALL_COMPILE_OPTIONS -fsanitize=memory -fsanitize-memory-track-origins=2 -O1 -fno-omit-frame-pointer -fno-optimize-sibling-calls)
   list(APPEND ALL_LINK_OPTIONS -fsanitize=memory -fsanitize-memory-track-origins=2 -O1 -fno-omit-frame-pointer -fno-optimize-sibling-calls)
 endif()
+
+string(REPLACE ";" " " ALL_C_COMPILE_OPTIONS_SPACED "${ALL_COMPILE_OPTIONS}")
+string(REPLACE ";" " " ALL_C_LINK_OPTIONS_SPACED "${ALL_LINK_OPTIONS}")
+ 
+if(NOT WIN32 AND NOT APPLE)
+  include(cmake/comedi.cmake)
+endif()
+include(cmake/ffmpeg.cmake)
  
 if(NOT WIN32 AND NOT APPLE)
   include(cmake/llvm.cmake)
   list(APPEND ALL_COMPILE_OPTIONS ${LIBCXX_COMPILE_OPTIONS})
   list(APPEND ALL_LINK_OPTIONS ${LIBCXX_LINK_OPTIONS})
-
-  include(cmake/comedi.cmake)
 endif()
 
 add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:${ALL_COMPILE_OPTIONS}>")
@@ -90,7 +96,6 @@ add_definitions(-DPRINTSYNC)
 include(cmake/grpc.cmake)
 include(cmake/zlib_processed.cmake)
 include(cmake/sdl.cmake)
-include(cmake/ffmpeg.cmake)
 include(cmake/opencv.cmake)
 include(cmake/boost.cmake)
 include(cmake/kfr.cmake)
@@ -119,7 +124,7 @@ message("PROTO_SOURCES ${PROTO_SOURCES}")
 message("PROTO_GENERATED_SOURCES ${PROTO_GENERATED_SOURCES}")
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic -Wno-deprecated-declarations -Wno-c11-extensions -Wno-gcc-compat)
+  set(WARNING_FLAGS -Wall -Wextra -Wpedantic -Wno-deprecated-declarations -Wno-c11-extensions -Wno-gcc-compat)
 endif()
 
 include_directories(${CMAKE_BINARY_DIR})
@@ -183,11 +188,13 @@ else()
   #target_compile_options(tracing PRIVATE -fPIC)
 endif()
 target_include_directories(tracing PUBLIC "${CMAKE_SOURCE_DIR}/src")
+target_compile_options(tracing PRIVATE ${WARNING_FLAGS})
 
 add_library(hydrate "src/hydrate.cpp")
 target_link_libraries(hydrate boost protoc_generated grpc++ hdf5-static)
 target_compile_definitions(hydrate PRIVATE _USE_MATH_DEFINES NOMINMAX WIN32_LEAN_AND_MEAN)
 target_include_directories(hydrate PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_compile_options(hydrate PRIVATE ${WARNING_FLAGS})
   
 add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/node_graph_impl.h"
@@ -256,6 +263,7 @@ else()
   target_sources(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src/nidaq_node_linux.cpp")
   target_link_libraries(thalamus comedi m)
 endif()
+target_compile_options(thalamus PRIVATE ${WARNING_FLAGS})
 
 target_compile_definitions(thalamus PRIVATE _USE_MATH_DEFINES)
 target_include_directories(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src")
@@ -263,17 +271,22 @@ target_link_libraries(thalamus opencv hdf5-static zlib_processed lua kfr
   tracing webrtc boost protoc_generated grpc++ grpc++_reflection absl::str_format_internal absl::strings absl::str_format ffmpeg)
 
 add_library(native_lib SHARED src/plugin.cpp)
+target_compile_options(native_lib PRIVATE ${WARNING_FLAGS})
 target_include_directories(native_lib PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(native_lib 
   thalamus 
   hydrate
   tracing webrtc ffmpeg sdl protoc_generated kfr lua)
+if(NOT WIN32)
+  target_link_options(native_lib PRIVATE -Wl,-Bsymbolic)
+endif()
 
 if(WIN32)
   target_compile_definitions(native_lib PRIVATE _WIN32_WINNT=0x0A00)
 endif()
 
 add_executable(native src/main.cpp)
+target_compile_options(native PRIVATE ${WARNING_FLAGS})
 
 if(ENABLE_SWIG)
   add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "$<TARGET_FILE:native>" "${FINAL_DIRECTORY}" 

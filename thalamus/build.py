@@ -95,7 +95,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   if platform.system() == 'Windows':
     platform_tag = 'win_amd64'
   elif platform.system() == 'Linux':
-    ldd_output = subprocess.check_output(['ldd', '--version'])
+    ldd_output = subprocess.check_output(['ldd', '--version'], encoding='utf8')
     assert ldd_output is not None
     ldd_line = [l.strip() for l in ldd_output.split('\n') if l[:3] == 'ldd'][0]
     libc_version = ldd_line.split(' ')[-1]

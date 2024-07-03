@@ -62,9 +62,9 @@ namespace thalamus {
     ThreadPool& pool;
 
     Impl(ObservableDictPtr state, boost::asio::io_context& io_context, OculomaticNode* outer, NodeGraph* graph)
-      : state(state)
+      : io_context(io_context)
+      , state(state)
       , outer(outer)
-      , io_context(io_context)
       , graph(graph)
       , current_result(Result{0, 0, 0, cv::Mat(), false, false, 0ns})
       , pool(graph->get_thread_pool()) {
@@ -149,7 +149,6 @@ namespace thalamus {
                   &mat_pool=this->mat_pool,
                   &output_frames=this->output_frames,
                   &next_output_frame=this->next_output_frame,
-                  &ready=outer->ready,
                   &io_context=io_context,
                   centering_pix=this->centering_pix,
                   centering_offset=this->centering_offset,
@@ -199,7 +198,7 @@ namespace thalamus {
         auto max_area_pixels = max_area*frame_size/100;
 
         int selected = -1;
-        for(auto i = 0;i < contours.size();++i) {
+        for(size_t i = 0;i < contours.size();++i) {
           if(areas[i] <= max_area_pixels && min_area_pixels <= areas[i] && (selected == -1 || areas[i] > areas[selected])) {
             selected = i;
           }
@@ -301,7 +300,7 @@ namespace thalamus {
     return "OCULOMATIC";
   }
 
-  ImageNode::Plane OculomaticNode::plane(int i) const {
+  ImageNode::Plane OculomaticNode::plane(int) const {
     auto image = impl->current_result.image;
     return ImageNode::Plane(image.data, image.data+image.rows*image.cols*image.channels());
   }
@@ -349,7 +348,7 @@ namespace thalamus {
     return 3;
   }
 
-  std::chrono::nanoseconds OculomaticNode::sample_interval(int channel) const {
+  std::chrono::nanoseconds OculomaticNode::sample_interval(int) const {
     return impl->current_result.interval;
   }
 
@@ -372,7 +371,7 @@ namespace thalamus {
     }
   }
 
-  void OculomaticNode::inject(const thalamus::vector<std::span<double const>>& data, const thalamus::vector<std::chrono::nanoseconds>& interval, const thalamus::vector<std::string_view>& names) {
+  void OculomaticNode::inject(const thalamus::vector<std::span<double const>>& data, const thalamus::vector<std::chrono::nanoseconds>& interval, const thalamus::vector<std::string_view>&) {
     THALAMUS_ASSERT(data.size() >= 3);
     THALAMUS_ASSERT(data[0].size() >= 1);
     THALAMUS_ASSERT(data[1].size() >= 1);

@@ -236,7 +236,7 @@ namespace thalamus {
         auto last_pose = pose_name;
         pose_name = "";
         auto min_distance = std::numeric_limits<double>::max();
-        for(auto i = 0;i < poses->size();++i) {
+        for(size_t i = 0;i < poses->size();++i) {
           ObservableListPtr pose = poses->at(i);
           long long pose_mask = pose->at(0);
           auto distance = 0.0;
@@ -246,7 +246,7 @@ namespace thalamus {
           }
           distance /= mask.size();
           pose_distances[i] = 1-distance;
-          channel_names[BASE_XSENS_CHANNEL_NAMES.size() + i] = pose->at(1);
+          channel_names[BASE_XSENS_CHANNEL_NAMES.size() + i] = static_cast<std::string>(pose->at(1));
 
           if(distance < .5 && distance < min_distance) {
             pose_name = channel_names[BASE_XSENS_CHANNEL_NAMES.size() + i];
@@ -446,7 +446,7 @@ namespace thalamus {
     return impl->frame_interval;
   }
 
-  void XsensNode::inject(const thalamus::vector<std::span<double const>>& spans, const thalamus::vector<std::chrono::nanoseconds>& sample_intervals, const thalamus::vector<std::string_view>&) {
+  void XsensNode::inject(const thalamus::vector<std::span<double const>>& spans, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&) {
     THALAMUS_ASSERT(spans.size() == 1);
     THALAMUS_ASSERT(spans.front().size() == 1);
   }
@@ -845,7 +845,7 @@ namespace thalamus {
     return impl->frame_interval;
   }
 
-  void HandEngineNode::inject(const thalamus::vector<std::span<double const>>& spans, const thalamus::vector<std::chrono::nanoseconds>& sample_intervals, const thalamus::vector<std::string_view>&) {
+  void HandEngineNode::inject(const thalamus::vector<std::span<double const>>& spans, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&) {
     THALAMUS_ASSERT(spans.size() == 1);
     THALAMUS_ASSERT(spans.front().size() == 1);
   }

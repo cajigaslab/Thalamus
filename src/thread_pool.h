@@ -15,16 +15,16 @@ namespace thalamus {
     std::list<std::function<void()>> jobs;
     std::condition_variable condition;
     mutable std::mutex mutex;
-    int num_busy_threads;
+    unsigned int num_busy_threads;
     const std::string name;
   public:
     const unsigned int num_threads;
     void thread_target(std::string);
     ThreadPool(const std::string& name, unsigned int num_threads = 0)
       : running(false)
+      , num_busy_threads(0)
       , name(name.empty() ? "ThreadPool" : name)
-      , num_threads(num_threads ? num_threads : std::thread::hardware_concurrency())
-      , num_busy_threads(0) {}
+      , num_threads(num_threads ? num_threads : std::thread::hardware_concurrency()) {}
     ~ThreadPool() {
       stop();
     }

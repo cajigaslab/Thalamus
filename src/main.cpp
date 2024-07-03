@@ -11,6 +11,7 @@
 #include <Windows.h>
 #else
 #include <dlfcn.h>
+#include <unistd.h>
 #endif
 
 const auto HELP = 
@@ -64,7 +65,7 @@ int main(int argc, char * argv[]) {
   library_handle = LoadLibrary(path.c_str());
 #else
   std::string path(256, '\0');
-  auto count = 0;
+  size_t count = 0;
   do {
     path.resize(2*path.size());
     count = readlink("/proc/self/exe", path.data(), path.size());
@@ -76,7 +77,11 @@ int main(int argc, char * argv[]) {
   path.resize(count);
   path = (std::filesystem::path(path).parent_path() /  "libnative_lib.so").string();
   std::cout << "Loading " << path << std::endl;
-	library_handle = dlopen(path.c_str(), RTLD_NOW);
+  library_handle = dlopen(path.c_str(), RTLD_NOW);
+  const char* message = dlerror();
+  message = message ? message : "";
+  std::cout << "Loaded " << path << " " << library_handle << " " << message << std::endl;
+
 #endif
 
   COMMANDS["thalamus"] = load_function<MainFunc>("thalamus_main");
