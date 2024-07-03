@@ -8,6 +8,8 @@ FetchContent_Populate(comedi)
 file(MAKE_DIRECTORY ${comedi_BINARY_DIR}/Debug)
 file(MAKE_DIRECTORY ${comedi_BINARY_DIR}/Release)
 
+execute_process(COMMAND git apply "${CMAKE_SOURCE_DIR}/patches/comedi"
+	        WORKING_DIRECTORY ${comedi_SOURCE_DIR})
 
 add_custom_command(OUTPUT "${comedi_SOURCE_DIR}/configure"
                    COMMAND ./autogen.sh
