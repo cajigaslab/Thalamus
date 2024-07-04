@@ -26,6 +26,7 @@ from .distortion_widget import DistortionWidget
 from .normalize_widget import NormalizeWidget
 from .genicam_widget import GenicamWidget
 from .channel_picker_widget import ChannelPickerWidget
+from .ros2_widget import Ros2Widget
 from .algebra_widget import AlgebraWidget
 from .channel_viewer import ChannelViewerWidget
 from .xsens_widget import XsensEditorWidget
@@ -355,6 +356,11 @@ FACTORIES = {
     UserData(UserDataType.DOUBLE_SPINBOX, 'Probe Frequency', 10.0, []),
     UserData(UserDataType.SPINBOX, 'Probe Size', 128, []),
     UserData(UserDataType.CHECK_BOX, 'Running', False, [])]),
+  'ROS2': Factory(lambda c, s: Ros2Widget(c, s), []),
+  'PUPIL': Factory(None, [
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+    UserData(UserDataType.CHECK_BOX, 'View', False, []),
+  ]),
 }
 
 FACTORY_NAMES = {}
