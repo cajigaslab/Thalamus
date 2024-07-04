@@ -79,6 +79,7 @@ if(NOT WIN32 AND NOT APPLE)
   include(cmake/comedi.cmake)
 endif()
 include(cmake/ffmpeg.cmake)
+include(cmake/cairo.cmake)
  
 if(NOT WIN32 AND NOT APPLE)
   include(cmake/llvm.cmake)
@@ -238,10 +239,14 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/gentl.h"
                      "${CMAKE_SOURCE_DIR}/src/genicam_node.h"
                      "${CMAKE_SOURCE_DIR}/src/genicam_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/ros2_node.h"
+                     "${CMAKE_SOURCE_DIR}/src/ros2_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/channel_picker_node.h"
                      "${CMAKE_SOURCE_DIR}/src/channel_picker_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/algebra_node.h"
                      "${CMAKE_SOURCE_DIR}/src/algebra_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/pupil_node.h"
+                     "${CMAKE_SOURCE_DIR}/src/pupil_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/normalize_node.h"
                      "${CMAKE_SOURCE_DIR}/src/normalize_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/lua_node.h"
@@ -267,7 +272,7 @@ target_compile_options(thalamus PRIVATE ${WARNING_FLAGS})
 
 target_compile_definitions(thalamus PRIVATE _USE_MATH_DEFINES)
 target_include_directories(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(thalamus opencv hdf5-static zlib_processed lua kfr
+target_link_libraries(thalamus opencv hdf5-static zlib_processed lua kfr cairo
   tracing webrtc boost protoc_generated grpc++ grpc++_reflection absl::str_format_internal absl::strings absl::str_format ffmpeg)
 
 add_library(native_lib SHARED src/plugin.cpp)
@@ -276,7 +281,7 @@ target_include_directories(native_lib PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(native_lib 
   thalamus 
   hydrate
-  tracing webrtc ffmpeg sdl protoc_generated kfr lua)
+  tracing webrtc ffmpeg sdl protoc_generated kfr lua cairo)
 if(NOT WIN32)
   target_link_options(native_lib PRIVATE -Wl,-Bsymbolic)
 endif()

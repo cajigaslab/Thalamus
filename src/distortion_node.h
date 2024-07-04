@@ -6,6 +6,7 @@
 #include <base_node.h>
 #include <state.h>
 #include <image_node.h>
+#include "opencv2/core.hpp"
 
 namespace thalamus {
   class DistortionNode : public Node, public ImageNode, public AnalogNode {
@@ -31,9 +32,11 @@ namespace thalamus {
     int num_channels() const override;
     std::chrono::nanoseconds sample_interval(int channel) const override;
     std::string_view name(int channel) const override;
-    std::span<const std::string> get_recommended_channels() const override;
     void inject(const thalamus::vector<std::span<double const>>&, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&) override;
     bool has_analog_data() const override;
+
+    const cv::Mat& camera_matrix() const;
+    std::span<const double> distortion_coefficients() const;
   };
 }
 

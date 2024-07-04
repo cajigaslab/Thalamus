@@ -25,7 +25,7 @@ add_custom_command(OUTPUT "${comedi_BINARY_DIR}/$<CONFIG>/Makefile"
 		      "LDFLAGS=${ALL_C_LINK_OPTIONS_SPACED}"
                       "${comedi_SOURCE_DIR}/configure"
                       "--prefix=${comedi_BINARY_DIR}/$<CONFIG>/install"
-                      --enable-shared=no --enable-static=yes
+                      --enable-shared=no --enable-static=yes --disable-python-binding
                    && cmake -E touch_nocreate "${comedi_BINARY_DIR}/$<CONFIG>/Makefile"
                    WORKING_DIRECTORY "${comedi_BINARY_DIR}/$<CONFIG>")
 

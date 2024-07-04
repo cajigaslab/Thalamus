@@ -3,9 +3,7 @@
 #include <shared_mutex>
 #include <boost/pool/object_pool.hpp>
 
-#include "opencv2/core.hpp"
 #include "opencv2/imgproc.hpp"
-#include "opencv2/imgcodecs.hpp"
 #include "opencv2/calib3d.hpp"
 
 namespace thalamus {
@@ -406,9 +404,6 @@ namespace thalamus {
   std::string_view DistortionNode::name(int) const {
     return LATENCY;
   }
-  std::span<const std::string> DistortionNode::get_recommended_channels() const {
-    return std::span<const std::string>(&LATENCY, &LATENCY+1);
-  }
   void DistortionNode::inject(const thalamus::vector<std::span<double const>>& data, const thalamus::vector<std::chrono::nanoseconds>& interval, const thalamus::vector<std::string_view>&)  {
     THALAMUS_ASSERT(data.size() >= 1);
     THALAMUS_ASSERT(data[0].size() >= 1);
@@ -421,5 +416,11 @@ namespace thalamus {
   }
   bool DistortionNode::has_analog_data() const {
     return impl->current_result.has_analog;
+  }
+  const cv::Mat& DistortionNode::camera_matrix() const {
+    return impl->camera_matrix;
+  }
+  std::span<const double> DistortionNode::distortion_coefficients() const {
+    return std::span<const double>(impl->distortion_coefficients.begin(), impl->distortion_coefficients.end());
   }
 }

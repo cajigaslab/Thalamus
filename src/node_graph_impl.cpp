@@ -13,6 +13,8 @@
 #include <thread_pool.h>
 #include <remote_node.h>
 #include <lua_node.h>
+#include <ros2_node.h>
+#include <pupil_node.h>
 
 namespace thalamus {
   using namespace std::chrono_literals;
@@ -20,6 +22,7 @@ namespace thalamus {
   struct INodeFactory {
     virtual Node* create(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph) = 0;
     virtual bool prepare() = 0;
+    virtual void cleanup() = 0;
     virtual std::string type_name() = 0;
   };
 
@@ -35,6 +38,12 @@ namespace thalamus {
       }
       else {
         return true;
+      }
+    }
+    void cleanup() override {
+      constexpr bool has_cleanup = requires { T::cleanup(); };
+      if constexpr (has_cleanup) {
+        T::cleanup();
       }
     }
     std::string type_name() override {
@@ -66,7 +75,9 @@ namespace thalamus {
     {"NORMALIZE", new NodeFactory<NormalizeNode>()},
     {"ALGEBRA", new NodeFactory<AlgebraNode>()},
     {"LUA", new NodeFactory<LuaNode>()},
-    {"REMOTE_NODE", new NodeFactory<RemoteNode>()}
+    {"ROS2", new NodeFactory<Ros2Node>()},
+    {"REMOTE_NODE", new NodeFactory<RemoteNode>()},
+    {"PUPIL", new NodeFactory<PupilNode>()}
   };
 
   struct NodeGraphImpl::Impl {
@@ -103,6 +114,13 @@ namespace thalamus {
         }
       }
       nodes->changed.connect(std::bind(&Impl::on_nodes, this, _1, _2, _3));
+    }
+
+    ~Impl() {
+      auto i = node_factories.begin();
+      while (i != node_factories.end()) {
+        i->second->cleanup();
+      }
     }
 
     void clean_signals() {
