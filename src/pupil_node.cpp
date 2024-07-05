@@ -1,7 +1,9 @@
 #include <pupil_node.h>
 #include <thread_pool.h>
 #include <boost/pool/object_pool.hpp>
+extern "C" {
 #include <cairo.h>
+}
 
 namespace thalamus {
   using namespace std::chrono_literals;

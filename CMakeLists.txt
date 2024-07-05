@@ -126,6 +126,9 @@ message("PROTO_GENERATED_SOURCES ${PROTO_GENERATED_SOURCES}")
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   set(WARNING_FLAGS -Wall -Wextra -Wpedantic -Wno-deprecated-declarations -Wno-c11-extensions -Wno-gcc-compat)
+else()
+  #set(WARNING_FLAGS /Wall)
+  set(WARNING_FLAGS)
 endif()
 
 include_directories(${CMAKE_BINARY_DIR})
@@ -193,7 +196,7 @@ target_compile_options(tracing PRIVATE ${WARNING_FLAGS})
 
 add_library(hydrate "src/hydrate.cpp")
 target_link_libraries(hydrate boost protoc_generated grpc++ hdf5-static)
-target_compile_definitions(hydrate PRIVATE _USE_MATH_DEFINES NOMINMAX WIN32_LEAN_AND_MEAN)
+target_compile_definitions(hydrate PRIVATE _USE_MATH_DEFINES NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS)
 target_include_directories(hydrate PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_compile_options(hydrate PRIVATE ${WARNING_FLAGS})
   
@@ -239,8 +242,6 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/gentl.h"
                      "${CMAKE_SOURCE_DIR}/src/genicam_node.h"
                      "${CMAKE_SOURCE_DIR}/src/genicam_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/ros2_node.h"
-                     "${CMAKE_SOURCE_DIR}/src/ros2_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/channel_picker_node.h"
                      "${CMAKE_SOURCE_DIR}/src/channel_picker_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/algebra_node.h"
@@ -258,7 +259,7 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/proto/thalamus.proto")
 
 if(WIN32)
-  target_compile_definitions(thalamus PRIVATE _WIN32_WINNT=0x0A00)
+  target_compile_definitions(thalamus PRIVATE _WIN32_WINNT=0x0A00 _CRT_SECURE_NO_WARNINGS)
   if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
     target_compile_options(thalamus PRIVATE /bigobj)
   endif()
@@ -267,7 +268,9 @@ elseif(APPLE)
   target_sources(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src/nidaq_node_mac.cpp")
   target_compile_definitions(thalamus PRIVATE _GNU_SOURCE)
 else()
-  target_sources(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src/nidaq_node_linux.cpp")
+  target_sources(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src/nidaq_node_linux.cpp"
+                                  "${CMAKE_SOURCE_DIR}/src/ros2_node.h"
+                                  "${CMAKE_SOURCE_DIR}/src/ros2_node.cpp")
   target_link_libraries(thalamus comedi m)
 endif()
 target_compile_options(thalamus PRIVATE ${WARNING_FLAGS})

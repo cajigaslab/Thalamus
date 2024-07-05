@@ -31,6 +31,7 @@ from .algebra_widget import AlgebraWidget
 from .channel_viewer import ChannelViewerWidget
 from .xsens_widget import XsensEditorWidget
 from .lua_widget import LuaWidget
+from .log_widget import LogWidget
 from ..util import NodeSelector
 from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
@@ -368,6 +369,7 @@ FACTORIES = {
     UserData(UserDataType.SPINBOX, 'Rows', 8, []),
     UserData(UserDataType.SPINBOX, 'Columns', 8, []),
   ]),
+  'LOG': Factory(lambda c, s: LogWidget(c, s), []),
 }
 
 FACTORY_NAMES = {}

@@ -30,13 +30,13 @@ add_custom_command(
   WORKING_DIRECTORY "${cairo_SOURCE_DIR}")
 
 if(WIN32)
-  set(CAIRO_LIBRARIES "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/x86_64-linux-gnu/libcairo.a"
-                      "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/x86_64-linux-gnu/libpixman-1.a")
-  set(CAIRO_PKGCONFIG_DIR "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/x86_64-linux-gnu/pkgconfig")
-else()
   set(CAIRO_LIBRARIES "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libcairo.a"
                       "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libpixman-1.a")
   set(CAIRO_PKGCONFIG_DIR "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/pkgconfig")
+else()
+  set(CAIRO_LIBRARIES "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/x86_64-linux-gnu/libcairo.a"
+                      "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/x86_64-linux-gnu/libpixman-1.a")
+  set(CAIRO_PKGCONFIG_DIR "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/x86_64-linux-gnu/pkgconfig")
 endif()
 set(CAIRO_INCLUDE_DIRS "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/include/cairo")
 
@@ -48,3 +48,4 @@ add_custom_command(DEPENDS "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Relea
 add_library(cairo INTERFACE ${CAIRO_LIBRARIES})
 target_include_directories(cairo INTERFACE ${CAIRO_INCLUDE_DIRS})
 target_link_libraries(cairo INTERFACE ${CAIRO_LIBRARIES})
+target_compile_definitions(cairo INTERFACE CAIRO_WIN32_STATIC_BUILD)

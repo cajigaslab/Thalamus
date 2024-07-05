@@ -141,6 +141,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
 
   if not (build_path / 'CMakeCache.txt').exists() or do_config:
     subprocess.check_call(cmake_command)
+  shutil.copy(build_path / 'compile_commands.json', 'compile_commands.json')
 
   command = ['cmake', '--build', build_path, '--config', "Release" if is_release else "Debug", '--parallel', str(os.cpu_count())]
   if target:
@@ -148,7 +149,6 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
 
   print(command)
   subprocess.check_call(command)
-  shutil.copy(build_path / 'compile_commands.json', 'compile_commands.json')
   shutil.copy('src/plugin.h', 'thalamus/plugin.h')
 
   files = []
