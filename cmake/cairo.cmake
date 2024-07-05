@@ -14,11 +14,14 @@ FetchContent_Populate(cairo)
 file(MAKE_DIRECTORY "${cairo_BINARY_DIR}/Debug/install")
 file(MAKE_DIRECTORY "${cairo_BINARY_DIR}/Release/install")
 
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  set(CAIRO_COMPILER CC=clang CXX=clang++)
+endif()
+
 add_custom_command(
   OUTPUT "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/build.ninja"
   COMMAND cmake -E env 
-  CC=clang 
-  CXX=clang++
+  ${CAIRO_COMPILER}
   meson setup "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>"
   -Dtests=disabled ${CAIRO_SANITIZER} -Ddefault_library=static -Dpng=disabled -Dfontconfig=disabled -Dfreetype=disabled -Db_vscrt=static_from_buildtype 
   --prefix "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install"
@@ -26,10 +29,16 @@ add_custom_command(
   && cmake -E touch_nocreate "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/build.ninja"
   WORKING_DIRECTORY "${cairo_SOURCE_DIR}")
 
-set(CAIRO_LIBRARIES "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/x86_64-linux-gnu/libcairo.a"
-                    "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/x86_64-linux-gnu/libpixman-1.a")
+if(WIN32)
+  set(CAIRO_LIBRARIES "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/x86_64-linux-gnu/libcairo.a"
+                      "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/x86_64-linux-gnu/libpixman-1.a")
+  set(CAIRO_PKGCONFIG_DIR "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/x86_64-linux-gnu/pkgconfig")
+else()
+  set(CAIRO_LIBRARIES "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libcairo.a"
+                      "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libpixman-1.a")
+  set(CAIRO_PKGCONFIG_DIR "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/pkgconfig")
+endif()
 set(CAIRO_INCLUDE_DIRS "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/include/cairo")
-set(CAIRO_PKGCONFIG_DIR "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/x86_64-linux-gnu/pkgconfig")
 
 add_custom_command(DEPENDS "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/build.ninja"
   OUTPUT ${CAIRO_LIBRARIES}
