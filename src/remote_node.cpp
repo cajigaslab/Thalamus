@@ -348,7 +348,7 @@ void RemoteNode::inject(const thalamus::vector<std::span<double const>>&, const 
 }
 
 std::string RemoteNode::type_name() {
-  return "REMOTE_NODE";
+  return "REMOTE";
 }
 
 std::span<MotionCaptureNode::Segment const> RemoteNode::segments() const {

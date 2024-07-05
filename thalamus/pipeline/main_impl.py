@@ -85,8 +85,8 @@ async def async_main() -> None:
   
   bmbi_native_filename = resource_filename('thalamus', 'native' + ('.exe' if sys.platform == 'win32' else ''))
   bmbi_native_proc = None
-  #bmbi_native_proc = await asyncio.create_subprocess_exec(
-  #      bmbi_native_filename, 'thalamus', '--port', str(arguments.port), '--slave', *(['--trace'] if arguments.trace else []))
+  bmbi_native_proc = await asyncio.create_subprocess_exec(
+        bmbi_native_filename, 'thalamus', '--port', str(arguments.port), '--slave', *(['--trace'] if arguments.trace else []))
 
   channel = grpc.aio.insecure_channel(f'localhost:{arguments.port}')
   await channel.channel_ready()

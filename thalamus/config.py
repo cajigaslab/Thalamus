@@ -10,8 +10,6 @@ import typing
 import pathlib
 import itertools
 
-import yaml
-
 class ObservableCollection(abc.ABC):
   """
   Wrapper for lists and dicts that allows observers to be notified when the contents change
@@ -374,8 +372,8 @@ def load(filename: typing.Union[str, pathlib.Path]) -> ObservableCollection:
   """
   Loads a configuration from a .json file and returns an ObervableCollection
   """
-  with open(str(filename), encoding='utf-8') as yaml_file:
-    result = yaml.load(yaml_file, yaml.FullLoader)
+  with open(str(filename), encoding='utf-8') as json_file:
+    result = json.load(json_file)
 
   fill_types(result)
   result['queue'] = []
@@ -394,8 +392,5 @@ def save(filename: typing.Union[str, pathlib.Path], config: typing.Any) -> None:
   if isinstance(config, ObservableCollection):
     config = config.unwrap()
 
-  with open(filename_str, "w", encoding='utf-8') as yaml_output:
-    if os.path.splitext(filename_str)[1] == '.json':
-      json.dump(config, yaml_output, indent=2)
-    else:
-      yaml.dump(config, yaml_output, indent=2)
+  with open(filename_str, "w", encoding='utf-8') as json_output:
+    json.dump(config, json_output, indent=2)

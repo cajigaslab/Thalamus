@@ -350,7 +350,7 @@ FACTORIES = {
     UserData(UserDataType.DEFAULT, 'Equation', '', [])]),
   'LUA': Factory(lambda c, s: LuaWidget(c, s), [
     UserData(UserDataType.DEFAULT, 'Source', '', [])]),
-  'REMOTE_NODE': Factory(None, [
+  'REMOTE': Factory(None, [
     UserData(UserDataType.DEFAULT, 'Address', '', []),
     UserData(UserDataType.DEFAULT, 'Node', '', []),
     UserData(UserDataType.DOUBLE_SPINBOX, 'Probe Frequency', 10.0, []),
@@ -360,6 +360,13 @@ FACTORIES = {
   'PUPIL': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
+  ]),
+  'CHESSBOARD': Factory(None, [
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+    UserData(UserDataType.CHECK_BOX, 'View', False, []),
+    UserData(UserDataType.SPINBOX, 'Height', 512, []),
+    UserData(UserDataType.SPINBOX, 'Rows', 8, []),
+    UserData(UserDataType.SPINBOX, 'Columns', 8, []),
   ]),
 }
 
