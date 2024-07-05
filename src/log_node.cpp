@@ -5,7 +5,8 @@ namespace thalamus {
     std::string_view text;
     std::chrono::nanoseconds time;
   };
-  LogNode::LogNode(ObservableDictPtr state, boost::asio::io_context&, NodeGraph* graph) {}
+  LogNode::LogNode(ObservableDictPtr state, boost::asio::io_context&, NodeGraph* graph) : impl(new Impl()) {}
+  LogNode::~LogNode() {}
   std::string_view LogNode::text() const {
     return impl->text;
   }
@@ -21,5 +22,8 @@ namespace thalamus {
   }
   std::chrono::nanoseconds LogNode::time() const {
     return impl->time;
+  }
+  std::string LogNode::type_name() {
+    return "LOG";
   }
 }

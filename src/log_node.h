@@ -1,3 +1,5 @@
+#pragma once
+
 #include <base_node.h>
 #include <text_node.h>
 
@@ -7,10 +9,11 @@ namespace thalamus {
     std::unique_ptr<Impl> impl;
   public:
     LogNode(ObservableDictPtr state, boost::asio::io_context&, NodeGraph* graph);
-    virtual ~LogNode() {};
+    ~LogNode();
     std::string_view text() const override;
     bool has_text_data() const override;
     boost::json::value process(const boost::json::value&) override;
-    std::chrono::nanoseconds time() const;
+    std::chrono::nanoseconds time() const override;
+    static std::string type_name();
   };
 }

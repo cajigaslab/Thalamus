@@ -162,6 +162,11 @@ namespace hydrate {
     hvl_t payload;
   };
 
+  struct Text {
+    size_t time;
+    char* text;
+  };
+
   struct RecapState {
     std::vector<std::string> path;
   };
@@ -208,6 +213,14 @@ namespace hydrate {
             ++counts["xsens/" + key.first + "/received"];
           }
           break;
+        case thalamus_grpc::StorageRecord::kText:
+          {
+            auto text = record->text();
+            auto key = std::pair<std::string, std::string>(record->node(), "");
+            ++counts["text/" + key.first + "/data"];
+            ++counts["text/" + key.first + "/received"];
+          }
+          break;
         case thalamus_grpc::StorageRecord::kEvent:
           {
             auto event = record->event();
@@ -245,6 +258,9 @@ namespace hydrate {
         THALAMUS_ASSERT(error >= 0);
         data_written += data_chunk;
 
+        if constexpr (std::is_pointer<T>::value) {
+          std::for_each(cache.begin(), cache.begin() + data_chunk, [](auto arg) { delete[] arg; });
+        }
         cache.erase(cache.begin(), cache.begin() + data_chunk);
       }
     }
@@ -365,15 +381,23 @@ namespace hydrate {
       
       H5Handle segment_type = createH5Segment(0);
 
-      H5Handle string_type =  H5Tvlen_create(H5T_NATIVE_UCHAR);
-      THALAMUS_ASSERT(string_type, "H5Tvlen_create(H5T_NATIVE_UCHAR) failed");
+      H5Handle blob_type =  H5Tvlen_create(H5T_NATIVE_UCHAR);
+      THALAMUS_ASSERT(blob_type, "H5Tvlen_create(H5T_NATIVE_UCHAR) failed");
 
       H5Handle event_type = H5Tcreate(H5T_COMPOUND, sizeof(Event));
       THALAMUS_ASSERT(event_type, "H5Tcreate(H5T_COMPOUND, sizeof(Event)) failed");
       auto error = H5Tinsert(event_type, "time", HOFFSET(Event, time), H5T_NATIVE_UINT64);
       THALAMUS_ASSERT(error >= 0, "Failed to create Event.time");
-      error = H5Tinsert(event_type, "payload", HOFFSET(Event, payload), string_type);
+      error = H5Tinsert(event_type, "payload", HOFFSET(Event, payload), blob_type);
       THALAMUS_ASSERT(error >= 0, "Failed to create Event.payload");
+
+      H5Handle str_type = H5Tcopy(H5T_C_S1);
+      error = H5Tset_size(str_type, H5T_VARIABLE);
+      THALAMUS_ASSERT(error >= 0);
+      error = H5Tset_strpad(str_type, H5T_STR_NULLTERM);
+      THALAMUS_ASSERT(error >= 0);
+      error = H5Tset_cset(str_type, H5T_CSET_UTF8);
+      THALAMUS_ASSERT(error >= 0);
 
       H5Handle link_plist = H5Pcreate(H5P_LINK_CREATE);
       error = H5Pset_create_intermediate_group(link_plist, 1);
@@ -412,6 +436,8 @@ namespace hydrate {
             type = segment_type;
           } else if(tokens.front() == "events") {
             type = event_type;
+          } else if(tokens.front() == "text") {
+            type = str_type;
           }
           hsize_t dims[] = { pair.second };
           hsize_t max_dims[] = { pair.second };
@@ -444,6 +470,7 @@ namespace hydrate {
       auto last_time = std::chrono::steady_clock::now();
       std::map<hid_t, std::vector<double>> data_caches;
       std::map<hid_t, std::vector<Segment>> segment_caches;
+      std::map<hid_t, std::vector<char*>> text_caches;
       std::vector<Event> event_cache;
       std::map<hid_t, std::vector<size_t>> received_caches;
 
@@ -506,6 +533,25 @@ namespace hydrate {
               hsize_t num_segments = xsens.segments().size();
               write_data(record->time(), num_segments, data, received, data_written, received_written, segment_type, segments.data(),
                          segment_caches[data], received_caches[received], data_count, received_count);
+            }
+            break;
+          case thalamus_grpc::StorageRecord::kText:
+            {
+              auto text = record->text().text();
+              auto text_data = new char[text.size()+1];
+              strcpy(text_data, text.data());
+
+              auto data_path = "text/" + record->node() + "/data";
+              auto received_path = "text/" + record->node() + "/received";
+              auto data = datasets[data_path];
+              auto received = datasets[received_path];
+              auto& data_written = written[data_path];
+              auto& received_written = written[received_path];
+              auto data_count = gzip ? std::min(dataset_counts[data_path] - data_written, chunk_size) : 1;
+              auto received_count = gzip ? std::min(dataset_counts[received_path] - received_written, chunk_size) : 1;
+
+              write_data(record->time(), 1, data, received, data_written, received_written, str_type, &text_data,
+                         text_caches[data], received_caches[received], data_count, received_count);
             }
             break;
           case thalamus_grpc::StorageRecord::kEvent:

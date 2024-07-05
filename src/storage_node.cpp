@@ -117,6 +117,7 @@ namespace thalamus {
         offset = offsets.insert(decltype(offsets)::value_type(key, metrics.size())).first;
         metrics.emplace_back(0.0, is_rate);
         names.push_back(name());
+        outer->channels_changed(outer);
       }
 
       metrics.at(offset->second).first += count;
@@ -377,7 +378,7 @@ namespace thalamus {
 
   std::filesystem::path StorageNode::get_next_file(const std::filesystem::path& name, std::chrono::system_clock::time_point time) {
     const auto start_time = absl::FromChrono(time);
-    auto start_time_str = absl::FormatTime("%Y%m%d", start_time, absl::LocalTimeZone());
+    auto start_time_str = absl::FormatTime("%Y%m%d%H%M%S", start_time, absl::LocalTimeZone());
     auto i = 0;
     std::filesystem::path filename;
     do {

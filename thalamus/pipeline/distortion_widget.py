@@ -3,10 +3,16 @@ from ..qt import *
 class DistortionTextEdit(QTextEdit):
   def __init__(self):
     super().__init__()
-    self.on_focus_out = lambda: None
+    self.on_apply = lambda: None
 
   def focusOutEvent(self, e):
-    self.on_focus_out()
+    self.on_apply()
+
+  def keyPressEvent(self, e: QKeyEvent):
+    if e.key() == Qt.Key_Return and not bool(e.modifiers() & Qt.ShiftModifier): # type: ignore
+      self.on_apply()
+      return
+    return super().keyPressEvent(e)
 
 class DistortionWidget(QWidget):
   def __init__(self, config, stub):
@@ -103,7 +109,7 @@ class DistortionWidget(QWidget):
 
     layout.addWidget(QLabel('Camera Matrix:'))
     self.camera_matrix_edit = DistortionTextEdit()
-    self.camera_matrix_edit.on_focus_out = on_matrix_changed
+    self.camera_matrix_edit.on_apply = on_matrix_changed
     layout.addWidget(self.camera_matrix_edit)
 
     layout.addStretch(1)
