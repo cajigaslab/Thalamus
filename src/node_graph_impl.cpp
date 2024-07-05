@@ -15,6 +15,7 @@
 #include <lua_node.h>
 #include <ros2_node.h>
 #include <pupil_node.h>
+#include <chessboard_node.h>
 
 namespace thalamus {
   using namespace std::chrono_literals;
@@ -76,7 +77,8 @@ namespace thalamus {
     {"ALGEBRA", new NodeFactory<AlgebraNode>()},
     {"LUA", new NodeFactory<LuaNode>()},
     {"ROS2", new NodeFactory<Ros2Node>()},
-    {"REMOTE_NODE", new NodeFactory<RemoteNode>()},
+    {"REMOTE", new NodeFactory<RemoteNode>()},
+    {"CHESSBOARD", new NodeFactory<ChessBoardNode>()},
     {"PUPIL", new NodeFactory<PupilNode>()}
   };
 
@@ -120,6 +122,7 @@ namespace thalamus {
       auto i = node_factories.begin();
       while (i != node_factories.end()) {
         i->second->cleanup();
+        ++i;
       }
     }
 
