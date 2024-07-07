@@ -76,6 +76,14 @@ class Form(PyQt5.QtWidgets.QWidget):
     default: float
     suffix: str = ''
 
+  class String(typing.NamedTuple):
+    '''
+    Configuration for a row that edits a string
+    '''
+    label: str
+    field: str
+    default: str = ''
+
   Color = typing.NamedTuple('Color', [
     ('label', str),
     ('field', str),
@@ -111,7 +119,7 @@ class Form(PyQt5.QtWidgets.QWidget):
     ('caption', str)
   ])
 
-  Row = typing.Union['Form.Uniform', 'Form.Constant', 'Form.Color', 'Form.Bool', 'Form.Choice', 'Form.File', 'Form.Directory']
+  Row = typing.Union['Form.Uniform', 'Form.Constant', 'Form.String', 'Form.Color', 'Form.Bool', 'Form.Choice', 'Form.File', 'Form.Directory']
 
   def append_labels(self, *headers: str) -> None:
     '''
@@ -133,6 +141,8 @@ class Form(PyQt5.QtWidgets.QWidget):
         result.append_uniform(arg)
       elif isinstance(arg, Form.Constant):
         result.append_constant(arg)
+      elif isinstance(arg, Form.String):
+        result.append_string(arg)
       elif isinstance(arg, Form.Color):
         result.append_color(arg)
       elif isinstance(arg, Form.Bool):
@@ -214,6 +224,30 @@ class Form(PyQt5.QtWidgets.QWidget):
     def on_config_change(_: ObservableCollection.Action, key: typing.Any, value: typing.Any) -> None:
       if key == config.field:
         min_spin_box.setValue(value)
+
+    self.config.add_observer(on_config_change, functools.partial(isdeleted, self))
+
+    self.row += 1
+
+  def append_string(self, config: String) -> None:
+    '''
+    Appends a row for editing a constant variable
+    '''
+    if config.field not in self.config:
+      self.config[config.field] = config.default
+
+    self.grid_layout.addWidget(PyQt5.QtWidgets.QLabel(config.label), self.row, 0)
+
+    edit = PyQt5.QtWidgets.QLineEdit()
+    edit.setObjectName(f'{config.field}')
+    edit.setText(self.config[config.field])
+    self.grid_layout.addWidget(edit, self.row, 1, 1, 2)
+
+    edit.editingFinished.connect(lambda: self.config.update({ config.field:edit.text() }))
+
+    def on_config_change(_: ObservableCollection.Action, key: typing.Any, value: typing.Any) -> None:
+      if key == config.field:
+        edit.setText(value)
 
     self.config.add_observer(on_config_change, functools.partial(isdeleted, self))
 

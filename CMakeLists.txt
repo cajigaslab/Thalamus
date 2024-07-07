@@ -80,6 +80,7 @@ if(NOT WIN32 AND NOT APPLE)
 endif()
 include(cmake/ffmpeg.cmake)
 include(cmake/cairo.cmake)
+include(cmake/luajit.cmake)
  
 if(NOT WIN32 AND NOT APPLE)
   include(cmake/llvm.cmake)
@@ -101,7 +102,6 @@ include(cmake/opencv.cmake)
 include(cmake/boost.cmake)
 include(cmake/kfr.cmake)
 include(cmake/hdf5.cmake)
-include(cmake/lua.cmake)
 
 execute_process(
   COMMAND git log -1 --format=%h

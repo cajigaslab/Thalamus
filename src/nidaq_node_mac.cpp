@@ -4,6 +4,7 @@
 #include <tracing/tracing.h>
 #include <numeric>
 #include <grpc_impl.h>
+#include <modalities_util.h>
 
 namespace thalamus {
   struct NidaqNode::Impl {
@@ -220,7 +221,7 @@ namespace thalamus {
         graph->get_node(source_str, [&](auto node) {
           source = node;
           auto locked_source = source.lock();
-          if (!locked_source || dynamic_cast<AnalogNode*>(locked_source.get()) == nullptr) {
+          if (!locked_source || node_cast<AnalogNode*>(locked_source.get()) == nullptr) {
             source.reset();
             return;
           }
@@ -273,4 +274,5 @@ namespace thalamus {
     return impl->_time;
   }
 
+  size_t NidaqNode::modalities() const { return infer_modalities<NidaqNode>(); }
 }

@@ -5,6 +5,7 @@
 #include "opencv2/core.hpp"
 #include "opencv2/imgproc.hpp"
 #include "opencv2/imgcodecs.hpp"
+#include <modalities_util.h>
 
 namespace thalamus {
   using namespace std::chrono_literals;
@@ -282,8 +283,8 @@ namespace thalamus {
             return;
           }
           
-          if (dynamic_cast<ImageNode*>(locked_source.get()) != nullptr) {
-            image_source = dynamic_cast<ImageNode*>(locked_source.get());
+          if (node_cast<ImageNode*>(locked_source.get()) != nullptr) {
+            image_source = node_cast<ImageNode*>(locked_source.get());
             source_connection = locked_source->ready.connect(std::bind(&Impl::on_data, this, _1));
           }
         });
@@ -406,4 +407,5 @@ namespace thalamus {
     impl->need_recenter = true;
     return boost::json::value();
   }
+  size_t OculomaticNode::modalities() const { return infer_modalities<OculomaticNode>(); }
 }

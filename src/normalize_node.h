@@ -24,5 +24,6 @@ namespace thalamus {
     bool has_analog_data() const override;
 
     boost::json::value process(const boost::json::value&) override;
+    size_t modalities() const override;
   };
 }

@@ -32,6 +32,7 @@ from .channel_viewer import ChannelViewerWidget
 from .xsens_widget import XsensEditorWidget
 from .lua_widget import LuaWidget
 from .log_widget import LogWidget
+from .wave_widget import WaveWidget
 from ..util import NodeSelector
 from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
@@ -264,7 +265,7 @@ FACTORIES = {
     UserData(UserDataType.DOUBLE_SPINBOX, 'Amplitude', 5.0, []),
     UserData(UserDataType.SPINBOX, 'Duration (ms)', 100, []),
   ]),
-  'WAVE': Factory(None, [
+  'WAVE': Factory(WaveWidget, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.DOUBLE_SPINBOX, 'Frequency', 1.0, []),
     UserData(UserDataType.DOUBLE_SPINBOX, 'Amplitude', 1.0, []),

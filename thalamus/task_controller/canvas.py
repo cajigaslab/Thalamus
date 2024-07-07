@@ -186,6 +186,7 @@ class BrowserReflectingPainter(PyQt5.QtGui.QPainter):
     })
 
   def drawImage(self, *args: typing.Any, **_: typing.Any) -> None:
+    return super().drawImage(*args, **_)
     signature = tuple(type(arg) for arg in args)
     if signature == (PyQt5.QtCore.QRect, PyQt5.QtGui.QImage):
       rect = args[0]

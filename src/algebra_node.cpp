@@ -2,6 +2,7 @@
 #include <vector>
 #include <calculator.h>
 #include <boost/spirit/include/qi.hpp>
+#include <modalities_util.h>
 
 namespace thalamus {
   struct AlgebraNode::Impl {
@@ -144,5 +145,7 @@ namespace thalamus {
   bool AlgebraNode::has_analog_data() const {
     return true;
   }
+
+  size_t AlgebraNode::modalities() const { return infer_modalities<AlgebraNode>(); }
 }
 

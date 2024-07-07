@@ -1,5 +1,6 @@
 #include <channel_picker_node.h>
 #include <vector>
+#include <modalities_util.h>
 
 namespace thalamus {
   struct ChannelPickerNode::Impl {
@@ -212,5 +213,7 @@ namespace thalamus {
   bool ChannelPickerNode::has_analog_data() const {
     return true;
   }
+
+  size_t ChannelPickerNode::modalities() const { return infer_modalities<ChannelPickerNode>(); }
 }
 

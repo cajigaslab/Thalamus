@@ -26,6 +26,7 @@ namespace thalamus {
     void inject(const thalamus_grpc::Image&) override;
     boost::json::value process(const boost::json::value&) override;
     bool has_image_data() const override;
+    size_t modalities() const override;
   };
 }
 

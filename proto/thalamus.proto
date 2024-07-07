@@ -191,6 +191,7 @@ message AnalogResponse {
   repeated double data = 1;
   repeated Span spans = 2;
   repeated uint64 sample_intervals = 3;
+  bool channels_changed = 4;
 }
 
 message GraphRequest {
@@ -209,6 +210,7 @@ message Span {
 message GraphResponse {
   repeated double bins = 1;
   repeated Span spans = 2;
+  bool channels_changed = 3;
 }
 
 message Event {

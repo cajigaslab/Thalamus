@@ -1,6 +1,7 @@
 #include <pupil_node.h>
 #include <thread_pool.h>
 #include <boost/pool/object_pool.hpp>
+#include <modalities_util.h>
 extern "C" {
 #include <cairo.h>
 }
@@ -206,4 +207,5 @@ namespace thalamus {
   boost::json::value PupilNode::process(const boost::json::value&) {
     return boost::json::value();
   }
+  size_t PupilNode::modalities() const { return infer_modalities<PupilNode>(); }
 }

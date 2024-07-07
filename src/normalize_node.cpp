@@ -4,6 +4,7 @@
 #include <fstream>
 #include <iostream>
 #include <filesystem>
+#include <modalities_util.h>
 
 using Range = std::pair<double, double>;
 
@@ -167,5 +168,6 @@ namespace thalamus {
     }
     return boost::json::value();
   }
+  size_t NormalizeNode::modalities() const { return infer_modalities<NormalizeNode>(); }
 }
 

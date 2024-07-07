@@ -14,6 +14,7 @@
 #include <iostream>
 #include <fstream>
 #include <filesystem>
+#include <modalities_util.h>
 
 namespace thalamus {
   class RateTracker {
@@ -857,4 +858,7 @@ namespace thalamus {
   bool HandEngineNode::has_motion_data() const {
     return impl->has_motion_data;
   }
+
+  size_t XsensNode::modalities() const { return infer_modalities<XsensNode>(); }
+  size_t HandEngineNode::modalities() const { return infer_modalities<HandEngineNode>(); }
 }

@@ -6,6 +6,7 @@
 #include <util.h>
 #include <absl/strings/str_format.h>
 #include <absl/time/time.h>
+#include <modalities_util.h>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -187,18 +188,18 @@ namespace thalamus {
           auto publish_info = std::make_shared<PublishInfo>();
           publish_info->node = source;
           
-          if (dynamic_cast<DistortionNode*>(locked_source.get()) != nullptr) {
-            publish_info->distortion = dynamic_cast<DistortionNode*>(locked_source.get());
-            publish_info->image = dynamic_cast<ImageNode*>(locked_source.get());
+          if (node_cast<DistortionNode*>(locked_source.get()) != nullptr) {
+            publish_info->distortion = node_cast<DistortionNode*>(locked_source.get());
+            publish_info->image = node_cast<ImageNode*>(locked_source.get());
             auto source_connection = locked_source->ready.connect(std::bind(&Impl::on_distortion_data, this, _1, publish_info));
             source_connections[node_name] = std::move(source_connection);
-          } else if (dynamic_cast<OculomaticNode*>(locked_source.get()) != nullptr) {
-            publish_info->oculomatic = dynamic_cast<OculomaticNode*>(locked_source.get());
-            publish_info->image = dynamic_cast<ImageNode*>(locked_source.get());
+          } else if (node_cast<OculomaticNode*>(locked_source.get()) != nullptr) {
+            publish_info->oculomatic = node_cast<OculomaticNode*>(locked_source.get());
+            publish_info->image = node_cast<ImageNode*>(locked_source.get());
             auto source_connection = locked_source->ready.connect(std::bind(&Impl::on_oculomatic_data, this, _1, publish_info));
             source_connections[node_name] = std::move(source_connection);
-          } else if (dynamic_cast<ImageNode*>(locked_source.get()) != nullptr) {
-            publish_info->image = dynamic_cast<ImageNode*>(locked_source.get());
+          } else if (node_cast<ImageNode*>(locked_source.get()) != nullptr) {
+            publish_info->image = node_cast<ImageNode*>(locked_source.get());
             auto source_connection = locked_source->ready.connect(std::bind(&Impl::on_image_data, this, _1, publish_info));
             source_connections[node_name] = std::move(source_connection);
           }

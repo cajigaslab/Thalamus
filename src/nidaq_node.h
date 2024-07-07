@@ -25,6 +25,7 @@ namespace thalamus {
     std::span<const std::string> get_recommended_channels() const override;
 
     static bool prepare();
+    size_t modalities() const override;
   };
 
   class NidaqOutputNode : public Node {
@@ -36,5 +37,8 @@ namespace thalamus {
     static std::string type_name();
 
     static bool prepare();
+    size_t modalities() const override {
+      return 0;
+    }
   };
 }

@@ -1,5 +1,6 @@
 #include <alpha_omega_node.h>
 #include <regex>
+#include <modalities_util.h>
 
 #ifdef _WIN32
   #ifdef __clang__
@@ -919,4 +920,6 @@ namespace thalamus {
 
     return boost::json::value();
   }
+
+  size_t AlphaOmegaNode::modalities() const { return infer_modalities<AlphaOmegaNode>(); }
 }

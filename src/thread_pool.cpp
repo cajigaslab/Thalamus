@@ -6,6 +6,7 @@
 #include <sys/prctl.h>
 #endif
 #include <tracing/tracing.h>
+#include <modalities_util.h>
 
 namespace thalamus {
   using namespace std::chrono_literals;
@@ -171,4 +172,6 @@ namespace thalamus {
   boost::json::value ThreadPoolNode::process(const boost::json::value&) {
     return boost::json::value();
   }
+
+  size_t ThreadPoolNode::modalities() const { return infer_modalities<ThreadPoolNode>(); }
 }

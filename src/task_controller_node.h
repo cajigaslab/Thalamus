@@ -14,5 +14,6 @@ namespace thalamus {
     void inject(const thalamus::vector<std::span<double const>>&, const thalamus::vector<std::chrono::nanoseconds>&);
     std::chrono::nanoseconds ping() const;
     static std::string type_name();
+    size_t modalities() const override;
   };
 }

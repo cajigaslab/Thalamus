@@ -2,6 +2,8 @@
 #include <vector>
 #include <calculator.h>
 #include <boost/spirit/include/qi.hpp>
+#include <modalities_util.h>
+
 extern "C" {
 #include <lua.h>
 #include <lualib.h>
@@ -34,21 +36,18 @@ namespace thalamus {
     double amplitude;
     double value;
     std::chrono::milliseconds duration;
-    std::chrono::steady_clock::duration compute_time;
     ObservableListPtr channels;
     NodeGraph* graph;
     std::vector<std::weak_ptr<AnalogNode>> sources;
     calculator::parser<std::string::const_iterator> parser;        // Our grammar
     lua_State* L;
     boost::asio::steady_timer timer;
-    bool did_compute = false;
     bool channels_changed = true;
     std::vector<std::string> channel_names;
     std::vector<std::chrono::nanoseconds> sample_intervals;
     std::chrono::nanoseconds time;
     std::string lua_namespace;
     ObservableListPtr equation_list;
-    bool unsafe;
     static Impl* current;
     std::chrono::nanoseconds sample_time;
     std::chrono::nanoseconds sample_interval;
@@ -59,9 +58,6 @@ namespace thalamus {
       , outer(outer)
       , graph(graph)
       , timer(io_context) {
-
-      timer.expires_after(1s);
-      timer.async_wait(std::bind(&Impl::on_timer, this, _1));
 
       lua_namespace = "_" + std::to_string(rand());
 
@@ -95,24 +91,6 @@ namespace thalamus {
       return 1;
     }
 
-    void on_timer(const boost::system::error_code& error) {
-      if(error) {
-        return;
-      }
-      if(did_compute) {
-        did_compute = false;
-        time = std::chrono::steady_clock::now().time_since_epoch();
-        for(auto& d : data) {
-          d.resize(0);
-        }
-        data.back().push_back(std::chrono::duration_cast<std::chrono::milliseconds>(compute_time).count());
-        compute_time = 0s;
-        outer->ready(outer);
-      }
-      timer.expires_after(1s);
-      timer.async_wait(std::bind(&Impl::on_timer, this, _1));
-    }
-
     boost::signals2::scoped_connection source_connection;
     AnalogNode* source = nullptr;
     std::optional<calculator::program> program;    // Our program (AST)
@@ -136,8 +114,7 @@ namespace thalamus {
       if(text.empty()) {
         ((*dict)["Error"]).assign("");
         lua_pushnil(L);
-        lua_copy(L, -1, index+1);
-        lua_pop(L, 1);
+        lua_replace(L, index+1);
         return;
       }
       auto func_name = lua_namespace + "_func" + std::to_string(index);
@@ -157,12 +134,11 @@ namespace thalamus {
         return;
       }
       ((*dict)["Error"]).assign("");
-      THALAMUS_ASSERT(status == LUA_OK, "Lua Failure");
+      THALAMUS_ASSERT(status == 0, "Lua Failure");
 
       lua_call(L, 0, 0);
       lua_getglobal(L, func_name.c_str());
-      lua_copy(L, -1, index+1);
-      lua_pop(L, 1);
+      lua_replace(L, index+1);
     }
 
     std::map<long long, boost::signals2::scoped_connection> equation_connections;
@@ -210,8 +186,8 @@ namespace thalamus {
                 channel_names.emplace_back(name.begin(), name.end());
                 sample_intervals.push_back(source->sample_interval(i));
               }
-              channel_names.push_back("Compute Time (ms)");
-              sample_intervals.push_back(1s);
+              channel_names.push_back("Latency (ns)");
+              sample_intervals.push_back(0s);
               if(equation_list) {
                 auto num_equations = equation_list->size();
                 if (num_equations) {
@@ -248,46 +224,30 @@ namespace thalamus {
                 continue;
               }
 
-              int isnum = 0;
               sample_interval = source->sample_interval(i);
-              if(unsafe) {
-                for(auto j = 0ull;j < transformed.size();++j) {
-                  sample_index = j;
-                  auto& from = transformed.at(j);
-                  last_data[i] = from;
-                  lua_pushvalue(L, i+1);
-                  lua_pushnumber(L, from);
-                  lua_call(L, 1, 1);
-                  from = lua_tonumber(L, -1);
+              for(size_t j = 0;j < transformed.size();++j) {
+                sample_index = j;
+                auto& from = transformed.at(j);
+                last_data[i] = from;
+                lua_pushvalue(L, i+1);
+                lua_pushnumber(L, from);
+                auto status = lua_pcall(L, 1, 1, 0);
+                if (status == LUA_ERRRUN) {
+                  auto error = lua_tostring(L, -1);
+                  ObservableDictPtr dict = equation_list->at(i);
+                  (*dict)["Error"].assign(error);
+                  lua_pushnil(L);
+                  lua_replace(L, i+1);
                   lua_pop(L, 1);
+                  break;
                 }
-              } else {
-                for(size_t j = 0;j < transformed.size();++j) {
-                  sample_index = j;
-                  auto& from = transformed.at(j);
-                  last_data[i] = from;
-                  lua_pushvalue(L, i+1);
-                  lua_pushnumber(L, from);
-                  auto status = lua_pcall(L, 1, 1, 0);
-                  if (status == LUA_ERRRUN) {
-                    auto error = lua_tostring(L, -1);
-                    ObservableDictPtr dict = equation_list->at(i);
-                    (*dict)["Error"].assign(error);
-                    lua_pushnil(L);
-                    lua_copy(L, -1, i+1);
-                    lua_pop(L, 2);
-                    break;
-                  }
-                  auto to = lua_tonumberx(L, -1, &isnum);
-                  from = isnum ? to : 0;
-                  lua_pop(L, 1);
-                }
+                from = lua_tonumber(L, -1);
+                lua_pop(L, 1);
               }
             }
-            compute_time += std::chrono::steady_clock::now() - start;
-            did_compute = true;
+            std::chrono::nanoseconds compute_time = std::chrono::steady_clock::now() - start;
+            data.back().assign(1, compute_time.count());
             time = source->time();
-            data.back().clear();
             outer->ready(outer);
           });
         });
@@ -295,8 +255,6 @@ namespace thalamus {
         equation_list = std::get<ObservableListPtr>(v);
         equation_list->changed.connect(std::bind(&Impl::on_equations_change, this, _1, _2, _3));
         equation_list->recap(std::bind(&Impl::on_equations_change, this, _1, _2, _3));
-      } else if (key_str == "Unsafe") {
-        unsafe = std::get<bool>(v);
       }
     }
   };
@@ -356,6 +314,7 @@ namespace thalamus {
   boost::json::value LuaNode::process(const boost::json::value&) {
     return boost::json::value();
   }
+  size_t LuaNode::modalities() const { return infer_modalities<LuaNode>(); }
 }
 
 
