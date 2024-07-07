@@ -37,6 +37,7 @@ namespace thalamus {
 
     const cv::Mat& camera_matrix() const;
     std::span<const double> distortion_coefficients() const;
+    size_t modalities() const override;
   };
 }
 

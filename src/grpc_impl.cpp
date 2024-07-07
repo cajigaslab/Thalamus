@@ -6,6 +6,7 @@
 #include <image_node.h>
 #include <text_node.h>
 #include <kfr/all.hpp>
+#include <modalities_util.h>
 
 namespace thalamus {
   using namespace std::chrono_literals;
@@ -183,24 +184,28 @@ namespace thalamus {
             return ::grpc::Status::OK;
           }
         }
-        if (!dynamic_cast<AnalogNode*>(raw_node.get())) {
+        if (!node_cast<AnalogNode*>(raw_node.get())) {
           std::this_thread::sleep_for(1s);
           continue;
         }
 
-        AnalogNode* node = dynamic_cast<AnalogNode*>(raw_node.get());
+        AnalogNode* node = node_cast<AnalogNode*>(raw_node.get());
         std::vector<size_t> channels(request->channels().begin(), request->channels().end());
         thalamus::vector<std::string> channel_names(request->channel_names().begin(), request->channel_names().begin());
         auto has_channels = !channels.empty() || !channel_names.empty();
 
         std::mutex connection_mutex;
 
+        bool channels_changed = true;
+        using channels_changed_signal_type = decltype(node->channels_changed);
+        boost::signals2::scoped_connection channels_connection = node->channels_changed.connect(channels_changed_signal_type::slot_type([&](const AnalogNode*) {
+          std::unique_lock<std::mutex> lock(connection_mutex);
+          channels_changed = true;
+        }));
+
         using signal_type = decltype(raw_node->ready);
         auto connection = raw_node->ready.connect(signal_type::slot_type([&](const Node*) {
-          if(!connection_mutex.try_lock()) {
-            return;
-          }
-          std::lock_guard<std::mutex> lock(connection_mutex, std::adopt_lock_t());
+          std::lock_guard<std::mutex> lock(connection_mutex);
           ::thalamus_grpc::AnalogResponse response;
 
           size_t num_channels = node->num_channels();
@@ -229,6 +234,8 @@ namespace thalamus {
             }
           }
 
+          response.set_channels_changed(channels_changed);
+          channels_changed = false;
           for (auto c = 0u; c < channels.size(); ++c) {
             auto channel = channels[c];
             if (channel >= num_channels) {
@@ -247,7 +254,7 @@ namespace thalamus {
             span->set_end(response.data_size());
           }
           writer(response, ::grpc::WriteOptions());
-          }).track_foreign(raw_node));
+        }));
         raw_node.reset();
 
         while (!context->IsCancelled() && connection.connected()) {
@@ -260,6 +267,7 @@ namespace thalamus {
           }
           std::this_thread::sleep_for(1s);
         }
+        channels_connection.disconnect();
         connection.disconnect();
         std::lock_guard<std::mutex> lock(connection_mutex);
         std::this_thread::sleep_for(1s);
@@ -287,16 +295,16 @@ namespace thalamus {
         return ::grpc::Status::OK;
       }
     }
-    if (dynamic_cast<AnalogNode*>(raw_node.get())) {
+    if (node_cast<AnalogNode*>(raw_node.get())) {
       response->add_values(thalamus_grpc::Modalities::AnalogModality);
     }
-    if (dynamic_cast<MotionCaptureNode*>(raw_node.get())) {
+    if (node_cast<MotionCaptureNode*>(raw_node.get())) {
       response->add_values(thalamus_grpc::Modalities::MocapModality);
     }
-    if (dynamic_cast<ImageNode*>(raw_node.get())) {
+    if (node_cast<ImageNode*>(raw_node.get())) {
       response->add_values(thalamus_grpc::Modalities::ImageModality);
     }
-    if (dynamic_cast<TextNode*>(raw_node.get())) {
+    if (node_cast<TextNode*>(raw_node.get())) {
       response->add_values(thalamus_grpc::Modalities::TextModality);
     }
     return ::grpc::Status::OK;
@@ -317,7 +325,7 @@ namespace thalamus {
     boost::asio::post(impl->io_context, [&] {
       impl->node_graph.get_node(*request, [&](auto ptr) {
         raw_node = ptr.lock();
-        AnalogNode* node = dynamic_cast<AnalogNode*>(raw_node.get());
+        AnalogNode* node = node_cast<AnalogNode*>(raw_node.get());
         if (!node) {
           promise.set_value();
           return;
@@ -454,7 +462,7 @@ namespace thalamus {
       }
       THALAMUS_LOG(info) << "Got node";
 
-      AnalogNode* node = dynamic_cast<AnalogNode*>(raw_node.get());
+      AnalogNode* node = node_cast<AnalogNode*>(raw_node.get());
       if (!node) {
         std::this_thread::sleep_for(1s);
         continue;
@@ -529,12 +537,12 @@ namespace thalamus {
           return ::grpc::Status::OK;
         }
       }
-      if (!dynamic_cast<AnalogNode*>(raw_node.get())) {
+      if (!node_cast<AnalogNode*>(raw_node.get())) {
         std::this_thread::sleep_for(1s);
         continue;
       }
 
-      AnalogNode* node = dynamic_cast<AnalogNode*>(raw_node.get());
+      AnalogNode* node = node_cast<AnalogNode*>(raw_node.get());
       std::vector<size_t> channels(request->channels().begin(), request->channels().end());
 
       std::chrono::nanoseconds bin_ns(request->bin_ns());
@@ -546,8 +554,16 @@ namespace thalamus {
       std::vector<std::chrono::nanoseconds> current_times(channels.size());
       std::vector<std::chrono::nanoseconds> bin_ends(channels.size(), bin_ns);
       thalamus::vector<std::string> channel_names(request->channel_names().begin(), request->channel_names().end());
+      std::optional<std::chrono::nanoseconds> first_time;
+      bool channels_changed = true;
 
       auto has_channels = !channels.empty() || !channel_names.empty();
+
+      using channels_changed_signal_type = decltype(node->channels_changed);
+      boost::signals2::scoped_connection channels_connection = node->channels_changed.connect(channels_changed_signal_type::slot_type([&](const AnalogNode*) {
+        std::unique_lock<std::mutex> lock(connection_mutex);
+        channels_changed = true;
+      }));
 
       using signal_type = decltype(raw_node->ready);
       auto connection = raw_node->ready.connect(signal_type::slot_type([&](const Node*) {
@@ -596,6 +612,11 @@ namespace thalamus {
           }
         }
 
+        response.set_channels_changed(channels_changed);
+        channels_changed = false;
+        if(!first_time) {
+          first_time = node->time();
+        }
         for (auto c = 0u; c < channels.size(); ++c) {
           auto channel = channels[c];
           auto& min = mins[c];
@@ -611,6 +632,9 @@ namespace thalamus {
           span->set_begin(response.bins_size());
 
           auto interval = node->sample_interval(channel);
+          if(interval == 0ns) {
+            current_time = node->time() - *first_time;
+          }
           auto data = node->data(channel);
           for (auto sample : data) {
             auto wrote = current_time >= bin_end;
@@ -632,7 +656,7 @@ namespace thalamus {
           span->set_name(name.data(), name.size());
         }
         writer->Write(response);
-        }).track_foreign(raw_node));
+      }));
       raw_node.reset();
 
       while (!context->IsCancelled() && connection.connected()) {
@@ -642,6 +666,7 @@ namespace thalamus {
         }
         std::this_thread::sleep_for(1s);
       }
+      channels_connection.disconnect();
       connection.disconnect();
       std::lock_guard<std::mutex> lock(connection_mutex);
       std::this_thread::sleep_for(1s);
@@ -672,12 +697,12 @@ namespace thalamus {
         }
       }
       auto raw_node = weak_raw_node.lock();
-      if (!dynamic_cast<AnalogNode*>(raw_node.get())) {
+      if (!node_cast<AnalogNode*>(raw_node.get())) {
         std::this_thread::sleep_for(1s);
         continue;
       }
 
-      AnalogNode* node = dynamic_cast<AnalogNode*>(raw_node.get());
+      AnalogNode* node = node_cast<AnalogNode*>(raw_node.get());
       std::vector<size_t> channels(request->channels().begin(), request->channels().end());
       thalamus::vector<std::string> channel_names(request->channel_names().begin(), request->channel_names().begin());
       auto has_channels = !channels.empty() || !channel_names.empty();
@@ -780,12 +805,12 @@ namespace thalamus {
           return ::grpc::Status::OK;
         }
       }
-      if (!dynamic_cast<AnalogNode*>(raw_node.get())) {
+      if (!node_cast<AnalogNode*>(raw_node.get())) {
         std::this_thread::sleep_for(1s);
         continue;
       }
 
-      AnalogNode* node = dynamic_cast<AnalogNode*>(raw_node.get());
+      AnalogNode* node = node_cast<AnalogNode*>(raw_node.get());
       std::vector<kfr::univector<double>> accumulated_data(request->channels().size());
       std::chrono::nanoseconds window_ns(static_cast<size_t>(request->window_s()*1e9));
       std::vector<int> window_samples(request->channels().size());
@@ -986,12 +1011,12 @@ namespace thalamus {
           return ::grpc::Status::OK;
         }
       }
-      if (!dynamic_cast<MotionCaptureNode*>(raw_node.get())) {
+      if (!node_cast<MotionCaptureNode*>(raw_node.get())) {
         std::this_thread::sleep_for(1s);
         continue;
       }
 
-      auto node = dynamic_cast<MotionCaptureNode*>(raw_node.get());
+      auto node = node_cast<MotionCaptureNode*>(raw_node.get());
 
       std::mutex connection_mutex;
 
@@ -1051,12 +1076,12 @@ namespace thalamus {
           return ::grpc::Status::OK;
         }
       }
-      if (!dynamic_cast<ImageNode*>(raw_node.get())) {
+      if (!node_cast<ImageNode*>(raw_node.get())) {
         std::this_thread::sleep_for(1s);
         continue;
       }
 
-      auto node = dynamic_cast<ImageNode*>(raw_node.get());
+      auto node = node_cast<ImageNode*>(raw_node.get());
 
       std::mutex connection_mutex;
       std::mutex images_mutex;
@@ -1500,10 +1525,10 @@ namespace thalamus {
           auto graph_node = impl->node_graph.get_node(node.name);
           auto locked_node = graph_node.lock();
           node.graph_node = locked_node.get();
-          if (dynamic_cast<AnalogNode*>(locked_node.get())) {
+          if (node_cast<AnalogNode*>(locked_node.get())) {
             node.type = H5Node::Type::ANALOG;
           }
-          else if (dynamic_cast<MotionCaptureNode*>(locked_node.get())) {
+          else if (node_cast<MotionCaptureNode*>(locked_node.get())) {
             node.type = H5Node::Type::XSENS;
           }
           else {
@@ -1527,12 +1552,12 @@ namespace thalamus {
           auto next_received = pair.second.next_received();
           if (next_received == current_time) {
             if (pair.second.type == H5Node::Type::ANALOG) {
-              auto analog_node = dynamic_cast<AnalogNode*>(pair.second.graph_node);
+              auto analog_node = node_cast<AnalogNode*>(pair.second.graph_node);
               analog_node->inject(pair.second.get_data(), pair.second.sample_intervals, { "" });
               pair.second.pop_received();
             }
             else if (pair.second.type == H5Node::Type::XSENS) {
-              auto xsens_node = dynamic_cast<MotionCaptureNode*>(pair.second.graph_node);
+              auto xsens_node = node_cast<MotionCaptureNode*>(pair.second.graph_node);
               xsens_node->inject(pair.second.get_xsens_data());
               pair.second.pop_received();
             }

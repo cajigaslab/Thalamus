@@ -1,6 +1,7 @@
 #include <chessboard_node.h>
 #include <thread_pool.h>
 #include <boost/pool/object_pool.hpp>
+#include <modalities_util.h>
 extern "C" {
 #include <cairo.h>
 }
@@ -214,4 +215,6 @@ namespace thalamus {
   boost::json::value ChessBoardNode::process(const boost::json::value&) {
     return boost::json::value();
   }
+
+  size_t ChessBoardNode::modalities() const { return infer_modalities<ChessBoardNode>(); }
 }

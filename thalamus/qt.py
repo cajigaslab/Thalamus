@@ -14,10 +14,10 @@ if False:
                                QListWidget, QTreeView, QTableView, QListView, QTableWidget, QTableWidgetItem,
                                QWizard, QWizardPage, QProgressBar)
   from PyQt6.QtOpenGLWidgets import (QOpenGLWidget)
-  from PyQt6.QtMultimedia import QSound
+  from PyQt6.QtMultimedia import QSound, QMediaPlayer
   from PyQt6.QtOpenGL import (QOpenGLFramebufferObjectFormat, QOpenGLFramebufferObject)
   from PyQt6.QtCore import (QPoint, QRect, QPointF, Qt, QSize, QDir, QModelIndex, QAbstractItemModel, QVariant,
-                            QAbstractListModel, QAbstractTableModel, QLineF, QRectF, QItemSelection)
+                            QAbstractListModel, QAbstractTableModel, QLineF, QRectF, QItemSelection, QUrl)
 
   def to_polygonf(polygon):
     return polygon.toPolygonF()
@@ -51,8 +51,8 @@ else:
                                QStyleOptionViewItem)
   from PyQt5.QtCore import (QPoint, QRect, QPointF, Qt, QSize, QDir, QItemSelectionModel, QModelIndex,
                             QAbstractListModel, QAbstractItemModel, QAbstractTableModel, QLineF, QRectF,
-                            QItemSelection, QVariant)
-  from PyQt5.QtMultimedia import QSound
+                            QItemSelection, QVariant, QUrl)
+  from PyQt5.QtMultimedia import QSound, QMediaPlayer, QAbstractVideoSurface, QVideoFrame, QMediaContent
 
   def to_polygonf(polygon):
     return QPolygonF(polygon)

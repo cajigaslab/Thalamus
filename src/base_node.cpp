@@ -5,6 +5,7 @@
 #include <util.h>
 #include <tracing/tracing.h>
 #include <random>
+#include <modalities_util.h>
 //#include <plot.h>
 
 namespace thalamus {
@@ -69,7 +70,7 @@ namespace thalamus {
         auto value_str = std::get<std::string>(v);
         graph->get_node(value_str, [&](auto weak_node) {
           auto node = weak_node.lock();
-          auto analog_node = dynamic_cast<AnalogNode*>(node.get());
+          auto analog_node = node_cast<AnalogNode*>(node.get());
           if (node && analog_node) {
             trigger_connection = node->ready.connect(std::bind(&Impl::on_data, this, _1, analog_node));
             trigger = weak_node;
@@ -528,4 +529,8 @@ namespace thalamus {
 
     return targets;
   }
+  size_t ToggleNode::modalities() const { return infer_modalities<ToggleNode>(); }
+  size_t WaveGeneratorNode::modalities() const { return infer_modalities<WaveGeneratorNode>(); }
+  size_t StarterNode::modalities() const { return infer_modalities<StarterNode>(); }
+  size_t AnalogNodeImpl::modalities() const { return infer_modalities<AnalogNodeImpl>(); }
 }

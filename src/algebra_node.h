@@ -22,5 +22,6 @@ namespace thalamus {
     std::chrono::nanoseconds sample_interval(int i) const override;
     void inject(const thalamus::vector<std::span<double const>>& spans, const thalamus::vector<std::chrono::nanoseconds>& sample_intervals, const thalamus::vector<std::string_view>&) override;
     bool has_analog_data() const override;
+    size_t modalities() const override;
   };
 }

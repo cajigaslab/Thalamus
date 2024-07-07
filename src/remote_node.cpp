@@ -6,6 +6,7 @@
 #include <boost/qvm/vec_access.hpp>
 #include <boost/qvm/quat_access.hpp>
 #include <tracing/tracing.h>
+#include <modalities_util.h>
 
 using namespace thalamus;
 
@@ -370,3 +371,5 @@ bool RemoteNode::has_analog_data() const {
 std::span<const std::string> RemoteNode::get_recommended_channels() const {
   return std::span<const std::string>(impl->names.begin(), impl->names.end());
 }
+
+size_t RemoteNode::modalities() const { return infer_modalities<RemoteNode>(); }

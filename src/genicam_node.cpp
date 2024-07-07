@@ -9,6 +9,7 @@
 #include <numeric>
 #include <calculator.h>
 #include <filesystem>
+#include <modalities_util.h>
 #ifdef _WIN32
 #else
 #include <dlfcn.h>
@@ -2011,4 +2012,5 @@ namespace thalamus {
     }
     return boost::json::value();
   }
+  size_t GenicamNode::modalities() const { return infer_modalities<GenicamNode>(); }
 }

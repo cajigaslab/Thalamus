@@ -6,10 +6,7 @@ class LuaWidget(QWidget):
     super().__init__()
     if "Equations" not in config:
       config["Equations"] = []
-    if "Unsafe" not in config:
-      config["Unsafe"] = False
 
-    config.add_observer(self.on_change, lambda: isdeleted(self))
     config['Equations'].add_observer(self.on_equations_change, lambda: isdeleted(self))
 
     self.top_layout = QVBoxLayout()
@@ -18,11 +15,6 @@ class LuaWidget(QWidget):
     self.__layout.setColumnStretch(0, 0)
     self.__layout.setColumnStretch(1, 1)
 
-    self.unsafe_checkbox = QCheckBox('Disable Error Checks (Lua error will crash program)')
-    self.unsafe_checkbox.toggled.connect(lambda checked: config.update({'Unsafe': checked}))
-
-    self.__layout.addWidget(self.unsafe_checkbox, 0, 0, 1, 2)
-
     self.top_layout.addLayout(self.__layout, 0)
     self.top_layout.addStretch(1)
     self.setLayout(self.top_layout)
@@ -30,11 +22,6 @@ class LuaWidget(QWidget):
 
     for k, v in enumerate(config['Equations']):
       self.on_equations_change(ObservableCollection.Action.SET, k, v)
-
-  def on_change(self, a, k, v):
-    if k == 'Unsafe':
-      if v != self.unsafe_checkbox.isChecked():
-        self.unsafe_checkbox.setChecked(v)
 
   def on_equations_change(self, a, k, v):
     if a == ObservableCollection.Action.SET:

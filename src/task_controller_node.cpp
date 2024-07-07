@@ -3,6 +3,7 @@
 #include <grpcpp/create_channel.h>
 #include <tracing/tracing.h>
 #include <task_controller.grpc.pb.h>
+#include <modalities_util.h>
 
 using namespace thalamus;
 
@@ -57,3 +58,5 @@ TaskControllerNode::~TaskControllerNode() {}
 std::string TaskControllerNode::type_name() {
   return "TASK_CONTROLLER";
 }
+
+size_t TaskControllerNode::modalities() const { return infer_modalities<TaskControllerNode>(); }

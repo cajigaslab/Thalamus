@@ -1,4 +1,5 @@
 #include <image_node.h>
+#include <modalities_util.h>
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -351,4 +352,5 @@ namespace thalamus {
   std::span<const std::string> FfmpegNode::get_recommended_channels() const {
     return std::span<const std::string>(names.begin(), names.end());
   }
+  size_t FfmpegNode::modalities() const { return infer_modalities<FfmpegNode>(); }
 }

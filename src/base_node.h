@@ -31,6 +31,7 @@ namespace thalamus {
     virtual ~Node() {};
     boost::signals2::signal<void(Node*)> ready;
     std::map<size_t, boost::signals2::scoped_connection> connections;
+    virtual size_t modalities() const = 0;
     virtual boost::json::value process(const boost::json::value&) {
       return boost::json::value();
     }
@@ -57,6 +58,9 @@ namespace thalamus {
   class NoneNode : public Node {
   public:
     NoneNode(ObservableDictPtr, boost::asio::io_context&, NodeGraph*) {}
+    size_t modalities() const override {
+      return 0;
+    }
 
     static std::string type_name() {
       return "NONE";
@@ -95,6 +99,7 @@ namespace thalamus {
     virtual void inject(const thalamus::vector<std::span<double const>>&, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&) override;
     virtual void inject(const thalamus::vector<std::span<double const>>&, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&, std::chrono::nanoseconds);
     static std::string type_name();
+    size_t modalities() const override;
   };
 
   class StarterNode : public Node {
@@ -104,6 +109,7 @@ namespace thalamus {
     StarterNode(ObservableDictPtr state, boost::asio::io_context&, NodeGraph* graph);
     ~StarterNode();
     static std::string type_name();
+    size_t modalities() const override;
   };
 
   class WaveGeneratorNode : public AnalogNode, public Node {
@@ -126,6 +132,7 @@ namespace thalamus {
     std::chrono::nanoseconds time() const override;
     std::string_view name(int channel) const override;
     std::span<const std::string> get_recommended_channels() const override;
+    size_t modalities() const override;
   };
 
   class ToggleNode : public AnalogNode, public Node {
@@ -147,6 +154,7 @@ namespace thalamus {
     std::chrono::nanoseconds time() const override;
     std::string_view name(int channel) const override;
     std::span<const std::string> get_recommended_channels() const override;
+    size_t modalities() const override;
   };
 
   std::vector<std::weak_ptr<ObservableDict>> get_nodes(ObservableList* nodes, const std::vector<std::string>& names);

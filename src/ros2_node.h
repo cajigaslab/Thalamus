@@ -28,5 +28,6 @@ namespace thalamus {
 
     static bool prepare();
     static void cleanup();
+    size_t modalities() const override { return 0; }
   };
 }

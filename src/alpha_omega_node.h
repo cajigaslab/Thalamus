@@ -40,5 +40,6 @@ namespace thalamus {
     void on_change(ObservableCollection::Action a, const ObservableCollection::Key& k, const ObservableCollection::Value& v);
 
     static bool prepare();
+    size_t modalities() const override;
   };
 }

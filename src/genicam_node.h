@@ -29,6 +29,7 @@ namespace thalamus {
     void inject(const thalamus::vector<std::span<double const>>&, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&) override;
     bool has_analog_data() const override;
     boost::json::value process(const boost::json::value&) override;
+    size_t modalities() const override;
   };
 }
 

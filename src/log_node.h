@@ -15,5 +15,6 @@ namespace thalamus {
     boost::json::value process(const boost::json::value&) override;
     std::chrono::nanoseconds time() const override;
     static std::string type_name();
+    size_t modalities() const override;
   };
 }

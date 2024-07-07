@@ -7,6 +7,7 @@
 #include <absl/time/time.h>
 #include <boost/qvm/vec_access.hpp>
 #include <boost/qvm/quat_access.hpp>
+#include <modalities_util.h>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -341,23 +342,23 @@ namespace thalamus {
               return;
             }
             
-            if (dynamic_cast<MotionCaptureNode*>(locked_source.get()) != nullptr) {
-              auto xsens_source = dynamic_cast<MotionCaptureNode*>(locked_source.get());
+            if (node_cast<MotionCaptureNode*>(locked_source.get()) != nullptr) {
+              auto xsens_source = node_cast<MotionCaptureNode*>(locked_source.get());
               auto xsens_source_connection = locked_source->ready.connect(std::bind(&Impl::on_xsens_data, this, _1, token, xsens_source, i));
               source_connections.push_back(std::move(xsens_source_connection));
             } 
-            if (dynamic_cast<AnalogNode*>(locked_source.get()) != nullptr) {
-              auto analog_source = dynamic_cast<AnalogNode*>(locked_source.get());
+            if (node_cast<AnalogNode*>(locked_source.get()) != nullptr) {
+              auto analog_source = node_cast<AnalogNode*>(locked_source.get());
               auto analog_source_connection = locked_source->ready.connect(std::bind(&Impl::on_data, this, _1, token, analog_source, i));
               source_connections.push_back(std::move(analog_source_connection));
             } 
-            if (dynamic_cast<ImageNode*>(locked_source.get()) != nullptr) {
-              auto image_source = dynamic_cast<ImageNode*>(locked_source.get());
+            if (node_cast<ImageNode*>(locked_source.get()) != nullptr) {
+              auto image_source = node_cast<ImageNode*>(locked_source.get());
               auto image_source_connection = locked_source->ready.connect(std::bind(&Impl::on_image_data, this, _1, token, image_source, i));
               source_connections.push_back(std::move(image_source_connection));
             }
-            if (dynamic_cast<TextNode*>(locked_source.get()) != nullptr) {
-              auto text_source = dynamic_cast<TextNode*>(locked_source.get());
+            if (node_cast<TextNode*>(locked_source.get()) != nullptr) {
+              auto text_source = node_cast<TextNode*>(locked_source.get());
               auto text_source_connection = locked_source->ready.connect(std::bind(&Impl::on_text_data, this, _1, token, text_source, i));
               source_connections.push_back(std::move(text_source_connection));
             }

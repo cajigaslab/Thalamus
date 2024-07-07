@@ -3,6 +3,7 @@
 #include <grpcpp/create_channel.h>
 #include <ophanim.grpc.pb.h>
 #include <tracing/tracing.h>
+#include <modalities_util.h>
 
 using namespace thalamus;
 
@@ -58,3 +59,5 @@ OphanimNode::~OphanimNode() {}
 std::string OphanimNode::type_name() {
   return "OPHANIM";
 }
+
+size_t OphanimNode::modalities() const { return infer_modalities<OphanimNode>(); }

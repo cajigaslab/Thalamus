@@ -293,7 +293,8 @@ class ObservableCollection(abc.ABC):
 
   def add_observer(self,
                    observer: typing.Callable[['ObservableCollection.Action', typing.Any, typing.Any], None],
-                   remove_when: typing.Optional[typing.Callable[[], bool]] = None) -> None:
+                   remove_when: typing.Optional[typing.Callable[[], bool]] = None,
+                   recap: bool = False) -> None:
     '''
     Add an observer.  If remove_when is defined then the observer is removed if it returns fals.
     '''
@@ -302,6 +303,8 @@ class ObservableCollection(abc.ABC):
 
     if not remove_when:
       self.observers[observer_id] = observer
+      if recap:
+        self.recap(observer)
       return
     valid_remove_when = remove_when
 
@@ -314,6 +317,9 @@ class ObservableCollection(abc.ABC):
 
     self.observers[observer_id] = callback
 
+    if recap:
+      self.recap(callback)
+
   def pop(self, i = -1) -> typing.Any:
     if not isinstance(self.content, list):
       raise RuntimeError("Attempted to append to ObservableCollection that doesn't wrap a list")
@@ -325,6 +331,11 @@ class ObservableCollection(abc.ABC):
       observer(ObservableCollection.Action.DELETE, i, value)
 
     return value
+
+  def recap(self, observer: typing.Callable[['ObservableCollection.Action', typing.Any, typing.Any], None]) -> None:
+    items = (self.content.items() if isinstance(self.content, dict) else enumerate(self.content))
+    for k, v in items:
+      observer(ObservableCollection.Action.SET, k, v)
 
 class ObservableDict(ObservableCollection, typing.Dict[typing.Any, typing.Any]):
   """
@@ -379,7 +390,6 @@ def load(filename: typing.Union[str, pathlib.Path]) -> ObservableCollection:
   result['queue'] = []
   if 'reward_schedule' not in result:
     result['reward_schedule'] = {'schedules': [[0]], 'index': 0}
-  #print(json.dumps(result, indent=2))
 
   result2 = ObservableDict(result)
   return result2

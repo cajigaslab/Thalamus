@@ -1,4 +1,5 @@
 #include <log_node.h>
+#include <modalities_util.h>
 
 namespace thalamus {
   struct LogNode::Impl {
@@ -26,4 +27,5 @@ namespace thalamus {
   std::string LogNode::type_name() {
     return "LOG";
   }
+  size_t LogNode::modalities() const { return infer_modalities<LogNode>(); }
 }

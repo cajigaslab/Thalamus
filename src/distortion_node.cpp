@@ -5,6 +5,7 @@
 
 #include "opencv2/imgproc.hpp"
 #include "opencv2/calib3d.hpp"
+#include <modalities_util.h>
 
 namespace thalamus {
   using namespace std::chrono_literals;
@@ -321,8 +322,8 @@ namespace thalamus {
             return;
           }
           
-          if (dynamic_cast<ImageNode*>(locked_source.get()) != nullptr) {
-            image_source = dynamic_cast<ImageNode*>(locked_source.get());
+          if (node_cast<ImageNode*>(locked_source.get()) != nullptr) {
+            image_source = node_cast<ImageNode*>(locked_source.get());
             source_connection = locked_source->ready.connect(std::bind(&Impl::on_data, this, _1));
           }
         });
@@ -423,4 +424,6 @@ namespace thalamus {
   std::span<const double> DistortionNode::distortion_coefficients() const {
     return std::span<const double>(impl->distortion_coefficients.begin(), impl->distortion_coefficients.end());
   }
+
+  size_t DistortionNode::modalities() const { return infer_modalities<DistortionNode>(); }
 }
