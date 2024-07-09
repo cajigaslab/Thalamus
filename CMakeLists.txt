@@ -286,6 +286,7 @@ target_include_directories(native_lib PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(native_lib 
   thalamus 
   hydrate
+  thalamus_ffmpeg
   tracing webrtc ffmpeg sdl protoc_generated kfr lua cairo)
 if(NOT WIN32)
   target_link_options(native_lib PRIVATE -Wl,-Bsymbolic)

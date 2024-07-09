@@ -1,6 +1,9 @@
 from ..config import ObservableCollection
 from ..qt import *
 
+from .. import thalamus_pb2
+from ..task_controller.util import create_task_with_exc_handling
+
 class LuaWidget(QWidget):
   def __init__(self, config, stub):
     super().__init__()
@@ -15,7 +18,18 @@ class LuaWidget(QWidget):
     self.__layout.setColumnStretch(0, 0)
     self.__layout.setColumnStretch(1, 1)
 
+    reset_button = QPushButton('Reset')
+    def reset():
+      request = thalamus_pb2.NodeRequest(
+        node = config['name'],
+        json = '"Reset"'
+      )
+      create_task_with_exc_handling(stub.node_request(request))
+    reset_button.clicked.connect(reset)
+
+
     self.top_layout.addLayout(self.__layout, 0)
+    self.top_layout.addWidget(reset_button)
     self.top_layout.addStretch(1)
     self.setLayout(self.top_layout)
     self.lines = []

@@ -87,12 +87,17 @@ async def async_main() -> None:
   if arguments.config:
     config = load(arguments.config)
   else:
-    config = ObservableDict({
-      'touch_channels': [0, 1], 
-      'task_clusters': [], 
-      'queue': [], 
-      'reward_schedule': {'schedules': [[0]], 'index': 0},
-    })
+    config = ObservableDict({})
+
+  if 'touch_channels' not in config:
+    config['touch_channels'] = [0, 1]
+  if 'task_clusters' not in config:
+    config['task_clusters'] = []
+  if 'queue' not in config:
+    config['queue'] = [] 
+  if 'reward_schedule' not in config:
+    config['reward_schedule'] = {'schedules': [[0]], 'index': 0},
+
   if 'nodes' not in config:
     config['nodes'] = []
   for node in config['nodes']:

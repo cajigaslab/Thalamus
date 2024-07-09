@@ -1,5 +1,7 @@
 #include <image_node.h>
 #include <modalities_util.h>
+#include <tracing/tracing.h>
+#include <atomic>
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -17,6 +19,8 @@ namespace thalamus {
     ObservableDictPtr state;
     boost::signals2::scoped_connection state_connection;
     boost::signals2::scoped_connection options_connection;
+    NodeGraph::NodeConnection node_connection;
+    boost::signals2::scoped_connection data_connection;
     bool is_running = false;
     FfmpegNode* outer;
     std::chrono::nanoseconds time;
@@ -33,11 +37,15 @@ namespace thalamus {
     AnalogNodeImpl analog_impl;
     bool has_analog = false;
     bool has_image = false;
+    NodeGraph* graph;
+    std::atomic_int stream_time;
 
-    Impl(ObservableDictPtr state, boost::asio::io_context& io_context, FfmpegNode* outer)
+    Impl(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph, FfmpegNode* outer)
       : state(state)
       , outer(outer)
-      , io_context(io_context) {
+      , io_context(io_context)
+      , graph(graph)
+      , stream_time(-1) {
       using namespace std::placeholders;
       analog_impl.inject({ {std::span<double const>()} }, { 0ns }, { "" });
 
@@ -59,9 +67,12 @@ namespace thalamus {
       AVCodecContext* codec = nullptr;
       std::shared_ptr<AVFrame> frame = nullptr;
       AVPacket* packet = nullptr;
-      FfmpegContext()
-      : frame(av_frame_alloc(), [](AVFrame* frame) { av_frame_free(&frame); })
-      {}
+      FfmpegContext() {
+        new_frame();
+      }
+      void new_frame() {
+        frame.reset(av_frame_alloc(), [](AVFrame* frame) { av_frame_free(&frame); });
+      }
       ~FfmpegContext() {
         if(input_format) {
           avformat_close_input(&input_format);
@@ -75,6 +86,7 @@ namespace thalamus {
     };
 
     void ffmpeg_target(const std::string input_format_name, const std::string input_name, AVDictionary* options) {
+      tracing::SetCurrentThreadName("FFMPEG");
       FfmpegContext context;
       context.options = options;
       context.input_format = avformat_alloc_context();
@@ -84,10 +96,13 @@ namespace thalamus {
         return;
       }
 
-      auto input_format = av_find_input_format(input_format_name.c_str());
-      if(!input_format) {
-        THALAMUS_LOG(error) << "Input Format not found " << input_format_name;
-        return;
+      const AVInputFormat* input_format = nullptr;
+      if (!input_format_name.empty()) {
+        input_format = av_find_input_format(input_format_name.c_str());
+        if (!input_format) {
+          THALAMUS_LOG(error) << "Input Format not found " << input_format_name;
+          return;
+        }
       }
 
 
@@ -146,6 +161,10 @@ namespace thalamus {
           boost::asio::post(io_context, stop);
           return;
         }
+        if(context.packet->stream_index != stream_index) {
+          av_packet_unref(context.packet);
+          continue;
+        }
 
         auto now = std::chrono::steady_clock::now();
         auto sleep_time = 0ns;
@@ -162,11 +181,6 @@ namespace thalamus {
           }
         }
 
-        if(frame_pending) {
-          av_packet_unref(context.packet);
-          continue;
-        }
-
         err = avcodec_send_packet(context.codec, context.packet);
         if(err < 0) {
           THALAMUS_LOG(error) << "Failed to decode frame, stopping Ffmpeg capture";
@@ -175,59 +189,87 @@ namespace thalamus {
         }
         av_packet_unref(context.packet);
 
-        err = avcodec_receive_frame(context.codec, context.frame.get());
-        if(err < 0) {
-          THALAMUS_LOG(error) << "Failed to receive decode frame, stopping Ffmpeg capture";
-          boost::asio::post(io_context, stop);
-          return;
-        }
-
-        size_t min_linesize = context.frame->width;
-        data.clear();
-        switch(context.frame->format) {
-          case AV_PIX_FMT_GRAY8: 
-            format = Format::Gray;
-            data.emplace_back(context.frame->data[0],
-                              context.frame->data[0] + context.frame->height * context.frame->linesize[0]);
+        while(true) {
+          err = avcodec_receive_frame(context.codec, context.frame.get());
+          if(err == AVERROR(EAGAIN)) {
             break;
-          case AV_PIX_FMT_RGB24:
-            format = Format::RGB;
-            data.emplace_back(context.frame->data[0],
-                              context.frame->data[0] + context.frame->height * context.frame->linesize[0]);
-            break;
-          case AV_PIX_FMT_YUYV422:
-            format = Format::YUYV422;
-            data.emplace_back(context.frame->data[0],
-                              context.frame->data[0] + context.frame->height * context.frame->linesize[0]);
-            break;
-          default:
-            THALAMUS_LOG(error) << "Unsupported pixel format: " << context.frame->format;
+          } else if(err < 0) {
+            THALAMUS_LOG(error) << "Failed to receive decode frame, stopping Ffmpeg capture";
             boost::asio::post(io_context, stop);
             return;
+          }
+
+          if(frame_pending || context.frame->pict_type == AV_PICTURE_TYPE_NONE) {
+            continue;
+          }
+
+          size_t min_linesize = context.frame->width;
+          data.clear();
+          switch(context.frame->format) {
+            case AV_PIX_FMT_GRAY8: 
+              format = Format::Gray;
+              data.emplace_back(context.frame->data[0],
+                                context.frame->data[0] + context.frame->height * context.frame->linesize[0]);
+              break;
+            case AV_PIX_FMT_RGB24:
+              format = Format::RGB;
+              data.emplace_back(context.frame->data[0],
+                                context.frame->data[0] + context.frame->height * context.frame->linesize[0]);
+              break;
+            case AV_PIX_FMT_YUYV422:
+              format = Format::YUYV422;
+              data.emplace_back(context.frame->data[0],
+                                context.frame->data[0] + context.frame->height * context.frame->linesize[0]);
+              break;
+            case AV_PIX_FMT_YUVJ420P:
+              format = Format::YUVJ420P;
+              data.emplace_back(context.frame->data[0],
+                                context.frame->data[0] + context.frame->height * context.frame->linesize[0]);
+              data.emplace_back(context.frame->data[1],
+                                context.frame->data[1] + context.frame->height/2 * context.frame->linesize[1]);
+              data.emplace_back(context.frame->data[2],
+                                context.frame->data[2] + context.frame->height/2 * context.frame->linesize[2]);
+              break;
+            case AV_PIX_FMT_YUV420P:
+              format = Format::YUV420P;
+              data.emplace_back(context.frame->data[0],
+                                context.frame->data[0] + context.frame->height * context.frame->linesize[0]);
+              data.emplace_back(context.frame->data[1],
+                                context.frame->data[1] + context.frame->height/2 * context.frame->linesize[1]);
+              data.emplace_back(context.frame->data[2],
+                                context.frame->data[2] + context.frame->height/2 * context.frame->linesize[2]);
+              break;
+            default:
+              THALAMUS_LOG(error) << "Unsupported pixel format: " << context.frame->format;
+              boost::asio::post(io_context, stop);
+              return;
+          }
+
+          while(!frame_times.empty() && now - *frame_times.begin() > 1s) {
+            frame_times.erase(frame_times.begin());
+          }
+          frame_times.insert(now);
+
+          width = context.frame->width;
+          height = context.frame->height;
+
+          auto frame_copy = context.frame;
+          context.new_frame();
+          frame_pending = true;
+          boost::asio::post(io_context, [&,now,frame_copy,framerate=double(frame_times.size()),sleep_time=1e-9*sleep_time.count(),frame_interval] {
+            this->time = now.time_since_epoch();
+            this->has_image = true;
+            this->has_analog = true;
+            double target_framerate = 1e9/this->frame_interval.count();
+            analog_impl.inject({ std::span<double const>(&target_framerate, &target_framerate+1),
+                                 std::span<double const>(&framerate, &framerate+1),
+                                 std::span<double const>(&sleep_time, &sleep_time+1),
+                                 }, 
+                               { frame_interval, frame_interval, frame_interval }, { "" });
+
+            frame_pending = false;
+          });
         }
-
-        while(!frame_times.empty() && now - *frame_times.begin() > 1s) {
-          frame_times.erase(frame_times.begin());
-        }
-        frame_times.insert(now);
-
-        width = context.frame->width;
-        height = context.frame->height;
-
-        frame_pending = true;
-        boost::asio::post(io_context, [&,frame_copy=context.frame,now,framerate=double(frame_times.size()),sleep_time=1e-9*sleep_time.count()] {
-          this->time = now.time_since_epoch();
-          this->has_image = true;
-          this->has_analog = true;
-          double target_framerate = 1e9/this->frame_interval.count();
-          analog_impl.inject({ std::span<double const>(&target_framerate, &target_framerate+1),
-                               std::span<double const>(&framerate, &framerate+1),
-                               std::span<double const>(&sleep_time, &sleep_time+1),
-                               }, 
-                             { frame_interval, frame_interval, frame_interval }, { "" });
-
-          frame_pending = false;
-        });
       }
     }
 
@@ -263,12 +305,37 @@ namespace thalamus {
         } else {
           stop();
         }
+      } else if (key_str == "Time Source") {
+        auto val_str = std::get<std::string>(v);
+        absl::StripAsciiWhitespace(&val_str);
+        data_connection.disconnect();
+        if(val_str.empty()) {
+          node_connection.reset();
+          stream_time = -1;
+          return;
+        }
+        node_connection = graph->get_node_scoped(val_str, [this] (std::weak_ptr<Node> weak_node) {
+          auto node = weak_node.lock();
+          auto analog = node_cast<AnalogNode*>(node.get());
+          data_connection = node->ready.connect([this, analog] (auto node) {
+            if(!analog->has_analog_data() || analog->num_channels() == 0) {
+              return;
+            }
+
+            auto data = analog->data(0);
+            if(data.empty()) {
+              return;
+            }
+
+            stream_time = 1000*data.front();
+          });
+        });
       }
     }
   };
 
-  FfmpegNode::FfmpegNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph*)
-    : impl(new Impl(state, io_context, this)) {}
+  FfmpegNode::FfmpegNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph)
+    : impl(new Impl(state, io_context, graph, this)) {}
 
   FfmpegNode::~FfmpegNode() {}
 

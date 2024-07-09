@@ -27,6 +27,7 @@ namespace thalamus {
     std::weak_ptr<Node> get_node(const thalamus_grpc::NodeSelector& query_name) override;
     void get_node(const std::string& query_name, std::function<void(std::weak_ptr<Node>)> callback) override;
     void get_node(const thalamus_grpc::NodeSelector& query_name, std::function<void(std::weak_ptr<Node>)> callback) override;
+    NodeConnection get_node_scoped(const std::string&, std::function<void(std::weak_ptr<Node>)>) override;
     NodeConnection get_node_scoped(const thalamus_grpc::NodeSelector&, std::function<void(std::weak_ptr<Node>)>) override;
     std::shared_ptr<grpc::Channel> get_channel(const std::string&) override;
     std::chrono::system_clock::time_point get_system_clock_at_start() override;

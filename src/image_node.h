@@ -14,7 +14,9 @@ namespace thalamus {
     enum class Format {
       Gray,
       RGB,
-      YUYV422
+      YUYV422,
+      YUV420P,
+      YUVJ420P,
     };
     virtual ~ImageNode() {}
     virtual Plane plane(int) const = 0;
