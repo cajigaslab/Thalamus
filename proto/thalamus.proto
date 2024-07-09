@@ -87,6 +87,8 @@ message Image {
     Gray = 0;
     RGB = 1;
     YUYV422 = 2;
+    YUV420P = 3;
+    YUVJ420P = 4;
   }
   repeated bytes data = 1;
   uint32 width = 2;

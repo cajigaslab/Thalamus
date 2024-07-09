@@ -43,6 +43,8 @@ namespace thalamus {
     lua_State* L;
     boost::asio::steady_timer timer;
     bool channels_changed = true;
+    std::vector<double> mins;
+    std::vector<double> maxes;
     std::vector<std::string> channel_names;
     std::vector<std::chrono::nanoseconds> sample_intervals;
     std::chrono::nanoseconds time;
@@ -67,6 +69,10 @@ namespace thalamus {
 
       lua_pushcfunction(L, lua_channel);
       lua_setglobal(L, "thalamus_channel");
+      lua_pushcfunction(L, lua_max);
+      lua_setglobal(L, "thalamus_max");
+      lua_pushcfunction(L, lua_min);
+      lua_setglobal(L, "thalamus_min");
 
       state_connection = state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
       state->recap(std::bind(&Impl::on_change, this, _1, _2, _3));
@@ -88,6 +94,28 @@ namespace thalamus {
       size_t index = current->sample_index*current->sample_interval.count()/channel_sample_interval.count();
       index = std::min(index, span.size()-1);
       lua_pushnumber(L, span[index]);
+      return 1;
+    }
+
+    static int lua_max(lua_State* L) {
+      auto channel = luaL_checkinteger(L, 1);
+      auto source = current->source;
+      auto num_channels = source->num_channels();
+      if(channel >= num_channels) {
+        return luaL_error(L, "channel %d requested, only %d available", channel, num_channels);
+      }
+      lua_pushnumber(L, current->maxes[channel]);
+      return 1;
+    }
+
+    static int lua_min(lua_State* L) {
+      auto channel = luaL_checkinteger(L, 1);
+      auto source = current->source;
+      auto num_channels = source->num_channels();
+      if(channel >= num_channels) {
+        return luaL_error(L, "channel %d requested, only %d available", channel, num_channels);
+      }
+      lua_pushnumber(L, current->mins[channel]);
       return 1;
     }
 
@@ -120,6 +148,8 @@ namespace thalamus {
       auto func_name = lua_namespace + "_func" + std::to_string(index);
       std::stringstream stream;
       stream << "local channel = thalamus_channel\n";
+      stream << "local max = thalamus_max\n";
+      stream << "local min = thalamus_min\n";
       stream << "function " << func_name << "(x)\n";
       stream << "return " << text << "\n";
       stream << "end\n";
@@ -179,6 +209,8 @@ namespace thalamus {
 
             if(channels_changed) {
               channels_changed = false;
+              maxes.assign(num_channels, -std::numeric_limits<double>::max());
+              mins.assign(num_channels, std::numeric_limits<double>::max());
               channel_names.clear();
               sample_intervals.clear();
               for(auto i = 0;i < num_channels;++i) {
@@ -219,6 +251,8 @@ namespace thalamus {
             for(auto i = 0;i < num_channels;++i) {
               auto span = source->data(i);
               auto& transformed = data.at(i);
+              auto& max = maxes.at(i);
+              auto& min = mins.at(i);
               transformed.assign(span.begin(), span.end());
               if(lua_isnil(L, i+1)) {
                 continue;
@@ -228,6 +262,8 @@ namespace thalamus {
               for(size_t j = 0;j < transformed.size();++j) {
                 sample_index = j;
                 auto& from = transformed.at(j);
+                max = std::max(max, from);
+                min = std::min(min, from);
                 last_data[i] = from;
                 lua_pushvalue(L, i+1);
                 lua_pushnumber(L, from);
@@ -312,6 +348,8 @@ namespace thalamus {
   }
 
   boost::json::value LuaNode::process(const boost::json::value&) {
+    impl->maxes.assign(impl->maxes.size(), -std::numeric_limits<double>::max());
+    impl->mins.assign(impl->mins.size(), std::numeric_limits<double>::max());
     return boost::json::value();
   }
   size_t LuaNode::modalities() const { return infer_modalities<LuaNode>(); }

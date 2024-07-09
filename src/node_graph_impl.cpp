@@ -277,6 +277,11 @@ namespace thalamus {
     }
   }
 
+  NodeGraph::NodeConnection NodeGraphImpl::get_node_scoped(const std::string& name, std::function<void(std::weak_ptr<Node>)> callback) {
+    thalamus_grpc::NodeSelector selector;
+    selector.set_name(name);
+    return get_node_scoped(selector, callback);
+  }
 
   NodeGraph::NodeConnection NodeGraphImpl::get_node_scoped(const thalamus_grpc::NodeSelector& selector, std::function<void(std::weak_ptr<Node>)> callback) {
     auto value = get_node(selector);

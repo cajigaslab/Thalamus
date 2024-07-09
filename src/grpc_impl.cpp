@@ -1131,6 +1131,11 @@ namespace thalamus {
           break;
         case ImageNode::Format::YUYV422:
           format = thalamus_grpc::Image::Format::Image_Format_YUYV422;
+        case ImageNode::Format::YUV420P:
+          format = thalamus_grpc::Image::Format::Image_Format_YUV420P;
+          break;
+        case ImageNode::Format::YUVJ420P:
+          format = thalamus_grpc::Image::Format::Image_Format_YUVJ420P;
           break;
         }
 
@@ -1152,10 +1157,10 @@ namespace thalamus {
               auto count = std::min(data.size() - in_plane_offset, remaining_chunk);
               piece.add_data(data.data() + in_plane_offset, count);
               remaining_chunk -= count;
+              position += count;
             }
             plane_offset += data.size();
           }
-          position += image_chunk_size - remaining_chunk;
         }
         responses.back().set_last(true);
 

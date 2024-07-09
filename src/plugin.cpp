@@ -238,5 +238,20 @@ extern "C" {
   EXPORT int hydrate_main(int argc, char** argv) {
     return hydrate::main(argc, argv);
   }
+  
+  extern int ffmpeg_main_impl(int argc, char** argv);
+  EXPORT int ffmpeg_main(int argc, char** argv) {
+    return ffmpeg_main_impl(argc, argv);
+  }
+  
+  extern int ffprobe_main_impl(int argc, char** argv);
+  EXPORT int ffprobe_main(int argc, char** argv) {
+    return ffprobe_main_impl(argc, argv);
+  }
+  
+  extern int ffplay_main_impl(int argc, char** argv);
+  EXPORT int ffplay_main(int argc, char** argv) {
+    return ffplay_main_impl(argc, argv);
+  }
 }
 

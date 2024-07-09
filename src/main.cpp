@@ -17,7 +17,11 @@
 const auto HELP = 
 "Thalamus native program, version " GIT_COMMIT_HASH "\n"
 "  thalamus         Signal tool\n"
-"  hydrate          Thalamus capture parsing\n";
+"  hydrate          Thalamus capture parsing\n"
+"  ffmpeg           ffmpeg\n"
+"  ffprobe          ffprobe\n"
+"  ffplay           ffplay\n"
+;
 
 std::map<std::string, std::function<int(int, char**)>> COMMANDS;
 
@@ -61,7 +65,6 @@ int main(int argc, char * argv[]) {
   } while(count == path.size());
   path.resize(count);
   path = (std::filesystem::path(path).parent_path() /  "native_lib.dll").string();
-  std::cout << "Loading " << path << std::endl;
   library_handle = LoadLibrary(path.c_str());
 #else
   std::string path(256, '\0');
@@ -86,6 +89,9 @@ int main(int argc, char * argv[]) {
 
   COMMANDS["thalamus"] = load_function<MainFunc>("thalamus_main");
   COMMANDS["hydrate"] = load_function<MainFunc>("hydrate_main");
+  COMMANDS["ffmpeg"] = load_function<MainFunc>("ffmpeg_main");
+  COMMANDS["ffprobe"] = load_function<MainFunc>("ffprobe_main");
+  COMMANDS["ffplay"] = load_function<MainFunc>("ffplay_main");
 
   auto command = COMMANDS.find(argc < 2 ? "thalamus" : argv[1]);
   if(command == COMMANDS.end()) { 
