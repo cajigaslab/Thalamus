@@ -13,9 +13,19 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - name: dir 
+      run: dir "C:\\Program Files (x86)\\Microsoft Visual Studio"
+    - name: dir
+      run: dir "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise"
+    - name: dir
+      run: dir "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC"
+    - name: dir
+      run: dir "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary"
+    - name: dir
+      run: dir "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build"
     - name: Prepare
       run: python prepare.py
     - name: Version Bump
       run: python bump.py patch
     - name: Build
-      run: call "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Auxiliary\\Build\\vcvars64.bat" && python -m build -n -w -Crelease
+      run: call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat" && python -m build -n -w -Crelease
