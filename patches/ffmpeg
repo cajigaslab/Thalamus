@@ -1,0 +1,13 @@
+diff --git a/fftools/cmdutils.c b/fftools/cmdutils.c
+index 156c13801a..7d052d8c73 100644
+--- a/fftools/cmdutils.c
++++ b/fftools/cmdutils.c
+@@ -162,7 +162,7 @@ static const OptionDef *find_option(const OptionDef *po, const char *name)
+ /* _WIN32 means using the windows libc - cygwin doesn't define that
+  * by default. HAVE_COMMANDLINETOARGVW is true on cygwin, while
+  * it doesn't provide the actual command line via GetCommandLineW(). */
+-#if HAVE_COMMANDLINETOARGVW && defined(_WIN32)
++#if 0 && defined(_WIN32)
+ #include <shellapi.h>
+ /* Will be leaked on exit */
+ static char** win32_argv_utf8 = NULL;

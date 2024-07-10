@@ -733,7 +733,7 @@ namespace thalamus {
             segment.frame = frame_count;
             auto lookup = HAND_ENGINE_TO_XSENS_SEGMENT_IDS.find(name);
             THALAMUS_ASSERT(lookup != HAND_ENGINE_TO_XSENS_SEGMENT_IDS.end());
-            segment.segment_id = lookup->second+1;
+            segment.segment_id = lookup->second;
           }
           std::sort(_segments.begin(), _segments.end(), [](auto& a, auto& b) {
             return a.segment_id < b.segment_id;
