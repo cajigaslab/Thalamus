@@ -72,6 +72,8 @@ namespace hydrate {
 
     H5Handle segment_type = H5Tcreate(H5T_COMPOUND, sizeof(Segment));
     THALAMUS_ASSERT(segment_type);
+    h5_status = H5Tinsert(segment_type, "time", HOFFSET(Segment, time), H5T_NATIVE_UINT32);
+    THALAMUS_ASSERT(h5_status >= 0, "Failed to create Segment.time");
     h5_status = H5Tinsert(segment_type, "frame", HOFFSET(Segment, frame), H5T_NATIVE_UINT32);
     THALAMUS_ASSERT(h5_status >= 0, "Failed to create Segment.frame");
     h5_status = H5Tinsert(segment_type, "segment_id", HOFFSET(Segment, segment_id), H5T_NATIVE_UINT32);
