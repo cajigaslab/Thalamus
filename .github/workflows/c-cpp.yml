@@ -19,6 +19,9 @@ jobs:
       run: git config --global user.email "no@email.com"
     - name: Prepare
       run: python prepare.py
+    - name: nasm
+      shell: cmd
+      run: echo %PATH% && echo %USERPROFILE% && dir %USERPROFILE%\nasm-2.15.05  && where nasm
     - name: Version Bump
       run: python bump.py patch
     - name: Build
