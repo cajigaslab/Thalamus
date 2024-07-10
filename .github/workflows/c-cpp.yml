@@ -16,6 +16,6 @@ jobs:
     - name: Prepare
       run: python prepare.py
     - name: Version Bump
-      run: python bumpy.py patch
+      run: python bump.py patch
     - name: Build
       run: call "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Auxiliary\\Build\\vcvars64.bat" && python -m build -n -w -Crelease
