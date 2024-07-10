@@ -7,6 +7,7 @@ FetchContent_Populate(ffmpeg)
 file(MAKE_DIRECTORY "${ffmpeg_BINARY_DIR}/Debug/Modules")
 file(MAKE_DIRECTORY "${ffmpeg_BINARY_DIR}/Release/Modules")
 
+execute_process(COMMAND git apply "${CMAKE_SOURCE_DIR}/patches/ffmpeg" WORKING_DIRECTORY "${ffmpeg_SOURCE_DIR}")
 
 if(WIN32)
   if(EXISTS "C:\\MSYS2")
