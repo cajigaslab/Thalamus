@@ -254,6 +254,8 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/normalize_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/lua_node.h"
                      "${CMAKE_SOURCE_DIR}/src/lua_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/intan_node.h"
+                     "${CMAKE_SOURCE_DIR}/src/intan_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/file.h"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/file.cpp"
                      "${CMAKE_SOURCE_DIR}/proto/thalamus.proto")

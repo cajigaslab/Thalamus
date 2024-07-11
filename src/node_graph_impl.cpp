@@ -17,6 +17,7 @@
 #include <pupil_node.h>
 #include <chessboard_node.h>
 #include <log_node.h>
+#include <intan_node.h>
 
 namespace thalamus {
   using namespace std::chrono_literals;
@@ -83,6 +84,7 @@ namespace thalamus {
     {"REMOTE", new NodeFactory<RemoteNode>()},
     {"CHESSBOARD", new NodeFactory<ChessBoardNode>()},
     {"LOG", new NodeFactory<LogNode>()},
+    {"INTAN", new NodeFactory<IntanNode>()},
     {"PUPIL", new NodeFactory<PupilNode>()}
   };
 
