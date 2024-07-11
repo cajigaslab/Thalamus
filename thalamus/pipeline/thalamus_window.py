@@ -259,6 +259,10 @@ FACTORIES = {
     UserData(UserDataType.DOUBLE_SPINBOX, 'Amplitude', 5.0, []),
     UserData(UserDataType.SPINBOX, 'Duration (ms)', 16, []),
   ]),
+  'INTAN': Factory(None, [
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+    UserData(UserDataType.DEFAULT, 'Address', "localhost:9000", []),
+  ]),
   'PULSE': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Toggle', False, []),
     UserData(UserDataType.CHECK_BOX, 'Generate Level', False, []),

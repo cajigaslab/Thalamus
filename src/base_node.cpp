@@ -233,7 +233,7 @@ namespace thalamus {
           wave = [&](std::chrono::nanoseconds time) {
             size_t interval = 1e9 / frequency;
             if((time - last_switch).count() > interval) {
-              current = amplitude*random_distribution(random_range);
+              current = amplitude*random_distribution(random_range) + offset;
               last_switch = time;
             }
             return current;

@@ -7,6 +7,20 @@ FetchContent_Populate(ffmpeg)
 file(MAKE_DIRECTORY "${ffmpeg_BINARY_DIR}/Debug/Modules")
 file(MAKE_DIRECTORY "${ffmpeg_BINARY_DIR}/Release/Modules")
 
+set(FFTOOL_OBJECTS 
+    "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/ffmpeg_dec.o"
+    "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/ffmpeg_demux.o"
+    "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/ffmpeg_enc.o"
+    "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/ffmpeg_filter.o"
+    "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/ffmpeg_hw.o"
+    "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/ffmpeg_mux.o"
+    "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/ffmpeg_mux_init.o"
+    "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/ffmpeg_opt.o"
+    "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/objpool.o"
+    "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/sync_queue.o"
+    "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/thread_queue.o"
+    "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/cmdutils.o"
+    "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/opt_common.o")
 
 if(WIN32)
   if(EXISTS "C:\\MSYS2")
@@ -87,7 +101,7 @@ endif()
 
 if(WIN32)
   add_custom_command(
-    OUTPUT "${FFMPEG_OUTPUT_LIBRARIES}"
+    OUTPUT "${FFMPEG_OUTPUT_LIBRARIES}" ${FFTOOL_OBJECTS}
     DEPENDS "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
     COMMAND ${FFMPEG_MAKE_COMMAND}
     && cmake -E touch_nocreate "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/${FFMPEG_LIB_PREFIX}avcodec.a"
@@ -95,7 +109,7 @@ if(WIN32)
     WORKING_DIRECTORY "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>")
 else()
   add_custom_command(
-    OUTPUT "${FFMPEG_OUTPUT_LIBRARIES}"
+    OUTPUT "${FFMPEG_OUTPUT_LIBRARIES}" ${FFTOOL_OBJECTS}
     DEPENDS "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
     COMMAND ${FFMPEG_MAKE_COMMAND}
     && cmake -E touch_nocreate "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libavcodec.a"
@@ -214,20 +228,7 @@ add_library(thalamus_ffmpeg
     "${CMAKE_BINARY_DIR}/thalamus_ffmpeg_$<CONFIG>.o"
     "${CMAKE_BINARY_DIR}/thalamus_ffprobe_$<CONFIG>.o"
     "${CMAKE_BINARY_DIR}/thalamus_ffplay_$<CONFIG>.o"
-    "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/ffmpeg_dec.o"
-    "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/ffmpeg_demux.o"
-    "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/ffmpeg_enc.o"
-    "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/ffmpeg_filter.o"
-    "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/ffmpeg_hw.o"
-    "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/ffmpeg_mux.o"
-    "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/ffmpeg_mux_init.o"
-    "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/ffmpeg_opt.o"
-    "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/objpool.o"
-    "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/sync_queue.o"
-    "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/thread_queue.o"
-    "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/cmdutils.o"
-    "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/opt_common.o"
-    )
+    ${FFTOOL_OBJECTS})
 target_link_libraries(thalamus_ffmpeg PUBLIC ffmpeg)
 set_target_properties(thalamus_ffmpeg PROPERTIES LINKER_LANGUAGE C)
 add_dependencies(thalamus_ffmpeg ffmpeg)

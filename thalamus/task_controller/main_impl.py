@@ -96,7 +96,7 @@ async def async_main() -> None:
   if 'queue' not in config:
     config['queue'] = [] 
   if 'reward_schedule' not in config:
-    config['reward_schedule'] = {'schedules': [[0]], 'index': 0},
+    config['reward_schedule'] = {'schedules': [[0]], 'index': 0}
 
   if 'nodes' not in config:
     config['nodes'] = []
