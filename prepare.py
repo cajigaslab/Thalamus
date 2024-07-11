@@ -69,22 +69,20 @@ def main():
       print('Administrator permissions required', file=sys.stderr)
       sys.exit(1)
 
-    new_path = os.environ['PATH']
-    path_change = False
+    old_path = os.environ['PATH']
+    new_path = []
     #nasm
     if not shutil.which('nasm'):
-      path_change = True
       destination = os.environ['USERPROFILE'] + '\\nasm-2.15.05'
-      new_path = destination + ';' + new_path
+      new_path.append(destination)
       if not (pathlib.Path(destination) / 'nasm.exe').exists():
         download('https://www.nasm.us/pub/nasm/releasebuilds/2.15.05/win64/nasm-2.15.05-win64.zip')
         subprocess.check_call(['powershell', '-Command', 'Expand-Archive -DestinationPath ' + os.environ['USERPROFILE'] + ' nasm-2.15.05-win64.zip'])
 
     #cmake
     if not shutil.which('cmake'):
-      path_change = True
       destination = os.environ['USERPROFILE'] + '\\cmake-3.24.0-windows-x86_64\\bin'
-      new_path = destination + ';' + new_path
+      new_path.append(destination)
       if not (pathlib.Path(destination) / 'cmake.exe').exists():
         download('https://github.com/Kitware/CMake/releases/download/v3.24.0/cmake-3.24.0-windows-x86_64.zip')
         subprocess.check_call(['powershell', '-Command', 'Expand-Archive -DestinationPath ' + os.environ['USERPROFILE'] + ' cmake-3.24.0-windows-x86_64.zip'])
@@ -92,16 +90,23 @@ def main():
     #perl
     if not shutil.which('perl'):
       print('Installing perl')
-      path_change = True
       destination = 'C:\\Strawberry\\perl\\bin' 
-      new_path = destination + ';' + new_path
+      new_path.append(destination)
       if not (pathlib.Path(destination) / 'perl.exe').exists():
         download('https://strawberryperl.com/download/5.32.1.1/strawberry-perl-5.32.1.1-64bit.msi')
         subprocess.check_call(['msiexec', '/quiet', '/i', 'strawberry-perl-5.32.1.1-64bit.msi'])
     print(list(pathlib.Path('C:\\Strawberry').iterdir()))
     
-    if path_change:
-     subprocess.check_call(['setx', 'PATH', new_path])
+    if new_path:
+      if 'GITHUB_PATH' in os.environ:
+        print('GITHUB_PATH', os.environ['GITHUB_PATH'])
+        with open(os.environ['GITHUB_PATH'], 'a') as path_file:
+          path_file.writelines(p + os.linesep for p in new_path)
+      new_path.append(old_path)
+      new_path = os.pathsep.join(new_path)
+      print(new_path)
+      subprocess.check_call(['setx', 'PATH', new_path])
+      print('PATHSET')
 
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-U', 'setuptools', 'ninja'], cwd=home_str)
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-r', str(pathlib.Path.cwd()/'requirements.txt')], cwd=home_str)
