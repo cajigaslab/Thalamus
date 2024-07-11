@@ -7,6 +7,8 @@ FetchContent_Populate(ffmpeg)
 file(MAKE_DIRECTORY "${ffmpeg_BINARY_DIR}/Debug/Modules")
 file(MAKE_DIRECTORY "${ffmpeg_BINARY_DIR}/Release/Modules")
 
+execute_process(COMMAND git apply "${CMAKE_SOURCE_DIR}/patches/ffmpeg" WORKING_DIRECTORY "${ffmpeg_SOURCE_DIR}")
+
 set(FFTOOL_OBJECTS 
     "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/ffmpeg_dec.o"
     "${ffmpeg_BINARY_DIR}/$<CONFIG>/fftools/ffmpeg_demux.o"
