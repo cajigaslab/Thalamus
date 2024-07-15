@@ -14,28 +14,40 @@
 #include <state.h>
 #include <boost/signals2.hpp>
 #include <modalities.h>
+#include <numeric>
 
 using namespace thalamus;
 using namespace std::chrono_literals;
 using namespace std::placeholders;
 
-class IntanNode::Impl {
+struct IntanNode::Impl {
   ObservableDictPtr state;
   size_t observer_id;
   boost::signals2::scoped_connection state_connection;
   boost::asio::io_context& io_context;
   boost::asio::high_resolution_timer timer;
-  boost::asio::ip::tcp::socket socket;
+  boost::asio::ip::tcp::socket command_socket;
+  boost::asio::ip::tcp::socket waveform_socket;
   size_t num_channels;
   size_t buffer_size;
+  int frame = 0;
+  int channel = 0;
+  size_t num_samples = 0;
+  unsigned int timestamp;
+  std::chrono::nanoseconds time;
   std::vector<short> short_buffer;
   std::vector<double> double_buffer;
-  std::vector<int> channels;
+  ObservableListPtr channels;
   std::map<size_t, std::function<void(Node*)>> observers;
+  std::vector<std::vector<double>> data;
+  std::vector<std::string> names;
   //double sample_rate;
   size_t counter = 0;
-  int address[6];
-  unsigned char buffer[1024];
+  std::string address = "localhost";
+  long long command_port = 5000;
+  long long waveform_port = 5001;
+  unsigned char command_buffer[1024];
+  unsigned char waveform_buffer[16384];
   IntanNode* outer;
   bool is_running = false;
   bool is_connected = false;
@@ -44,7 +56,8 @@ public:
     : state(state)
     , io_context(io_context)
     , timer(io_context)
-    , socket(io_context)
+    , command_socket(io_context)
+    , waveform_socket(io_context)
     , outer(outer) {
     state_connection = state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
     (*state)["Running"].assign(false);
@@ -58,62 +71,178 @@ public:
 
   void on_change(ObservableCollection::Action a, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
     auto key_str = std::get<std::string>(k);
-    if (key_str == "Running") {
+    if(key_str == "Address") {
+      address = std::get<std::string>(v);
+    } else if (key_str == "Command Port") {
+      command_port = std::get<long long>(v);
+    } else if (key_str == "Waveform Port") {
+      waveform_port = std::get<long long>(v);
+    } else if (key_str == "Running") {
       is_running = std::get<bool>(v);
       if (is_running) {
-        std::string address_str = state->at("Address");
-        std::vector<std::string> address_tokens = absl::StrSplit(address_str, ':');
-        if (address_tokens.size() < 2) {
-          address_tokens.push_back("5000");
-        }
         boost::asio::ip::tcp::resolver resolver(io_context);
-        auto endpoints = resolver.resolve(address_tokens.at(0), address_tokens.at(1));
+        auto endpoints = resolver.resolve(address, std::to_string(command_port));
         boost::system::error_code ec;
-        boost::asio::connect(socket, endpoints, ec);
+        boost::asio::connect(command_socket, endpoints, ec);
         if(ec) {
           THALAMUS_LOG(error) << ec.what();
           (*state)["Running"].assign(false);
           return;
         }
-        std::string command = "set runmode run";
-        socket.send(boost::asio::const_buffer(command.data(), command.size()), 0, ec);
+
+        std::string command = "execute clearalldataoutputs";
+        command_socket.send(boost::asio::const_buffer(command.data(), command.size()), 0, ec);
+
+        if(channels) {
+          names.assign(1, "timestamp");
+          for(auto i = channels->begin();i != channels->end();++i) {
+            std::string text = *i;
+            names.push_back(text);
+            auto command = absl::StrFormat("set %s.tcpdataoutputenabled true", text);
+            command_socket.send(boost::asio::const_buffer(command.data(), command.size()), 0, ec);
+            if(ec) {
+              THALAMUS_LOG(error) << ec.what();
+              (*state)["Running"].assign(false);
+              return;
+            }
+          }
+        }
+        num_channels = channels->size();
+        data.assign(num_channels+1, std::vector<double>());
+
+        endpoints = resolver.resolve(address, std::to_string(waveform_port));
+        boost::asio::connect(waveform_socket, endpoints, ec);
         if(ec) {
           THALAMUS_LOG(error) << ec.what();
           (*state)["Running"].assign(false);
           return;
         }
-        socket.async_receive(boost::asio::buffer(buffer, sizeof(buffer)), std::bind(&Impl::on_receive, this, _1, _2));
+        waveform_socket.async_receive(boost::asio::buffer(command_buffer, sizeof(command_buffer)), std::bind(&Impl::on_receive_waveform, this, _1, _2));
+
+        command = "set runmode run";
+        command_socket.send(boost::asio::const_buffer(command.data(), command.size()), 0, ec);
+        if(ec) {
+          THALAMUS_LOG(error) << ec.what();
+          (*state)["Running"].assign(false);
+          return;
+        }
+
+        command_socket.async_receive(boost::asio::buffer(command_buffer, sizeof(command_buffer)), std::bind(&Impl::on_receive_command, this, _1, _2));
         is_connected = true;
       } else if(is_connected) {
         std::string command = "set runmode stop";
         boost::system::error_code ec;
-        socket.send(boost::asio::const_buffer(command.data(), command.size()), 0, ec);
+        command_socket.send(boost::asio::const_buffer(command.data(), command.size()), 0, ec);
         if(ec) {
           THALAMUS_LOG(error) << ec.what();
         }
 
-        socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+        command_socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
         if(ec) {
           THALAMUS_LOG(error) << ec.what();
         }
-        socket.close(ec);
+        command_socket.close(ec);
         if(ec) {
           THALAMUS_LOG(error) << ec.what();
         }
+
+        waveform_socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+        if(ec) {
+          THALAMUS_LOG(error) << ec.what();
+        }
+        waveform_socket.close(ec);
+        if(ec) {
+          THALAMUS_LOG(error) << ec.what();
+        }
+
         is_connected = false;
       }
+    } else if (key_str == "Channels") {
+      channels = std::get<ObservableListPtr>(v);
     }
   }
 
-  void on_receive(const boost::system::error_code& error, size_t length) {
+  void on_receive_command(const boost::system::error_code& error, size_t length) {
     if(error) {
       THALAMUS_LOG(error) << error.what();
       (*state)["Running"].assign(false);
       return;
     }
-    std::cout << std::string(reinterpret_cast<char*>(buffer), length);
+    std::cout << std::string(reinterpret_cast<char*>(command_buffer), length);
 
-    socket.async_receive(boost::asio::buffer(buffer, sizeof(buffer)), std::bind(&Impl::on_receive, this, _1, _2));
+    command_socket.async_receive(boost::asio::buffer(command_buffer, sizeof(command_buffer)), std::bind(&Impl::on_receive_command, this, _1, _2));
+  }
+
+  enum class WaveParserState {
+    MAGIC_NUMBER,
+    FRAME_TIMESTAMP,
+    FRAME_SAMPLES
+  } wave_parser_state;
+
+  void on_receive_waveform(const boost::system::error_code& error, size_t length) {
+    if(error) {
+      THALAMUS_LOG(error) << error.what();
+      (*state)["Running"].assign(false);
+      return;
+    }
+    time = std::chrono::steady_clock::now().time_since_epoch();
+
+    size_t i = 0;
+    size_t remaining = length;
+    unsigned int magic;
+    auto parsing = true;
+    while(parsing) {
+      switch(wave_parser_state) {
+        case WaveParserState::MAGIC_NUMBER:
+          if(length - i >= 4) {
+            magic = boost::endian::little_to_native(*reinterpret_cast<unsigned int*>(waveform_buffer + i));
+            i += 4;
+            if(magic != 0x2ef07a08) {
+              if(error) {
+                THALAMUS_LOG(error) << "Magic number check failed";
+                (*state)["Running"].assign(false);
+                return;
+              }
+            }
+            frame = 0;
+            wave_parser_state = WaveParserState::FRAME_TIMESTAMP;
+          } else {
+            parsing = false;
+          }
+          break;
+        case WaveParserState::FRAME_TIMESTAMP:
+          if(length - i >= 4) {
+            timestamp = boost::endian::little_to_native(*reinterpret_cast<unsigned int*>(waveform_buffer + i));
+            data[0].push_back(timestamp);
+            i += 4;
+            channel = 0;
+            wave_parser_state = WaveParserState::FRAME_SAMPLES;
+          } else {
+            parsing = false;
+          }
+          break;
+        case WaveParserState::FRAME_SAMPLES:
+          if(length - i >= 2) {
+            data[channel+1].push_back(boost::endian::little_to_native(*reinterpret_cast<unsigned short*>(waveform_buffer + i)));
+            i += 2;
+            ++channel;
+            if(channel == num_channels) {
+              ++frame;
+              wave_parser_state = frame == 128 ? WaveParserState::MAGIC_NUMBER : WaveParserState::FRAME_TIMESTAMP;
+            }
+          } else {
+            parsing = false;
+          }
+          break;
+      }
+    }
+
+    num_samples = std::accumulate(data.begin(), data.end(), std::numeric_limits<size_t>::max(), [](size_t a, auto& b) { return std::min(a, b.size()); });
+    if(num_samples > 0) { 
+      outer->ready(outer);
+    }
+    std::copy(waveform_buffer+i, waveform_buffer+length, waveform_buffer);
+    waveform_socket.async_receive(boost::asio::buffer(waveform_buffer, sizeof(waveform_buffer)), std::bind(&Impl::on_receive_waveform, this, _1, _2));
   }
 };
 
@@ -123,15 +252,16 @@ IntanNode::IntanNode(ObservableDictPtr state, boost::asio::io_context& io_contex
 IntanNode::~IntanNode() {}
   
 std::span<const double> IntanNode::data(int channel) const {
-  return std::span<const double>();
+  auto& data = impl->data[channel];
+  return std::span<const double>(data.begin(), data.begin()+impl->num_samples);
 }
 
 std::string_view IntanNode::name(int channel) const {
-  return std::string_view();
+  return impl->names[channel];
 }
 
 int IntanNode::num_channels() const {
-  return 1;
+  return impl->data.size();
 }
 
 std::chrono::nanoseconds IntanNode::sample_interval(int i) const {
@@ -139,7 +269,7 @@ std::chrono::nanoseconds IntanNode::sample_interval(int i) const {
 }
 
 std::chrono::nanoseconds IntanNode::time() const {
-  return std::chrono::nanoseconds();
+  return impl->time;
 }
 
 std::string IntanNode::type_name() {
