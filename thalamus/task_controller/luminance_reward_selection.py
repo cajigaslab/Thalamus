@@ -7,9 +7,7 @@ import logging
 import datetime
 import numpy as np
 
-import PyQt5.QtCore
-import PyQt5.QtWidgets
-from PyQt5.QtGui import QColor
+from ..qt import *
 
 from . import task_context
 from .widgets import Form, ListAsTabsWidget
@@ -29,14 +27,14 @@ Config = typing.NamedTuple('Config', [
   ('blink_timeout', datetime.timedelta),
   ('fail_timeout', datetime.timedelta),
   ('success_timeout', datetime.timedelta),
-  ('target_rectangle', PyQt5.QtCore.QRect),
+  ('target_rectangle', QRect),
   ('target_color', QColor),
 ])
 
 RANDOM_DEFAULT = {'min': 1, 'max':1}
 COLOR_DEFAULT = [255, 255, 255]
 
-class TargetWidget(PyQt5.QtWidgets.QWidget):
+class TargetWidget(QWidget):
   '''
   Widget for managing a target config
   '''
@@ -45,12 +43,12 @@ class TargetWidget(PyQt5.QtWidgets.QWidget):
     if 'name' not in config:
       config['name'] = 'Untitled'
 
-    layout = PyQt5.QtWidgets.QGridLayout()
+    layout = QGridLayout()
     self.setLayout(layout)
 
-    layout.addWidget(PyQt5.QtWidgets.QLabel('Name:'), 0, 0)
+    layout.addWidget(QLabel('Name:'), 0, 0)
 
-    name_edit = PyQt5.QtWidgets.QLineEdit(config['name'])
+    name_edit = QLineEdit(config['name'])
     name_edit.setObjectName('name_edit')
     name_edit.textChanged.connect(lambda v: config.update({'name': v}))
     layout.addWidget(name_edit, 0, 1)
@@ -59,7 +57,7 @@ class TargetWidget(PyQt5.QtWidgets.QWidget):
       if config.parent:
         config.parent.append(config.copy())
 
-    copy_button = PyQt5.QtWidgets.QPushButton('Copy Target')
+    copy_button = QPushButton('Copy Target')
     copy_button.setObjectName('copy_button')
     copy_button.clicked.connect(do_copy)
     layout.addWidget(copy_button, 0, 2)
@@ -91,12 +89,12 @@ class State(enum.Enum):
   GO = enum.auto()
   TARGS_ACQ = enum.auto()
 
-def create_widget(task_config: ObservableCollection) -> PyQt5.QtWidgets.QWidget:
+def create_widget(task_config: ObservableCollection) -> QWidget:
   """
   Creates a widget for configuring the simple task
   """
-  result = PyQt5.QtWidgets.QWidget()
-  layout = PyQt5.QtWidgets.QVBoxLayout()
+  result = QWidget()
+  layout = QVBoxLayout()
   result.setLayout(layout)
 
   """
@@ -129,7 +127,7 @@ def create_widget(task_config: ObservableCollection) -> PyQt5.QtWidgets.QWidget:
   )
   layout.addWidget(form)
 
-  new_target_button = PyQt5.QtWidgets.QPushButton('Add Target')
+  new_target_button = QPushButton('Add Target')
   new_target_button.setObjectName('new_target_button')
   new_target_button.clicked.connect(lambda: task_config['targets'].append({}) and None)
   layout.addWidget(new_target_button)
@@ -184,7 +182,7 @@ def get_target_rectangle(context, itarg, dpi):
   p_win = Rvec*pos_vis + t
 
 
-  return PyQt5.QtCore.QRect(p_win[0] - targ_width_px/2, p_win[1] - targ_height_px/2, targ_width_px, targ_height_px)
+  return QRect(p_win[0] - targ_width_px/2, p_win[1] - targ_height_px/2, targ_width_px, targ_height_px)
 
 def get_target_rectangles(context, dpi):  
 
@@ -214,7 +212,7 @@ def make_relative_targ2_rect(context, i_targ2, origin_target_rect, dpi):
 
   p_win = Rvec*pos_vis + t
 
-  return PyQt5.QtCore.QRect(p_win[0] - targ_width_px/2, p_win[1] - targ_height_px/2, targ_width_px, targ_height_px)
+  return QRect(p_win[0] - targ_width_px/2, p_win[1] - targ_height_px/2, targ_width_px, targ_height_px)
 
 
 def get_start_target_index(context):
@@ -285,14 +283,14 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   dpi = context.config.get('dpi', None) or context.widget.logicalDpiX()
 
   building_rects = True
-  center = PyQt5.QtCore.QPoint(context.widget.width()/2, context.widget.height()/2)
+  center = QPoint(context.widget.width()/2, context.widget.height()/2)
   while building_rects:
     all_target_rects = get_target_rectangles(context, dpi)
-    one = PyQt5.QtCore.QPointF(all_target_rects[i_periph_targs[0]].center() - center)
-    two = PyQt5.QtCore.QPointF(all_target_rects[i_periph_targs[1]].center() - center)
+    one = QPointF(all_target_rects[i_periph_targs[0]].center() - center)
+    two = QPointF(all_target_rects[i_periph_targs[1]].center() - center)
     one /= np.sqrt(one.x()**2 + one.y()**2)
     two /= np.sqrt(two.x()**2 + two.y()**2)
-    building_rects = PyQt5.QtCore.QPointF.dotProduct(one, two) > np.cos(min_angle*np.pi/180)
+    building_rects = QPointF.dotProduct(one, two) > np.cos(min_angle*np.pi/180)
 
   all_target_windows = [ecc_to_px(context.get_target_value(itarg, 'window_size'), dpi)
                         for itarg in range(ntargets)]
@@ -311,14 +309,14 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   for i in i_periph_targs:
     color = all_target_colors[i]
     luminance = all_target_luminance[i]
-    new_color = PyQt5.QtGui.QColor(color.red()*luminance, color.green()*luminance, color.blue()*luminance)
+    new_color = QColor(color.red()*luminance, color.green()*luminance, color.blue()*luminance)
     all_target_colors[i] = new_color
 
   """
   Defining drawing and cursor behavior.
   """
 
-  def gaze_handler(cursor: PyQt5.QtCore.QPoint) -> None:
+  def gaze_handler(cursor: QPoint) -> None:
     nonlocal all_target_acquired
     all_target_acquired = [distance(p[0].center(), cursor) < p[1] for p in zip(all_target_rects, all_target_windows)]
 

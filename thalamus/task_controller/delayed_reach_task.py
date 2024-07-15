@@ -15,10 +15,7 @@ import os
 
 import stl
 
-import PyQt5.QtCore
-import PyQt5.QtWidgets
-from PyQt5.QtGui import QColor
-from PyQt5.QtMultimedia import QSound
+from ..qt import *
 
 from . import task_context
 from .widgets import Form, ListAsTabsWidget
@@ -44,7 +41,7 @@ Config = typing.NamedTuple('Config', [
 RANDOM_DEFAULT = {'min': 1, 'max':1}
 COLOR_DEFAULT = [255, 255, 255]
 
-class TargetWidget(PyQt5.QtWidgets.QWidget):
+class TargetWidget(QWidget):
   '''
   Widget for managing a target config
   '''
@@ -53,12 +50,12 @@ class TargetWidget(PyQt5.QtWidgets.QWidget):
     if 'name' not in config:
       config['name'] = 'Untitled'
 
-    layout = PyQt5.QtWidgets.QGridLayout()
+    layout = QGridLayout()
     self.setLayout(layout)
 
-    layout.addWidget(PyQt5.QtWidgets.QLabel('Name:'), 0, 0)
+    layout.addWidget(QLabel('Name:'), 0, 0)
 
-    name_edit = PyQt5.QtWidgets.QLineEdit(config['name'])
+    name_edit = QLineEdit(config['name'])
     name_edit.setObjectName('name_edit')
     name_edit.textChanged.connect(lambda v: config.update({'name': v}))
     layout.addWidget(name_edit, 0, 1)
@@ -67,7 +64,7 @@ class TargetWidget(PyQt5.QtWidgets.QWidget):
       if config.parent:
         config.parent.append(config.copy())
 
-    copy_button = PyQt5.QtWidgets.QPushButton('Copy Target')
+    copy_button = QPushButton('Copy Target')
     copy_button.setObjectName('copy_button')
     copy_button.clicked.connect(do_copy)
     layout.addWidget(copy_button, 0, 2)
@@ -112,12 +109,12 @@ class State(enum.Enum):
   TARGS_ON = enum.auto()
   TARGS_ACQ = enum.auto()
 
-def create_widget(task_config: ObservableCollection) -> PyQt5.QtWidgets.QWidget:
+def create_widget(task_config: ObservableCollection) -> QWidget:
   """
   Creates a widget for configuring the simple task
   """
-  result = PyQt5.QtWidgets.QWidget()
-  layout = PyQt5.QtWidgets.QVBoxLayout()
+  result = QWidget()
+  layout = QVBoxLayout()
   result.setLayout(layout)
 
   """
@@ -150,7 +147,7 @@ def create_widget(task_config: ObservableCollection) -> PyQt5.QtWidgets.QWidget:
   )
   layout.addWidget(form)
 
-  new_target_button = PyQt5.QtWidgets.QPushButton('Add Target')
+  new_target_button = QPushButton('Add Target')
   new_target_button.setObjectName('new_target_button')
   new_target_button.clicked.connect(lambda: task_config['targets'].append({}) and None)
   layout.addWidget(new_target_button)
@@ -202,7 +199,7 @@ def get_target_rectangles(context, dpi):
 
     p_win = Rvec*pos_vis + t
 
-    all_target_rects.append(PyQt5.QtCore.QRect(int(p_win[0] - targ_width_px/2), int(p_win[1] - targ_height_px/2), int(targ_width_px), int(targ_height_px)))
+    all_target_rects.append(QRect(int(p_win[0] - targ_width_px/2), int(p_win[1] - targ_height_px/2), int(targ_width_px), int(targ_height_px)))
 
   return all_target_rects
 
@@ -318,8 +315,8 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   last_selected_target = None
   blank_space_touched = False
 
-  touch_pos = PyQt5.QtCore.QPoint()
-  def touch_handler(cursor: PyQt5.QtCore.QPoint) -> None:
+  touch_pos = QPoint()
+  def touch_handler(cursor: QPoint) -> None:
     nonlocal blank_space_touched
     nonlocal start_target_acquired
     nonlocal presented_targ_acquired
@@ -358,7 +355,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   show_start_target = False
   show_presented_target = False
   state_brightness = 0
-  def renderer(painter: PyQt5.QtGui.QPainter) -> None:
+  def renderer(painter: QPainter) -> None:
     color_base = all_target_colors[i_start_targ]
     scale = (all_target_on_luminance[i_start_targ] if not dim_start_target
              else all_target_off_luminance[i_start_targ])
@@ -397,7 +394,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
           painter.fillRect(all_target_rects[i_presented_targ], all_target_colors[i_presented_targ])
 
     with painter.masked(RenderOutput.OPERATOR):
-      path = PyQt5.QtGui.QPainterPath()
+      path = QPainterPath()
 
       for rect in all_target_rects:
         path.addEllipse(rect.center(), window, window)

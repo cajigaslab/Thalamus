@@ -121,7 +121,7 @@ class AlphaOmegaTableModel(QAbstractTableModel):
     self.dataChanged.emit(index, index)
     return True
 
-  def flags(self, index: QModelIndex) -> Qt.ItemFlags:
+  def flags(self, index: QModelIndex) -> Qt.ItemFlag:
     if index.column() == 3:
       return Qt.ItemIsUserCheckable | super().flags(index)
     return super().flags(index)
@@ -261,7 +261,9 @@ FACTORIES = {
   ]),
   'INTAN': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
-    UserData(UserDataType.DEFAULT, 'Address', "localhost:9000", []),
+    UserData(UserDataType.DEFAULT, 'Address', "localhost", []),
+    UserData(UserDataType.SPINBOX, 'Command Port', 5000, []),
+    UserData(UserDataType.SPINBOX, 'Waveform Port', 5001, []),
   ]),
   'PULSE': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Toggle', False, []),
@@ -958,21 +960,21 @@ class ImageWidget(QWidget):
       response.format = response_piece.format
 
       if response.format == thalamus_pb2.Image.Format.Gray:
-        format = QImage.Format_Grayscale8
+        format = QImage.Format.Format_Grayscale8
         data = response.data[0]
         if response.width*response.height != len(data):
           data = numpy.array(numpy.frombuffer(data, dtype=numpy.uint8).reshape(response.height,-1)[:,:response.width])
         else:
           data = data
       elif response.format == thalamus_pb2.Image.Format.RGB:
-        format = QImage.Format_RGB888
+        format = QImage.Format.Format_RGB888
         data = response.data[0]
         if response.width*3*response.height != len(data):
           data = numpy.array(numpy.frombuffer(data, dtype=numpy.uint8).reshape(response.height,-1)[:,:3*response.width])
         else:
           data = data
       elif response.format == thalamus_pb2.Image.Format.YUYV422:
-        format = QImage.Format_RGB888
+        format = QImage.Format.Format_RGB888
         data = response.data[0]
         if response.width*2*response.height != len(data):
           data = numpy.array(numpy.frombuffer(data, dtype=numpy.uint8).reshape(response.height,-1)[:,:2*response.width])
@@ -980,7 +982,7 @@ class ImageWidget(QWidget):
           data = numpy.frombuffer(data, dtype=numpy.uint8).reshape(response.height,response.width,-1)[:,:,:2]
         data = cv2.cvtColor(data, cv2.COLOR_YUV2RGB_YUYV)
       elif response.format in (thalamus_pb2.Image.Format.YUVJ420P, thalamus_pb2.Image.Format.YUV420P):
-        format = QImage.Format_RGB888
+        format = QImage.Format.Format_RGB888
         luminance = response.data[0]
         if response.width*response.height != len(luminance):
           luminance = numpy.array(numpy.frombuffer(luminance, dtype=numpy.uint8).reshape(response.height,-1)[:,:response.width])
@@ -1288,7 +1290,7 @@ class ItemModel(QAbstractItemModel):
 
   def setData(self, index: QModelIndex, value: typing.Any, role: int = Qt.ItemDataRole.EditRole) -> bool:
     if role == Qt.ItemDataRole.CheckStateRole:
-      value = value == Qt.CheckState.Checked
+      value = Qt.CheckState(value) == Qt.CheckState.Checked
     elif role == Qt.ItemDataRole.EditRole:
       pass
     else:
@@ -1311,6 +1313,7 @@ class ItemModel(QAbstractItemModel):
       factory = FACTORIES[type]
       fields = factory.fields
       field = fields[index.row()]
+      print(node, field, value)
       if node[field.key] != value:
         node[field.key] = value
         self.dataChanged.emit(index, index, [role])
@@ -1333,7 +1336,7 @@ class ItemModel(QAbstractItemModel):
       fields = factory.fields
       field = fields[index.row()]
       if field.type == UserDataType.CHECK_BOX:
-        return Qt.ItemFlag.ItemIsEditable | Qt.ItemFlag.ItemIsUserCheckable | flags
+        return Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | flags
       return Qt.ItemFlag.ItemIsEditable | flags
 
     return flags
@@ -1753,7 +1756,7 @@ class ThalamusWindow(QMainWindow):
     """
     Save the current config to a new file
     """
-    filename = PyQt5.QtWidgets.QFileDialog.getSaveFileName(self, "Save Config", "", "*.json")
+    filename = QFileDialog.getSaveFileName(self, "Save Config", "", "*.json")
     if filename and filename[0]:
       save(filename[0], self.state)
       self.filename = filename[0]
@@ -1763,7 +1766,7 @@ class ThalamusWindow(QMainWindow):
     """
     Load a config
     """
-    filename = PyQt5.QtWidgets.QFileDialog.getOpenFileName(self, "Load Config", "", "*.json")
+    filename = QFileDialog.getOpenFileName(self, "Load Config", "", "*.json")
     if filename and filename[0]:
       new_config = load(filename[0])
       self.state.merge(new_config)
@@ -1774,7 +1777,7 @@ class ThalamusWindow(QMainWindow):
       self.setWindowTitle(f'Thalamus: {self.filename}')
 
   def on_replay(self):
-    file_name = PyQt5.QtWidgets.QFileDialog.getOpenFileName(self, "Load Recording", "", "*.h5")
+    file_name = QFileDialog.getOpenFileName(self, "Load Recording", "", "*.h5")
     if file_name and file_name[0]:
       all_nodes: typing.List[str] = []
       with h5py.File(file_name[0]) as h5file:

@@ -257,12 +257,12 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     if state == State.SUCCESS:
       if indicate_success_failure:
         painter.setPen(QColor(0, 255, 0))
-        painter.drawText(QRect(0, 0, context.widget.width(), context.widget.height()), Qt.AlignCenter, 'SUCCESS')
+        painter.drawText(QRect(0, 0, context.widget.width(), context.widget.height()), Qt.AlignmentFlag.AlignCenter, 'SUCCESS')
       return
     elif state == State.FAILURE:
       if indicate_success_failure:
         painter.setPen(QColor(255, 0, 0))
-        painter.drawText(QRect(0, 0, context.widget.width(), context.widget.height()), Qt.AlignCenter, 'FAILURE')
+        painter.drawText(QRect(0, 0, context.widget.width(), context.widget.height()), Qt.AlignmentFlag.AlignCenter, 'FAILURE')
       return
 
     if not rendered_images:
@@ -277,7 +277,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       offset[0] += image.width()*scale
 
   space_pressed = False
-  def on_key_release(e: PyQt5.QtGui.QKeyEvent):
+  def on_key_release(e: QKeyEvent):
     nonlocal space_pressed
     space_pressed = space_pressed or e.key() == Qt.Key.Key_Space
 
