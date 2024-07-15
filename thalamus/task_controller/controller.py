@@ -6,9 +6,7 @@ import typing
 import asyncio
 import functools
 
-import PyQt5.QtWidgets
-from PyQt5.QtWidgets import QMessageBox
-import PyQt5.QtGui
+from ..qt import *
 
 import numpy
 
@@ -22,8 +20,9 @@ from .operator_view import Window as OperatorWindow
 from .window import Window as SubjectWindow
 from .reward_schedule import RewardSchedule
 from .util import create_task_with_exc_handling, isdeleted
+from ..qt import *
 
-class TaskWidget(PyQt5.QtWidgets.QWidget):
+class TaskWidget(QWidget):
   """
   Implements the UI for editing a task
   """
@@ -34,9 +33,9 @@ class TaskWidget(PyQt5.QtWidgets.QWidget):
     self.config = config
     self.on_task_name_changed = on_task_name_changed
     self.task_descriptions = sorted(task_descriptions, key=lambda t: t.display_name)
-    self.current_widget: typing.Optional[PyQt5.QtWidgets.QWidget] = None
+    self.current_widget: typing.Optional[QWidget] = None
 
-    self.combo_box = PyQt5.QtWidgets.QComboBox()
+    self.combo_box = QComboBox()
     self.combo_box.setObjectName('task_type')
     for task in self.task_descriptions:
       self.combo_box.addItem(task.display_name, task)
@@ -48,32 +47,32 @@ class TaskWidget(PyQt5.QtWidgets.QWidget):
 
     self.combo_box.currentIndexChanged.connect(self.on_task_type_selected)
 
-    spinner = PyQt5.QtWidgets.QSpinBox()
+    spinner = QSpinBox()
     spinner.setObjectName('goal')
     spinner.setValue(self.config['goal'])
     spinner.valueChanged.connect(self.on_goal_changed)
 
-    layout = PyQt5.QtWidgets.QHBoxLayout()
-    layout.addWidget(PyQt5.QtWidgets.QLabel("Task Name:"), 0)
-    self.name_edit = PyQt5.QtWidgets.QLineEdit(self.config['name'])
+    layout = QHBoxLayout()
+    layout.addWidget(QLabel("Task Name:"), 0)
+    self.name_edit = QLineEdit(self.config['name'])
     self.name_edit.setObjectName('name')
     self.name_edit.textChanged.connect(self.on_name_changed)
     layout.addWidget(self.name_edit, 0)
-    layout.addWidget(PyQt5.QtWidgets.QLabel("Task Type:"), 0)
+    layout.addWidget(QLabel("Task Type:"), 0)
     layout.addWidget(self.combo_box, 0)
-    layout.addWidget(PyQt5.QtWidgets.QLabel("Goal:"), 0)
+    layout.addWidget(QLabel("Goal:"), 0)
     layout.addWidget(spinner, 0)
-    enqueue_button = PyQt5.QtWidgets.QPushButton("Enqueue Task")
+    enqueue_button = QPushButton("Enqueue Task")
     enqueue_button.setObjectName('enqueue')
     enqueue_button.clicked.connect(lambda: self.on_enqueue(queue))
     layout.addWidget(enqueue_button)
-    copy_task_button = PyQt5.QtWidgets.QPushButton("Copy Task")
+    copy_task_button = QPushButton("Copy Task")
     copy_task_button.setObjectName('copy')
     copy_task_button.clicked.connect(self.on_copy_task)
     layout.addWidget(copy_task_button)
     layout.addStretch(1)
 
-    self.top_layout = PyQt5.QtWidgets.QVBoxLayout()
+    self.top_layout = QVBoxLayout()
     self.top_layout.addLayout(layout, 0)
 
     self.setLayout(self.top_layout)
@@ -121,7 +120,7 @@ class TaskWidget(PyQt5.QtWidgets.QWidget):
     task_description = desc
     self.combo_box.setCurrentIndex(index)
 
-    self.current_widget = PyQt5.QtWidgets.QScrollArea()
+    self.current_widget = QScrollArea()
     self.current_widget.setWidgetResizable(True)
     task_widget = task_description.create_widget(self.config)
     task_widget.setObjectName('task_widget')
@@ -130,7 +129,7 @@ class TaskWidget(PyQt5.QtWidgets.QWidget):
     self.top_layout.addWidget(self.current_widget, 1)
 
 
-  def on_task_changed(self, spinner: PyQt5.QtWidgets.QSpinBox,
+  def on_task_changed(self, spinner: QSpinBox,
                       action: ObservableCollection.Action,
                       key: typing.Any, value: typing.Any) -> None:
     """
@@ -159,7 +158,7 @@ class TaskWidget(PyQt5.QtWidgets.QWidget):
     """
     self.config['goal'] = value
 
-class TaskClusterWidget(PyQt5.QtWidgets.QWidget):
+class TaskClusterWidget(QWidget):
   """
   Implements the UI for editing a task cluster
   """
@@ -171,40 +170,40 @@ class TaskClusterWidget(PyQt5.QtWidgets.QWidget):
     self.config['tasks'].add_observer(self.on_tasks_changed, functools.partial(isdeleted, self))
     self.queue = queue
     self.name_callback = name_callback
-    self.spinner = PyQt5.QtWidgets.QSpinBox()
+    self.spinner = QSpinBox()
     self.spinner.setObjectName('weight')
     self.spinner.setValue(int(self.config['weight']))
     self.spinner.valueChanged.connect(self.on_weight_changed)
 
-    layout = PyQt5.QtWidgets.QHBoxLayout()
-    layout.addWidget(PyQt5.QtWidgets.QLabel("Name:"), 0)
-    self.name_edit = PyQt5.QtWidgets.QLineEdit(self.config['name'])
+    layout = QHBoxLayout()
+    layout.addWidget(QLabel("Name:"), 0)
+    self.name_edit = QLineEdit(self.config['name'])
     self.name_edit.setObjectName('cluster_name')
     self.name_edit.textChanged.connect(self.on_name_changed)
     layout.addWidget(self.name_edit, 0)
-    layout.addWidget(PyQt5.QtWidgets.QLabel("Weight:"), 0)
+    layout.addWidget(QLabel("Weight:"), 0)
     layout.addWidget(self.spinner, 0)
-    create_task_button = PyQt5.QtWidgets.QPushButton("Add Task")
+    create_task_button = QPushButton("Add Task")
     create_task_button.setObjectName('add_task')
     create_task_button.clicked.connect(self.on_create_task)
     layout.addWidget(create_task_button)
-    copy_task_cluster_button = PyQt5.QtWidgets.QPushButton("Copy Task Cluster")
+    copy_task_cluster_button = QPushButton("Copy Task Cluster")
     copy_task_cluster_button.setObjectName('copy_task_cluster')
     copy_task_cluster_button.clicked.connect(self.on_copy_task_cluster)
     layout.addWidget(copy_task_cluster_button)
-    enqueue_button = PyQt5.QtWidgets.QPushButton("Enqueue Task Cluster")
+    enqueue_button = QPushButton("Enqueue Task Cluster")
     enqueue_button.setObjectName('enqueue_task_cluster')
     enqueue_button.clicked.connect(self.on_enqueue)
     layout.addWidget(enqueue_button)
     layout.addStretch(1)
 
-    self.task_tabs = PyQt5.QtWidgets.QTabWidget()
+    self.task_tabs = QTabWidget()
     self.task_tabs.setObjectName('task_tabs')
     self.task_tabs.setTabsClosable(True)
     self.task_tabs.setMovable(True)
     self.task_tabs.tabCloseRequested.connect(self.on_delete_task)
 
-    top_layout = PyQt5.QtWidgets.QVBoxLayout(self)
+    top_layout = QVBoxLayout(self)
     top_layout.addLayout(layout, 0)
     top_layout.addWidget(self.task_tabs, 1)
     self.setLayout(top_layout)
@@ -227,7 +226,7 @@ class TaskClusterWidget(PyQt5.QtWidgets.QWidget):
     #mypy doesn't appears to interpret the union below as a typing.Union[StandardButtons, StandardButton]
     confirm = QMessageBox.question(self, "Delete Task", "Delete Task " + config['name'] + "?",
                                    QMessageBox.Yes | QMessageBox.No)
-    if confirm == PyQt5.QtWidgets.QMessageBox.No:
+    if confirm == QMessageBox.No:
       return
     remove_by_is(config.parent, config)
 
@@ -297,7 +296,7 @@ class TaskClusterWidget(PyQt5.QtWidgets.QWidget):
         break
 
 #Suppress the following pylint error.  The following is how QT expects us to extend QTreeWidgetItem
-class QueueTreeWidgetItem(PyQt5.QtWidgets.QTreeWidgetItem): # pylint: disable=too-few-public-methods
+class QueueTreeWidgetItem(QTreeWidgetItem): # pylint: disable=too-few-public-methods
   """
   A QTreeWidgetItem with a config object representing a task or task_cluster
   """
@@ -305,11 +304,11 @@ class QueueTreeWidgetItem(PyQt5.QtWidgets.QTreeWidgetItem): # pylint: disable=to
     super().__init__(*args)
     self.config = config
 
-def add_action(menu: PyQt5.QtWidgets.QMenu, text: str, callback: typing.Callable[[], None]) -> None:
+def add_action(menu: QMenu, text: str, callback: typing.Callable[[], None]) -> None:
   """
   Add an action to a menu
   """
-  action = PyQt5.QtWidgets.QAction(text, menu)
+  action = QAction(text, menu)
   action.triggered.connect(callback)
   menu.addAction(action)
 
@@ -320,7 +319,7 @@ class ConfigData(typing.NamedTuple):
   user_config: typing.Dict[typing.Any, typing.Any]
   file_name: str
 
-class ControlWindow(PyQt5.QtWidgets.QMainWindow):
+class ControlWindow(QMainWindow):
   """
   Implements the controller UI that manages the config and TaskContext
   """
@@ -331,7 +330,7 @@ class ControlWindow(PyQt5.QtWidgets.QMainWindow):
     self.task_context = task_context
     self.config_data = config_data
     self.done_future = done_future
-    self.valid_queue_items: typing.List[PyQt5.QtWidgets.QTreeWidgetItem] = []
+    self.valid_queue_items: typing.List[QTreeWidgetItem] = []
     self.operator_window: typing.Optional[OperatorWindow] = None
 
     file_menu = self.menuBar().addMenu("&File")
@@ -347,37 +346,37 @@ class ControlWindow(PyQt5.QtWidgets.QMainWindow):
     view_menu = self.menuBar().addMenu("&View")
     add_action(view_menu, 'Operator View', lambda: self.on_operator_view(subject_window))
 
-    self.task_cluster_tabs = PyQt5.QtWidgets.QTabWidget()
+    self.task_cluster_tabs = QTabWidget()
     self.setObjectName('task_cluster_tabs')
     self.task_cluster_tabs.setTabsClosable(True)
     self.task_cluster_tabs.setMovable(True)
     self.task_cluster_tabs.tabCloseRequested.connect(self.on_delete_task_cluster)
 
-    queue_layout = PyQt5.QtWidgets.QVBoxLayout()
-    self.queue_tree = PyQt5.QtWidgets.QTreeWidget()
+    queue_layout = QVBoxLayout()
+    self.queue_tree = QTreeWidget()
     self.queue_tree.setObjectName('queue_tree')
     self.queue_tree.setHeaderLabel("Queue")
-    self.queue_tree.setSelectionMode(PyQt5.QtWidgets.QAbstractItemView.ExtendedSelection)
+    self.queue_tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
     self.queue_tree.doubleClicked.connect(self.on_queue_item_selected)
     queue_layout.addWidget(self.queue_tree)
-    button = PyQt5.QtWidgets.QPushButton("Delete Selected")
+    button = QPushButton("Delete Selected")
     button.setObjectName('delete_selected')
     button.clicked.connect(self.on_delete_from_queue)
     queue_layout.addWidget(button)
 
-    queue_widget = PyQt5.QtWidgets.QWidget()
+    queue_widget = QWidget()
     queue_widget.setLayout(queue_layout)
 
     self.setCentralWidget(self.task_cluster_tabs)
 
-    dock = PyQt5.QtWidgets.QDockWidget('Queue', self)
+    dock = QDockWidget('Queue', self)
     dock.setWidget(queue_widget)
-    self.addDockWidget(PyQt5.QtCore.Qt.RightDockWidgetArea, dock)
+    self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
 
     plot = RewardSchedule(self.task_context.config['reward_schedule'])
-    dock = PyQt5.QtWidgets.QDockWidget('Reward Schedule', self)
+    dock = QDockWidget('Reward Schedule', self)
     dock.setWidget(plot)
-    self.addDockWidget(PyQt5.QtCore.Qt.BottomDockWidgetArea, dock)
+    self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock)
 
     self.init()
     self.task_context.config['queue'].add_observer(self.on_queue_changed)
@@ -389,22 +388,22 @@ class ControlWindow(PyQt5.QtWidgets.QMainWindow):
   def __prepare_status(self) -> None:
     if 'status' not in self.task_context.config:
       self.task_context.config['status'] = ''
-    status_widget = PyQt5.QtWidgets.QLabel()
+    status_widget = QLabel()
     self.statusBar().addWidget(status_widget)
     self.task_context.config.add_observer(functools.partial(self.__on_status_change, status_widget))
 
-  def __on_status_change(self, widget: PyQt5.QtWidgets.QLabel,
+  def __on_status_change(self, widget: QLabel,
                          _: ObservableCollection.Action, key: typing.Any, value: typing.Any) -> None:
     if key == 'status':
       widget.setText(value)
 
-  def on_queue_item_selected(self, index: PyQt5.QtCore.QModelIndex) -> None:
+  def on_queue_item_selected(self, index: QModelIndex) -> None:
     '''
     Display window to view an edit a task or cluster in the queue.
     '''
     item = typing.cast(QueueTreeWidgetItem, self.queue_tree.itemFromIndex(index))
-    window = PyQt5.QtWidgets.QMainWindow(self)
-    widget: PyQt5.QtWidgets.QWidget
+    window = QMainWindow(self)
+    widget: QWidget
     if item.config['type'] == 'task':
       window.setWindowTitle('Queue Task: ' + item.config['name'])
       widget = TaskWidget(item.config, self.task_context.config['queue'], lambda a: None, TASK_DESCRIPTIONS)
@@ -420,7 +419,7 @@ class ControlWindow(PyQt5.QtWidgets.QMainWindow):
     Opens a new operator view or brings an existing operator view to the front
     """
     if not subject_window:
-      PyQt5.QtWidgets.QMessageBox.critical(self, "Unsupported Feature",
+      QMessageBox.critical(self, "Unsupported Feature",
                                            "Operator View is not supported in remote executor mode")
       return
 
@@ -430,7 +429,7 @@ class ControlWindow(PyQt5.QtWidgets.QMainWindow):
     self.operator_window.show()
     self.operator_window.activateWindow()
 
-  def closeEvent(self, event: PyQt5.QtGui.QCloseEvent) -> None: # pylint: disable=invalid-name
+  def closeEvent(self, event: QCloseEvent) -> None: # pylint: disable=invalid-name
     """
     Stop the ROS loop when the user exists
     """
@@ -455,7 +454,7 @@ class ControlWindow(PyQt5.QtWidgets.QMainWindow):
     '''
     Loads a reward schedule from CSV
     '''
-    file_name = PyQt5.QtWidgets.QFileDialog.getOpenFileName(self, "Load Reward Schedule", "", "*.csv")
+    file_name = QFileDialog.getOpenFileName(self, "Load Reward Schedule", "", "*.csv")
     if file_name and file_name[0]:
       numpy.loadtxt(file_name[0], delimiter=',')
       schedules = numpy.loadtxt(file_name[0], delimiter=',', unpack=True).tolist()
@@ -495,7 +494,7 @@ class ControlWindow(PyQt5.QtWidgets.QMainWindow):
     confirm = QMessageBox.question(self, "Delete Task Cluster",
                                    f'Delete Task Cluster {config["name"]}?',
                                    QMessageBox.Yes | QMessageBox.No)
-    if confirm == PyQt5.QtWidgets.QMessageBox.No:
+    if confirm == QMessageBox.No:
       return
     remove_by_is(config.parent, config)
 
@@ -541,7 +540,7 @@ class ControlWindow(PyQt5.QtWidgets.QMainWindow):
     """
     Save the current config to a new file
     """
-    file_name = PyQt5.QtWidgets.QFileDialog.getSaveFileName(self, "Save Config", "", "*.json *.mat")
+    file_name = QFileDialog.getSaveFileName(self, "Save Config", "", "*.json *.mat")
     if file_name:
       save(file_name[0], self.task_context.config)
       self.config_data = ConfigData(self.config_data.user_config, file_name[0])
@@ -551,7 +550,7 @@ class ControlWindow(PyQt5.QtWidgets.QMainWindow):
     """
     Load a config
     """
-    file_name = PyQt5.QtWidgets.QFileDialog.getOpenFileName(self, "Load Config", "", "*.json *.mat")
+    file_name = QFileDialog.getOpenFileName(self, "Load Config", "", "*.json *.mat")
     if file_name and file_name[0]:
       async def task() -> None:
         new_config = load(file_name[0])

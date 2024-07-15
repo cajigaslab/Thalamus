@@ -15,20 +15,9 @@ import contextlib
 
 import nidaqmx
 
-import PyQt5.QtGui
-import PyQt5.QtCore
-import PyQt5.QtWidgets
+from ..qt import *
 
 LOGGER = logging.getLogger(__name__)
-
-try:
-  import PyQt5.sip
-  isdeleted = PyQt5.sip.isdeleted
-  voidptr = PyQt5.sip.voidptr
-except ImportError:
-  import sip
-  isdeleted = sip.isdeleted
-  voidptr = sip.voidptr
 
 import stl.mesh
 
@@ -59,13 +48,13 @@ class CanvasPainterProtocol(typing_extensions.Protocol):
     Context manager that will disable rendering if we are not rendering to the specified output
     '''
 
-  def render_stl(self, mesh: stl.mesh.Mesh, color: PyQt5.QtGui.QColor) -> None:
+  def render_stl(self, mesh: stl.mesh.Mesh, color: QColor) -> None:
     '''
     Draw an STL mesh
     '''
 
   @property
-  def model_view(self) -> PyQt5.QtGui.QMatrix4x4:
+  def model_view(self) -> QMatrix4x4:
     '''
     The model view transformation
     '''
@@ -102,25 +91,25 @@ class CanvasProtocol(typing_extensions.Protocol):
     '''
 
   @property
-  def touch_listener(self) -> typing.Callable[[PyQt5.QtCore.QPoint], None]:
+  def touch_listener(self) -> typing.Callable[[QPoint], None]:
     '''
     Get touch callback
     '''
 
   @touch_listener.setter
-  def touch_listener(self, value: typing.Callable[[PyQt5.QtCore.QPoint], None]) -> None:
+  def touch_listener(self, value: typing.Callable[[QPoint], None]) -> None:
     '''
     touch_listener setter
     '''
 
   @property
-  def gaze_listener(self) -> typing.Callable[[PyQt5.QtCore.QPoint], None]:
+  def gaze_listener(self) -> typing.Callable[[QPoint], None]:
     '''
     Get gaze callback
     '''
 
   @gaze_listener.setter
-  def gaze_listener(self, value: typing.Callable[[PyQt5.QtCore.QPoint], None]) -> None:
+  def gaze_listener(self, value: typing.Callable[[QPoint], None]) -> None:
     '''
     gaze_listener setter
     '''
@@ -214,14 +203,14 @@ class TaskContextProtocol(metaclass=abc.ABCMeta):
     case, a uniform random number in the range [min, max] will be returned.
     """
 
-  def get_color(self, key: str, default: typing.Optional[typing.List[int]] = None) -> PyQt5.QtGui.QColor:
+  def get_color(self, key: str, default: typing.Optional[typing.List[int]] = None) -> QColor:
     """
     Reads a color from the current task_config.  The specified config value should be a list of numpers specifying RGB
     values.
     """
 
   def get_target_color(self, itarg: int, key: str,
-                       default: typing.Optional[typing.List[int]] = None) -> PyQt5.QtGui.QColor:
+                       default: typing.Optional[typing.List[int]] = None) -> QColor:
     """
     Reads a color from the current task_config for the target indexed by itarg.  The specified config value should be a
     list of numpers specifying RGB
@@ -271,7 +260,7 @@ def assert_behav_result_has(fields):
       result = await func(context)
       for f in fields:
         if f not in context.behav_result:
-          PyQt5.QtWidgets.QMessageBox.critical(context.widget,
+          QMessageBox.critical(context.widget,
                                               'behav_result Assertion Failed',
                                               f'{f} missing from behav_result')
       return result
@@ -308,33 +297,33 @@ def create_task_with_exc_handling(awaitable: 'typing.Awaitable[RETURN]') -> 'asy
 
   return asyncio.get_event_loop().create_task(inner())
 
-def lower_left_origin_transform(height: int) -> PyQt5.QtGui.QTransform:
+def lower_left_origin_transform(height: int) -> QTransform:
   '''
   Returns a QTransform that sets the origin to the lower left corner of a QWidget height pixels tall
   '''
-  transform = PyQt5.QtGui.QTransform()
+  transform = QTransform()
   transform.translate(0, height)
   transform.scale(1, -1)
   return transform
 
-WithTransformTarget = typing.Union[typing.Callable[[PyQt5.QtCore.QPoint], None],
-                                   typing.Callable[[PyQt5.QtGui.QPainter], None]]
-WithTransformOutput = typing.Callable[[typing.Union[PyQt5.QtCore.QPoint, PyQt5.QtGui.QPainter]], None]
+WithTransformTarget = typing.Union[typing.Callable[[QPoint], None],
+                                   typing.Callable[[QPainter], None]]
+WithTransformOutput = typing.Callable[[typing.Union[QPoint, QPainter]], None]
 
-def with_transform(transform: PyQt5.QtGui.QTransform) -> typing.Callable[[WithTransformTarget], WithTransformOutput]:
+def with_transform(transform: QTransform) -> typing.Callable[[WithTransformTarget], WithTransformOutput]:
   '''
   Wraps task renderers or input handlers so that input has the specified transform is applied to the input or QPainter.
   '''
   def decorator(func: WithTransformTarget) -> WithTransformOutput:
-    def wrapper(arg: typing.Union[PyQt5.QtCore.QPoint, PyQt5.QtGui.QPainter]) -> None:
-      if isinstance(arg, PyQt5.QtCore.QPoint):
+    def wrapper(arg: typing.Union[QPoint, QPainter]) -> None:
+      if isinstance(arg, QPoint):
         new_point = transform.map(arg)
-        typing.cast(typing.Callable[[PyQt5.QtCore.QPoint], None], func)(new_point)
+        typing.cast(typing.Callable[[QPoint], None], func)(new_point)
       else:
         old_transform = arg.transform()
         try:
           arg.setTransform(transform)
-          typing.cast(typing.Callable[[PyQt5.QtGui.QPainter], None], func)(arg)
+          typing.cast(typing.Callable[[QPainter], None], func)(arg)
         finally:
           arg.setTransform(old_transform)
     return wrapper

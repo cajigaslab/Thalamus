@@ -30,9 +30,7 @@ import jsonpath_ng.ext.parser # type: ignore
 from .. import task_controller_pb2
 from .. import task_controller_pb2_grpc
 
-import PyQt5.QtGui
-import PyQt5.QtWidgets
-from PyQt5.QtMultimedia import QSound
+from ..qt import *
 
 from .canvas import Canvas
 from ..config import ObservableCollection, ObservableDict
@@ -47,7 +45,7 @@ class TaskDescription(typing.NamedTuple):
   '''
   code: str
   display_name: str
-  create_widget: typing.Callable[[ObservableCollection], PyQt5.QtWidgets.QWidget]
+  create_widget: typing.Callable[[ObservableCollection], QWidget]
   run: typing.Callable[['TaskContextProtocol'], typing.Awaitable[TaskResult]]
 
 async def to_thread(func):
@@ -365,7 +363,7 @@ class TaskContext(TaskContextProtocol):
       return typing.cast(PARAMETERTYPE, parameter.get_parameter_value().double_value)
     raise RuntimeError("Unsupported parameter type: {}".format(parameter_type))
 
-  def get_color(self, key: str, default: typing.Optional[typing.List[int]] = None) -> PyQt5.QtGui.QColor:
+  def get_color(self, key: str, default: typing.Optional[typing.List[int]] = None) -> QColor:
     """
     Reads a color from the current task_config.  The specified config value should be a list of numpers specifying RGB
     values.
@@ -373,7 +371,7 @@ class TaskContext(TaskContextProtocol):
     rgb = self.task_config.get(key, default)
     self.trial_summary_data.used_values[key] = rgb
     red, green, blue = int(rgb[0]), int(rgb[1]), int(rgb[2])
-    return PyQt5.QtGui.QColor(red, green, blue)
+    return QColor(red, green, blue)
 
   def get_value(self, key: str, default: typing.Any = None) -> typing.Union[int, float, bool]:
     """
@@ -422,7 +420,7 @@ class TaskContext(TaskContextProtocol):
     raise RuntimeError(f'Expected number or object with min and max fields, got {key}={value_config}')
 
   def get_target_color(self, itarg: int, key: str,
-                       default: typing.Optional[typing.List[int]] = None) -> PyQt5.QtGui.QColor:
+                       default: typing.Optional[typing.List[int]] = None) -> QColor:
     """
     Reads a color from the current task_config for the target indexed by itarg.  The specified config value should be a
     list of numpers specifying RGB
@@ -431,7 +429,7 @@ class TaskContext(TaskContextProtocol):
     rgb = self.task_config['targets'][itarg].get(key, default)
     self.trial_summary_data.used_values['targ' + str(itarg) + '_' + key] = rgb
     red, green, blue = int(rgb[0]), int(rgb[1]), int(rgb[2])
-    return PyQt5.QtGui.QColor(red, green, blue)
+    return QColor(red, green, blue)
 
   def __sample_task(self, recurse: bool = False) -> typing.Any:
     """
@@ -531,7 +529,7 @@ class TaskContext(TaskContextProtocol):
       transforms['frame_width'] = self.widget.frameGeometry().width()
       transforms['frame_height'] = self.widget.frameGeometry().height()
       
-      local_to_global_translation = self.widget.mapFromGlobal(PyQt5.QtCore.QPoint(0, 0))
+      local_to_global_translation = self.widget.mapFromGlobal(QPoint(0, 0))
       transforms['local_to_global_translation_x'] = local_to_global_translation.x()
       transforms['local_to_global_translation_y'] = local_to_global_translation.y()
 

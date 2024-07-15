@@ -5,21 +5,18 @@ import typing
 import asyncio
 import functools
 
-import PyQt5.QtWidgets
-import PyQt5.QtGui
-import PyQt5.QtCore
-import PyQt5.Qt
+from ..qt import *
 
 import packaging.version
 
-PYQT_VERSION = packaging.version.parse(PyQt5.Qt.PYQT_VERSION_STR)
+PYQT_VERSION = packaging.version.parse(PYQT_VERSION_STR)
 USINGLEGACY_QT = PYQT_VERSION < packaging.version.parse('5.11.0')
 
 from .window import Window as TaskWindow
 from .util import RenderOutput
 from ..config import ObservableCollection
 
-class ViewWidget(PyQt5.QtWidgets.QWidget):
+class ViewWidget(QWidget):
   """
   Central widget for the operator view
   """
@@ -28,7 +25,7 @@ class ViewWidget(PyQt5.QtWidgets.QWidget):
     self.target = target
     self.painting = False
 
-  def paintEvent(self, _: PyQt5.QtGui.QPaintEvent) -> None: # pylint: disable=invalid-name
+  def paintEvent(self, _: QPaintEvent) -> None: # pylint: disable=invalid-name
     """
     Renders the target widget into this view
     """
@@ -38,25 +35,25 @@ class ViewWidget(PyQt5.QtWidgets.QWidget):
         with self.target.canvas.masked(RenderOutput.OPERATOR):
           image = self.target.canvas.grabFramebuffer()
       else:
-        image = PyQt5.QtGui.QImage(self.target.width(), self.target.height(),
-                                   PyQt5.QtGui.QImage.Format_RGB32) # type: ignore # pylint: disable=no-member
+        image = QImage(self.target.width(), self.target.height(),
+                                   QImage.Format.Format_RGB32) # type: ignore # pylint: disable=no-member
         with self.target.canvas.masked(RenderOutput.OPERATOR):
           self.target.canvas.render(image)
 
 
-      painter = PyQt5.QtGui.QPainter(self)
+      painter = QPainter(self)
 
       scale_factor = min(self.width()/self.target.width(), self.height()/self.target.height())
       render_width = int(self.target.width()*scale_factor)
       render_height = int(self.target.height()*scale_factor)
       render_x = int((self.width() - render_width)/2)
       render_y = int((self.height() - render_height)/2)
-      render_rect = PyQt5.QtCore.QRect(render_x, render_y, render_width, render_height)
+      render_rect = QRect(render_x, render_y, render_width, render_height)
       painter.drawImage(render_rect, image)
     finally:
       self.painting = False
 
-class CentralWidget(PyQt5.QtWidgets.QWidget):
+class CentralWidget(QWidget):
   """
   Central widget for the operator view
   """
@@ -68,11 +65,11 @@ class CentralWidget(PyQt5.QtWidgets.QWidget):
 
     eye_config = config['eye_scaling']
 
-    layout = PyQt5.QtWidgets.QGridLayout()
+    layout = QGridLayout()
     layout.addWidget(ViewWidget(target), 0, 0, 1, 4)
     layout.setRowStretch(0, 1)
 
-    clear_button = PyQt5.QtWidgets.QPushButton('Clear')
+    clear_button = QPushButton('Clear')
     layout.addWidget(clear_button, 1, 0)
     layout.setRowStretch(1, 0)
     clear_button.clicked.connect(target.canvas.clear_accumulation)
@@ -91,25 +88,25 @@ class CentralWidget(PyQt5.QtWidgets.QWidget):
       if quadrant not in eye_config:
         eye_config[quadrant] = {'x': 1, 'y': 1}
 
-      layout.addWidget(PyQt5.QtWidgets.QLabel(quadrant), row, column)
+      layout.addWidget(QLabel(quadrant), row, column)
       layout.setRowStretch(row, 0)
       layout.setRowStretch(row+1, 0)
 
-      x_spin_box = PyQt5.QtWidgets.QDoubleSpinBox()
+      x_spin_box = QDoubleSpinBox()
       x_spin_box.setMaximum(1e9)
       x_spin_box.setValue(eye_config[quadrant]['x'])
       x_spin_box.valueChanged.connect(functools.partial(update_field, quadrant, 'x'))
       x_spin_box.setObjectName(f'{quadrant}_x')
       layout.addWidget(x_spin_box, row+1, column)
 
-      y_spin_box = PyQt5.QtWidgets.QDoubleSpinBox()
+      y_spin_box = QDoubleSpinBox()
       y_spin_box.setMaximum(1e9)
       y_spin_box.setValue(eye_config[quadrant]['y'])
       y_spin_box.valueChanged.connect(functools.partial(update_field, quadrant, 'y'))
       y_spin_box.setObjectName(f'{quadrant}_y')
       layout.addWidget(y_spin_box, row+1, column+1)
 
-      def on_config_change(quadrant: str, x_box: PyQt5.QtWidgets.QDoubleSpinBox, y_box: PyQt5.QtWidgets.QDoubleSpinBox,
+      def on_config_change(quadrant: str, x_box: QDoubleSpinBox, y_box: QDoubleSpinBox,
                            _: ObservableCollection.Action, _key: typing.Any, _value: typing.Any) -> None:
         x_box.setValue(eye_config[quadrant]['x'])
         y_box.setValue(eye_config[quadrant]['y'])
@@ -118,7 +115,7 @@ class CentralWidget(PyQt5.QtWidgets.QWidget):
 
     self.setLayout(layout)
 
-class Window(PyQt5.QtWidgets.QMainWindow):
+class Window(QMainWindow):
   """
   Root widget for the operator view
   """
@@ -138,7 +135,7 @@ class Window(PyQt5.QtWidgets.QMainWindow):
     except asyncio.CancelledError:
       pass
 
-  def closeEvent(self, event: PyQt5.QtGui.QCloseEvent) -> None: # pylint: disable=invalid-name
+  def closeEvent(self, event: QCloseEvent) -> None: # pylint: disable=invalid-name
     """
     Remove callback when window closes
     """

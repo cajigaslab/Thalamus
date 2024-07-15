@@ -14,10 +14,7 @@ import os
 
 import stl
 
-import PyQt5.QtCore
-import PyQt5.QtWidgets
-from PyQt5.QtGui import QColor
-from PyQt5.QtMultimedia import QSound
+from ..qt import *
 
 from . import task_context
 from .widgets import Form, ListAsTabsWidget
@@ -52,17 +49,17 @@ def validate_target(config, text):
         continue
       if target['name'] == text:
         if anchor_target is not None:
-          asyncio.get_event_loop().call_soon(lambda: PyQt5.QtWidgets.QMessageBox.warning(None, 'Invalid Anchor', 'Multiple targets with that name exist'))
+          asyncio.get_event_loop().call_soon(lambda: QMessageBox.warning(None, 'Invalid Anchor', 'Multiple targets with that name exist'))
           return False
         else:
           anchor_target = target
     if anchor_target is None:
-      asyncio.get_event_loop().call_soon(lambda: PyQt5.QtWidgets.QMessageBox.warning(None, 'Invalid Anchor', 'No target with that name exist'))
+      asyncio.get_event_loop().call_soon(lambda: QMessageBox.warning(None, 'Invalid Anchor', 'No target with that name exist'))
       return False
     return True
 
 
-class TargetWidget(PyQt5.QtWidgets.QWidget):
+class TargetWidget(QWidget):
   '''
   Widget for managing a target config
   '''
@@ -71,12 +68,12 @@ class TargetWidget(PyQt5.QtWidgets.QWidget):
     if 'name' not in config:
       config['name'] = 'Untitled'
 
-    layout = PyQt5.QtWidgets.QGridLayout()
+    layout = QGridLayout()
     self.setLayout(layout)
 
-    layout.addWidget(PyQt5.QtWidgets.QLabel('Name:'), 0, 0)
+    layout.addWidget(QLabel('Name:'), 0, 0)
 
-    name_edit = PyQt5.QtWidgets.QLineEdit(config['name'])
+    name_edit = QLineEdit(config['name'])
     name_edit.setObjectName('name_edit')
     name_edit.textChanged.connect(lambda v: config.update({'name': v}))
     layout.addWidget(name_edit, 0, 1)
@@ -85,7 +82,7 @@ class TargetWidget(PyQt5.QtWidgets.QWidget):
       if config.parent:
         config.parent.append(config.copy())
 
-    copy_button = PyQt5.QtWidgets.QPushButton('Copy Target')
+    copy_button = QPushButton('Copy Target')
     copy_button.setObjectName('copy_button')
     copy_button.clicked.connect(do_copy)
     layout.addWidget(copy_button, 0, 2)
@@ -109,10 +106,10 @@ class TargetWidget(PyQt5.QtWidgets.QWidget):
     layout.addWidget(fixed_form, 1, 1, 1, 2)
 
     fixed_form_layout = fixed_form.layout()
-    assert isinstance(fixed_form_layout, PyQt5.QtWidgets.QGridLayout)
+    assert isinstance(fixed_form_layout, QGridLayout)
 
-    anchor_target_widget = PyQt5.QtWidgets.QLineEdit()
-    fixed_form_layout.addWidget(PyQt5.QtWidgets.QLabel('Anchor:'), fixed_form_layout.rowCount(), 0, 1, 1)
+    anchor_target_widget = QLineEdit()
+    fixed_form_layout.addWidget(QLabel('Anchor:'), fixed_form_layout.rowCount(), 0, 1, 1)
     fixed_form_layout.addWidget(anchor_target_widget, fixed_form_layout.rowCount()-1, 1, 1, 2)
 
     if 'anchor' not in config:
@@ -146,12 +143,12 @@ class TargetWidget(PyQt5.QtWidgets.QWidget):
     )
     layout.addWidget(random_form, 1, 3, 1, 2)
 
-def create_widget(task_config: ObservableCollection) -> PyQt5.QtWidgets.QWidget:
+def create_widget(task_config: ObservableCollection) -> QWidget:
   """
   Creates a widget for configuring the simple task
   """
-  result = PyQt5.QtWidgets.QWidget()
-  layout = PyQt5.QtWidgets.QVBoxLayout()
+  result = QWidget()
+  layout = QVBoxLayout()
   result.setLayout(layout)
 
   """
@@ -179,7 +176,7 @@ def create_widget(task_config: ObservableCollection) -> PyQt5.QtWidgets.QWidget:
   )
   layout.addWidget(form)
 
-  new_target_button = PyQt5.QtWidgets.QPushButton('Add Target')
+  new_target_button = QPushButton('Add Target')
   new_target_button.setObjectName('new_target_button')
   new_target_button.clicked.connect(lambda: task_config['targets'].append({}) and None)
   layout.addWidget(new_target_button)
@@ -240,7 +237,7 @@ def get_target_rectangle(context, itarg, dpi, cache):
 
   p_win = Rvec*pos_vis + t
 
-  result = PyQt5.QtCore.QRect(p_win[0] - targ_width_px/2, p_win[1] - targ_height_px/2, targ_width_px, targ_height_px)
+  result = QRect(p_win[0] - targ_width_px/2, p_win[1] - targ_height_px/2, targ_width_px, targ_height_px)
   cache[itarg] = result
   return result
 
@@ -272,7 +269,7 @@ def make_relative_targ2_rect(context, i_targ2, origin_target_rect, dpi):
 
   p_win = Rvec*pos_vis + t
 
-  return PyQt5.QtCore.QRect(p_win[0] - targ_width_px/2, p_win[1] - targ_height_px/2, targ_width_px, targ_height_px)
+  return QRect(p_win[0] - targ_width_px/2, p_win[1] - targ_height_px/2, targ_width_px, targ_height_px)
 
 
 def get_start_target_index(context):
@@ -403,9 +400,9 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   last_selected_target = None
   targ2_acquired = False
   selected_targ2 = None
-  gaze_pos = PyQt5.QtCore.QPoint()
+  gaze_pos = QPoint()
 
-  def gaze_handler(cursor: PyQt5.QtCore.QPoint) -> None:
+  def gaze_handler(cursor: QPoint) -> None:
     nonlocal start_target_acquired
     nonlocal presented_targ_acquired
     nonlocal i_selected_target
@@ -443,7 +440,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   state_brightness = 0
   show_targ2_target = False
 
-  def renderer(painter: PyQt5.QtGui.QPainter) -> None:
+  def renderer(painter: QPainter) -> None:
     color_base = all_target_colors[i_start_targ]
     scale = (all_target_on_luminance[i_start_targ] if not dim_start_target
              else all_target_off_luminance[i_start_targ])
@@ -480,7 +477,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
 
     with painter.masked(RenderOutput.OPERATOR):
-      path = PyQt5.QtGui.QPainterPath()
+      path = QPainterPath()
 
       for rect in (r for r in all_target_rects if r is not None):
         path.addEllipse(rect.center(), window, window)

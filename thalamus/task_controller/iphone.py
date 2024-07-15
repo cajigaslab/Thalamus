@@ -3,7 +3,7 @@ Implementation of the null task.  Does nothing, mostly used for testing
 """
 import datetime
 
-import PyQt5.QtWidgets
+from ..qt import *
 
 from . import task_context
 from ..config import *
@@ -11,7 +11,7 @@ from . import util
 
 from .widgets import Form
 
-def create_widget(task_config: ObservableCollection) -> PyQt5.QtWidgets.QWidget:
+def create_widget(task_config: ObservableCollection) -> QWidget:
   """
   Returns a QWidget that will be used to edit the task configuration
   """

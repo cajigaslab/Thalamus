@@ -24,11 +24,6 @@ import numpy
 
 import OpenGL.GL
 
-import PyQt5.QtWidgets
-import PyQt5.QtGui
-import PyQt5.QtCore
-
-
 from pkg_resources import resource_string, resource_filename
 
 from ..config import ObservableCollection
@@ -36,6 +31,7 @@ from .util import CanvasPainterProtocol, RenderOutput, voidptr, TaskContextProto
 from .. import util_pb2
 from .. import ophanim_pb2
 from .. import ophanim_pb2_grpc
+from ..qt import *
 #from .. import recorder2_pb2
 #from .. import recorder2_pb2_grpc
 
@@ -43,13 +39,13 @@ LOGGER = logging.getLogger(__name__)
 
 VOLTAGE_RANGE = -10, 10
 
-def load_transform(filename: str) -> PyQt5.QtGui.QTransform:
+def load_transform(filename: str) -> QTransform:
   '''
-  Load PyQt5.QtGui.QTransform from yaml file
+  Load QTransform from yaml file
   '''
   with open(filename) as touch_transform_file:
     transform_config = yaml.load(touch_transform_file, Loader=yaml.FullLoader)
-    touch_transform = PyQt5.QtGui.QTransform()
+    touch_transform = QTransform()
     if 'is_matrix' in transform_config and transform_config['is_matrix']:
       touch_transform.setMatrix(
         transform_config['m11'], transform_config['m12'], transform_config['m13'],
@@ -126,19 +122,19 @@ class Vbos(typing.NamedTuple):
   """
   Vertex buffers used in rendering
   """
-  vertex: PyQt5.QtGui.QOpenGLBuffer
-  normal: PyQt5.QtGui.QOpenGLBuffer
+  vertex: QOpenGLBuffer
+  normal: QOpenGLBuffer
 
 class OpenGLConfig(typing.NamedTuple):
   '''
   OpenGL settings
   '''
-  projection_matrix: PyQt5.QtGui.QMatrix4x4
-  program: PyQt5.QtGui.QOpenGLShaderProgram
+  projection_matrix: QMatrix4x4
+  program: QOpenGLShaderProgram
   locations: GlslLocations
   vbo_cache: typing.Dict[int, Vbos]
 
-class BrowserReflectingPainter(PyQt5.QtGui.QPainter):
+class BrowserReflectingPainter(QPainter):
   """
   Forwards draw commands to the browser
   """
@@ -160,15 +156,15 @@ class BrowserReflectingPainter(PyQt5.QtGui.QPainter):
     QPainter.fillRect override
     """
     signature = tuple(type(arg) for arg in args)
-    if signature == (PyQt5.QtCore.QRect, PyQt5.QtGui.QColor):
+    if signature == (QRect, QColor):
       rect = args[0]
       color = args[1]
-    elif signature == (int, int, int, int, PyQt5.QtGui.QColor):
-      rect = PyQt5.QtCore.QRect(args[0], args[1], args[2], args[3])
+    elif signature == (int, int, int, int, QColor):
+      rect = QRect(args[0], args[1], args[2], args[3])
       color = args[4]
-    elif signature == (int, int, int, int, PyQt5.QtCore.Qt.GlobalColor):
-      rect = PyQt5.QtCore.QRect(args[0], args[1], args[2], args[3])
-      color = PyQt5.QtGui.QColor(args[4])
+    elif signature == (int, int, int, int, Qt.GlobalColor):
+      rect = QRect(args[0], args[1], args[2], args[3])
+      color = QColor(args[4])
     else:
       raise NotImplementedError(f'BrowserReflectingPainter.fillRect{signature} is not supported')
 
@@ -188,7 +184,7 @@ class BrowserReflectingPainter(PyQt5.QtGui.QPainter):
   def drawImage(self, *args: typing.Any, **_: typing.Any) -> None:
     return super().drawImage(*args, **_)
     signature = tuple(type(arg) for arg in args)
-    if signature == (PyQt5.QtCore.QRect, PyQt5.QtGui.QImage):
+    if signature == (QRect, QImage):
       rect = args[0]
       image = args[1]
     else:
@@ -210,7 +206,7 @@ class CanvasPainter(BrowserReflectingPainter):
     super().__init__(*args)
     self.current_output_mask = RenderOutput.ANY
     self.output_mask = output_mask
-    self.model_view = PyQt5.QtGui.QMatrix4x4()
+    self.model_view = QMatrix4x4()
     self.projection_matrix = opengl_config.projection_matrix
     self.program = opengl_config.program
     self.locations = opengl_config.locations
@@ -256,7 +252,7 @@ class CanvasPainter(BrowserReflectingPainter):
     finally:
       self.current_output_mask = previous_mask
 
-  def render_stl(self, mesh: stl.mesh.Mesh, color: PyQt5.QtGui.QColor) -> None:
+  def render_stl(self, mesh: stl.mesh.Mesh, color: QColor) -> None:
     '''
     Draw an STL mesh
     '''
@@ -271,14 +267,14 @@ class CanvasPainter(BrowserReflectingPainter):
 
     if not id(mesh) in self.vbo_cache:
       vertex = numpy.array(mesh.points.flatten(), dtype=numpy.float32)
-      vertex_vbo = PyQt5.QtGui.QOpenGLBuffer()
+      vertex_vbo = QOpenGLBuffer()
       vertex_vbo.create()
       vertex_vbo.bind()
       vertex_vbo.allocate(typing.cast(voidptr, vertex.data), vertex.nbytes)
       vertex_vbo.release()
 
       normal = numpy.array(mesh.normals.repeat(3, axis=0).flatten(), dtype=numpy.float32)
-      normal_vbo = PyQt5.QtGui.QOpenGLBuffer()
+      normal_vbo = QOpenGLBuffer()
       normal_vbo.create()
       normal_vbo.bind()
       normal_vbo.allocate(typing.cast(voidptr, normal.data), normal.nbytes)
@@ -318,7 +314,7 @@ class TouchCalibration():
     self.touch_target_index = 0
     self.touch_targets: typing.List[typing.List[int]] = []
     self.touch_target_voltage: typing.List[typing.List[float]] = []
-    self.touch_transform = PyQt5.QtGui.QTransform()
+    self.touch_transform = QTransform()
     self.load_transform()
 
   def load_transform(self) -> None:
@@ -340,21 +336,21 @@ class InputConfig():
   '''
   def __init__(self, config: ObservableCollection) -> None:
     self.touch_channels = config['touch_channels']
-    self.touch_path = PyQt5.QtGui.QPainterPath()
-    self.touch_path.setFillRule(PyQt5.QtCore.Qt.WindingFill)
-    self.last_touch = PyQt5.QtCore.QPoint(0, 0)
+    self.touch_path = QPainterPath()
+    self.touch_path.setFillRule(Qt.FillRule.WindingFill)
+    self.last_touch = QPoint(0, 0)
     self.gaze_paths = [
-      PyQt5.QtGui.QPainterPath(), PyQt5.QtGui.QPainterPath(), PyQt5.QtGui.QPainterPath(), PyQt5.QtGui.QPainterPath()]
-    self.gaze_paths[0].setFillRule(PyQt5.QtCore.Qt.WindingFill)
-    self.gaze_paths[1].setFillRule(PyQt5.QtCore.Qt.WindingFill)
-    self.gaze_paths[2].setFillRule(PyQt5.QtCore.Qt.WindingFill)
-    self.gaze_paths[3].setFillRule(PyQt5.QtCore.Qt.WindingFill)
-    self.points: typing.List[typing.List[PyQt5.QtCore.QPointF]] = [[], [], [], []]
+      QPainterPath(), QPainterPath(), QPainterPath(), QPainterPath()]
+    self.gaze_paths[0].setFillRule(Qt.FillRule.WindingFill)
+    self.gaze_paths[1].setFillRule(Qt.FillRule.WindingFill)
+    self.gaze_paths[2].setFillRule(Qt.FillRule.WindingFill)
+    self.gaze_paths[3].setFillRule(Qt.FillRule.WindingFill)
+    self.points: typing.List[typing.List[QPointF]] = [[], [], [], []]
     self.gaze_transforms = [
-      PyQt5.QtGui.QTransform(),
-      PyQt5.QtGui.QTransform(),
-      PyQt5.QtGui.QTransform(),
-      PyQt5.QtGui.QTransform()]
+      QTransform(),
+      QTransform(),
+      QTransform(),
+      QTransform()]
     self.touch_calibration = TouchCalibration()
 
     if 'eye_scaling' not in config:
@@ -374,25 +370,25 @@ class InputConfig():
     if quadrant == 'I':
       transform = self.gaze_transforms[0]
       points = self.points[0]
-      path = self.gaze_paths[0] = PyQt5.QtGui.QPainterPath()
+      path = self.gaze_paths[0] = QPainterPath()
     elif quadrant == 'II':
       transform = self.gaze_transforms[1]
       points = self.points[1]
-      path = self.gaze_paths[1] = PyQt5.QtGui.QPainterPath()
+      path = self.gaze_paths[1] = QPainterPath()
     elif quadrant == 'III':
       transform = self.gaze_transforms[2]
       points = self.points[2]
-      path = self.gaze_paths[2] = PyQt5.QtGui.QPainterPath()
+      path = self.gaze_paths[2] = QPainterPath()
     elif quadrant == 'IV':
       transform = self.gaze_transforms[3]
       points = self.points[3]
-      path = self.gaze_paths[3] = PyQt5.QtGui.QPainterPath()
+      path = self.gaze_paths[3] = QPainterPath()
 
     transform.setMatrix(
       value if key == 'x' else transform.m11(),                          transform.m12(), transform.m13(),
                                transform.m21(), value if key == 'y' else transform.m22(), transform.m23(),
                                transform.m31(),                          transform.m32(), transform.m33())
-    path.setFillRule(PyQt5.QtCore.Qt.WindingFill)
+    path.setFillRule(Qt.FillRule.WindingFill)
     for point in points:
       scaled_point = transform.map(point)
       path.addEllipse(scaled_point, 2, 2)
@@ -404,13 +400,13 @@ class CanvasOpenGLConfig(typing.NamedTuple):
   '''
   OpenGL properties of the Canvas
   '''
-  program: PyQt5.QtGui.QOpenGLShaderProgram
+  program: QOpenGLShaderProgram
   proj_matrix_loc: int
   mv_matrix_loc: int
   normal_matrix_loc: int
   color_loc: int
   vbo_cache: typing.Dict[int, Vbos]
-  proj: PyQt5.QtGui.QMatrix4x4
+  proj: QMatrix4x4
 
 TOUCH_LISTENER = 0
 GAZE_LISTENER = 1
@@ -421,8 +417,8 @@ class Listeners():
   Canvas listeners
   '''
   def __init__(self) -> None:
-    self.touch_listener: typing.Callable[[PyQt5.QtCore.QPoint], None] = lambda e: None
-    self.gaze_listener: typing.Callable[[PyQt5.QtCore.QPoint], None] = lambda e: None
+    self.touch_listener: typing.Callable[[QPoint], None] = lambda e: None
+    self.gaze_listener: typing.Callable[[QPoint], None] = lambda e: None
     self.renderer: typing.Callable[[CanvasPainterProtocol], None] = lambda w: None
     self.key_release_handler: typing.Callable[[CanvasPainterProtocol], None] = lambda w: None
     self.paint_subscribers: typing.List[typing.Callable[[], None]] = []
@@ -447,7 +443,7 @@ class Handles:
   def __repr__(self) -> str:
     return str(self)
 
-class Canvas(PyQt5.QtWidgets.QOpenGLWidget):
+class Canvas(QOpenGLWidget):
   """
   The QWidget the task will render on and that will generate mouse events on touch input
   """
@@ -483,7 +479,7 @@ class Canvas(PyQt5.QtWidgets.QOpenGLWidget):
 
     self.listeners = Listeners()
 
-    self.setFocusPolicy(PyQt5.QtCore.Qt.StrongFocus)
+    self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
     self.opengl_config: typing.Optional[CanvasOpenGLConfig] = None
 
@@ -535,25 +531,25 @@ class Canvas(PyQt5.QtWidgets.QOpenGLWidget):
     self.listeners.key_release_handler = value
 
   @property
-  def touch_listener(self) -> typing.Callable[[PyQt5.QtCore.QPoint], None]:
+  def touch_listener(self) -> typing.Callable[[QPoint], None]:
     '''
     Get touch callback
     '''
     return self.listeners.touch_listener
 
   @touch_listener.setter
-  def touch_listener(self, value: typing.Callable[[PyQt5.QtCore.QPoint], None]) -> None:
+  def touch_listener(self, value: typing.Callable[[QPoint], None]) -> None:
     self.listeners.touch_listener = value
 
   @property
-  def gaze_listener(self) -> typing.Callable[[PyQt5.QtCore.QPoint], None]:
+  def gaze_listener(self) -> typing.Callable[[QPoint], None]:
     '''
     Get gaze callback
     '''
     return self.listeners.gaze_listener
 
   @gaze_listener.setter
-  def gaze_listener(self, value: typing.Callable[[PyQt5.QtCore.QPoint], None]) -> None:
+  def gaze_listener(self, value: typing.Callable[[QPoint], None]) -> None:
     self.listeners.gaze_listener = value
 
   @contextlib.contextmanager
@@ -572,9 +568,9 @@ class Canvas(PyQt5.QtWidgets.QOpenGLWidget):
     '''
     Sets up OpenGL
     '''
-    program = PyQt5.QtGui.QOpenGLShaderProgram()
-    program.addShaderFromSourceCode(PyQt5.QtGui.QOpenGLShader.Vertex, VERTEX_SHADER_SOURCE)
-    program.addShaderFromSourceCode(PyQt5.QtGui.QOpenGLShader.Fragment, FRAGMENT_SHADER_SOURCE)
+    program = QOpenGLShaderProgram()
+    program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Vertex, VERTEX_SHADER_SOURCE)
+    program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, FRAGMENT_SHADER_SOURCE)
     program.bindAttributeLocation("vertex", 0)
     program.bindAttributeLocation("normal", 1)
     program.link()
@@ -592,7 +588,7 @@ class Canvas(PyQt5.QtWidgets.QOpenGLWidget):
       normal_matrix_loc,
       color_loc,
       {},
-      PyQt5.QtGui.QMatrix4x4())
+      QMatrix4x4())
 
   def resizeGL(self, width: int, height: int) -> None: # pylint: disable=invalid-name
     '''
@@ -615,20 +611,20 @@ class Canvas(PyQt5.QtWidgets.QOpenGLWidget):
 
     locations = GlslLocations(0, 1, self.opengl_config.color_loc, self.opengl_config.mv_matrix_loc,
                               self.opengl_config.proj_matrix_loc, self.opengl_config.normal_matrix_loc)
-    geometry = PyQt5.QtWidgets.QApplication.desktop().screenGeometry()
+    geometry = qt_screen_geometry()
     painter = CanvasPainter(self.current_output_mask,
                             OpenGLConfig(self.opengl_config.proj, self.opengl_config.program, locations,
                                          self.opengl_config.vbo_cache), self.send, self)
     with painter:
-      painter.fillRect(PyQt5.QtCore.QRect(0, 0, 4000, 4000), PyQt5.QtGui.QColor(0, 0, 0))
+      painter.fillRect(QRect(0, 0, 4000, 4000), QColor(0, 0, 0))
       self.listeners.renderer(painter)
 
       with painter.masked(RenderOutput.OPERATOR):
-        painter.fillPath(self.input_config.touch_path, PyQt5.QtGui.QColor(255, 0, 0))
+        painter.fillPath(self.input_config.touch_path, QColor(255, 0, 0))
 
-        painter.setTransform(PyQt5.QtGui.QTransform.fromTranslate(self.width()/2, self.height()/2))
+        painter.setTransform(QTransform.fromTranslate(self.width()/2, self.height()/2))
         for path in self.input_config.gaze_paths:
-          painter.fillPath(path, PyQt5.QtGui.QColor(0, 0, 255))
+          painter.fillPath(path, QColor(0, 0, 255))
 
     if self.current_output_mask != RenderOutput.OPERATOR:
       for subscriber in self.listeners.paint_subscribers:
@@ -687,13 +683,13 @@ class Canvas(PyQt5.QtWidgets.QOpenGLWidget):
           parsed = json.loads(buffer)
           if parsed['type'] == 'cursor':
             if parsed.get('buttons', 0) & 1:
-              self.on_touch(PyQt5.QtCore.QPoint(parsed['x'], parsed['y']))
+              self.on_touch(QPoint(parsed['x'], parsed['y']))
             else: 
-              self.on_touch(PyQt5.QtCore.QPoint(-1, -1))
+              self.on_touch(QPoint(-1, -1))
             if parsed.get('buttons', 0) & 2:
-              self.on_gaze(PyQt5.QtCore.QPoint(parsed['x'], parsed['y']))
+              self.on_gaze(QPoint(parsed['x'], parsed['y']))
             else: 
-              self.on_gaze(PyQt5.QtCore.QPoint(-1, -1))
+              self.on_gaze(QPoint(-1, -1))
           elif parsed['type'] == 'dimensions':
             self.browser_dimensions = parsed['width'], parsed['height']
 
@@ -738,10 +734,10 @@ class Canvas(PyQt5.QtWidgets.QOpenGLWidget):
       else:
         await self.on_websocket(headers, reader, writer)
         
-  def load_images(self, images: typing.List[PyQt5.QtGui.QImage]):
+  def load_images(self, images: typing.List[QImage]):
     #self.send({'function': 'clear_images'})
     for image in (image for image in images if id(image) not in self.sent_images):
-      buffer = PyQt5.QtCore.QBuffer()
+      buffer = QBuffer()
       image.save(buffer, 'png')
       encoded = base64.b64encode(buffer.buffer()).decode()
       url = f'data:image/png;base64,{encoded}'
@@ -803,9 +799,9 @@ class Canvas(PyQt5.QtWidgets.QOpenGLWidget):
       i = offset + message.ntimes*self.input_config.touch_channels[0]
       j = offset + message.ntimes*self.input_config.touch_channels[1]
       
-      voltage = PyQt5.QtCore.QPointF(message.ad_data[i], message.ad_data[j])
+      voltage = QPointF(message.ad_data[i], message.ad_data[j])
       if voltage.x() < -5 or voltage.y() < -5:
-        self.on_touch(PyQt5.QtCore.QPoint(-1, -1))
+        self.on_touch(QPoint(-1, -1))
         return
       self.last_voltage = voltage
       if self.input_config.touch_calibration.calibrating_touch:
@@ -819,24 +815,24 @@ class Canvas(PyQt5.QtWidgets.QOpenGLWidget):
         return
 
       global_point = self.input_config.touch_calibration.touch_transform.map(voltage)
-      local_point = self.mapFromGlobal(PyQt5.QtCore.QPoint(int(global_point.x()), int(global_point.y())))
+      local_point = self.mapFromGlobal(QPoint(int(global_point.x()), int(global_point.y())))
 
       self.on_touch(local_point)
 
-  def on_touch(self, point: PyQt5.QtCore.QPoint) -> None:
+  def on_touch(self, point: QPoint) -> None:
     """
     Core of touch event processing
     """
     offset = point - self.input_config.last_touch
-    if PyQt5.QtCore.QPoint.dotProduct(offset, offset) > 2:
-      self.input_config.touch_path.addEllipse(point, 2, 2)
+    if QPoint.dotProduct(offset, offset) > 2:
+      self.input_config.touch_path.addEllipse(QPointF(point), 2, 2)
       self.input_config.last_touch = offset
 
     self.listeners.touch_listener(point)
     if self.task_context:
       self.task_context.process()
 
-  def on_gaze(self, point: PyQt5.QtCore.QPoint) -> None:
+  def on_gaze(self, point: QPoint) -> None:
     """
     Core of gaze event processing
     """
@@ -849,7 +845,7 @@ class Canvas(PyQt5.QtWidgets.QOpenGLWidget):
     Processes eye input
     """
     async for message in messages:
-      voltage_point = PyQt5.QtCore.QPointF(message.x, -message.y)
+      voltage_point = QPointF(message.x, -message.y)
 
       if message.y >= 0:
         if message.x >= 0:
@@ -870,20 +866,21 @@ class Canvas(PyQt5.QtWidgets.QOpenGLWidget):
           scaled_point = self.input_config.gaze_transforms[3].map(voltage_point)
           self.input_config.gaze_paths[3].addEllipse(scaled_point, 2, 2)
 
-      #geometry = PyQt5.QtWidgets.QApplication.desktop().screenGeometry()
-      #global_point = PyQt5.QtCore.QPoint(scaled_point.x() + geometry.width()/2, scaled_point.y() + geometry.height()/2)
+      #geometry = qt_screen_geometry()
+      #global_point = QPoint(scaled_point.x() + geometry.width()/2, scaled_point.y() + geometry.height()/2)
       #local_point = self.mapFromGlobal(global_point)
 
-      local_point = PyQt5.QtCore.QPoint(int(scaled_point.x()) + self.width()//2, int(scaled_point.y()) + self.height()//2)
+      local_point = QPoint(int(scaled_point.x()) + self.width()//2, int(scaled_point.y()) + self.height()//2)
 
       self.on_gaze(local_point)
 
-  def keyReleaseEvent(self, e: PyQt5.QtGui.QKeyEvent) -> None: # pylint: disable=invalid-name
+  def keyReleaseEvent(self, e: QKeyEvent) -> None: # pylint: disable=invalid-name
     '''
     Progresses touch calibration on key presses
     '''
     self.listeners.key_release_handler(e)
     touch_calibration = self.input_config.touch_calibration
+    print(e, touch_calibration.calibrating_touch, touch_calibration.touch_target_voltage_count)
     if touch_calibration.calibrating_touch and touch_calibration.touch_target_voltage_count:
       touch_calibration.touch_target_voltage[-1][0] /= touch_calibration.touch_target_voltage_count
       touch_calibration.touch_target_voltage[-1][1] /= touch_calibration.touch_target_voltage_count
@@ -892,7 +889,7 @@ class Canvas(PyQt5.QtWidgets.QOpenGLWidget):
       LOGGER.info("y voltage: %f", touch_calibration.touch_target_voltage[-1][1])
 
 
-      point = PyQt5.QtCore.QPoint(touch_calibration.touch_targets[touch_calibration.touch_target_index][0],
+      point = QPoint(touch_calibration.touch_targets[touch_calibration.touch_target_index][0],
                                   touch_calibration.touch_targets[touch_calibration.touch_target_index][1])
       point = self.mapFromGlobal(point)
 
@@ -934,33 +931,33 @@ class Canvas(PyQt5.QtWidgets.QOpenGLWidget):
     Clears the accumulation view
     '''
     self.input_config.gaze_paths = [
-      PyQt5.QtGui.QPainterPath(), PyQt5.QtGui.QPainterPath(), PyQt5.QtGui.QPainterPath(), PyQt5.QtGui.QPainterPath()]
-    self.input_config.gaze_paths[0].setFillRule(PyQt5.QtCore.Qt.WindingFill)
-    self.input_config.gaze_paths[1].setFillRule(PyQt5.QtCore.Qt.WindingFill)
-    self.input_config.gaze_paths[2].setFillRule(PyQt5.QtCore.Qt.WindingFill)
-    self.input_config.gaze_paths[3].setFillRule(PyQt5.QtCore.Qt.WindingFill)
+      QPainterPath(), QPainterPath(), QPainterPath(), QPainterPath()]
+    self.input_config.gaze_paths[0].setFillRule(Qt.FillRule.WindingFill)
+    self.input_config.gaze_paths[1].setFillRule(Qt.FillRule.WindingFill)
+    self.input_config.gaze_paths[2].setFillRule(Qt.FillRule.WindingFill)
+    self.input_config.gaze_paths[3].setFillRule(Qt.FillRule.WindingFill)
     self.input_config.points = [[], [], [], []]
 
-    self.input_config.touch_path = PyQt5.QtGui.QPainterPath()
-    self.input_config.touch_path.setFillRule(PyQt5.QtCore.Qt.WindingFill)
+    self.input_config.touch_path = QPainterPath()
+    self.input_config.touch_path.setFillRule(Qt.FillRule.WindingFill)
 
-  def mousePressEvent(self, event: PyQt5.QtGui.QMouseEvent) -> None: # pylint: disable=invalid-name
+  def mousePressEvent(self, event: QMouseEvent) -> None: # pylint: disable=invalid-name
     self.mouseMoveEvent(event)
 
-  def mouseReleaseEvent(self, event: PyQt5.QtGui.QMouseEvent) -> None: # pylint: disable=invalid-name
-    if not(event.buttons() & PyQt5.QtCore.Qt.LeftButton): # type: ignore
-      self.on_touch(PyQt5.QtCore.QPoint(-1, -1))
+  def mouseReleaseEvent(self, event: QMouseEvent) -> None: # pylint: disable=invalid-name
+    if not(event.buttons() & Qt.MouseButton.LeftButton): # type: ignore
+      self.on_touch(QPoint(-1, -1))
 
-  def mouseMoveEvent(self, event: PyQt5.QtGui.QMouseEvent) -> None: # pylint: disable=invalid-name
+  def mouseMoveEvent(self, event: QMouseEvent) -> None: # pylint: disable=invalid-name
     """
     Forwards mouse events to the current mouse_listener
     """
-    if event.buttons() & PyQt5.QtCore.Qt.LeftButton: # type: ignore
+    if event.buttons() & Qt.MouseButton.LeftButton: # type: ignore
       self.on_touch(event.pos())
-    if event.buttons() & PyQt5.QtCore.Qt.RightButton: # type: ignore
+    if event.buttons() & Qt.MouseButton.RightButton: # type: ignore
 
       local_point = event.pos()
-      from_center = local_point - PyQt5.QtCore.QPoint(self.width()//2, self.height()//2)
+      from_center = local_point - QPoint(self.width()//2, self.height()//2)
 
       from_center.setY(-from_center.y())
 
@@ -997,7 +994,7 @@ class Canvas(PyQt5.QtWidgets.QOpenGLWidget):
     ]
 
     for target in self.input_config.touch_calibration.touch_targets:
-      point = PyQt5.QtCore.QPoint(target[0], target[1])
+      point = QPoint(target[0], target[1])
       global_point = self.mapToGlobal(point)
       target[0], target[1] = global_point.x(), global_point.y()
 
@@ -1009,15 +1006,15 @@ class Canvas(PyQt5.QtWidgets.QOpenGLWidget):
     '''
     Render the touch calibration UI
     '''
-    painter = PyQt5.QtGui.QPainter(self)
-    geometry = PyQt5.QtWidgets.QApplication.desktop().screenGeometry()
-    painter.fillRect(PyQt5.QtCore.QRect(0, 0, geometry.width(), geometry.height()), PyQt5.QtGui.QColor(0, 0, 0))
-    point = PyQt5.QtCore.QPoint(
+    painter = QPainter(self)
+    geometry = qt_screen_geometry()
+    painter.fillRect(QRect(0, 0, geometry.width(), geometry.height()), QColor(0, 0, 0))
+    point = QPoint(
       self.input_config.touch_calibration.touch_targets[self.input_config.touch_calibration.touch_target_index][0],
       self.input_config.touch_calibration.touch_targets[self.input_config.touch_calibration.touch_target_index][1])
     point = self.mapFromGlobal(point)
 
-    path = PyQt5.QtGui.QPainterPath()
+    path = QPainterPath()
     path.moveTo(0, point.y())
     path.lineTo(self.width(), point.y())
     path.moveTo(point.x(), 0)
@@ -1025,15 +1022,15 @@ class Canvas(PyQt5.QtWidgets.QOpenGLWidget):
 
     pen = painter.pen()
 
-    pen.setColor(PyQt5.QtGui.QColor(255, 0, 0))
+    pen.setColor(QColor(255, 0, 0))
     painter.setPen(pen)
     painter.drawPath(path)
 
-    pen.setColor(PyQt5.QtGui.QColor(255, 255, 255))
+    pen.setColor(QColor(255, 255, 255))
     painter.setPen(pen)
     total_targets = len(self.input_config.touch_calibration.touch_targets)
-    painter.drawText(PyQt5.QtCore.QRect(0, 0, self.width(), self.height()), PyQt5.QtCore.Qt.AlignCenter,
+    painter.drawText(QRect(0, 0, self.width(), self.height()), Qt.AlignmentFlag.AlignCenter,
       'Touch target then press any key to progress, do not move window, '
       f'{total_targets-self.input_config.touch_calibration.touch_target_index-1} more targets')
 
-    painter.fillPath(self.input_config.touch_path, PyQt5.QtGui.QColor(255, 0, 0))
+    painter.fillPath(self.input_config.touch_path, QColor(255, 0, 0))
