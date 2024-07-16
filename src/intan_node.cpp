@@ -35,6 +35,7 @@ struct IntanNode::Impl {
   size_t num_samples = 0;
   unsigned int timestamp;
   std::chrono::nanoseconds time;
+  std::chrono::nanoseconds sample_interval;
   std::vector<short> short_buffer;
   std::vector<double> double_buffer;
   ObservableListPtr channels;
@@ -47,10 +48,12 @@ struct IntanNode::Impl {
   long long command_port = 5000;
   long long waveform_port = 5001;
   unsigned char command_buffer[1024];
+  std::string sample_rate_response;
   unsigned char waveform_buffer[16384];
   IntanNode* outer;
   bool is_running = false;
   bool is_connected = false;
+  bool getting_sample_rate = false;
 public:
   Impl(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph, IntanNode* outer)
     : state(state)
@@ -61,7 +64,6 @@ public:
     , outer(outer) {
     state_connection = state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
     (*state)["Running"].assign(false);
-    memset(&address, 0, sizeof(address));
     state->recap(std::bind(&Impl::on_change, this, _1, _2, _3));
   }
 
@@ -89,26 +91,7 @@ public:
           (*state)["Running"].assign(false);
           return;
         }
-
-        std::string command = "execute clearalldataoutputs";
-        command_socket.send(boost::asio::const_buffer(command.data(), command.size()), 0, ec);
-
-        if(channels) {
-          names.assign(1, "timestamp");
-          for(auto i = channels->begin();i != channels->end();++i) {
-            std::string text = *i;
-            names.push_back(text);
-            auto command = absl::StrFormat("set %s.tcpdataoutputenabled true", text);
-            command_socket.send(boost::asio::const_buffer(command.data(), command.size()), 0, ec);
-            if(ec) {
-              THALAMUS_LOG(error) << ec.what();
-              (*state)["Running"].assign(false);
-              return;
-            }
-          }
-        }
-        num_channels = channels->size();
-        data.assign(num_channels+1, std::vector<double>());
+        is_connected = true;
 
         endpoints = resolver.resolve(address, std::to_string(waveform_port));
         boost::asio::connect(waveform_socket, endpoints, ec);
@@ -117,20 +100,88 @@ public:
           (*state)["Running"].assign(false);
           return;
         }
-        waveform_socket.async_receive(boost::asio::buffer(command_buffer, sizeof(command_buffer)), std::bind(&Impl::on_receive_waveform, this, _1, _2));
+        wave_parser_state = WaveParserState::MAGIC_NUMBER;
+        waveform_socket.async_receive(boost::asio::buffer(waveform_buffer, sizeof(waveform_buffer)), std::bind(&Impl::on_receive_waveform, this, _1, _2));
 
-        command = "set runmode run";
+        std::string command = "execute clearalldataoutputs;";
+        command_socket.send(boost::asio::const_buffer(command.data(), command.size()), 0, ec);
+
+        if(channels) {
+          names.assign(1, "timestamp");
+          for(auto i = channels->begin();i != channels->end();++i) {
+            std::string text = *i;
+            names.push_back(text);
+            auto command = absl::StrFormat("set %s.tcpdataoutputenabled true;", text);
+            command_socket.send(boost::asio::const_buffer(command.data(), command.size()), 0, ec);
+            if(ec) {
+              THALAMUS_LOG(error) << ec.what();
+              (*state)["Running"].assign(false);
+              return;
+            }
+          }
+          num_channels = channels->size();
+        } else {
+          num_channels = 0;
+        }
+        data.assign(num_channels+1, std::vector<double>());
+
+        command = "get sampleratehertz;";
         command_socket.send(boost::asio::const_buffer(command.data(), command.size()), 0, ec);
         if(ec) {
           THALAMUS_LOG(error) << ec.what();
           (*state)["Running"].assign(false);
           return;
         }
+        getting_sample_rate = true;
+        sample_rate_response = "";
+        timer.expires_after(1s);
+        timer.async_wait([&](const boost::system::error_code& ec) {
+          if(ec) {
+            return;
+          }
+
+          getting_sample_rate = false;
+          std::vector<std::string> tokens = absl::StrSplit(sample_rate_response, ' ');
+          sample_rate_response = "";
+          if(tokens.size() < 3 || tokens[0] != "Return:" || tokens[1] != "SampleRateHertz") {
+            THALAMUS_LOG(error) << "Unexpected response to get sampleratehertz: " << sample_rate_response;
+            (*state)["Running"].assign(false);
+            return;
+          }
+
+          std::string digits = "";
+          for(auto c : tokens[2]) {
+            if(std::isdigit(c)) {
+              digits.push_back(c);
+            } else {
+              break;
+            }
+          }
+          int samplerate;
+          auto success = absl::SimpleAtoi(digits, &samplerate);
+          if(!success) {
+            THALAMUS_LOG(error) << "Failed to parse sample rate: " << tokens[2];
+            (*state)["Running"].assign(false);
+            return;
+          }
+          sample_interval = std::chrono::nanoseconds(std::nano::den/samplerate);
+          outer->channels_changed(outer);
+
+          THALAMUS_LOG(info) << "Starting " << sample_interval.count();
+          std::string command = "set runmode run;";
+          boost::system::error_code ec2;
+          command_socket.send(boost::asio::const_buffer(command.data(), command.size()), 0, ec2);
+          if(ec) {
+            THALAMUS_LOG(error) << ec.what();
+            (*state)["Running"].assign(false);
+            return;
+          }
+        });
 
         command_socket.async_receive(boost::asio::buffer(command_buffer, sizeof(command_buffer)), std::bind(&Impl::on_receive_command, this, _1, _2));
-        is_connected = true;
+
       } else if(is_connected) {
-        std::string command = "set runmode stop";
+        std::string command = "set runmode stop;";
         boost::system::error_code ec;
         command_socket.send(boost::asio::const_buffer(command.data(), command.size()), 0, ec);
         if(ec) {
@@ -168,7 +219,11 @@ public:
       (*state)["Running"].assign(false);
       return;
     }
-    std::cout << std::string(reinterpret_cast<char*>(command_buffer), length);
+    auto text = std::string(reinterpret_cast<char*>(command_buffer), length);
+    std::cout << text;
+    if(getting_sample_rate) {
+      sample_rate_response += text;
+    }
 
     command_socket.async_receive(boost::asio::buffer(command_buffer, sizeof(command_buffer)), std::bind(&Impl::on_receive_command, this, _1, _2));
   }
@@ -177,7 +232,8 @@ public:
     MAGIC_NUMBER,
     FRAME_TIMESTAMP,
     FRAME_SAMPLES
-  } wave_parser_state;
+  };
+  WaveParserState wave_parser_state = WaveParserState::MAGIC_NUMBER;
 
   void on_receive_waveform(const boost::system::error_code& error, size_t length) {
     if(error) {
@@ -227,6 +283,7 @@ public:
             i += 2;
             ++channel;
             if(channel == num_channels) {
+              channel = 0;
               ++frame;
               wave_parser_state = frame == 128 ? WaveParserState::MAGIC_NUMBER : WaveParserState::FRAME_TIMESTAMP;
             }
@@ -265,7 +322,7 @@ int IntanNode::num_channels() const {
 }
 
 std::chrono::nanoseconds IntanNode::sample_interval(int i) const {
-  return 1'000'000ns;
+  return impl->sample_interval;
 }
 
 std::chrono::nanoseconds IntanNode::time() const {

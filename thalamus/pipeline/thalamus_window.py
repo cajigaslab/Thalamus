@@ -33,6 +33,7 @@ from .xsens_widget import XsensEditorWidget
 from .lua_widget import LuaWidget
 from .log_widget import LogWidget
 from .wave_widget import WaveWidget
+from .intan_widget import IntanWidget
 from ..util import NodeSelector
 from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
@@ -259,7 +260,7 @@ FACTORIES = {
     UserData(UserDataType.DOUBLE_SPINBOX, 'Amplitude', 5.0, []),
     UserData(UserDataType.SPINBOX, 'Duration (ms)', 16, []),
   ]),
-  'INTAN': Factory(None, [
+  'INTAN': Factory(IntanWidget, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.DEFAULT, 'Address', "localhost", []),
     UserData(UserDataType.SPINBOX, 'Command Port', 5000, []),
