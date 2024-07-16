@@ -5,16 +5,13 @@
 #include <functional>
 #include <string>
 #include <iostream>
-#include <variant>
-#include <regex>
-#include <thread>
-//#include <plot.h>
 #include <base_node.h>
 #include <absl/strings/str_split.h>
 #include <state.h>
 #include <boost/signals2.hpp>
 #include <modalities.h>
 #include <numeric>
+#include <boost/endian/conversion.hpp> 
 
 using namespace thalamus;
 using namespace std::chrono_literals;
