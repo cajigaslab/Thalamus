@@ -1,5 +1,5 @@
 
-file(STRINGS "${ffmpeg_BINARY_DIR}/Debug/ffbuild/config.mak" FFMPEG_CONFIG_MAK)
+file(STRINGS "${ffmpeg_BINARY_DIR}/${CMAKE_BUILD_TYPE}/ffbuild/config.mak" FFMPEG_CONFIG_MAK)
 foreach(LINE IN LISTS FFMPEG_CONFIG_MAK)
   #message(${LINE})
   if("${LINE}" MATCHES "^CPPFLAGS=|^CFLAGS=")

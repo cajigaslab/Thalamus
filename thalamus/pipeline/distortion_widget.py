@@ -9,7 +9,7 @@ class DistortionTextEdit(QTextEdit):
     self.on_apply()
 
   def keyPressEvent(self, e: QKeyEvent):
-    if e.key() == Qt.Key_Return and not bool(e.modifiers() & Qt.ShiftModifier): # type: ignore
+    if e.key() == Qt.Key.Key_Return and not bool(e.modifiers() & Qt.KeyboardModifier.ShiftModifier): # type: ignore
       self.on_apply()
       return
     return super().keyPressEvent(e)

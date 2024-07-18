@@ -62,7 +62,7 @@ class DataWidget(QMainWindow):
 
   def on_screenshot(self):
     widget = self.centralWidget()
-    image = PyQt5.QtGui.QImage(widget.width(), widget.height(), PyQt5.QtGui.QImage.Format_RGB32) # type: ignore # pylint: disable=no-member
+    image = QImage(widget.width(), widget.height(), QImage.Format.Format_RGB32) # type: ignore # pylint: disable=no-member
     self.centralWidget().render(image)
 
     i = 1

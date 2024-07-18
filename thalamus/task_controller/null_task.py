@@ -1,7 +1,6 @@
 """
 Implementation of the null task.  Does nothing, mostly used for testing
 """
-import PyQt5.QtWidgets
 
 import datetime
 from . import task_context
@@ -11,13 +10,14 @@ from ..config import *
 from .widgets import Form
 from .util import do_stimulation
 from .. import task_controller_pb2
+from ..qt import *
 
-def create_widget(task_config: ObservableCollection) -> PyQt5.QtWidgets.QWidget:
+def create_widget(task_config: ObservableCollection) -> QWidget:
   """
   Returns a QWidget that will be used to edit the task configuration
   """
-  result = PyQt5.QtWidgets.QWidget()
-  layout = PyQt5.QtWidgets.QVBoxLayout()
+  result = QWidget()
+  layout = QVBoxLayout()
   result.setLayout(layout)
 
   """

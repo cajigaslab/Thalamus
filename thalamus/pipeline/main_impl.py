@@ -12,8 +12,6 @@ import itertools
 
 import yaml
 
-import PyQt5.QtWidgets
-
 from ..config import *
 
 from pkg_resources import resource_string, resource_filename
@@ -23,6 +21,8 @@ from .. import ophanim_pb2_grpc
 from .. import thalamus_pb2_grpc
 from ..task_controller.observable_bridge import ObservableBridge
 from .thalamus_window import ThalamusWindow
+
+from ..qt import *
 
 UNHANDLED_EXCEPTION: typing.List[Exception] = []
 
@@ -71,7 +71,7 @@ async def async_main() -> None:
 
   arguments = parse_args()
 
-  _ = PyQt5.QtWidgets.QApplication(sys.argv)
+  _ = QApplication(sys.argv)
 
   if arguments.config:
     config = load(arguments.config)
@@ -93,7 +93,7 @@ async def async_main() -> None:
   stub = thalamus_pb2_grpc.ThalamusStub(channel)
   observable_bridge = ObservableBridge(stub, config)
 
-  screen_geometry = PyQt5.QtWidgets.QApplication.desktop().screenGeometry()
+  screen_geometry = qt_screen_geometry()
 
   thalamus = ThalamusWindow(config, stub, done_future)
   thalamus.enable_config_menu(arguments.config)
@@ -102,7 +102,7 @@ async def async_main() -> None:
 
   try:
     while not done_future.done() and not UNHANDLED_EXCEPTION:
-      PyQt5.QtWidgets.QApplication.processEvents()
+      QApplication.processEvents()
       await asyncio.sleep(.016)
     if not done_future.done():
       done_future.set_result(None)

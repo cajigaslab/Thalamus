@@ -5,9 +5,7 @@ import typing
 import logging
 import datetime
 
-import PyQt5.QtCore
-import PyQt5.QtWidgets
-from PyQt5.QtGui import QColor
+from ..qt import *
 
 from . import task_context
 from .widgets import Form, ListAsTabsWidget
@@ -24,14 +22,14 @@ Config = typing.NamedTuple('Config', [
   ('blink_timeout', datetime.timedelta),
   ('fail_timeout', datetime.timedelta),
   ('success_timeout', datetime.timedelta),
-  ('target_rectangle', PyQt5.QtCore.QRect),
+  ('target_rectangle', QRect),
   ('target_color', QColor),
 ])
 
 RANDOM_DEFAULT = {'min': 1, 'max':1}
 COLOR_DEFAULT = [255, 255, 255]
 
-class TargetWidget(PyQt5.QtWidgets.QWidget):
+class TargetWidget(QWidget):
   '''
   Widget for managing a target config
   '''
@@ -40,12 +38,12 @@ class TargetWidget(PyQt5.QtWidgets.QWidget):
     if 'name' not in config:
       config['name'] = 'Untitled'
 
-    layout = PyQt5.QtWidgets.QGridLayout()
+    layout = QGridLayout()
     self.setLayout(layout)
 
-    layout.addWidget(PyQt5.QtWidgets.QLabel('Name:'), 0, 0)
+    layout.addWidget(QLabel('Name:'), 0, 0)
 
-    name_edit = PyQt5.QtWidgets.QLineEdit(config['name'])
+    name_edit = QLineEdit(config['name'])
     name_edit.setObjectName('name_edit')
     name_edit.textChanged.connect(lambda v: config.update({'name': v}))
     layout.addWidget(name_edit, 0, 1)
@@ -54,7 +52,7 @@ class TargetWidget(PyQt5.QtWidgets.QWidget):
       if config.parent:
         config.parent.append(config.copy())
 
-    copy_button = PyQt5.QtWidgets.QPushButton('Copy Target')
+    copy_button = QPushButton('Copy Target')
     copy_button.setObjectName('copy_button')
     copy_button.clicked.connect(do_copy)
     layout.addWidget(copy_button, 0, 2)
@@ -89,12 +87,12 @@ class TargetWidget(PyQt5.QtWidgets.QWidget):
     )
     layout.addWidget(random_form, 1, 3, 1, 2)
 
-def create_widget(task_config: ObservableCollection) -> PyQt5.QtWidgets.QWidget:
+def create_widget(task_config: ObservableCollection) -> QWidget:
   """
   Creates a widget for configuring the simple task
   """
-  result = PyQt5.QtWidgets.QWidget()
-  layout = PyQt5.QtWidgets.QVBoxLayout()
+  result = QWidget()
+  layout = QVBoxLayout()
   result.setLayout(layout)
 
   """
@@ -119,7 +117,7 @@ def create_widget(task_config: ObservableCollection) -> PyQt5.QtWidgets.QWidget:
   )
   layout.addWidget(form)
 
-  new_target_button = PyQt5.QtWidgets.QPushButton('Add Target')
+  new_target_button = QPushButton('Add Target')
   new_target_button.setObjectName('new_target_button')
   new_target_button.clicked.connect(lambda: task_config['targets'].append({}) and None)
   layout.addWidget(new_target_button)
@@ -158,7 +156,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     datetime.timedelta(seconds=context.get_value('blink_timeout', RANDOM_DEFAULT)),
     datetime.timedelta(seconds=context.get_value('fail_timeout', RANDOM_DEFAULT)),
     datetime.timedelta(seconds=context.get_value('success_timeout', RANDOM_DEFAULT)),
-    PyQt5.QtCore.QRect(int(context.get_value('target_x', RANDOM_DEFAULT)),
+    QRect(int(context.get_value('target_x', RANDOM_DEFAULT)),
                        int(context.get_value('target_y', RANDOM_DEFAULT)),
                        int(context.get_value('target_width', RANDOM_DEFAULT)),
                        int(context.get_value('target_height', RANDOM_DEFAULT))),
@@ -170,7 +168,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   """
 
   target_acquired = False
-  def touch_handler(cursor: PyQt5.QtCore.QPoint) -> None:
+  def touch_handler(cursor: QPoint) -> None:
     nonlocal target_acquired
     target_acquired = config.target_rectangle.contains(cursor)
 

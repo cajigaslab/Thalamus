@@ -69,21 +69,6 @@ class State(enum.Enum):
   SUCCESS = enum.auto()
   FAILURE = enum.auto()
 
-class VideoSurface(QAbstractVideoSurface):
-  def __init__(self, widget: QWidget):
-    super().__init__()
-    self.widget = widget
-    self.frame: typing.Optional[QVideoFrame] = None
-
-  def present(self, frame):
-    #print('present')
-    self.frame = frame
-    self.widget.update()
-    return True
-
-  def supportedPixelFormats(self, type):
-    return list(range(35))
-
 last_range = None
 images = []
 time_node = ''
@@ -147,7 +132,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     try:
       while True:
         data = await proc.stdout.readexactly(3*width*height)
-        image = QImage(data, width, height, QImage.Format_RGB888)
+        image = QImage(data, width, height, QImage.Format.Format_RGB888)
         images.append(image)
     except asyncio.IncompleteReadError:
       pass
@@ -174,7 +159,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     painter.drawImage(0, 0, image)
 
   space_pressed = False
-  def on_key_release(e: PyQt5.QtGui.QKeyEvent):
+  def on_key_release(e: QKeyEvent):
     nonlocal space_pressed
     space_pressed = space_pressed or e.key() == Qt.Key.Key_Space
 

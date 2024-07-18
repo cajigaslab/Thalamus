@@ -13,16 +13,13 @@ import numpy as np
 import os
 
 import stl
-import PyQt5.QtCore
-import PyQt5.QtWidgets
-from PyQt5.QtGui import QColor
-from PyQt5.QtMultimedia import QSound
 
 from . import task_context
 from .widgets import Form, ListAsTabsWidget
 from .util import wait_for, wait_for_hold, RenderOutput, animate
 from .. import task_controller_pb2
 from ..config import ObservableCollection
+from ..qt import *
 
 LOGGER = logging.getLogger(__name__)
 
@@ -43,7 +40,7 @@ Config = typing.NamedTuple('Config', [
 RANDOM_DEFAULT = {'min': 1, 'max':1}
 COLOR_DEFAULT = [255, 255, 255]
 
-class TargetWidget(PyQt5.QtWidgets.QWidget):
+class TargetWidget(QWidget):
   '''
   Widget for managing a target config
   '''
@@ -52,12 +49,12 @@ class TargetWidget(PyQt5.QtWidgets.QWidget):
     if 'name' not in config:
       config['name'] = 'Untitled'
 
-    layout = PyQt5.QtWidgets.QGridLayout()
+    layout = QGridLayout()
     self.setLayout(layout)
 
-    layout.addWidget(PyQt5.QtWidgets.QLabel('Name:'), 0, 0)
+    layout.addWidget(QLabel('Name:'), 0, 0)
 
-    name_edit = PyQt5.QtWidgets.QLineEdit(config['name'])
+    name_edit = QLineEdit(config['name'])
     name_edit.setObjectName('name_edit')
     name_edit.textChanged.connect(lambda v: config.update({'name': v}))
     layout.addWidget(name_edit, 0, 1)
@@ -66,7 +63,7 @@ class TargetWidget(PyQt5.QtWidgets.QWidget):
       if config.parent:
         config.parent.append(config.copy())
 
-    copy_button = PyQt5.QtWidgets.QPushButton('Copy Target')
+    copy_button = QPushButton('Copy Target')
     copy_button.setObjectName('copy_button')
     copy_button.clicked.connect(do_copy)
     layout.addWidget(copy_button, 0, 2)
@@ -102,12 +99,12 @@ class TargetWidget(PyQt5.QtWidgets.QWidget):
     )
     layout.addWidget(random_form, 1, 3, 1, 2)
 
-def create_widget(task_config: ObservableCollection) -> PyQt5.QtWidgets.QWidget:
+def create_widget(task_config: ObservableCollection) -> QWidget:
   """
   Creates a widget for configuring the context dependent reach task
   """
-  result = PyQt5.QtWidgets.QWidget()
-  layout = PyQt5.QtWidgets.QVBoxLayout()
+  result = QWidget()
+  layout = QVBoxLayout()
   result.setLayout(layout)
 
   """
@@ -132,7 +129,7 @@ def create_widget(task_config: ObservableCollection) -> PyQt5.QtWidgets.QWidget:
   )
   layout.addWidget(form)
 
-  new_target_button = PyQt5.QtWidgets.QPushButton('Add Target')
+  new_target_button = QPushButton('Add Target')
   new_target_button.setObjectName('new_target_button')
   new_target_button.clicked.connect(lambda: task_config['targets'].append({}) and None)
   layout.addWidget(new_target_button)
@@ -185,7 +182,7 @@ def get_target_rectangles(context, dpi):
 
     p_win = Rvec*pos_vis + t
 
-    all_target_rects.append(PyQt5.QtCore.QRect(p_win[0] - targ_width_px/2, p_win[1] - targ_height_px/2, targ_width_px, targ_height_px))
+    all_target_rects.append(QRect(p_win[0] - targ_width_px/2, p_win[1] - targ_height_px/2, targ_width_px, targ_height_px))
 
   return all_target_rects
 
@@ -328,8 +325,8 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   any_resp_targ_acquired = False
   i_selected_target = None
   last_selected_target = None
-  touch_pos = PyQt5.QtCore.QPoint()
-  def touch_handler(cursor: PyQt5.QtCore.QPoint) -> None:
+  touch_pos = QPoint()
+  def touch_handler(cursor: QPoint) -> None:
     nonlocal start_target_acquired
     nonlocal correct_resp_targ_acquired
     nonlocal any_resp_targ_acquired
@@ -365,7 +362,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   show_cue = False
   show_response_targets = False
   display_state_brightness = 0
-  def renderer(painter: PyQt5.QtGui.QPainter) -> None:
+  def renderer(painter: QPainter) -> None:
     color_base = all_target_colors[i_start_targ]
     scale = (all_target_on_luminance[i_start_targ] if not dim_start_target
              else all_target_off_luminance[i_start_targ])
@@ -408,7 +405,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
           painter.fillRect(all_target_rects[iresp], all_target_colors[iresp])
         
     with painter.masked(RenderOutput.OPERATOR):
-      path = PyQt5.QtGui.QPainterPath()
+      path = QPainterPath()
 
       path.addEllipse(all_target_rects[i_start_targ].center(), window, window)
       path.addEllipse(all_target_rects[i_correct_resp_targ].center(), window, window)
