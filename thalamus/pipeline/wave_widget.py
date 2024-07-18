@@ -3,7 +3,6 @@ from ..qt import *
 import dataclasses
 import inspect
 import typing
-import attrs
 from ..config import ObservableCollection
 
 #MISSING: typing.Any = object()

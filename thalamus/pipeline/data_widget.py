@@ -283,6 +283,8 @@ class PlotCanvas(QWidget):
             self.current_value = value
 
         self.update()
+    except asyncio.CancelledError:
+      pass
     finally:
       print('Cancelling')
       stream.cancel()
@@ -394,6 +396,8 @@ class SpectrogramCanvas(QWidget):
         self.qimage.setColorTable(colormap)
 
         self.update()
+    except asyncio.CancelledError:
+      pass
     finally:
       print('Cancelling')
       stream.cancel()
@@ -453,11 +457,14 @@ class ChannelComboBox(QComboBox):
 
     selector = thalamus_pb2.NodeSelector(name=selected_node)
     stream = self.stub.channel_info(thalamus_pb2.AnalogRequest(node=selector))
-    async for message in stream:
-      selected_channel = self.config['selected_channel']
-      self.clear()
-      self.addItems([s.name for s in message.spans])
-      self.setCurrentText(selected_channel)
+    try:
+      async for message in stream:
+        selected_channel = self.config['selected_channel']
+        self.clear()
+        self.addItems([s.name for s in message.spans])
+        self.setCurrentText(selected_channel)
+    except asyncio.CancelledError:
+      pass
 
 class AdvancedDialog(QDialog):
   def __init__(self, config):
