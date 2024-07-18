@@ -1,0 +1,21 @@
+name: Documentations
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - run: pwd
+    - name: Install Sphinx
+      run: python3 -m pip install sphinx
+    - name: Build Documents
+      run: sphinx-build
+    - name: Set Git email 
+      run: git config --global user.email "no@email.com"
+    - name: Set Git name 
+      run: git config --global user.email "no name"
