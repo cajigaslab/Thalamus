@@ -6,20 +6,18 @@ import typing
 import logging
 import functools
 
-from PyQt5.QtGui import QColor
-import PyQt5.QtWidgets
-from PyQt5.QtWidgets import QFileDialog, QMessageBox
+from ..qt import *
 
 from ..config import ObservableCollection
 from .util import remove_by_is, isdeleted
 
 LOGGER = logging.getLogger(__name__)
 
-class ColorWidget(PyQt5.QtWidgets.QWidget):
+class ColorWidget(QWidget):
   """
   Widget for rendering a selected color
   """
-  def __init__(self, parent: typing.Optional[PyQt5.QtWidgets.QWidget] = None) -> None:
+  def __init__(self, parent: typing.Optional[QWidget] = None) -> None:
     super().__init__(parent)
     self._color = QColor(0, 0, 0, 0)
 
@@ -35,25 +33,25 @@ class ColorWidget(PyQt5.QtWidgets.QWidget):
     self._color = value
     self.update()
 
-  def paintEvent(self, _: PyQt5.QtGui.QPaintEvent) -> None: # pylint: disable=invalid-name
+  def paintEvent(self, _: QPaintEvent) -> None: # pylint: disable=invalid-name
     """
     Renders a checkerboard pattern and then the selected color on top of it.
     """
-    painter = PyQt5.QtGui.QPainter(self)
+    painter = QPainter(self)
     for pix_x, pix_y in ((x, y) for x in range(0, self.width(), 10) for y in range(0, self.height(), 10)):
       color = QColor.fromRgbF(1, 1, 1) if ((pix_x + pix_y) % 20) == 0 else QColor.fromRgbF(0, 0, 0)
       painter.fillRect(pix_x, pix_y, 10, 10, color)
     painter.fillRect(0, 0, self.width(), self.height(), self.color)
     painter.drawRect(0, 0, self.width()-1, self.height()-1)
 
-class Form(PyQt5.QtWidgets.QWidget):
+class Form(QWidget):
   '''
   A row based form for editing an ObservableCollection
   '''
   def __init__(self, config: ObservableCollection) -> None:
     super().__init__()
     self.config = config
-    self.grid_layout = PyQt5.QtWidgets.QGridLayout()
+    self.grid_layout = QGridLayout()
     self.setLayout(self.grid_layout)
     self.row = 0
 
@@ -126,7 +124,7 @@ class Form(PyQt5.QtWidgets.QWidget):
     Appends a row of labels
     '''
     for i, text in enumerate(headers):
-      self.grid_layout.addWidget(PyQt5.QtWidgets.QLabel(text), self.row, i)
+      self.grid_layout.addWidget(QLabel(text), self.row, i)
     self.row += 1
 
   @staticmethod
@@ -167,9 +165,9 @@ class Form(PyQt5.QtWidgets.QWidget):
     if 'max' not in self.config[config.field]:
       self.config[config.field]['max'] = config.max
 
-    self.grid_layout.addWidget(PyQt5.QtWidgets.QLabel(config.label), self.row, 0)
+    self.grid_layout.addWidget(QLabel(config.label), self.row, 0)
 
-    min_spin_box = PyQt5.QtWidgets.QDoubleSpinBox()
+    min_spin_box = QDoubleSpinBox()
     min_spin_box.setObjectName(f'{config.field}_min')
     min_spin_box.setKeyboardTracking(False)
     min_spin_box.setRange(-1000000, 1000000)
@@ -177,7 +175,7 @@ class Form(PyQt5.QtWidgets.QWidget):
     min_spin_box.setValue(self.config[config.field]['min'])
     self.grid_layout.addWidget(min_spin_box, self.row, 1)
 
-    max_spin_box = PyQt5.QtWidgets.QDoubleSpinBox()
+    max_spin_box = QDoubleSpinBox()
     max_spin_box.setObjectName(f'{config.field}_max')
     max_spin_box.setKeyboardTracking(False)
     max_spin_box.setRange(-1000000, 1000000)
@@ -209,9 +207,9 @@ class Form(PyQt5.QtWidgets.QWidget):
     if config.field not in self.config:
       self.config[config.field] = config.default
 
-    self.grid_layout.addWidget(PyQt5.QtWidgets.QLabel(config.label), self.row, 0)
+    self.grid_layout.addWidget(QLabel(config.label), self.row, 0)
 
-    min_spin_box = PyQt5.QtWidgets.QDoubleSpinBox()
+    min_spin_box = QDoubleSpinBox()
     min_spin_box.setObjectName(f'{config.field}')
     min_spin_box.setKeyboardTracking(False)
     min_spin_box.setRange(0, 1000000)
@@ -236,9 +234,9 @@ class Form(PyQt5.QtWidgets.QWidget):
     if config.field not in self.config:
       self.config[config.field] = config.default
 
-    self.grid_layout.addWidget(PyQt5.QtWidgets.QLabel(config.label), self.row, 0)
+    self.grid_layout.addWidget(QLabel(config.label), self.row, 0)
 
-    edit = PyQt5.QtWidgets.QLineEdit()
+    edit = QLineEdit()
     edit.setObjectName(f'{config.field}')
     edit.setText(self.config[config.field])
     self.grid_layout.addWidget(edit, self.row, 1, 1, 2)
@@ -270,16 +268,16 @@ class Form(PyQt5.QtWidgets.QWidget):
       '''
       Opens a dialog to select a color
       '''
-      color = PyQt5.QtWidgets.QColorDialog.getColor(color_widget.color, self, "Select Color",
-                                                    PyQt5.QtWidgets.QColorDialog.ShowAlphaChannel)
+      color = QColorDialog.getColor(color_widget.color, self, "Select Color",
+                                                    QColorDialog.ShowAlphaChannel)
       if color.isValid():
         self.config[config.field] = [color.red(), color.green(), color.blue()]
 
-    color_button = PyQt5.QtWidgets.QPushButton("Edit")
+    color_button = QPushButton("Edit")
     color_button.setObjectName(f'{config.field}_button')
     color_button.clicked.connect(on_edit_color)
 
-    self.grid_layout.addWidget(PyQt5.QtWidgets.QLabel(config.label), self.row, 0)
+    self.grid_layout.addWidget(QLabel(config.label), self.row, 0)
     self.grid_layout.addWidget(color_widget, self.row, 1)
     self.grid_layout.addWidget(color_button, self.row, 2)
 
@@ -301,9 +299,9 @@ class Form(PyQt5.QtWidgets.QWidget):
     if config.field not in self.config:
       self.config[config.field] = config.default
 
-    self.grid_layout.addWidget(PyQt5.QtWidgets.QLabel(config.label), self.row, 0)
+    self.grid_layout.addWidget(QLabel(config.label), self.row, 0)
 
-    check_box = PyQt5.QtWidgets.QCheckBox()
+    check_box = QCheckBox()
     check_box.setObjectName(f'{config.field}')
     check_box.setChecked(self.config[config.field])
     self.grid_layout.addWidget(check_box, self.row, 1, 1, 2)
@@ -325,9 +323,9 @@ class Form(PyQt5.QtWidgets.QWidget):
     if config.field not in self.config:
       self.config[config.field] = config.options[0][1]
 
-    self.grid_layout.addWidget(PyQt5.QtWidgets.QLabel(config.label), self.row, 0)
+    self.grid_layout.addWidget(QLabel(config.label), self.row, 0)
 
-    combobox = PyQt5.QtWidgets.QComboBox()
+    combobox = QComboBox()
     combobox.setObjectName(f'{config.field}')
     for i, args in enumerate(config.options):
       combobox.addItem(*args)
@@ -355,7 +353,7 @@ class Form(PyQt5.QtWidgets.QWidget):
     if config.field not in self.config:
       self.config[config.field] = config.default
 
-    edit_widget = PyQt5.QtWidgets.QLineEdit()
+    edit_widget = QLineEdit()
     edit_widget.setObjectName(f'{config.field}_edit')
     edit_widget.setText(self.config[config.field])
     edit_widget.textChanged.connect(lambda v: self.config.update({config.field: v}))
@@ -365,11 +363,11 @@ class Form(PyQt5.QtWidgets.QWidget):
       if filename:
         edit_widget.setText(filename)
 
-    button = PyQt5.QtWidgets.QPushButton("Select")
+    button = QPushButton("Select")
     button.setObjectName(f'{config.field}_button')
     button.clicked.connect(on_select_file)
 
-    self.grid_layout.addWidget(PyQt5.QtWidgets.QLabel(config.label), self.row, 0)
+    self.grid_layout.addWidget(QLabel(config.label), self.row, 0)
     self.grid_layout.addWidget(edit_widget, self.row, 1)
     self.grid_layout.addWidget(button, self.row, 2)
 
@@ -388,7 +386,7 @@ class Form(PyQt5.QtWidgets.QWidget):
     if config.field not in self.config:
       self.config[config.field] = config.default
 
-    edit_widget = PyQt5.QtWidgets.QLineEdit()
+    edit_widget = QLineEdit()
     edit_widget.setObjectName(f'{config.field}_edit')
     edit_widget.setText(self.config[config.field])
     edit_widget.textChanged.connect(lambda v: self.config.update({config.field: v}))
@@ -398,11 +396,11 @@ class Form(PyQt5.QtWidgets.QWidget):
       if filename:
         edit_widget.setText(filename)
 
-    button = PyQt5.QtWidgets.QPushButton("Select")
+    button = QPushButton("Select")
     button.setObjectName(f'{config.field}_button')
     button.clicked.connect(on_select_file)
 
-    self.grid_layout.addWidget(PyQt5.QtWidgets.QLabel(config.label), self.row, 0)
+    self.grid_layout.addWidget(QLabel(config.label), self.row, 0)
     self.grid_layout.addWidget(edit_widget, self.row, 1)
     self.grid_layout.addWidget(button, self.row, 2)
 
@@ -418,15 +416,15 @@ class Form(PyQt5.QtWidgets.QWidget):
     '''
     Appends a row that shifts the above rows to the top
     '''
-    self.grid_layout.addWidget(PyQt5.QtWidgets.QLabel(''))
+    self.grid_layout.addWidget(QLabel(''))
     self.grid_layout.setRowStretch(self.row, 1)
 
-class ListAsTabsWidget(PyQt5.QtWidgets.QTabWidget):
+class ListAsTabsWidget(QTabWidget):
   '''
   A QTabWidget for editing an ObervableCollection that wraps a list
   '''
   def __init__(self, config: ObservableCollection,
-               tab_factory: typing.Callable[[ObservableCollection], PyQt5.QtWidgets.QWidget],
+               tab_factory: typing.Callable[[ObservableCollection], QWidget],
                label_factory: typing.Callable[[ObservableCollection], str]) -> None:
     super().__init__()
     self.setTabsClosable(True)
@@ -436,7 +434,7 @@ class ListAsTabsWidget(PyQt5.QtWidgets.QTabWidget):
     self.config.add_observer(self.on_items_changed, lambda: isdeleted(self))
     self.tab_factory = tab_factory
     self.label_factory = label_factory
-    self.widget_to_config: typing.Dict[PyQt5.QtWidgets.QWidget, ObservableCollection] = {}
+    self.widget_to_config: typing.Dict[QWidget, ObservableCollection] = {}
     for i, item in enumerate(config):
       self.on_items_changed(ObservableCollection.Action.SET, i, item)
 
@@ -453,7 +451,7 @@ class ListAsTabsWidget(PyQt5.QtWidgets.QTabWidget):
     if confirm == QMessageBox.Yes:
       remove_by_is(self.config, item_config)
 
-  def name_updater(self, config: ObservableCollection, widget: PyQt5.QtWidgets.QWidget) -> None:
+  def name_updater(self, config: ObservableCollection, widget: QWidget) -> None:
     '''
     Updates the tab text in response to ObservableCollection changes
     '''

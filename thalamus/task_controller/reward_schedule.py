@@ -5,8 +5,6 @@ Defines the RewardSchedule widget
 import typing
 import functools
 
-from PyQt5 import QtCore
-
 from ..qt import *
 
 import matplotlib

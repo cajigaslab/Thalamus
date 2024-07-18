@@ -12,8 +12,6 @@ import itertools
 
 import yaml
 
-import PyQt5.QtWidgets
-
 from . import task_context as task_context_module
 from . import tasks
 from . import window as task_window
@@ -30,6 +28,7 @@ from .. import thalamus_pb2_grpc
 from .servicer import TaskControllerServicer
 from .observable_bridge import ObservableBridge
 from ..pipeline.thalamus_window import ThalamusWindow
+from ..qt import *
 
 UNHANDLED_EXCEPTION: typing.List[Exception] = []
 
@@ -82,7 +81,7 @@ async def async_main() -> None:
 
   arguments = parse_args()
 
-  _ = PyQt5.QtWidgets.QApplication(sys.argv)
+  _ = QApplication(sys.argv)
 
   if arguments.config:
     config = load(arguments.config)
@@ -122,7 +121,7 @@ async def async_main() -> None:
   else:
     user_config = {}
 
-  screen_geometry = PyQt5.QtWidgets.QApplication.desktop().screenGeometry()
+  screen_geometry = qt_screen_geometry()
 
   server = grpc.aio.server()
   servicer = TaskControllerServicer()
@@ -153,7 +152,7 @@ async def async_main() -> None:
       recorder_stub = None
 
     window = task_window.Window(config, done_future, recorder_stub, ophanim_stub, arguments.port)
-    #node.create_timer(1/60, PyQt5.QtWidgets.QApplication.processEvents)
+    #node.create_timer(1/60, QApplication.processEvents)
 
     window.resize(1024, 768)
 
@@ -185,7 +184,7 @@ async def async_main() -> None:
 
   try:
     while not done_future.done() and not UNHANDLED_EXCEPTION:
-      PyQt5.QtWidgets.QApplication.processEvents()
+      QApplication.processEvents()
       task_context.process()
       await asyncio.sleep(.016)
       #await asyncio.sleep(.001)
