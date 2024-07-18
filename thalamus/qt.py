@@ -1,7 +1,6 @@
 import sys
 
-#if sys.version_info[1] >= 7:
-if True:
+if sys.version_info[1] >= 7:
   from PyQt6.QtGui import (QTransform, QPolygon, QOpenGLContext, QPainter, QImage, QMouseEvent, QColor, QFont, 
                            QContextMenuEvent, QAction, QPixmap, QPainterPath, QBrush, QKeyEvent, QStandardItemModel,
                            QSurfaceFormat, QOffscreenSurface, QOpenGLContext, QPen, QFontMetrics, QCloseEvent,
@@ -84,6 +83,60 @@ else:
     import sip
     isdeleted = sip.isdeleted
     voidptr = sip.voidptr
+
+  def qt_move_attr(source, destination, key):
+    setattr(destination, key, getattr(source, key))
+  qt_move_attr(Qt, Qt.DockWidgetArea, 'RightDockWidgetArea')
+  qt_move_attr(Qt, Qt.DockWidgetArea, 'LeftDockWidgetArea')
+  qt_move_attr(Qt, Qt.DockWidgetArea, 'TopDockWidgetArea')
+  qt_move_attr(Qt, Qt.DockWidgetArea, 'BottomDockWidgetArea')
+  qt_move_attr(Qt, Qt.DockWidgetArea, 'NoDockWidgetArea')
+  qt_move_attr(QAbstractItemView, QAbstractItemView.SelectionMode, 'SingleSelection')
+  qt_move_attr(Qt, Qt.Orientation, 'Horizontal')
+  qt_move_attr(Qt, Qt.Orientation, 'Vertical')
+  qt_move_attr(Qt, Qt.ItemDataRole, 'DisplayRole')
+  qt_move_attr(Qt, Qt.ItemDataRole, 'UserRole')
+  qt_move_attr(Qt, Qt.ItemDataRole, 'CheckStateRole')
+  qt_move_attr(Qt, Qt.ItemDataRole, 'EditRole')
+  qt_move_attr(Qt, Qt.ItemFlag, 'ItemIsEditable')
+  qt_move_attr(Qt, Qt.ItemFlag, 'ItemIsEnabled')
+  qt_move_attr(Qt, Qt.ItemFlag, 'ItemIsUserCheckable')
+  qt_move_attr(Qt, Qt.CheckState, 'Checked')
+  qt_move_attr(Qt, Qt.CheckState, 'Unchecked')
+
+  for key in ['red', 'green', 'blue', 'black', 'white']:
+    qt_move_attr(Qt, Qt.GlobalColor, key)
+
+
+  for key in ['Key_0', 'Key_1', 'Key_2', 'Key_3', 'Key_4', 'Key_5', 'Key_6', 'Key_7', 'Key_8',
+    'Key_9',
+    'Key_A',
+    'Key_B',
+    'Key_C',
+    'Key_D',
+    'Key_E',
+    'Key_F',
+    'Key_G',
+    'Key_H',
+    'Key_I',
+    'Key_J',
+    'Key_K',
+    'Key_L',
+    'Key_M',
+    'Key_N',
+    'Key_O',
+    'Key_P',
+    'Key_Q',
+    'Key_R',
+    'Key_S',
+    'Key_T',
+    'Key_U',
+    'Key_V',
+    'Key_W',
+    'Key_X',
+    'Key_Y',
+    'Key_Z']:
+    qt_move_attr(Qt, Qt.Key, key)
 
   def qt_screen_geometry() -> QRect:
     return QApplication.desktop().screenGeometry()
