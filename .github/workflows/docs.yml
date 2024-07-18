@@ -14,7 +14,7 @@ jobs:
         path: Thalamus
     - uses: actions/checkout@v4
       with:
-        repository: cajigaslab/cajigaslab
+        repository: cajigaslab/cajigaslab.github.io
         token: ${{ secrets.GH_PAGES_PAT }}
         path: cajigaslab
     - run: python3 -m pip install sphinx
