@@ -10,8 +10,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - run: git clone git@github.com:cajigaslab/cajigaslab.git
-      working-directory: /home/runner/work
+    - uses: actions/checkout@v4
+      with:
+        repository: https://github.com/cajigaslab/cajigaslab.git
+        token: ${{ secrets.GH_PAGES_PAT }}
     - run: python3 -m pip install sphinx
     - run: sphinx-build -M html docs/source/ docs/build/
     - run: cp -r docs/build/html/* /home/runner/work/cajigaslab
