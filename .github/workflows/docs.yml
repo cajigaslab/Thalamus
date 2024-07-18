@@ -20,7 +20,7 @@ jobs:
     - run: python3 -m pip install sphinx
     - run: sphinx-build -M html Thalamus/docs/source/ cajigaslab/docs/build/
     - run: git config --global user.email "no@email.com"
-    - run: git config --global user.email "no name"
+    - run: git config --global user.name "no name"
     - run: git add -A
       working-directory: cajigaslab
     - run: git commit -m "Update site"
