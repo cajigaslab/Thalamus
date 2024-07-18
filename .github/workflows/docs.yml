@@ -18,7 +18,8 @@ jobs:
         token: ${{ secrets.GH_PAGES_PAT }}
         path: cajigaslab
     - run: python3 -m pip install sphinx
-    - run: sphinx-build -M html Thalamus/docs/source/ cajigaslab/docs/build/
+    - run: sphinx-build -M html Thalamus/docs/source/ Thalamus/docs/build/
+    - run: cp -r Thalamus/docs/build/html/* cajigalab
     - run: git config --global user.email "no@email.com"
     - run: git config --global user.name "no name"
     - run: git add -A
