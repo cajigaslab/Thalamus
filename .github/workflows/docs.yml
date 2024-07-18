@@ -10,18 +10,21 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        path: Thalamus
     - uses: actions/checkout@v4
       with:
         repository: cajigaslab/cajigaslab
         token: ${{ secrets.GH_PAGES_PAT }}
+        path: cajigaslab
     - run: python3 -m pip install sphinx
-    - run: sphinx-build -M html docs/source/ docs/build/
-    - run: cp -r docs/build/html/* /home/runner/work/cajigaslab
+    - run: sphinx-build -M html docs/source/ ../cajigaslab/docs/build/
+    - run: cp -r docs/build/html/* ../cajigaslab
     - run: git config --global user.email "no@email.com"
     - run: git config --global user.email "no name"
     - run: git add -A
-      working-directory: /home/runner/work/cajigaslab
+      working-directory: cajigaslab
     - run: git commit -m "Update site"
-      working-directory: /home/runner/work/cajigaslab
+      working-directory: cajigaslab
     - run: git push origin main
-      working-directory: /home/runner/work/cajigaslab
+      working-directory: cajigaslab
