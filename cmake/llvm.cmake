@@ -37,7 +37,7 @@ if(NOT EXISTS "${llvm_BINARY_DIR}/lib/libc++.a")
   endif()
 endif()
 if(NOT EXISTS "${llvm_BINARY_DIR}/lib/combined/libc++.a")
-  execute_process(COMMAND sh ${CMAKE_SOURCE_DIR}/make_combined.sh ${OSX_TARGET_PARAMETER}
+  execute_process(COMMAND bash ${CMAKE_SOURCE_DIR}/make_combined.sh ${OSX_TARGET_PARAMETER}
                     WORKING_DIRECTORY ${llvm_BINARY_DIR}/lib)
 endif()
 

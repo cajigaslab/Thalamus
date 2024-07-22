@@ -181,19 +181,21 @@ else()
 endif()
 
 file(READ "${ffmpeg_SOURCE_DIR}/fftools/ffmpeg.c" FFMPEG_C_SOURCE)
-string(REPLACE "int main" "int ffmpeg_main_impl" THALAMUS_FFMPEG_C_SOURCE "${FFMPEG_C_SOURCE}")
+string(REPLACE "int main" "int ffmpeg_main_impl(int argc, char** argv);int ffmpeg_main_impl" THALAMUS_FFMPEG_C_SOURCE "${FFMPEG_C_SOURCE}")
 file(WRITE "${CMAKE_BINARY_DIR}/thalamus_ffmpeg.c" "${THALAMUS_FFMPEG_C_SOURCE}")
 
 file(READ "${ffmpeg_SOURCE_DIR}/fftools/ffprobe.c" FFPROBE_C_SOURCE)
-string(REPLACE "int main" "int ffprobe_main_impl" THALAMUS_FFPROBE_C_SOURCE "${FFPROBE_C_SOURCE}")
+string(REPLACE "int main" "int ffprobe_main_impl(int argc, char** argv);int ffprobe_main_impl" THALAMUS_FFPROBE_C_SOURCE "${FFPROBE_C_SOURCE}")
+string(REPLACE "void show_help_default" "void ffprobe_show_help_default(const char* opt, const char* arg);void ffprobe_show_help_default" 
+	THALAMUS_FFPROBE_C_SOURCE "${THALAMUS_FFPROBE_C_SOURCE}")
 string(REPLACE "show_help_default" "ffprobe_show_help_default" THALAMUS_FFPROBE_C_SOURCE "${THALAMUS_FFPROBE_C_SOURCE}")
 string(REPLACE "program_name" "ffprobe_program_name" THALAMUS_FFPROBE_C_SOURCE "${THALAMUS_FFPROBE_C_SOURCE}")
 string(REPLACE "program_birth_year" "ffprobe_program_birth_year" THALAMUS_FFPROBE_C_SOURCE "${THALAMUS_FFPROBE_C_SOURCE}")
 file(WRITE "${CMAKE_BINARY_DIR}/thalamus_ffprobe.c" "${THALAMUS_FFPROBE_C_SOURCE}")
 
 file(READ "${ffmpeg_SOURCE_DIR}/fftools/ffplay.c" FFPLAY_C_SOURCE)
-string(REPLACE "int main" "int ffplay_main_impl" THALAMUS_FFPLAY_C_SOURCE "${FFPLAY_C_SOURCE}")
-string(REPLACE "show_help_default" "ffplay_show_help_default" THALAMUS_FFPLAY_C_SOURCE "${THALAMUS_FFPLAY_C_SOURCE}")
+string(REPLACE "int main" "int ffplay_main_impl(int argc, char** argv);int ffplay_main_impl" THALAMUS_FFPLAY_C_SOURCE "${FFPLAY_C_SOURCE}")
+string(REPLACE "void show_help_default" "void ffplay_show_help_default(const char* opt, const char* arg);void ffplay_show_help_default" THALAMUS_FFPLAY_C_SOURCE "${THALAMUS_FFPLAY_C_SOURCE}")
 string(REPLACE "program_name" "ffplay_program_name" THALAMUS_FFPLAY_C_SOURCE "${THALAMUS_FFPLAY_C_SOURCE}")
 string(REPLACE "program_birth_year" "ffplay_program_birth_year" THALAMUS_FFPLAY_C_SOURCE "${THALAMUS_FFPLAY_C_SOURCE}")
 file(WRITE "${CMAKE_BINARY_DIR}/thalamus_ffplay.c" "${THALAMUS_FFPLAY_C_SOURCE}")
@@ -208,21 +210,21 @@ add_custom_command(
 add_custom_command(
   OUTPUT "${CMAKE_BINARY_DIR}/thalamus_ffmpeg_$<CONFIG>.o"
   DEPENDS "${CMAKE_BINARY_DIR}/ffmpeg_$<CONFIG>.rsp"
-  COMMAND "${CMAKE_C_COMPILER}" -c ${FFMPEG_OUT_ARG}thalamus_ffmpeg_$<CONFIG>.o "-I${ffmpeg_SOURCE_DIR}/fftools" "-I${ffmpeg_SOURCE_DIR}" "-I${ffmpeg_BINARY_DIR}/$<CONFIG>" "@${CMAKE_BINARY_DIR}/ffmpeg_$<CONFIG>.rsp" "${CMAKE_BINARY_DIR}/thalamus_ffmpeg.c"
+  COMMAND "${CMAKE_C_COMPILER}" -c ${FFMPEG_OUT_ARG}thalamus_ffmpeg_$<CONFIG>.o ${FFMPEG_FLAGS} "-I${ffmpeg_SOURCE_DIR}/fftools" "-I${ffmpeg_SOURCE_DIR}" "-I${ffmpeg_BINARY_DIR}/$<CONFIG>" "@${CMAKE_BINARY_DIR}/ffmpeg_$<CONFIG>.rsp" "${CMAKE_BINARY_DIR}/thalamus_ffmpeg.c"
   && cmake -E touch_nocreate "${CMAKE_BINARY_DIR}/thalamus_ffmpeg_$<CONFIG>.o"
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
 
 add_custom_command(
   OUTPUT "${CMAKE_BINARY_DIR}/thalamus_ffprobe_$<CONFIG>.o"
   DEPENDS "${CMAKE_BINARY_DIR}/ffmpeg_$<CONFIG>.rsp"
-  COMMAND "${CMAKE_C_COMPILER}" -c ${FFMPEG_OUT_ARG}thalamus_ffprobe_$<CONFIG>.o "-I${ffmpeg_SOURCE_DIR}/fftools" "-I${ffmpeg_SOURCE_DIR}" "-I${ffmpeg_BINARY_DIR}/$<CONFIG>" "@${CMAKE_BINARY_DIR}/ffmpeg_$<CONFIG>.rsp" "${CMAKE_BINARY_DIR}/thalamus_ffprobe.c"
+  COMMAND "${CMAKE_C_COMPILER}" -c ${FFMPEG_OUT_ARG}thalamus_ffprobe_$<CONFIG>.o ${FFMPEG_FLAGS} "-I${ffmpeg_SOURCE_DIR}/fftools" "-I${ffmpeg_SOURCE_DIR}" "-I${ffmpeg_BINARY_DIR}/$<CONFIG>" "@${CMAKE_BINARY_DIR}/ffmpeg_$<CONFIG>.rsp" "${CMAKE_BINARY_DIR}/thalamus_ffprobe.c"
   && cmake -E touch_nocreate "${CMAKE_BINARY_DIR}/thalamus_ffprobe_$<CONFIG>.o"
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
 
 add_custom_command(
   OUTPUT "${CMAKE_BINARY_DIR}/thalamus_ffplay_$<CONFIG>.o"
   DEPENDS "${CMAKE_BINARY_DIR}/ffmpeg_$<CONFIG>.rsp"
-  COMMAND "${CMAKE_C_COMPILER}" -c ${FFMPEG_OUT_ARG}thalamus_ffplay_$<CONFIG>.o "-I${ffmpeg_SOURCE_DIR}/fftools" "-I${ffmpeg_SOURCE_DIR}" "-I${ffmpeg_BINARY_DIR}/$<CONFIG>" "@${CMAKE_BINARY_DIR}/ffmpeg_$<CONFIG>.rsp" "${CMAKE_BINARY_DIR}/thalamus_ffplay.c"
+  COMMAND "${CMAKE_C_COMPILER}" -c ${FFMPEG_OUT_ARG}thalamus_ffplay_$<CONFIG>.o ${FFMPEG_FLAGS} "-I${SDL_INCLUDE}" "-I${ffmpeg_SOURCE_DIR}/fftools" "-I${ffmpeg_SOURCE_DIR}" "-I${ffmpeg_BINARY_DIR}/$<CONFIG>" "@${CMAKE_BINARY_DIR}/ffmpeg_$<CONFIG>.rsp" "${CMAKE_BINARY_DIR}/thalamus_ffplay.c"
   && cmake -E touch_nocreate "${CMAKE_BINARY_DIR}/thalamus_ffplay_$<CONFIG>.o"
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
 

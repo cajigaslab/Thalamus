@@ -1,6 +1,5 @@
 import platform
-import importlib.resources
+import pkg_resources
 
-THALAMUS_ANCHOR = importlib.resources.files('thalamus')
 EXE_SUFFIX = '.exe' if platform.system() == 'Windows' else ''
-native_exe = THALAMUS_ANCHOR / ('native' + EXE_SUFFIX)
+native_exe = pkg_resources.resource_filename(__name__, 'native' + EXE_SUFFIX)
