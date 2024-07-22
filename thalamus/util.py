@@ -19,7 +19,7 @@ class MeteredUpdater:
     self.config = config
     self.interval = interval
     self.stop_when = stop_when
-    self.task = asyncio.create_task(self.__loop())
+    self.task = asyncio.get_event_loop().create_task(self.__loop())
     self.updates = []
 
   async def __loop(self):
