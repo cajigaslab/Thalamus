@@ -150,7 +150,7 @@ namespace thalamus {
     return impl->_time;
   }
 
-  void NidaqNode::inject(const thalamus::vector<std::span<double const>>& spans, const thalamus::vector<std::chrono::nanoseconds>& sample_intervals) {
+  void NidaqNode::inject(const thalamus::vector<std::span<double const>>& spans, const thalamus::vector<std::chrono::nanoseconds>& sample_intervals, const thalamus::vector<std::string_view>& names) {
     auto temp = impl->_num_channels;
     auto previous_sample_interval = impl->_sample_interval;
     impl->_num_channels = spans.size();
@@ -251,28 +251,14 @@ namespace thalamus {
     return "NIDAQ_OUT (MOCK)";
   }
 
-  std::span<const double> NidaqOutputNode::data(int channel) const {
-    return impl->_data.at(channel);
-  }
-
-  int NidaqOutputNode::num_channels() const {
-    return impl->_data.size();
-  }
-
-  void NidaqOutputNode::inject(const thalamus::vector<std::span<double const>>& spans, const thalamus::vector<std::chrono::nanoseconds>& sample_intervals) {
-    impl->_data = spans;
-    auto previous_sample_interval = impl->_sample_intervals;
-    impl->_sample_intervals = sample_intervals;
-    ready(this);
-    impl->_sample_intervals = previous_sample_interval;
-  }
-
-  std::chrono::nanoseconds NidaqOutputNode::sample_interval(int i) const {
-    return impl->_sample_intervals.at(i);
-  }
-  std::chrono::nanoseconds NidaqOutputNode::time() const {
-    return impl->_time;
-  }
-
   size_t NidaqNode::modalities() const { return infer_modalities<NidaqNode>(); }
+
+  bool NidaqNode::prepare() { return true; }
+  bool NidaqOutputNode::prepare() { return true; }
+  std::span<const std::string> NidaqNode::get_recommended_channels() const {
+    return std::span<const std::string>();
+  }
+  std::string_view NidaqNode::name(int) const {
+    return "0";
+  }
 }

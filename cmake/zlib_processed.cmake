@@ -21,6 +21,12 @@ add_custom_command(DEPENDS zlibstatic
 		   && cmake "-DZLIB_LIBRARY=$<TARGET_FILE:zlibstatic>" "-DOUTPUT_DIR=${ZLIB_PROCESSED_HEADER_DIR}" -P ${CMAKE_SOURCE_DIR}/generate_zlib_pc.cmake)
 
 add_library(zlib_processed INTERFACE ${ZLIB_PROCESSED_HEADER_PATHS})
-target_link_options(zlib_processed INTERFACE -Wl,--whole-archive "$<TARGET_FILE:zlibstatic>" -Wl,--no-whole-archive)
+if(WIN32)
+  target_link_libraries(zlib_processed INTERFACE "$<TARGET_FILE:zlibstatic>")
+elseif(APPLE)
+  target_link_options(zlib_processed INTERFACE -Wl,-all_load "$<TARGET_FILE:zlibstatic>")
+else()
+  target_link_options(zlib_processed INTERFACE -Wl,--whole-archive "$<TARGET_FILE:zlibstatic>" -Wl,--no-whole-archive)
+endif()
 target_include_directories(zlib_processed INTERFACE "${ZLIB_PROCESSED_HEADER_DIR}")
 

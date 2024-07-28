@@ -17,7 +17,7 @@ else()
   set(LUA_LIB "${luajit_SOURCE_DIR}/src/libluajit_$<CONFIG>.a")
   add_custom_command(OUTPUT "${LUA_LIB}"
                      COMMAND make clean
-                     && cmake -E env "CFLAGS=${ALL_C_COMPILE_OPTIONS_SPACED}" make
+                     && cmake -E env "CFLAGS=${ALL_C_COMPILE_OPTIONS_SPACED}" MACOSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET} make
                      && cmake -E copy "${luajit_SOURCE_DIR}/src/libluajit.a" "${LUA_LIB}"
                      && cmake -E touch_nocreate "${LUA_LIB}"
                      WORKING_DIRECTORY  "${luajit_SOURCE_DIR}")

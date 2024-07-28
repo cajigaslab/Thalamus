@@ -78,7 +78,7 @@ namespace thalamus {
     {"NORMALIZE", new NodeFactory<NormalizeNode>()},
     {"ALGEBRA", new NodeFactory<AlgebraNode>()},
     {"LUA", new NodeFactory<LuaNode>()},
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__APPLE__)
     {"ROS2", new NodeFactory<Ros2Node>()},
 #endif
     {"REMOTE", new NodeFactory<RemoteNode>()},

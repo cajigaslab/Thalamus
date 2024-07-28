@@ -94,12 +94,14 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   platform_tag = None
   if platform.system() == 'Windows':
     platform_tag = 'win_amd64'
+  elif platform.system() == 'Darwin':
+    platform_tag = 'macosx_11_0_x86_64'
   elif platform.system() == 'Linux':
     ldd_output = subprocess.check_output(['ldd', '--version'], encoding='utf8')
     assert ldd_output is not None
     ldd_line = [l.strip() for l in ldd_output.split('\n') if l[:3] == 'ldd'][0]
     libc_version = ldd_line.split(' ')[-1]
-    platform_tag = f'manylunux_{libc_version.replace(".", "_")}'
+    platform_tag = f'manylinux_{libc_version.replace(".", "_")}_x86_64'
   assert platform_tag is not None
 
   whl_name = f'thalamus-{version}-py3-none-{platform_tag}.whl'
@@ -117,10 +119,11 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     '-B', build_path,
     f'-DCMAKE_BUILD_TYPE={"Release" if is_release else "Debug"}',
     '-DENABLE_SWIG=OFF',
-    '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON'
+    '-DENABLE_SWIG=OFF',
+    '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
+    '-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0'
   ]
-  if generator:
-    cmake_command += ['-G', generator]
+  cmake_command += ['-G', generator]
 
   if sys.platform == 'win32':
     cmake_command += [

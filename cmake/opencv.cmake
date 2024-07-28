@@ -65,31 +65,6 @@ endif()
 add_custom_command(OUTPUT "${opencv_BINARY_DIR}/$<CONFIG>/CMakeCache.txt"
                    DEPENDS ${ZLIB_PROCESSED_HEADER_PATHS} ffmpeg
                    COMMAND 
-                   echo cmake "${opencv_SOURCE_DIR}" -Wno-dev 
-                   -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-                   -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-                   -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
-                   -DCMAKE_LINKER=${CMAKE_LINKER}
-                   "-DCMAKE_MODULE_PATH=${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Modules"
-                   "-DCMAKE_EXE_LINKER_FLAGS=${ALL_LINK_OPTIONS_SPACED}"
-                   "-DCMAKE_CXX_FLAGS=${ALL_COMPILE_OPTIONS_SPACED}" 
-                   "-DCMAKE_C_FLAGS=${ALL_COMPILE_OPTIONS_SPACED}"
-                   -DBUILD_TESTS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_PERF_TESTS=OFF
-                   -DBUILD_SHARED_LIBS=OFF -DWITH_EIGEN=OFF  -DOPENCV_PYTHON_SKIP_DETECTION=ON
-                   -DBUILD_JPEG=ON -DBUILD_PNG=ON -DWITH_WEBP=OFF -DBUILD_TIFF=ON -DBUILD_ZLIB=OFF
-                   -DBUILD_OPENJPEG=ON -DBUILD_OPENEXR=ON -DWITH_GSTREAMER=OFF -DWITH_FFMPEG=ON 
-                   -DOPENCV_FFMPEG_USE_FIND_PACKAGE=ON -DWITH_1394=OFF -DWITH_GTK=OFF -DWITH_VTK=OFF
-                   -DBUILD_LIST=core,imgproc,imgcodecs,highgui,videoio,calib3d,flann,features2d,stitching
-                   -DBUILD_opencv_python2=OFF -DBUILD_opencv_python3=OFF
-                   "-DCMAKE_BUILD_TYPE=$<CONFIG>" "-DCMAKE_INSTALL_PREFIX=${opencv_BINARY_DIR}/$<CONFIG>/install"
-                   -DCMAKE_CXX_STANDARD=${CMAKE_CXX_STANDARD} "-DZLIB_LIBRARY=$<TARGET_FILE:zlibstatic>"
-                   -DCMAKE_OSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}
-                   "-DZLIB_ROOT=${ZLIB_PROCESSED_HEADER_DIR}"
-                   -DCMAKE_POLICY_DEFAULT_CMP0091=NEW
-                   -DCMAKE_MSVC_RUNTIME_LIBRARY=${CMAKE_MSVC_RUNTIME_LIBRARY}
-                   -DCMAKE_MSVC_RUNTIME_LIBRARY_DEFAULT=${CMAKE_MSVC_RUNTIME_LIBRARY}
-                   -G "${CMAKE_GENERATOR}"
-                   &&
                    cmake "${opencv_SOURCE_DIR}" -Wno-dev 
                       -DCMAKE_POSITION_INDEPENDENT_CODE=ON
                       -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
@@ -99,6 +74,7 @@ add_custom_command(OUTPUT "${opencv_BINARY_DIR}/$<CONFIG>/CMakeCache.txt"
                       "-DCMAKE_EXE_LINKER_FLAGS=${ALL_LINK_OPTIONS_SPACED}"
                       "-DCMAKE_CXX_FLAGS=${ALL_COMPILE_OPTIONS_SPACED}" 
                       "-DCMAKE_C_FLAGS=${ALL_COMPILE_OPTIONS_SPACED}"
+                      -DOPENCV_SKIP_VISIBILITY_HIDDEN=ON
                       -DBUILD_TESTS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_PERF_TESTS=OFF
                       -DBUILD_SHARED_LIBS=OFF -DWITH_EIGEN=OFF  -DOPENCV_PYTHON_SKIP_DETECTION=ON
                       -DBUILD_JPEG=ON -DBUILD_PNG=ON -DWITH_WEBP=OFF -DBUILD_TIFF=ON -DBUILD_ZLIB=OFF

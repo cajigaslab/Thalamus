@@ -108,7 +108,7 @@ def main():
       subprocess.check_call(['setx', 'PATH', new_path])
       print('PATHSET')
 
-    subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-U', 'setuptools', 'ninja'], cwd=home_str)
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-U', 'setuptools'], cwd=home_str)
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-r', str(pathlib.Path.cwd()/'requirements.txt')], cwd=home_str)
 
     msys2_root, msys64_root = pathlib.Path('C:/MSYS2'), pathlib.Path('C:/MSYS64')
@@ -145,7 +145,8 @@ def main():
       subprocess.check_call(['curl', '-L', '--output', 'brew_install.sh', 'https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh'])
       subprocess.check_call(['bash', 'brew_install.sh'])
 
-    subprocess.check_call(['brew', 'install', 'autoconf', 'automake', 'libtool', 'pcre2'])
+    subprocess.check_call(['brew', 'install', 'autoconf', 'automake', 'libtool', 'pcre2', 'pkg-config'])
+    subprocess.check_call(['touch', str(home_path / '.thalamusrc')])
 
     #nasm
     if not shutil.which('nasm'):
@@ -161,7 +162,8 @@ def main():
       with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
         bashrc.write(f'\nexport PATH={home_str}/cmake-3.24.0-macos-universal/CMake.app/Contents/bin:$PATH\n')
 
-    subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-U', 'setuptools', 'ninja'], cwd=home_str)
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-U', 'setuptools'], cwd=home_str)
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-r', str(pathlib.Path.cwd()/'requirements.txt')], cwd=home_str)
 
     with open(str(home_path / '.bash_profile'), 'r') as bash_profile:
       bash_profile_content = bash_profile.read()
@@ -227,9 +229,6 @@ def main():
       with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
         bashrc.write(f'\nexport PATH={home_str}/.local/cmake-{cmake_version}-linux-x86_64/bin:$PATH\n')
     
-    _, meson_is_current = is_up_to_date('meson', r'(\d+).(\d+).(\d+)', (0, 55, 0))
-    if not meson_is_current:
-      subprocess.check_call(['python3', '-m', 'pip', 'install', 'meson'], cwd=home_str)
     with open(str(home_path / '.bashrc'), 'r') as bashrc:
       bashrc_content = bashrc.read()
     if "source ~/.thalamusrc" not in bashrc_content:
