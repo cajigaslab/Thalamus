@@ -19,7 +19,6 @@ if(WIN32)
 endif()
 
 if(APPLE)
-  set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum OS X deployment version")
   set(OSX_TARGET_PARAMETER -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET})
 endif()
 
@@ -197,8 +196,8 @@ target_include_directories(tracing PUBLIC "${CMAKE_SOURCE_DIR}/src")
 target_compile_options(tracing PRIVATE ${WARNING_FLAGS})
 
 add_library(hydrate "src/hydrate.cpp")
-target_link_libraries(hydrate boost protoc_generated grpc++ hdf5-static)
-target_compile_definitions(hydrate PRIVATE _USE_MATH_DEFINES NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS)
+target_link_libraries(hydrate boost grpc++ hdf5-static)
+target_compile_definitions(hydrate PRIVATE _USE_MATH_DEFINES NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS _GNU_SOURCE)
 target_include_directories(hydrate PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_compile_options(hydrate PRIVATE ${WARNING_FLAGS})
   
@@ -281,8 +280,8 @@ target_compile_options(thalamus PRIVATE ${WARNING_FLAGS})
 
 target_compile_definitions(thalamus PRIVATE _USE_MATH_DEFINES)
 target_include_directories(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(thalamus opencv hdf5-static zlib_processed lua kfr cairo
-  tracing webrtc boost protoc_generated grpc++ grpc++_reflection absl::str_format_internal absl::strings absl::str_format ffmpeg)
+target_link_libraries(thalamus opencv hdf5-static lua kfr cairo
+  tracing webrtc boost grpc++ grpc++_reflection absl::str_format_internal absl::strings absl::str_format ffmpeg)
 
 add_library(native_lib SHARED src/plugin.cpp)
 target_compile_options(native_lib PRIVATE ${WARNING_FLAGS})
@@ -292,19 +291,25 @@ target_link_libraries(native_lib
   hydrate
   thalamus_ffmpeg
   tracing webrtc ffmpeg sdl protoc_generated kfr lua cairo)
-if(NOT WIN32)
+if(NOT WIN32 AND NOT APPLE)
   target_link_options(native_lib PRIVATE -Wl,-Bsymbolic)
 endif()
 
 if(WIN32)
   target_compile_definitions(native_lib PRIVATE _WIN32_WINNT=0x0A00)
 endif()
+target_compile_definitions(native_lib PRIVATE _GNU_SOURCE)
 
 add_executable(native src/main.cpp)
 target_compile_options(native PRIVATE ${WARNING_FLAGS})
 if(WIN32)
 else()
   target_link_libraries(native PRIVATE dl)
+endif()
+
+if(APPLE)
+  target_link_options(native PRIVATE -pagezero_size 10000 -image_base 100000000)
+  target_link_options(native_lib PRIVATE -image_base 7fff04c4a000)
 endif()
 
 if(ENABLE_SWIG)

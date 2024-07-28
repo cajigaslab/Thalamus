@@ -14,6 +14,10 @@
 #include <unistd.h>
 #endif
 
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
+
 const auto HELP = 
 "Thalamus native program, version " GIT_COMMIT_HASH "\n"
 "  thalamus         Signal tool\n"
@@ -66,6 +70,24 @@ int main(int argc, char * argv[]) {
   path.resize(count);
   path = (std::filesystem::path(path).parent_path() /  "native_lib.dll").string();
   library_handle = LoadLibrary(path.c_str());
+#elif defined(__APPLE__)
+  std::string path(256, '\0');
+  unsigned int path_size = path.size();
+  int result = _NSGetExecutablePath(path.data(), &path_size);
+  if(result < 0) {
+    path.resize(path_size);
+    result = _NSGetExecutablePath(path.data(), &path_size);
+  }
+  auto null_pos = path.find('\0');
+  path.resize(null_pos);
+
+  path = (std::filesystem::path(path).parent_path() /  "libnative_lib.dylib").string();
+
+  std::cout << "Loading " << path << std::endl;
+  library_handle = dlopen(path.c_str(), RTLD_NOW);
+  const char* message = dlerror();
+  message = message ? message : "";
+  std::cout << "Loaded " << path << " " << library_handle << " " << message << std::endl;
 #else
   std::string path(256, '\0');
   size_t count = 0;
@@ -78,7 +100,9 @@ int main(int argc, char * argv[]) {
     }
   } while(count == path.size());
   path.resize(count);
+
   path = (std::filesystem::path(path).parent_path() /  "libnative_lib.so").string();
+
   std::cout << "Loading " << path << std::endl;
   library_handle = dlopen(path.c_str(), RTLD_NOW);
   const char* message = dlerror();
