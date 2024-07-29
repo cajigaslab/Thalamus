@@ -44,7 +44,7 @@ if(WIN32)
       OUTPUT "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
       DEPENDS sdl
       COMMAND
-      cmake -E env "PATH=$<TARGET_FILE_DIR:sdl2-config>;$ENV{PATH}"
+      cmake -E env "PATH=$<TARGET_FILE_DIR:sdl2-config>;$ENV{PATH}" "PKG_CONFIG_PATH=${SDL_PKG_CONFIG_DIR}"
       ${MSYS2_ROOT}\\msys2_shell.cmd -here -use-full-path -no-start -defterm -c "'${CMAKE_SOURCE_DIR}/config_ffmpeg_msvc.bash' '${ffmpeg_SOURCE_DIR}/configure' '${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install' '-MT$<IF:$<CONFIG:Debug>,d,> ${FFMPEG_ALL_COMPILE_OPTIONS_SPACED}' $<IF:$<CONFIG:Debug>,--enable-debug,>"
       && cmake -E touch_nocreate "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
       WORKING_DIRECTORY "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>")
@@ -210,21 +210,21 @@ add_custom_command(
 add_custom_command(
   OUTPUT "${CMAKE_BINARY_DIR}/thalamus_ffmpeg_$<CONFIG>.o"
   DEPENDS "${CMAKE_BINARY_DIR}/ffmpeg_$<CONFIG>.rsp"
-  COMMAND "${CMAKE_C_COMPILER}" -c ${FFMPEG_OUT_ARG}thalamus_ffmpeg_$<CONFIG>.o ${FFMPEG_FLAGS} "-I${ffmpeg_SOURCE_DIR}/fftools" "-I${ffmpeg_SOURCE_DIR}" "-I${ffmpeg_BINARY_DIR}/$<CONFIG>" "@${CMAKE_BINARY_DIR}/ffmpeg_$<CONFIG>.rsp" "${CMAKE_BINARY_DIR}/thalamus_ffmpeg.c"
+  COMMAND "${CMAKE_C_COMPILER}" -c ${FFMPEG_OUT_ARG}thalamus_ffmpeg_$<CONFIG>.o "-I${ffmpeg_SOURCE_DIR}/fftools" "-I${ffmpeg_SOURCE_DIR}" "-I${ffmpeg_BINARY_DIR}/$<CONFIG>" "@${CMAKE_BINARY_DIR}/ffmpeg_$<CONFIG>.rsp" "${CMAKE_BINARY_DIR}/thalamus_ffmpeg.c"
   && cmake -E touch_nocreate "${CMAKE_BINARY_DIR}/thalamus_ffmpeg_$<CONFIG>.o"
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
 
 add_custom_command(
   OUTPUT "${CMAKE_BINARY_DIR}/thalamus_ffprobe_$<CONFIG>.o"
   DEPENDS "${CMAKE_BINARY_DIR}/ffmpeg_$<CONFIG>.rsp"
-  COMMAND "${CMAKE_C_COMPILER}" -c ${FFMPEG_OUT_ARG}thalamus_ffprobe_$<CONFIG>.o ${FFMPEG_FLAGS} "-I${ffmpeg_SOURCE_DIR}/fftools" "-I${ffmpeg_SOURCE_DIR}" "-I${ffmpeg_BINARY_DIR}/$<CONFIG>" "@${CMAKE_BINARY_DIR}/ffmpeg_$<CONFIG>.rsp" "${CMAKE_BINARY_DIR}/thalamus_ffprobe.c"
+  COMMAND "${CMAKE_C_COMPILER}" -c ${FFMPEG_OUT_ARG}thalamus_ffprobe_$<CONFIG>.o "-I${ffmpeg_SOURCE_DIR}/fftools" "-I${ffmpeg_SOURCE_DIR}" "-I${ffmpeg_BINARY_DIR}/$<CONFIG>" "@${CMAKE_BINARY_DIR}/ffmpeg_$<CONFIG>.rsp" "${CMAKE_BINARY_DIR}/thalamus_ffprobe.c"
   && cmake -E touch_nocreate "${CMAKE_BINARY_DIR}/thalamus_ffprobe_$<CONFIG>.o"
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
 
 add_custom_command(
   OUTPUT "${CMAKE_BINARY_DIR}/thalamus_ffplay_$<CONFIG>.o"
   DEPENDS "${CMAKE_BINARY_DIR}/ffmpeg_$<CONFIG>.rsp"
-  COMMAND "${CMAKE_C_COMPILER}" -c ${FFMPEG_OUT_ARG}thalamus_ffplay_$<CONFIG>.o ${FFMPEG_FLAGS} "-I${SDL_INCLUDE}" "-I${ffmpeg_SOURCE_DIR}/fftools" "-I${ffmpeg_SOURCE_DIR}" "-I${ffmpeg_BINARY_DIR}/$<CONFIG>" "@${CMAKE_BINARY_DIR}/ffmpeg_$<CONFIG>.rsp" "${CMAKE_BINARY_DIR}/thalamus_ffplay.c"
+  COMMAND "${CMAKE_C_COMPILER}" -c ${FFMPEG_OUT_ARG}thalamus_ffplay_$<CONFIG>.o "-I${SDL_INCLUDE}" "-I${ffmpeg_SOURCE_DIR}/fftools" "-I${ffmpeg_SOURCE_DIR}" "-I${ffmpeg_BINARY_DIR}/$<CONFIG>" "@${CMAKE_BINARY_DIR}/ffmpeg_$<CONFIG>.rsp" "${CMAKE_BINARY_DIR}/thalamus_ffplay.c"
   && cmake -E touch_nocreate "${CMAKE_BINARY_DIR}/thalamus_ffplay_$<CONFIG>.o"
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
 

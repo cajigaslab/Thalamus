@@ -68,7 +68,3 @@ else()
 endif()
 target_include_directories(sdl INTERFACE "${SDL_INCLUDE}")
 
-add_executable(sdl2-config src/sdl2-config.cpp)
-target_link_libraries(sdl2-config absl::strings absl::str_format)
-target_compile_definitions(sdl2-config PRIVATE "SDL_INCLUDE=\"${SDL_INCLUDE}\"" "SDL_LIB_FILES=\"${SDL_LIB_FILES}\"")
-add_dependencies(sdl sdl2-config)
