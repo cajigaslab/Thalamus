@@ -282,6 +282,9 @@ target_compile_definitions(thalamus PRIVATE _USE_MATH_DEFINES)
 target_include_directories(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(thalamus opencv hdf5-static lua kfr cairo
   tracing webrtc boost grpc++ grpc++_reflection absl::str_format_internal absl::strings absl::str_format ffmpeg)
+if(NOT APPLE)
+  target_link_libraries(thalamus zlib_processed)
+endif()
 
 add_library(native_lib SHARED src/plugin.cpp)
 target_compile_options(native_lib PRIVATE ${WARNING_FLAGS})
@@ -308,7 +311,7 @@ else()
 endif()
 
 if(APPLE)
-  target_link_options(native PRIVATE -pagezero_size 10000 -image_base 100000000)
+  target_link_options(native PRIVATE -pagezero_size 10000)
   target_link_options(native_lib PRIVATE -image_base 7fff04c4a000)
 endif()
 
