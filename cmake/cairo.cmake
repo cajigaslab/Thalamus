@@ -18,10 +18,19 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   set(CAIRO_COMPILER CC=clang CXX=clang++)
 endif()
 
+if(WIN32)
+  set(CAIRO_PKG_CONFIG_ENV "PKG_CONFIG_PATH=${GLIB_PKGCONFIG_DIR};${ZLIB_PKG_CONFIG_DIR}")
+else()
+  set(CAIRO_PKG_CONFIG_ENV "PKG_CONFIG_PATH=${GLIB_PKGCONFIG_DIR}:${ZLIB_PKG_CONFIG_DIR}")
+endif()
+
 add_custom_command(
+  DEPENDS glib
   OUTPUT "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/build.ninja"
   COMMAND cmake -E env 
   ${CAIRO_COMPILER}
+  "${CAIRO_PKG_CONFIG_ENV}"
+  "CFLAGS=${OSX_TARGET_PARAMETER}"
   meson setup "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>"
   -Dtests=disabled ${CAIRO_SANITIZER} -Ddefault_library=static -Dpng=disabled -Dfontconfig=disabled -Dfreetype=disabled -Db_vscrt=static_from_buildtype 
   --prefix "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install"
@@ -29,7 +38,7 @@ add_custom_command(
   && cmake -E touch_nocreate "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/build.ninja"
   WORKING_DIRECTORY "${cairo_SOURCE_DIR}")
 
-if(WIN32)
+if(WIN32 OR APPLE)
   set(CAIRO_LIBRARIES "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libcairo.a"
                       "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libpixman-1.a")
   set(CAIRO_PKGCONFIG_DIR "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/pkgconfig")
