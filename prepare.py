@@ -69,6 +69,10 @@ def main():
       print('Administrator permissions required', file=sys.stderr)
       sys.exit(1)
 
+    result = subprocess.call(['winget', 'list', '-q', 'bloodrock.pkg-config-lite'], cwd=home_str)
+    if result != 0:
+      subprocess.check_call(['winget', 'install', 'bloodrock.pkg-config-lite'], cwd=home_str)
+
     old_path = os.environ['PATH']
     new_path = []
     #nasm
@@ -86,16 +90,6 @@ def main():
       if not (pathlib.Path(destination) / 'cmake.exe').exists():
         download('https://github.com/Kitware/CMake/releases/download/v3.24.0/cmake-3.24.0-windows-x86_64.zip')
         subprocess.check_call(['powershell', '-Command', 'Expand-Archive -DestinationPath ' + os.environ['USERPROFILE'] + ' cmake-3.24.0-windows-x86_64.zip'])
-    
-    #perl
-    if not shutil.which('perl'):
-      print('Installing perl')
-      destination = 'C:\\Strawberry\\perl\\bin' 
-      new_path.append(destination)
-      if not (pathlib.Path(destination) / 'perl.exe').exists():
-        download('https://strawberryperl.com/download/5.32.1.1/strawberry-perl-5.32.1.1-64bit.msi')
-        subprocess.check_call(['msiexec', '/quiet', '/i', 'strawberry-perl-5.32.1.1-64bit.msi'])
-    print(list(pathlib.Path('C:\\Strawberry').iterdir()))
     
     if new_path:
       if 'GITHUB_PATH' in os.environ:

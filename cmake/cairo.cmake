@@ -1,8 +1,3 @@
-if(APPLE)
-  include(cmake/glib.cmake)
-  set(CAIRO_DEPENDS glib)
-endif()
-
 if("${SANITIZER}" STREQUAL thread)
   set(CAIRO_SANITIZER -Db_sanitize=thread)
 elseif("${SANITIZER}" STREQUAL address)
@@ -23,12 +18,18 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   set(CAIRO_COMPILER CC=clang CXX=clang++)
 endif()
 
+if(WIN32)
+  set(CAIRO_PKG_CONFIG_ENV "PKG_CONFIG_PATH=${GLIB_PKGCONFIG_DIR};${ZLIB_PKG_CONFIG_DIR}")
+else()
+  set(CAIRO_PKG_CONFIG_ENV "PKG_CONFIG_PATH=${GLIB_PKGCONFIG_DIR}:${ZLIB_PKG_CONFIG_DIR}")
+endif()
+
 add_custom_command(
-  DEPENDS ${CAIRO_DEPENDS}
+  DEPENDS glib
   OUTPUT "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/build.ninja"
   COMMAND cmake -E env 
   ${CAIRO_COMPILER}
-  "PKG_CONFIG_PATH=${GLIB_PKGCONFIG_DIR}"
+  "${CAIRO_PKG_CONFIG_ENV}"
   "CFLAGS=${OSX_TARGET_PARAMETER}"
   meson setup "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>"
   -Dtests=disabled ${CAIRO_SANITIZER} -Ddefault_library=static -Dpng=disabled -Dfontconfig=disabled -Dfreetype=disabled -Db_vscrt=static_from_buildtype 
