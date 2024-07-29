@@ -81,6 +81,7 @@ if(NOT WIN32 AND NOT APPLE)
 endif()
 include(cmake/sdl.cmake)
 include(cmake/ffmpeg.cmake)
+include(cmake/glib.cmake)
 include(cmake/cairo.cmake)
 include(cmake/luajit.cmake)
  

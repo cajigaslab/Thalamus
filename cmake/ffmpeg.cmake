@@ -39,17 +39,14 @@ if(WIN32)
   string(STRIP "${FFMPEG_ALL_COMPILE_OPTIONS_SPACED}" FFMPEG_ALL_COMPILE_OPTIONS_SPACED)
   if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
     string(APPEND FFMPEG_ALL_COMPILE_OPTIONS_SPACED " -FS")
-    set(FFMPEG_LIB_PREFIX lib)
     add_custom_command(
       OUTPUT "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
       DEPENDS sdl
       COMMAND
-      cmake -E env "PATH=$<TARGET_FILE_DIR:sdl2-config>;$ENV{PATH}" "PKG_CONFIG_PATH=${SDL_PKG_CONFIG_DIR}"
-      ${MSYS2_ROOT}\\msys2_shell.cmd -here -use-full-path -no-start -defterm -c "'${CMAKE_SOURCE_DIR}/config_ffmpeg_msvc.bash' '${ffmpeg_SOURCE_DIR}/configure' '${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install' '-MT$<IF:$<CONFIG:Debug>,d,> ${FFMPEG_ALL_COMPILE_OPTIONS_SPACED}' $<IF:$<CONFIG:Debug>,--enable-debug,>"
+      ${MSYS2_ROOT}\\msys2_shell.cmd -here -use-full-path -no-start -defterm -c "export 'PKG_CONFIG_PATH=${SDL_PKG_CONFIG_DIR}' && '${CMAKE_SOURCE_DIR}/config_ffmpeg_msvc.bash' '${ffmpeg_SOURCE_DIR}/configure' '${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install' '-MT$<IF:$<CONFIG:Debug>,d,> ${FFMPEG_ALL_COMPILE_OPTIONS_SPACED}' $<IF:$<CONFIG:Debug>,--enable-debug,>"
       && cmake -E touch_nocreate "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
       WORKING_DIRECTORY "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>")
   else()
-    set(FFMPEG_LIB_PREFIX)
     add_custom_command(
       OUTPUT "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
       DEPENDS sdl
@@ -74,13 +71,13 @@ endif()
 
 if(WIN32)
   set(FFMPEG_OUTPUT_LIBRARIES
-    "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/${FFMPEG_LIB_PREFIX}avcodec.lib"
-    "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/${FFMPEG_LIB_PREFIX}avdevice.lib"
-    "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/${FFMPEG_LIB_PREFIX}avfilter.lib"
-    "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/${FFMPEG_LIB_PREFIX}avformat.lib"
-    "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/${FFMPEG_LIB_PREFIX}avutil.lib"
-    "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/${FFMPEG_LIB_PREFIX}swresample.lib"
-    "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/${FFMPEG_LIB_PREFIX}swscale.lib")
+    "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libavcodec.a"
+    "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libavdevice.a"
+    "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libavfilter.a"
+    "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libavformat.a"
+    "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libavutil.a"
+    "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libswresample.a"
+    "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libswscale.a")
   set(FFMPEG_LIBRARIES "${FFMPEG_OUTPUT_LIBRARIES}"
     Ws2_32.lib Secur32.lib Bcrypt.lib Mfplat.lib Ole32.lib User32.lib dxguid.lib uuid.lib Mfuuid.lib strmiids.lib Kernel32.lib Psapi.lib)
   set(FFMPEG_EXECUTABLE "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/bin/ffmpeg.exe")
@@ -100,23 +97,14 @@ else()
   set(FFPLAY_EXECUTABLE "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/bin/ffplay")
   set(FFPROBE_EXECUTABLE "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/bin/ffprobe")
 endif()
+set(FFMPEG_PKG_CONFIG_DIR "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/pkgconfig")
 
-if(WIN32)
-  add_custom_command(
-    OUTPUT "${FFMPEG_OUTPUT_LIBRARIES}" ${FFTOOL_OBJECTS} "${ffmpeg_BINARY_DIR}/$<CONFIG>/ffbuild/config.mak" 
-    DEPENDS "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
-    COMMAND ${FFMPEG_MAKE_COMMAND}
-    && cmake -E touch_nocreate "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/${FFMPEG_LIB_PREFIX}avcodec.a"
-    && cmake "-DFILES=${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/lib*.a" -P "${CMAKE_SOURCE_DIR}/a_to_lib.cmake"
-    WORKING_DIRECTORY "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>")
-else()
-  add_custom_command(
-    OUTPUT "${FFMPEG_OUTPUT_LIBRARIES}" ${FFTOOL_OBJECTS} "${ffmpeg_BINARY_DIR}/$<CONFIG>/ffbuild/config.mak" 
-    DEPENDS "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
-    COMMAND ${FFMPEG_MAKE_COMMAND}
-    && cmake -E touch_nocreate "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libavcodec.a"
-    WORKING_DIRECTORY "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>")
-endif()
+add_custom_command(
+  OUTPUT "${FFMPEG_OUTPUT_LIBRARIES}" ${FFTOOL_OBJECTS} "${ffmpeg_BINARY_DIR}/$<CONFIG>/ffbuild/config.mak" 
+  DEPENDS "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
+  COMMAND ${FFMPEG_MAKE_COMMAND}
+  && cmake -E touch_nocreate "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libavcodec.a"
+  WORKING_DIRECTORY "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>")
 
 set(FFMPEG_FOUND 1)
 set(FFMPEG_INCLUDE_DIRS
@@ -125,9 +113,6 @@ string(REPLACE "$<IF:$<CONFIG:Debug>,Debug,Release>" "Debug" FFMPEG_INCLUDE_DIRS
 string(REPLACE "$<IF:$<CONFIG:Debug>,Debug,Release>" "Release" FFMPEG_INCLUDE_DIRS_RELEASE "${FFMPEG_INCLUDE_DIRS}")
 string(REPLACE "$<IF:$<CONFIG:Debug>,Debug,Release>" "Debug" FFMPEG_LIBRARIES_DEBUG "${FFMPEG_LIBRARIES}")
 string(REPLACE "$<IF:$<CONFIG:Debug>,Debug,Release>" "Release" FFMPEG_LIBRARIES_RELEASE "${FFMPEG_LIBRARIES}")
-
-
-
 
 set(FIND_FFMPEG "")
 set(FIND_FFMPEG "${FIND_FFMPEG}execute_process(COMMAND ${ffmpeg_BINARY_DIR}/Debug/install/bin/ffmpeg -version\n")

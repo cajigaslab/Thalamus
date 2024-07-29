@@ -30,7 +30,7 @@ add_custom_command(
   && cmake -E touch_nocreate "${glib_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/build.ninja"
   WORKING_DIRECTORY "${glib_SOURCE_DIR}")
 
-if(APPLE)
+if(APPLE OR WIN32)
   set(GLIB_LIB_DIR "${glib_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib")
 else()
   set(GLIB_LIB_DIR "${glib_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/x86_64-linux-gnu")
@@ -46,7 +46,7 @@ set(GLIB_PKGCONFIG_DIR "${GLIB_LIB_DIR}/pkgconfig")
 
 add_custom_command(DEPENDS ${glib_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/build.ninja
   OUTPUT ${GLIB_LIBRARIES}
-  COMMAND ninja ${MAKE_J} && ninja install
+  COMMAND ninja install
   WORKING_DIRECTORY "${glib_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>")
 
 add_library(glib INTERFACE ${GLIB_LIBRARIES})

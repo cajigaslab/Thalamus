@@ -7,9 +7,9 @@ file(MAKE_DIRECTORY ${sdl_BINARY_DIR}/Debug)
 file(MAKE_DIRECTORY ${sdl_BINARY_DIR}/Release)
 
 if(WIN32)
-  set(SDL_LIB_FILES "${sdl_BINARY_DIR}/$<CONFIG>/install/lib/SDL2-static$<$<CONFIG:Debug>:d>.lib")
+  set(SDL_LIB_FILES "${sdl_BINARY_DIR}/$<CONFIG>/install/lib/SDL2-static.lib")
 else()
-  set(SDL_LIB_FILES "${sdl_BINARY_DIR}/$<CONFIG>/install/lib/libSDL2$<$<CONFIG:Debug>:d>.a")
+  set(SDL_LIB_FILES "${sdl_BINARY_DIR}/$<CONFIG>/install/lib/libSDL2.a")
 endif()
 
 add_custom_command(OUTPUT "${sdl_BINARY_DIR}/$<CONFIG>/CMakeCache.txt"
@@ -22,6 +22,7 @@ add_custom_command(OUTPUT "${sdl_BINARY_DIR}/$<CONFIG>/CMakeCache.txt"
                       -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
                       -DCMAKE_LINKER=${CMAKE_LINKER}
                       -DBUILD_SHARED_LIBS=OFF
+                      "-DSDL_CMAKE_DEBUG_POSTFIX=\"\""
                       "-DCMAKE_CXX_FLAGS=${ALL_COMPILE_OPTIONS_SPACED}" 
                       "-DCMAKE_C_FLAGS=${ALL_COMPILE_OPTIONS_SPACED}"
                       "-DCMAKE_BUILD_TYPE=$<CONFIG>" "-DCMAKE_INSTALL_PREFIX=${sdl_BINARY_DIR}/$<CONFIG>/install"
