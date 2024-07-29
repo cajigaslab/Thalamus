@@ -471,6 +471,7 @@ namespace thalamus {
       thalamus::vector<std::span<const double>> spans;
       thalamus::vector<std::chrono::nanoseconds> sample_intervals;
       thalamus::vector<std::string_view> names;
+      bool first = true;
       while(reader->Read(&request)) {
         if(request.has_node()) {
           node_name = request.node();
@@ -492,6 +493,10 @@ namespace thalamus {
         std::promise<void> promise;
         auto future = promise.get_future();
         boost::asio::post(impl->io_context, [&] {
+          if(first || request.signal().channels_changed()) {
+            node->channels_changed(node);
+            first = false;
+          }
           node->inject(spans, sample_intervals, names);
           promise.set_value();
         });

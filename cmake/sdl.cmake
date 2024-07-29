@@ -7,9 +7,9 @@ file(MAKE_DIRECTORY ${sdl_BINARY_DIR}/Debug)
 file(MAKE_DIRECTORY ${sdl_BINARY_DIR}/Release)
 
 if(WIN32)
-  set(SDL_LIB_FILES "${sdl_BINARY_DIR}/$<CONFIG>/install/lib/SDL2-static$<$<CONFIG:Debug>:d>.lib")
+  set(SDL_LIB_FILES "${sdl_BINARY_DIR}/$<CONFIG>/install/lib/SDL2-static.lib")
 else()
-  set(SDL_LIB_FILES "${sdl_BINARY_DIR}/$<CONFIG>/install/lib/libSDL2$<$<CONFIG:Debug>:d>.a")
+  set(SDL_LIB_FILES "${sdl_BINARY_DIR}/$<CONFIG>/install/lib/libSDL2.a")
 endif()
 
 add_custom_command(OUTPUT "${sdl_BINARY_DIR}/$<CONFIG>/CMakeCache.txt"
@@ -22,6 +22,7 @@ add_custom_command(OUTPUT "${sdl_BINARY_DIR}/$<CONFIG>/CMakeCache.txt"
                       -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
                       -DCMAKE_LINKER=${CMAKE_LINKER}
                       -DBUILD_SHARED_LIBS=OFF
+                      "-DSDL_CMAKE_DEBUG_POSTFIX=\"\""
                       "-DCMAKE_CXX_FLAGS=${ALL_COMPILE_OPTIONS_SPACED}" 
                       "-DCMAKE_C_FLAGS=${ALL_COMPILE_OPTIONS_SPACED}"
                       "-DCMAKE_BUILD_TYPE=$<CONFIG>" "-DCMAKE_INSTALL_PREFIX=${sdl_BINARY_DIR}/$<CONFIG>/install"
@@ -48,12 +49,23 @@ add_library(sdl INTERFACE ${SDL_LIB_FILES})
 target_link_libraries(sdl INTERFACE ${SDL_LIB_FILES})
 if(WIN32)
   target_link_libraries(sdl INTERFACE User32.lib Gdi32.lib Setupapi.lib Advapi32.lib Imm32.lib Winmm.lib Shell32.lib Ole32.lib Oleaut32.lib Version.lib Shlwapi.lib Vfw32.lib)
+elseif(APPLE)
+  find_library(CORE_AUDIO CoreAudio)
+  find_library(CORE_IMAGE CoreImage)
+  find_library(CORE_HAPTICS CoreHaptics)
+  find_library(CORE_GRAPHICS CoreGraphics)
+  find_library(FORCE_FEEDBACK ForceFeedback)
+  find_library(GAME_CONTROLLER GameController)
+  find_library(IO_KIT IOKit)
+  find_library(APP_KIT AppKit)
+  find_library(SECURITY Security)
+  find_library(OPENGL OpenGL)
+  find_library(CARBON Carbon)
+  find_library(METAL Metal)
+  target_link_libraries(sdl INTERFACE ${CORE_AUDIO} ${CORE_IMAGE} ${CORE_HAPTICS} ${CORE_GRAPHICS} ${FORCE_FEEDBACK}
+    ${GAME_CONTROLLER} ${IO_KIT} ${APP_KIT} ${SECURITY} ${OPENGL} ${CARBON} ${METAL})
 else()
   target_link_libraries(sdl INTERFACE xcb xcb-shm xcb-xfixes xcb-shape)
 endif()
 target_include_directories(sdl INTERFACE "${SDL_INCLUDE}")
 
-add_executable(sdl2-config src/sdl2-config.cpp)
-target_link_libraries(sdl2-config absl::strings absl::str_format)
-target_compile_definitions(sdl2-config PRIVATE "SDL_INCLUDE=\"${SDL_INCLUDE}\"" "SDL_LIB_FILES=\"${SDL_LIB_FILES}\"")
-add_dependencies(sdl sdl2-config)

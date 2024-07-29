@@ -1,10 +1,5 @@
 #include <thread_pool.h>
 #include <boost/pool/object_pool.hpp>
-#ifdef _WIN32
-#include <windows.h>
-#else
-#include <sys/prctl.h>
-#endif
 #include <tracing/tracing.h>
 #include <modalities_util.h>
 
