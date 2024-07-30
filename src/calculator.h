@@ -23,6 +23,7 @@ namespace thalamus {
     ///////////////////////////////////////////////////////////////////////////
     struct nil {};
     struct signed_;
+    struct function_;
     struct program;
     using number = std::variant<long long int, double>;
 
@@ -32,6 +33,7 @@ namespace thalamus {
           , unsigned long long int
           , double
           , boost::recursive_wrapper<signed_>
+          , boost::recursive_wrapper<function_>
           , boost::recursive_wrapper<program>
         >
     operand;
@@ -55,6 +57,12 @@ namespace thalamus {
         operand first;
         std::list<operation> rest;
     };
+
+    struct function_
+    {
+      std::string function;
+      program program_;
+    };
   }
 }
 
@@ -62,6 +70,12 @@ BOOST_FUSION_ADAPT_STRUCT(
     thalamus::calculator::signed_,
     (std::string, sign)
     (thalamus::calculator::operand, operand_)
+)
+
+BOOST_FUSION_ADAPT_STRUCT(
+    thalamus::calculator::function_,
+    (std::string, function)
+    (thalamus::calculator::program, program_)
 )
 
 BOOST_FUSION_ADAPT_STRUCT(
@@ -202,6 +216,82 @@ namespace thalamus {
             return 0ll;
         }
 
+        template <typename T>
+        static long long sgn(T arg) {
+          if (arg < 0) {
+            return -1;
+          }
+          else if (arg > 0) {
+            return 1;
+          }
+          return 0;
+        }
+
+        template <typename T>
+        static T neg(T arg) {
+          return -arg;
+        }
+
+#define APPLY_FUNCTION(func, rhs) std::holds_alternative<long long int>(rhs) ? func(std::get<long long int>(rhs)) : func(std::get<double>(rhs));
+
+        number operator()(function_ const& x) const
+        {
+          number rhs = (*this)(x.program_);
+          if (x.function == "ATAN") {
+            return APPLY_FUNCTION(atan, rhs);
+          }
+          else if (x.function == "COS") {
+            return APPLY_FUNCTION(cos, rhs);
+          }
+          else if (x.function == "SIN") {
+            return APPLY_FUNCTION(sin, rhs);
+          }
+          else if (x.function == "TAN") {
+            return APPLY_FUNCTION(tan, rhs);
+          }
+          else if (x.function == "ABS") {
+            return APPLY_FUNCTION(abs, rhs);
+          }
+          else if (x.function == "EXP") {
+            return APPLY_FUNCTION(exp, rhs);
+          }
+          else if (x.function == "LN") {
+            return APPLY_FUNCTION(log, rhs);
+          }
+          else if (x.function == "LOG") {
+            return APPLY_FUNCTION(log10, rhs);
+          }
+          else if (x.function == "SQRT") {
+            return APPLY_FUNCTION(sqrt, rhs);
+          }
+          else if (x.function == "TRUNC") {
+            return APPLY_FUNCTION(trunc, rhs);
+          }
+          else if (x.function == "FLOOR") {
+            return APPLY_FUNCTION(floor, rhs);
+          }
+          else if (x.function == "CEIL") {
+            return APPLY_FUNCTION(ceil, rhs);
+          }
+          else if (x.function == "ROUND") {
+            return APPLY_FUNCTION(round, rhs);
+          }
+          else if (x.function == "ASIN") {
+            return APPLY_FUNCTION(asin, rhs);
+          }
+          else if (x.function == "ACOS") {
+            return APPLY_FUNCTION(acos, rhs);
+          }
+          else if (x.function == "SGN") {
+            return APPLY_FUNCTION(sgn, rhs);
+          }
+          else if (x.function == "NEG") {
+            return APPLY_FUNCTION(neg, rhs);
+          }
+          BOOST_ASSERT(0);
+          return 0ll;
+        }
+
         number operator()(program const& x) const
         {
             number state = boost::apply_visitor(*this, x.first);
@@ -289,12 +379,30 @@ namespace thalamus {
                 ;
 
             factor =
-                    raw_[lexeme_[(alpha_ | '_') >> *(alnum_ | '_')]] | ("0x" >> hex_) |
-                    double_ | ulong_
-                |   '(' >> expression1 >> ')'
+                    (char_("ATAN") >> '(' >> expression1 >> ')')
+                |   (char_("COS") >> '(' >> expression1 >> ')')
+                |   (char_("SIN") >> '(' >> expression1 >> ')')
+                |   (char_("TAN") >> '(' >> expression1 >> ')')
+                |   (char_("ABS") >> '(' >> expression1 >> ')')
+                |   (char_("EXP") >> '(' >> expression1 >> ')')
+                |   (char_("LN") >> '(' >> expression1 >> ')')
+                |   (char_("LOG") >> '(' >> expression1 >> ')')
+                |   (char_("SQRT") >> '(' >> expression1 >> ')')
+                |   (char_("TRUNC") >> '(' >> expression1 >> ')')
+                |   (char_("FLOOR") >> '(' >> expression1 >> ')')
+                |   (char_("CEIL") >> '(' >> expression1 >> ')')
+                |   (char_("ROUND") >> '(' >> expression1 >> ')')
+                |   (char_("ASIN") >> '(' >> expression1 >> ')')
+                |   (char_("ACOS") >> '(' >> expression1 >> ')')
+                |   (char_("SGN") >> '(' >> expression1 >> ')')
+                |   (char_("NEG") >> '(' >> expression1 >> ')')
                 |   (char_("-") >> factor)
                 |   (char_("+") >> factor)
                 |   (char_("~") >> factor)
+                |   double_
+                |   ulong_
+                |   raw_[lexeme_[(alpha_ | '_') >> *(alnum_ | '_')]] | ("0x" >> hex_)
+                |   '(' >> expression1 >> ')'
                 ;
         }
 
