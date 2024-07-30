@@ -86,6 +86,7 @@ else:
 
   def qt_move_attr(source, destination, key):
     setattr(destination, key, getattr(source, key))
+
   qt_move_attr(Qt, Qt.DockWidgetArea, 'RightDockWidgetArea')
   qt_move_attr(Qt, Qt.DockWidgetArea, 'LeftDockWidgetArea')
   qt_move_attr(Qt, Qt.DockWidgetArea, 'TopDockWidgetArea')
@@ -103,6 +104,10 @@ else:
   qt_move_attr(Qt, Qt.ItemFlag, 'ItemIsUserCheckable')
   qt_move_attr(Qt, Qt.CheckState, 'Checked')
   qt_move_attr(Qt, Qt.CheckState, 'Unchecked')
+  qt_move_attr(Qt, Qt.AlignmentFlag, 'AlignLeft')
+  qt_move_attr(Qt, Qt.AlignmentFlag, 'AlignRight')
+  qt_move_attr(Qt, Qt.AlignmentFlag, 'AlignHCenter')
+  qt_move_attr(Qt, Qt.AlignmentFlag, 'AlignJustify')
 
   for key in ['red', 'green', 'blue', 'black', 'white']:
     qt_move_attr(Qt, Qt.GlobalColor, key)

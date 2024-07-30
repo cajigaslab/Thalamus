@@ -249,7 +249,7 @@ class PlotCanvas(QWidget):
       painter.save()
       painter.setPen(QColor(int(255*(1-interp)), 0, int(255*interp)))
       painter.setFont(font)
-      painter.drawText(device_bounds, Qt.AlignRight, text)
+      painter.drawText(device_bounds, Qt.AlignmentFlag.AlignRight, text)
       painter.restore()
 
     painter.drawText(0, metrics.height(), str(self.range[1]))
