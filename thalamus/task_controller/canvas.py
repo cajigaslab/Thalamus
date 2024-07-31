@@ -31,6 +31,8 @@ from .util import CanvasPainterProtocol, RenderOutput, voidptr, TaskContextProto
 from .. import util_pb2
 from .. import ophanim_pb2
 from .. import ophanim_pb2_grpc
+from .. import thalamus_pb2
+from .. import thalamus_pb2_grpc
 from ..qt import *
 #from .. import recorder2_pb2
 #from .. import recorder2_pb2_grpc
@@ -450,6 +452,7 @@ class Canvas(QOpenGLWidget):
   def __init__(self, config: ObservableCollection,
                recorder: typing.Any,
                ophanim: ophanim_pb2_grpc.OphanimStub,
+               thalamus: thalamus_pb2_grpc.ThalamusStub,
                port: typing.Optional[int] = None,
                mock_sleep: typing.Optional[typing.Callable[[float], 'asyncio.Future[None]']] = None) -> None:
     super().__init__()
@@ -468,8 +471,12 @@ class Canvas(QOpenGLWidget):
     
     if self.recorder:
       asyncio.create_task(self.on_ros_touch(recorder.data(util_pb2.Empty())))
-    if self.ophanim:
-      asyncio.create_task(self.on_ros_gaze(ophanim.data(ophanim_pb2.OculomaticRequest())))
+
+    request = thalamus_pb2.AnalogRequest(node=thalamus_pb2.NodeSelector(name='recorder'), channel_names=['ai0','ai1'])
+    asyncio.create_task(self.on_ros_touch(thalamus.analog(request)))
+
+    request = thalamus_pb2.AnalogRequest(node=thalamus_pb2.NodeSelector(type='OCULOMATIC'), channel_names=['X','Y'])
+    asyncio.create_task(self.on_ros_gaze(thalamus.analog(request)))
 
     self.handles = Handles()
     if port:
@@ -789,17 +796,21 @@ class Canvas(QOpenGLWidget):
     #if self.websockets:
     #  await asyncio.wait([w.drain() for w in self.websockets])
 
-  async def on_ros_touch(self, messages: typing.Any) -> None:
+  async def on_ros_touch(self, messages: typing.AsyncIterable[thalamus_pb2.AnalogResponse]) -> None:
     """
     Translates touch events into mouse input
     """
     # TODO: check if this indexing is correct, because it seems wrong.
     async for message in messages:
-      offset = message.ntimes - 1
-      i = offset + message.ntimes*self.input_config.touch_channels[0]
-      j = offset + message.ntimes*self.input_config.touch_channels[1]
+      x, y = None, None
+      for span in message.spans:
+        if span.name == 'ai0' and span.begin < span.end:
+          x = message.data[span.end-1]
+        elif span.name == 'ai1' and span.begin < span.end:
+          y = message.data[span.end-1]
+      assert x is not None and y is not None
       
-      voltage = QPointF(message.ad_data[i], message.ad_data[j])
+      voltage = QPointF(x, y)
       if voltage.x() < -5 or voltage.y() < -5:
         self.on_touch(QPoint(-1, -1))
         return
@@ -840,15 +851,24 @@ class Canvas(QOpenGLWidget):
     if self.task_context:
       self.task_context.process()
 
-  async def on_ros_gaze(self, messages: typing.AsyncIterable[ophanim_pb2.Gaze]) -> None:
+  async def on_ros_gaze(self, messages: typing.AsyncIterable[thalamus_pb2.AnalogResponse]) -> None:
     """
     Processes eye input
     """
     async for message in messages:
-      voltage_point = QPointF(message.x, -message.y)
+      x, y = None, None
+      for span in message.spans:
+        if span.name == 'X' and span.begin < span.end:
+          x = message.data[span.begin]
+        elif span.name == 'Y' and span.begin < span.end:
+          y = message.data[span.begin]
+      assert x is not None and y is not None
 
-      if message.y >= 0:
-        if message.x >= 0:
+      voltage_point = QPointF(x, -y)
+      print(voltage_point)
+
+      if y >= 0:
+        if x >= 0:
           self.input_config.points[0].append(voltage_point)
           scaled_point = self.input_config.gaze_transforms[0].map(voltage_point)
           self.input_config.gaze_paths[0].addEllipse(scaled_point, 2, 2)
@@ -857,7 +877,7 @@ class Canvas(QOpenGLWidget):
           scaled_point = self.input_config.gaze_transforms[1].map(voltage_point)
           self.input_config.gaze_paths[1].addEllipse(scaled_point, 2, 2)
       else:
-        if message.x < 0:
+        if x < 0:
           self.input_config.points[2].append(voltage_point)
           scaled_point = self.input_config.gaze_transforms[2].map(voltage_point)
           self.input_config.gaze_paths[2].addEllipse(scaled_point, 2, 2)
