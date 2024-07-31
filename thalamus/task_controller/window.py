@@ -12,6 +12,7 @@ from .canvas import Canvas
 from ..config import ObservableCollection
 #from .. import recorder2_pb2_grpc
 from .. import ophanim_pb2_grpc
+from .. import thalamus_pb2_grpc
 from .util import TaskContextProtocol
 
 class CentralWidget(QWidget):
@@ -46,10 +47,11 @@ class Window(QMainWindow):
   def __init__(self, config: ObservableCollection, done_future: asyncio.Future,
                recorder: typing.Any,#recorder2_pb2_grpc.RecorderStub,
                ophanim: ophanim_pb2_grpc.OphanimStub,
+               thalamus: thalamus_pb2_grpc.ThalamusStub,
                port: typing.Optional[int] = None) -> None:
     super().__init__()
     self.done_future = done_future
-    self.canvas = Canvas(config, recorder, ophanim, port)    
+    self.canvas = Canvas(config, recorder, ophanim, thalamus, port)    
     self.canvas.setWindowIcon(QIcon(os.path.join(os.path.dirname(__file__), 'icon.png')))
     self.canvas.setObjectName('canvas')
     self.central_widget = CentralWidget(self.canvas)

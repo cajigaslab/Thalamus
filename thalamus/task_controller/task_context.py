@@ -29,6 +29,7 @@ import jsonpath_ng.ext.parser # type: ignore
 
 from .. import task_controller_pb2
 from .. import task_controller_pb2_grpc
+from .. import thalamus_pb2_grpc
 
 from ..qt import *
 
@@ -251,12 +252,14 @@ class TaskContext(TaskContextProtocol):
   rendering and accessing the event loop
   """
   def __init__(self, config: ObservableCollection, widget: typing.Optional[Canvas],
-               task_descriptions_map: typing.Dict[str, TaskDescription], servicer: typing.Optional[task_controller_pb2_grpc.TaskControllerServicer]) -> None:
+               task_descriptions_map: typing.Dict[str, TaskDescription], servicer: typing.Optional[task_controller_pb2_grpc.TaskControllerServicer],
+               stub: thalamus_pb2_grpc.ThalamusStub) -> None:
     super().__init__(widget, config)
     self.sleeper = Sleeper()
     self.task_descriptions_map = task_descriptions_map
     self.running = False
     self.servicer = servicer
+    self.stub = stub
     self.task_config = ObservableDict({})
     self.channels: typing.Mapping[str, grpc.aio.Channel] = {}
     self.task: asyncio.tasks.Task[typing.Any] = create_task_with_exc_handling(asyncio.sleep(0))
@@ -665,6 +668,9 @@ class TaskContext(TaskContextProtocol):
     channel = grpc.aio.insecure_channel(name)
     self.channels[name] = channel
     return channel
+
+  def thalamus_stub(self) -> thalamus_pb2_grpc.ThalamusStub:
+    return self.stub
 
   async def cleanup(self):
     for channel in self.channels.values():

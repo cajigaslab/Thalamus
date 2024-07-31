@@ -151,7 +151,7 @@ async def async_main() -> None:
     else:
       recorder_stub = None
 
-    window = task_window.Window(config, done_future, recorder_stub, ophanim_stub, arguments.port)
+    window = task_window.Window(config, done_future, recorder_stub, ophanim_stub, stub, arguments.port)
     #node.create_timer(1/60, QApplication.processEvents)
 
     window.resize(1024, 768)
@@ -164,7 +164,7 @@ async def async_main() -> None:
 
   task_context = task_context_module.TaskContext(config,
                                           window.get_canvas() if window else None,
-                                          tasks.DESCRIPTIONS_MAP, servicer)
+                                          tasks.DESCRIPTIONS_MAP, servicer, stub)
   servicer.task_context = task_context
   task_context.start()
   window.set_task_context(task_context)
