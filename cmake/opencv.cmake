@@ -30,6 +30,7 @@ if(WIN32)
                   "opencv_imgcodecs481$<$<CONFIG:Debug>:d>"
                   "opencv_imgproc481$<$<CONFIG:Debug>:d>"
                   "opencv_highgui481$<$<CONFIG:Debug>:d>"
+                  "opencv_objdetect481$<$<CONFIG:Debug>:d>"
                   "opencv_videoio481$<$<CONFIG:Debug>:d>")
   if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
     if("${MSVC_VERSION}" LESS "1940")
@@ -52,6 +53,7 @@ else()
                   opencv_videoio
                   opencv_imgcodecs
                   opencv_imgproc
+                  opencv_objdetect
                   opencv_core)
   set(OPENCV_THIRDPARTY_LIBS libjpeg-turbo libpng libtiff libopenjp2 IlmImf ippiw ittnotify ippicv)
   foreach(LIB ${OPENCV_LIBS})
@@ -80,7 +82,7 @@ add_custom_command(OUTPUT "${opencv_BINARY_DIR}/$<CONFIG>/CMakeCache.txt"
                       -DBUILD_JPEG=ON -DBUILD_PNG=ON -DWITH_WEBP=OFF -DBUILD_TIFF=ON -DBUILD_ZLIB=OFF
                       -DBUILD_OPENJPEG=ON -DBUILD_OPENEXR=ON -DWITH_GSTREAMER=OFF -DWITH_FFMPEG=ON 
                       -DOPENCV_FFMPEG_USE_FIND_PACKAGE=ON -DWITH_1394=OFF -DWITH_GTK=OFF -DWITH_VTK=OFF
-                      -DBUILD_LIST=core,imgproc,imgcodecs,highgui,videoio,calib3d,flann,features2d,stitching
+                      -DBUILD_LIST=core,imgproc,imgcodecs,highgui,videoio,calib3d,flann,features2d,stitching,objdetect
                       -DBUILD_opencv_python2=OFF -DBUILD_opencv_python3=OFF
                       "-DCMAKE_BUILD_TYPE=$<CONFIG>" "-DCMAKE_INSTALL_PREFIX=${opencv_BINARY_DIR}/$<CONFIG>/install"
                       -DCMAKE_CXX_STANDARD=${CMAKE_CXX_STANDARD} "-DZLIB_LIBRARY=$<TARGET_FILE:zlibstatic>"
