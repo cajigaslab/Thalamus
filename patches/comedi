@@ -1,0 +1,17 @@
+diff --git a/lib/libinternal.h b/lib/libinternal.h
+index 63843d4..6224a60 100644
+--- a/lib/libinternal.h
++++ b/lib/libinternal.h
+@@ -60,9 +60,9 @@
+ 
+ /* handle versioning */
+ 
+-#define EXPORT_SYMBOL(a,b) __asm__(".symver " #a "," #a "@v" #b )
+-#define EXPORT_ALIAS_VER(a,b,c) __asm__(".symver " #a "," #b "@v" #c )
+-#define EXPORT_ALIAS_DEFAULT(a,b,c) __asm__(".symver " #a "," #b "@@v" #c )
++#define EXPORT_SYMBOL(a,b) __asm__(".global  " #b " \n " #b "  = " #a )
++#define EXPORT_ALIAS_VER(a,b,c) __asm__(".global  " #b " \n " #b "  = " #a )
++#define EXPORT_ALIAS_DEFAULT(a,b,c) __asm__(".global  " #b " \n " #b "  = " #a )
+ 
+ 
+ extern int __comedi_init;

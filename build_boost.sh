@@ -1,0 +1,2 @@
+echo COMMAND ./b2 cxxflags="$1" linkflags="$2" --stagedir=stage-$3 --with-filesystem --with-date_time --with-system --with-program_options --with-log --with-json --with-container link=static cxxstd=20 $3
+./b2 cxxflags="$1" cflags="$1" linkflags="$2" --stagedir=stage-$3 --with-atomic --with-chrono --with-thread --with-filesystem --with-date_time --with-system --with-program_options --with-log --with-json --with-container visibility=global link=static address-model=64 cxxstd=20 $3

@@ -1,0 +1,245 @@
+syntax = "proto3";
+
+import "util.proto";
+
+package thalamus_grpc;
+
+service Thalamus {
+  rpc events(stream Event) returns (util_grpc.Empty) {}
+  rpc observable_bridge(stream ObservableChange) returns (stream ObservableChange) {}
+  rpc graph(GraphRequest) returns (stream GraphResponse) {}
+  rpc analog(AnalogRequest) returns (stream AnalogResponse) {}
+  rpc spectrogram(SpectrogramRequest) returns (stream SpectrogramResponse) {}
+  rpc channel_info(AnalogRequest) returns (stream AnalogResponse) {}
+  rpc xsens(NodeSelector) returns (stream XsensResponse) {}
+  rpc image(ImageRequest) returns (stream Image) {}
+  rpc eval(stream EvalResponse) returns (stream EvalRequest) {}
+  rpc get_type_name(StringMessage) returns (StringMessage) {}
+  rpc get_recommended_channels(NodeSelector) returns (StringListMessage) {}
+  rpc replay(ReplayRequest) returns (util_grpc.Empty) {}
+  rpc remote_node(stream RemoteNodeMessage) returns (stream RemoteNodeMessage) {}
+  rpc notification (util_grpc.Empty) returns (stream Notification) {}
+  rpc node_request (NodeRequest) returns (NodeResponse) {}
+  rpc inject_analog(stream InjectAnalogRequest) returns (util_grpc.Empty) {}
+  rpc get_modalities(NodeSelector) returns (ModalitiesMessage) {}
+  rpc ping(stream Ping) returns (stream Pong) {}
+  rpc inject_text(stream InjectTextRequest) returns (stream Pong) {}
+}
+
+message ChannelId {
+  string name = 1;
+  int32 index = 2;
+}
+
+message Spectrogram {
+  ChannelId channel = 1;
+  repeated double data = 2;
+  double max_frequency = 3;
+}
+
+message SpectrogramRequest {
+  NodeSelector node = 1;
+  repeated ChannelId channels = 2;
+  double window_s = 3;
+  double hop_s = 4;
+}
+
+message SpectrogramResponse {
+  repeated Spectrogram spectrograms = 1;
+}
+
+message NodeSelector {
+  string name = 1;
+  string type = 2;
+}
+
+message NodeRequest {
+  string node = 1;
+  string json = 2;
+}
+message NodeResponse {
+  string json = 1;
+}
+
+message Text {
+  string text = 1;
+}
+
+message StorageRecord {
+  oneof body {
+    AnalogResponse analog = 1;
+    XsensResponse xsens = 2;
+    Event event = 3;
+    Image image = 6;
+    Text text = 7;
+  }
+  uint64 time = 4;
+  string node = 5;
+}
+
+message ImageRequest {
+  NodeSelector node = 1;
+  double framerate = 2;
+}
+
+message Image {
+  enum Format {
+    Gray = 0;
+    RGB = 1;
+    YUYV422 = 2;
+    YUV420P = 3;
+    YUVJ420P = 4;
+  }
+  repeated bytes data = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+  Format format = 4;
+  uint64 frame_interval = 5;
+  bool last = 6;
+}
+
+message Ping {
+  uint32 id = 1;
+  bytes payload = 2;
+}
+
+message Pong {
+  uint32 id = 2;
+  bytes payload = 3;
+}
+
+message RemoteNodeMessage {
+  oneof body {
+    AnalogRequest request = 1;
+    AnalogResponse data = 2;
+    Ping ping = 3;
+    Pong pong = 4;
+  }
+}
+
+message ReplayRequest {
+  string filename = 1;
+  repeated string nodes = 2;
+}
+
+message XsensSegment {
+    uint32 id = 1;
+    float x = 2;
+    float y = 3;
+    float z = 4;
+    float q0 = 5;
+    float q1 = 6;
+    float q2 = 7;
+    float q3 = 8;
+    uint32 frame = 9;
+    uint32 time = 10;
+}
+
+message XsensResponse {
+  repeated XsensSegment segments = 1;
+  string pose_name = 2;
+}
+
+message StringMessage {
+    string value = 1;
+}
+
+enum Modalities {
+  AnalogModality = 0;
+  MocapModality = 1;
+  ImageModality = 2;
+  TextModality = 3;
+}
+
+message ModalitiesMessage {
+  repeated Modalities values = 1;
+}
+
+message StringListMessage {
+  repeated string value = 1;
+}
+
+message EvalResponse {
+  string value = 1;
+  uint64 id = 2;
+}
+
+message EvalRequest {
+  string code = 1;
+  uint64 id = 2;
+}
+
+message AnalogRequest {
+  NodeSelector node = 1;
+  repeated int32 channels = 2;
+  repeated string channel_names = 3;
+}
+
+message InjectAnalogRequest {
+  oneof body {
+    string node = 1;
+    AnalogResponse signal = 2;
+  }
+}
+
+message InjectTextRequest {
+  oneof body {
+    string node = 1;
+    Text text = 2;
+  }
+}
+
+message AnalogResponse {
+  repeated double data = 1;
+  repeated Span spans = 2;
+  repeated uint64 sample_intervals = 3;
+  bool channels_changed = 4;
+}
+
+message GraphRequest {
+  NodeSelector node = 1;
+  repeated int32 channels = 2;
+  uint64 bin_ns = 3;
+  repeated string channel_names = 4;
+}
+
+message Span {
+  uint32 begin = 1;
+  uint32 end = 2;
+  string name = 3;
+}
+
+message GraphResponse {
+  repeated double bins = 1;
+  repeated Span spans = 2;
+  bool channels_changed = 3;
+}
+
+message Event {
+  bytes payload = 1;
+  uint64 time = 2;
+}
+
+message ObservableChange {
+  enum Action {
+    Set = 0;
+    Delete = 1;
+  }
+  string address = 1;
+  string value = 2;
+  Action action = 3;
+  uint64 id = 4;
+  uint64 acknowledged = 5;
+}
+
+message Notification {
+  enum Type {
+    Error = 0;
+    Warning = 1;
+    Info = 2;
+  }
+
+  Type type = 1;
+  string title = 2;
+  string message = 3;
+}

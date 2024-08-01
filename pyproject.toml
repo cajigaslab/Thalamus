@@ -1,0 +1,12 @@
+[metadata]
+name = "thalamus"
+version = "0.3.0"
+description = "TODO: Package description"
+license = "TODO: License declaration"
+maintainer = "jarl"
+maintainer_email = "Jarl.Haggerty@Pennmedicine.penn.edu"
+
+[build-system]
+requires = [ "setuptools", "grpcio-tools", "toml",]
+backend-path = [ ".",]
+build-backend = "thalamus.build"

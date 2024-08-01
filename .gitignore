@@ -1,0 +1,15 @@
+*.exe
+*.dll
+*.so
+thalamus/*.h
+thalamus/**/*.proto
+thalamus/**/*_pb2.py
+thalamus/**/*_grpc.py
+compile_commands.json
+dist
+build
+.cache
+__pycache__
+thalamus/native
+*.dist-info
+.vs
