@@ -228,7 +228,7 @@ ArucoNode::ArucoNode(ObservableDictPtr state, boost::asio::io_context& io_contex
 ArucoNode::~ArucoNode() {}
 
 std::string ArucoNode::type_name() {
-  return "XSENS";
+  return "ARUCO";
 }
 
 std::span<ArucoNode::Segment const> ArucoNode::segments() const {
@@ -304,4 +304,7 @@ void ArucoNode::inject(const thalamus_grpc::Image&) {
 }
 bool ArucoNode::has_image_data() const {
   return true;
+}
+size_t ArucoNode::modalities() const {
+  return THALAMUS_MODALITY_IMAGE;
 }

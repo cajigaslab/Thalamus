@@ -396,13 +396,13 @@ namespace thalamus {
                 |   (char_("ACOS") >> '(' >> expression1 >> ')')
                 |   (char_("SGN") >> '(' >> expression1 >> ')')
                 |   (char_("NEG") >> '(' >> expression1 >> ')')
+                | raw_[lexeme_[(alpha_ | '_') >> *(alnum_ | '_')]] | ("0x" >> hex_)
+                | double_
+                | ulong_
+                | '(' >> expression1 >> ')'
                 |   (char_("-") >> factor)
                 |   (char_("+") >> factor)
                 |   (char_("~") >> factor)
-                |   double_
-                |   ulong_
-                |   raw_[lexeme_[(alpha_ | '_') >> *(alnum_ | '_')]] | ("0x" >> hex_)
-                |   '(' >> expression1 >> ')'
                 ;
         }
 

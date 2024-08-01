@@ -18,6 +18,8 @@
 #include <chessboard_node.h>
 #include <log_node.h>
 #include <intan_node.h>
+#include <spikeglx_node.h>
+#include <aruco_node.h>
 
 namespace thalamus {
   using namespace std::chrono_literals;
@@ -85,6 +87,8 @@ namespace thalamus {
     {"CHESSBOARD", new NodeFactory<ChessBoardNode>()},
     {"LOG", new NodeFactory<LogNode>()},
     {"INTAN", new NodeFactory<IntanNode>()},
+    {"SPIKEGLX", new NodeFactory<SpikeGlxNode>()},
+    {"ARUCO", new NodeFactory<ArucoNode>()},
     {"PUPIL", new NodeFactory<PupilNode>()}
   };
 
