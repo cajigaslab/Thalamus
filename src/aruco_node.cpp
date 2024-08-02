@@ -3,7 +3,9 @@
 #include <modalities_util.h>
 #include <opencv2/objdetect/aruco_detector.hpp>
 #include <opencv2/imgproc.hpp>
+#include <opencv2/calib3d.hpp>
 #include <thread_pool.h>
+#include <distortion_node.h>
 
 using namespace thalamus;
 
@@ -20,6 +22,7 @@ struct ArucoNode::Impl {
   std::string pose_name;
   NodeGraph::NodeConnection get_source_connection;
   ImageNode* source;
+  DistortionNode* distortion_source;
   boost::signals2::scoped_connection source_connection;
   cv::aruco::PredefinedDictionaryType dict_type = cv::aruco::DICT_6X6_250;
   cv::aruco::Dictionary dict;
@@ -109,6 +112,12 @@ struct ArucoNode::Impl {
           this->source = node_cast<ImageNode*>(locked_source.get());
           source_connection = locked_source->ready.connect(std::bind(&Impl::on_data, this, _1));
         }
+
+        if (dynamic_cast<DistortionNode*>(locked_source.get()) != nullptr) {
+          this->distortion_source = dynamic_cast<DistortionNode*>(locked_source.get());
+        } else {
+          this->distortion_source = nullptr;
+        }
       });
     } else if(key_str == "Dictionary") {
       auto value_str = std::get<std::string>(value);
@@ -177,6 +186,8 @@ struct ArucoNode::Impl {
     int height = source->height();
     auto frame_interval = source->frame_interval();
     cv::Mat in = cv::Mat(height, width, CV_8UC1, data).clone();
+    cv::Mat camera_matrix = distortion_source ? distortion_source->camera_matrix() : cv::Mat();
+    auto distortion_parameters = distortion_source ? distortion_source->distortion_coefficients() : std::span<const double>();
 
     pool.push([frame_id=next_input_frame++,
                width, height, in,
@@ -188,6 +199,8 @@ struct ArucoNode::Impl {
                &next_output_frame=this->next_output_frame,
                &current_frame=this->current_frame,
                frame_interval,
+               camera_matrix,
+               distortion_parameters=std::vector<double>(distortion_parameters.begin(), distortion_parameters.end()),
                outer=outer->shared_from_this()
     ] {
       for(auto& pair : boards) {
@@ -200,6 +213,17 @@ struct ArucoNode::Impl {
 
         cv::Mat color;
         cv::cvtColor(in, color, cv::COLOR_GRAY2RGB);
+
+        if(!camera_matrix.empty() && !ids.empty()) {
+          cv::Mat obj_points, img_points;
+          grid_board.matchImagePoints(corners, ids, obj_points, img_points);
+          cv::Vec3d rvec, tvec;
+          cv::solvePnP(obj_points, img_points, camera_matrix, distortion_parameters, rvec, tvec);
+
+          auto axis_length = .5*std::min(board.columns, board.rows)*(board.markerSize + board.markerSeparation) + board.markerSeparation;
+
+          cv::drawFrameAxes(color, camera_matrix, distortion_parameters, rvec, tvec, axis_length);
+        }
 
         cv::aruco::drawDetectedMarkers(color, corners, ids);
 
