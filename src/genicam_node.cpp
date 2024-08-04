@@ -1921,7 +1921,7 @@ namespace thalamus {
       if (device->is_writable("ExposureMode")) {
         device->set("ExposureMode", "Timed");
       }
-      if (device->is_writable("ExposureMode")) {
+      if (device->is_writable("AcquisitionFrameRateAuto")) {
         device->set("AcquisitionFrameRateAuto", "Off");
       }
       device->set("AcquisitionMode", "Continuous");

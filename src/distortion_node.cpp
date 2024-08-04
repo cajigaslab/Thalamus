@@ -31,7 +31,7 @@ namespace thalamus {
     bool running = false;
     bool collecting = false;
     bool invert = false;
-    bool show_threshold;
+    bool apply_threshold;
     thalamus_grpc::Image image;
     std::vector<unsigned char> intermediate;
     thalamus::vector<Plane> data;
@@ -47,11 +47,13 @@ namespace thalamus {
     double y_gain;
     bool invert_x;
     bool invert_y;
-    int source_width;
-    int source_height;
+    int source_width = -1;
+    int source_height = -1;
     size_t next_input_frame = 0;
     size_t next_output_frame = 0;
     std::set<cv::Mat*> mat_pool;
+    cv::Mat map1, map2;
+    double square_size = 1;
 
     struct Result {
       cv::Mat image = cv::Mat();
@@ -97,8 +99,15 @@ namespace thalamus {
       }
 
       unsigned char* data = const_cast<unsigned char*>(image_source->plane(0).data());
-      source_width = image_source->width();
-      source_height = image_source->height();
+      if(source_width != image_source->width() || source_height != image_source->height()) {
+        source_width = image_source->width();
+        source_height = image_source->height();
+        auto R = cv::Mat::eye(3,3, CV_64FC1);
+        auto new_camera_matrix = camera_matrix.clone();
+        map1 = cv::Mat::zeros(source_height, source_width, CV_16SC2);
+        map2 = cv::Mat::zeros(source_height, source_width, CV_16UC1);
+        cv::initUndistortRectifyMap(camera_matrix, distortion_coefficients, R, new_camera_matrix, cv::Size(source_width, source_height), CV_16SC2, map1, map2);
+      }
       auto frame_interval = image_source->frame_interval();
       cv::Mat in = cv::Mat(source_height, source_width, CV_8UC1, data).clone();
       busy = true;
@@ -120,7 +129,7 @@ namespace thalamus {
                   distortion_coefficients=this->distortion_coefficients,
                   columns=this->columns,
                   collecting=this->collecting,
-                  show_threshold=this->show_threshold,
+                  apply_threshold=this->apply_threshold,
                   &computations=this->computations,
                   &mutex=this->mutex,
                   computing=this->computing,
@@ -130,18 +139,21 @@ namespace thalamus {
                   &next_output_frame=this->next_output_frame,
                   &io_context=io_context,
                   threshold=this->threshold,
-                  in=std::move(in),
+                  map1=this->map1, map2=this->map2,
+                  thresholded=in,
                   outer=outer->shared_from_this()] {
         auto start = std::chrono::steady_clock::now();
         std::vector<std::vector<cv::Point> > contours;
         std::vector<cv::Vec4i> hierarchy;
         
-        cv::Mat thresholded;
+        if(apply_threshold) {
+          cv::threshold(thresholded, thresholded, threshold, 255, invert ? cv::THRESH_BINARY_INV : cv::THRESH_BINARY);
+        }
+
         cv::Mat out, undistorted;
 
         cv::Size board_size(columns, rows);
         if(collecting) {
-          cv::threshold(in, thresholded, threshold, 255, invert ? cv::THRESH_BINARY_INV : cv::THRESH_BINARY);
           cv::cvtColor(thresholded, out, cv::COLOR_GRAY2RGB);
           undistorted = out;
 
@@ -151,7 +163,7 @@ namespace thalamus {
           std::shared_lock<std::shared_mutex> lock(mutex);
           if(found) {
             cv::TermCriteria criteria(cv::TermCriteria::EPS + cv::TermCriteria::MAX_ITER, 30, .1);
-            cv::cornerSubPix(in, corners, cv::Size(11, 11), cv::Size(-1, -1), criteria);
+            cv::cornerSubPix(thresholded, corners, cv::Size(11, 11), cv::Size(-1, -1), criteria);
 
             if (computations.size()) {
               auto distance = 0.0;
@@ -175,20 +187,10 @@ namespace thalamus {
           }
         } else {
           if(computing) {
-            cv::undistort(in, out,
-                          camera_matrix,
-                          distortion_coefficients);
-            if(show_threshold) {
-              cv::threshold(out, undistorted, threshold, 255, invert ? cv::THRESH_BINARY_INV : cv::THRESH_BINARY);
-            } else {
-              undistorted = out;
-            }
-          } else if (show_threshold) {
-            cv::threshold(in, undistorted, threshold, 255, invert ? cv::THRESH_BINARY_INV : cv::THRESH_BINARY);
+            cv::remap(thresholded, undistorted, map1, map2, cv::INTER_LINEAR, cv::BORDER_CONSTANT);
           } else {
-            undistorted = in;
+            undistorted = thresholded;
           }
-          //cv::cvtColor(in, out, cv::COLOR_GRAY2RGB);
         }
         auto elapsed = std::chrono::steady_clock::now() - start;
         boost::asio::post(io_context, [undistorted, elapsed,
@@ -221,8 +223,10 @@ namespace thalamus {
         threshold = std::get<long long int>(v);
       } else if(key_str == "Computing") {
         computing = std::get<bool>(v);
-      } else if(key_str == "Show Threshold") {
-        show_threshold = std::get<bool>(v);
+      } else if(key_str == "Square Size") {
+        square_size = std::get<double>(v);
+      } else if(key_str == "Show Threshold" || key_str == "Apply Threshold") {
+        apply_threshold = std::get<bool>(v);
       } else if(key_str == "Collecting") {
         std::lock_guard<std::shared_mutex> lock(mutex);
         collecting = std::get<bool>(v);
@@ -238,13 +242,14 @@ namespace thalamus {
                       rows=this->rows,
                       state=this->state,
                       width=this->source_width,
+                      square_size=this->square_size,
                       height=this->source_height] {
             std::vector<std::vector<cv::Point3f>> object_points;
             for(const auto& _ : local_computations) {
               object_points.emplace_back();
               for(size_t y = 0;y < rows;++y) {
                 for(size_t x = 0;x < columns;++x) {
-                  object_points.back().emplace_back(static_cast<float>(x), static_cast<float>(y), 0.0f);
+                  object_points.back().emplace_back(static_cast<float>(square_size*x), static_cast<float>(square_size*y), 0.0f);
                 }
               }
             }
@@ -288,13 +293,14 @@ namespace thalamus {
         ObservableListPtr row2 = rows->at(2);
         auto update_matrix = [&](ObservableCollection::Action, const ObservableCollection::Key&, const ObservableCollection::Value&) {
           ObservableListPtr rows = state->at("Camera Matrix");
-          this->camera_matrix = cv::Mat::zeros(3, 3, CV_64FC1);
           for(size_t r = 0;r < rows->size();++r) {
             ObservableListPtr row = rows->at(r);
             for(size_t c = 0;c < row->size();++c) {
               camera_matrix.at<double>(r, c) = row->at(c);
             }
           }
+          source_width = -1;
+          source_height = -1;
         };
         mat_connection = rows->changed.connect(update_matrix);
         mat0_connection = row0->changed.connect(update_matrix);
@@ -309,6 +315,8 @@ namespace thalamus {
           for(size_t i = 0;i < list->size();++i) {
             distortion_coefficients.push_back(list->at(i));
           }
+          source_width = -1;
+          source_height = -1;
         };
         distortion_connection = list->changed.connect(update_distortion);
         update_distortion(a, k, v);
