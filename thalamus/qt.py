@@ -13,7 +13,7 @@ if sys.version_info[1] >= 7:
                                QDoubleSpinBox, QDockWidget, QApplication, QMenuBar, QItemDelegate, QSplitter,
                                QTreeWidget, QTreeWidgetItem, QListWidget, QTreeView, QTableView, QListView,
                                QTableWidget, QTableWidgetItem, QWizard, QWizardPage, QProgressBar, QAbstractItemView,
-                               QStyleOptionViewItem)
+                               QStyleOptionViewItem, QScrollArea, QColorDialog)
   from PyQt6.QtOpenGLWidgets import (QOpenGLWidget)
   from PyQt6.QtMultimedia import QSoundEffect, QMediaPlayer
   from PyQt6.QtOpenGL import (QOpenGLFramebufferObjectFormat, QOpenGLFramebufferObject, QOpenGLBuffer, QOpenGLShader,
@@ -61,7 +61,7 @@ else:
                                QApplication, QOpenGLWidget, QAction, QAbstractItemView, QTreeView, QTableView,
                                QListView, QMenuBar, QItemDelegate, QSplitter, QTreeWidget, QTreeWidgetItem,
                                QListWidget, QTableWidget, QTableWidgetItem, QWizard, QWizardPage, QProgressBar,
-                               QStyleOptionViewItem)
+                               QStyleOptionViewItem, QScrollArea, QColorDialog)
   from PyQt5.QtCore import (QPoint, QRect, QPointF, Qt, QSize, QDir, QItemSelectionModel, QModelIndex,
                             QAbstractListModel, QAbstractItemModel, QAbstractTableModel, QLineF, QRectF,
                             QItemSelection, QVariant, QUrl, PYQT_VERSION_STR)

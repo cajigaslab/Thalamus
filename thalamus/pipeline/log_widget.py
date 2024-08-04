@@ -41,7 +41,7 @@ class LogWidget(QWidget):
     list.currentTextChanged.connect(on_current_text_changed)
     list.itemDoubleClicked.connect(send_message)
 
-    splitter = QSplitter(Qt.Vertical)
+    splitter = QSplitter(Qt.Orientation.Vertical)
     splitter.addWidget(list)
     splitter.addWidget(edit)
     splitter.setSizes([1_000_000, 1])

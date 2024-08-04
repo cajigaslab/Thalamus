@@ -1,1 +1,2 @@
 #cmakedefine GIT_COMMIT_HASH "@GIT_COMMIT_HASH@"
+#cmakedefine WITH_CAIRO

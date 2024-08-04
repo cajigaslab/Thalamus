@@ -75,14 +75,16 @@ endif()
 
 string(REPLACE ";" " " ALL_C_COMPILE_OPTIONS_SPACED "${ALL_COMPILE_OPTIONS}")
 string(REPLACE ";" " " ALL_C_LINK_OPTIONS_SPACED "${ALL_LINK_OPTIONS}")
- 
+
 if(NOT WIN32 AND NOT APPLE)
   include(cmake/comedi.cmake)
 endif()
 include(cmake/sdl.cmake)
 include(cmake/ffmpeg.cmake)
 include(cmake/glib.cmake)
-include(cmake/cairo.cmake)
+if(WITH_CAIRO)
+  include(cmake/cairo.cmake)
+endif()
 include(cmake/luajit.cmake)
  
 if(NOT WIN32 AND NOT APPLE)
@@ -248,10 +250,6 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/channel_picker_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/algebra_node.h"
                      "${CMAKE_SOURCE_DIR}/src/algebra_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/pupil_node.h"
-                     "${CMAKE_SOURCE_DIR}/src/pupil_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/chessboard_node.h"
-                     "${CMAKE_SOURCE_DIR}/src/chessboard_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/normalize_node.h"
                      "${CMAKE_SOURCE_DIR}/src/normalize_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/lua_node.h"
@@ -263,6 +261,13 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/file.h"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/file.cpp"
                      "${CMAKE_SOURCE_DIR}/proto/thalamus.proto")
+if(WITH_CAIRO)
+  target_sources(thalamus PRIVATE 
+                 "${CMAKE_SOURCE_DIR}/src/pupil_node.h"
+                 "${CMAKE_SOURCE_DIR}/src/pupil_node.cpp"
+                 "${CMAKE_SOURCE_DIR}/src/chessboard_node.h"
+                 "${CMAKE_SOURCE_DIR}/src/chessboard_node.cpp")
+endif()
 
 if(WIN32)
   target_compile_definitions(thalamus PRIVATE _WIN32_WINNT=0x0A00 _CRT_SECURE_NO_WARNINGS)
@@ -283,8 +288,9 @@ target_compile_options(thalamus PRIVATE ${WARNING_FLAGS})
 
 target_compile_definitions(thalamus PRIVATE _USE_MATH_DEFINES)
 target_include_directories(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(thalamus opencv hdf5-static lua kfr cairo
-  tracing webrtc boost grpc++ grpc++_reflection absl::str_format_internal absl::strings absl::str_format ffmpeg)
+target_link_libraries(thalamus opencv hdf5-static lua kfr
+  tracing webrtc boost grpc++ grpc++_reflection 
+  absl::str_format_internal absl::strings absl::str_format ffmpeg)
 if(NOT APPLE)
   target_link_libraries(thalamus zlib_processed)
 endif()
@@ -296,9 +302,13 @@ target_link_libraries(native_lib
   thalamus 
   hydrate
   thalamus_ffmpeg
-  tracing webrtc ffmpeg sdl protoc_generated kfr lua cairo)
+  tracing webrtc ffmpeg sdl protoc_generated kfr lua)
 if(NOT WIN32 AND NOT APPLE)
   target_link_options(native_lib PRIVATE -Wl,-Bsymbolic)
+endif()
+if(WITH_CAIRO)
+  target_link_libraries(thalamus cairo)
+  target_link_libraries(native_lib cairo)
 endif()
 
 if(WIN32)

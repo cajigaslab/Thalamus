@@ -69,12 +69,10 @@ def main():
       print('Administrator permissions required', file=sys.stderr)
       sys.exit(1)
 
-    result = subprocess.call(['winget', 'list', '-q', 'bloodrock.pkg-config-lite'], cwd=home_str)
-    if result != 0:
-      subprocess.check_call(['winget', 'install', 'bloodrock.pkg-config-lite'], cwd=home_str)
-
-    old_path = os.environ['PATH']
+    reg_query = subprocess.check_output(['reg', 'query', r'HKEY_CURRENT_USER\Environment', '/v', 'Path'], encoding='utf8')
+    old_path = reg_query.split('REG_SZ')[-1].strip()
     new_path = []
+
     #nasm
     if not shutil.which('nasm'):
       destination = os.environ['USERPROFILE'] + '\\nasm-2.15.05'
@@ -82,6 +80,15 @@ def main():
       if not (pathlib.Path(destination) / 'nasm.exe').exists():
         download('https://www.nasm.us/pub/nasm/releasebuilds/2.15.05/win64/nasm-2.15.05-win64.zip')
         subprocess.check_call(['powershell', '-Command', 'Expand-Archive -DestinationPath ' + os.environ['USERPROFILE'] + ' nasm-2.15.05-win64.zip'])
+
+    #pkg-config
+    pkg_config_which = shutil.which('pkg-config')
+    if not pkg_config_which or 'strawberry' in pkg_config_which.lower():
+      destination = os.environ['USERPROFILE'] + '\\pkg-config-lite-0.28-1\\bin'
+      new_path.append(destination)
+      if not (pathlib.Path(destination) / 'pkg-config.exe').exists():
+        download('https://zenlayer.dl.sourceforge.net/project/pkgconfiglite/0.28-1/pkg-config-lite-0.28-1_bin-win32.zip')
+        subprocess.check_call(['powershell', '-Command', 'Expand-Archive -DestinationPath ' + os.environ['USERPROFILE'] + ' pkg-config-lite-0.28-1_bin-win32.zip'])
 
     #cmake
     if not shutil.which('cmake'):

@@ -124,7 +124,7 @@ class AlphaOmegaTableModel(QAbstractTableModel):
 
   def flags(self, index: QModelIndex) -> Qt.ItemFlag:
     if index.column() == 3:
-      return Qt.ItemIsUserCheckable | super().flags(index)
+      return Qt.ItemFlag.ItemIsUserCheckable | super().flags(index)
     return super().flags(index)
 
   def headerData(self, section: int, orientation: Qt.Orientation, role: int = ...) -> typing.Any:
