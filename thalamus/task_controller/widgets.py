@@ -269,7 +269,7 @@ class Form(QWidget):
       Opens a dialog to select a color
       '''
       color = QColorDialog.getColor(color_widget.color, self, "Select Color",
-                                                    QColorDialog.ShowAlphaChannel)
+                                                    QColorDialog.ColorDialogOption.ShowAlphaChannel)
       if color.isValid():
         self.config[config.field] = [color.red(), color.green(), color.blue()]
 

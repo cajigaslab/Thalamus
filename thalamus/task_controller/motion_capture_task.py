@@ -250,7 +250,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   state = State.QUEUE
   def renderer(painter: CanvasPainterProtocol) -> None:
     nonlocal rendered_images
-    painter.fillRect(0, 0, context.widget.width(), context.widget.height(), Qt.black)
+    painter.fillRect(0, 0, context.widget.width(), context.widget.height(), Qt.GlobalColor.black)
     font = painter.font()
     font.setPointSize(192)
     painter.setFont(font)
