@@ -96,28 +96,6 @@ class TaskControllerServicer(task_controller_pb2_grpc.TaskControllerServicer):
     finally:
       self.connection_event.clear()
 
-  async def execution(self, 
-                      request_iterator: typing.AsyncIterable[task_controller_pb2.TaskConfig],
-                      context: grpc.ServicerContext) -> typing.AsyncIterable[task_controller_pb2.TaskResult]:
-    LOGGER.info('Executor connected')
-    waiting_for_result = False
-    try:
-      self.connection_event.set()
-      while True:
-        config = await self.out_queue.get()
-        yield config
-        waiting_for_result = True
-        result = await request_iterator.__anext__()
-        waiting_for_result = False
-        await self.in_queue.put(result)
-    except StopAsyncIteration:
-      LOGGER.info('Executor disconnected')
-      if waiting_for_result:
-        await self.in_queue.put(None)
-        waiting_for_result = False
-    finally:
-      self.connection_event.clear()
-
   async def wait_for_executor(self) -> None:
     got, stopped = asyncio.create_task(self.connection_event.wait()), asyncio.create_task(self.stopped_event.wait())
     done, _ = await asyncio.wait([got, stopped], return_when=asyncio.FIRST_COMPLETED)

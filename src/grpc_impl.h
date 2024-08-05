@@ -19,6 +19,7 @@ namespace thalamus {
     std::unique_ptr<Impl> impl;
   public:
     boost::signals2::signal<void(::thalamus_grpc::Event&)> events_signal;
+    boost::signals2::signal<void(::thalamus_grpc::Text&)> log_signal;
     //boost::signals2::signal<void(::thalamus_grpc::ObservableChange&)> change_signal;
 
     Service(ObservableCollection::Value state, boost::asio::io_context& io_context, NodeGraph& node_graph);
@@ -27,6 +28,7 @@ namespace thalamus {
     ::grpc::Status get_type_name(::grpc::ServerContext* context, const ::thalamus_grpc::StringMessage* request, ::thalamus_grpc::StringMessage* response) override;
     ::grpc::Status node_request(::grpc::ServerContext* context, const ::thalamus_grpc::NodeRequest* request, ::thalamus_grpc::NodeResponse* response) override;
     ::grpc::Status events(::grpc::ServerContext* context, ::grpc::ServerReader< ::thalamus_grpc::Event>* reader, ::util_grpc::Empty*) override;
+    ::grpc::Status log(::grpc::ServerContext* context, ::grpc::ServerReader< ::thalamus_grpc::Text>* reader, ::util_grpc::Empty*) override;
     ::grpc::Status observable_bridge(::grpc::ServerContext* context, ::grpc::ServerReaderWriter< ::thalamus_grpc::ObservableChange, ::thalamus_grpc::ObservableChange>* stream) override;
     ::grpc::Status graph(::grpc::ServerContext* context, const ::thalamus_grpc::GraphRequest* request, ::grpc::ServerWriter< ::thalamus_grpc::GraphResponse>* writer) override;
     ::grpc::Status get_recommended_channels(::grpc::ServerContext* context, const ::thalamus_grpc::NodeSelector* request, ::thalamus_grpc::StringListMessage* response) override;

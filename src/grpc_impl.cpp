@@ -372,12 +372,29 @@ namespace thalamus {
         TRACE_EVENT0("thalamus", "events(post)");
         events_signal(the_event);
         promise.set_value();
-        });
+      });
       while (future.wait_for(1s) == std::future_status::timeout && !context->IsCancelled()) {}
     }
     return ::grpc::Status::OK;
   }
 
+  ::grpc::Status Service::log(::grpc::ServerContext* context, ::grpc::ServerReader< ::thalamus_grpc::Text>* reader, ::util_grpc::Empty*) {
+    tracing::SetCurrentThreadName("log");
+    Impl::ContextGuard guard(this, context);
+    ::thalamus_grpc::Text the_text;
+    while (reader->Read(&the_text)) {
+      TRACE_EVENT0("thalamus", "log");
+      std::promise<void> promise;
+      auto future = promise.get_future();
+      boost::asio::post(impl->io_context, [&] {
+        TRACE_EVENT0("thalamus", "log(post)");
+        log_signal(the_text);
+        promise.set_value();
+      });
+      while (future.wait_for(1s) == std::future_status::timeout && !context->IsCancelled()) {}
+    }
+    return ::grpc::Status::OK;
+  }
 
   ::grpc::Status Service::observable_bridge(::grpc::ServerContext* context, ::grpc::ServerReaderWriter< ::thalamus_grpc::ObservableChange, ::thalamus_grpc::ObservableChange>* stream) {
     tracing::SetCurrentThreadName("observable_bridge");

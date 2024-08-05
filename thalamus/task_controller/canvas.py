@@ -34,6 +34,7 @@ from .. import ophanim_pb2_grpc
 from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
 from ..qt import *
+from .util import create_task_with_exc_handling
 #from .. import recorder2_pb2
 #from .. import recorder2_pb2_grpc
 
@@ -456,6 +457,16 @@ class Canvas(QOpenGLWidget):
                port: typing.Optional[int] = None,
                mock_sleep: typing.Optional[typing.Callable[[float], 'asyncio.Future[None]']] = None) -> None:
     super().__init__()
+
+    if 'touch_config' not in config:
+      config['touch_config'] = {
+        'node': '',
+        'x': '',
+        'y': '',
+      }
+    self.touch_config = config['touch_config']
+    self.thalamus = thalamus
+
     self.sent_images = set()
     self.recorder = recorder
     self.ophanim = ophanim
@@ -468,15 +479,13 @@ class Canvas(QOpenGLWidget):
     self.browser_dimensions: typing.Optional[typing.Tuple[int, int]] = None
 
     self.current_output_mask = RenderOutput.SUBJECT
-    
-    if self.recorder:
-      asyncio.create_task(self.on_ros_touch(recorder.data(util_pb2.Empty())))
 
-    request = thalamus_pb2.AnalogRequest(node=thalamus_pb2.NodeSelector(name='recorder'), channel_names=['ai0','ai1'])
-    asyncio.create_task(self.on_ros_touch(thalamus.analog(request)))
+    self.touch_stream = None
+    self.touch_config.add_observer(self.on_touch_config_change, lambda: isdeleted(self))
+    self.on_touch_config_change(None, None, None)
 
     request = thalamus_pb2.AnalogRequest(node=thalamus_pb2.NodeSelector(type='OCULOMATIC'), channel_names=['X','Y'])
-    asyncio.create_task(self.on_ros_gaze(thalamus.analog(request)))
+    create_task_with_exc_handling(self.on_ros_gaze(thalamus.analog(request)))
 
     self.handles = Handles()
     if port:
@@ -491,6 +500,21 @@ class Canvas(QOpenGLWidget):
     self.opengl_config: typing.Optional[CanvasOpenGLConfig] = None
 
     self.handles.clear_loop = asyncio.get_event_loop().create_task(self.__clear_periodically())
+
+  def on_touch_config_change(self, action, key, value):
+    node = self.touch_config['node']
+    self.x_channel = self.touch_config['x']
+    self.y_channel = self.touch_config['y']
+
+    if not all([node, self.x_channel, self.y_channel]):
+      return
+
+    if self.touch_stream:
+      self.touch_stream.cancel()
+
+    request = thalamus_pb2.AnalogRequest(node=thalamus_pb2.NodeSelector(name=node), channel_names=[self.x_channel, self.y_channel])
+    self.touch_stream = self.thalamus.analog(request)
+    create_task_with_exc_handling(self.on_ros_touch(self.touch_stream))
 
   def set_task_context(self, task_context: TaskContextProtocol):
     self.task_context = task_context
@@ -801,34 +825,37 @@ class Canvas(QOpenGLWidget):
     Translates touch events into mouse input
     """
     # TODO: check if this indexing is correct, because it seems wrong.
-    async for message in messages:
-      x, y = None, None
-      for span in message.spans:
-        if span.name == 'ai0' and span.begin < span.end:
-          x = message.data[span.end-1]
-        elif span.name == 'ai1' and span.begin < span.end:
-          y = message.data[span.end-1]
-      assert x is not None and y is not None
-      
-      voltage = QPointF(x, y)
-      if voltage.x() < -5 or voltage.y() < -5:
-        self.on_touch(QPoint(-1, -1))
-        return
-      self.last_voltage = voltage
-      if self.input_config.touch_calibration.calibrating_touch:
-        # self.touch_target_voltage[-1][0] += voltage.x()
-        # self.touch_target_voltage[-1][1] += voltage.y()
-        # self.touch_target_voltage_count += 1
+    try:
+      async for message in messages:
+        x, y = None, None
+        for span in message.spans:
+          if span.name == self.x_channel and span.begin < span.end:
+            x = message.data[span.end-1]
+          elif span.name == self.y_channel and span.begin < span.end:
+            y = message.data[span.end-1]
+        assert x is not None and y is not None
+        
+        voltage = QPointF(x, y)
+        if voltage.x() < -5 or voltage.y() < -5:
+          self.on_touch(QPoint(-1, -1))
+          return
+        self.last_voltage = voltage
+        if self.input_config.touch_calibration.calibrating_touch:
+          # self.touch_target_voltage[-1][0] += voltage.x()
+          # self.touch_target_voltage[-1][1] += voltage.y()
+          # self.touch_target_voltage_count += 1
 
-        self.input_config.touch_calibration.touch_target_voltage[-1][0] = voltage.x()
-        self.input_config.touch_calibration.touch_target_voltage[-1][1] = voltage.y()
-        self.input_config.touch_calibration.touch_target_voltage_count = 1
-        return
+          self.input_config.touch_calibration.touch_target_voltage[-1][0] = voltage.x()
+          self.input_config.touch_calibration.touch_target_voltage[-1][1] = voltage.y()
+          self.input_config.touch_calibration.touch_target_voltage_count = 1
+          return
 
-      global_point = self.input_config.touch_calibration.touch_transform.map(voltage)
-      local_point = self.mapFromGlobal(QPoint(int(global_point.x()), int(global_point.y())))
+        global_point = self.input_config.touch_calibration.touch_transform.map(voltage)
+        local_point = self.mapFromGlobal(QPoint(int(global_point.x()), int(global_point.y())))
 
-      self.on_touch(local_point)
+        self.on_touch(local_point)
+    except asyncio.CancelledError:
+      pass
 
   def on_touch(self, point: QPoint) -> None:
     """

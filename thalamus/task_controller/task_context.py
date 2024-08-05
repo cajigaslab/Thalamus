@@ -29,9 +29,12 @@ import jsonpath_ng.ext.parser # type: ignore
 
 from .. import task_controller_pb2
 from .. import task_controller_pb2_grpc
+from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
+from .. import util_pb2
 
 from ..qt import *
+from ..util import IterableQueue
 
 from .canvas import Canvas
 from ..config import ObservableCollection, ObservableDict
@@ -260,6 +263,8 @@ class TaskContext(TaskContextProtocol):
     self.running = False
     self.servicer = servicer
     self.stub = stub
+    self.log_queue = IterableQueue()
+    self.log_stream = stub.log(self.log_queue)
     self.task_config = ObservableDict({})
     self.channels: typing.Mapping[str, grpc.aio.Channel] = {}
     self.task: asyncio.tasks.Task[typing.Any] = create_task_with_exc_handling(asyncio.sleep(0))
@@ -288,6 +293,8 @@ class TaskContext(TaskContextProtocol):
     else:
       self.use_comedi = False
 
+  async def log(self, text: str):
+    await self.log_queue.put(thalamus_pb2.Text(text=text,time=time.perf_counter_ns()))
 
   @property
   def behav_result(self) -> typing.Dict[str, typing.Any]:
@@ -599,15 +606,15 @@ class TaskContext(TaskContextProtocol):
         break
 
       if not was_cancelled:
-        trial_summ = task_controller_pb2.TrialSummary()
-        trial_summ.header.stamp = time.perf_counter_ns()
-        trial_summ.used_values = json.dumps(self.trial_summary_data.used_values)
-        trial_summ.task_config = json.dumps({**self.task_config.unwrap(), **self.get_canvas_info()})
-        trial_summ.task_result = json.dumps(result._asdict())
+        trial_summ = {
+          'used_values': self.trial_summary_data.used_values,
+          'task_config': {**self.task_config.unwrap(), **self.get_canvas_info()},
+          'task_result': result._asdict()
+        }
 
         if self.trial_summary_data.behav_result:
-          trial_summ.behav_result = json.dumps(self.trial_summary_data.behav_result)
-        await self.servicer.publish_trial_summary(trial_summ)
+          trial_summ['behav_result'] = self.trial_summary_data.behav_result
+        await self.log(json.dumps(trial_summ))
     
     for future in self.sleeper.cancelled_futures:
       future.exception()

@@ -6,6 +6,7 @@ package thalamus_grpc;
 
 service Thalamus {
   rpc events(stream Event) returns (util_grpc.Empty) {}
+  rpc log(stream Text) returns (util_grpc.Empty) {}
   rpc observable_bridge(stream ObservableChange) returns (stream ObservableChange) {}
   rpc graph(GraphRequest) returns (stream GraphResponse) {}
   rpc analog(AnalogRequest) returns (stream AnalogResponse) {}
@@ -63,6 +64,7 @@ message NodeResponse {
 
 message Text {
   string text = 1;
+  uint64 time = 2;
 }
 
 message StorageRecord {

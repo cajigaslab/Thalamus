@@ -134,6 +134,22 @@ class ObservableCollection(abc.ABC):
     for observer in list(self.observers.values()):
       observer(ObservableCollection.Action.SET, key, value)
 
+
+  def __add_impl(self, other, reverse=False):
+    assert isinstance(self.content, list), 'content is not a list'
+
+    other_content = other.content if isinstance(other, ObservableCollection) else other
+    assert isinstance(other_content, list), 'argument is not a list'
+
+    new_content = (other_content + self.content) if reverse else (self.content + other_content)
+    return ObservableList(new_content)
+
+  def __add__(self, other):
+    return self.__add_impl(other)
+
+  def __radd__(self, other):
+    return self.__add_impl(other, True)
+
   def __delitem__(self, key: typing.Any) -> None:
     assert isinstance(self.content, (list, dict)), 'content is neither list or dict'
 

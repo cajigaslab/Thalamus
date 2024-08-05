@@ -37,6 +37,7 @@ namespace thalamus {
     NodeGraph* graph;
     std::chrono::steady_clock::time_point start_time;
     boost::signals2::scoped_connection events_connection;
+    boost::signals2::scoped_connection log_connection;
     boost::signals2::scoped_connection change_connection;
     std::ofstream output_stream;
     thalamus::vector<std::pair<double, bool>> metrics;
@@ -56,6 +57,7 @@ namespace thalamus {
       state_connection = state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
       this->state->recap(std::bind(&Impl::on_change, this, _1, _2, _3));
       events_connection = graph->get_service().events_signal.connect(std::bind(&Impl::on_event, this, _1));
+      log_connection = graph->get_service().log_signal.connect(std::bind(&Impl::on_log, this, _1));
     }
 
     ~Impl() {
@@ -73,6 +75,22 @@ namespace thalamus {
 
       thalamus_grpc::StorageRecord record;
       auto body = record.mutable_event();
+      *body = e;
+      record.set_time(e.time());
+
+      queue_record(std::move(record));
+    }
+
+    void on_event(const thalamus_grpc::Text& e) {
+      TRACE_EVENT0("thalamus", "StorageNode::on_log");
+      if (!is_running) {
+        return;
+      }
+
+      update_metrics(1, 0, 1, [&] { return "Log"; });
+
+      thalamus_grpc::StorageRecord record;
+      auto body = record.mutable_text();
       *body = e;
       record.set_time(e.time());
 
