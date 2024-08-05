@@ -167,7 +167,8 @@ async def async_main() -> None:
                                           tasks.DESCRIPTIONS_MAP, servicer, stub)
   servicer.task_context = task_context
   task_context.start()
-  window.set_task_context(task_context)
+  if window:
+    window.set_task_context(task_context)
 
   controller = ControlWindow(window, task_context, ConfigData(user_config, arguments.config), done_future)
   controller.resize(1024, 768)

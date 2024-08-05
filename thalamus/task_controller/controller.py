@@ -21,6 +21,7 @@ from .window import Window as SubjectWindow
 from .reward_schedule import RewardSchedule
 from .util import create_task_with_exc_handling, isdeleted
 from ..qt import *
+from .touch_dialog import TouchDialog
 
 class TaskWidget(QWidget):
   """
@@ -346,6 +347,9 @@ class ControlWindow(QMainWindow):
     view_menu = self.menuBar().addMenu("&View")
     add_action(view_menu, 'Operator View', lambda: self.on_operator_view(subject_window))
 
+    settings_menu = self.menuBar().addMenu("&Settings")
+    add_action(settings_menu, 'Touch Screen', lambda: self.on_touch_screen())
+
     self.task_cluster_tabs = QTabWidget()
     self.setObjectName('task_cluster_tabs')
     self.task_cluster_tabs.setTabsClosable(True)
@@ -413,6 +417,13 @@ class ControlWindow(QMainWindow):
     window.setCentralWidget(widget)
     window.move(self.x() + 100, self.y() + 100)
     window.show()
+
+  def on_touch_screen(self) -> None:
+    touch_dialog = TouchDialog(self.task_context.config, self.task_context.stub)
+    touch_dialog.resize(self.width()//2, self.height()//2)
+    touch_dialog.show()
+    touch_dialog.activateWindow()
+
 
   def on_operator_view(self, subject_window: typing.Optional[SubjectWindow]) -> None:
     """

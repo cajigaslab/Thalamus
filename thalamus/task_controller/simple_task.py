@@ -182,12 +182,12 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   context.widget.renderer = renderer
 
   while True:
-    await context.servicer.publish_state(task_controller_pb2.BehavState(state='intertrial'))
+    await context.log('BehavState=intertrial')
     show_target = False
     context.widget.update()
     await context.sleep(config.intertrial_timeout)
 
-    await context.servicer.publish_state(task_controller_pb2.BehavState(state='start_on'))
+    await context.log('BehavState=start_on')
     show_target = True
     context.widget.update()
     acquired = await wait_for(context, lambda: target_acquired, config.start_timeout)
@@ -205,12 +205,12 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   show_target = False
   context.widget.update()
   if success:
-    await context.servicer.publish_state(task_controller_pb2.BehavState(state='success'))
+    await context.log('BehavState=success')
 
     await context.sleep(config.success_timeout)
     return TaskResult(True)
 
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='fail'))
+  await context.log('BehavState=fail')
 
   await context.sleep(config.fail_timeout)
   return TaskResult(False)
