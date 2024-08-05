@@ -1049,13 +1049,13 @@ namespace thalamus {
                 }
               } else if(current_name == "Command") {
                 auto p_value = current->get_optional<std::string>("pValue");
-                auto command_value = current->get_optional<long long int>("CommandValue");
+                auto command_value = get_int(*current, "CommandValue", 0);
                 auto p_command_value = current->get_optional<std::string>("pCommandValue");
 
                 if(p_command_value) {
                   nodes[name] = Command {this, *p_value, *p_command_value};
                 } else {
-                  nodes[name] = Command {this, *p_value, *command_value};
+                  nodes[name] = Command {this, *p_value, command_value};
                 }
               } else if(current_name == "StringReg") {
                 size_t address = get_int(*current, "Address", 0);
@@ -1807,8 +1807,15 @@ namespace thalamus {
       if(envval == nullptr) {
         return true;
       }
+#ifdef _WIN32
       auto paths = absl::StrSplit(envval, ';');
+#else
+      auto paths = absl::StrSplit(envval, ':');
+#endif
       for(auto& path : paths) {
+        if(!std::filesystem::exists(std::filesystem::path(path))) {
+          continue;
+        }
         for(auto& file : std::filesystem::directory_iterator(path)) {
           if(file.path().extension() == ".cti") {
             ctis.emplace_back(new Cti(file.path().stem().string(), file.path().string()));

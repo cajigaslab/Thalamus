@@ -953,80 +953,83 @@ class ImageWidget(QWidget):
 
   async def __stream_task(self, stream: typing.AsyncIterable[thalamus_pb2.Image]):
     response = thalamus_pb2.Image()
-    async for response_piece in stream:
-      for i, data in enumerate(response_piece.data):
-        if len(response.data) <= i:
-          response.data.append(data)
-        else:
-          response.data[i] += data
+    try:
+      async for response_piece in stream:
+        for i, data in enumerate(response_piece.data):
+          if len(response.data) <= i:
+            response.data.append(data)
+          else:
+            response.data[i] += data
 
-      if not response_piece.last:
-        continue
+        if not response_piece.last:
+          continue
 
-      response.width = response_piece.width
-      response.height = response_piece.height
-      response.format = response_piece.format
+        response.width = response_piece.width
+        response.height = response_piece.height
+        response.format = response_piece.format
 
-      if response.format == thalamus_pb2.Image.Format.Gray:
-        format = QImage.Format.Format_Grayscale8
-        data = response.data[0]
-        if response.width*response.height != len(data):
-          data = numpy.array(numpy.frombuffer(data, dtype=numpy.uint8).reshape(response.height,-1)[:,:response.width])
-        else:
-          data = data
-      elif response.format == thalamus_pb2.Image.Format.RGB:
-        format = QImage.Format.Format_RGB888
-        data = response.data[0]
-        if response.width*3*response.height != len(data):
-          data = numpy.array(numpy.frombuffer(data, dtype=numpy.uint8).reshape(response.height,-1)[:,:3*response.width])
-        else:
-          data = data
-      elif response.format == thalamus_pb2.Image.Format.YUYV422:
-        format = QImage.Format.Format_RGB888
-        data = response.data[0]
-        if response.width*2*response.height != len(data):
-          data = numpy.array(numpy.frombuffer(data, dtype=numpy.uint8).reshape(response.height,-1)[:,:2*response.width])
-        else:
-          data = numpy.frombuffer(data, dtype=numpy.uint8).reshape(response.height,response.width,-1)[:,:,:2]
-        data = cv2.cvtColor(data, cv2.COLOR_YUV2RGB_YUYV)
-      elif response.format in (thalamus_pb2.Image.Format.YUVJ420P, thalamus_pb2.Image.Format.YUV420P):
-        format = QImage.Format.Format_RGB888
-        luminance = response.data[0]
-        if response.width*response.height != len(luminance):
-          luminance = numpy.array(numpy.frombuffer(luminance, dtype=numpy.uint8).reshape(response.height,-1)[:,:response.width])
-        else:
-          luminance = numpy.frombuffer(luminance, dtype=numpy.uint8).reshape(response.height,response.width)
+        if response.format == thalamus_pb2.Image.Format.Gray:
+          format = QImage.Format.Format_Grayscale8
+          data = response.data[0]
+          if response.width*response.height != len(data):
+            data = numpy.array(numpy.frombuffer(data, dtype=numpy.uint8).reshape(response.height,-1)[:,:response.width])
+          else:
+            data = data
+        elif response.format == thalamus_pb2.Image.Format.RGB:
+          format = QImage.Format.Format_RGB888
+          data = response.data[0]
+          if response.width*3*response.height != len(data):
+            data = numpy.array(numpy.frombuffer(data, dtype=numpy.uint8).reshape(response.height,-1)[:,:3*response.width])
+          else:
+            data = data
+        elif response.format == thalamus_pb2.Image.Format.YUYV422:
+          format = QImage.Format.Format_RGB888
+          data = response.data[0]
+          if response.width*2*response.height != len(data):
+            data = numpy.array(numpy.frombuffer(data, dtype=numpy.uint8).reshape(response.height,-1)[:,:2*response.width])
+          else:
+            data = numpy.frombuffer(data, dtype=numpy.uint8).reshape(response.height,response.width,-1)[:,:,:2]
+          data = cv2.cvtColor(data, cv2.COLOR_YUV2RGB_YUYV)
+        elif response.format in (thalamus_pb2.Image.Format.YUVJ420P, thalamus_pb2.Image.Format.YUV420P):
+          format = QImage.Format.Format_RGB888
+          luminance = response.data[0]
+          if response.width*response.height != len(luminance):
+            luminance = numpy.array(numpy.frombuffer(luminance, dtype=numpy.uint8).reshape(response.height,-1)[:,:response.width])
+          else:
+            luminance = numpy.frombuffer(luminance, dtype=numpy.uint8).reshape(response.height,response.width)
 
-        chroma1 = response.data[1]
-        if response.width*response.height//4 != len(chroma1):
-          chroma1 = numpy.array(numpy.frombuffer(chroma1, dtype=numpy.uint8).reshape(response.height//2,-1)[:,:response.width//2])
-        else:
-          chroma1 = numpy.frombuffer(chroma1, dtype=numpy.uint8).reshape(response.height//2,response.width//2)
+          chroma1 = response.data[1]
+          if response.width*response.height//4 != len(chroma1):
+            chroma1 = numpy.array(numpy.frombuffer(chroma1, dtype=numpy.uint8).reshape(response.height//2,-1)[:,:response.width//2])
+          else:
+            chroma1 = numpy.frombuffer(chroma1, dtype=numpy.uint8).reshape(response.height//2,response.width//2)
 
-        chroma2 = response.data[2]
-        if response.width*response.height//4 != len(chroma2):
-          chroma2 = numpy.array(numpy.frombuffer(chroma2, dtype=numpy.uint8).reshape(response.height//2,-1)[:,:response.width//2])
-        else:
-          chroma2 = numpy.frombuffer(chroma2, dtype=numpy.uint8).reshape(response.height//2,response.width//2)
+          chroma2 = response.data[2]
+          if response.width*response.height//4 != len(chroma2):
+            chroma2 = numpy.array(numpy.frombuffer(chroma2, dtype=numpy.uint8).reshape(response.height//2,-1)[:,:response.width//2])
+          else:
+            chroma2 = numpy.frombuffer(chroma2, dtype=numpy.uint8).reshape(response.height//2,response.width//2)
 
-        chroma_all = numpy.zeros((response.height//2, response.width//2, 2), dtype=numpy.uint8)
-        chroma_all[:,:,0] = chroma1
-        chroma_all[:,:,1] = chroma2
-        #if response.format == thalamus_pb2.Image.Format.YUVJ420P:
-        #  luminance = numpy.array(luminance, dtype=numpy.int32)
-        #  chroma_all = numpy.zeros((response.height//2, response.width//2, 2), dtype=numpy.int32)
-        #  chroma_all[:,:,0] = chroma1
-        #  chroma_all[:,:,1] = chroma2
+          chroma_all = numpy.zeros((response.height//2, response.width//2, 2), dtype=numpy.uint8)
+          chroma_all[:,:,0] = chroma1
+          chroma_all[:,:,1] = chroma2
+          #if response.format == thalamus_pb2.Image.Format.YUVJ420P:
+          #  luminance = numpy.array(luminance, dtype=numpy.int32)
+          #  chroma_all = numpy.zeros((response.height//2, response.width//2, 2), dtype=numpy.int32)
+          #  chroma_all[:,:,0] = chroma1
+          #  chroma_all[:,:,1] = chroma2
 
-        #  luminance = numpy.array(numpy.where(luminance >= 128, (luminance-128)*(235-128)//(255-128), (luminance-128)*(16-128)//(0-128)), dtype=numpy.uint8)
-        #  chroma_all = numpy.array(numpy.where(chroma_all >= 128, (chroma_all-128)*(240-128)//(255-128), (chroma_all-128)*(16-128)//(0-128)), dtype=numpy.uint8)
+          #  luminance = numpy.array(numpy.where(luminance >= 128, (luminance-128)*(235-128)//(255-128), (luminance-128)*(16-128)//(0-128)), dtype=numpy.uint8)
+          #  chroma_all = numpy.array(numpy.where(chroma_all >= 128, (chroma_all-128)*(240-128)//(255-128), (chroma_all-128)*(16-128)//(0-128)), dtype=numpy.uint8)
 
-        data = cv2.cvtColorTwoPlane(luminance, chroma_all, cv2.COLOR_YUV2RGB_NV12)
-        #data = luminance
+          data = cv2.cvtColorTwoPlane(luminance, chroma_all, cv2.COLOR_YUV2RGB_NV12)
+          #data = luminance
 
-      self.image = QImage(data, response.width, response.height, format)
-      self.update()
-      response = thalamus_pb2.Image()
+        self.image = QImage(data, response.width, response.height, format)
+        self.update()
+        response = thalamus_pb2.Image()
+    except asyncio.CancelledError:
+      pass
 
   def on_change(self, action, key, value):
     if key == 'View':

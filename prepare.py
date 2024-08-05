@@ -208,6 +208,8 @@ def main():
                           'libkrb5-dev',
                           'libva-dev',
                           'libvdpau-dev',
+                          'libasound2-dev',
+                          'libxv-dev',
                           'liblzma-dev', 'libtool', 'flex',
                           'nasm', 'libpcre2-dev', 'bison',
                           'libbrotli-dev', 'autotools-dev', 'automake',
