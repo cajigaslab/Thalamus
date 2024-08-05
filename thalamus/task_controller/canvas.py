@@ -27,7 +27,7 @@ import OpenGL.GL
 from pkg_resources import resource_string, resource_filename
 
 from ..config import ObservableCollection
-from .util import CanvasPainterProtocol, RenderOutput, voidptr, TaskContextProtocol
+from .util import CanvasPainterProtocol, RenderOutput, voidptr, TaskContextProtocol, create_task_with_exc_handling
 from .. import util_pb2
 from .. import ophanim_pb2
 from .. import ophanim_pb2_grpc
@@ -859,9 +859,9 @@ class Canvas(QOpenGLWidget):
       x, y = None, None
       for span in message.spans:
         if span.name == 'X' and span.begin < span.end:
-          x = message.data[span.begin]
+          x = message.data[span.end-1]
         elif span.name == 'Y' and span.begin < span.end:
-          y = message.data[span.begin]
+          y = message.data[span.end-1]
       assert x is not None and y is not None
 
       voltage_point = QPointF(x, -y)
@@ -992,11 +992,15 @@ class Canvas(QOpenGLWidget):
         else:
           transform = self.input_config.gaze_transforms[3]
 
-      gaze_message = oculomatic_msgs.msg.Gaze()
-      gaze_message.x = from_center.x()/transform.m11()
-      gaze_message.y = from_center.y()/transform.m22()
+      gaze_message = thalamus_pb2.AnalogResponse(
+          data = [from_center.x()/transform.m11(), from_center.y()/transform.m22()],
+          spans = [thalamus_pb2.Span(name='X', begin=0, end=1), thalamus_pb2.Span(name='Y', begin=1, end=2)]
+      )
 
-      self.on_ros_gaze(gaze_message)
+      async def async_yield(message):
+        yield message
+
+      create_task_with_exc_handling(self.on_ros_gaze(async_yield(gaze_message)))
 
   def calibrate_touch(self) -> None:
     '''
