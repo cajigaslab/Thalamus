@@ -1,14 +1,13 @@
 name: Build
 
 on:
+  workflow_dispatch: {}
   schedule:
     - cron: "0 0 * * 1"
 
 jobs:
-  build:
-
+  build-windows:
     runs-on: windows-latest
-
     steps:
     - uses: actions/checkout@v4
     - name: Set Git name 
@@ -25,3 +24,37 @@ jobs:
     - name: Build
       shell: cmd
       run: call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat" && python -m build -n -w -Crelease
+  
+  build-mac:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set Git name 
+      run: git config --global user.name "Github Actions"
+    - name: Set Git email 
+      run: git config --global user.email "no@email.com"
+    - name: Prepare
+      run: python3 prepare.py
+    - name: nasm
+      run: echo $PATH && echo $HOME && dir $HOME/nasm-2.15.05  && which nasm
+    - name: Version Bump
+      run: python3 bump.py patch
+    - name: Build
+      run: python3 -m build -n -w -Crelease
+      
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set Git name 
+      run: git config --global user.name "Github Actions"
+    - name: Set Git email 
+      run: git config --global user.email "no@email.com"
+    - name: Prepare
+      run: python3 prepare.py
+    - name: nasm
+      run: echo $PATH && echo $HOME && dir $HOME/nasm-2.15.05  && which nasm
+    - name: Version Bump
+      run: python3 bump.py patch
+    - name: Build
+      run: python3 -m build -n -w -Crelease
