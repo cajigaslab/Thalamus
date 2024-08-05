@@ -42,7 +42,7 @@ if sys.version_info[1] >= 7:
   class QSound(QSoundEffect):
     def __init__(self, filename):
       super().__init__()
-      self.setSource(filename)
+      self.setSource(QUrl(filename))
 
   def qt_screen_geometry() -> QRect:
     return QApplication.screens()[0].geometry()
