@@ -9,18 +9,20 @@ class TouchDialog(QWidget):
 
     if 'touch_config' not in config:
       config['touch_config'] = {
-        'node': '',
+        'selected_node': '',
         'x': '',
         'y': '',
       }
     touch_config = config['touch_config']
+    if touch_config.get('selected_node', '') == '':
+      touch_config['selected_node'] = nodes_model.data(nodes_model.index(0, 0)) if nodes_model.rowCount(QModelIndex()) else ''
 
     node_combo = QComboBox()
     node_combo.setModel(nodes_model)
 
-    x_channel_combo = ChannelComboBox(stub, config)
+    x_channel_combo = ChannelComboBox(stub, touch_config, 'x')
     x_channel_combo.setEditable(True)
-    y_channel_combo = ChannelComboBox(stub, config)
+    y_channel_combo = ChannelComboBox(stub, touch_config, 'y')
     y_channel_combo.setEditable(True)
 
     layout = QGridLayout()
@@ -33,12 +35,12 @@ class TouchDialog(QWidget):
 
     self.setLayout(layout)
 
-    node_combo.currentTextChanged.connect(lambda text: touch_config.update({'node': text}))
+    node_combo.currentTextChanged.connect(lambda text: touch_config.update({'selected_node': text}))
     x_channel_combo.currentTextChanged.connect(lambda text: touch_config.update({'x': text}))
     y_channel_combo.currentTextChanged.connect(lambda text: touch_config.update({'y': text}))
 
     def on_change(action, key, value):
-      if key == 'node':
+      if key == 'selected_node':
         node_combo.setCurrentText(value)
       elif key == 'x':
         x_channel_combo.setCurrentText(value)

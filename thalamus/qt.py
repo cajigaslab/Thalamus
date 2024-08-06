@@ -19,7 +19,7 @@ if sys.version_info[1] >= 7:
   from PyQt6.QtOpenGL import (QOpenGLFramebufferObjectFormat, QOpenGLFramebufferObject, QOpenGLBuffer, QOpenGLShader,
                               QOpenGLShaderProgram)
   from PyQt6.QtCore import (QPoint, QRect, QPointF, Qt, QSize, QDir, QModelIndex, QAbstractItemModel, QVariant,
-                            QAbstractListModel, QAbstractTableModel, QLineF, QRectF, QItemSelection, QUrl,
+                            QAbstractListModel, QAbstractTableModel, QLineF, QRectF, QItemSelection, QUrl, QTimer,
                             PYQT_VERSION_STR)
 
   def qt_to_polygonf(polygon):
@@ -62,7 +62,7 @@ else:
                                QListView, QMenuBar, QItemDelegate, QSplitter, QTreeWidget, QTreeWidgetItem,
                                QListWidget, QTableWidget, QTableWidgetItem, QWizard, QWizardPage, QProgressBar,
                                QStyleOptionViewItem, QScrollArea, QColorDialog)
-  from PyQt5.QtCore import (QPoint, QRect, QPointF, Qt, QSize, QDir, QItemSelectionModel, QModelIndex,
+  from PyQt5.QtCore import (QPoint, QRect, QPointF, Qt, QSize, QDir, QItemSelectionModel, QModelIndex, QTimer,
                             QAbstractListModel, QAbstractItemModel, QAbstractTableModel, QLineF, QRectF,
                             QItemSelection, QVariant, QUrl, PYQT_VERSION_STR)
   from PyQt5.QtMultimedia import QSound, QMediaPlayer, QAbstractVideoSurface, QVideoFrame, QMediaContent
@@ -111,6 +111,8 @@ else:
   qt_move_attr(Qt, Qt.AlignmentFlag, 'AlignJustify')
   qt_move_attr(QImage, QImage.Format, 'Format_Grayscale8')
   qt_move_attr(QImage, QImage.Format, 'Format_RGB888')
+  qt_move_attr(QMessageBox, QMessageBox.StandardButton, 'Yes')
+  qt_move_attr(QMessageBox, QMessageBox.StandardButton, 'No')
 
   for key in ['red', 'green', 'blue', 'black', 'white']:
     qt_move_attr(Qt, Qt.GlobalColor, key)

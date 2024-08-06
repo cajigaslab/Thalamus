@@ -53,13 +53,13 @@ class OculomaticWidget(QWidget):
     layout.addWidget(QLabel('X Gain:'))
     self.x_gain_slider = QSlider(Qt.Orientation.Horizontal)
     self.x_gain_slider.setRange(0, 500)
-    self.x_gain_slider.valueChanged.connect(lambda value: config.update({'X Gain': value}))
+    self.x_gain_slider.valueChanged.connect(lambda value: config.update({'X Gain': float(value)}))
     layout.addWidget(self.x_gain_slider)
 
     layout.addWidget(QLabel('Y Gain:'))
     self.y_gain_slider = QSlider(Qt.Orientation.Horizontal)
     self.y_gain_slider.setRange(0, 500)
-    self.y_gain_slider.valueChanged.connect(lambda value: config.update({'Y Gain': value}))
+    self.y_gain_slider.valueChanged.connect(lambda value: config.update({'Y Gain': float(value)}))
     layout.addWidget(self.y_gain_slider)
 
     self.invert_x_checkbox = QCheckBox('Invert X')

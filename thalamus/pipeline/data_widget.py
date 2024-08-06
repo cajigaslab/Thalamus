@@ -436,16 +436,18 @@ class NodesModel(QAbstractListModel):
     return self.nodes_list[index.row()]['name']
 
 class ChannelComboBox(QComboBox):
-  def __init__(self, stub, config):
+  def __init__(self, stub, config, selected_channel_key = 'selected_channel'):
     super().__init__()
     self.stub = stub
     self.config = config
+    self.selected_channel_key = selected_channel_key 
     self.task: typing.Optional[asyncio.Task] = None
     self.config.add_observer(self.__on_change, lambda: isdeleted(self))
     for k, v in self.config.items():
       self.__on_change(None, k, v)
 
   def __on_change(self, action, key, value):
+    print('ChannelComboBox.__on_change', action, key, value)
     if key == 'selected_node':
       if self.task is not None:
         self.task.cancel()
@@ -459,7 +461,7 @@ class ChannelComboBox(QComboBox):
     stream = self.stub.channel_info(thalamus_pb2.AnalogRequest(node=selector))
     try:
       async for message in stream:
-        selected_channel = self.config['selected_channel']
+        selected_channel = self.config[self.selected_channel_key]
         self.clear()
         self.addItems([s.name for s in message.spans])
         self.setCurrentText(selected_channel)

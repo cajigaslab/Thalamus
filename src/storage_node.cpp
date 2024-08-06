@@ -81,7 +81,7 @@ namespace thalamus {
       queue_record(std::move(record));
     }
 
-    void on_event(const thalamus_grpc::Text& e) {
+    void on_log(const thalamus_grpc::Text& e) {
       TRACE_EVENT0("thalamus", "StorageNode::on_log");
       if (!is_running) {
         return;
