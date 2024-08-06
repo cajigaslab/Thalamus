@@ -9,7 +9,7 @@ endif()
 FetchContent_Declare(
   glib 
   GIT_REPOSITORY https://gitlab.gnome.org/GNOME/glib.git
-  GIT_TAG        2.81.0
+  GIT_TAG        2.78.6
 )
 FetchContent_Populate(glib)
 file(MAKE_DIRECTORY "${glib_BINARY_DIR}/Debug/install")
