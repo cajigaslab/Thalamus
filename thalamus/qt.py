@@ -42,7 +42,7 @@ if sys.version_info[1] >= 7:
   class QSound(QSoundEffect):
     def __init__(self, filename):
       super().__init__()
-      self.setSource(filename)
+      self.setSource(QUrl(filename))
 
   def qt_screen_geometry() -> QRect:
     return QApplication.screens()[0].geometry()
@@ -93,6 +93,7 @@ else:
   qt_move_attr(Qt, Qt.DockWidgetArea, 'BottomDockWidgetArea')
   qt_move_attr(Qt, Qt.DockWidgetArea, 'NoDockWidgetArea')
   qt_move_attr(QAbstractItemView, QAbstractItemView.SelectionMode, 'SingleSelection')
+  qt_move_attr(QSizePolicy, QSizePolicy.Policy, 'Expanding')
   qt_move_attr(Qt, Qt.Orientation, 'Horizontal')
   qt_move_attr(Qt, Qt.Orientation, 'Vertical')
   qt_move_attr(Qt, Qt.ItemDataRole, 'DisplayRole')
@@ -108,10 +109,11 @@ else:
   qt_move_attr(Qt, Qt.AlignmentFlag, 'AlignRight')
   qt_move_attr(Qt, Qt.AlignmentFlag, 'AlignHCenter')
   qt_move_attr(Qt, Qt.AlignmentFlag, 'AlignJustify')
+  qt_move_attr(QImage, QImage.Format, 'Format_Grayscale8')
+  qt_move_attr(QImage, QImage.Format, 'Format_RGB888')
 
   for key in ['red', 'green', 'blue', 'black', 'white']:
     qt_move_attr(Qt, Qt.GlobalColor, key)
-
 
   for key in ['Key_0', 'Key_1', 'Key_2', 'Key_3', 'Key_4', 'Key_5', 'Key_6', 'Key_7', 'Key_8',
     'Key_9',
