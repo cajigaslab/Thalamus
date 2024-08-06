@@ -35,6 +35,7 @@ from .log_widget import LogWidget
 from .wave_widget import WaveWidget
 from .intan_widget import IntanWidget
 from .aruco_widget import ArucoWidget
+from .analog_widget import AnalogWidget
 from ..util import NodeSelector
 from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
@@ -317,8 +318,8 @@ FACTORIES = {
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
     #UserData(UserDataType.DEFAULT, 'Time Source', '', []),
   ]),
-  'ANALOG': Factory(None, [
-    UserData(UserDataType.CHECK_BOX, 'View', False, [])
+  'ANALOG': Factory(AnalogWidget, [
+    UserData(UserDataType.CHECK_BOX, 'Widget is Touchpad', False, [])
   ]),
   'OCULOMATIC': Factory(lambda c, s: OculomaticWidget(c, s) , [
     UserData(UserDataType.SPINBOX, 'Threshold', 100, []),

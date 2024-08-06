@@ -226,8 +226,8 @@ class TaskClusterWidget(QWidget):
     config = self.task_tabs.widget(index).config
     #mypy doesn't appears to interpret the union below as a typing.Union[StandardButtons, StandardButton]
     confirm = QMessageBox.question(self, "Delete Task", "Delete Task " + config['name'] + "?",
-                                   QMessageBox.Yes | QMessageBox.No)
-    if confirm == QMessageBox.No:
+                                   QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+    if confirm == QMessageBox.StandardButton.No:
       return
     remove_by_is(config.parent, config)
 
@@ -504,8 +504,8 @@ class ControlWindow(QMainWindow):
     #mypy doesn't appears to interpret the union below as a typing.Union[StandardButtons, StandardButton]
     confirm = QMessageBox.question(self, "Delete Task Cluster",
                                    f'Delete Task Cluster {config["name"]}?',
-                                   QMessageBox.Yes | QMessageBox.No)
-    if confirm == QMessageBox.No:
+                                   QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+    if confirm == QMessageBox.StandardButton.No:
       return
     remove_by_is(config.parent, config)
 

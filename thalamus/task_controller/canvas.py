@@ -19,14 +19,13 @@ import collections
 import os.path
 
 import stl.mesh
-import yaml
 import numpy
 
 import OpenGL.GL
 
 from pkg_resources import resource_string, resource_filename
 
-from ..config import ObservableCollection
+from ..config import ObservableCollection, ObservableDict
 from .util import CanvasPainterProtocol, RenderOutput, voidptr, TaskContextProtocol, create_task_with_exc_handling
 from .. import util_pb2
 from .. import ophanim_pb2
@@ -42,24 +41,18 @@ LOGGER = logging.getLogger(__name__)
 
 VOLTAGE_RANGE = -10, 10
 
-def load_transform(filename: str) -> QTransform:
+def load_transform(config: ObservableDict) -> QTransform:
   '''
-  Load QTransform from yaml file
+  Load QTransform from config
   '''
-  with open(filename) as touch_transform_file:
-    transform_config = yaml.load(touch_transform_file, Loader=yaml.FullLoader)
-    touch_transform = QTransform()
-    if 'is_matrix' in transform_config and transform_config['is_matrix']:
-      touch_transform.setMatrix(
-        transform_config['m11'], transform_config['m12'], transform_config['m13'],
-        transform_config['m21'], transform_config['m22'], transform_config['m23'],
-        transform_config['m31'], transform_config['m32'], transform_config['m33'])
-    else:
-      touch_transform.translate(transform_config['offset_x'], transform_config['offset_y'])
-      touch_transform.rotate(transform_config['rotation_z'])
-      touch_transform.scale(-1 if transform_config['fliplr'] else 1, 1)
-      touch_transform.scale(transform_config['gain'], transform_config['gain'])
-    return touch_transform
+  touch_transform = QTransform()
+  if 'touch_transform' in config:
+    transform_config = config['touch_transform']
+    touch_transform.setMatrix(
+      transform_config['m11'], transform_config['m12'], transform_config['m13'],
+      transform_config['m21'], transform_config['m22'], transform_config['m23'],
+      transform_config['m31'], transform_config['m32'], transform_config['m33'])
+  return touch_transform
 
 class Opcode(enum.IntEnum):
   """
@@ -311,24 +304,13 @@ class TouchCalibration():
   '''
   Touch calibration fields
   '''
-  def __init__(self) -> None:
+  def __init__(self, config) -> None:
     self.calibrating_touch = False
     self.touch_target_voltage_count = 0
     self.touch_target_index = 0
     self.touch_targets: typing.List[typing.List[int]] = []
     self.touch_target_voltage: typing.List[typing.List[float]] = []
-    self.touch_transform = QTransform()
-    self.load_transform()
-
-  def load_transform(self) -> None:
-    '''
-    Loads the gaze transformation
-    '''
-    system_file = resource_filename(__name__, 'touch_transform.yaml')
-    user_file = pathlib.Path.home().joinpath('.task_controller', 'touch_transform.yaml')
-    filename = str(user_file) if user_file.exists() else system_file
-
-    self.touch_transform = load_transform(filename)
+    self.touch_transform = load_transform(config)
 
   def __str__(self) -> str:
     return f'TouchCalibration(calibrating_touch={self.calibrating_touch})'
@@ -354,7 +336,7 @@ class InputConfig():
       QTransform(),
       QTransform(),
       QTransform()]
-    self.touch_calibration = TouchCalibration()
+    self.touch_calibration = TouchCalibration(config)
 
     if 'eye_scaling' not in config:
       config['eye_scaling'] = {}
@@ -457,10 +439,11 @@ class Canvas(QOpenGLWidget):
                port: typing.Optional[int] = None,
                mock_sleep: typing.Optional[typing.Callable[[float], 'asyncio.Future[None]']] = None) -> None:
     super().__init__()
+    self.config = config
 
     if 'touch_config' not in config:
       config['touch_config'] = {
-        'node': '',
+        'selected_node': '',
         'x': '',
         'y': '',
       }
@@ -502,11 +485,11 @@ class Canvas(QOpenGLWidget):
     self.handles.clear_loop = asyncio.get_event_loop().create_task(self.__clear_periodically())
 
   def on_touch_config_change(self, action, key, value):
-    node = self.touch_config['node']
+    node = self.touch_config['selected_node']
     self.x_channel = self.touch_config['x']
     self.y_channel = self.touch_config['y']
 
-    if not all([node, self.x_channel, self.y_channel]):
+    if not all([node, self.x_channel, self.y_channel]) or self.x_channel == self.y_channel:
       return
 
     if self.touch_stream:
@@ -838,7 +821,7 @@ class Canvas(QOpenGLWidget):
         voltage = QPointF(x, y)
         if voltage.x() < -5 or voltage.y() < -5:
           self.on_touch(QPoint(-1, -1))
-          return
+          continue
         self.last_voltage = voltage
         if self.input_config.touch_calibration.calibrating_touch:
           # self.touch_target_voltage[-1][0] += voltage.x()
@@ -848,7 +831,7 @@ class Canvas(QOpenGLWidget):
           self.input_config.touch_calibration.touch_target_voltage[-1][0] = voltage.x()
           self.input_config.touch_calibration.touch_target_voltage[-1][1] = voltage.y()
           self.input_config.touch_calibration.touch_target_voltage_count = 1
-          return
+          continue
 
         global_point = self.input_config.touch_calibration.touch_transform.map(voltage)
         local_point = self.mapFromGlobal(QPoint(int(global_point.x()), int(global_point.y())))
@@ -892,7 +875,6 @@ class Canvas(QOpenGLWidget):
       assert x is not None and y is not None
 
       voltage_point = QPointF(x, -y)
-      print(voltage_point)
 
       if y >= 0:
         if x >= 0:
@@ -940,7 +922,7 @@ class Canvas(QOpenGLWidget):
                                   touch_calibration.touch_targets[touch_calibration.touch_target_index][1])
       point = self.mapFromGlobal(point)
 
-      self.input_config.touch_path.addEllipse(point, 2, 2)
+      self.input_config.touch_path.addEllipse(QPointF(point), 2, 2)
       touch_calibration.touch_target_index += 1
 
       if touch_calibration.touch_target_index < len(touch_calibration.touch_targets):
@@ -957,20 +939,13 @@ class Canvas(QOpenGLWidget):
           transform[0,2], transform[1,2], transform[2,2]
         )
 
-        user_file = pathlib.Path.home().joinpath('.task_controller', 'touch_transform.yaml')
-        if not user_file.parent.exists():
-          user_file.parent.mkdir(parents=True)
-
-        with open(str(user_file), 'w') as touch_transform_file:
-          touch_transform = touch_calibration.touch_transform
-          config = {
-            'is_matrix': True,
-            'm11': touch_transform.m11(), 'm12': touch_transform.m12(), 'm13': touch_transform.m13(),
-            'm21': touch_transform.m21(), 'm22': touch_transform.m22(), 'm23': touch_transform.m23(),
-            'm31': touch_transform.m31(), 'm32': touch_transform.m32(), 'm33': touch_transform.m33()
-          }
-          touch_transform_file.write(yaml.dump(config))
-          touch_calibration.calibrating_touch = False
+        touch_transform = touch_calibration.touch_transform
+        self.config['touch_transform'] = {
+          'm11': touch_transform.m11(), 'm12': touch_transform.m12(), 'm13': touch_transform.m13(),
+          'm21': touch_transform.m21(), 'm22': touch_transform.m22(), 'm23': touch_transform.m23(),
+          'm31': touch_transform.m31(), 'm32': touch_transform.m32(), 'm33': touch_transform.m33()
+        }
+        touch_calibration.calibrating_touch = False
       self.update()
 
   def clear_accumulation(self) -> None:

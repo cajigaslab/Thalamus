@@ -251,6 +251,11 @@ class TaskContextProtocol(metaclass=abc.ABCMeta):
     Progress task execution
     '''
 
+  async def log(self, text: str) -> None:
+    '''
+    Send log to thalamus
+    '''
+
 AnimateTarget = typing.Callable[[TaskContextProtocol],
                                 typing.Awaitable[TaskResult]]
 
@@ -350,7 +355,6 @@ async def wait_for_dual_hold(context: TaskContextProtocol,
   Waits for two conditions to be held for hold_duration. Both is_held1 and is_held2 must both maintain true
   throughout.  up to blink1_duration and blink2_duration.
   """
-  state_message = BehavState()
   start = time.perf_counter()
 
   time_spent_blinking = 0.0
@@ -365,9 +369,7 @@ async def wait_for_dual_hold(context: TaskContextProtocol,
     if not blinked:
       break
 
-    state_message.header.stamp = context.ros_now().to_msg()
-    state_message.state = 'blink'
-    context.publish(BehavState, 'state', state_message)      
+    await context.log('BehavState=blink')      
 
     t0 = time.perf_counter()  
     if not is_held1():    
@@ -391,14 +393,11 @@ async def stamp_msg(context, msg):
   return msg
 
 async def do_stimulation(context, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
-  state_message = BehavState()
   try:
     await context.sleep(stim_start)
     message = comedi_nodes.msg.DigWordChunk()
 
-    state_message.state = 'pulse_start'
-    state_message.header.stamp = context.ros_manager.node.node.get_clock().now().to_msg()
-    context.publish(BehavState, 'state', state_message)
+    await context.log('BehavState=pulse_start')
 
     if pulse_width.total_seconds() > 0:
       for _ in range(pulse_count):
@@ -419,9 +418,7 @@ async def do_stimulation(context, stim_start, intan_cfg, pulse_width, pulse_coun
     context.publish(comedi_nodes.msg.DigWordChunk, '/stim_triggers', message)
     pass
   finally:
-    state_message.state = 'pulse_end'
-    state_message.header.stamp = context.ros_manager.node.node.get_clock().now().to_msg()
-    context.publish(BehavState, 'state', state_message)
+    await context.log('BehavState=pulse_end')
 
 @contextlib.contextmanager
 def stimulator(*args, **kwargs):
@@ -443,7 +440,6 @@ async def wait_for_hold(context: TaskContextProtocol,
   """
   Waits for the target to be held for hold_duration.  Subject is allowed to blink no longer than blink_duration
   """
-  state_message = BehavState()
   start = time.perf_counter()
   time_spent_blinking = 0.0
   while True:
@@ -457,9 +453,7 @@ async def wait_for_hold(context: TaskContextProtocol,
     if not blinked:
       break
     
-    state_message.state = 'blink'
-    state_message.header.stamp = context.ros_now().to_msg()
-    context.publish(BehavState, 'state', state_message)
+    await context.log('BehavState=blink')
 
     t0 = time.perf_counter()        
     reacquired = await wait_for(context, is_held, blink_duration)

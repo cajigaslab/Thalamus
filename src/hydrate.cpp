@@ -219,8 +219,13 @@ namespace hydrate {
           {
             auto text = record->text();
             auto key = std::pair<std::string, std::string>(record->node(), "");
-            ++counts["text/" + key.first + "/data"];
-            ++counts["text/" + key.first + "/received"];
+            if(key.first.empty()) {
+              ++counts["log/data"];
+              ++counts["log/received"];
+            } else {
+              ++counts["text/" + key.first + "/data"];
+              ++counts["text/" + key.first + "/received"];
+            }
           }
           break;
         case thalamus_grpc::StorageRecord::kEvent:
@@ -440,6 +445,8 @@ namespace hydrate {
             type = event_type;
           } else if(tokens.front() == "text") {
             type = str_type;
+          } else if(tokens.front() == "log") {
+            type = str_type;
           }
           hsize_t dims[] = { pair.second };
           hsize_t max_dims[] = { pair.second };
@@ -543,8 +550,8 @@ namespace hydrate {
               auto text_data = new char[text.size()+1];
               strcpy(text_data, text.data());
 
-              auto data_path = "text/" + record->node() + "/data";
-              auto received_path = "text/" + record->node() + "/received";
+              auto data_path = record->node().empty() ? "log/data" : "text/" + record->node() + "/data";
+              auto received_path = record->node().empty() ? "log/received" : "text/" + record->node() + "/received";
               auto data = datasets[data_path];
               auto received = datasets[received_path];
               auto& data_written = written[data_path];
