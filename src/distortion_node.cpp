@@ -94,7 +94,7 @@ namespace thalamus {
     }
 
     void on_data(Node*) {
-      if(image_source->format() != ImageNode::Format::Gray || pool.full() || (busy && collecting)) {
+      if(image_source->format() != ImageNode::Format::Gray || pool.full()) {
         return;
       }
 

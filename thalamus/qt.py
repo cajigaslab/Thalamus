@@ -109,6 +109,8 @@ else:
   qt_move_attr(Qt, Qt.AlignmentFlag, 'AlignRight')
   qt_move_attr(Qt, Qt.AlignmentFlag, 'AlignHCenter')
   qt_move_attr(Qt, Qt.AlignmentFlag, 'AlignJustify')
+  qt_move_attr(Qt, Qt.CursorShape, 'SplitHCursor')
+  qt_move_attr(Qt, Qt.CursorShape, 'SplitVCursor')
   qt_move_attr(QImage, QImage.Format, 'Format_Grayscale8')
   qt_move_attr(QImage, QImage.Format, 'Format_RGB888')
   qt_move_attr(QMessageBox, QMessageBox.StandardButton, 'Yes')

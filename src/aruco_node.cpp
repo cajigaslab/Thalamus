@@ -15,6 +15,7 @@ struct ArucoNode::Impl {
   boost::signals2::scoped_connection state_connection;
   boost::signals2::scoped_connection boards_connection;
   std::vector<boost::signals2::scoped_connection> board_connections;
+  std::vector<boost::signals2::scoped_connection> id_connections;
   std::vector<Segment> _segments;
   std::span<Segment const> _segment_span;
   NodeGraph* graph;
@@ -44,6 +45,7 @@ struct ArucoNode::Impl {
     long long columns;
     double markerSize;
     double markerSeparation;
+    std::vector<int> ids;
   };
 
   std::map<ObservableDictPtr, Board> boards;
@@ -63,6 +65,21 @@ struct ArucoNode::Impl {
     this->state->recap(std::bind(&Impl::on_change, this, _1, _2, _3));
   }
 
+  void on_ids_change(ObservableDictPtr self, ObservableCollection::Action action, const ObservableCollection::Key& key, const ObservableCollection::Value& value) {
+    auto key_int = std::get<long long>(key);
+    auto value_int = std::get<long long>(value);
+
+    auto& board = boards[self];
+    if(action == ObservableCollection::Action::Set) {
+      while(board.ids.size() <= key_int) {
+        board.ids.emplace_back();
+      }
+      board.ids[key_int] = value_int;
+    } else {
+      board.ids.erase(board.ids.begin()+key_int);
+    }
+  }
+
   void on_board_change(ObservableDictPtr self, ObservableCollection::Action action, const ObservableCollection::Key& key, const ObservableCollection::Value& value) {
     auto key_str = std::get<std::string>(key);
     auto& board = boards[self];
@@ -74,6 +91,10 @@ struct ArucoNode::Impl {
       board.markerSize = std::get<double>(value);
     } else if(key_str == "Marker Separation") {
       board.markerSeparation = std::get<double>(value);
+    } else if(key_str == "ids") {
+      auto value_list = std::get<ObservableListPtr>(value);
+      id_connections.push_back(value_list->changed.connect(std::bind(&Impl::on_ids_change, this, self, _1, _2, _3)));
+      value_list->recap(std::bind(&Impl::on_ids_change, this, self, _1, _2, _3));
     }
   }
 
@@ -177,7 +198,7 @@ struct ArucoNode::Impl {
   Frame current_frame;
 
   void on_data(Node*) {
-    if(!running || !source->has_image_data() || source->format() != ImageNode::Format::Gray || pool.full()) {
+    if(!source->has_image_data() || source->format() != ImageNode::Format::Gray || pool.full()) {
       return;
     }
 
@@ -193,6 +214,7 @@ struct ArucoNode::Impl {
                width, height, in,
                boards=this->boards, 
                dict=this->dict, 
+               running=this->running,
                detector=this->detector, 
                &io_context=this->io_context,
                &output_frames=this->output_frames,
@@ -203,46 +225,49 @@ struct ArucoNode::Impl {
                distortion_parameters=std::vector<double>(distortion_parameters.begin(), distortion_parameters.end()),
                outer=outer->shared_from_this()
     ] {
-      for(auto& pair : boards) {
-        auto& board = pair.second;
-        cv::aruco::GridBoard grid_board(cv::Size(board.columns, board.rows), board.markerSize, board.markerSeparation, dict);
+      cv::Mat color;
+      cv::cvtColor(in, color, cv::COLOR_GRAY2RGB);
 
+      if(running) {
         std::vector<int> ids;
         std::vector<std::vector<cv::Point2f>> corners, rejected;
         detector->detectMarkers(in, corners, ids, rejected);
-
-        cv::Mat color;
-        cv::cvtColor(in, color, cv::COLOR_GRAY2RGB);
-
-        if(!camera_matrix.empty() && !ids.empty()) {
-          cv::Mat obj_points, img_points;
-          grid_board.matchImagePoints(corners, ids, obj_points, img_points);
-          cv::Vec3d rvec, tvec;
-          cv::solvePnP(obj_points, img_points, camera_matrix, distortion_parameters, rvec, tvec);
-
-          auto axis_length = .5*std::min(board.columns, board.rows)*(board.markerSize + board.markerSeparation) + board.markerSeparation;
-
-          cv::drawFrameAxes(color, camera_matrix, distortion_parameters, rvec, tvec, axis_length);
-        }
-
         cv::aruco::drawDetectedMarkers(color, corners, ids);
 
-        boost::asio::post(io_context, [frame_id,color,&output_frames,&next_output_frame,&current_frame,outer,frame_interval] {
-          output_frames[frame_id] = Frame{color, frame_interval};
-          for(auto i = output_frames.begin();i != output_frames.end();) {
-            if(i->first == next_output_frame) {
-              ++next_output_frame;
-              current_frame = i->second;
-              outer->ready(outer.get());
-              i = output_frames.erase(i);
-            } else {
-              ++i;
+        if(!camera_matrix.empty() && !ids.empty()) {
+          for(auto& pair : boards) {
+            auto& board = pair.second;
+            cv::aruco::GridBoard grid_board(cv::Size(board.columns, board.rows), board.markerSize, board.markerSeparation, dict, board.ids);
+
+            cv::Mat obj_points, img_points;
+            grid_board.matchImagePoints(corners, ids, obj_points, img_points);
+            cv::Vec3d rvec, tvec;
+            try {
+              cv::solvePnP(obj_points, img_points, camera_matrix, distortion_parameters, rvec, tvec);
+
+              auto axis_length = .5*std::min(board.columns, board.rows)*(board.markerSize + board.markerSeparation) + board.markerSeparation;
+
+              cv::drawFrameAxes(color, camera_matrix, distortion_parameters, rvec, tvec, axis_length);
+            } catch(cv::Exception& e) {
+              THALAMUS_LOG(error) << e.what();
             }
           }
-        });
+        }
       }
+      boost::asio::post(io_context, [frame_id,color,&output_frames,&next_output_frame,&current_frame,outer,frame_interval] {
+        output_frames[frame_id] = Frame{color, frame_interval};
+        for(auto i = output_frames.begin();i != output_frames.end();) {
+          if(i->first == next_output_frame) {
+            ++next_output_frame;
+            current_frame = i->second;
+            outer->ready(outer.get());
+            i = output_frames.erase(i);
+          } else {
+            ++i;
+          }
+        }
+      });
     });
-
   }
 };
 
