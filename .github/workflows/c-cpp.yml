@@ -33,14 +33,15 @@ jobs:
       run: git config --global user.name "Github Actions"
     - name: Set Git email 
       run: git config --global user.email "no@email.com"
+    - run: python3 -m venv pyenv
     - name: Prepare
-      run: python3 prepare.py
+      run: source pyenv/bin/activate && python3 prepare.py
     - name: nasm
       run: echo $PATH && echo $HOME && dir $HOME/nasm-2.15.05  && which nasm
     - name: Version Bump
-      run: python3 bump.py patch
+      run: source pyenv/bin/activate && python3 bump.py patch
     - name: Build
-      run: python3 -m build -n -w -Crelease
+      run: source pyenv/bin/activate && python3 -m build -n -w -Crelease
       
   build-linux:
     runs-on: ubuntu-latest
