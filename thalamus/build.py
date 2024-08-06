@@ -200,3 +200,9 @@ def build_sdist(sdist_directory, config_settings=None):
           tar.add(str(path), root/path)
 
   return sdist_name
+
+def main():
+  generate()
+
+if __name__ == '__main__':
+  main()

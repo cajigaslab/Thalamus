@@ -1374,7 +1374,7 @@ namespace thalamus {
 
           GenTL::INFO_DATATYPE defines_type;
           bool8_t does_define;
-          size_t define_size;
+          size_t define_size = sizeof(does_define);
           auto error = cti->DSGetInfo(ds_handle, GenTL::STREAM_INFO_DEFINES_PAYLOADSIZE, &defines_type, &does_define, &define_size);
           if(error != GenTL::GC_ERR_SUCCESS) {
             THALAMUS_LOG(info) << "DSGetInfo failed.";
@@ -1383,8 +1383,8 @@ namespace thalamus {
           THALAMUS_ASSERT(does_define);
 
           GenTL::INFO_DATATYPE payload_size_type;
-          size_t payload_size_size;
           size_t payload_size;
+          size_t payload_size_size = sizeof(payload_size);
           error = cti->DSGetInfo(ds_handle, GenTL::STREAM_INFO_PAYLOAD_SIZE, &payload_size_type, &payload_size, &payload_size_size);
           if(error != GenTL::GC_ERR_SUCCESS) {
             THALAMUS_LOG(info) << "DSGetInfo failed.";
@@ -1392,8 +1392,8 @@ namespace thalamus {
           }
 
           GenTL::INFO_DATATYPE announce_min_type;
-          size_t announce_min_size;
           size_t announce_min;
+          size_t announce_min_size = sizeof(announce_min);
           error = cti->DSGetInfo(ds_handle, GenTL::STREAM_INFO_BUF_ANNOUNCE_MIN, &announce_min_type, &announce_min, &announce_min_size);
           if (error != GenTL::GC_ERR_SUCCESS) {
             THALAMUS_LOG(info) << "DSGetInfo failed.";
@@ -1539,7 +1539,7 @@ namespace thalamus {
 
         bool is_writable(const std::string& reg) {
           auto i = nodes.find(reg);
-          if (i != nodes.end()) {
+          if (i == nodes.end()) {
             return false;
           }
           else if (std::holds_alternative<long long int>(i->second)) {
@@ -1817,6 +1817,7 @@ namespace thalamus {
           continue;
         }
         for(auto& file : std::filesystem::directory_iterator(path)) {
+          THALAMUS_LOG(info) << "Loading " << file;
           if(file.path().extension() == ".cti") {
             ctis.emplace_back(new Cti(file.path().stem().string(), file.path().string()));
           }

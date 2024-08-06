@@ -82,16 +82,19 @@ class ObservableBridge:
     create_task_with_exc_handling(self.queue.put(message))
 
   async def __notification_processor(self):
-    async for request in self.stub.notification(util_pb2.Empty()):
-      func = None
-      if request.type == thalamus_pb2.Notification.Type.Info:
-        func = QMessageBox.information
-      elif request.type == thalamus_pb2.Notification.Type.Warning:
-        func = QMessageBox.warning
-      elif request.type == thalamus_pb2.Notification.Type.Error:
-        func = QMessageBox.critical
-      assert func is not None, f'Unexpected notification type: {request.type}'
-      func(None, request.title, request.message)
+    try:
+      async for request in self.stub.notification(util_pb2.Empty()):
+        func = None
+        if request.type == thalamus_pb2.Notification.Type.Info:
+          func = QMessageBox.information
+        elif request.type == thalamus_pb2.Notification.Type.Warning:
+          func = QMessageBox.warning
+        elif request.type == thalamus_pb2.Notification.Type.Error:
+          func = QMessageBox.critical
+        assert func is not None, f'Unexpected notification type: {request.type}'
+        func(None, request.title, request.message)
+    except asyncio.CancelledError:
+      pass
 
   async def __eval_processor(self):
     async for request in self.stub.eval(self.eval_queue):
@@ -101,42 +104,45 @@ class ObservableBridge:
       await self.eval_queue.put(thalamus_pb2.EvalResponse(id = request.id, value = json_result))
 
   async def __bridge_processor(self):
-    async for change in self.stub.observable_bridge(self.queue):
-      #LOGGER.info('Change: %s = %s', change.address, change.value)
-      try:
-        jsonpath_expr = jsonpath_ng.parse(change.address)
-      except Exception as _exc: # pylint: disable=broad-except
-        LOGGER.exception('Failed to parse JSONPATH %s', change.address)
-        continue
-      
-      matches = jsonpath_expr.find(self.config)
+    try:
+      async for change in self.stub.observable_bridge(self.queue):
+        #LOGGER.info('Change: %s = %s', change.address, change.value)
+        try:
+          jsonpath_expr = jsonpath_ng.parse(change.address)
+        except Exception as _exc: # pylint: disable=broad-except
+          LOGGER.exception('Failed to parse JSONPATH %s', change.address)
+          continue
+        
+        matches = jsonpath_expr.find(self.config)
 
-      if not matches:
-        if isinstance(jsonpath_expr, jsonpath_ng.Child):
-          for m in jsonpath_expr.left.find(self.config):
-            matches.append(PatchMatch(None, MatchContext(m.value), jsonpath_expr.right))
-        else:
-          matches.append(PatchMatch(None, MatchContext(self.config), jsonpath_expr))
-
-      try:
-        value = json.loads(change.value)
-      except json.JSONDecodeError:
-        LOGGER.exception('Failed to decode JSON: %s', change.value)
-        continue
-
-      for match in matches:
-        if isinstance(match.value, ObservableCollection):
-          match.value.assign(value)
-        elif isinstance(match.path, jsonpath_ng.Index):
-          if match.path.index == len(match.context.value):
-            match.context.value.append(value)
+        if not matches:
+          if isinstance(jsonpath_expr, jsonpath_ng.Child):
+            for m in jsonpath_expr.left.find(self.config):
+              matches.append(PatchMatch(None, MatchContext(m.value), jsonpath_expr.right))
           else:
-            match.context.value[match.path.index] = value
-        elif isinstance(match.path, jsonpath_ng.Fields):
-          match.context.value[match.path.fields[0]] = value
-      
-      message = thalamus_pb2.ObservableChange(acknowledged = change.id)
-      create_task_with_exc_handling(self.queue.put(message))
+            matches.append(PatchMatch(None, MatchContext(self.config), jsonpath_expr))
+
+        try:
+          value = json.loads(change.value)
+        except json.JSONDecodeError:
+          LOGGER.exception('Failed to decode JSON: %s', change.value)
+          continue
+
+        for match in matches:
+          if isinstance(match.value, ObservableCollection):
+            match.value.assign(value)
+          elif isinstance(match.path, jsonpath_ng.Index):
+            if match.path.index == len(match.context.value):
+              match.context.value.append(value)
+            else:
+              match.context.value[match.path.index] = value
+          elif isinstance(match.path, jsonpath_ng.Fields):
+            match.context.value[match.path.fields[0]] = value
+        
+        message = thalamus_pb2.ObservableChange(acknowledged = change.id)
+        create_task_with_exc_handling(self.queue.put(message))
+    except asyncio.CancelledError:
+      pass
 
   def __combine(self, pre: str, end: typing.Union[str, int]) -> None:
     if pre is None:

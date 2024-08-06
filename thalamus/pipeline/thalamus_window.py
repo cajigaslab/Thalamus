@@ -13,8 +13,6 @@ import collections
 import pkg_resources
 from ..config import *
 import functools
-import vtk
-import cv2
 import h5py
 import asyncio
 from ..task_controller.util import create_task_with_exc_handling
@@ -35,7 +33,7 @@ from .log_widget import LogWidget
 from .wave_widget import WaveWidget
 from .intan_widget import IntanWidget
 from .aruco_widget import ArucoWidget
-from .analog_widget import AnalogWidget
+#from .analog_widget import AnalogWidget
 from ..util import NodeSelector
 from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
@@ -318,7 +316,7 @@ FACTORIES = {
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
     #UserData(UserDataType.DEFAULT, 'Time Source', '', []),
   ]),
-  'ANALOG': Factory(AnalogWidget, [
+  'ANALOG': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Widget is Touchpad', False, [])
   ]),
   'OCULOMATIC': Factory(lambda c, s: OculomaticWidget(c, s) , [
@@ -383,6 +381,8 @@ FACTORIES = {
   'LOG': Factory(lambda c, s: LogWidget(c, s), []),
   'ARUCO': Factory(lambda c, s: ArucoWidget(c, s), [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+    UserData(UserDataType.CHECK_BOX, 'Marker Mode', False, []),
+    UserData(UserDataType.CHECK_BOX, 'View', False, []),
     UserData(UserDataType.DEFAULT, 'Source', '', []),
     UserData(UserDataType.COMBO_BOX, 'Dictionary',  "DICT_4X4_50", [
       "DICT_4X4_50",
