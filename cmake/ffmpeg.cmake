@@ -58,9 +58,6 @@ if(WIN32)
   set(FFMPEG_MAKE_COMMAND ${MSYS2_ROOT}\\msys2_shell.cmd -here -use-full-path -no-start -defterm -c \"${CMAKE_SOURCE_DIR}/make_ffmpeg.bash ${CPU_COUNT}\")
 else()
   string(REPLACE "-nostdinc++" "" FFMPEG_COMPILE_OPTIONS_SPACED "${ALL_C_COMPILE_OPTIONS_SPACED}")
-  if(APPLE)
-    set(FFMPEG_DISABLE_ASM --disable-x86asm)
-  endif()
   add_custom_command(
     OUTPUT "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
     DEPENDS zlib_processed sdl
