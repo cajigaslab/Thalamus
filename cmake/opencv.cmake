@@ -57,7 +57,10 @@ else()
                   opencv_imgproc
                   opencv_objdetect
                   opencv_core)
-  set(OPENCV_THIRDPARTY_LIBS libjpeg-turbo libpng libtiff libopenjp2 IlmImf ippiw ittnotify ippicv quirc)
+  set(OPENCV_THIRDPARTY_LIBS libjpeg-turbo libpng libtiff libopenjp2 IlmImf ittnotify quirc)
+  if(NOT APPLE)
+    list(APPEND OPENCV_THIRDPARTY_LIBS ippiw ippicv)
+  endif()
   foreach(LIB ${OPENCV_LIBS})
     list(APPEND OPENCV_LIB_FILES "${opencv_BINARY_DIR}/$<CONFIG>/install/lib/lib${LIB}.a")
   endforeach()
