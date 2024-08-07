@@ -18,7 +18,7 @@ jobs:
     - name: Prepare
       run: source pyenv/bin/activate && python3 prepare.py
     - name: nasm
-      run: echo $PATH && echo $HOME && dir $HOME/nasm-2.15.05  && which nasm
+      run: echo $PATH && echo $HOME && ls $HOME/nasm-2.15.05  && which nasm
     - name: Version Bump
       run: source pyenv/bin/activate && python3 bump.py patch
     - name: Build
