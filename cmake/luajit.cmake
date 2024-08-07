@@ -1,7 +1,7 @@
 FetchContent_Declare(
   luajit
   GIT_REPOSITORY https://luajit.org/git/luajit.git
-  GIT_TAG v2.0.5)
+  GIT_TAG v2.1)
 FetchContent_Populate(luajit)
 
 execute_process(COMMAND git apply "${CMAKE_SOURCE_DIR}/patches/luajit" WORKING_DIRECTORY "${luajit_SOURCE_DIR}")

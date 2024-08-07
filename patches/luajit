@@ -1,13 +1,13 @@
 diff --git a/src/msvcbuild.bat b/src/msvcbuild.bat
-index bd0c4c5f..a30dadb5 100644
+index 13b8175a..1748085b 100644
 --- a/src/msvcbuild.bat
 +++ b/src/msvcbuild.bat
-@@ -14,7 +14,7 @@
- @if not defined INCLUDE goto :FAIL
- 
+@@ -15,7 +15,7 @@
  @setlocal
+ @rem Add more debug flags here, e.g. DEBUGCFLAGS=/DLUA_USE_ASSERT
+ @set DEBUGCFLAGS=
 -@set LJCOMPILE=cl /nologo /c /O2 /W3 /D_CRT_SECURE_NO_DEPRECATE /D_CRT_STDIO_INLINE=__declspec(dllexport)__inline
 +@set LJCOMPILE=cl /nologo /c /O2 /W3 /D_CRT_SECURE_NO_DEPRECATE /D_CRT_STDIO_INLINE=__declspec(dllexport)__inline %CFLAGS%
- @set LJLINK=link /nologo
- @set LJMT=mt /nologo
- @set LJLIB=lib /nologo /nodefaultlib
+ @set LJDYNBUILD=/DLUA_BUILD_AS_DLL /MD
+ @set LJDYNBUILD_DEBUG=/DLUA_BUILD_AS_DLL /MDd 
+ @set LJCOMPILETARGET=/Zi
