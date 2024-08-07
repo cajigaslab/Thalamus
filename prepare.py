@@ -45,6 +45,8 @@ auth_handler = urllib.request.HTTPBasicAuthHandler(password_mgr)
 opener = urllib.request.build_opener(auth_handler, log_handler)
 urllib.request.install_opener(opener)
 
+CMAKE_VERSION = '3.30.2'
+
 def download(url: str):
   print(f'Downloading {url}: 0%')
   def reporthook(block_num, block_size, total_size):
@@ -92,11 +94,11 @@ def main():
 
     #cmake
     if not shutil.which('cmake'):
-      destination = os.environ['USERPROFILE'] + '\\cmake-3.24.0-windows-x86_64\\bin'
+      destination = os.environ['USERPROFILE'] + f'\\cmake-{CMAKE_VERSION}-windows-x86_64\\bin'
       new_path.append(destination)
       if not (pathlib.Path(destination) / 'cmake.exe').exists():
-        download('https://github.com/Kitware/CMake/releases/download/v3.24.0/cmake-3.24.0-windows-x86_64.zip')
-        subprocess.check_call(['powershell', '-Command', 'Expand-Archive -DestinationPath ' + os.environ['USERPROFILE'] + ' cmake-3.24.0-windows-x86_64.zip'])
+        download(f'https://github.com/Kitware/CMake/releases/download/v{CMAKE_VERSION}/cmake-{CMAKE_VERSION}-windows-x86_64.zip')
+        subprocess.check_call(['powershell', '-Command', 'Expand-Archive -DestinationPath ' + os.environ['USERPROFILE'] + f' cmake-{CMAKE_VERSION}-windows-x86_64.zip'])
     
     if new_path:
       if 'GITHUB_PATH' in os.environ:
@@ -158,10 +160,10 @@ def main():
 
     #cmake
     if not shutil.which('cmake'):
-      subprocess.check_call(['curl', '-L', '-o', 'cmake-3.24.0-macos-universal.tar.gz', 'https://github.com/Kitware/CMake/releases/download/v3.24.0/cmake-3.24.0-macos-universal.tar.gz'])
-      subprocess.check_call(['tar', '-xvzf', 'cmake-3.24.0-macos-universal.tar.gz', '-C', os.environ['HOME']])
+      subprocess.check_call(['curl', '-L', '-o', f'cmake-{CMAKE_VERSION}-macos-universal.tar.gz', 'https://github.com/Kitware/CMake/releases/download/v{CMAKE_VERSION}/cmake-{CMAKE_VERSION}-macos-universal.tar.gz'])
+      subprocess.check_call(['tar', '-xvzf', f'cmake-{CMAKE_VERSION}-macos-universal.tar.gz', '-C', os.environ['HOME']])
       with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
-        bashrc.write(f'\nexport PATH={home_str}/cmake-3.24.0-macos-universal/CMake.app/Contents/bin:$PATH\n')
+        bashrc.write(f'\nexport PATH={home_str}/cmake-{CMAKE_VERSION}-macos-universal/CMake.app/Contents/bin:$PATH\n')
 
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-U', 'setuptools'], cwd=home_str)
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-r', str(pathlib.Path.cwd()/'requirements.txt')], cwd=home_str)
@@ -225,12 +227,11 @@ def main():
 
     _, cmake_is_current = is_up_to_date('cmake', r'cmake version (\d+).(\d+).(\d+)', (3, 16, 0))
     if not cmake_is_current:
-      cmake_version = '3.23.1'
-      subprocess.check_call(['wget', f'https://github.com/Kitware/CMake/releases/download/v{cmake_version}/cmake-{cmake_version}-linux-x86_64.sh'])
+      subprocess.check_call(['wget', f'https://github.com/Kitware/CMake/releases/download/v{CMAKE_VERSION}/cmake-{CMAKE_VERSION}-linux-x86_64.sh'])
       (home_path / '.local').mkdir(exist_ok=True)
-      subprocess.check_call(['sh', f'./cmake-{cmake_version}-linux-x86_64.sh', f'--prefix={home_str}/.local', '--skip-license', '--include-subdir'])
+      subprocess.check_call(['sh', f'./cmake-{CMAKE_VERSION}-linux-x86_64.sh', f'--prefix={home_str}/.local', '--skip-license', '--include-subdir'])
       with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
-        bashrc.write(f'\nexport PATH={home_str}/.local/cmake-{cmake_version}-linux-x86_64/bin:$PATH\n')
+        bashrc.write(f'\nexport PATH={home_str}/.local/cmake-{CMAKE_VERSION}-linux-x86_64/bin:$PATH\n')
     
     with open(str(home_path / '.bashrc'), 'r') as bashrc:
       bashrc_content = bashrc.read()
