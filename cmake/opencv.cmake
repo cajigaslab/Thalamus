@@ -118,7 +118,7 @@ if(WIN32)
 elseif(APPLE)
   set(OPENCV_INCLUDE "${opencv_BINARY_DIR}/$<CONFIG>/install/include/opencv4")
 
-  foreach(LIB ${OPENCV_LIBS})
+  foreach(LIB ${OPENCV_LIBS_FILES})
     target_link_options(opencv INTERFACE -Wl,-all_load ${LIB})
   endforeach()
 
