@@ -57,7 +57,14 @@ else()
                   opencv_imgproc
                   opencv_objdetect
                   opencv_core)
-  set(OPENCV_THIRDPARTY_LIBS libjpeg-turbo libpng libtiff libopenjp2 IlmImf ippiw ittnotify ippicv quirc)
+  set(OPENCV_THIRDPARTY_LIBS libjpeg-turbo libpng libtiff libopenjp2 IlmImf ittnotify quirc)
+  if(APPLE)
+    if("${CMAKE_SYSTEM_PROCESSOR}" MATCHES "x86_64")
+      list(APPEND OPENCV_THIRDPARTY_LIBS ippiw ippicv)
+    else()
+      list(APPEND OPENCV_THIRDPARTY_LIBS tegra_hal)
+    endif()
+  endif()
   foreach(LIB ${OPENCV_LIBS})
     list(APPEND OPENCV_LIB_FILES "${opencv_BINARY_DIR}/$<CONFIG>/install/lib/lib${LIB}.a")
   endforeach()
@@ -118,8 +125,8 @@ if(WIN32)
 elseif(APPLE)
   set(OPENCV_INCLUDE "${opencv_BINARY_DIR}/$<CONFIG>/install/include/opencv4")
 
-  foreach(LIB ${OPENCV_LIBS})
-    target_link_options(opencv INTERFACE -Wl,-all_load ${LIB})
+  foreach(LIB ${OPENCV_LIB_FILES})
+    target_link_options(opencv INTERFACE -Wl,-force_load ${LIB})
   endforeach()
 
   target_link_libraries(opencv INTERFACE lzma iconv
