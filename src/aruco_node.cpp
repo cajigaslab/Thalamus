@@ -2,10 +2,16 @@
 #include <image_node.h>
 #include <modalities_util.h>
 #include <opencv2/objdetect/aruco_detector.hpp>
+#include <opencv2/core/quaternion.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/calib3d.hpp>
 #include <thread_pool.h>
 #include <distortion_node.h>
+#include <boost/qvm/vec_access.hpp>
+#include <boost/qvm/vec_operations.hpp>
+#include <boost/qvm/quat_access.hpp>
+#include <boost/qvm/quat_operations.hpp>
+#include <boost/qvm/quat_vec_operations.hpp>
 
 using namespace thalamus;
 
@@ -16,8 +22,6 @@ struct ArucoNode::Impl {
   boost::signals2::scoped_connection boards_connection;
   std::vector<boost::signals2::scoped_connection> board_connections;
   std::vector<boost::signals2::scoped_connection> id_connections;
-  std::vector<Segment> _segments;
-  std::span<Segment const> _segment_span;
   NodeGraph* graph;
   ArucoNode* outer;
   std::string pose_name;
@@ -36,6 +40,8 @@ struct ArucoNode::Impl {
   struct Frame {
     cv::Mat mat;
     std::chrono::nanoseconds interval;
+    std::vector<Segment> segments;
+    std::chrono::nanoseconds time;
   };
   std::map<size_t, Frame> output_frames;
   std::chrono::nanoseconds frame_interval;
@@ -205,14 +211,20 @@ struct ArucoNode::Impl {
       detector = std::make_shared<cv::aruco::ArucoDetector>(dict, detector_parameters);
 
     } else if(key_str == "Running") {
+      frame = 0;
       running = std::get<bool>(value);
     }
   }
 
   Frame current_frame;
+  unsigned int frame = 0;
 
   void on_data(Node*) {
-    if(!source->has_image_data() || source->format() != ImageNode::Format::Gray || pool.full()) {
+    if(!source->has_image_data() || source->format() != ImageNode::Format::Gray) {
+      return;
+    }
+    ++frame;
+    if(pool.full()) {
       return;
     }
 
@@ -236,11 +248,14 @@ struct ArucoNode::Impl {
                &current_frame=this->current_frame,
                frame_interval,
                camera_matrix,
+               frame=this->frame,
+               time=source->time(),
                distortion_parameters=std::vector<double>(distortion_parameters.begin(), distortion_parameters.end()),
                outer=outer->shared_from_this()
     ] {
       cv::Mat color;
       cv::cvtColor(in, color, cv::COLOR_GRAY2RGB);
+      std::vector<MotionCaptureNode::Segment> _segments;
 
       if(running) {
         std::vector<int> ids;
@@ -249,6 +264,7 @@ struct ArucoNode::Impl {
         cv::aruco::drawDetectedMarkers(color, corners, ids);
 
         if(!camera_matrix.empty() && !ids.empty()) {
+          auto board_index = 0;
           for(auto& pair : boards) {
             auto& board = pair.second;
             cv::aruco::GridBoard grid_board(cv::Size(board.columns, board.rows), board.markerSize, board.markerSeparation, dict, board.ids);
@@ -286,14 +302,30 @@ struct ArucoNode::Impl {
               line(color, imagePoints[0], imagePoints[2], cv::Scalar(0, 255, 0), 3);
               line(color, imagePoints[0], imagePoints[3], cv::Scalar(255, 0, 0), 3);
 
+              _segments.emplace_back();
+              _segments.back().frame = frame;
+              _segments.back().segment_id = board_index;
+              _segments.back().time = std::chrono::duration_cast<std::chrono::milliseconds>(time).count();
+
+              boost::qvm::X(_segments.back().position) = tvec[0];
+              boost::qvm::Y(_segments.back().position) = tvec[1];
+              boost::qvm::Z(_segments.back().position) = tvec[2];
+
+              auto quaternion = cv::Quat<float>::createFromRvec(board.rotation);
+
+              boost::qvm::S(_segments.back().rotation) = quaternion.w;
+              boost::qvm::X(_segments.back().rotation) = quaternion.x;
+              boost::qvm::Y(_segments.back().rotation) = quaternion.y;
+              boost::qvm::Z(_segments.back().rotation) = quaternion.z;
             } catch(cv::Exception& e) {
               THALAMUS_LOG(error) << e.what();
             }
+            ++board_index;
           }
         }
       }
-      boost::asio::post(io_context, [frame_id,color,&output_frames,&next_output_frame,&current_frame,outer,frame_interval] {
-        output_frames[frame_id] = Frame{color, frame_interval};
+      boost::asio::post(io_context, [frame_id,color,&output_frames,&next_output_frame,&current_frame,outer,frame_interval,_segments=std::move(_segments),time] {
+        output_frames[frame_id] = Frame{color, frame_interval, std::move(_segments), time};
         for(auto i = output_frames.begin();i != output_frames.end();) {
           if(i->first == next_output_frame) {
             ++next_output_frame;
@@ -318,20 +350,20 @@ std::string ArucoNode::type_name() {
   return "ARUCO";
 }
 
-std::span<ArucoNode::Segment const> ArucoNode::segments() const {
-  return impl->_segment_span;
+std::span<MotionCaptureNode::Segment const> ArucoNode::segments() const {
+  return std::span<Segment const>(impl->current_frame.segments.begin(), impl->current_frame.segments.end());
 }
+
 const std::string& ArucoNode::pose_name() const {
-  return impl->pose_name;
+  return "";
 }
 
 void ArucoNode::inject(const std::span<Segment const>& segments) {
-  impl->_segment_span = segments;
   ready(this);
 }
 
 std::chrono::nanoseconds ArucoNode::time() const {
-  return 0ns;
+  return impl->current_frame.time;
 }
 
 std::span<const double> ArucoNode::data(int channel) const {
