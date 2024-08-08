@@ -12,6 +12,8 @@ set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 
 project(thalamus)
 
+message("CMAKE_SYSTEM_PROCESSOR ${CMAKE_SYSTEM_PROCESSOR}")
+
 if(WIN32)
   if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     execute_process(COMMAND "${CMAKE_CXX_COMPILER}" "${CMAKE_SOURCE_DIR}/stub_atomic.cpp" -c -o "${CMAKE_BINARY_DIR}/atomic.lib")
