@@ -41,6 +41,8 @@ struct ArucoNode::Impl {
   std::chrono::nanoseconds frame_interval;
 
   struct Board {
+    double translation_x = 0, translation_y = 0, translation_z = 0;
+    cv::Vec3d rotation;
     long long rows;
     long long columns;
     double markerSize;
@@ -95,6 +97,18 @@ struct ArucoNode::Impl {
       auto value_list = std::get<ObservableListPtr>(value);
       id_connections.push_back(value_list->changed.connect(std::bind(&Impl::on_ids_change, this, self, _1, _2, _3)));
       value_list->recap(std::bind(&Impl::on_ids_change, this, self, _1, _2, _3));
+    } else if (key_str == "translation_x") {
+      board.translation_x = std::get<double>(value);
+    } else if (key_str == "translation_y") {
+      board.translation_y = std::get<double>(value);
+    } else if (key_str == "translation_z") {
+      board.translation_z = std::get<double>(value);
+    } else if (key_str == "rotation_x") {
+      board.rotation[0] = std::get<double>(value);
+    } else if (key_str == "rotation_y") {
+      board.rotation[1] = std::get<double>(value);
+    } else if (key_str == "rotation_z") {
+      board.rotation[2] = std::get<double>(value);
     }
   }
 
@@ -248,6 +262,30 @@ struct ArucoNode::Impl {
               auto axis_length = .5*std::min(board.columns, board.rows)*(board.markerSize + board.markerSeparation) + board.markerSeparation;
 
               cv::drawFrameAxes(color, camera_matrix, distortion_parameters, rvec, tvec, axis_length);
+
+              std::vector<cv::Point3f> axesPoints;
+              axesPoints.emplace_back(0, 0, 0);
+              axesPoints.emplace_back(axis_length, 0, 0);
+              axesPoints.emplace_back(0, axis_length, 0);
+              axesPoints.emplace_back(0, 0, axis_length);
+
+              cv::Mat rotmat(3, 3, CV_64F);
+              cv::Rodrigues(board.rotation, rotmat);
+              for(auto& point : axesPoints) {
+                auto old = point;
+                point.x = old.x*rotmat.at<double>(0, 0) + old.y*rotmat.at<double>(0, 1) + old.z*rotmat.at<double>(0, 2) + board.translation_x;
+                point.y = old.x*rotmat.at<double>(1, 0) + old.y*rotmat.at<double>(1, 1) + old.z*rotmat.at<double>(1, 2) + board.translation_y;
+                point.z = old.x*rotmat.at<double>(2, 0) + old.y*rotmat.at<double>(2, 1) + old.z*rotmat.at<double>(2, 2) + board.translation_z;
+              }
+
+              std::vector<cv::Point2f> imagePoints;
+              projectPoints(axesPoints, rvec, tvec, camera_matrix, distortion_parameters, imagePoints);
+
+              // draw axes lines
+              line(color, imagePoints[0], imagePoints[1], cv::Scalar(0, 0, 255), 3);
+              line(color, imagePoints[0], imagePoints[2], cv::Scalar(0, 255, 0), 3);
+              line(color, imagePoints[0], imagePoints[3], cv::Scalar(255, 0, 0), 3);
+
             } catch(cv::Exception& e) {
               THALAMUS_LOG(error) << e.what();
             }
