@@ -65,6 +65,30 @@ class BoardsModel(QAbstractItemModel):
     elif key == 'Marker Separation':
       index = self.index(i, 3, QModelIndex())
       self.dataChanged.emit(index, index)
+    elif key == 'translation_x':
+      parent = self.index(i, 0, QModelIndex())
+      index = self.index(1, 1, parent)
+      self.dataChanged.emit(index, index)
+    elif key == 'translation_y':
+      parent = self.index(i, 0, QModelIndex())
+      index = self.index(1, 2, parent)
+      self.dataChanged.emit(index, index)
+    elif key == 'translation_z':
+      parent = self.index(i, 0, QModelIndex())
+      index = self.index(1, 3, parent)
+      self.dataChanged.emit(index, index)
+    elif key == 'rotation_x':
+      parent = self.index(i, 0, QModelIndex())
+      index = self.index(1, 4, parent)
+      self.dataChanged.emit(index, index)
+    elif key == 'rotation_y':
+      parent = self.index(i, 0, QModelIndex())
+      index = self.index(1, 5, parent)
+      self.dataChanged.emit(index, index)
+    elif key == 'rotation_z':
+      parent = self.index(i, 0, QModelIndex())
+      index = self.index(1, 6, parent)
+      self.dataChanged.emit(index, index)
     elif key == 'ids':
       parent = self.index(i, 0, QModelIndex())
       board.add_observer(lambda *args: self.on_ids_change(board, *args), functools.partial(isdeleted, self))
@@ -75,7 +99,7 @@ class BoardsModel(QAbstractItemModel):
     if action == ObservableCollection.Action.SET:
       i = self.get_row(board)
       parent = self.index(i, 0, QModelIndex())
-      index = self.index(key, 0, parent)
+      index = self.index(key+2, 1, parent)
       self.dataChanged.emit(index, index)
 
   def data(self, index: QModelIndex, role: int) -> typing.Any:
@@ -96,13 +120,40 @@ class BoardsModel(QAbstractItemModel):
         return board['Marker Size']
       elif index.column() == 3:
         return board['Marker Separation']
-    elif index.column() == 0 and index.row() == 0:
-      return 'IDs:'
-    elif index.column() == 1:
+    else:
       board_row = index.parent().row()
       board = self.config[board_row]
-      ids = board['ids']
-      return ids[index.row()]
+      if index.column() == 0 and index.row() == 1:
+        return 'End Effector Transform:'
+      elif index.column() == 1 and index.row() == 0:
+        return 'Tranlsation X:'
+      elif index.column() == 2 and index.row() == 0:
+        return 'Tranlsation Y:'
+      elif index.column() == 3 and index.row() == 0:
+        return 'Tranlsation Z:'
+      elif index.column() == 4 and index.row() == 0:
+        return 'Rotation X:'
+      elif index.column() == 5 and index.row() == 0:
+        return 'Rotation Y:'
+      elif index.column() == 6 and index.row() == 0:
+        return 'Rotation Z:'
+      elif index.column() == 1 and index.row() == 1:
+        return board['translation_x']
+      elif index.column() == 2 and index.row() == 1:
+        return board['translation_y']
+      elif index.column() == 3 and index.row() == 1:
+        return board['translation_z']
+      elif index.column() == 4 and index.row() == 1:
+        return board['rotation_x']
+      elif index.column() == 5 and index.row() == 1:
+        return board['rotation_y']
+      elif index.column() == 6 and index.row() == 1:
+        return board['rotation_z']
+      elif index.column() == 0 and index.row() == 2:
+        return 'IDs:'
+      elif index.column() == 1 and index.row() >= 2:
+        ids = board['ids']
+        return ids[index.row()-2]
 
   def setData(self, index: QModelIndex, value: typing.Any, role: int = Qt.ItemDataRole.EditRole) -> bool:
     #print('setData', index, value, role)
@@ -137,14 +188,33 @@ class BoardsModel(QAbstractItemModel):
     else:
       board_row = index.parent().row()
       board = self.config[board_row]
-      try:
-        board['ids'][index.row()] = int(value)
-      except ValueError:
-        return False
+      if index.row() == 1:
+        if index.column() == 0:
+          return False
+        try:
+          if index.column() == 1:
+            board['translation_x'] = float(value)
+          elif index.column() == 2:
+            board['translation_y'] = float(value)
+          elif index.column() == 3:
+            board['translation_z'] = float(value)
+          elif index.column() == 4:
+            board['rotation_x'] = float(value)
+          elif index.column() == 5:
+            board['rotation_y'] = float(value)
+          elif index.column() == 6:
+            board['rotation_z'] = float(value)
+        except ValueError:
+          return False
+      elif index.column() == 1 and index.row() >= 2:
+        try:
+          board['ids'][index.row()-2] = int(value)
+        except ValueError:
+          return False
       return True
 
   def flags(self, index: QModelIndex) -> Qt.ItemFlag:
-    if index.parent().isValid() and index.column() == 0:
+    if index.parent().isValid() and index.column() == 0 or index.row() == 0:
       return super().flags(index)
     return super().flags(index) | Qt.ItemFlag.ItemIsEditable
 
@@ -191,7 +261,7 @@ class BoardsModel(QAbstractItemModel):
 
   def columnCount(self, _: QModelIndex) -> int:
     #print('columnCount', _)
-    return 4
+    return 7
 
 class ArucoWidget(QWidget):
   def __init__(self, config, stub):
@@ -201,6 +271,11 @@ class ArucoWidget(QWidget):
     if 'Boards' not in config:
       config['Boards'] = []
     boards = config['Boards']
+
+    for board in boards:
+      for k in ('translation_x', 'translation_y', 'translation_z', 'rotation_x', 'rotation_y', 'rotation_z'):
+        if k not in board:
+          board[k] = 0.0
 
     qlist = QTreeView()
     model = BoardsModel(boards)
@@ -253,7 +328,13 @@ class ArucoWidget(QWidget):
         'Columns': 4,
         'Marker Size': .05,
         'Marker Separation': .01,
-        'ids': list(range(max_id+1, max_id+1+12))
+        'ids': list(range(max_id+1, max_id+1+12)),
+        'translation_x': 0.0,
+        'translation_y': 0.0,
+        'translation_z': 0.0,
+        'rotation_x': 0.0,
+        'rotation_y': 0.0,
+        'rotation_z': 0.0
       }
       boards.append(board)
     add_button.clicked.connect(on_add)
