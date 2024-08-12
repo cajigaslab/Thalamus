@@ -7,6 +7,12 @@
 #include <absl/strings/str_format.h>
 #include <absl/time/time.h>
 #include <modalities_util.h>
+#include <boost/qvm/vec_access.hpp>
+#include <boost/qvm/vec_operations.hpp>
+#include <boost/qvm/quat_access.hpp>
+#include <boost/qvm/quat_operations.hpp>
+#include <boost/qvm/quat_vec_operations.hpp>
+#include <boost/qvm/swizzle.hpp>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -37,6 +43,9 @@ typedef int (*thalamus_ros2_bridge_publish_gaze_t)(int publisher,
                                              unsigned long long timestamp_ns,
                                              float x, float y, int width, int height, 
                                              int diameter, int i);
+typedef int (*thalamus_ros2_bridge_broadcast_transform_t)(unsigned long long timestamp_ns,
+                                             const char* parent_frame, const char* child_frame,
+                                             const double* translation, const double* rotation);
 }
 
 thalamus_ros2_bridge_start_t thalamus_ros2_bridge_start;
@@ -47,7 +56,7 @@ thalamus_ros2_bridge_create_gaze_publisher_t thalamus_ros2_bridge_create_gaze_pu
 thalamus_ros2_bridge_publish_image_t thalamus_ros2_bridge_publish_image;
 thalamus_ros2_bridge_publish_camera_info_t thalamus_ros2_bridge_publish_camera_info;
 thalamus_ros2_bridge_publish_gaze_t thalamus_ros2_bridge_publish_gaze;
-
+thalamus_ros2_bridge_broadcast_transform_t thalamus_ros2_bridge_broadcast_transform;
 
 namespace thalamus {
   struct Ros2Node::Impl {
@@ -75,10 +84,13 @@ namespace thalamus {
       int image_publisher = -1;
       int gaze_publisher = -1;
       int eye = 0;
+      std::string parent_frame;
+      std::string child_frame;
       std::weak_ptr<Node> node;
       ImageNode* image;
       DistortionNode* distortion;
       OculomaticNode* oculomatic;
+      MotionCaptureNode* mocap;
     };
 
     void on_distortion_data(Node*, std::shared_ptr<PublishInfo> info) {
@@ -138,6 +150,21 @@ namespace thalamus {
       }
     }
 
+    void on_mocap_data(Node*, std::shared_ptr<PublishInfo> info) {
+      if (info->mocap->has_motion_data()) {
+        auto time = info->mocap->time();
+        auto segments = info->mocap->segments();
+        if(segments.empty()) {
+          return;
+        }
+        auto& segment = segments.front();
+        double translation[] = {boost::qvm::X(segment.position), boost::qvm::Y(segment.position), boost::qvm::Z(segment.position)};
+        double rotation[] = {boost::qvm::X(segment.rotation), boost::qvm::Y(segment.rotation), boost::qvm::Z(segment.rotation), boost::qvm::S(segment.rotation)};
+        
+        thalamus_ros2_bridge_broadcast_transform(time.count(), info->parent_frame.c_str(), info->child_frame.c_str(), translation, rotation);
+      }
+    }
+
     void on_source_change(std::shared_ptr<PublishInfo> info, ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
       auto k_str = std::get<std::string>(k);
       if(k_str == "Gaze Topic") {
@@ -172,6 +199,10 @@ namespace thalamus {
         info->camera_info_publisher = thalamus_ros2_bridge_create_camera_info_publisher(v_str.c_str());
       } else if (k_str == "Eye") {
         info->eye = std::get<long long>(v);
+      } else if (k_str == "Parent Frame") {
+        info->parent_frame = std::get<std::string>(v);
+      } else if (k_str == "Child Frame") {
+        info->child_frame = std::get<std::string>(v);
       }
     }
 
@@ -201,6 +232,10 @@ namespace thalamus {
           } else if (node_cast<ImageNode*>(locked_source.get()) != nullptr) {
             publish_info->image = node_cast<ImageNode*>(locked_source.get());
             auto source_connection = locked_source->ready.connect(std::bind(&Impl::on_image_data, this, _1, publish_info));
+            source_connections[node_name] = std::move(source_connection);
+          } else if (node_cast<MotionCaptureNode*>(locked_source.get()) != nullptr) {
+            publish_info->mocap = node_cast<MotionCaptureNode*>(locked_source.get());
+            auto source_connection = locked_source->ready.connect(std::bind(&Impl::on_mocap_data, this, _1, publish_info));
             source_connections[node_name] = std::move(source_connection);
           }
 
@@ -292,6 +327,7 @@ namespace thalamus {
     LOAD_FUNC(thalamus_ros2_bridge_publish_image);
     LOAD_FUNC(thalamus_ros2_bridge_publish_camera_info);
     LOAD_FUNC(thalamus_ros2_bridge_publish_gaze);
+    LOAD_FUNC(thalamus_ros2_bridge_broadcast_transform);
 
     thalamus_ros2_bridge_start();
 

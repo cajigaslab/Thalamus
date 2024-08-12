@@ -92,6 +92,10 @@ class SourcesModel(QAbstractItemModel):
       return row_data['Gaze Topic']
     elif index.column() == 4:
       return row_data['Eye']
+    elif index.column() == 5:
+      return row_data['Parent Frame']
+    elif index.column() == 6:
+      return row_data['Child Frame']
 
   def setData(self, index: QModelIndex, value: typing.Any, role: int = Qt.ItemDataRole.EditRole) -> bool:
     #print('setData', index, value, role)
@@ -111,6 +115,12 @@ class SourcesModel(QAbstractItemModel):
       return True
     elif index.column() == 4:
       row_data['Eye'] = value
+      return True
+    elif index.column() == 5:
+      row_data['Parent Frame'] = value
+      return True
+    elif index.column() == 6:
+      row_data['Child Frame'] = value
       return True
     return False
 
@@ -136,6 +146,10 @@ class SourcesModel(QAbstractItemModel):
         return "Gaze Topic"
       elif section == 4:
         return "Eye"
+      elif section == 5:
+        return "Parent Frame"
+      elif section == 6:
+        return "Child Frame"
     return None
 
   def index(self, row: int, column: int, parent: QModelIndex) -> QModelIndex:
@@ -153,7 +167,7 @@ class SourcesModel(QAbstractItemModel):
 
   def columnCount(self, parent: QModelIndex) -> int:
     if not parent.isValid():
-      return 5
+      return 7
     return 0
 
 class Ros2Widget(QWidget):
@@ -165,6 +179,11 @@ class Ros2Widget(QWidget):
     if 'Sources' not in self.config:
       self.config['Sources'] = {}
     sources = self.config['Sources']
+    for source in sources:
+      if 'Parent Frame' not in source:
+        source['Parent Frame'] = ''
+      if 'Child Frame' not in source:
+        source['Child Frame'] = ''
 
     layout = QVBoxLayout()
     combo = QComboBox()
@@ -195,7 +214,7 @@ class Ros2Widget(QWidget):
       new_name = new_node['name']
       if new_name in sources:
         return
-      sources[new_name] = {'Image Topic': '', 'Camera Info Topic': '', 'Gaze Topic': '', 'Eye': 0}
+      sources[new_name] = {'Image Topic': '', 'Camera Info Topic': '', 'Gaze Topic': '', 'Eye': 0, 'Parent Frame': '', 'Child Frame': ''}
     add_button.clicked.connect(on_add)
 
     def on_remove():

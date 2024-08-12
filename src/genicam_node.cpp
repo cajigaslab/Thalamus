@@ -1760,6 +1760,26 @@ namespace thalamus {
               device_id.resize(device_id.size()-1);
               THALAMUS_LOG(info) << "Device ID = " << device_id;
 
+              GenTL::INFO_DATATYPE vendor_type;
+              size_t vendor_size;
+              error = IFGetDeviceInfo(if_handle, device_id.c_str(), GenTL::DEVICE_INFO_VENDOR, &vendor_type, nullptr, &vendor_size);
+              if(error != GenTL::GC_ERR_SUCCESS) {
+                THALAMUS_LOG(info) << "IFGetDeviceInfo failed.  " << name << " disabled";
+                return;
+              }
+              std::string vendor;
+              vendor.resize(vendor_size);
+              error = IFGetDeviceInfo(if_handle, device_id.c_str(), GenTL::DEVICE_INFO_VENDOR, &vendor_type, vendor.data(), &vendor_size);
+              if(error != GenTL::GC_ERR_SUCCESS) {
+                THALAMUS_LOG(info) << "IFGetDeviceInfo failed.  " << name << " disabled";
+                return;
+              }
+              vendor.resize(vendor.size()-1);
+              if(interface_id.find("IDS") != std::string::npos && vendor.find("IDS") == std::string::npos) {
+                THALAMUS_LOG(info) << "IDS GenTL detected another vendor's camera, ignoring.  " << vendor;
+                return;
+              }
+
               GenTL::DEV_HANDLE dev_handle;
               error = IFOpenDevice(if_handle, device_id.c_str(), GenTL::DEVICE_ACCESS_EXCLUSIVE, &dev_handle);
               if(error != GenTL::GC_ERR_SUCCESS) {
