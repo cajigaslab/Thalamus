@@ -97,11 +97,14 @@ class ObservableBridge:
       pass
 
   async def __eval_processor(self):
-    async for request in self.stub.eval(self.eval_queue):
-      root = self.config
-      result = eval(request.code)
-      json_result = json.dumps(result)
-      await self.eval_queue.put(thalamus_pb2.EvalResponse(id = request.id, value = json_result))
+    try:
+      async for request in self.stub.eval(self.eval_queue):
+        root = self.config
+        result = eval(request.code)
+        json_result = json.dumps(result)
+        await self.eval_queue.put(thalamus_pb2.EvalResponse(id = request.id, value = json_result))
+    except asyncio.CancelledError:
+      pass
 
   async def __bridge_processor(self):
     try:

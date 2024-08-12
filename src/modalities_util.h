@@ -28,6 +28,8 @@ namespace thalamus {
       return (modalities & THALAMUS_MODALITY_IMAGE) ? dynamic_cast<T>(node) : nullptr;
     } else if constexpr (std::is_same<T, TextNode*>::value) {
       return (modalities & THALAMUS_MODALITY_TEXT) ? dynamic_cast<T>(node) : nullptr;
+    } else {
+      return dynamic_cast<T>(node);
     }
   }
 }
