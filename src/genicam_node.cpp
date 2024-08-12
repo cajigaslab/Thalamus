@@ -169,6 +169,7 @@ namespace thalamus {
         THALAMUS_ASSERT(false);
       }
       struct Device {
+        virtual ~Device() {};
         virtual RegValue get(const std::string& reg) = 0;
         virtual void set(const std::string& reg, const std::variant<long long int, std::string, double>& value) = 0;
         virtual bool is_writable(const std::string&) = 0;
@@ -399,6 +400,7 @@ namespace thalamus {
         Cti* cti;
         size_t address;
         std::string p_address;
+        std::string int_swiss_knife;
         size_t length;
         AccessMode access_mode;
         std::string buffer;
@@ -408,6 +410,9 @@ namespace thalamus {
           auto total_address = address;
           if(!p_address.empty()) {
             total_address += std::get<long long int>(device->get(p_address));
+          }
+          if(!int_swiss_knife.empty()) {
+            total_address += std::get<long long int>(device->get(int_swiss_knife));
           }
 
           auto error = cti->GCReadPort(handle, total_address, buffer.data(), &length);
@@ -427,6 +432,7 @@ namespace thalamus {
         Cti* cti;
         size_t address;
         std::string p_address;
+        std::string int_swiss_knife;
         size_t length;
         bool little_endian;
         bool _unsigned;
@@ -440,6 +446,9 @@ namespace thalamus {
           auto total_address = address;
           if(!p_address.empty()) {
             total_address += std::get<long long int>(device->get(p_address));
+          }
+          if(!int_swiss_knife.empty()) {
+            total_address += std::get<long long int>(device->get(int_swiss_knife));
           }
 
           auto error = cti->GCReadPort(handle, total_address, buffer.data(), &length);
@@ -548,6 +557,7 @@ namespace thalamus {
         Cti* cti;
         size_t address;
         std::string p_address;
+        std::string int_swiss_knife;
         size_t length;
         bool little_endian;
         bool _unsigned;
@@ -559,6 +569,9 @@ namespace thalamus {
           auto total_address = address;
           if(!p_address.empty()) {
             total_address += std::get<long long int>(device->get(p_address));
+          }
+          if(!int_swiss_knife.empty()) {
+            total_address += std::get<long long int>(device->get(int_swiss_knife));
           }
 
           auto error = cti->GCReadPort(handle, total_address, buffer.data(), &length);
@@ -635,12 +648,13 @@ namespace thalamus {
         std::string name;
       };
 
-      static long long int get_int(const boost::property_tree::ptree& tree, const std::string& path, long long int default_value) {
+      template <typename T = long long int>
+      static T get_int(const boost::property_tree::ptree& tree, const std::string& path, long long int default_value) {
         auto text = tree.get_optional<std::string>(path);
         if(!text) {
           return default_value;
         }
-        long long int result;
+        T result;
         if(text->starts_with("0x")) {
           auto success = absl::SimpleHexAtoi(*text, &result);
           THALAMUS_ASSERT(success);
@@ -1062,26 +1076,47 @@ namespace thalamus {
                 auto p_address = current->get<std::string>("pAddress", "");
                 auto access_mode = parse_access_mode(current->get<std::string>("AccessMode", "RW"));
 
-                auto length = current->get<size_t>("Length");
-                nodes[name] = StringReg {this, port_handle, cti, address, p_address, length, access_mode};
+                auto int_swiss_knife_node = current->get_child_optional("IntSwissKnife");
+                std::string int_swiss_knife = "";
+                if(int_swiss_knife_node.has_value()) {
+                  open.emplace_back("IntSwissKnife", &int_swiss_knife_node.value());
+                  int_swiss_knife = int_swiss_knife_node->get<std::string>("<xmlattr>.Name");
+                }
+
+                auto length = get_int<size_t>(*current, "Length", 0);
+                nodes[name] = StringReg {this, port_handle, cti, address, p_address, int_swiss_knife, length, access_mode};
               } else if(current_name == "IntReg") {
                 size_t address = get_int(*current, "Address", 0);
                 auto p_address = current->get<std::string>("pAddress", "");
                 auto access_mode = parse_access_mode(current->get<std::string>("AccessMode", "RW"));
 
-                auto length = current->get<size_t>("Length");
+                auto int_swiss_knife_node = current->get_child_optional("IntSwissKnife");
+                std::string int_swiss_knife = "";
+                if(int_swiss_knife_node.has_value()) {
+                  open.emplace_back("IntSwissKnife", &int_swiss_knife_node.value());
+                  int_swiss_knife = int_swiss_knife_node->get<std::string>("<xmlattr>.Name");
+                }
+
+                auto length = get_int<size_t>(*current, "Length", 0);
                 auto little_endian = current->get<std::string>("Endianess", "LittleEndian") == "LittleEndian";
                 auto _unsigned = current->get<std::string>("Sign", "Unsigned") == "Unsigned";
-                nodes[name] = IntReg {this, port_handle, cti, address, p_address, length, little_endian, _unsigned, access_mode };
+                nodes[name] = IntReg {this, port_handle, cti, address, p_address, int_swiss_knife, length, little_endian, _unsigned, access_mode };
               } else if(current_name == "FloatReg") {
                 size_t address = get_int(*current, "Address", 0);
                 auto p_address = current->get<std::string>("pAddress", "");
                 auto access_mode = parse_access_mode(current->get<std::string>("AccessMode", "RW"));
 
-                auto length = current->get<size_t>("Length");
+                auto int_swiss_knife_node = current->get_child_optional("IntSwissKnife");
+                std::string int_swiss_knife = "";
+                if(int_swiss_knife_node.has_value()) {
+                  open.emplace_back("IntSwissKnife", &int_swiss_knife_node.value());
+                  int_swiss_knife = int_swiss_knife_node->get<std::string>("<xmlattr>.Name");
+                }
+
+                auto length = get_int<size_t>(*current, "Length", 0);
                 auto little_endian = current->get<std::string>("Endianess", "LittleEndian") == "LittleEndian";
                 auto _unsigned = current->get<std::string>("Sign", "Unsigned") == "Unsigned";
-                nodes[name] = FloatReg {this, port_handle, cti, address, p_address, length, little_endian, _unsigned, access_mode };
+                nodes[name] = FloatReg {this, port_handle, cti, address, p_address, int_swiss_knife, length, little_endian, _unsigned, access_mode };
               } else if(current_name == "Float") {
                 auto p_value = current->get_optional<std::string>("pValue");
                 auto value = get_optional<double>(*current, "Value");
@@ -1192,6 +1227,13 @@ namespace thalamus {
                 auto p_address = current->get<std::string>("pAddress", "");
                 auto access_mode = parse_access_mode(current->get<std::string>("AccessMode", "RW"));
 
+                auto int_swiss_knife_node = current->get_child_optional("IntSwissKnife");
+                std::string int_swiss_knife = "";
+                if(int_swiss_knife_node.has_value()) {
+                  open.emplace_back("IntSwissKnife", &int_swiss_knife_node.value());
+                  int_swiss_knife = int_swiss_knife_node->get<std::string>("<xmlattr>.Name");
+                }
+
                 auto lsb = current->get_optional<long long int>("LSB");
                 auto msb = current->get_optional<long long int>("MSB");
                 auto bit = current->get_optional<long long int>("Bit");
@@ -1199,16 +1241,23 @@ namespace thalamus {
                   lsb = msb = bit;
                 }
 
-                auto length = current->get<size_t>("Length");
+                auto length = get_int<size_t>(*current, "Length", 0);
                 auto little_endian = current->get<std::string>("Endianess", "LittleEndian") == "LittleEndian";
                 auto _unsigned = current->get<std::string>("Sign", "Unsigned") == "Unsigned";
-                nodes[name] = IntReg {this, port_handle, cti, address, p_address, length, little_endian, _unsigned, access_mode,
+                nodes[name] = IntReg {this, port_handle, cti, address, p_address, int_swiss_knife, length, little_endian, _unsigned, access_mode,
                   lsb ? std::optional<long long int>(lsb.value()) : std::nullopt,
                   msb ? std::optional<long long int>(msb.value()) : std::nullopt };
               } else if (current_name == "StructReg") {
                 size_t default_address = get_int(*current, "Address", 0);
                 auto default_p_address = current->get<std::string>("pAddress", "");
                 auto access_mode = parse_access_mode(current->get<std::string>("AccessMode", "RW"));
+
+                auto int_swiss_knife_node = current->get_child_optional("IntSwissKnife");
+                std::string default_int_swiss_knife = "";
+                if(int_swiss_knife_node.has_value()) {
+                  open.emplace_back("IntSwissKnife", &int_swiss_knife_node.value());
+                  default_int_swiss_knife = int_swiss_knife_node->get<std::string>("<xmlattr>.Name");
+                }
 
                 auto default_lsb = current->get_optional<long long int>("LSB");
                 auto default_msb = current->get_optional<long long int>("MSB");
@@ -1217,7 +1266,7 @@ namespace thalamus {
                   default_lsb = default_msb = default_bit;
                 }
 
-                auto default_length = current->get<size_t>("Length");
+                auto default_length = get_int<size_t>(*current, "Length", 0);
                 auto default_little_endian = current->get<std::string>("Endianess", "LittleEndian");
                 auto default__unsigned = current->get<std::string>("Sign", "Unsigned");
 
@@ -1240,11 +1289,11 @@ namespace thalamus {
                     lsb = msb = bit;
                   }
 
-                  auto length = pair.second.get<size_t>("Length", default_length);
+                  auto length = get_int<size_t>(pair.second, "Length", default_length);
                   auto little_endian = pair.second.get<std::string>("Endianess", default_little_endian) == "LittleEndian";
                   auto _unsigned = pair.second.get<std::string>("Sign", default__unsigned) == "Unsigned";
 
-                  nodes[*name] = IntReg {this, port_handle, cti, address, p_address, length, little_endian, _unsigned, access_mode,
+                  nodes[*name] = IntReg {this, port_handle, cti, address, p_address, default_int_swiss_knife, length, little_endian, _unsigned, access_mode,
                     lsb ? std::optional<long long int>(lsb.value()) : std::nullopt,
                     msb ? std::optional<long long int>(msb.value()) : std::nullopt };
                 }
@@ -1944,8 +1993,12 @@ namespace thalamus {
         return;
       }
 
-      device->set("GainAuto", "Off");
-      device->set("ExposureAuto", "Off");
+      if (device->is_writable("GainAuto")) {
+        device->set("GainAuto", "Off");
+      }
+      if (device->is_writable("ExposureAuto")) {
+        device->set("ExposureAuto", "Off");
+      }
       if (device->is_writable("ExposureMode")) {
         device->set("ExposureMode", "Timed");
       }

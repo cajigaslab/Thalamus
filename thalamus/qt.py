@@ -1,6 +1,10 @@
-import sys
+try:
+  import PyQt6
+  HAS_QT6 = True
+except ImportError:
+  HAS_QT6 = False
 
-if sys.version_info[1] >= 7:
+if HAS_QT6:
   from PyQt6.QtGui import (QTransform, QPolygon, QOpenGLContext, QPainter, QImage, QMouseEvent, QColor, QFont, 
                            QContextMenuEvent, QAction, QPixmap, QPainterPath, QBrush, QKeyEvent, QStandardItemModel,
                            QSurfaceFormat, QOffscreenSurface, QOpenGLContext, QPen, QFontMetrics, QCloseEvent,
