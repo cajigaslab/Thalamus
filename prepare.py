@@ -216,7 +216,7 @@ def main():
                           'nasm', 'libpcre2-dev', 'bison',
                           'libbrotli-dev', 'autotools-dev', 'automake',
                           'swig', 'debconf-utils', 'libusb-1.0-0', 'ffmpeg'])
-    subprocess.check_call(['python3', '-m', 'pip', 'install', '-U', 'setuptools'], cwd=home_str)
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-U', 'setuptools'], cwd=home_str)
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-r', str(pathlib.Path.cwd()/'requirements.txt')], cwd=home_str)
                           
     _, clang_is_current = is_up_to_date('clang++', r'clang version (\d+).(\d+).(\d+)', (10, 0, 0))
