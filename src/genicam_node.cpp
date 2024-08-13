@@ -46,7 +46,7 @@ namespace thalamus {
     GenicamNode* outer;
     std::chrono::nanoseconds time;
     std::thread ffmpeg_thread;
-    std::atomic_bool running = false;
+    bool running = false;
     thalamus_grpc::Image image;
     std::atomic_bool frame_pending;
     std::vector<unsigned char> intermediate;
@@ -2005,7 +2005,9 @@ namespace thalamus {
       if (device->is_writable("AcquisitionFrameRateAuto")) {
         device->set("AcquisitionFrameRateAuto", "Off");
       }
-      device->set("AcquisitionMode", "Continuous");
+      if(!running) {
+        device->set("AcquisitionMode", "Continuous");
+      }
 
       auto value = variant_cast<long long int>(this->device->get("WidthMax"));
       (*state)["WidthMax"].assign(value);
@@ -2070,9 +2072,9 @@ namespace thalamus {
       if (key_str == "Camera") {
         initialize_camera();
       } else if (key_str == "Running") {
-        auto value = variant_cast<bool>(v);
+        running = variant_cast<bool>(v);
         if(device) {
-          if(value) {
+          if(running) {
             device->start_stream(io_context);
           } else {
             device->stop_stream();

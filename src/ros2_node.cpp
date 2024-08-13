@@ -233,7 +233,9 @@ namespace thalamus {
             publish_info->image = node_cast<ImageNode*>(locked_source.get());
             auto source_connection = locked_source->ready.connect(std::bind(&Impl::on_image_data, this, _1, publish_info));
             source_connections[node_name] = std::move(source_connection);
-          } else if (node_cast<MotionCaptureNode*>(locked_source.get()) != nullptr) {
+          }
+          
+          if (node_cast<MotionCaptureNode*>(locked_source.get()) != nullptr) {
             publish_info->mocap = node_cast<MotionCaptureNode*>(locked_source.get());
             auto source_connection = locked_source->ready.connect(std::bind(&Impl::on_mocap_data, this, _1, publish_info));
             source_connections[node_name] = std::move(source_connection);
