@@ -130,7 +130,7 @@ namespace thalamus {
             } else if(x.operator_ == "*") {
               return lhs * rhs;
             } else if(x.operator_ == "/") {
-              return lhs / rhs;
+              return 1.0 * lhs / rhs;
             } else if(x.operator_ == "=") {
               return lhs == rhs ? 1ll : 0ll;
             } else if(x.operator_ == "<>") {

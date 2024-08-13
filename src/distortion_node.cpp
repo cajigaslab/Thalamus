@@ -117,8 +117,12 @@ namespace thalamus {
       //}
       //auto out = *mat_pool.begin();
       //mat_pool.erase(out);
+      auto frame_id = 0;
+      if(!collecting) {
+        frame_id = next_input_frame++;
+      }
 
-      pool.push([frame_id=next_input_frame++,
+      pool.push([frame_id,
                   &busy=this->busy,
                   //out,
                   state=this->state,
@@ -195,12 +199,18 @@ namespace thalamus {
         auto elapsed = std::chrono::steady_clock::now() - start;
         boost::asio::post(io_context, [undistorted, elapsed,
                                        //&mat_pool,
+                                       collecting,
                                        &busy,
                                        frame_id,
                                        &output_frames,
                                        &next_output_frame,
                                        &current_result,frame_interval,outer] {
           double latency = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+          if(collecting) {
+            current_result = Result{ undistorted, frame_interval, true, true, latency };
+            outer->ready(outer.get());
+            return;
+          }
           output_frames[frame_id] = Result{ undistorted, frame_interval, true, true, latency };
           for(auto i = output_frames.begin();i != output_frames.end();) {
             if(i->first == next_output_frame) {

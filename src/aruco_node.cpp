@@ -425,5 +425,5 @@ bool ArucoNode::has_image_data() const {
   return true;
 }
 size_t ArucoNode::modalities() const {
-  return THALAMUS_MODALITY_IMAGE;
+  return THALAMUS_MODALITY_IMAGE | THALAMUS_MODALITY_MOCAP;
 }
