@@ -23,6 +23,7 @@ from . import doublestep_saccade
 from . import motion_capture_task
 from . import luminance_reward_selection
 from . import avatar_task
+from . import imagined_task
 from .task_context import TaskDescription
 
 DESCRIPTIONS = [
@@ -88,7 +89,10 @@ DESCRIPTIONS = [
     motion_capture_task.run),
   TaskDescription('avatar_task', 'Avatar',
     avatar_task.create_widget,
-    avatar_task.run)
+    avatar_task.run),
+  TaskDescription('imagined_task', 'Imagined',
+    imagined_task.create_widget,
+    imagined_task.run)
     #add gazeanchoring stim task
 
 ]
