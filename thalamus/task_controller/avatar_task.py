@@ -104,6 +104,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
 
   new_time_node = context.task_config['time_node']
   if time_node != new_time_node:
+    print('new time node', new_time_node)
     time_node = new_time_node
     if analog_task:
       analog_task.cancel()
