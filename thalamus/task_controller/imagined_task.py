@@ -160,7 +160,9 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
 
   form = Form.build(task_config, ["Name:", "Value:"],
     Form.Constant('Time Between Transisions (s)', 'inter_transition_interval', 1, 's'),
-    Form.File('Audio Queue', 'audio_file', '', 'Select sound file', '')
+    Form.File('Audio Queue', 'audio_file', '', 'Select sound file', ''),
+    Form.String('Feedback Node', 'feedback_node', ''),
+    Form.String('Feedback Channel', 'feedback_channel', '')
   )
   layout.addWidget(form)
   layout.addWidget(error_label)
@@ -226,18 +228,42 @@ analog_task = None
 current_time = 0.0
 last_video_file = ''
 loaded_videos = {}
+feedback_node = ''
+feedback_channel = ''
+
+async def analog_processor(stream):
+  global current_time
+  try:
+    async for message in stream:
+      if len(message.data) == 0:
+        continue
+      current_time = min(max(0, message.data[-1]), 1)
+  finally:
+    stream.cancel()
 
 @animate(60)
 async def run(context: TaskContextProtocol) -> TaskResult:
-  global channel, stub, queue, analog_queue, log_call, LAST_IMAGE, current_pose, xsens_task, last_range, images, time_node, analog_task, last_video_file
+  global channel, feedback_node, feedback_channel, stub, queue, analog_queue, log_call, LAST_IMAGE, current_pose, xsens_task, last_range, images, time_node, analog_task, last_video_file
 
   if channel is None:
     channel = context.get_channel('localhost:50050')
     stub = thalamus_pb2_grpc.ThalamusStub(channel)
-    queue = IterableQueue()
-    log_call = stub.log(queue)
 
   task_config = context.task_config
+
+  new_feedback_node, new_feedback_channel = task_config['feedback_node'], task_config['feedback_channel']
+  if (new_feedback_node, new_feedback_channel) != (feedback_node, feedback_channel):
+    feedback_node = new_feedback_node
+    feedback_channel = new_feedback_channel
+    if analog_task:
+      analog_task.cancel()
+    if not feedback_node or not feedback_channel:
+      analog_task = None
+    else:
+      request = thalamus_pb2.AnalogRequest(node=thalamus_pb2.NodeSelector(name=feedback_node),channel_names=[feedback_channel])
+      stream = stub.analog(request)
+      analog_task = create_task_with_exc_handling(analog_processor(stream))
+
   transitions = task_config['Transitions']
   inter_interval = datetime.timedelta(seconds=task_config['inter_transition_interval'])
 
@@ -282,7 +308,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     return TaskResult(False)
 
   config_json = json.dumps(context.task_config.unwrap())
-  await queue.put(thalamus_pb2.Text(text=config_json.encode(),time=time.perf_counter_ns()))
+  await context.log(config_json)
 
   def renderer(painter):
     if not draw:
@@ -293,15 +319,40 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     index = min(max(index, 0), len(frames)-1)
     frame = frames[index]
 
-    scale = min((.5*context.widget.width())/frame.width(), (context.widget.height())/frame.width())
-    painter.drawImage(QRect(0, int((context.widget.height() - scale*frame.height())//2),
-                            int(scale*frame.width()), int(scale*frame.height())),
-                      frame)
+    if analog_task is not None:
+      portion = 1/3
+      feedback_index = int(current_time*(len(frames)-1))
+      feedback_index = min(max(feedback_index, 0), len(frames)-1)
+      feedback_frame = frames[feedback_index]
 
-    scale = min((.5*context.widget.width())/goal.width(), (context.widget.height())/goal.width())
-    painter.drawImage(QRect(context.widget.width()//2, int((context.widget.height() - scale*goal.height())//2),
-                            int(scale*goal.width()), int(scale*goal.height())),
-                      goal)
+      scale = min((portion*context.widget.width())/frame.width(), (context.widget.height())/frame.width())
+      painter.drawImage(QRect(0, int((context.widget.height() - scale*frame.height())//2),
+                              int(scale*frame.width()), int(scale*frame.height())),
+                        feedback_frame)
+
+      scale = min((portion*context.widget.width())/frame.width(), (context.widget.height())/frame.width())
+      painter.drawImage(QRect(int(portion*context.widget.width()), int((context.widget.height() - scale*frame.height())//2),
+                              int(scale*frame.width()), int(scale*frame.height())),
+                        frame)
+
+      scale = min((portion*context.widget.width())/goal.width(), (context.widget.height())/goal.width())
+      painter.drawImage(QRect(2*int(portion*context.widget.width()), int((context.widget.height() - scale*goal.height())//2),
+                              int(scale*goal.width()), int(scale*goal.height())),
+                        goal)
+    else:
+      portion = 1/2
+
+      scale = min((portion*context.widget.width())/frame.width(), (context.widget.height())/frame.width())
+      painter.drawImage(QRect(0, int((context.widget.height() - scale*frame.height())//2),
+                              int(scale*frame.width()), int(scale*frame.height())),
+                        frame)
+
+      scale = min((portion*context.widget.width())/goal.width(), (context.widget.height())/goal.width())
+      painter.drawImage(QRect(int(portion*context.widget.width()), int((context.widget.height() - scale*goal.height())//2),
+                              int(scale*goal.width()), int(scale*goal.height())),
+                        goal)
+
+    
 
     if elapsed >= duration and future is not None:
       future.set_result(None)
@@ -324,6 +375,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     print(sound, sound.source(), sound.status())
     #if sound is not None:
     sound.play()
+    await context.log(f'{i} start')
     
     draw = True
     start_time = time.perf_counter()
@@ -333,7 +385,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     future = asyncio.get_event_loop().create_future()
     await future
     future = None
-    await queue.put(thalamus_pb2.Text(text=f'{i} complete',time=time.perf_counter_ns()))
+    await context.log(f'{i} end')
     await context.until(lambda: space_pressed)
 
   return TaskResult(True)

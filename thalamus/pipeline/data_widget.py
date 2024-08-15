@@ -2,6 +2,7 @@ import typing
 import asyncio
 import numpy
 import math
+import grpc
 import bisect
 import pathlib
 import datetime
@@ -283,6 +284,8 @@ class PlotCanvas(QWidget):
             self.current_value = value
 
         self.update()
+    except grpc.aio.AioRpcError:
+      pass
     except asyncio.CancelledError:
       pass
     finally:
