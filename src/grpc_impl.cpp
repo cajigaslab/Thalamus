@@ -191,7 +191,7 @@ namespace thalamus {
 
         AnalogNode* node = node_cast<AnalogNode*>(raw_node.get());
         std::vector<size_t> channels(request->channels().begin(), request->channels().end());
-        thalamus::vector<std::string> channel_names(request->channel_names().begin(), request->channel_names().begin());
+        thalamus::vector<std::string> channel_names(request->channel_names().begin(), request->channel_names().end());
         auto has_channels = !channels.empty() || !channel_names.empty();
 
         std::mutex connection_mutex;
