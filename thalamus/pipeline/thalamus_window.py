@@ -266,6 +266,10 @@ FACTORIES = {
     UserData(UserDataType.SPINBOX, 'Command Port', 5000, []),
     UserData(UserDataType.SPINBOX, 'Waveform Port', 5001, []),
   ]),
+  'SPIKEGLX': Factory(IntanWidget, [
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+    UserData(UserDataType.DEFAULT, 'Address', "localhost:4142", []),
+  ]),
   'PULSE': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Toggle', False, []),
     UserData(UserDataType.CHECK_BOX, 'Generate Level', False, []),
