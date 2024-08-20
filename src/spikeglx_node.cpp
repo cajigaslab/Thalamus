@@ -14,6 +14,7 @@
 #include <state.h>
 #include <boost/signals2.hpp>
 #include <modalities.h>
+#include <thread_pool.h>
 
 using namespace thalamus;
 using namespace std::chrono_literals;
@@ -57,6 +58,8 @@ struct SpikeGlxNode::Impl {
   std::chrono::nanoseconds time;
   bool skip_offset = false;
 
+  ThreadPool& pool;
+
   enum class FetchState {
     READ_HEADER,
     READ_DATA,
@@ -68,7 +71,8 @@ struct SpikeGlxNode::Impl {
     , io_context(io_context)
     , timer(io_context)
     , socket(io_context)
-    , outer(outer) {
+    , outer(outer)
+    , pool(graph->get_thread_pool()) {
     state_connection = state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
     (*state)["Running"].assign(false);
     memset(&address, 0, sizeof(address));
@@ -197,14 +201,33 @@ struct SpikeGlxNode::Impl {
         }
         //short lower = std::numeric_limits<short>::max();
         //short upper = std::numeric_limits<short>::min();
-        while(position + 1 < end) {
-          short sample = bytes[position] + (bytes[position+1] << 8);
-          //lower = std::min(lower, sample);
-          //upper = std::max(upper, sample);
-          data[samples_read++ % nchans].push_back(sample);
-          position += 2;
+        std::vector<std::promise<void>> promises;
+        auto band_size = nchans/12;
+        for(auto c = 0;c < nchans;c+=band_size) {
+          promises.emplace_back();
         }
-        //THALAMUS_LOG(info) << lower << " " << upper;
+        for(auto c = 0;c < nchans;c+=band_size) {
+          pool.push([&,c,promise=&promises[c/band_size]] {
+            try {
+              for(auto subc = 0;subc < band_size && c+subc < nchans;++subc) {
+                auto channel = (samples_read+c+subc) % nchans;
+                for(auto i = 2*(c+subc);i+1 < end;i += 2*nchans) {
+                  short sample = bytes[i] + (bytes[i+1] << 8);
+                  data[channel].push_back(sample);
+                }
+              }
+              promise->set_value();
+            } catch (std::exception& e) {
+              THALAMUS_LOG(error) << e.what();
+            }
+          });
+        }
+        //THALAMUS_LOG(info) << "start";
+        for(auto& promise : promises) {
+          promise.get_future().get();
+        }
+        //THALAMUS_LOG(info) << "done";
+        samples_read += end / sizeof(short);
         time = std::chrono::steady_clock::now().time_since_epoch();
         complete_samples = std::numeric_limits<size_t>::max();
         for (auto& d : data) {
@@ -221,8 +244,12 @@ struct SpikeGlxNode::Impl {
           on_binary_data(error, length);
           return;
         }
-        std::copy(bytes + position, bytes + end, buffer);
-        buffer_offset = end - position;
+        if(end % 2 == 1) {
+          buffer[0] = bytes[end-1];
+          buffer_offset = 1;
+        } else {
+          buffer_offset = 0;
+        }
         skip_offset = false;
         socket.async_receive(boost::asio::buffer(buffer + buffer_offset, sizeof(buffer) - buffer_offset), std::bind(&Impl::on_binary_data, this, _1, _2));
       }
@@ -249,9 +276,9 @@ struct SpikeGlxNode::Impl {
     boost::system::error_code ec;
     std::stringstream command;
     if(spike_glx_version < 20240000) {
-      command << "FETCH -1 " << sample_count << " 50000\n";
+      command << "FETCH 0 " << sample_count << " 50000\n";
     } else {
-      command << "FETCH 0 0 " << sample_count << " 50000\n";
+      command << "FETCH 2 0 " << sample_count << " 50000\n";
     }
     //THALAMUS_LOG(info) << "fetch " << command.str();
     socket.send(boost::asio::const_buffer(command.str().data(), command.str().size()), 0, ec);
@@ -286,7 +313,7 @@ struct SpikeGlxNode::Impl {
     }
     sample_interval = std::chrono::nanoseconds(size_t(1e9/sample_rate));
     boost::system::error_code ec;
-    std::string command = spike_glx_version < 20240000 ? "GETSCANCOUNT -1\n" : "GETSTREAMSAMPLECOUNT 0 0\n";
+    std::string command = spike_glx_version < 20240000 ? "GETSCANCOUNT 0\n" : "GETSTREAMSAMPLECOUNT 2 0\n";
     socket.send(boost::asio::const_buffer(command.data(), command.size()), 0, ec);
     if(ec) {
       THALAMUS_LOG(error) << ec.what();
@@ -314,7 +341,7 @@ struct SpikeGlxNode::Impl {
     }
 
     boost::system::error_code ec;
-    std::string command = spike_glx_version < 20240000 ? "GETSAMPLERATE -1\n" : "GETSTREAMSAMPLERATE 0 0\n";
+    std::string command = spike_glx_version < 20240000 ? "GETSAMPLERATE 0\n" : "GETSTREAMSAMPLERATE 2 0\n";
     socket.send(boost::asio::const_buffer(command.data(), command.size()), 0, ec);
     if(ec) {
       THALAMUS_LOG(error) << ec.what();
