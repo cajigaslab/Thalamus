@@ -412,9 +412,6 @@ namespace thalamus {
   std::string_view NidaqNode::name(int channel) const {
     return impl->recommended_names.at(channel);
   }
-  std::span<const std::string> NidaqNode::get_recommended_channels() const {
-    return std::span<const std::string>(impl->recommended_names.begin(), impl->recommended_names.end());
-  }
 
   void NidaqNode::inject(const thalamus::vector<std::span<double const>>& spans, const thalamus::vector<std::chrono::nanoseconds>& sample_intervals, const thalamus::vector<std::string_view>&) {
     auto temp = impl->_num_channels;

@@ -17,8 +17,8 @@ namespace thalamus {
   }
 
   struct DeviceParams {
-    unsigned int device;
-    unsigned int subdevice;
+    int device = -1;
+    int subdevice = -1;
     thalamus::vector<unsigned int> channels;
   };
 
@@ -101,7 +101,6 @@ namespace thalamus {
     thalamus::vector<double> output_buffer;
     thalamus::vector<std::span<double const>> spans;
     size_t _num_channels;
-    size_t buffer_size;
     std::chrono::nanoseconds _sample_interval;
     std::chrono::milliseconds polling_interval;
     size_t counter = 0;
@@ -115,6 +114,8 @@ namespace thalamus {
     std::atomic_bool is_running;
     bool digital;
     thalamus::vector<std::string> recommended_names;
+    std::vector<std::vector<double>> output_data;
+    size_t complete_samples = 0;
 
     Impl(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph, NidaqNode* outer)
       : state(state)
@@ -138,12 +139,6 @@ namespace thalamus {
 
     void nidaq_target() {
       thalamus::vector<comedi_range*> ranges;
-      if(!digital) {
-        for(auto c : channels) {
-          auto range = comedi_get_range(device, subdevice, c, 0);
-          ranges.push_back(range);
-        }
-      }
       while (is_running) {
         auto start = std::chrono::steady_clock::now();
         auto now = start;
@@ -190,43 +185,84 @@ namespace thalamus {
               buffer = std::vector<std::vector<double>>(channels.size());
             }
           }
-        } else {
-          std::vector<std::vector<double>> buffer(channels.size());
-          while(is_running) {
-            for(auto c = 0;c < channels.size();++c) {
-              unsigned int bit;
-              comedi_dio_read(device, subdevice, channels.at(c), &bit);
-              buffer.at(c).push_back(bit ? 5 : 0);
-            }
-            target_time += _sample_interval;
-            std::this_thread::sleep_until(target_time);
-            now = std::chrono::steady_clock::now();
-            if(now - start >= polling_interval) {
-              boost::asio::post(io_context, [this,buffer=std::move(buffer),start]() {
-                TRACE_EVENT0("thalamus", "NidaqCallback(post)");
-                auto impl = this;
-                impl->output_buffer.clear();
-                impl->spans.clear();
-                for(auto b : buffer) {
-                  std::cout << b.size() << " ";
-                  impl->output_buffer.insert(impl->output_buffer.end(), b.begin(), b.end());
-                }
-                std::cout << std::endl;
-                auto offset = 0;
-                for(auto b : buffer) {
-                  impl->spans.emplace_back(impl->output_buffer.begin() + offset, impl->output_buffer.begin() + offset + b.size());
-                  offset += b.size();
-                }
-
-                impl->_time += start.time_since_epoch();
-                outer->ready(outer);
-              });
-              start = now;
-              buffer = std::vector<std::vector<double>>(channels.size());
-            }
-          }
         }
       }
+    }
+
+    std::vector<comedi_range *> range_info;
+    std::vector<lsampl_t> maxdata;
+    std::vector<unsigned int> chanlist;
+    comedi_cmd command;
+    lsampl_t lsampl_buffer[16384];
+    sampl_t* sampl_buffer = reinterpret_cast<sampl_t*>(lsampl_buffer);
+    unsigned char* bytes_buffer = reinterpret_cast<unsigned char*>(lsampl_buffer);
+    size_t buffer_size = sizeof(lsampl_buffer);
+    size_t offset = 0;
+
+    unsigned int flags;
+    size_t bytes_per_sample;
+    size_t next_channel = 0;
+
+    void store_sample(unsigned int sample) {
+      auto physical_value = comedi_to_phys(sample, range_info[next_channel], maxdata[next_channel]);
+      output_data[next_channel].push_back(physical_value);
+      next_channel = (next_channel+1) % output_data.size();
+    }
+
+    void on_timer(std::chrono::milliseconds polling_interval, const boost::system::error_code& e) {
+      if(e) {
+        THALAMUS_LOG(info) << e.what();
+        (*state)["Running"].assign(false, [] {});
+        return;
+      }
+
+		  auto ret = read(comedi_fileno(device),bytes_buffer+offset,buffer_size-offset);
+      if(ret < 0) {
+        if(errno==EAGAIN) {
+          timer.expires_after(polling_interval);
+          timer.async_wait(std::bind(&Impl::on_timer, this, polling_interval, _1));
+        } else {
+          THALAMUS_LOG(error) << strerror(errno);
+          (*state)["Running"].assign(false, [] {});
+        }
+        return;
+      } else if(ret == 0) {
+        THALAMUS_LOG(error) << "End of comedi stream";
+        (*state)["Running"].assign(false, [] {});
+        return;
+      }
+
+      _time = std::chrono::steady_clock::now().time_since_epoch();
+
+      for(auto& d : output_data) {
+        d.erase(d.begin(), d.begin() + complete_samples);
+      }
+
+      auto end = (offset+ret)/bytes_per_sample;
+      if(bytes_per_sample == sizeof(lsampl_t)) {
+        for(auto i = 0;i < end;++i) {
+          store_sample(lsampl_buffer[i]);
+        }
+      } else {
+        for(auto i = 0;i < end;++i) {
+          store_sample(sampl_buffer[i]);
+        }
+      }
+
+      complete_samples = std::numeric_limits<size_t>::max();
+      for(auto& d : output_data) {
+        complete_samples = std::min(complete_samples, d.size());
+      }
+
+      if(complete_samples) {
+        outer->ready(outer);
+      }
+
+      std::copy(bytes_buffer+end*bytes_per_sample, bytes_buffer+offset+ret, bytes_buffer);
+      offset = (offset+ret) % bytes_per_sample;
+
+      timer.expires_after(polling_interval);
+      timer.async_wait(std::bind(&Impl::on_timer, this, polling_interval, _1));
     }
 
     void on_change(ObservableCollection::Action a, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
@@ -237,6 +273,8 @@ namespace thalamus {
         _num_channels = recommended_names.size();
       }
       else if (key_str == "Running") {
+        timer.cancel();
+        close_device(&device);
         is_running = std::get<bool>(v);
         if (is_running) {
           counter = 0;
@@ -257,37 +295,62 @@ namespace thalamus {
           size_t polling_interval_raw = state->at("Poll Interval");
           polling_interval = std::chrono::milliseconds(polling_interval_raw);
 
-          std::string channel_name = name + " channel";
-          buffer_size = static_cast<size_t>(sample_rate * _num_channels);
-          std::function<void()> reader;
+          auto filename = absl::StrFormat("/dev/comedi%d", device_params->device-1);
+          device = comedi_open(filename.c_str());
+          THALAMUS_ASSERT(device != nullptr);
+          fcntl(comedi_fileno(device), F_SETFL, O_NONBLOCK);
 
           digital = is_digital(channel);
           if(!digital) {
-            subdevice = comedi_find_subdevice_by_type(device, COMEDI_SUBD_AI, 0);
+            subdevice = comedi_get_read_subdevice(device);
+            THALAMUS_ASSERT(subdevice >= 0);
           }
 
-          auto filename = absl::StrFormat("/dev/comedi%d", device_params->device-1);
-          device = comedi_open(filename.c_str());
-          BOOST_ASSERT_MSG(device != nullptr, "comedi_open failed");
-
+          _time = 0ns;
           if (digital) {
             for(auto channel : channels) {
               auto daq_error = comedi_dio_config(device, subdevice, channel, COMEDI_INPUT);
-              BOOST_ASSERT_MSG(daq_error >= 0, "comedi_dio_config failed");
+              THALAMUS_ASSERT(daq_error >= 0);
             }
+          } else {
+            range_info.clear();
+            maxdata.clear();
+            chanlist.clear();
+            for(auto channel : channels) {
+              chanlist.push_back(CR_PACK(channel, 0, AREF_GROUND));
+		          range_info.push_back(comedi_get_range(device, subdevice, channel, 0));
+              THALAMUS_ASSERT(range_info.back());
+		          maxdata.push_back(comedi_get_maxdata(device, subdevice, channel));
+              THALAMUS_ASSERT(maxdata.back());
+            }
+            memset(&command, 0, sizeof(command));
+	          auto ret = comedi_get_cmd_generic_timed(device, subdevice, &command, channels.size(), _sample_interval.count());
+            THALAMUS_ASSERT(ret == 0);
+	          command.chanlist = chanlist.data();
+           	command.chanlist_len = chanlist.size();
+            command.stop_src = TRIG_NONE;
+            command.flags = TRIG_WAKE_EOS;
+            ret = comedi_command_test(device, &command);
+            THALAMUS_ASSERT(ret >= 0);
+            ret = comedi_command_test(device, &command);
+            THALAMUS_ASSERT(ret == 0);
+	          ret = comedi_set_read_subdevice(device, subdevice);
+            THALAMUS_ASSERT(ret == 0);
+	          ret = comedi_command(device, &command);
+            THALAMUS_ASSERT(ret == 0);
           }
-          _time = 0ns;
-          nidaq_thread = std::thread(std::bind(&Impl::nidaq_target, this));
 
-          //if (reader) {
-          //  on_timer(reader, polling_interval, boost::system::error_code());
-          //}
-        }
-        else if (device != nullptr) {
-          if (nidaq_thread.joinable()) {
-            nidaq_thread.join();
+          flags = comedi_get_subdevice_flags(device, subdevice);
+          bytes_per_sample = flags & SDF_LSAMPL ? sizeof(lsampl_t) : sizeof(sampl_t);
+          next_channel = 0;
+          output_data.resize(channels.size());
+          for(auto& d : output_data) {
+            d.clear();
           }
-          close_device(&device);
+          complete_samples = 0;
+          offset = 0;
+
+          on_timer(polling_interval, boost::system::error_code());
         }
       }
     }
@@ -322,11 +385,11 @@ namespace thalamus {
   }
 
   std::span<const double> NidaqNode::data(int channel) const {
-    return impl->spans.at(channel);
+    return std::span<const double>(impl->output_data[channel].begin(), impl->output_data[channel].begin() + impl->complete_samples);
   }
 
   int NidaqNode::num_channels() const {
-    return impl->_num_channels;
+    return impl->output_data.size();
   }
 
   std::chrono::nanoseconds NidaqNode::sample_interval(int i) const {
@@ -340,19 +403,8 @@ namespace thalamus {
   std::string_view NidaqNode::name(int channel) const {
     return impl->recommended_names.at(channel);
   }
-  std::span<const std::string> NidaqNode::get_recommended_channels() const {
-    return std::span<const std::string>(impl->recommended_names.begin(), impl->recommended_names.end());
-  }
 
   void NidaqNode::inject(const thalamus::vector<std::span<double const>>& spans, const thalamus::vector<std::chrono::nanoseconds>& sample_intervals, const thalamus::vector<std::string_view>&) {
-    auto temp = impl->_num_channels;
-    auto previous_sample_interval = impl->_sample_interval;
-    impl->_num_channels = spans.size();
-    impl->spans = spans;
-    impl->_sample_interval = sample_intervals.at(0);
-    ready(this);
-    impl->_sample_interval = previous_sample_interval;
-    impl->_num_channels = temp;
   }
 
   struct NidaqOutputNode::Impl {
@@ -427,7 +479,7 @@ namespace thalamus {
 
         auto is_done = [&] {
           auto result = true;
-          for (auto i = 0; i < buffers.size(); ++i) {
+          for (auto i = 0ull; i < buffers.size(); ++i) {
             result = result && positions.at(i) == buffers.at(i).size();
           }
           return result;
@@ -437,7 +489,7 @@ namespace thalamus {
           while (!is_done()) {
             {
               //TRACE_EVENT0("thalamus", "NidaqOutputNode::fast_forward(digital)");
-              for (auto c = 0; c < buffers.size(); ++c) {
+              for (auto c = 0ull; c < buffers.size(); ++c) {
                 auto& buffer = buffers.at(c);
                 auto& position = positions.at(c);
                 auto old_level = digital_levels.at(c);
@@ -471,7 +523,7 @@ namespace thalamus {
 
             {
               //TRACE_EVENT0("thalamus", "NidaqOutputNode::write_signal(digital)");
-              for (auto c = 0; c < buffers.size(); ++c) {
+              for (auto c = 0ull; c < buffers.size(); ++c) {
                 auto& buffer = buffers.at(c);
                 auto& time = times.at(c);
                 auto& position = positions.at(c);
