@@ -20,6 +20,9 @@ using namespace thalamus;
 using namespace std::chrono_literals;
 using namespace std::placeholders;
 
+#define SPIKEGLX_ASSERT(cond, message) if(!(cond)) {handle_error(message);return;}
+#define BUFFER_SIZE 16777216
+
 struct SpikeGlxNode::Impl {
   ObservableDictPtr state;
   size_t observer_id;
@@ -36,11 +39,11 @@ struct SpikeGlxNode::Impl {
   //double sample_rate;
   size_t counter = 0;
   int address[6];
-  unsigned char buffer[1048576];
+  unsigned char buffer[BUFFER_SIZE];
   size_t buffer_length = 0;
   size_t buffer_offset = 0;
+  size_t buffer_total = 0;
   std::vector<std::string_view> lines;
-  std::vector<std::string> names;
   SpikeGlxNode* outer;
   bool is_running = false;
   bool is_connected = false;
@@ -52,12 +55,12 @@ struct SpikeGlxNode::Impl {
   int next_channel = 0;
   size_t samples_read;
   size_t from_count;
-  std::vector<std::vector<double>> data;
   size_t position = 0;
   size_t complete_samples;
   std::chrono::nanoseconds time;
   bool skip_offset = false;
-
+  std::vector<std::pair<std::string, std::function<void()>>> spikeglx_queue;
+  bool queue_busy = false;
   ThreadPool& pool;
 
   enum class FetchState {
@@ -65,6 +68,313 @@ struct SpikeGlxNode::Impl {
     READ_DATA,
     READ_OK
   } fetch_state;
+
+  enum class Device {
+    IMEC, NI
+  };
+  std::map<std::pair<Device, int>, size_t> sample_counts;
+  std::map<std::pair<Device, int>, std::chrono::nanoseconds> sample_intervals;
+
+  static const char* device_to_string(Device d) {
+    switch(d) {
+      case Device::IMEC:
+        return "IMEC";
+      case Device::NI:
+        return "NI";
+    }
+  }
+  static const char* state_to_string(FetchState d) {
+    switch (d) {
+    case FetchState::READ_HEADER:
+      return "READ_HEADER";
+    case FetchState::READ_DATA:
+      return "READ_DATA";
+    case FetchState::READ_OK:
+      return "READ_OK";
+    }
+  }
+
+  std::vector<std::vector<double>> ni_data;
+  std::vector<std::vector<double>> imec_data;
+  std::vector<std::string> ni_names;
+  std::vector<std::string> imec_names;
+  std::atomic_int pending_bands = 0;
+  std::chrono::steady_clock::time_point fetch_start;
+  double latency = 0;
+
+  void on_fetch(Device js, int ip, std::function<void()> callback) {
+    //THALAMUS_LOG(info) << "on_fetch " << device_to_string(js) << " " << ip << " " << state_to_string(fetch_state);
+    auto& data = js == Device::IMEC ? imec_data : ni_data;
+    auto& names = js == Device::IMEC ? imec_names : ni_names;
+    auto& sample_count = sample_counts[std::make_pair(js, ip)];
+    auto prefix = (js == Device::IMEC ? "IMEC:" : "NI:") + std::to_string(ip) + ":";
+    switch(fetch_state) {
+      case FetchState::READ_HEADER: {
+        char* chars = reinterpret_cast<char*>(buffer);
+        for(auto i = buffer_offset;i < buffer_offset+buffer_length;++i) {
+          if(chars[i] == '\n') {
+            chars[i] = 0;
+            //THALAMUS_LOG(info) << "fetch header " << chars;
+            if(std::string_view(chars, chars+i).starts_with("ERROR FETCH: No data")) {
+              for (auto& d : data) {
+                d.clear();
+              }
+              process_queue();
+              callback();
+              return;
+            }
+            auto count = sscanf(chars, "BINARY_DATA %d %d uint64(%llu)", &nchans, &nsamples, &from_count);
+            SPIKEGLX_ASSERT(count == 3, std::string("Failed to read BINARY_DATA header: ") + chars);
+            data.resize(nchans);
+            for (auto& d : data) {
+              d.clear();
+            }
+            names.resize(nchans);
+            for(size_t i = 0;i < names.size();++i) {
+              auto& name = names[i];
+              if(name.empty()) {
+                name = prefix + std::to_string(i);
+              }
+            }
+            samples_read = 0;
+            next_channel = 0;
+            complete_samples = 0;
+
+            fetch_state = FetchState::READ_DATA;
+            buffer_offset = i+1;
+            buffer_length = buffer_total - buffer_offset;
+            skip_offset = true;
+            on_fetch(js, ip, callback);
+            return;
+          }
+        }
+        fill_buffer(std::bind(&Impl::on_fetch, this, js, ip, callback));
+      }
+      break;
+      case FetchState::READ_DATA: {
+        size_t position = 0;
+
+        unsigned char* bytes = buffer + (skip_offset ? buffer_offset : 0);
+
+        size_t end = skip_offset ? buffer_length : buffer_total;
+
+        //THALAMUS_LOG(info) << "fetch data " << position_shorts << " " << end_shorts;
+        //for(auto& d : data) {
+        //  d.erase(d.begin(), d.begin() + complete_samples);
+        //}
+        //short lower = std::numeric_limits<short>::max();
+        //short upper = std::numeric_limits<short>::min();
+        auto band_size = std::max(1u, nchans/pool.num_threads);
+        band_size += (nchans % band_size) ? 1 : 0;
+
+        pending_bands = nchans/band_size;
+        pending_bands += (nchans % band_size) ? 1 : 0;
+
+        auto post_deinterlace = [&,js,ip,callback,end] {
+          //THALAMUS_LOG(info) << "post_deinterlace";
+          samples_read += end / sizeof(short);
+          
+          if(samples_read / nchans == nsamples) {
+            auto now = std::chrono::steady_clock::now();
+            time = now.time_since_epoch();
+            latency = (now - fetch_start).count()/1e6;
+            complete_samples = std::numeric_limits<size_t>::max();
+            for (auto& d : data) {
+              complete_samples = std::min(complete_samples, d.size());
+            }
+            if (complete_samples > 0) {
+              outer->ready(outer);
+            }
+            //THALAMUS_LOG(info) << "fetch done";
+            sample_count += nsamples;
+            fetch_state = FetchState::READ_OK;
+            on_fetch(js, ip, callback);
+            return;
+          }
+
+          consume_buffer(buffer_total - (end % 2));
+          skip_offset = false;
+          fill_buffer(std::bind(&Impl::on_fetch, this, js, ip, callback));
+        };
+        for(auto c = 0;c < nchans;c+=band_size) {
+          pool.push([&,c,post_deinterlace,band_size,end,bytes] {
+            for(auto subc = 0;subc < band_size && c+subc < nchans;++subc) {
+              auto channel = (samples_read+c+subc) % nchans;
+              for(auto i = 2*(c+subc);i+1 < end;i += 2*nchans) {
+                short sample = bytes[i] + (bytes[i+1] << 8);
+                data[channel].push_back(sample);
+              }
+            }
+            if(--pending_bands == 0) {
+              boost::asio::post(io_context, post_deinterlace);
+            }
+          });
+        }
+      }
+      break;
+      case FetchState::READ_OK: {
+        char* chars = reinterpret_cast<char*>(buffer);
+        auto end = chars + buffer_total;
+        if(buffer_total >= 3 && std::string_view(end-3, end) == "OK\n") {
+          process_queue();
+          callback();
+          return;
+        }
+        
+        fill_buffer(std::bind(&Impl::on_fetch, this, js, ip, callback));
+      }
+      break;
+    }
+  }
+
+  void fetch(Device js, int ip, const std::string& subset, std::function<void()> callback) {
+    //THALAMUS_LOG(info) << "fetch " << device_to_string(js);
+    auto i = sample_counts.find(std::make_pair(js, ip));
+    auto j = sample_intervals.find(std::make_pair(js, ip));
+    if(i == sample_counts.end()) {
+      std::string command;
+      if(js == Device::IMEC) {
+        if(spike_glx_version < 20240000) {
+          command = absl::StrFormat("GETSCANCOUNT %d", 0);
+        } else {
+          command = absl::StrFormat("GETSTREAMSAMPLECOUNT %d 0", 2);
+        }
+      } else {
+        if(spike_glx_version < 20240000) {
+          command = absl::StrFormat("GETSCANCOUNT %d", -1);
+        } else {
+          command = absl::StrFormat("GETSTREAMSAMPLECOUNT %d 0", 0);
+        }
+      }
+
+      query_string(command, [this,js,ip,subset,callback](auto& text) {
+        //THALAMUS_LOG(info) << "scancount " << text;
+        size_t count;
+        auto success = absl::SimpleAtoi(text, &count);
+        sample_counts[std::make_pair(js, ip)] = count;
+        SPIKEGLX_ASSERT(success, std::string("Failed to parse sample count: ") + text);
+        fetch(js, ip, subset, callback);
+      });
+    } else if (j == sample_intervals.end()) {
+      std::string command;
+      if (js == Device::IMEC) {
+        if (spike_glx_version < 20240000) {
+          command = absl::StrFormat("GETSAMPLERATE %d", 0);
+        }
+        else {
+          command = absl::StrFormat("GETSTREAMSAMPLERATE %d 0", 2);
+        }
+      }
+      else {
+        if (spike_glx_version < 20240000) {
+          command = absl::StrFormat("GETSAMPLERATE %d", -1);
+        }
+        else {
+          command = absl::StrFormat("GETSTREAMSAMPLERATE %d 0", 0);
+        }
+      }
+
+      query_string(command, [this, js, ip, subset, callback](auto& text) {
+        //THALAMUS_LOG(info) << "samplerate " << text;
+        double rate;
+        auto success = absl::SimpleAtod(text, &rate);
+        sample_intervals[std::make_pair(js, ip)] = std::chrono::nanoseconds(size_t(1000000000/rate));
+        SPIKEGLX_ASSERT(success, std::string("Failed to parse sample rate: ") + text);
+        fetch(js, ip, subset, callback);
+      });
+    } else {
+      fetch_start = std::chrono::steady_clock::now();
+      std::string command;
+      if(js == Device::IMEC) {
+        if(spike_glx_version < 20240000) {
+          command = absl::StrFormat("FETCH %d %d 50000 %s", 0, i->second, subset);
+        } else {
+          command = absl::StrFormat("FETCH %d 0 %d 50000 %s", 2, i->second, subset);
+        }
+      } else {
+        if(spike_glx_version < 20240000) {
+          command = absl::StrFormat("FETCH %d %d 50000 %s", -1, i->second, subset);
+        } else {
+          command = absl::StrFormat("FETCH %d 0 %d 50000 %s", 0, i->second, subset);
+        }
+      }
+      
+      fetch_state = FetchState::READ_HEADER;
+      enqueue(command, std::bind(&Impl::on_fetch, this, js, ip, callback));
+    }
+  }
+  
+  void on_query_string(std::function<void(const std::string&)> callback) {
+    char* chars = reinterpret_cast<char*>(buffer);
+    auto end = chars + buffer_total;
+    if(buffer_total >= 3 && std::string_view(end-3, end) == "OK\n") {
+      std::string_view view(chars, end);
+      auto offset = view.find('\n');
+      process_queue();
+      callback(std::string(chars, chars+offset));
+      return;
+    }
+    
+    fill_buffer(std::bind(&Impl::on_query_string, this, callback));
+  }
+
+  void query_string(const std::string& command, std::function<void(const std::string&)> callback) {
+    enqueue(command, std::bind(&Impl::on_query_string, this, callback));
+  }
+
+  void consume_buffer(size_t count = BUFFER_SIZE) {
+    if(count < buffer_offset + buffer_length) {
+      std::copy(buffer + count, buffer + buffer_offset + buffer_length, buffer);
+      buffer_offset = buffer_offset + buffer_length - count;
+      buffer_length = 0;
+    } else {
+      buffer_offset = 0;
+      buffer_length = 0;
+    }
+    buffer_total = buffer_offset + buffer_length;
+  }
+
+  void on_fill_buffer(std::function<void()> callback, const boost::system::error_code& ec, size_t length) {
+    SPIKEGLX_ASSERT(!ec, ec);
+    if(!queue_busy) {
+      return;
+    }
+    buffer_length = length;
+    buffer_total = buffer_offset + buffer_length;
+    callback();
+  }
+
+  void fill_buffer(std::function<void()> callback) {
+    buffer_offset += buffer_length;
+    //THALAMUS_LOG(info) << buffer_offset << " " << (sizeof(buffer) - buffer_offset);
+    socket.async_receive(boost::asio::buffer(buffer + buffer_offset, sizeof(buffer) - buffer_offset), std::bind(&Impl::on_fill_buffer, this, callback, _1, _2));
+  }
+
+  void process_queue() {
+    queue_busy = false;
+    if(spikeglx_queue.empty()) {
+      return;
+    }
+    auto& pair = spikeglx_queue.front();
+    std::string command_nl = pair.first + "\n";
+    boost::system::error_code ec;
+    socket.send(boost::asio::const_buffer(command_nl.data(), command_nl.size()), 0, ec);
+    SPIKEGLX_ASSERT(!ec, ec);
+
+    //THALAMUS_LOG(info) << "process_queue " << pair.first;
+    consume_buffer();
+    fill_buffer(pair.second);
+    spikeglx_queue.erase(spikeglx_queue.begin());
+    queue_busy = true;
+  }
+
+  void enqueue(const std::string& command, std::function<void()> callback) {
+    //THALAMUS_LOG(info) << "enqueue " << command;
+    spikeglx_queue.emplace_back(command, callback);
+    if(!queue_busy) {
+      process_queue();
+    }
+  }
 
   Impl(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph, SpikeGlxNode* outer)
     : state(state)
@@ -83,302 +393,109 @@ struct SpikeGlxNode::Impl {
     (*state)["Running"].assign(false);
   }
 
+  void handle_error(const std::string& message, bool do_disconnect = true) {
+    THALAMUS_LOG(error) << message;
+    (*state)["Error"].assign(message);
+    queue_busy = false;
+    if(do_disconnect) {
+      disconnect();
+    }
+  }
+
+  void handle_error(const boost::system::error_code& ec, bool do_disconnect = true) {
+    handle_error(ec.what(), do_disconnect);
+  }
+
+  void disconnect() {
+    if(!is_connected) {
+      return;
+    }
+    boost::system::error_code ec;
+    socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+    handle_error(ec, false);
+    socket.close(ec);
+    handle_error(ec, false);
+    is_connected = false;
+    is_running = false;
+    (*state)["Running"].assign(false);
+  }
+
+  void connect(std::function<void()> callback) {
+    if(is_connected) {
+      callback();
+    }
+
+    SPIKEGLX_ASSERT(state->contains("Address"), "No Address defined");
+
+    std::string address_str = state->at("Address");
+    std::vector<std::string> address_tokens = absl::StrSplit(address_str, ':');
+    if (address_tokens.size() == 1) {
+      address_tokens.push_back("4142");
+    }
+
+    SPIKEGLX_ASSERT(address_tokens.size() == 2, std::string("Failed to parse address :") + address_str);
+
+    boost::asio::ip::tcp::resolver resolver(io_context);
+    auto endpoints = resolver.resolve(address_tokens.at(0), address_tokens.at(1));
+    boost::system::error_code ec;
+    boost::asio::async_connect(socket, endpoints, std::bind(&Impl::on_connect, this, callback, _1));
+  }
+
+  void on_connect(std::function<void()> callback, const boost::system::error_code& e) {
+    SPIKEGLX_ASSERT(!e, e);
+    load_version(callback);
+  }
+
+  void load_version(std::function<void()> callback) {
+    query_string("GETVERSION",  [&, callback](auto& text) {
+      //THALAMUS_LOG(info) << text;
+      std::vector<std::string_view> tokens = absl::StrSplit(text, absl::ByAnyChar(".,"));
+      SPIKEGLX_ASSERT(tokens.size() >= 2, std::string("Failed to parse SpikeGLX version: ") + text);
+
+      auto success = absl::SimpleAtoi(tokens[1], &spike_glx_version);
+      SPIKEGLX_ASSERT(success, std::string("Failed to parse SpikeGLX version :") + text);
+
+      is_connected = true;
+      callback();
+    });
+  }
+
+  void on_fetch_space(const boost::system::error_code& ec, Device js, int ip, const std::string& subset) {
+    fetch_continuously(js, ip, subset);
+  }
+
+  void fetch_continuously(Device js, int ip, const std::string& subset) {
+    if(!is_running) {
+      return;
+    }
+    //THALAMUS_LOG(info) << "fetch_continuously " << device_to_string(js) << " " << ip;
+    fetch(js, ip, subset, [this, js, ip, subset] {
+      //fetch_continuously(js, ip, subset);
+      timer.expires_after(2ms);
+      timer.async_wait(std::bind(&Impl::on_fetch_space, this, _1, js, ip, subset));
+    });
+  }
+
   void on_change(ObservableCollection::Action a, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
     auto key_str = std::get<std::string>(k);
     if (key_str == "Running") {
       is_running = std::get<bool>(v);
       if (is_running) {
-        std::string address_str = state->at("Address");
-        std::vector<std::string> address_tokens = absl::StrSplit(address_str, ':');
-        if (address_tokens.size() < 2) {
-          address_tokens.push_back("4142");
-        }
-        boost::asio::ip::tcp::resolver resolver(io_context);
-        auto endpoints = resolver.resolve(address_tokens.at(0), address_tokens.at(1));
-        boost::system::error_code ec;
-        boost::asio::connect(socket, endpoints, ec);
-        if(ec) {
-          THALAMUS_LOG(error) << ec.what();
-          (*state)["Running"].assign(false);
-          return;
-        }
-
-        lines.clear();
-        std::string command = "GETVERSION\n";
-        socket.send(boost::asio::const_buffer(command.data(), command.size()), 0, ec);
-        if(ec) {
-          THALAMUS_LOG(error) << ec.what();
-          (*state)["Running"].assign(false);
-          return;
-        }
-        is_connected = true;
-        read_string(std::bind(&Impl::on_version, this, _1));
-      } else if(is_connected) {
-        boost::system::error_code ec;
-        socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
-        if(ec) {
-          THALAMUS_LOG(error) << ec.what();
-        }
-        socket.close(ec);
-        if(ec) {
-          THALAMUS_LOG(error) << ec.what();
-        }
-        is_connected = false;
+        sample_counts.clear();
+        connect([&] {
+          fetch_continuously(Device::IMEC, 0, "");
+        });
+      }
+      else {
+        disconnect();
       }
     }
   }
 
-  void on_binary_wait(const boost::system::error_code& error) {
-    if(error) {
-      THALAMUS_LOG(error) << error.what();
-      (*state)["Running"].assign(false);
-      return;
-    }
-    fetch();
+  void get_num_imec(std::function<void(int)>) {
+    auto command = "GETSTREAMNP";
   }
-
-  void on_binary_data(const boost::system::error_code& error, size_t length) {
-    if(error) {
-      THALAMUS_LOG(error) << error.what();
-      (*state)["Running"].assign(false);
-      return;
-    }
-    switch(fetch_state) {
-      case FetchState::READ_HEADER: {
-        char* chars = reinterpret_cast<char*>(buffer);
-        for(auto i = buffer_offset;i < buffer_offset+length;++i) {
-          if(chars[i] == '\n') {
-            chars[i] = 0;
-            //THALAMUS_LOG(info) << "fetch header " << chars;
-            if(std::string_view(chars, chars+i).starts_with("ERROR FETCH: No data")) {
-              //THALAMUS_LOG(info) << "fetch retry";
-              timer.expires_after(1ms);
-              timer.async_wait(std::bind(&Impl::on_binary_wait, this, _1));
-              return;
-            }
-            auto count = sscanf(chars, "BINARY_DATA %d %d uint64(%llu)", &nchans, &nsamples, &from_count);
-            if(count < 3) {
-              THALAMUS_LOG(error) << "Failed to read BINARY_DATA header: " << chars;
-              (*state)["Running"].assign(false);
-              return;
-            }
-            data.resize(nchans);
-            for (auto& d : data) {
-              d.clear();
-            }
-            names.resize(nchans);
-            for(size_t i = 0;i < names.size();++i) {
-              auto& name = names[i];
-              if(name.empty()) {
-                name = std::to_string(i);
-              }
-            }
-            samples_read = 0;
-            next_channel = 0;
-            complete_samples = 0;
-
-            fetch_state = FetchState::READ_DATA;
-            length -= i+1 - buffer_offset;
-            buffer_offset = i+1;
-            skip_offset = true;
-            on_binary_data(error, length);
-            return;
-          }
-        }
-        buffer_offset += length;
-        socket.async_receive(boost::asio::buffer(buffer + buffer_offset, sizeof(buffer) - buffer_offset), std::bind(&Impl::on_binary_data, this, _1, _2));
-      }
-      case FetchState::READ_DATA: {
-        size_t position = 0;
-
-        unsigned char* bytes = buffer + (skip_offset ? buffer_offset : 0);
-
-        size_t end = length + (skip_offset ? 0 : buffer_offset);
-
-        //THALAMUS_LOG(info) << "fetch data " << position_shorts << " " << end_shorts;
-        for(auto& d : data) {
-          d.erase(d.begin(), d.begin() + complete_samples);
-        }
-        //short lower = std::numeric_limits<short>::max();
-        //short upper = std::numeric_limits<short>::min();
-        std::vector<std::promise<void>> promises;
-        auto band_size = std::max(1u, nchans/pool.num_threads);
-        for(auto c = 0;c < nchans;c+=band_size) {
-          promises.emplace_back();
-        }
-        for(auto c = 0;c < nchans;c+=band_size) {
-          pool.push([&,c,promise=&promises[c/band_size]] {
-            for(auto subc = 0;subc < band_size && c+subc < nchans;++subc) {
-              auto channel = (samples_read+c+subc) % nchans;
-              for(auto i = 2*(c+subc);i+1 < end;i += 2*nchans) {
-                short sample = bytes[i] + (bytes[i+1] << 8);
-                data[channel].push_back(sample);
-              }
-            }
-            promise->set_value();
-          });
-        }
-        //THALAMUS_LOG(info) << "start";
-        for(auto& promise : promises) {
-          promise.get_future().get();
-        }
-        //THALAMUS_LOG(info) << "done";
-        samples_read += end / sizeof(short);
-        time = std::chrono::steady_clock::now().time_since_epoch();
-        complete_samples = std::numeric_limits<size_t>::max();
-        for (auto& d : data) {
-          complete_samples = std::min(complete_samples, d.size());
-        }
-        if (complete_samples > 0) {
-          outer->ready(outer);
-        }
-
-        if(samples_read / nchans == nsamples) {
-          //THALAMUS_LOG(info) << "fetch done";
-          sample_count += nsamples;
-          fetch_state = FetchState::READ_OK;
-          on_binary_data(error, length);
-          return;
-        }
-        if(end % 2 == 1) {
-          buffer[0] = bytes[end-1];
-          buffer_offset = 1;
-        } else {
-          buffer_offset = 0;
-        }
-        skip_offset = false;
-        socket.async_receive(boost::asio::buffer(buffer + buffer_offset, sizeof(buffer) - buffer_offset), std::bind(&Impl::on_binary_data, this, _1, _2));
-      }
-      break;
-      case FetchState::READ_OK: {
-        char* chars = reinterpret_cast<char*>(buffer);
-        auto end = chars + buffer_offset + length;
-        //THALAMUS_LOG(info) << "fetch READ_OK " << end - chars;
-        //if (end - chars >= 3) {
-        //  THALAMUS_LOG(info) << "fetch READ_OK2 " << std::string_view(end - 3, end) << (std::string_view(end - 3, end) == "OK\n");
-        //}
-        if(end - chars >= 3 && std::string_view(end-3, end) == "OK\n") {
-          fetch();
-          return;
-        }
-        buffer_offset += length;
-        socket.async_receive(boost::asio::buffer(buffer + buffer_offset, sizeof(buffer) - buffer_offset), std::bind(&Impl::on_binary_data, this, _1, _2));
-      }
-      break;
-    }
-  }
-
-  void fetch() {
-    boost::system::error_code ec;
-    std::stringstream command;
-    if(spike_glx_version < 20240000) {
-      command << "FETCH -1 " << sample_count << " 50000\n";
-    } else {
-      command << "FETCH 2 0 " << sample_count << " 50000\n";
-    }
-    //THALAMUS_LOG(info) << "fetch " << command.str();
-    socket.send(boost::asio::const_buffer(command.str().data(), command.str().size()), 0, ec);
-    if(ec) {
-      THALAMUS_LOG(error) << ec.what();
-      (*state)["Running"].assign(false);
-      return;
-    }
-    buffer_offset = 0;
-    fetch_state = FetchState::READ_HEADER;
-    socket.async_receive(boost::asio::buffer(buffer, sizeof(buffer)), std::bind(&Impl::on_binary_data, this, _1, _2));
-  }
-
-  void on_sample_count(const std::string_view& text) {
-    //THALAMUS_LOG(info) << "on_sample_count " << text;
-    auto success = absl::SimpleAtoi(text, &sample_count);
-    if(!success) {
-      THALAMUS_LOG(error) << "Failed to parse sample count";
-      (*state)["Running"].assign(false);
-      return;
-    }
-    fetch();
-  }
-
-  void on_sample_rate(const std::string_view& text) {
-    //THALAMUS_LOG(info) << "on_sample_rate " << text;
-    auto success = absl::SimpleAtod(text, &sample_rate);
-    if(!success) {
-      THALAMUS_LOG(error) << "Failed to parse sample rate";
-      (*state)["Running"].assign(false);
-      return;
-    }
-    sample_interval = std::chrono::nanoseconds(size_t(1e9/sample_rate));
-    boost::system::error_code ec;
-    std::string command = spike_glx_version < 20240000 ? "GETSCANCOUNT -1\n" : "GETSTREAMSAMPLECOUNT 2 0\n";
-    socket.send(boost::asio::const_buffer(command.data(), command.size()), 0, ec);
-    if(ec) {
-      THALAMUS_LOG(error) << ec.what();
-      (*state)["Running"].assign(false);
-      return;
-    }
-    read_string(std::bind(&Impl::on_sample_count, this, _1));
-  }
-
   size_t spike_glx_version;
-
-  void on_version(const std::string_view& text) {
-    THALAMUS_LOG(info) << text;
-    std::vector<std::string_view> tokens = absl::StrSplit(text, absl::ByAnyChar(".,"));
-    if(tokens.size() < 2) {
-      THALAMUS_LOG(error) << "Failed to parse SpikeGLX version " << text;
-      (*state)["Running"].assign(false);
-      return;
-    }
-    auto success = absl::SimpleAtoi(tokens[1], &spike_glx_version);
-    if(!success) {
-      THALAMUS_LOG(error) << "Failed to parse SpikeGLX version " << text;
-      (*state)["Running"].assign(false);
-      return;
-    }
-
-    boost::system::error_code ec;
-    std::string command = spike_glx_version < 20240000 ? "GETSAMPLERATE -1\n" : "GETSTREAMSAMPLERATE 2 0\n";
-    socket.send(boost::asio::const_buffer(command.data(), command.size()), 0, ec);
-    if(ec) {
-      THALAMUS_LOG(error) << ec.what();
-      (*state)["Running"].assign(false);
-      return;
-    }
-    read_string(std::bind(&Impl::on_sample_rate, this, _1));
-  }
-
-  void read_string(std::function<void(const std::string_view&)> callback) {
-    lines.clear();
-    buffer_length = 0;
-    buffer_offset = 0;
-    socket.async_receive(boost::asio::buffer(buffer, sizeof(buffer)), std::bind(&Impl::read_string_receive, this, callback, _1, _2));
-  }
-
-  void read_string_receive(std::function<void(const std::string_view&)> callback, const boost::system::error_code& error, size_t length) {
-    if(error) {
-      THALAMUS_LOG(error) << error.what();
-      (*state)["Running"].assign(false);
-      return;
-    }
-
-    char* chars = reinterpret_cast<char*>(buffer);
-    std::string_view view(chars, chars + buffer_offset + length);
-    size_t offset = buffer_offset;
-    size_t last_offset = buffer_offset;
-    while((offset = view.find('\n', offset)) != std::string::npos) {
-      lines.emplace_back(chars + last_offset, chars + offset);
-      ++offset;
-      last_offset = offset;
-    }
-    if(!lines.empty() && lines.back() == "OK") {
-      callback(lines.front());
-      return;
-    }
-
-    buffer_offset += length;
-
-    socket.async_receive(boost::asio::buffer(buffer + buffer_offset, sizeof(buffer) - buffer_offset), std::bind(&Impl::read_string_receive, this, callback, _1, _2));
-  }
 };
 
 SpikeGlxNode::SpikeGlxNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph)
@@ -387,19 +504,28 @@ SpikeGlxNode::SpikeGlxNode(ObservableDictPtr state, boost::asio::io_context& io_
 SpikeGlxNode::~SpikeGlxNode() {}
   
 std::span<const double> SpikeGlxNode::data(int channel) const {
-  return std::span<const double>(impl->data[channel].begin(), impl->data[channel].begin() + impl->complete_samples);
+  if(channel == 0) {
+    return std::span<const double>(&impl->latency, &impl->latency+1);
+  }
+  return std::span<const double>(impl->imec_data[channel-1].begin(), impl->imec_data[channel-1].begin() + impl->complete_samples);
 }
 
 std::string_view SpikeGlxNode::name(int channel) const {
-  return impl->names[channel];
+  if(channel == 0) {
+    return "Latency (ms)";
+  }
+  return impl->imec_names[channel-1];
 }
 
 int SpikeGlxNode::num_channels() const {
-  return impl->data.size();
+  return impl->imec_data.size()+1;
 }
 
 std::chrono::nanoseconds SpikeGlxNode::sample_interval(int i) const {
-  return impl->sample_interval;
+  if(i == 0) {
+    return 0ns;
+  }
+  return impl->sample_intervals[std::make_pair(Impl::Device::IMEC, 0)];//impl->sample_interval;
 }
 
 std::chrono::nanoseconds SpikeGlxNode::time() const {
@@ -414,4 +540,11 @@ void SpikeGlxNode::inject(const thalamus::vector<std::span<double const>>& data,
 
 size_t SpikeGlxNode::modalities() const {
   return THALAMUS_MODALITY_ANALOG;
+}
+
+boost::json::value SpikeGlxNode::process(const boost::json::value&) {
+  return boost::json::value();
+  //impl->connect([&] {
+  //  get_imec_count();
+  //});
 }

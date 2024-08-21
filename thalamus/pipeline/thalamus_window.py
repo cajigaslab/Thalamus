@@ -32,6 +32,7 @@ from .lua_widget import LuaWidget
 from .log_widget import LogWidget
 from .wave_widget import WaveWidget
 from .intan_widget import IntanWidget
+from .spikeglx_widget import SpikeGlxWidget
 from .aruco_widget import ArucoWidget
 #from .analog_widget import AnalogWidget
 from ..util import NodeSelector
@@ -266,7 +267,7 @@ FACTORIES = {
     UserData(UserDataType.SPINBOX, 'Command Port', 5000, []),
     UserData(UserDataType.SPINBOX, 'Waveform Port', 5001, []),
   ]),
-  'SPIKEGLX': Factory(IntanWidget, [
+  'SPIKEGLX': Factory(SpikeGlxWidget, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.DEFAULT, 'Address', "localhost:4142", []),
   ]),
