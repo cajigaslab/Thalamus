@@ -24,7 +24,7 @@ namespace thalamus {
       : running(false)
       , name(name.empty() ? "ThreadPool" : name)
       , num_threads(num_threads ? num_threads : std::thread::hardware_concurrency())
-      , num_busy_threads(num_threads) {}
+      , num_busy_threads(this->num_threads) {}
     ~ThreadPool() {
       stop();
     }
