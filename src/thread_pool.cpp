@@ -12,7 +12,9 @@ namespace thalamus {
       std::function<void()> job;
       {
         std::unique_lock<std::mutex> lock(mutex);
+        --num_busy_threads;
         condition.wait(lock, [&]() { return !running || !jobs.empty(); });
+        ++num_busy_threads;
         if(!running) {
           break;
         }
@@ -20,9 +22,7 @@ namespace thalamus {
         jobs.pop_front();
       }
 
-      ++num_busy_threads;
       job();
-      --num_busy_threads;
     }
   }
 

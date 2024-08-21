@@ -46,7 +46,7 @@ if HAS_QT6:
   class QSound(QSoundEffect):
     def __init__(self, filename):
       super().__init__()
-      self.setSource(QUrl(filename))
+      self.setSource(QUrl.fromLocalFile(filename))
 
   def qt_screen_geometry() -> QRect:
     return QApplication.screens()[0].geometry()
