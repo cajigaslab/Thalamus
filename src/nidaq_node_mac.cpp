@@ -255,9 +255,6 @@ namespace thalamus {
 
   bool NidaqNode::prepare() { return true; }
   bool NidaqOutputNode::prepare() { return true; }
-  std::span<const std::string> NidaqNode::get_recommended_channels() const {
-    return std::span<const std::string>();
-  }
   std::string_view NidaqNode::name(int) const {
     return "0";
   }

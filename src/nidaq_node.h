@@ -22,7 +22,6 @@ namespace thalamus {
     void inject(const thalamus::vector<std::span<double const>>& spans, const thalamus::vector<std::chrono::nanoseconds>& sample_intervals, const thalamus::vector<std::string_view>& names) override;
     static int get_num_channels(const std::string& channel);
     std::string_view name(int channel) const override;
-    std::span<const std::string> get_recommended_channels() const override;
 
     static bool prepare();
     size_t modalities() const override;

@@ -179,7 +179,7 @@ class Ros2Widget(QWidget):
     if 'Sources' not in self.config:
       self.config['Sources'] = {}
     sources = self.config['Sources']
-    for source in sources:
+    for source in sources.values():
       if 'Parent Frame' not in source:
         source['Parent Frame'] = ''
       if 'Child Frame' not in source:
