@@ -1,5 +1,6 @@
 from ..qt import *
 import typing
+import asyncio
 import collections
 from .. import thalamus_pb2
 from ..task_controller.util import create_task_with_exc_handling
@@ -26,26 +27,29 @@ class ChannelsDataModel(QAbstractItemModel):
   async def get_channels(self, channels_list: ChannelsList, index: QModelIndex):
     selector = thalamus_pb2.NodeSelector(name=channels_list.node)
     stream = self.stub.channel_info(thalamus_pb2.AnalogRequest(node=selector))
-    async for response in stream:
-      if channels_list.channels:
-        self.beginRemoveRows(index, 0, len(channels_list.channels)-1)
-        channels_list.channels.clear()
-        channels_list.sample_intervals.clear()
-        self.endRemoveRows()
+    try:
+      async for response in stream:
+        if channels_list.channels:
+          self.beginRemoveRows(index, 0, len(channels_list.channels)-1)
+          channels_list.channels.clear()
+          channels_list.sample_intervals.clear()
+          self.endRemoveRows()
 
-      new_channels = []
-      new_sample_intervals = []
-      for i in range(len(response.spans)):
-        span = response.spans[i]
-        sample_interval = response.sample_intervals[i]
-        new_channels.append(span.name)
-        new_sample_intervals.append(sample_interval)
+        new_channels = []
+        new_sample_intervals = []
+        for i in range(len(response.spans)):
+          span = response.spans[i]
+          sample_interval = response.sample_intervals[i]
+          new_channels.append(span.name)
+          new_sample_intervals.append(sample_interval)
 
-      if new_channels:
-        self.beginInsertRows(index, 0, len(new_channels)-1)
-        channels_list.channels.extend(new_channels)
-        channels_list.sample_intervals.extend(new_sample_intervals)
-        self.endInsertRows()
+        if new_channels:
+          self.beginInsertRows(index, 0, len(new_channels)-1)
+          channels_list.channels.extend(new_channels)
+          channels_list.sample_intervals.extend(new_sample_intervals)
+          self.endInsertRows()
+    except asyncio.CancelledError:
+      pass 
 
   async def update(self):
     for task in self.tasks:
