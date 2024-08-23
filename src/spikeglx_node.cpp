@@ -15,6 +15,7 @@
 #include <boost/signals2.hpp>
 #include <modalities.h>
 #include <thread_pool.h>
+#include <thalamus/atoi.h>
 
 using namespace thalamus;
 using namespace std::chrono_literals;
@@ -67,7 +68,7 @@ struct SpikeGlxNode::Impl {
     READ_HEADER,
     READ_DATA,
     READ_OK
-  } fetch_state;
+  };
 
   enum class Device {
     IMEC, NI
@@ -81,6 +82,8 @@ struct SpikeGlxNode::Impl {
         return "IMEC";
       case Device::NI:
         return "NI";
+      default:
+        THALAMUS_ASSERT(false, "Invalid Device");
     }
   }
   static const char* state_to_string(FetchState d) {
@@ -91,21 +94,25 @@ struct SpikeGlxNode::Impl {
       return "READ_DATA";
     case FetchState::READ_OK:
       return "READ_OK";
+    default:
+      THALAMUS_ASSERT(false, "Invalid FetchState");
     }
   }
 
   std::vector<std::vector<double>> ni_data;
-  std::vector<std::vector<double>> imec_data;
+  std::vector<std::vector<std::vector<double>>> imec_data;
   std::vector<std::string> ni_names;
-  std::vector<std::string> imec_names;
+  std::vector<std::vector<std::string>> imec_names;
   std::atomic_int pending_bands = 0;
   std::chrono::steady_clock::time_point fetch_start;
   double latency = 0;
+  Device current_js;
+  int current_ip;
 
-  void on_fetch(Device js, int ip, std::function<void()> callback) {
+  void on_fetch(Device js, int ip, FetchState fetch_state, std::function<void()> callback) {
     //THALAMUS_LOG(info) << "on_fetch " << device_to_string(js) << " " << ip << " " << state_to_string(fetch_state);
-    auto& data = js == Device::IMEC ? imec_data : ni_data;
-    auto& names = js == Device::IMEC ? imec_names : ni_names;
+    auto& data = js == Device::IMEC ? imec_data[ip] : ni_data;
+    auto& names = js == Device::IMEC ? imec_names[ip] : ni_names;
     auto& sample_count = sample_counts[std::make_pair(js, ip)];
     auto prefix = (js == Device::IMEC ? "IMEC:" : "NI:") + std::to_string(ip) + ":";
     switch(fetch_state) {
@@ -140,15 +147,14 @@ struct SpikeGlxNode::Impl {
             next_channel = 0;
             complete_samples = 0;
 
-            fetch_state = FetchState::READ_DATA;
             buffer_offset = i+1;
             buffer_length = buffer_total - buffer_offset;
             skip_offset = true;
-            on_fetch(js, ip, callback);
+            on_fetch(js, ip, FetchState::READ_DATA, callback);
             return;
           }
         }
-        fill_buffer(std::bind(&Impl::on_fetch, this, js, ip, callback));
+        fill_buffer(std::bind(&Impl::on_fetch, this, js, ip, FetchState::READ_HEADER, callback));
       }
       break;
       case FetchState::READ_DATA: {
@@ -182,19 +188,28 @@ struct SpikeGlxNode::Impl {
             for (auto& d : data) {
               complete_samples = std::min(complete_samples, d.size());
             }
+            auto last_num_channels = num_channels;
+            num_channels = ni_data.size();
+            for(auto& d : imec_data) {
+              num_channels += d.size();
+            }
+            if(num_channels != last_num_channels) {
+              outer->channels_changed(outer);
+            }
             if (complete_samples > 0) {
+              current_js = js;
+              current_ip = ip;
               outer->ready(outer);
             }
             //THALAMUS_LOG(info) << "fetch done";
             sample_count += nsamples;
-            fetch_state = FetchState::READ_OK;
-            on_fetch(js, ip, callback);
+            on_fetch(js, ip, FetchState::READ_OK, callback);
             return;
           }
 
           consume_buffer(buffer_total - (end % 2));
           skip_offset = false;
-          fill_buffer(std::bind(&Impl::on_fetch, this, js, ip, callback));
+          fill_buffer(std::bind(&Impl::on_fetch, this, js, ip, FetchState::READ_DATA, callback));
         };
         for(auto c = 0;c < nchans;c+=band_size) {
           pool.push([&,c,post_deinterlace,band_size,end,bytes] {
@@ -221,14 +236,14 @@ struct SpikeGlxNode::Impl {
           return;
         }
         
-        fill_buffer(std::bind(&Impl::on_fetch, this, js, ip, callback));
+        fill_buffer(std::bind(&Impl::on_fetch, this, js, ip, FetchState::READ_OK, callback));
       }
       break;
     }
   }
 
   void fetch(Device js, int ip, const std::string& subset, std::function<void()> callback) {
-    //THALAMUS_LOG(info) << "fetch " << device_to_string(js);
+    //THALAMUS_LOG(info) << "fetch " << device_to_string(js) << " " << ip << " " << subset;
     auto i = sample_counts.find(std::make_pair(js, ip));
     auto j = sample_intervals.find(std::make_pair(js, ip));
     if(i == sample_counts.end()) {
@@ -299,8 +314,7 @@ struct SpikeGlxNode::Impl {
         }
       }
       
-      fetch_state = FetchState::READ_HEADER;
-      enqueue(command, std::bind(&Impl::on_fetch, this, js, ip, callback));
+      enqueue(command, std::bind(&Impl::on_fetch, this, js, ip, FetchState::READ_HEADER, callback));
     }
   }
   
@@ -310,8 +324,10 @@ struct SpikeGlxNode::Impl {
     if(buffer_total >= 3 && std::string_view(end-3, end) == "OK\n") {
       std::string_view view(chars, end);
       auto offset = view.find('\n');
+      std::string result(chars, chars+offset);
+      //THALAMUS_LOG(info) << "on_query_string " << result;
       process_queue();
-      callback(std::string(chars, chars+offset));
+      callback(result);
       return;
     }
     
@@ -352,6 +368,7 @@ struct SpikeGlxNode::Impl {
 
   void process_queue() {
     queue_busy = false;
+    //THALAMUS_LOG(info) << "queue free";
     if(spikeglx_queue.empty()) {
       return;
     }
@@ -366,10 +383,11 @@ struct SpikeGlxNode::Impl {
     fill_buffer(pair.second);
     spikeglx_queue.erase(spikeglx_queue.begin());
     queue_busy = true;
+    //THALAMUS_LOG(info) << "queue busy";
   }
 
   void enqueue(const std::string& command, std::function<void()> callback) {
-    //THALAMUS_LOG(info) << "enqueue " << command;
+    //THALAMUS_LOG(info) << "enqueue " << queue_busy << " " << command;
     spikeglx_queue.emplace_back(command, callback);
     if(!queue_busy) {
       process_queue();
@@ -397,6 +415,7 @@ struct SpikeGlxNode::Impl {
     THALAMUS_LOG(error) << message;
     (*state)["Error"].assign(message);
     queue_busy = false;
+    //THALAMUS_LOG(info) << "error free";
     if(do_disconnect) {
       disconnect();
     }
@@ -456,34 +475,75 @@ struct SpikeGlxNode::Impl {
       SPIKEGLX_ASSERT(success, std::string("Failed to parse SpikeGLX version :") + text);
 
       is_connected = true;
-      callback();
+      count_probes(callback);
     });
   }
 
-  void on_fetch_space(const boost::system::error_code& ec, Device js, int ip, const std::string& subset) {
-    fetch_continuously(js, ip, subset);
+  void on_fetch_space(const boost::system::error_code& ec) {
+    fetch_continuously();
   }
 
-  void fetch_continuously(Device js, int ip, const std::string& subset) {
+  void fetch_continuously() {
     if(!is_running) {
       return;
     }
     //THALAMUS_LOG(info) << "fetch_continuously " << device_to_string(js) << " " << ip;
-    fetch(js, ip, subset, [this, js, ip, subset] {
+    for(auto i = 0;i < imec_count;++i) {
+      fetch(Device::IMEC, i, imec_subsets[i], [] {});
+    }
+    fetch(Device::NI, 0, "", [&] {
       //fetch_continuously(js, ip, subset);
       timer.expires_after(2ms);
-      timer.async_wait(std::bind(&Impl::on_fetch_space, this, _1, js, ip, subset));
+      timer.async_wait(std::bind(&Impl::on_fetch_space, this, _1));
+    });
+  }
+
+  long long imec_count = 0;
+  long long imec_pending = 0;
+
+  std::vector<std::string> imec_subsets;
+
+  void count_probes(std::function<void()> callback) {
+    auto command = spike_glx_version < 20240000 ? "GETIMPROBECOUNT" : "GETSTREAMNP 2";
+    query_string(command, [&,callback](const auto& text) {
+      auto callback_wrapper = [&,callback] () {
+        if(--imec_pending == 0) {
+          callback();
+        }
+      };
+
+      imec_count = parse_number<long long>(text);
+      imec_data.resize(imec_count);
+      imec_names.resize(imec_count);
+
+      imec_pending = 1;
+      (*state)["imec_count"].assign(imec_count, callback_wrapper);
+
+      for(auto i = 0ll;i < imec_count;++i) {
+        auto text = absl::StrFormat("imec_subset_%d", i);
+        if(state->contains(text)) {
+          continue;
+        }
+
+        ++imec_pending;
+        (*state)[text].assign("*", callback_wrapper);
+      }
     });
   }
 
   void on_change(ObservableCollection::Action a, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
     auto key_str = std::get<std::string>(k);
-    if (key_str == "Running") {
+    if(key_str.starts_with("imec_subset")) {
+      std::vector<std::string> tokens = absl::StrSplit(key_str, '_');
+      auto index = parse_number<size_t>(tokens.back());
+      imec_subsets.resize(index+1, "*");
+      imec_subsets[index] = std::get<std::string>(v);
+    } else if (key_str == "Running") {
       is_running = std::get<bool>(v);
       if (is_running) {
         sample_counts.clear();
         connect([&] {
-          fetch_continuously(Device::IMEC, 0, "");
+          fetch_continuously();
         });
       }
       else {
@@ -492,9 +552,6 @@ struct SpikeGlxNode::Impl {
     }
   }
 
-  void get_num_imec(std::function<void(int)>) {
-    auto command = "GETSTREAMNP";
-  }
   size_t spike_glx_version;
 };
 
@@ -507,25 +564,70 @@ std::span<const double> SpikeGlxNode::data(int channel) const {
   if(channel == 0) {
     return std::span<const double>(&impl->latency, &impl->latency+1);
   }
-  return std::span<const double>(impl->imec_data[channel-1].begin(), impl->imec_data[channel-1].begin() + impl->complete_samples);
+  --channel;
+
+  for(auto j = 0ull;j < impl->imec_data.size();++j) {
+    auto& channels = impl->imec_data[j];
+    if(channel < channels.size()) {
+      if(impl->current_js == Impl::Device::IMEC && impl->current_ip == j) {
+        return std::span<const double>(channels[channel].begin(), channels[channel].begin() + impl->complete_samples);
+      } else {
+        return std::span<const double>();
+      }
+    }
+    channel -= channels.size();
+  }
+
+  if(channel < impl->ni_data.size() && impl->current_js == Impl::Device::NI) {
+    return std::span<const double>(impl->ni_data[channel].begin(), impl->ni_data[channel].begin() + impl->complete_samples);
+  }
+
+  return std::span<const double>();
 }
 
 std::string_view SpikeGlxNode::name(int channel) const {
   if(channel == 0) {
     return "Latency (ms)";
   }
-  return impl->imec_names[channel-1];
+  --channel;
+
+  for(const auto& names : impl->imec_names) {
+    if(channel < names.size()) {
+      return names[channel];
+    }
+    channel -= names.size();
+  }
+
+  if(channel < impl->ni_data.size()) {
+    return impl->ni_names[channel];
+  }
+  
+  return "";
 }
 
 int SpikeGlxNode::num_channels() const {
-  return impl->imec_data.size()+1;
+  return impl->num_channels+1;
 }
 
 std::chrono::nanoseconds SpikeGlxNode::sample_interval(int i) const {
   if(i == 0) {
     return 0ns;
   }
-  return impl->sample_intervals[std::make_pair(Impl::Device::IMEC, 0)];//impl->sample_interval;
+  --i;
+
+  for(auto j = 0ull;j < impl->imec_data.size();++j) {
+    auto& channels = impl->imec_data[j];
+    if(i < channels.size()) {
+      return impl->sample_intervals[std::make_pair(Impl::Device::IMEC, int(j))];
+    }
+    i -= channels.size();
+  }
+
+  if(i < impl->ni_data.size()) {
+    return impl->sample_intervals[std::make_pair(Impl::Device::NI, 0)];
+  }
+  
+  return 0ns;
 }
 
 std::chrono::nanoseconds SpikeGlxNode::time() const {
@@ -543,8 +645,30 @@ size_t SpikeGlxNode::modalities() const {
 }
 
 boost::json::value SpikeGlxNode::process(const boost::json::value&) {
+  impl->connect([]{});
   return boost::json::value();
   //impl->connect([&] {
-  //  get_imec_count();
+  //  auto command = impl->spike_glx_version < 20240000 ? "GETIMPROBECOUNT" : "GETSTREAMNP";
+  //  impl->query_string(command, [&](const auto& text) {
+  //    auto count = parse_number<int>(text);
+  //    impl->imec_data.resize(count);
+  //    (*impl->state)["imec_count"].assign(count);
+  //    for(auto i = 0;i < count:++i) {
+  //      std::string command;
+  //      if(impl->spike_glx_version < 20240000) {
+  //        command = absl::StrFormat("GETACQCHANCOUNTS %d", i);
+  //      } else {
+  //        command = absl::StrFormat("GETSTREAMACQCHANS 2 %d", i);
+  //      }
+  //      impl->query_string(command, [&,i](const auto& text) {
+  //        auto tokens = absl::StrSplit(text, ' ');
+  //        auto sum = 0;
+  //        for(auto token : tokens) {
+  //          sum += parse_number<int>(token);
+  //        }
+  //        impl->imec_data[i].resize(sum);
+  //      })
+  //    }
+  //  });
   //});
 }
