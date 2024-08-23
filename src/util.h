@@ -9,7 +9,6 @@
 
 #ifdef __clang__
   #pragma clang diagnostic push
-  #pragma clang diagnostic ignored "-Wdeprecated-builtins"
   #pragma clang diagnostic ignored "-Wlanguage-extension-token"
   #pragma clang diagnostic ignored "-Wgnu-anonymous-struct"
   #pragma clang diagnostic ignored "-Wnested-anon-types"
