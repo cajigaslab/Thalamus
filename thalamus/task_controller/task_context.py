@@ -388,9 +388,13 @@ class TaskContext(TaskContextProtocol):
     Reads a number from the current task_config.  The specified config value should be a number or an object specifying
     a max and min value.  In the latter case a uniform random number in the range [min, max] will be returned.
     """
+
     if default is None:
       default = {}
     value_config = self.task_config.get(key, default)
+
+    if key == 'shape':
+        return value_config
 
     if isinstance(value_config, (int, float, bool)):
       self.trial_summary_data.used_values[key] = value_config

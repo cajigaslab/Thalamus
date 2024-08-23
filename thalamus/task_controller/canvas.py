@@ -845,8 +845,10 @@ class Canvas(QOpenGLWidget):
     Core of touch event processing
     """
     offset = point - self.input_config.last_touch
+    print('touch')
     if QPoint.dotProduct(offset, offset) > 2:
-      self.input_config.touch_path.addEllipse(QPointF(point), 2, 2)
+      print('touch2')
+      self.input_config.touch_path.addEllipse(QPointF(point), 20, 20)
       self.input_config.last_touch = offset
 
     self.listeners.touch_listener(point)

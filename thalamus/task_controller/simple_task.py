@@ -4,6 +4,8 @@ Implementation of the simple task
 import typing
 import logging
 import datetime
+import random
+import numpy as np # import Numpy to draw Gaussian
 
 from ..qt import *
 
@@ -24,10 +26,12 @@ Config = typing.NamedTuple('Config', [
   ('success_timeout', datetime.timedelta),
   ('target_rectangle', QRect),
   ('target_color', QColor),
+  ('shape', str)  # Add the shape attribute
 ])
 
 RANDOM_DEFAULT = {'min': 1, 'max':1}
 COLOR_DEFAULT = [255, 255, 255]
+shapes = ['rectangle', 'gaussian'] # Define the possible shapes
 
 class TargetWidget(QWidget):
   '''
@@ -67,7 +71,7 @@ class TargetWidget(QWidget):
       Form.Constant('Audio Scale Right', 'audio_scale_right', 0),
       Form.Color('Color', 'color', QColor(255, 255,255)),
       Form.Bool('Is Fixation', 'is_fixation', False),
-      Form.Choice('Shape', 'shape', [('Box', 'box'), ('Ellipsoid', 'ellipsoid')]),
+      Form.Choice('Shape', 'shape', shapes),  # Add the shape attribute
       Form.File('Stl File (Overrides shape)', 'stl_file', '', 'Select Stl File', '*.stl'),
       Form.File('Audio File', 'audio_file', '', 'Select Audio File', '*.wav'),
       Form.Bool('Only Play If Channel Is High', 'audio_only_if_high'),
@@ -83,7 +87,8 @@ class TargetWidget(QWidget):
       Form.Uniform('Auditory Spatial Offset', 'auditory_spatial_offset', 0, 0),
       Form.Uniform('Auditory Spatial Offset Around Fixation', 'auditory_spatial_offset_around_fixation', 0, 0),
       Form.Uniform('On Luminance', 'on_luminance', 0, 0),
-      Form.Uniform('Off Luminance', 'off_luminance', 0, 0)
+      Form.Uniform('Off Luminance', 'off_luminance', 0, 0),
+      Form.Constant('Shape', 'shape', random.choice(shapes))  # Randomly select the shape
     )
     layout.addWidget(random_form, 1, 3, 1, 2)
 
@@ -109,11 +114,12 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Uniform('Blink Interval', 'blink_timeout', 1, 1, 's'),
     Form.Uniform('Fail Interval', 'fail_timeout', 1, 1, 's'),
     Form.Uniform('Success Interval', 'success_timeout', 1, 1, 's'),
-    Form.Uniform('Target X', 'target_x', 1, 1, 'px'),
-    Form.Uniform('Target Y', 'target_y', 1, 1, 'px'),
-    Form.Uniform('Target Width', 'target_width', 1, 1, 'px'),
-    Form.Uniform('Target Height', 'target_height', 1, 1, 'px'),
-    Form.Color('Color', 'target_color', QColor(255, 255, 255))
+    Form.Uniform('Target X', 'target_x', 300, 300, 'px'),
+    Form.Uniform('Target Y', 'target_y', 300, 300, 'px'),
+    Form.Uniform('Target Width', 'target_width', 333, 333, 'px'),
+    Form.Uniform('Target Height', 'target_height', 333, 333, 'px'),
+    Form.Color('Color', 'target_color', QColor(255, 255, 255)),
+    Form.Constant('Shape', 'shape',  random.choice(shapes))  # Add the shape attribute
   )
   layout.addWidget(form)
 
@@ -160,7 +166,8 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
                        int(context.get_value('target_y', RANDOM_DEFAULT)),
                        int(context.get_value('target_width', RANDOM_DEFAULT)),
                        int(context.get_value('target_height', RANDOM_DEFAULT))),
-    context.get_color('target_color', COLOR_DEFAULT)
+    context.get_color('target_color', COLOR_DEFAULT),
+    context.get_value('shape', random.choice(shapes))  # Add the shape attribute
   )
 
   """
@@ -173,11 +180,32 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     target_acquired = config.target_rectangle.contains(cursor)
 
   context.widget.touch_listener = touch_handler
-
+  
   show_target = False
-  def renderer(painter: CanvasPainterProtocol) -> None:
-    if show_target:
-      painter.fillRect(config.target_rectangle, config.target_color)
+  
+  def renderer(painter: CanvasPainterProtocol) -> None: 
+      # Defines a function renderer that takes a painter object implementing the CanvasPainterProtocol.
+      if show_target:
+          if config.shape == 'gaussian':
+              # Draw Gaussian shape
+              rect = config.target_rectangle
+              width, height = rect.width(), rect.height()
+              center_x, center_y = rect.center().x(), rect.center().y()
+              sigma_x, sigma_y = width / 6, height / 6  # Calculates the standard deviations for the Gaussian distribution.
+  
+              for x in range(rect.left(), rect.right()):
+                  for y in range(rect.top(), rect.bottom()):
+                      dx, dy = x - center_x, y - center_y # Calculates the distance from the center for each pixel.
+                      value = np.exp(-(dx**2 / (2 * sigma_x**2) + dy**2 / (2 * sigma_y**2))) # Computes the Gaussian value for each pixel.
+                      color = QColor(config.target_color)
+                      color.setAlphaF(value) # Sets the color with an alpha value based on the Gaussian value.
+                      painter.setPen(color)
+                      painter.drawPoint(x, y) # Draws the point at the specified coordinates.
+          else:
+              # Draw rectangular shape (i.e. fills the rectangle with the target color)
+              painter.fillRect(config.target_rectangle, config.target_color)
+  
+  context.widget.renderer = renderer # Assigns the renderer function to the widget's renderer attribute.
 
   context.widget.renderer = renderer
 
@@ -185,18 +213,19 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     await context.log('BehavState=intertrial')
     show_target = False
     context.widget.update()
-    await context.sleep(config.intertrial_timeout)
+    await context.sleep(config.intertrial_timeout) # Sleeps for the intertrial timeout duration.
 
     await context.log('BehavState=start_on')
     show_target = True
     context.widget.update()
-    acquired = await wait_for(context, lambda: target_acquired, config.start_timeout)
+    acquired = await wait_for(context, lambda: target_acquired, config.start_timeout) # Waits for the target to be acquired within the start timeout duration.
 
-    if acquired:
+    if acquired: # If the target was acquired within the start timeout duration, break out of the loop
       break
 
   # state: startacq
   success = await wait_for_hold(context, lambda: target_acquired, config.hold_timeout, config.blink_timeout)
+  # Waits for the target to be held within the hold timeout and blink timeout durations.
 
   """
   The trial's outcome (success or failure) at this point is decided, and now
@@ -208,7 +237,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     await context.log('BehavState=success')
 
     await context.sleep(config.success_timeout)
-    return TaskResult(True)
+    return TaskResult(True) # Returns a TaskResult indicating success.
 
   await context.log('BehavState=fail')
 
