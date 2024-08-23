@@ -413,7 +413,7 @@ namespace thalamus {
     unsigned int subdevice;
     std::vector<unsigned int> channels;
     NodeGraph* graph;
-    std::weak_ptr<Node> source;
+    AnalogNode* source;
     boost::asio::io_context& io_context;
     std::thread nidaq_thread;
     std::mutex mutex;
@@ -430,12 +430,13 @@ namespace thalamus {
     size_t counter = 0;
     std::chrono::nanoseconds _time;
     NidaqOutputNode* outer;
-    bool running;
+    std::atomic_bool running;
     std::vector<std::chrono::steady_clock::time_point> next_write;
     std::vector<std::chrono::steady_clock::time_point> times;
     bool digital = false;
     std::vector<bool> digital_levels;
     std::atomic_bool new_buffers = false;
+    size_t bytes_per_sample;
 
     Impl(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph, NidaqOutputNode* outer)
       : state(state)
@@ -455,138 +456,10 @@ namespace thalamus {
       close_device(&device);
     }
 
-    void nidaq_target() {
-      while (running) {
-        TRACE_EVENT0("thalamus", "NidaqOutputNode::on_data");
-        std::vector<std::vector<double>> buffers;
-        std::vector<std::chrono::nanoseconds> sample_intervals;
-        {
-          std::unique_lock<std::mutex> lock(mutex);
-          condition_variable.wait(lock, [&] {
-            return !running || !this->buffers.empty();
-          });
-          if (!running) {
-            continue;
-          }
-          buffers.swap(this->buffers);
-          sample_intervals.swap(_sample_intervals);
-          new_buffers = false;
-        }
-        std::vector<size_t> positions(buffers.size(), 0);
-        times.resize(buffers.size(), std::chrono::steady_clock::now());
-        digital_levels.resize(buffers.size(), false);
-
-        auto is_done = [&] {
-          auto result = true;
-          for (auto i = 0ull; i < buffers.size(); ++i) {
-            result = result && positions.at(i) == buffers.at(i).size();
-          }
-          return result;
-        };
-
-        if (digital) {
-          while (!is_done()) {
-            {
-              //TRACE_EVENT0("thalamus", "NidaqOutputNode::fast_forward(digital)");
-              for (auto c = 0ull; c < buffers.size(); ++c) {
-                auto& buffer = buffers.at(c);
-                auto& position = positions.at(c);
-                auto old_level = digital_levels.at(c);
-                auto& time = times.at(c);
-
-                auto new_level = position < buffer.size() ? buffer.at(position) > 1.6 : false;
-                while (position < buffer.size() && new_level == old_level) {
-                  ++position;
-                  new_level = position < buffer.size() ? buffer.at(position) > 1.6 : false;
-                  time += sample_intervals.at(c);
-                }
-              }
-            }
-
-            if (is_done()) {
-              break;
-            }
-
-            auto next_time = std::min_element(times.begin(), times.end());
-            auto now = std::chrono::steady_clock::now();
-            {
-              std::unique_lock<std::mutex> lock(mutex);
-              auto wait_result = condition_variable.wait_for(lock, *next_time - now, [&] {
-                return !running || !this->buffers.empty();
-                });
-              if (wait_result) {
-                break;
-              }
-            }
-            now = std::chrono::steady_clock::now();
-
-            {
-              //TRACE_EVENT0("thalamus", "NidaqOutputNode::write_signal(digital)");
-              for (auto c = 0ull; c < buffers.size(); ++c) {
-                auto& buffer = buffers.at(c);
-                auto& time = times.at(c);
-                auto& position = positions.at(c);
-
-                std::optional<unsigned char> value;
-                while (time <= now && position < buffer.size()) {
-                  value = buffer.at(position) > 1.6;
-                  ++position;
-                  time += sample_intervals.at(c);
-                }
-                if (value) {
-                  auto status = comedi_dio_write(device, subdevice, channels[c], *value);
-                  THALAMUS_ASSERT(status >= 0, "comedi_dio_write failed: %d", status);
-                  digital_levels.at(c) = *value;
-                }
-              }
-            }
-          }
-        }
-        else {
-          while (!is_done()) {
-            auto next_time = std::min_element(times.begin(), times.end());
-            auto now = std::chrono::steady_clock::now();
-            std::this_thread::sleep_for(*next_time - now);
-            if (new_buffers) {
-              break;
-            }
-            now = std::chrono::steady_clock::now();
-
-            {
-              TRACE_EVENT0("thalamus", "NidaqOutputNode::write_signal(analog)");
-              for (auto c = 0ull; c < buffers.size(); ++c) {
-                auto& buffer = buffers.at(c);
-                auto& time = times.at(c);
-                auto& position = positions.at(c);
-                std::optional<double> value;
-                while (time <= now && position < buffer.size()) {
-                  value = buffer.at(position);
-                  ++position;
-                  time += sample_intervals.at(c);
-                }
-                if (value) {
-                  auto status = comedi_data_write(device, subdevice, channels[c], 0, 0, *value);
-                  THALAMUS_ASSERT(status >= 0, "comedi_data_write failed: %d", status);
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
     void on_change(ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value&) {
       auto key_str = std::get<std::string>(k);
       if (key_str == "Running" || key_str == "Source" || key_str == "Channel" || key_str == "Digital") {
-        {
-          std::lock_guard<std::mutex> lock(mutex);
-          running = state->at("Running");
-        }
-        condition_variable.notify_all();
-
-        if (nidaq_thread.joinable()) {
-          nidaq_thread.join();
-        }
+        running = state->at("Running");
         close_device(&device);
 
         source_connection.disconnect();
@@ -596,10 +469,10 @@ namespace thalamus {
         }
         std::string source_str = state->at("Source");
         graph->get_node(source_str, [&](auto node) {
-          source = node;
-          auto locked_source = source.lock();
-          if (!locked_source || node_cast<AnalogNode*>(locked_source.get()) == nullptr) {
-            source.reset();
+          auto locked_source = node.lock();
+          source = locked_source ? node_cast<AnalogNode*>(locked_source.get()) : nullptr;
+          if (!source) {
+            source = nullptr;
             return;
           }
           source_connection = locked_source->ready.connect(std::bind(&Impl::on_data, this, _1));
@@ -621,60 +494,183 @@ namespace thalamus {
           subdevice = device_params->subdevice;
           channels = device_params->channels;
 
-          digital = is_digital(channel);
-          if(!digital) {
-            subdevice = comedi_find_subdevice_by_type(device, COMEDI_SUBD_AO, 0);
-          }
-
-          _sample_rate = -1;
-          buffer_size = static_cast<size_t>(16 * _num_channels);
-          std::function<void()> reader;
-          nidaq_thread = std::thread(std::bind(&Impl::nidaq_target, this));
-
           auto filename = absl::StrFormat("/dev/comedi%d", device_params->device-1);
           device = comedi_open(filename.c_str());
-          BOOST_ASSERT_MSG(device != nullptr, "comedi_open failed");
+          THALAMUS_ASSERT(device != nullptr, "comedi_open failed");
+
+          digital = is_digital(channel);
+          if(!digital) {
+            subdevice = comedi_get_write_subdevice(device);
+            THALAMUS_ASSERT(subdevice >= 0, "comedi_get_read_subdevice failed");
+          }
+
+          auto ret = comedi_cancel(device, subdevice);
+          THALAMUS_ASSERT(ret == 0, "comedi_cancel failed");
 
           if (digital) {
             for(auto channel : channels) {
               auto daq_error = comedi_dio_config(device, subdevice, channel, COMEDI_OUTPUT);
-              BOOST_ASSERT_MSG(daq_error >= 0, "comedi_dio_config failed");
+              THALAMUS_ASSERT(daq_error >= 0, "DIO config failed");
             }
+          } else {
+            range_info.clear();
+            maxdata.clear();
+            chanlist.clear();
+            for(auto channel : channels) {
+              chanlist.push_back(CR_PACK(channel, 0, AREF_GROUND));
+		          range_info.push_back(comedi_get_range(device, subdevice, channel, 0));
+              THALAMUS_ASSERT(range_info.back(), "comedi_get_range failed: %d %d", subdevice, channel);
+		          maxdata.push_back(comedi_get_maxdata(device, subdevice, channel));
+              THALAMUS_ASSERT(maxdata.back(), "comedi_get_maxdata failed");
+            }
+            memset(&command,0,sizeof(command));
+            command.subdev = subdevice;
+            command.flags = CMDF_WRITE;
+            command.start_src = TRIG_INT;
+            command.start_arg = 0;
+            command.scan_begin_src = TRIG_TIMER;
+            command.scan_begin_arg = 1;
+            command.convert_src = TRIG_NOW;
+            command.convert_arg = 0;
+            command.scan_end_src = TRIG_COUNT;
+            command.scan_end_arg = channels.size();
+            command.stop_src = TRIG_COUNT;
+            command.stop_arg = 1;
+            command.chanlist = chanlist.data();
+            command.chanlist_len = chanlist.size();
+            ret = comedi_command_test(device, &command);
+            THALAMUS_LOG(info) << "scan_begin_arg " << command.scan_begin_arg;
+            THALAMUS_ASSERT(ret >= 0, "comedi_command_test failed");
+            ret = comedi_command_test(device, &command);
+            THALAMUS_ASSERT(ret == 0, "comedi_command_test failed");
+            
+	          ret = comedi_set_write_subdevice(device, subdevice);
+            THALAMUS_ASSERT(ret == 0, "comedi_set_write_subdevice failed");
+	          THALAMUS_LOG(info) << "comedi_get_write_subdevice " << comedi_get_write_subdevice(device);
+
+	          //ret = comedi_command(device, &command);
+            //THALAMUS_ASSERT(ret == 0, "comedi_command failed");
+
+            auto flags = comedi_get_subdevice_flags(device, subdevice);
+            bytes_per_sample = flags & SDF_LSAMPL ? sizeof(lsampl_t) : sizeof(sampl_t);
+
+            buffer.assign(channels.size(), 0);
+            current_values.assign(channels.size(), 0);
+            //lsampls = buffer.data();
+            //sampls = reinterpret_cast<sampl_t*>(lsampls);
+            //sampls[0] = 12345;
+            
+	          //ret = write(comedi_fileno(device), (void*)buffer.data(), buffer.size()*bytes_per_sample);
+            //THALAMUS_ASSERT(ret == buffer.size()*bytes_per_sample, "write failed");
+	          //ret = comedi_internal_trigger(device, subdevice, 0);
+            //comedi_perror("comedi_internal_trigger");
+            //THALAMUS_ASSERT(ret >= 0, "comedi_internal_trigger failed %s", strerror(errno));
+
+            //comedi_set_buffer_size(device, subdevice, bytes_per_sample*channels.size()*100000);
+  
+            looping = false;
+            nidaq_thread = std::thread(std::bind(&Impl::nidaq_target, this));
           }
-        }
-        else {
-          if (nidaq_thread.joinable()) {
+        } else {
+          if(nidaq_thread.joinable()) {
             nidaq_thread.join();
           }
         }
       }
     }
 
-    void on_data(Node* raw_node) {
+    void nidaq_target() {
+      std::vector<sampl_t> copied_values;
+      while(running) {
+        auto ret = comedi_cancel(device, subdevice);
+        THALAMUS_ASSERT(ret == 0, "comedi_cancel failed");
+
+	      ret = comedi_command(device, &command);
+        THALAMUS_ASSERT(ret == 0, "comedi_command failed");
+
+        {
+          std::lock_guard<std::mutex> lock(mutex);
+          copied_values = current_values;
+        }
+
+        ret = write(comedi_fileno(device), (void*)copied_values.data(), copied_values.size()*bytes_per_sample);
+        THALAMUS_ASSERT(ret >= 0, "write failed %s", strerror(errno));
+
+	      ret = comedi_internal_trigger(device, subdevice, 0);
+        THALAMUS_ASSERT(ret >= 0, "comedi_internal_trigger failed");
+      }
+    }
+
+    bool looping;
+    
+    std::vector<sampl_t> current_values;
+
+    std::vector<comedi_range *> range_info;
+    std::vector<lsampl_t> maxdata;
+    std::vector<unsigned int> chanlist;
+    std::vector<sampl_t> buffer;
+    //lsampl_t* lsampls;
+    //sampl_t* sampls;
+    comedi_cmd command;
+
+    void on_data(Node*) {
+      static int cc = 0;
+      static auto tt = std::chrono::steady_clock::now();
       TRACE_EVENT0("thalamus", "NidaqOutputNode::on_data");
-      if (device == nullptr) {
+      if(!source->has_analog_data() || device == nullptr) {
         return;
       }
-      auto node = reinterpret_cast<AnalogNode*>(raw_node);
-      _time = node->time();
-      {
-        std::lock_guard<std::mutex> lock(mutex);
-        //buffers.assign(node->num_channels(), std::vector<double>());
-        _data.clear();
-        //_sample_intervals.clear();
-        buffers.clear();
-        _sample_intervals.clear();
-        for (auto i = 0; i < node->num_channels(); ++i) {
-          auto data = node->data(i);
-          buffers.emplace_back(data.begin(), data.end());
-          _data.push_back(data);
-          _sample_intervals.emplace_back(node->sample_interval(i));
-        }
-        new_buffers = true;
+      if(!running) {
+        return;
       }
-      condition_variable.notify_all();
+      if(digital) {
+        unsigned int bits = 0;
+        for (auto i = 0; i < source->num_channels(); ++i) {
+          auto data = source->data(i);
+          auto channel = channels[i];
+          if(!data.empty()) {
+            bits |= data.back() > 1 ? (0x1 << channel) : 0;
+          }
+          auto ret = comedi_dio_bitfield2(device, subdevice, std::numeric_limits<unsigned int>::max(), &bits, 0);
+          if(ret < 0) {
+            THALAMUS_LOG(error) << strerror(errno);
+            running = false;
+            (*state)["Running"].assign(false, [] {});
+            return;
+          }
+        }
+      } else {
+        auto count = std::min(size_t(source->num_channels()), channels.size());
+        std::lock_guard<std::mutex> lock(mutex);
+        for (auto i = 0ull; i < count; ++i) {
+          auto data = source->data(i);
+          if(!data.empty()) {
+            auto sample = comedi_from_phys(data.back(), range_info[i], maxdata[i]);
+            current_values[i] = sample;
 
-      outer->ready(outer);
+            //auto ret = comedi_cancel(device, subdevice);
+            //THALAMUS_ASSERT(ret == 0, "comedi_cancel failed");
+
+            //auto ret = write(comedi_fileno(device), (void*)buffer.data(), buffer.size()*bytes_per_sample);
+            ////THALAMUS_ASSERT(ret == buffer.size()*bytes_per_sample, "write failed");
+	          //ret = comedi_internal_trigger(device, subdevice, 0);
+            //++cc;
+            //auto now = std::chrono::steady_clock::now();
+            //if(now - tt > 1s) {
+            //  THALAMUS_LOG(info) << cc;
+            //  tt = now;
+            //  cc = 0;
+            //}
+            //THALAMUS_LOG(info) << "trigger " << ret << " " << device << " " << subdevice << " " << strerror(errno);
+            //THALAMUS_ASSERT(ret >= 0, "comedi_internal_trigger failed");
+            //if(bytes_per_sample == sizeof(lsampl_t)) {
+            //  lsampls[i] = sample;
+            //} else {
+            //  sampls[i] = sample;
+            //}
+          }
+        }
+      }
     }
   };
 
