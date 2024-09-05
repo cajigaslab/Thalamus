@@ -1,0 +1,151 @@
+{
+  "touch_channels": [
+    0,
+    1
+  ],
+  "task_clusters": [
+    {
+      "type": "task_cluster",
+      "name": "Untitled",
+      "weight": 1,
+      "tasks": [
+        {
+          "task_type": "dimitrij",
+          "type": "task",
+          "goal": 5,
+          "name": "Untitled",
+          "width": 0.77,
+          "height": 0.77,
+          "center_x": 0.0,
+          "center_y": 0.0,
+          "intertrial_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "start_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "hold_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "blink_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "fail_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "success_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "target_x": {
+            "min": 300,
+            "max": 300
+          },
+          "target_y": {
+            "min": 300,
+            "max": 300
+          },
+          "target_width": {
+            "min": 333,
+            "max": 333
+          },
+          "target_height": {
+            "min": 333,
+            "max": 333
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "shape": "gaussian",
+          "targets": []
+        }
+      ]
+    }
+  ],
+  "queue": [
+    {
+      "task_type": "dimitrij",
+      "type": "task",
+      "goal": 5,
+      "name": "Untitled",
+      "width": 0.77,
+      "height": 0.77,
+      "center_x": 0.0,
+      "center_y": 0.0,
+      "intertrial_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "start_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "hold_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "blink_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "fail_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "success_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "target_x": {
+        "min": 300,
+        "max": 300
+      },
+      "target_y": {
+        "min": 300,
+        "max": 300
+      },
+      "target_width": {
+        "min": 333,
+        "max": 333
+      },
+      "target_height": {
+        "min": 333,
+        "max": 333
+      },
+      "target_color": [
+        255,
+        255,
+        255
+      ],
+      "shape": "gaussian",
+      "targets": [],
+      "task_cluster_name": "Untitled",
+      "queue_index": 0
+    }
+  ],
+  "reward_schedule": {
+    "schedules": [
+      [
+        0
+      ]
+    ],
+    "index": 0
+  },
+  "nodes": [],
+  "status": "",
+  "thalamus_view_geometry": [
+    99,
+    99,
+    384,
+    768
+  ],
+  "data_views": [],
+  "node_widgets": []
+}

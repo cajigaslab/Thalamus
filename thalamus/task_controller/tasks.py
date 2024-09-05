@@ -24,6 +24,7 @@ from . import motion_capture_task
 from . import luminance_reward_selection
 from . import avatar_task
 from . import imagined_task
+from . import dimitrij_task
 from .task_context import TaskDescription
 
 DESCRIPTIONS = [
@@ -92,7 +93,10 @@ DESCRIPTIONS = [
     avatar_task.run),
   TaskDescription('imagined_task', 'Imagined',
     imagined_task.create_widget,
-    imagined_task.run)
+    imagined_task.run),
+  TaskDescription('gaussian_task', 'Gaussian',
+    gaussian_task.create_widget,
+    gaussian_task.run)
     #add gazeanchoring stim task
 
 ]
