@@ -7,20 +7,16 @@
     {
       "type": "task_cluster",
       "name": "Untitled",
-      "weight": 1,
+      "weight": 0,
       "tasks": [
         {
-          "task_type": "dimitrij",
+          "task_type": "gaussian_task",
           "type": "task",
           "goal": 5,
           "name": "Untitled",
-          "width": 0.77,
-          "height": 0.77,
-          "center_x": 0.0,
-          "center_y": 0.0,
           "intertrial_timeout": {
             "min": 1,
-            "max": 1
+            "max": 6.0
           },
           "start_timeout": {
             "min": 1,
@@ -31,8 +27,8 @@
             "max": 1
           },
           "blink_timeout": {
-            "min": 1,
-            "max": 1
+            "min": 2.0,
+            "max": 4.0
           },
           "fail_timeout": {
             "min": 1,
@@ -60,28 +56,28 @@
           },
           "target_color": [
             255,
-            255,
-            255
+            170,
+            127
           ],
           "shape": "gaussian",
-          "targets": []
+          "targets": [],
+          "width": 0.75,
+          "height": 0.75,
+          "center_x": 0,
+          "center_y": 0
         }
       ]
     }
   ],
   "queue": [
     {
-      "task_type": "dimitrij",
+      "task_type": "gaussian_task",
       "type": "task",
       "goal": 5,
       "name": "Untitled",
-      "width": 0.77,
-      "height": 0.77,
-      "center_x": 0.0,
-      "center_y": 0.0,
       "intertrial_timeout": {
         "min": 1,
-        "max": 1
+        "max": 6.0
       },
       "start_timeout": {
         "min": 1,
@@ -92,8 +88,8 @@
         "max": 1
       },
       "blink_timeout": {
-        "min": 1,
-        "max": 1
+        "min": 2.0,
+        "max": 4.0
       },
       "fail_timeout": {
         "min": 1,
@@ -121,11 +117,15 @@
       },
       "target_color": [
         255,
-        255,
-        255
+        170,
+        127
       ],
       "shape": "gaussian",
       "targets": [],
+      "width": 0.75,
+      "height": 0.75,
+      "center_x": 0,
+      "center_y": 0,
       "task_cluster_name": "Untitled",
       "queue_index": 0
     }
