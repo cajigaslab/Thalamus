@@ -1,0 +1,68 @@
+Collecting FuzzyTM
+  Obtaining dependency information for FuzzyTM from https://files.pythonhosted.org/packages/2d/30/074bac7a25866a2807c1005c7852c0139ac22ba837871fc01f16df29b9dc/FuzzyTM-2.0.9-py3-none-any.whl.metadata
+  Downloading FuzzyTM-2.0.9-py3-none-any.whl.metadata (7.9 kB)
+Requirement already satisfied: numpy in c:\users\beauc\anaconda3\envs\thalamus_v1\lib\site-packages (from FuzzyTM) (1.23.5)
+Requirement already satisfied: pandas in c:\users\beauc\anaconda3\envs\thalamus_v1\lib\site-packages (from FuzzyTM) (2.0.3)
+Requirement already satisfied: scipy in c:\users\beauc\anaconda3\envs\thalamus_v1\lib\site-packages (from FuzzyTM) (1.11.1)
+Collecting pyfume (from FuzzyTM)
+  Obtaining dependency information for pyfume from https://files.pythonhosted.org/packages/ed/ea/a3b120e251145dcdb10777f2bc5f18b1496fd999d705a178c1b0ad947ce1/pyFUME-0.3.4-py3-none-any.whl.metadata
+  Downloading pyFUME-0.3.4-py3-none-any.whl.metadata (9.7 kB)
+Requirement already satisfied: python-dateutil>=2.8.2 in c:\users\beauc\anaconda3\envs\thalamus_v1\lib\site-packages (from pandas->FuzzyTM) (2.8.2)
+Requirement already satisfied: pytz>=2020.1 in c:\users\beauc\anaconda3\envs\thalamus_v1\lib\site-packages (from pandas->FuzzyTM) (2023.3.post1)
+Requirement already satisfied: tzdata>=2022.1 in c:\users\beauc\anaconda3\envs\thalamus_v1\lib\site-packages (from pandas->FuzzyTM) (2023.3)
+Collecting scipy (from FuzzyTM)
+  Obtaining dependency information for scipy from https://files.pythonhosted.org/packages/65/76/903324159e4a3566e518c558aeb21571d642f781d842d8dd0fd9c6b0645a/scipy-1.10.1-cp311-cp311-win_amd64.whl.metadata
+  Downloading scipy-1.10.1-cp311-cp311-win_amd64.whl.metadata (58 kB)
+     ---------------------------------------- 59.0/59.0 kB 3.2 MB/s eta 0:00:00
+Collecting numpy (from FuzzyTM)
+  Obtaining dependency information for numpy from https://files.pythonhosted.org/packages/d8/ec/ebef2f7d7c28503f958f0f8b992e7ce606fb74f9e891199329d5f5f87404/numpy-1.24.4-cp311-cp311-win_amd64.whl.metadata
+  Downloading numpy-1.24.4-cp311-cp311-win_amd64.whl.metadata (5.6 kB)
+Collecting simpful==2.12.0 (from pyfume->FuzzyTM)
+  Obtaining dependency information for simpful==2.12.0 from https://files.pythonhosted.org/packages/9d/0e/aebc2fb0b0f481994179b2ee2b8e6bbf0894d971594688c018375e7076ea/simpful-2.12.0-py3-none-any.whl.metadata
+  Downloading simpful-2.12.0-py3-none-any.whl.metadata (4.8 kB)
+Collecting fst-pso==1.8.1 (from pyfume->FuzzyTM)
+  Downloading fst-pso-1.8.1.tar.gz (18 kB)
+  Preparing metadata (setup.py): started
+  Preparing metadata (setup.py): finished with status 'done'
+Collecting pandas (from FuzzyTM)
+  Obtaining dependency information for pandas from https://files.pythonhosted.org/packages/da/6d/1235da14daddaa6e47f74ba0c255358f0ce7a6ee05da8bf8eb49161aa6b5/pandas-1.5.3-cp311-cp311-win_amd64.whl.metadata
+  Downloading pandas-1.5.3-cp311-cp311-win_amd64.whl.metadata (12 kB)
+Collecting miniful (from fst-pso==1.8.1->pyfume->FuzzyTM)
+  Downloading miniful-0.0.6.tar.gz (2.8 kB)
+  Preparing metadata (setup.py): started
+  Preparing metadata (setup.py): finished with status 'done'
+Requirement already satisfied: six>=1.5 in c:\users\beauc\anaconda3\envs\thalamus_v1\lib\site-packages (from python-dateutil>=2.8.2->pandas->FuzzyTM) (1.16.0)
+Downloading FuzzyTM-2.0.9-py3-none-any.whl (31 kB)
+Downloading pyFUME-0.3.4-py3-none-any.whl (60 kB)
+   ---------------------------------------- 60.3/60.3 kB 3.3 MB/s eta 0:00:00
+Downloading numpy-1.24.4-cp311-cp311-win_amd64.whl (14.8 MB)
+   ---------------------------------------- 14.8/14.8 MB 7.0 MB/s eta 0:00:00
+Downloading pandas-1.5.3-cp311-cp311-win_amd64.whl (10.3 MB)
+   ---------------------------------------- 10.3/10.3 MB 8.2 MB/s eta 0:00:00
+Downloading scipy-1.10.1-cp311-cp311-win_amd64.whl (42.2 MB)
+   ---------------------------------------- 42.2/42.2 MB 9.9 MB/s eta 0:00:00
+Downloading simpful-2.12.0-py3-none-any.whl (24 kB)
+Building wheels for collected packages: fst-pso, miniful
+  Building wheel for fst-pso (setup.py): started
+  Building wheel for fst-pso (setup.py): finished with status 'done'
+  Created wheel for fst-pso: filename=fst_pso-1.8.1-py3-none-any.whl size=20448 sha256=da5d5249dce86e5ac7238145bb5880a6117bb57e9e79ef22dcb80e0c3c564e15
+  Stored in directory: c:\users\beauc\appdata\local\pip\cache\wheels\69\f5\e5\18ad53fe1ed6b2af9fad05ec052e4acbac8e92441df44bad2e
+  Building wheel for miniful (setup.py): started
+  Building wheel for miniful (setup.py): finished with status 'done'
+  Created wheel for miniful: filename=miniful-0.0.6-py3-none-any.whl size=3522 sha256=e8b2a473bf113fe38f7b07dd654cc361720e548367fe801ae9c4898701f839d9
+  Stored in directory: c:\users\beauc\appdata\local\pip\cache\wheels\9d\ff\2f\afe4cd56f47de147407705626517d68bea0f3b74eb1fb168e6
+Successfully built fst-pso miniful
+Installing collected packages: numpy, scipy, pandas, simpful, miniful, fst-pso, pyfume, FuzzyTM
+  Attempting uninstall: numpy
+    Found existing installation: numpy 1.23.5
+    Uninstalling numpy-1.23.5:
+      Successfully uninstalled numpy-1.23.5
+  Attempting uninstall: scipy
+    Found existing installation: scipy 1.11.1
+    Uninstalling scipy-1.11.1:
+      Successfully uninstalled scipy-1.11.1
+  Attempting uninstall: pandas
+    Found existing installation: pandas 2.0.3
+    Uninstalling pandas-2.0.3:
+      Successfully uninstalled pandas-2.0.3
+Successfully installed FuzzyTM-2.0.9 fst-pso-1.8.1 miniful-0.0.6 numpy-1.24.4 pandas-1.5.3 pyfume-0.3.4 scipy-1.10.1 simpful-2.12.0
