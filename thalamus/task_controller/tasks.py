@@ -24,7 +24,7 @@ from . import motion_capture_task
 from . import luminance_reward_selection
 from . import avatar_task
 from . import imagined_task
-from . import dimitrij_task
+from . import gaussian_task
 from .task_context import TaskDescription
 
 DESCRIPTIONS = [
