@@ -1,6 +1,16 @@
 
+from psychopy import monitors
+
+# Create a Monitor object for the primary monitor
+monitor = monitors.Monitor('testMonitor')
+
+# Get the screen size in pixels
+screen_width, screen_height = monitor.getSizePix()
+
+print(f"Screen width: {screen_width}, Screen height: {screen_height}")
 
 ## A simplest code to draw a basic white circle
+'''
 from psychopy import visual, core
 
 # Create a window
@@ -25,6 +35,7 @@ core.wait(2)
 
 # Close the window
 win.close()
+'''
 
 
 '''

@@ -11,7 +11,7 @@ import queue
 import pprint
 import typing
 import random
-from psychopy import visual, core
+from psychopy import visual, core, monitors
 
 
 def get_value(config: dict, key: str, default: typing.Any = None) -> typing.Union[int, float, bool]:
@@ -47,36 +47,45 @@ response_queue = queue.Queue()
 clock = core.Clock() # Create a clock object; > precise than core.wait(2.3)
 
 # Create a window
-# win = visual.Window(size=(800, 600), units='pix', fullscr=False)  
-# win = visual.Window(size=(1024, 976), fullscr=True, screen=1)
-win = visual.Window(size=(800, 600))
+win = visual.Window(size=(1024, 768), color='black')#, units='pix', fullscr=False, screen=2)
 
 for message in stub.execution(iter(response_queue.get, None)):
    config = json.loads(message.body) # reads the message body as JSON and converts it into config
-   pprint.pprint(config) # output for debugging
+   # pprint.pprint(config) # output for debugging
 
    width, height = config['width'], config['height']
-   center_x, center_y = config['center_x'], config['center_y']
+   center_x, center_y = config['center_x']/100, config['center_y']/100 # /100 b/c visual.GratingStim uses a range of -1 to 1
+   print("center_x = ", center_x)  # Debugging statement
    target_color_rgb = config['target_color']
 
    blink_timeout = get_value(config,'blink_timeout')
    intertrial_timeout = get_value(config,'intertrial_timeout')
-   print("intertrial_timeout = ", intertrial_timeout)  # Debugging statement
    
    ''
    # Create a Gaussian blurred circle stimulus
    gaussian_circle = visual.GratingStim(
       win=win,
       size=(width, height),  # Size of the circle
-      pos=(center_x, center_y),
+      pos=(center_x, center_y), # If units for Visual.Window are not defined, pos is in fraction of the screen
       sf=0,  # Spatial frequency of the grating (0 means no grating)
       mask='gauss',  # Gaussian mask
       color=target_color_rgb,  # Color of the circle
       colorSpace='rgb255'
    )
   
-   # Draw the Gaussian circle
-   gaussian_circle.draw()
+   # Create a white rectangle
+   rectangle = visual.Rect(
+      win=win,
+      width=0.45,
+      height=0.45,
+      fillColor='white',
+      lineColor='white',
+      pos=(-0.95, 0.95)  # Position as a fraction of the screen
+   )
+
+   # Draw
+   gaussian_circle.draw() # the Gaussian circle
+   rectangle.draw() # draw the rectangle
 
    win.flip() # Switch drawing buffer to the screen
 
@@ -99,6 +108,7 @@ for message in stub.execution(iter(response_queue.get, None)):
       if clock.getTime() >= intertrial_timeout + 1:  # Add a safety margin
          print("Warning: intertrial_timeout exceeded")
          break
+
    response_queue.put(task_controller_pb2.TaskResult(success=True))
 
 # Close the window after the loop
