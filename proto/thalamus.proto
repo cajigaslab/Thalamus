@@ -91,6 +91,8 @@ message Image {
     YUYV422 = 2;
     YUV420P = 3;
     YUVJ420P = 4;
+    Gray16 = 5;
+    RGB16 = 6;
   }
   repeated bytes data = 1;
   uint32 width = 2;
@@ -98,6 +100,7 @@ message Image {
   Format format = 4;
   uint64 frame_interval = 5;
   bool last = 6;
+  bool bigendian = 7;
 }
 
 message Ping {

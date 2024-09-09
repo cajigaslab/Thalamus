@@ -71,9 +71,12 @@ def main():
       print('Administrator permissions required', file=sys.stderr)
       sys.exit(1)
 
-    reg_query = subprocess.check_output(['reg', 'query', r'HKEY_CURRENT_USER\Environment', '/v', 'Path'], encoding='utf8')
-    old_path = reg_query.split('REG_SZ')[-1].strip()
     new_path = []
+    with winreg.OpenKeyEx(winreg.HKEY_LOCAL_MACHINE,
+                          r'HKEY_CURRENT_USER\Environment', 
+                          0, 
+                          winreg.KEY_READ | winreg.KEY_SET_VALUE | winreg.KEY_WOW64_64KEY) as key:
+      old_path = winreg.QueryValueEx(key, 'Path')
 
     #nasm
     if not shutil.which('nasm'):
@@ -108,7 +111,12 @@ def main():
       new_path.append(old_path)
       new_path = os.pathsep.join(new_path)
       print(new_path)
-      subprocess.check_call(['setx', 'PATH', new_path])
+
+      with winreg.OpenKeyEx(winreg.HKEY_LOCAL_MACHINE,
+                            r'HKEY_CURRENT_USER\Environment', 
+                            0, 
+                            winreg.KEY_READ | winreg.KEY_SET_VALUE | winreg.KEY_WOW64_64KEY) as key:
+        winreg.SetValueEx(key, 'Path', 0, winreg.REG_SZ, new_path)
       print('PATHSET')
 
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-U', 'setuptools'], cwd=home_str)
