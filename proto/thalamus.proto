@@ -138,6 +138,7 @@ message XsensSegment {
     float q3 = 8;
     uint32 frame = 9;
     uint32 time = 10;
+    uint32 actor = 11;
 }
 
 message XsensResponse {

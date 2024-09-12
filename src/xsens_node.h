@@ -19,6 +19,7 @@ namespace thalamus {
       unsigned int time;
       boost::qvm::vec<float, 3> position;
       boost::qvm::quat<float> rotation;
+      unsigned char actor;
       static const size_t serialized_size;
       static Segment parse(unsigned char* data);
     };

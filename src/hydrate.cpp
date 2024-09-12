@@ -39,6 +39,7 @@ namespace hydrate {
     boost::qvm::vec<float, 3> position;
     boost::qvm::quat<float> rotation;
     const char* pose;
+    unsigned char actor;
   };
 
   H5Handle createH5Segment(size_t pose_length = 0) {
@@ -84,6 +85,8 @@ namespace hydrate {
     THALAMUS_ASSERT(h5_status >= 0, "Failed to create Segment.rotation");
     h5_status = H5Tinsert(segment_type, "pose", HOFFSET(Segment, pose), str_type);
     THALAMUS_ASSERT(h5_status >= 0, "Failed to create Segment.pose");
+    h5_status = H5Tinsert(segment_type, "actor", HOFFSET(Segment, actor), H5T_NATIVE_UINT8);
+    THALAMUS_ASSERT(h5_status >= 0, "Failed to create Segment.frame");
 
     return segment_type;
   }
@@ -535,6 +538,7 @@ namespace hydrate {
                 segment.frame = s.frame();
                 segment.segment_id = s.id();
                 segment.time = s.time();
+                segment.actor = s.actor();
                 segment.position = boost::qvm::vec<float, 3>{s.x(), s.y(), s.z()};
                 segment.rotation = boost::qvm::quat<float>{s.q0(), s.q1(), s.q2(), s.q3()};
                 segment.pose = pose_cstr;

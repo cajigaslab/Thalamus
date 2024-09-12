@@ -212,6 +212,7 @@ namespace thalamus {
         protobuf_segment->set_id(segment.segment_id);
         protobuf_segment->set_frame(segment.frame);
         protobuf_segment->set_time(segment.time);
+        protobuf_segment->set_actor(segment.actor);
         protobuf_segment->set_x(boost::qvm::X(segment.position));
         protobuf_segment->set_y(boost::qvm::Y(segment.position));
         protobuf_segment->set_z(boost::qvm::Z(segment.position));

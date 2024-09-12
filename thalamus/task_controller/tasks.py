@@ -24,6 +24,7 @@ from . import motion_capture_task
 from . import luminance_reward_selection
 from . import avatar_task
 from . import imagined_task
+from . import feedback_task
 from .task_context import TaskDescription
 
 DESCRIPTIONS = [
@@ -92,9 +93,10 @@ DESCRIPTIONS = [
     avatar_task.run),
   TaskDescription('imagined_task', 'Imagined',
     imagined_task.create_widget,
-    imagined_task.run)
-    #add gazeanchoring stim task
-
+    imagined_task.run),
+  TaskDescription('feedback_task', 'Feedback',
+    feedback_task.create_widget,
+    feedback_task.run)
 ]
 
 DESCRIPTIONS_MAP = dict((description.code, description) for description in DESCRIPTIONS)
