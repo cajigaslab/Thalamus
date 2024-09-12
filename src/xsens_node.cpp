@@ -205,6 +205,7 @@ namespace thalamus {
       unsigned char* end = position + payload_size;
       while (position < end) {
         _segments.push_back(Segment::parse(position));
+        _segments.back().actor = character_id;
         _segments.back().frame = sample_counter;
         _segments.back().time = time_code;
         position += Segment::serialized_size;
