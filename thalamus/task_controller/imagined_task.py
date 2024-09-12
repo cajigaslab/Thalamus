@@ -275,6 +275,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   video_tasks = []
   goals = []
   task_config['error'] = ''
+  seen_videos = set()
   for i, transition in enumerate(transitions):
     video, goal = transition['Video'], transition['Goal']
 
@@ -294,7 +295,8 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     if not video_path.exists():
       task_config['error'] = f'video file for tansition {i} does not exist'
 
-    if video not in loaded_videos:
+    if video not in loaded_videos and video_path not in seen_videos:
+      seen_videos.add(video_path)
       async def load_helper(video_path):
         images = await load_video(video_path)
         loaded_videos[str(video_path)] = images

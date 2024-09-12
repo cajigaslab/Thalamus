@@ -129,6 +129,8 @@ class XsensEditorWidget(QWidget):
       config['Xsens Address'] = '127.0.0.1:6004'
     if 'Send Type' not in self.config:
       config['Send Type'] = 'Current'
+    if 'Actor' not in self.config:
+      config['Actor'] = 0
 
     qlist = QTreeView()
     model = PosesModel(config['Poses'])
@@ -192,6 +194,12 @@ class XsensEditorWidget(QWidget):
     self.send_min_checkbox = QRadioButton('Send Min')
     self.send_min_checkbox.toggled.connect(lambda t: set_send(t, 'Min'))
 
+    actor_row = QHBoxLayout()
+    actor_row.addWidget(QLabel('Actor:'))
+    self.actor_spinbox = QSpinBox()
+    self.actor_spinbox.valueChanged.connect(lambda v: config.update({'Actor': v}))
+    actor_row.addWidget(self.actor_spinbox)
+
     layout.addLayout(address_row)
     layout.addWidget(reset_button)
     layout.addWidget(cache_button)
@@ -199,6 +207,7 @@ class XsensEditorWidget(QWidget):
     layout.addWidget(self.send_max_checkbox)
     layout.addWidget(self.send_min_checkbox)
     layout.addLayout(hand_row)
+    layout.addLayout(actor_row)
     layout.addWidget(qlist)
     layout.addWidget(add_pose_button)
     layout.addWidget(remove_pose_button)
@@ -214,6 +223,8 @@ class XsensEditorWidget(QWidget):
       self.address_edit.setText(v)
     elif k == 'Pose Hand':
       self.hand_combo.setCurrentText(v)
+    elif k == 'Actor':
+      self.actor_spinbox.setValue(v)
     elif k == 'Send Type':
       if v == 'Current':
         self.send_current_checkbox.setChecked(True)

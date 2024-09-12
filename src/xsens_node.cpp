@@ -125,6 +125,7 @@ namespace thalamus {
     bool has_analog_data = false;
     std::chrono::nanoseconds start_time = 0ns;
     std::vector<std::string> channel_names;
+    long long actor = 0;
 
     enum class SendType {
       Current,
@@ -180,7 +181,7 @@ namespace thalamus {
 
       rate_tracker.update(time);
       if(frame_interval == 0ns && time - start_time > 2s) {
-        frame_interval = std::chrono::nanoseconds(size_t(1e9/rate_tracker.rate()));
+        frame_interval = std::chrono::nanoseconds(0);
       }
 
       std::string id_string(reinterpret_cast<char*>(buffer), 6);
@@ -193,7 +194,7 @@ namespace thalamus {
       //unsigned char datagram_counter = *reinterpret_cast<unsigned char*>(buffer + 10);
       //unsigned char number_of_items = *reinterpret_cast<unsigned char*>(buffer + 11);
       unsigned int time_code = ntohl(*reinterpret_cast<unsigned int*>(buffer + 12));
-      //unsigned char character_id = *reinterpret_cast<unsigned char*>(buffer + 16);
+      unsigned char character_id = *reinterpret_cast<unsigned char*>(buffer + 16);
       //unsigned char num_body_segments = *reinterpret_cast<unsigned char*>(buffer + 17);
       //unsigned char num_props = *reinterpret_cast<unsigned char*>(buffer + 18);
       //unsigned char num_finger_segments = *reinterpret_cast<unsigned char*>(buffer + 19);
@@ -210,7 +211,7 @@ namespace thalamus {
       }
       _segment_span = std::span<Segment const>(_segments.begin(), _segments.end());
 
-      if(frame_interval != 0ns) {
+      if(character_id == actor) {
         auto hand_offset = 23;
         fingers[0].update(boost::qvm::mag(_segments[hand_offset + 3].position - _segments[hand_offset + 2].position));
         fingers[1].update(boost::qvm::mag(_segments[hand_offset + 7].position - _segments[hand_offset + 5].position));
@@ -277,6 +278,9 @@ namespace thalamus {
         return;
       } else if (key_str == "Pose Hand") {
         pose_with_left_hand = std::get<std::string>(value) == "Left";
+        return;
+      } else if (key_str == "Actor") {
+        actor = std::get<long long>(value);
         return;
       } else if (key_str == "Send Type") {
         auto key_str = std::get<std::string>(value);
