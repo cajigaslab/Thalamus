@@ -23,7 +23,7 @@ LOGGER = logging.getLogger(__name__)
 Config = typing.NamedTuple('Config', [
   ('intertrial_timeout', datetime.timedelta),
   ('start_timeout', datetime.timedelta),
-  ('hold_timeout', datetime.timedelta),
+  ('fix_timeout', datetime.timedelta),
   ('blink_timeout', datetime.timedelta),
   ('fail_timeout', datetime.timedelta),
   ('success_timeout', datetime.timedelta),
@@ -117,7 +117,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Constant('Center Y (\u00B1%)', 'center_y', 0, '%'),
     Form.Uniform('Intertrial Interval', 'intertrial_timeout', 1, 2, 's'),
     Form.Uniform('Start Interval', 'start_timeout', 1, 1, 's'),
-    Form.Uniform('Hold Interval', 'hold_timeout', 1, 1, 's'),
+    Form.Uniform('Fixation Interval', 'fix_timeout', 1, 2, 's'),
     Form.Uniform('Blink Interval', 'blink_timeout', 2, 4, 's'),
     Form.Uniform('Fail Interval', 'fail_timeout', 1, 1, 's'),
     Form.Uniform('Success Interval', 'success_timeout', 1, 1, 's'),
