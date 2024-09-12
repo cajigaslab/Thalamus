@@ -3,14 +3,18 @@ Implementation of the simple task
 """
 from thalamus import task_controller_pb2
 from thalamus import task_controller_pb2_grpc
+from thalamus import thalamus_pb2
+from thalamus import thalamus_pb2_grpc
 
 import datetime
 import grpc
 import json
+import time
 import queue
 import pprint
 import typing
 import random
+import threading
 from psychopy import visual, core, monitors
 
 
@@ -43,14 +47,49 @@ def get_value(config: dict, key: str, default: typing.Any = None) -> typing.Unio
 channel = grpc.insecure_channel('localhost:50051') # Connect to the task_controller server
 stub = task_controller_pb2_grpc.TaskControllerStub(channel)
 
+channel = grpc.insecure_channel('localhost:50050') # Connect to the task_controller server for Thalamus processor (e.g. data nodes)
+thalamus = thalamus_pb2_grpc.ThalamusStub(channel)
+
 response_queue = queue.Queue()
 clock = core.Clock() # Create a clock object; > precise than core.wait(2.3)
+
+# Define the vertices for the fixation cross
+vertices = [
+    (-10, 0), (10, 0),  # Horizontal line
+    (0, -10), (0, 10)   # Vertical line
+]
+
+# Below is the code used to make OCULOMATIC data available for real-time processing
+# this code runs as a separate thread in parallel with the drawing loop (i.e. "for message in stub.execution")
+''
+oculomatic_lock = threading.Lock() # Lock to avoid reading and writing data at the same time
+# (e.g. like trying to read from the airport scrolling text while it's still scrolling)
+oculomatic_data = [0, 0, 0]
+
+def oculomatic_target():
+   request = thalamus_pb2.AnalogRequest(node=thalamus_pb2.NodeSelector(type='OCULOMATIC'))
+   for message in thalamus.analog(request):
+      with oculomatic_lock:
+         for span in message.spans:
+            if span.name == 'X':
+               oculomatic_data[0] = message.data[span.begin]
+            elif span.name == 'Y':
+               oculomatic_data[1] = message.data[span.begin]
+            elif span.name == 'Diameter':
+               oculomatic_data[2] = message.data[span.begin]
+         #print(oculomatic_data)
+
+oculomatic_thread = threading.Thread(target=oculomatic_target)
+oculomatic_thread.start()
+''
 
 # Create a window
 win = visual.Window(size=(1024, 768), color='black')#, units='pix', fullscr=False, screen=2)
 
 for message in stub.execution(iter(response_queue.get, None)):
    config = json.loads(message.body) # reads the message body as JSON and converts it into config
+   with oculomatic_lock:
+      print(oculomatic_data)
    # pprint.pprint(config) # output for debugging
 
    width, height = config['width'], config['height']
@@ -60,8 +99,19 @@ for message in stub.execution(iter(response_queue.get, None)):
 
    blink_timeout = get_value(config,'blink_timeout')
    intertrial_timeout = get_value(config,'intertrial_timeout')
-   
+   fix_timeout = get_value(config,'fix_timeout')
+
    ''
+
+   # Create the fixation cross
+   fixation_cross = visual.ShapeStim(
+      win=win,
+      vertices=vertices,
+      lineWidth=5,
+      closeShape=False,
+      lineColor='white'
+   )
+
    # Create a Gaussian blurred circle stimulus
    gaussian_circle = visual.GratingStim(
       win=win,
@@ -83,20 +133,29 @@ for message in stub.execution(iter(response_queue.get, None)):
       pos=(-0.95, 0.95)  # Position as a fraction of the screen
    )
 
-   # Draw
-   gaussian_circle.draw() # the Gaussian circle
+   fixation_cross.draw() # Draw the fixation cross
+   win.flip() # Switch drawing buffer to the screen
+   # Fixation time
+   clock.reset()
+   while clock.getTime() < fix_timeout:
+      pass # Busy-wait (i.e. pauses the entire OS)
+
+   gaussian_circle.draw() # Draw the Gaussian circle
    rectangle.draw() # draw the rectangle
 
    win.flip() # Switch drawing buffer to the screen
 
    # Stimulus presentation time
    clock.reset()
+
+   start = time.perf_counter() # uses steady clock with 100ns resolution
    while clock.getTime() < blink_timeout:
       pass # Busy-wait (i.e. pauses the entire OS)
       # core.wait(0.01)  # Non-blocking wait
-      if clock.getTime() >= blink_timeout + 1:  # Add a safety margin
-         print("Warning: blink_timeout exceeded")
-         break
+      # if clock.getTime() >= blink_timeout + 1:  # Add a safety margin
+      #    print("Warning: blink_timeout exceeded")
+      #    break
+   elapsed = time.perf_counter() - start
 
    win.flip()
 
