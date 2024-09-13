@@ -100,7 +100,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   if platform.system() == 'Windows':
     platform_tag = 'win_amd64'
   elif platform.system() == 'Darwin':
-    platform_tag = 'macosx_11_0_x86_64'
+    platform_tag = 'macosx_11_0_arm64' if 'arm' in platform.processor() else 'macosx_11_0_x86_64'
   elif platform.system() == 'Linux':
     ldd_output = subprocess.check_output(['ldd', '--version'], encoding='utf8')
     assert ldd_output is not None

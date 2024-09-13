@@ -23,3 +23,8 @@ jobs:
       run: source $HOME/.thalamusrc && source pyenv/bin/activate && python3 bump.py patch
     - name: Build
       run: source $HOME/.thalamusrc && source pyenv/bin/activate && python3 -m build -n -w -Crelease
+    - name: Archive Distribution
+      uses: actions/upload-artifact@v4
+      with:
+        name: dist
+        path: dist
