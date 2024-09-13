@@ -72,11 +72,11 @@ def main():
       sys.exit(1)
 
     new_path = []
-    with winreg.OpenKeyEx(winreg.HKEY_LOCAL_MACHINE,
-                          r'HKEY_CURRENT_USER\Environment', 
+    with winreg.OpenKeyEx(winreg.HKEY_CURRENT_USER,
+                          'Environment', 
                           0, 
                           winreg.KEY_READ | winreg.KEY_SET_VALUE | winreg.KEY_WOW64_64KEY) as key:
-      old_path = winreg.QueryValueEx(key, 'Path')
+      old_path = winreg.QueryValueEx(key, 'Path')[0]
 
     #nasm
     if not shutil.which('nasm'):
@@ -112,8 +112,8 @@ def main():
       new_path = os.pathsep.join(new_path)
       print(new_path)
 
-      with winreg.OpenKeyEx(winreg.HKEY_LOCAL_MACHINE,
-                            r'HKEY_CURRENT_USER\Environment', 
+      with winreg.OpenKeyEx(winreg.HKEY_CURRENT_USER,
+                            'Environment', 
                             0, 
                             winreg.KEY_READ | winreg.KEY_SET_VALUE | winreg.KEY_WOW64_64KEY) as key:
         winreg.SetValueEx(key, 'Path', 0, winreg.REG_SZ, new_path)
