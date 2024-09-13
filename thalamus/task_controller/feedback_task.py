@@ -39,6 +39,12 @@ class ItemModel(QAbstractItemModel):
     self.config = config
     self.config.add_observer(self.on_rows_change, functools.partial(isdeleted, self))
     for k, v in enumerate(self.config):
+      if 'Image' not in v:
+        v['Image'] = ''
+      if 'Video' not in v:
+        v['Video'] = ''
+      if 'Hold' not in v:
+        v['Hold'] = ''
       if 'Prompt' not in v:
         v['Prompt'] = ''
       self.on_rows_change(ObservableCollection.Action.SET, k, v)
@@ -367,11 +373,15 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     start_filename, end_filename, is_hold = transition['Image'], transition['Video'], transition['Hold']
     prompt = transition['Prompt']
 
+    await context.log(f'Entering {i} {end_filename}')
+
     start_image = images[i]
     video_frames = loaded_videos[end_filename]
 
     state = State.PREP
     space_pressed = False
+
+    await context.log('PREP')
     await context.until(lambda: space_pressed)
 
     state = State.GO
@@ -379,6 +389,8 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     accumulator = 0
     threshold = hold_threshold if is_hold else go_threshold
     duration = 3 if is_hold else 5
+
+    await context.log('HOLD' if is_hold else 'GO')
     await context.any(context.sleep(datetime.timedelta(seconds=duration)), context.until(lambda: accumulator >= threshold))
 
     if is_hold:
@@ -386,6 +398,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     else:
       state = State.SUCCESS if accumulator >= threshold else State.FAIL
 
+    await context.log('SUCCESS' if state == State.SUCCESS else 'MISS')
     await context.sleep(datetime.timedelta(seconds=1.5))
     
 
