@@ -36,7 +36,7 @@ namespace thalamus {
 
   template <typename T>
   struct NodeFactory : public INodeFactory {
-    T* create(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph) override {
+    Node* create(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph) override {
       return new T(state, io_context, graph);
     }
     bool prepare() override {

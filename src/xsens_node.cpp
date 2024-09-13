@@ -329,7 +329,7 @@ namespace thalamus {
         if (old_is_running) {
           xsens_command = "<StopRecordingReq/>";
           boost::system::error_code error;
-          socket.send_to(boost::asio::const_buffer(xsens_command.data(), xsens_command.size()), xsens_endpoint, 0, error);
+          //socket.send_to(boost::asio::const_buffer(xsens_command.data(), xsens_command.size()), xsens_endpoint, 0, error);
           if (error) {
             THALAMUS_LOG(warning) << "Xsens Remote Stop Failed: " << error.message();
           }
@@ -358,7 +358,7 @@ namespace thalamus {
       const auto start_time = absl::FromChrono(std::chrono::system_clock::now());
       auto start_time_str = absl::FormatTime("%Y%m%d%H%M%S", start_time, absl::LocalTimeZone());
       xsens_command = "<StartRecordingReq SessionName=\"Thalamus_" + start_time_str + "\"/>";
-      socket.send_to(boost::asio::const_buffer(xsens_command.data(), xsens_command.size()), xsens_endpoint, 0, error);
+      //socket.send_to(boost::asio::const_buffer(xsens_command.data(), xsens_command.size()), xsens_endpoint, 0, error);
       if(error) {
         THALAMUS_LOG(warning) << "Xsens Remote Start Failed: " << error.message();
       }

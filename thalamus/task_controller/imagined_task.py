@@ -248,6 +248,9 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   if channel is None:
     channel = context.get_channel('localhost:50050')
     stub = thalamus_pb2_grpc.ThalamusStub(channel)
+    analog_queue = IterableQueue()
+    events_call = stub.inject_analog(analog_queue)
+    await analog_queue.put(thalamus_pb2.InjectAnalogRequest(node="gesture_signal"))
 
   task_config = context.task_config
 
@@ -327,30 +330,30 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       feedback_index = min(max(feedback_index, 0), len(frames)-1)
       feedback_frame = frames[feedback_index]
 
-      scale = min((portion*context.widget.width())/frame.width(), (context.widget.height())/frame.width())
+      scale = min((portion*context.widget.width())/frame.width(), (context.widget.height())/frame.height())
       painter.drawImage(QRect(0, int((context.widget.height() - scale*frame.height())//2),
                               int(scale*frame.width()), int(scale*frame.height())),
                         feedback_frame)
 
-      scale = min((portion*context.widget.width())/frame.width(), (context.widget.height())/frame.width())
+      scale = min((portion*context.widget.width())/frame.width(), (context.widget.height())/frame.height())
       painter.drawImage(QRect(int(portion*context.widget.width()), int((context.widget.height() - scale*frame.height())//2),
                               int(scale*frame.width()), int(scale*frame.height())),
                         frame)
 
-      scale = min((portion*context.widget.width())/goal.width(), (context.widget.height())/goal.width())
+      scale = min((portion*context.widget.width())/goal.width(), (context.widget.height())/goal.height())
       painter.drawImage(QRect(2*int(portion*context.widget.width()), int((context.widget.height() - scale*goal.height())//2),
                               int(scale*goal.width()), int(scale*goal.height())),
                         goal)
     else:
-      portion = 1/2
+      portion = 1
 
-      scale = min((portion*context.widget.width())/frame.width(), (context.widget.height())/frame.width())
-      painter.drawImage(QRect(0, int((context.widget.height() - scale*frame.height())//2),
+      scale = min(context.widget.width()/frame.width(), context.widget.height()/frame.height())
+      painter.drawImage(QRect(int((context.widget.width() - scale*frame.width())//2), int((context.widget.height() - scale*frame.height())//2),
                               int(scale*frame.width()), int(scale*frame.height())),
                         frame)
 
-      scale = min((portion*context.widget.width())/goal.width(), (context.widget.height())/goal.width())
-      painter.drawImage(QRect(int(portion*context.widget.width()), int((context.widget.height() - scale*goal.height())//2),
+      scale = min((context.widget.width()/4)/goal.width(), (context.widget.height()/4)/goal.height())
+      painter.drawImage(QRect(int(context.widget.width() - scale*goal.width()), 0,
                               int(scale*goal.width()), int(scale*goal.height())),
                         goal)
 
@@ -377,7 +380,13 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     print(sound, sound.source(), sound.status())
     #if sound is not None:
     sound.play()
-    await context.log(f'{i} start')
+    await asyncio.gather(
+      analog_queue.put(thalamus_pb2.InjectAnalogRequest(signal=thalamus_pb2.AnalogResponse(
+        data=[5,0],
+        spans=[thalamus_pb2.Span(begin=0,end=2)],
+        sample_intervals=[100000000]))),
+      context.log(f'{i} start'))
+
     
     draw = True
     start_time = time.perf_counter()
