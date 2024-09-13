@@ -162,7 +162,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   files = []
   with open(f'thalamus-{version}.dist-info/RECORD', 'w') as record_file:
     for path in pathlib.Path('thalamus').rglob('*'):
-      if not path.is_file() or path.name != 'native' and path.suffix not in ('.py', '.vert', '.proto', '.comp', '.frag', '.exe', '.dll', '.so', '.h'):
+      if not path.is_file() or path.name != 'native' and path.suffix not in ('.py', '.vert', '.proto', '.comp', '.frag', '.exe', '.dll', '.so', '.dylib', '.h'):
         continue
       files.append(path)
       digest = hashlib.sha256()
