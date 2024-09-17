@@ -16,8 +16,65 @@ import typing
 import random
 import threading
 from psychopy import visual, core, monitors
+import numpy as np
 
+# Creating PsychoPy objects
+''
+clock = core.Clock() # Create a clock object; > precise than core.wait(2.3) (accurate to ~1ms)
+my_monitor = monitors.Monitor('DellLaptopMonitor') # Create a Monitor object
+my_monitor.setSizePix((3840, 2160))  # # Set the screen resolution
+my_monitor.setWidth(38.189)  # # Set the screen width in centimeters
+my_monitor.setDistance(57)  # Set the distance from the user to the screen in centimeters
+win = visual.Window( # Create a window using the Monitor object
+   size=(1024, 768),
+   monitor=my_monitor,
+   units='deg',  # Use degrees of visual angle
+   color='black'
+)#, units='pix', fullscr=False, screen=2) 
+vertices = [ # Define the vertices for the fixation cross
+    (-0.25, 0), (0.25, 0),  # Horizontal line
+    (0, 0), (0, -0.25), (0, 0.25)  # Vertical line
+]
+# Define the fixation cross
+fixation_cross = visual.ShapeStim(
+   win=win,
+   closeShape=False,
+   vertices=vertices,
+   units='deg',
+   lineWidth=3,
+   lineColor='red'
+)
+# Create a white rectangle for photodiode in top left corner
+''
+# Calculate the position of the top-left corner in degrees.
+# Assuming the center of the window is (0, 0) in degrees.
+# The top-left corner will be at (-half_width, half_height).
+# Get monitor details
+screen_width_cm = my_monitor.getWidth()  # Monitor width in cm
+screen_width_px = my_monitor.getSizePix()[0]  # Monitor width in pixels
+view_distance_cm = my_monitor.getDistance()  # Distance to monitor in cm
+# Manually calculate degrees per pixel using the formula
+cm_per_pixel = screen_width_cm / screen_width_px
+deg_per_px = 2 * np.arctan(cm_per_pixel / (2 * view_distance_cm)) * (180 / np.pi)
+# Convert the window size from pixels to degrees
+win_size_deg = (win.size[0] * deg_per_px, win.size[1] * deg_per_px)
+# Define the size of the square in degrees (0.5° x 0.5°)
+square_size = 0.5
+# Define the top-left corner position in degrees relative to the window center
+# (0, 0) is the center of the window in degrees
+top_left_position = (-win_size_deg[0] / 2 + square_size / 2, win_size_deg[1] / 2 - square_size / 2)
+# Defining a rectangle
+rectangle = visual.Rect(
+   win=win,
+   width=square_size,
+   height=square_size,
+   fillColor='white',
+   lineColor='white',
+   pos=top_left_position  # Position in deg
+)
+''
 
+# Define a function to get a value from the config defined by the GUI
 def get_value(config: dict, key: str, default: typing.Any = None) -> typing.Union[int, float, bool]:
    """
    Reads a number from the config for the parameters defindes as [min]...[max] and randomly choses 
@@ -51,13 +108,6 @@ channel = grpc.insecure_channel('localhost:50050') # Connect to the task_control
 thalamus = thalamus_pb2_grpc.ThalamusStub(channel)
 
 response_queue = queue.Queue()
-clock = core.Clock() # Create a clock object; > precise than core.wait(2.3)
-
-# Define the vertices for the fixation cross
-vertices = [
-    (-10, 0), (10, 0),  # Horizontal line
-    (0, -10), (0, 10)   # Vertical line
-]
 
 # Below is the code used to make OCULOMATIC data available for real-time processing
 # this code runs as a separate thread in parallel with the drawing loop (i.e. "for message in stub.execution")
@@ -83,34 +133,21 @@ oculomatic_thread = threading.Thread(target=oculomatic_target)
 oculomatic_thread.start()
 ''
 
-# Create a window
-win = visual.Window(size=(1024, 768), color='black')#, units='pix', fullscr=False, screen=2)
-
 for message in stub.execution(iter(response_queue.get, None)):
    config = json.loads(message.body) # reads the message body as JSON and converts it into config
+   
    with oculomatic_lock:
       print(oculomatic_data)
    # pprint.pprint(config) # output for debugging
 
    width, height = config['width'], config['height']
-   center_x, center_y = config['center_x']/100, config['center_y']/100 # /100 b/c visual.GratingStim uses a range of -1 to 1
+   center_x, center_y = config['center_x'], config['center_y'] # /100 b/c visual.GratingStim uses a range of -1 to 1
    print("center_x = ", center_x)  # Debugging statement
    target_color_rgb = config['target_color']
 
    blink_timeout = get_value(config,'blink_timeout')
    intertrial_timeout = get_value(config,'intertrial_timeout')
    fix_timeout = get_value(config,'fix_timeout')
-
-   ''
-
-   # Create the fixation cross
-   fixation_cross = visual.ShapeStim(
-      win=win,
-      vertices=vertices,
-      lineWidth=5,
-      closeShape=False,
-      lineColor='white'
-   )
 
    # Create a Gaussian blurred circle stimulus
    gaussian_circle = visual.GratingStim(
@@ -121,16 +158,6 @@ for message in stub.execution(iter(response_queue.get, None)):
       mask='gauss',  # Gaussian mask
       color=target_color_rgb,  # Color of the circle
       colorSpace='rgb255'
-   )
-  
-   # Create a white rectangle
-   rectangle = visual.Rect(
-      win=win,
-      width=0.45,
-      height=0.45,
-      fillColor='white',
-      lineColor='white',
-      pos=(-0.95, 0.95)  # Position as a fraction of the screen
    )
 
    fixation_cross.draw() # Draw the fixation cross
