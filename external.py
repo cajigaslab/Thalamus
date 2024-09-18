@@ -18,7 +18,7 @@ import threading
 from psychopy import visual, core, monitors
 import numpy as np
 
-# Creating PsychoPy objects
+# region -- Creating PsychoPy objects
 ''
 clock = core.Clock() # Create a clock object; > precise than core.wait(2.3) (accurate to ~1ms)
 my_monitor = monitors.Monitor('DellLaptopMonitor') # Create a Monitor object
@@ -44,7 +44,7 @@ fixation_cross = visual.ShapeStim(
    lineWidth=3,
    lineColor='red'
 )
-# Create a white rectangle for photodiode in top left corner
+## Create a white rectangle for photodiode in top left corner
 ''
 # Calculate the position of the top-left corner in degrees.
 # Assuming the center of the window is (0, 0) in degrees.
@@ -74,7 +74,54 @@ rectangle = visual.Rect(
 )
 ''
 
-# Define a function to get a value from the config defined by the GUI
+# region -- Drawing a polar coordinates for defining the spatial grid for visual stimuli
+max_size = min(win_size_deg)  # The maximum diameter that fits in the window
+# Calculate the step size
+num_circles = 10
+step_size = max_size / num_circles
+circles = [] # List to store the circles
+for i in range(1, num_circles + 1, 2):  # Create circles #1, #3, #5, #7, and #9
+    circle_diameter = i * step_size
+    circle = visual.Circle(
+        win=win,
+        radius=circle_diameter / 2,  # Radius is half of the diameter
+        edges=128,  # Number of edges to make the circle smooth
+        lineColor='white',
+        fillColor=None  # No fill color, only the outline
+    )
+    circles.append(circle)
+outermost_radius = 10 * step_size / 2 # Calculate the radius of the 10th circle
+lines = [] # List to store the lines
+for angle in np.arange(0, 360, 30): # Generate 12 lines, each 30 degrees apart
+    radians = np.deg2rad(angle)
+    x_end = outermost_radius * np.cos(radians)
+    y_end = outermost_radius * np.sin(radians)
+    line = visual.Line(
+        win=win,
+        start=(0, 0),
+        end=(x_end, y_end),
+        lineColor='white'
+    )
+    lines.append(line)
+
+intersection_points = [] # Calculate the intersection points for position grid
+for circle in circles:
+    radius = circle.radius
+    for angle in np.arange(0, 360, 30):
+        radians = np.deg2rad(angle)
+        x = radius * np.cos(radians)
+        y = radius * np.sin(radians)
+        intersection_points.append((x, y))
+intersection_points = np.array(intersection_points) # Convert the list to a numpy array
+# Example: Randomly pool a subset of the coordinates
+subset_size = int(intersection_points.size/2) # size/2 = total number of coordinate pairs
+rand_pos = intersection_points[np.random.choice(intersection_points.shape[0], subset_size, replace=False)]
+
+# endregion
+
+# endregion
+
+## Define a function to get a value from the config defined by the GUI
 def get_value(config: dict, key: str, default: typing.Any = None) -> typing.Union[int, float, bool]:
    """
    Reads a number from the config for the parameters defindes as [min]...[max] and randomly choses 
@@ -109,7 +156,7 @@ thalamus = thalamus_pb2_grpc.ThalamusStub(channel)
 
 response_queue = queue.Queue()
 
-# Below is the code used to make OCULOMATIC data available for real-time processing
+# region -- Below is the code used to make OCULOMATIC data available for real-time processing
 # this code runs as a separate thread in parallel with the drawing loop (i.e. "for message in stub.execution")
 ''
 oculomatic_lock = threading.Lock() # Lock to avoid reading and writing data at the same time
@@ -132,7 +179,9 @@ def oculomatic_target():
 oculomatic_thread = threading.Thread(target=oculomatic_target)
 oculomatic_thread.start()
 ''
+# endregion
 
+i = 1 # loop counter
 for message in stub.execution(iter(response_queue.get, None)):
    config = json.loads(message.body) # reads the message body as JSON and converts it into config
    
@@ -146,55 +195,64 @@ for message in stub.execution(iter(response_queue.get, None)):
    target_color_rgb = config['target_color']
 
    blink_timeout = get_value(config,'blink_timeout')
-   intertrial_timeout = get_value(config,'intertrial_timeout')
-   fix_timeout = get_value(config,'fix_timeout')
+   decision_timeout = get_value(config,'decision_timeout')
+   fix1_timeout = get_value(config,'fix1_timeout')
+   fix2_timeout = get_value(config,'fix2_timeout')
 
-   # Create a Gaussian blurred circle stimulus
-   gaussian_circle = visual.GratingStim(
+   gaussian_circle = visual.GratingStim( # Create a Gaussian blurred circle stimulus
       win=win,
       size=(width, height),  # Size of the circle
-      pos=(center_x, center_y), # If units for Visual.Window are not defined, pos is in fraction of the screen
+      pos=rand_pos[i], # If units for Visual.Window are not defined, pos is in fraction of the screen
       sf=0,  # Spatial frequency of the grating (0 means no grating)
       mask='gauss',  # Gaussian mask
       color=target_color_rgb,  # Color of the circle
       colorSpace='rgb255'
    )
 
+   ## Show a fixation cross
    fixation_cross.draw() # Draw the fixation cross
    win.flip() # Switch drawing buffer to the screen
    # Fixation time
    clock.reset()
-   while clock.getTime() < fix_timeout:
+   while clock.getTime() < fix1_timeout:
       pass # Busy-wait (i.e. pauses the entire OS)
 
+   ## Show the Gaussian circle
+   for circle in circles:    # Draw spatial position grid circles
+      circle.draw()
+   for line in lines: # Draw all the lines
+      line.draw()
+   fixation_cross.draw() # Draw the fixation cross
    gaussian_circle.draw() # Draw the Gaussian circle
    rectangle.draw() # draw the rectangle
-
    win.flip() # Switch drawing buffer to the screen
-
    # Stimulus presentation time
    clock.reset()
-
    start = time.perf_counter() # uses steady clock with 100ns resolution
    while clock.getTime() < blink_timeout:
       pass # Busy-wait (i.e. pauses the entire OS)
-      # core.wait(0.01)  # Non-blocking wait
-      # if clock.getTime() >= blink_timeout + 1:  # Add a safety margin
-      #    print("Warning: blink_timeout exceeded")
-      #    break
    elapsed = time.perf_counter() - start
 
-   win.flip()
+   ## Show a fixation cross again
+   fixation_cross.draw() # Draw the fixation cross
+   win.flip() # Switch drawing buffer to the screen
+   # Fixation time
+   clock.reset()
+   while clock.getTime() < fix2_timeout:
+      pass # Busy-wait (i.e. pauses the entire OS)
 
+   ## Show the empty black screen
+   win.flip()
    # Intertrial interval (inter-stimulus wait time)
    clock.reset()
-   while clock.getTime() < intertrial_timeout:
+   while clock.getTime() < decision_timeout:
       pass # Busy-wait (i.e. pauses the entire OS)
       # core.wait(0.01)  # Non-blocking wait
-      if clock.getTime() >= intertrial_timeout + 1:  # Add a safety margin
-         print("Warning: intertrial_timeout exceeded")
+      if clock.getTime() >= decision_timeout + 1:  # Add a safety margin
+         print("Warning: decision_timeout exceeded")
          break
 
+   i = i+1 # Increment the loop counter
    response_queue.put(task_controller_pb2.TaskResult(success=True))
 
 # Close the window after the loop
