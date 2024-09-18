@@ -21,11 +21,11 @@ from ..config import *
 LOGGER = logging.getLogger(__name__)
 
 Config = typing.NamedTuple('Config', [
-  ('intertrial_timeout', datetime.timedelta),
-  ('start_timeout', datetime.timedelta),
-  ('fix_timeout', datetime.timedelta),
-  ('blink_timeout', datetime.timedelta),
   ('fail_timeout', datetime.timedelta),
+  ('decision_timeout', datetime.timedelta),
+  ('fix1_timeout', datetime.timedelta),
+  ('fix2_timeout', datetime.timedelta),
+  ('blink_timeout', datetime.timedelta),
   ('success_timeout', datetime.timedelta),
   ('target_rectangle', QRect),
   ('target_color', QColor),
@@ -106,7 +106,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   """
   Below: We're building a Form (widgets.py) object that will use task_config to initialize
   the parameters of this task. Values are taken from the provided "task_config" argument, and
-  if the key (e.g. intertrial_timeout) is not found in the task_config, the parameters will
+  if the key (e.g. decision_timeout) is not found in the task_config, the parameters will
   default to the values provided below. The build function also wires up all the
   listeners to update the task_config when changes are made.
   """
@@ -115,11 +115,11 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Constant('Height', 'height', 0.75, '\u00B0'),
     Form.Constant('Center X', 'center_x', 0, '\u00B0'),
     Form.Constant('Center Y', 'center_y', 0, '\u00B0'),
-    Form.Uniform('Intertrial Interval', 'intertrial_timeout', 1, 2, 's'),
-    Form.Uniform('Start Interval', 'start_timeout', 1, 1, 's'),
-    Form.Uniform('Fixation Interval', 'fix_timeout', 1, 2, 's'),
+    Form.Uniform('Fixation Interval 1', 'fix1_timeout', 1, 2, 's'),
     Form.Uniform('Blink Interval', 'blink_timeout', 2, 4, 's'),
-    Form.Uniform('Fail Interval', 'fail_timeout', 1, 1, 's'),
+    Form.Uniform('Fixation Interval 2', 'fix2_timeout', 1, 2, 's'),
+    Form.Uniform('Decision Interval', 'decision_timeout', 1, 2, 's'),
+    Form.Uniform('Failure Interval', 'fail_timeout', 1, 1, 's'),
     Form.Uniform('Success Interval', 'success_timeout', 1, 1, 's'),
     Form.Uniform('Target X', 'target_x', 300, 300, 'px'),
     Form.Uniform('Target Y', 'target_y', 300, 300, 'px'),
