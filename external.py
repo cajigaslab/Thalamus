@@ -113,9 +113,19 @@ for circle in circles:
         y = radius * np.sin(radians)
         intersection_points.append((x, y))
 intersection_points = np.array(intersection_points) # Convert the list to a numpy array
-# Example: Randomly pool a subset of the coordinates
+# Example: Randomly pool a subset of the coordinates without repeating
 subset_size = int(intersection_points.size/2) # size/2 = total number of coordinate pairs
 rand_pos = intersection_points[np.random.choice(intersection_points.shape[0], subset_size, replace=False)]
+
+# Check for repeated values
+unique_elements, counts = np.unique(rand_pos, axis=0, return_counts=True)
+repeated_values = unique_elements[counts > 1]
+
+if repeated_values.size > 0:
+    print("Repeated values found:")
+    print(repeated_values)
+else:
+    print("No repeated values found.")
 
 # endregion
 

@@ -1,13 +1,120 @@
 
-from psychopy import monitors
+# region -- Gaussian visualizer and manipulator
+''
+import tkinter as tk
+from tkinter import ttk
+from psychopy import visual, core, event, monitors
 
-# Create a Monitor object for the primary monitor
-monitor = monitors.Monitor('testMonitor')
+# Function to update the Gaussian circle
+def update_gaussian():
+    global gaussian_circle
+    width = float(width_var.get())
+    height = float(height_var.get())
+    sf = float(sf_var.get())
+    color = [int(c) for c in color_var.get().split(',')]
+    ori = float(ori_var.get())
+    contrast = float(contrast_var.get())
+    opacity = float(opacity_var.get())
+    
+    gaussian_circle.size = (width, height)
+    gaussian_circle.sf = sf
+    gaussian_circle.color = color
+    gaussian_circle.ori = ori
+    gaussian_circle.contrast = contrast
+    gaussian_circle.opacity = opacity
+    
+    # Draw the updated Gaussian circle
+    gaussian_circle.draw()
+    win.flip()
 
-# Get the screen size in pixels
-screen_width, screen_height = monitor.getSizePix()
+# Create a PsychoPy window
+my_monitor = monitors.Monitor('DellLaptopMonitor') # Create a Monitor object
+my_monitor.setSizePix((3840, 2160))  # # Set the screen resolution
+my_monitor.setWidth(38.189)  # # Set the screen width in centimeters
+my_monitor.setDistance(57)  # Set the distance from the user to the screen in centimeters
+win = visual.Window( # Create a window using the Monitor object
+   size=(1024, 768),
+   monitor=my_monitor,
+   units='deg',  # Use degrees of visual angle
+   color='black'
+)#, units='pix', fullscr=False, screen=2) 
 
-print(f"Screen width: {screen_width}, Screen height: {screen_height}")
+# Initial parameters for the Gaussian circle
+initial_width = 10
+initial_height = 10
+initial_sf = 0.05
+initial_color = [255, 255, 255]
+initial_ori = 0
+initial_contrast = 1.0
+initial_opacity = 1.0
+
+# Create the Gaussian circle stimulus
+gaussian_circle = visual.GratingStim(
+    win=win,
+    tex='sin',
+    mask='gauss',
+    size=(initial_width, initial_height),
+    sf=initial_sf,
+    color=initial_color,
+    colorSpace='rgb255',
+    ori=initial_ori,
+    contrast=initial_contrast,
+    opacity=initial_opacity
+)
+
+# Draw the initial Gaussian circle
+gaussian_circle.draw()
+win.flip()
+
+# Create the GUI window
+root = tk.Tk()
+root.title("Gaussian Circle Parameters")
+
+# Width parameter
+tk.Label(root, text="Width:").grid(row=0, column=0)
+width_var = tk.StringVar(value=str(initial_width))
+tk.Entry(root, textvariable=width_var).grid(row=0, column=1)
+
+# Height parameter
+tk.Label(root, text="Height:").grid(row=1, column=0)
+height_var = tk.StringVar(value=str(initial_height))
+tk.Entry(root, textvariable=height_var).grid(row=1, column=1)
+
+# Spatial frequency parameter
+tk.Label(root, text="Spatial Frequency:").grid(row=2, column=0)
+sf_var = tk.StringVar(value=str(initial_sf))
+tk.Entry(root, textvariable=sf_var).grid(row=2, column=1)
+
+# Color parameter
+tk.Label(root, text="Color (R,G,B):").grid(row=3, column=0)
+color_var = tk.StringVar(value=','.join(map(str, initial_color)))
+tk.Entry(root, textvariable=color_var).grid(row=3, column=1)
+
+# Orientation parameter
+tk.Label(root, text="Orientation:").grid(row=4, column=0)
+ori_var = tk.StringVar(value=str(initial_ori))
+tk.Entry(root, textvariable=ori_var).grid(row=4, column=1)
+
+# Contrast parameter
+tk.Label(root, text="Contrast:").grid(row=5, column=0)
+contrast_var = tk.StringVar(value=str(initial_contrast))
+tk.Entry(root, textvariable=contrast_var).grid(row=5, column=1)
+
+# Opacity parameter
+tk.Label(root, text="Opacity:").grid(row=6, column=0)
+opacity_var = tk.StringVar(value=str(initial_opacity))
+tk.Entry(root, textvariable=opacity_var).grid(row=6, column=1)
+
+# Update button
+tk.Button(root, text="Update", command=update_gaussian).grid(row=7, columnspan=2)
+
+# Run the GUI loop
+root.mainloop()
+
+# Close the PsychoPy window
+win.close()
+''
+# endregion
 
 ## A simplest code to draw a basic white circle
 '''
