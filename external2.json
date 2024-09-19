@@ -1,0 +1,227 @@
+{
+  "touch_channels": [
+    0,
+    1
+  ],
+  "task_clusters": [
+    {
+      "type": "task_cluster",
+      "name": "Untitled",
+      "weight": 0,
+      "tasks": [
+        {
+          "task_type": "gaussian_task",
+          "type": "task",
+          "goal": 5,
+          "name": "Untitled",
+          "intertrial_timeout": {
+            "min": 1,
+            "max": 6.0
+          },
+          "start_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "hold_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "blink_timeout": {
+            "min": 2.0,
+            "max": 4.0
+          },
+          "fail_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "success_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "target_x": {
+            "min": 300,
+            "max": 300
+          },
+          "target_y": {
+            "min": 300,
+            "max": 300
+          },
+          "target_width": {
+            "min": 333,
+            "max": 333
+          },
+          "target_height": {
+            "min": 333,
+            "max": 333
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "shape": "gaussian",
+          "targets": [],
+          "width": 0.75,
+          "height": 0.75,
+          "center_x": 0,
+          "center_y": 0,
+          "fix_timeout": {
+            "min": 1,
+            "max": 2
+          },
+          "fix1_timeout": {
+            "min": 1,
+            "max": 2
+          },
+          "fix2_timeout": {
+            "min": 1,
+            "max": 2
+          },
+          "decision_timeout": {
+            "min": 1,
+            "max": 2
+          }
+        }
+      ]
+    }
+  ],
+  "queue": [
+    {
+      "task_type": "gaussian_task",
+      "type": "task",
+      "goal": 5,
+      "name": "Untitled",
+      "intertrial_timeout": {
+        "min": 1,
+        "max": 6.0
+      },
+      "start_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "hold_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "blink_timeout": {
+        "min": 2.0,
+        "max": 4.0
+      },
+      "fail_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "success_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "target_x": {
+        "min": 300,
+        "max": 300
+      },
+      "target_y": {
+        "min": 300,
+        "max": 300
+      },
+      "target_width": {
+        "min": 333,
+        "max": 333
+      },
+      "target_height": {
+        "min": 333,
+        "max": 333
+      },
+      "target_color": [
+        255,
+        255,
+        255
+      ],
+      "shape": "gaussian",
+      "targets": [],
+      "width": 0.75,
+      "height": 0.75,
+      "center_x": 0,
+      "center_y": 0,
+      "fix_timeout": {
+        "min": 1,
+        "max": 2
+      },
+      "fix1_timeout": {
+        "min": 1,
+        "max": 2
+      },
+      "fix2_timeout": {
+        "min": 1,
+        "max": 2
+      },
+      "decision_timeout": {
+        "min": 1,
+        "max": 2
+      },
+      "task_cluster_name": "Untitled",
+      "queue_index": 0
+    }
+  ],
+  "reward_schedule": {
+    "schedules": [
+      [
+        0
+      ]
+    ],
+    "index": 0
+  },
+  "nodes": [
+    {
+      "name": "Pupil",
+      "type": "PUPIL",
+      "Running": false,
+      "View": true,
+      "view_geometry": [
+        45,
+        1373,
+        400,
+        400
+      ]
+    },
+    {
+      "name": "Oculomatic",
+      "type": "OCULOMATIC",
+      "Threshold": 100,
+      "Min Area": 0,
+      "Max Area": 100,
+      "X Gain": 0.0,
+      "Y Gain": 0.0,
+      "Invert X": false,
+      "Invert Y": false,
+      "Source": "Pupil",
+      "Computing": true,
+      "View": true,
+      "view_geometry": [
+        481,
+        1379,
+        400,
+        400
+      ]
+    }
+  ],
+  "status": "",
+  "thalamus_view_geometry": [
+    99,
+    99,
+    402,
+    768
+  ],
+  "data_views": [],
+  "node_widgets": [
+    {
+      "node": "Oculomatic",
+      "dock_area": "right",
+      "view_geometry": [
+        265,
+        31,
+        137,
+        737
+      ]
+    }
+  ]
+}
