@@ -1,12 +1,14 @@
 FetchContent_Declare(
   gRPC
   GIT_REPOSITORY https://github.com/grpc/grpc
-  GIT_TAG        v1.44.0
+  GIT_TAG        v1.66.1
 )
 set(BUILD_SHARED_LIBS OFF)
 set(BUILD_TESTING OFF)
 set(FETCHCONTENT_QUIET OFF)
-#set(ABSL_ENABLE_INSTALL ON)
+set(gRPC_MSVC_STATIC_RUNTIME ON)
+set(protobuf_MSVC_STATIC_RUNTIME ON)
+set(ABSL_ENABLE_INSTALL ON)
 #add_definitions(-DBORINGSSL_NO_CXX)
 #set(gRPC_BUILD_TESTS ON)
 FetchContent_Populate(gRPC)
