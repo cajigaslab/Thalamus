@@ -1,5 +1,6 @@
 """
-Implementation of the simple task
+Presenting visual Gaussian shapes via remote executor and PsychoPy
+v0 by 9/24/2024 before adding feedback from Oculomatic
 """
 from thalamus import task_controller_pb2
 from thalamus import task_controller_pb2_grpc
@@ -200,14 +201,18 @@ for message in stub.execution(iter(response_queue.get, None)):
    # pprint.pprint(config) # output for debugging
 
    width, height = config['width'], config['height']
+   is_height_locked = config['is_height_locked']
    center_x, center_y = config['center_x'], config['center_y'] # /100 b/c visual.GratingStim uses a range of -1 to 1
-   print("center_x = ", center_x)  # Debugging statement
+   print("is_height_locked = ", is_height_locked)  # Debugging statement
    target_color_rgb = config['target_color']
 
    blink_timeout = get_value(config,'blink_timeout')
    decision_timeout = get_value(config,'decision_timeout')
    fix1_timeout = get_value(config,'fix1_timeout')
    fix2_timeout = get_value(config,'fix2_timeout')
+
+   if is_height_locked:
+      height = width
 
    gaussian_circle = visual.GratingStim( # Create a Gaussian blurred circle stimulus
       win=win,

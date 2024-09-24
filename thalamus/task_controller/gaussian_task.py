@@ -6,9 +6,6 @@ import logging
 import datetime
 import random
 import numpy as np # import Numpy to draw Gaussian
-#from psychopy import visual, core
-# import os
-# os.environ['QT_OPENGL'] = 'software'
 
 from ..qt import *
 
@@ -36,10 +33,9 @@ RANDOM_DEFAULT = {'min': 1, 'max':1}
 COLOR_DEFAULT = [255, 255, 255]
 shapes = ['rectangle', 'gaussian'] # Define the possible shapes
 
+#  Widget for managing the GUI fields that appear after pressing ADD TARGET
 class TargetWidget(QWidget):
-  '''
-  Widget for managing a target config
-  '''
+
   def __init__(self, config: ObservableCollection) -> None:
     super().__init__()
     if 'name' not in config:
@@ -111,8 +107,9 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   listeners to update the task_config when changes are made.
   """
   form = Form.build(task_config, ["Name:", "Min:", "Max:"],
-    Form.Constant('Width', 'width', 0.75, '\u00B0'),
+    Form.Constant('Width', 'width', 1, '\u00B0'),
     Form.Constant('Height', 'height', 0.75, '\u00B0'),
+    Form.Bool('Lock Height to Width?', 'is_height_locked', False),
     Form.Constant('Center X', 'center_x', 0, '\u00B0'),
     Form.Constant('Center Y', 'center_y', 0, '\u00B0'),
     Form.Uniform('Fixation Interval 1', 'fix1_timeout', 1, 2, 's'),
@@ -129,6 +126,11 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Constant('Shape', 'shape',  random.choice(shapes))  # Add the shape attribute
   )
   layout.addWidget(form)
+
+  # spinbox allows to constraint value options for above constants
+  width_spinbox = form.findChild(QDoubleSpinBox, "width")
+  width_spinbox.setRange(.1, 1.0)
+  width_spinbox.setSingleStep(.1)
 
   new_target_button = QPushButton('Add Target')
   new_target_button.setObjectName('new_target_button')
