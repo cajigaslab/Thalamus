@@ -25,6 +25,7 @@ from . import luminance_reward_selection
 from . import avatar_task
 from . import imagined_task
 from . import feedback_task
+from . import psychopy_task
 from .task_context import TaskDescription
 
 DESCRIPTIONS = [
@@ -96,7 +97,10 @@ DESCRIPTIONS = [
     imagined_task.run),
   TaskDescription('feedback_task', 'Feedback',
     feedback_task.create_widget,
-    feedback_task.run)
+    feedback_task.run),
+  TaskDescription('psychopy', 'Psychopy',
+    psychopy_task.create_widget,
+    psychopy_task.run)
 ]
 
 DESCRIPTIONS_MAP = dict((description.code, description) for description in DESCRIPTIONS)
