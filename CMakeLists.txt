@@ -202,6 +202,7 @@ target_compile_options(tracing PRIVATE ${WARNING_FLAGS})
 
 add_library(hydrate "src/hydrate.cpp")
 target_link_libraries(hydrate boost grpc++ hdf5-static)
+add_dependencies(hydrate protoc_generated)
 target_compile_definitions(hydrate PRIVATE _USE_MATH_DEFINES NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS _GNU_SOURCE)
 target_include_directories(hydrate PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_compile_options(hydrate PRIVATE ${WARNING_FLAGS})

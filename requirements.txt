@@ -14,6 +14,7 @@ scipy
 typing_extensions>=4.4.0; python_version >= "3.8"
 typing_extensions; python_version < "3.8"
 opencv-python
+opencv-contrib-python
 numpy-stl
 scikit-learn
 Pillow
