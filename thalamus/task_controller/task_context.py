@@ -53,7 +53,7 @@ class TaskDescription(typing.NamedTuple):
   run: typing.Callable[['TaskContextProtocol'], typing.Awaitable[TaskResult]]
 
 async def to_thread(func):
-  loop = asyncio.events.get_running_loop()
+  loop = asyncio.get_event_loop()
   ctx = contextvars.copy_context()
   func_call = functools.partial(ctx.run, func)
   return await loop.run_in_executor(None, func_call)
@@ -87,7 +87,7 @@ class Sleeper():
           condition.notify()
       self.tasks.remove(task)
 
-    task = asyncio.create_task(to_thread(inner))
+    task = asyncio.get_event_loop().create_task(to_thread(inner))
     task.add_done_callback(on_done)
     self.tasks.append(task)
 
@@ -649,7 +649,7 @@ class TaskContext(TaskContextProtocol):
     Schedules the TaskContext event loop to stop and waits
     """
     if not self.running:
-      return asyncio.create_task(asyncio.sleep(0))
+      return asyncio.get_event_loop().create_task(asyncio.sleep(0))
 
     if self.servicer is not None:
       self.servicer.stop()

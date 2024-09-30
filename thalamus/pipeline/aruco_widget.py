@@ -1,7 +1,7 @@
 from ..qt import *
 from ..config import *
 import functools
-import cv2.aruco
+#import cv2.aruco
 import pathlib
 import traceback
 import numpy
