@@ -25,6 +25,7 @@ my_monitor = monitors.Monitor('DellLaptopMonitor') # Create a Monitor object
 my_monitor.setSizePix((3840, 2160))  # # Set the screen resolution
 my_monitor.setWidth(38.189)  # # Set the screen width in centimeters
 my_monitor.setDistance(57)  # Set the distance from the user to the screen in centimeters
+monitor_Hz = 60 # screen refresh rate in Hz
 win = visual.Window( # Create a window using the Monitor object
    size=(1024, 768),
    monitor=my_monitor,
@@ -117,16 +118,6 @@ intersection_points = np.array(intersection_points) # Convert the list to a nump
 subset_size = int(intersection_points.size/2) # size/2 = total number of coordinate pairs
 rand_pos = intersection_points[np.random.choice(intersection_points.shape[0], subset_size, replace=False)]
 
-# Check for repeated values
-unique_elements, counts = np.unique(rand_pos, axis=0, return_counts=True)
-repeated_values = unique_elements[counts > 1]
-
-if repeated_values.size > 0:
-    print("Repeated values found:")
-    print(repeated_values)
-else:
-    print("No repeated values found.")
-
 # endregion
 
 # endregion
@@ -202,7 +193,6 @@ for message in stub.execution(iter(response_queue.get, None)):
    width, height = config['width'], config['height']
    is_height_locked = config['is_height_locked']
    center_x, center_y = config['center_x'], config['center_y'] # /100 b/c visual.GratingStim uses a range of -1 to 1
-   print("is_height_locked = ", is_height_locked)  # Debugging statement
    target_color_rgb = config['target_color']
 
    blink_timeout = get_value(config,'blink_timeout')
@@ -223,15 +213,15 @@ for message in stub.execution(iter(response_queue.get, None)):
       colorSpace='rgb255'
    )
 
-   ## Show a fixation cross
+   # region -- 1) Fixation #1: fixate for XXms to start a trial
    fixation_cross.draw() # Draw the fixation cross
    win.flip() # Switch drawing buffer to the screen
-   # Fixation time
    clock.reset()
    while clock.getTime() < fix1_timeout:
       pass # Busy-wait (i.e. pauses the entire OS)
+   # endregion
 
-   ## Show the Gaussian circle
+   # region -- 2) Target presentation
    for circle in circles:    # Draw spatial position grid circles
       circle.draw()
    for line in lines: # Draw all the lines
@@ -246,16 +236,18 @@ for message in stub.execution(iter(response_queue.get, None)):
    while clock.getTime() < blink_timeout:
       pass # Busy-wait (i.e. pauses the entire OS)
    elapsed = time.perf_counter() - start
+   # endregion
 
-   ## Show a fixation cross again
+   # region -- 3) Fixation #2: post-target 
    fixation_cross.draw() # Draw the fixation cross
    win.flip() # Switch drawing buffer to the screen
    # Fixation time
    clock.reset()
    while clock.getTime() < fix2_timeout:
       pass # Busy-wait (i.e. pauses the entire OS)
+   # endregion
 
-   ## Show the empty black screen
+   # region -- 4) Move to the target while showing an empty black screen
    win.flip()
    # Intertrial interval (inter-stimulus wait time)
    clock.reset()
@@ -265,6 +257,7 @@ for message in stub.execution(iter(response_queue.get, None)):
       if clock.getTime() >= decision_timeout + 1:  # Add a safety margin
          print("Warning: decision_timeout exceeded")
          break
+   # endregion
 
    i = i+1 # Increment the loop counter
    response_queue.put(task_controller_pb2.TaskResult(success=True))
