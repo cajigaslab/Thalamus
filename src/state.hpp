@@ -47,11 +47,11 @@ namespace thalamus {
       Set,
       Delete
     };
-    using Observer = std::function<void(Action, const Key&, const Value&)>;
+    using Observer = std::function<void(Action, const Key&, Value&)>;
     ObservableCollection* parent;
     std::function<bool(Action, const std::string&, ObservableCollection::Value, std::function<void()>)> remote_storage;
   public:
-    using Changed = boost::signals2::signal<void(Action, const Key&, const Value&)>;
+    using Changed = boost::signals2::signal<void(Action, const Key&, Value&)>;
     Changed changed;
     class ValueWrapper {
       Key key;

@@ -4,7 +4,7 @@
 #include <thalamus.pb.h>
 #include <thalamus_asio.h>
 #include <base_node.h>
-#include <state.h>
+#include <state.hpp>
 
 namespace thalamus {
   class ImageNode {
