@@ -275,15 +275,15 @@ struct ArucoNode::Impl {
             try {
               cv::solvePnP(obj_points, img_points, camera_matrix, distortion_parameters, rvec, tvec);
 
-              auto axis_length = .5*std::min(board.columns, board.rows)*(board.markerSize + board.markerSeparation) + board.markerSeparation;
+              float axis_length = .5*std::min(board.columns, board.rows)*(board.markerSize + board.markerSeparation) + board.markerSeparation;
 
               cv::drawFrameAxes(color, camera_matrix, distortion_parameters, rvec, tvec, axis_length);
 
               std::vector<cv::Point3f> axesPoints;
-              axesPoints.emplace_back(0, 0, 0);
-              axesPoints.emplace_back(axis_length, 0, 0);
-              axesPoints.emplace_back(0, axis_length, 0);
-              axesPoints.emplace_back(0, 0, axis_length);
+              axesPoints.emplace_back(0.0f, 0.0f, 0.0f);
+              axesPoints.emplace_back(axis_length, 0.0f, 0.0f);
+              axesPoints.emplace_back(0.0f, axis_length, 0.0f);
+              axesPoints.emplace_back(0.0f, 0.0f, axis_length);
 
               cv::Mat rotmat(3, 3, CV_64F);
               cv::Rodrigues(board.rotation, rotmat);
@@ -354,7 +354,7 @@ std::span<MotionCaptureNode::Segment const> ArucoNode::segments() const {
   return std::span<Segment const>(impl->current_frame.segments.begin(), impl->current_frame.segments.end());
 }
 
-const std::string& ArucoNode::pose_name() const {
+const std::string_view ArucoNode::pose_name() const {
   return "";
 }
 

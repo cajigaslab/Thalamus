@@ -4,7 +4,7 @@
 
 #include <string>
 #include <base_node.h>
-#include <state.h>
+#include <state.hpp>
 
 namespace thalamus {
   class AlgebraNode : public Node, public AnalogNode {

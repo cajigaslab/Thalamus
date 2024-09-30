@@ -12,7 +12,7 @@
 #include <thread>
 //#include <plot.h>
 #include <base_node.h>
-#include <state.h>
+#include <state.hpp>
 #include <xsens_node.h>
 #include <tracing/tracing.h>
 

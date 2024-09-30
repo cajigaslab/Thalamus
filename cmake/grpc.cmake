@@ -36,7 +36,7 @@ macro(apply_protoc_grpc OUTPUT_SOURCES)
           --plugin=protoc-gen-grpc=$<TARGET_FILE:grpc_cpp_plugin>
           -I "${PROTO_DIRECTORY}"
           ${PROTO_ABSOLUTE}
-          DEPENDS "${PROTO_ABSOLUTE}")
+          DEPENDS "${PROTO_ABSOLUTE}" $<TARGET_FILE:protobuf::protoc>)
     if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
       set_source_files_properties(
         ${${OUTPUT_SOURCES}}
@@ -62,7 +62,7 @@ macro(apply_protoc OUTPUT_SOURCES)
           --cpp_out "${CMAKE_CURRENT_BINARY_DIR}"
           -I "${PROTO_DIRECTORY}"
           ${PROTO_ABSOLUTE}
-          DEPENDS "${PROTO_ABSOLUTE}")
+          DEPENDS "${PROTO_ABSOLUTE}" $<TARGET_FILE:protobuf::protoc>)
     if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
       set_source_files_properties(
         ${${OUTPUT_SOURCES}}

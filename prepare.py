@@ -78,6 +78,12 @@ def main():
                           winreg.KEY_READ | winreg.KEY_SET_VALUE | winreg.KEY_WOW64_64KEY) as key:
       old_path = winreg.QueryValueEx(key, 'Path')[0]
 
+    #depot_tools
+    if not shutil.which('gclient'):
+      destination = home_path / 'depot_tools'
+      new_path.append(destination)
+      subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
+
     #nasm
     if not shutil.which('nasm'):
       destination = os.environ['USERPROFILE'] + '\\nasm-2.15.05'
@@ -109,7 +115,7 @@ def main():
         with open(os.environ['GITHUB_PATH'], 'a') as path_file:
           path_file.writelines(p + os.linesep for p in new_path)
       new_path.append(old_path)
-      new_path = os.pathsep.join(new_path)
+      new_path = os.pathsep.join(str(p) for p in new_path)
       print(new_path)
 
       with winreg.OpenKeyEx(winreg.HKEY_CURRENT_USER,
@@ -158,6 +164,14 @@ def main():
 
     subprocess.check_call(['brew', 'install', 'autoconf', 'automake', 'libtool', 'pcre2', 'pkg-config'])
     subprocess.check_call(['touch', str(home_path / '.thalamusrc')])
+
+    #depot_tools
+    if not shutil.which('gclient'):
+      destination = home_path / 'depot_tools'
+      new_path.append(destination)
+      subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
+      with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
+        bashrc.write(f'\nexport PATH={home_str}/depot_tools:$PATH\n')
 
     #nasm
     if not shutil.which('nasm'):
@@ -240,6 +254,14 @@ def main():
       subprocess.check_call(['sh', f'./cmake-{CMAKE_VERSION}-linux-x86_64.sh', f'--prefix={home_str}/.local', '--skip-license', '--include-subdir'])
       with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
         bashrc.write(f'\nexport PATH={home_str}/.local/cmake-{CMAKE_VERSION}-linux-x86_64/bin:$PATH\n')
+
+    #depot_tools
+    if not shutil.which('gclient'):
+      destination = home_path / 'depot_tools'
+      new_path.append(destination)
+      subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
+      with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
+        bashrc.write(f'\nexport PATH={home_str}/depot_tools:$PATH\n')
     
     with open(str(home_path / '.bashrc'), 'r') as bashrc:
       bashrc_content = bashrc.read()

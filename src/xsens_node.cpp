@@ -379,7 +379,7 @@ namespace thalamus {
   std::span<XsensNode::Segment const> XsensNode::segments() const {
     return impl->_segment_span;
   }
-  const std::string& XsensNode::pose_name() const {
+  const std::string_view XsensNode::pose_name() const {
     return impl->pose_name;
   }
 
@@ -796,7 +796,7 @@ namespace thalamus {
     return impl->_segment_span;
   }
 
-  const std::string& HandEngineNode::pose_name() const {
+  const std::string_view HandEngineNode::pose_name() const {
     return impl->pose_name;
   }
 

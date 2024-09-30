@@ -3,7 +3,7 @@
 #include "node_graph_impl.h"
 #include <boost/asio.hpp>
 #include <boost/program_options.hpp>
-#include <state.h>
+#include <state.hpp>
 #include <future>
 #ifdef _WIN32
 #include <timeapi.h>
@@ -144,7 +144,7 @@ extern "C" {
     grpc::ServerBuilder builder;
     builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
     node_graph.reset(new thalamus::NodeGraphImpl(nodes, io_context, system_start, steady_start));
-    service.reset(new thalamus::Service(std::make_shared<thalamus::ObservableDict>(), io_context, *node_graph));
+    service.reset(new thalamus::Service(std::make_shared<thalamus::ObservableDict>(), io_context, *node_graph, ""));
     node_graph->set_service(service.get());
     builder.RegisterService(service.get());
     server = builder.BuildAndStart();

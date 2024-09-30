@@ -10,7 +10,7 @@ namespace thalamus {
     ~ArucoNode();
     static std::string type_name();
     std::span<Segment const> segments() const override;
-    const std::string& pose_name() const override;
+    const std::string_view pose_name() const override;
     std::chrono::nanoseconds time() const override;
     void inject(const std::span<Segment const>& segments) override;
   

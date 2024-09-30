@@ -355,7 +355,7 @@ std::string RemoteNode::type_name() {
 std::span<MotionCaptureNode::Segment const> RemoteNode::segments() const {
   return std::span<MotionCaptureNode::Segment const>(impl->segments.begin(), impl->segments.end());
 }
-const std::string& RemoteNode::pose_name() const {
+const std::string_view RemoteNode::pose_name() const {
   return impl->pose_name;
 }
 void RemoteNode::inject(const std::span<Segment const>&) {
