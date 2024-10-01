@@ -5,7 +5,7 @@
 #include <functional>
 #include <string>
 #include <base_node.h>
-#include <state.h>
+#include <state.hpp>
 
 namespace thalamus {
   class NidaqNode : public Node, public AnalogNode {

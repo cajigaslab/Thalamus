@@ -21,6 +21,7 @@ from .. import ophanim_pb2_grpc
 from .. import thalamus_pb2_grpc
 from ..task_controller.observable_bridge import ObservableBridge
 from .thalamus_window import ThalamusWindow
+from ..servicer import ThalamusServicer
 
 from ..qt import *
 
@@ -82,16 +83,24 @@ async def async_main() -> None:
   for node in config['nodes']:
     if 'Running' in node:
       node['Running'] = False
+
+  server = grpc.aio.server()
+  servicer = ThalamusServicer(config)
+  thalamus_pb2_grpc.add_ThalamusServicer_to_server(servicer, server)
+  listen_addr = f'[::]:50051'
+
+  server.add_insecure_port(listen_addr)
+  logging.info("Starting GRPC server on %s", listen_addr)
+  await server.start()
   
   bmbi_native_filename = resource_filename('thalamus', 'native' + ('.exe' if sys.platform == 'win32' else ''))
   bmbi_native_proc = None
   bmbi_native_proc = await asyncio.create_subprocess_exec(
-        bmbi_native_filename, 'thalamus', '--port', str(arguments.port), '--slave', *(['--trace'] if arguments.trace else []))
+      bmbi_native_filename, 'thalamus', '--port', str(arguments.port), '--state-url', 'localhost:50051', *(['--trace'] if arguments.trace else []))
 
   channel = grpc.aio.insecure_channel(f'localhost:{arguments.port}')
   await channel.channel_ready()
   stub = thalamus_pb2_grpc.ThalamusStub(channel)
-  observable_bridge = ObservableBridge(stub, config)
 
   screen_geometry = qt_screen_geometry()
 
@@ -109,6 +118,7 @@ async def async_main() -> None:
   except KeyboardInterrupt:
     pass
 
+  await servicer.stop()
   await channel.close()
   if bmbi_native_proc:
     await bmbi_native_proc.wait()

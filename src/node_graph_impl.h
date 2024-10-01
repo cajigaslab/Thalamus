@@ -3,7 +3,7 @@
 #include <base_node.h>
 #include <memory>
 //#include <QMainWindow>
-#include <state.h>
+#include <state.hpp>
 #include <grpc_impl.h>
 
 #include <nidaq_node.h>

@@ -4,7 +4,7 @@
 #include <boost/asio.hpp>
 #include <string>
 //#include <plot.h>
-#include <state.h>
+#include <state.hpp>
 
 namespace thalamus {
   using namespace std::chrono_literals;

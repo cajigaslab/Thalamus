@@ -7,7 +7,7 @@
 #include <iostream>
 #include <base_node.h>
 #include <absl/strings/str_split.h>
-#include <state.h>
+#include <state.hpp>
 #include <boost/signals2.hpp>
 #include <modalities.h>
 #include <numeric>

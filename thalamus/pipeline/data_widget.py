@@ -470,6 +470,9 @@ class ChannelComboBox(QComboBox):
         self.setCurrentText(selected_channel)
     except asyncio.CancelledError:
       pass
+    except grpc.aio.AioRpcError as e:
+      if e.status != grpc.StatusCode.CANCELLED:
+        raise
 
 class AdvancedDialog(QDialog):
   def __init__(self, config):
