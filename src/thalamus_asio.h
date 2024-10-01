@@ -7,6 +7,7 @@
   #pragma clang diagnostic ignored "-Wgnu-anonymous-struct"
   #pragma clang diagnostic ignored "-Wunused-private-field"
   #pragma clang diagnostic ignored "-Wlanguage-extension-token"
+  #pragma clang diagnostic ignored "-Wunknown-attributes"
     #include <boost/asio.hpp>
   #pragma clang diagnostic pop
 #else
