@@ -311,7 +311,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
 
     payload = bytes(indexes)
     tasks = [
-      asyncio.create_task(queue.put(thalamus_pb2.Event(payload=payload,time=time.perf_counter_ns()))),
+      asyncio.get_event_loop().create_task(queue.put(thalamus_pb2.Event(payload=payload,time=time.perf_counter_ns()))),
     ]
 
     if duration is None:
@@ -320,7 +320,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       tasks.append(context.sleep(duration))
 
     if indexes:
-      tasks.append(asyncio.create_task(analog_queue.put(thalamus_pb2.InjectAnalogRequest(signal=thalamus_pb2.AnalogResponse(
+      tasks.append(asyncio.get_event_loop().create_task(analog_queue.put(thalamus_pb2.InjectAnalogRequest(signal=thalamus_pb2.AnalogResponse(
         data=[5,0],
         spans=[thalamus_pb2.Span(begin=0,end=2)],
         sample_intervals=[100000000])))))
