@@ -1,8 +1,9 @@
 FetchContent_Declare(
   sdl
   GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
-  GIT_TAG release-2.28.5)
-FetchContent_Populate(sdl)
+  GIT_TAG release-2.28.5
+  SOURCE_SUBDIR thalamus-nonexistant)
+FetchContent_MakeAvailable(sdl)
 file(MAKE_DIRECTORY ${sdl_BINARY_DIR}/Debug)
 file(MAKE_DIRECTORY ${sdl_BINARY_DIR}/Release)
 

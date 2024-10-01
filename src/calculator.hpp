@@ -116,7 +116,7 @@ namespace thalamus {
         typedef number result_type;
         std::map<std::string, number> symbols;
 
-        number operator()(nil) const { THALAMUS_ASSERT(false); return 0; }
+        number operator()(nil) const { THALAMUS_ASSERT(false, "nil not converable to number"); return 0; }
         number operator()(double n) const { return n; }
         number operator()(unsigned long long int n) const { return (long long int)n; }
         number operator()(std::string n) const { return symbols.at(n); }
