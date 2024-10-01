@@ -11,11 +11,11 @@ set(protobuf_MSVC_STATIC_RUNTIME ON)
 set(ABSL_ENABLE_INSTALL ON)
 #add_definitions(-DBORINGSSL_NO_CXX)
 #set(gRPC_BUILD_TESTS ON)
-FetchContent_Populate(gRPC)
+FetchContent_MakeAvailable(gRPC)
 #file(READ "${grpc_SOURCE_DIR}/third_party/zlib/CMakeLists.txt" FILE_CONTENTS)
 #string(REPLACE "cmake_minimum_required(VERSION 2.4.4)" "cmake_minimum_required(VERSION 3.12)" FILE_CONTENTS "${FILE_CONTENTS}")
 #file(WRITE "${grpc_SOURCE_DIR}/third_party/zlib/CMakeLists.txt" "${FILE_CONTENTS}")
-add_subdirectory("${grpc_SOURCE_DIR}" "${grpc_BINARY_DIR}")
+#add_subdirectory("${grpc_SOURCE_DIR}" "${grpc_BINARY_DIR}")
 
 #target_compile_options(crypto PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-w>")
 

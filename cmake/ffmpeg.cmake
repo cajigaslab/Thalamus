@@ -3,7 +3,7 @@ FetchContent_Declare(
   GIT_REPOSITORY https://github.com/FFmpeg/FFmpeg.git
   GIT_TAG        n6.1
 )
-FetchContent_Populate(ffmpeg)
+FetchContent_MakeAvailable(ffmpeg)
 file(MAKE_DIRECTORY "${ffmpeg_BINARY_DIR}/Debug/Modules")
 file(MAKE_DIRECTORY "${ffmpeg_BINARY_DIR}/Release/Modules")
 

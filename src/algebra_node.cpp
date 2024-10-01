@@ -1,6 +1,6 @@
-#include <algebra_node.h>
+#include <algebra_node.hpp>
 #include <vector>
-#include <calculator.h>
+#include <calculator.hpp>
 #include <boost/spirit/include/qi.hpp>
 #include <modalities_util.h>
 
@@ -34,7 +34,7 @@ namespace thalamus {
     std::vector<std::weak_ptr<AnalogNode>> sources;
     calculator::parser<std::string::const_iterator> parser;        // Our grammar
   public:
-    Impl(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph, AlgebraNode* outer)
+    Impl(ObservableDictPtr state, boost::asio::io_context&, NodeGraph* graph, AlgebraNode* outer)
       : state(state)
       , outer(outer)
       , graph(graph) {
@@ -64,11 +64,11 @@ namespace thalamus {
           if(!source) {
             return;
           }
-          source_connection = locked->ready.connect([&] (auto n) {
+          source_connection = locked->ready.connect([&] (auto) {
             if(!source->has_analog_data()) {
               return;
             }
-            if(data.size() < source->num_channels()) {
+            if(data.size() < static_cast<size_t>(source->num_channels())) {
               data.resize(source->num_channels());
             }
             for(auto i = 0;i < source->num_channels();++i) {
@@ -78,7 +78,7 @@ namespace thalamus {
               if(!program) {
                 continue;
               }
-              for(auto j = 0;j < transformed.size();++j) {
+              for(auto j = 0ull;j < transformed.size();++j) {
                 eval.symbols["X"] = transformed.at(j);
                 eval.symbols["x"] = transformed.at(j);
                 auto result = eval(*program);
@@ -138,8 +138,8 @@ namespace thalamus {
     return impl->source->sample_interval(channel);
   }
 
-  void AlgebraNode::inject(const thalamus::vector<std::span<double const>>& spans, const thalamus::vector<std::chrono::nanoseconds>& sample_intervals, const thalamus::vector<std::string_view>&) {
-    THALAMUS_ASSERT(false);
+  void AlgebraNode::inject(const thalamus::vector<std::span<double const>>&, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&) {
+    THALAMUS_ASSERT(false, "Unimplemented");
   }
    
   bool AlgebraNode::has_analog_data() const {

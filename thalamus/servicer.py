@@ -159,6 +159,8 @@ class ThalamusServicer(thalamus_pb2_grpc.ThalamusServicer):
                 match.context.value[match.path.fields[0]] = value
             
           await queue.put(thalamus_pb2.ObservableTransaction(acknowledged = transaction.id))
+      except asyncio.CancelledError:
+        pass
       finally:
         await queue.put(None)
 

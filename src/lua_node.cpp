@@ -1,6 +1,6 @@
-#include <lua_node.h>
+#include <lua_node.hpp>
 #include <vector>
-#include <calculator.h>
+#include <calculator.hpp>
 #include <boost/spirit/include/qi.hpp>
 #include <modalities_util.h>
 
@@ -332,7 +332,7 @@ namespace thalamus {
   }
 
   std::span<const std::string> LuaNode::get_recommended_channels() const {
-    THALAMUS_ASSERT(false);
+    THALAMUS_ASSERT(false, "Unimplemented");
   }
 
   std::chrono::nanoseconds LuaNode::sample_interval(int channel) const {
@@ -340,7 +340,7 @@ namespace thalamus {
   }
 
   void LuaNode::inject(const thalamus::vector<std::span<double const>>&, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&) {
-    THALAMUS_ASSERT(false);
+    THALAMUS_ASSERT(false, "Unimplemented");
   }
    
   bool LuaNode::has_analog_data() const {

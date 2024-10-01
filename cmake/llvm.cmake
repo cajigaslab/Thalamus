@@ -10,9 +10,10 @@ FetchContent_Declare(
   llvm
   GIT_REPOSITORY https://github.com/llvm/llvm-project
   GIT_TAG        llvmorg-14.0.3
+  SOURCE_SUBDIR  thalamus-nonexistant
 )  
 message("Populate libc++")
-FetchContent_Populate(llvm)
+FetchContent_MakeAvailable(llvm)
 message("Populated libc++")
 if(NOT EXISTS "${llvm_BINARY_DIR}/CMakeCache.txt")
   message("BUILD libc++")

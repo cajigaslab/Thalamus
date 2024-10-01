@@ -179,6 +179,19 @@ namespace thalamus {
     poll_function(boost::system::error_code());
 
     io_context.run();
+    THALAMUS_LOG(info) << "Shutting down";
+
+    auto shutdown_success = false;
+    std::condition_variable shutdown_condition;
+    std::mutex shutdown_mutex;
+    std::thread termination_thread([&] {
+      std::unique_lock<std::mutex> lock(shutdown_mutex);
+      shutdown_condition.wait_for(lock, 5s, [&] { return shutdown_success; });
+      if(!shutdown_success) {
+        THALAMUS_LOG(error) << "Clean shutdown taking too long, terminating" << std::endl;
+        std::terminate();
+      }
+    });
 
     service.stop();
     server->Shutdown();
@@ -188,6 +201,14 @@ namespace thalamus {
       tracing::Stop();
       tracing::Wait();
     }
+
+    {
+      std::lock_guard<std::mutex> lock(shutdown_mutex);
+      shutdown_success = true;
+    }
+    shutdown_condition.notify_all();
+    termination_thread.join();
+    THALAMUS_LOG(info) << "Thalamus Ending";
 
     return 0;
   }
