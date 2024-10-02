@@ -1,7 +1,7 @@
 """
 Entrypoing
 """
-
+import os
 import sys
 import typing
 import asyncio
@@ -73,6 +73,10 @@ async def async_main() -> None:
   """
   Entrypoint
   """
+  
+  if 'QT_QPA_PLATFORM_PLUGIN_PATH' in os.environ:
+    del os.environ['QT_QPA_PLATFORM_PLUGIN_PATH']
+
   done_future = asyncio.get_event_loop().create_future()
 
   asyncio.get_event_loop().set_exception_handler(exception_handler)
