@@ -1,7 +1,7 @@
 """
 Entrypoing
 """
-
+import os
 import sys
 import typing
 import asyncio
@@ -58,12 +58,17 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument('-c', '--config', help='Config file location')
   parser.add_argument('-t', '--trace', action='store_true', help='Enable tracing')
   parser.add_argument('-p', '--port', type=int, default=50050, help='GRPC port')
+  parser.add_argument('-u', '--ui-port', type=int, default=50051, help='UI GRPC port')
   return parser.parse_args(self_args[1:])
 
 async def async_main() -> None:
   """
   Entrypoint
   """
+  
+  if 'QT_QPA_PLATFORM_PLUGIN_PATH' in os.environ:
+    del os.environ['QT_QPA_PLATFORM_PLUGIN_PATH']
+
   done_future = asyncio.get_event_loop().create_future()
 
   asyncio.get_event_loop().set_exception_handler(exception_handler)
@@ -87,7 +92,7 @@ async def async_main() -> None:
   server = grpc.aio.server()
   servicer = ThalamusServicer(config)
   thalamus_pb2_grpc.add_ThalamusServicer_to_server(servicer, server)
-  listen_addr = f'[::]:50051'
+  listen_addr = f'[::]:{arguments.ui_port}'
 
   server.add_insecure_port(listen_addr)
   logging.info("Starting GRPC server on %s", listen_addr)
@@ -96,7 +101,7 @@ async def async_main() -> None:
   bmbi_native_filename = resource_filename('thalamus', 'native' + ('.exe' if sys.platform == 'win32' else ''))
   bmbi_native_proc = None
   bmbi_native_proc = await asyncio.create_subprocess_exec(
-      bmbi_native_filename, 'thalamus', '--port', str(arguments.port), '--state-url', 'localhost:50051', *(['--trace'] if arguments.trace else []))
+      bmbi_native_filename, 'thalamus', '--port', str(arguments.port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else []))
 
   channel = grpc.aio.insecure_channel(f'localhost:{arguments.port}')
   await channel.channel_ready()
