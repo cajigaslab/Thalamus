@@ -471,7 +471,7 @@ class ChannelComboBox(QComboBox):
     except asyncio.CancelledError:
       pass
     except grpc.aio.AioRpcError as e:
-      if e.status != grpc.StatusCode.CANCELLED:
+      if e.code() != grpc.StatusCode.CANCELLED:
         raise
 
 class AdvancedDialog(QDialog):
