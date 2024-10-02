@@ -2,7 +2,7 @@ FetchContent_Declare(
   lua
   URL https://lua.org/ftp/lua-5.4.6.tar.gz
   URL_HASH SHA256=7d5ea1b9cb6aa0b59ca3dde1c6adcb57ef83a1ba8e5432c0ecd06bf439b3ad88)
-FetchContent_Populate(lua)
+FetchContent_MakeAvailable(lua)
 
 add_library(lua
   "${lua_SOURCE_DIR}/src/lapi.c"

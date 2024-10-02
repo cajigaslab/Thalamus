@@ -102,16 +102,26 @@ async def async_main() -> None:
   for node in config['nodes']:
     if 'Running' in node:
       node['Running'] = False
+
+  server = grpc.aio.server()
+  servicer = ThalamusServicer(config)
+  task_controller_servicer = TaskControllerServicer()
+  thalamus_pb2_grpc.add_ThalamusServicer_to_server(servicer, server)
+  task_controller_pb2_grpc.add_TaskControllerServicer_to_server(task_controller_servicer, server)
+  listen_addr = f'[::]:50051'
+
+  server.add_insecure_port(listen_addr)
+  logging.info("Starting GRPC server on %s", listen_addr)
+  await server.start()
   
   bmbi_native_filename = resource_filename('thalamus', 'native' + ('.exe' if sys.platform == 'win32' else ''))
   bmbi_native_proc = None
   bmbi_native_proc = await asyncio.create_subprocess_exec(
-        bmbi_native_filename, 'thalamus', '--slave', *(['--trace'] if arguments.trace else []))
+      bmbi_native_filename, 'thalamus', '--port', str(arguments.port), '--state-url', 'localhost:50051', *(['--trace'] if arguments.trace else []))
 
   channel = grpc.aio.insecure_channel('localhost:50050')
   await channel.channel_ready()
   stub = thalamus_pb2_grpc.ThalamusStub(channel)
-  observable_bridge = ObservableBridge(stub, config)
 
   user_config_path = pathlib.Path.home().joinpath('.task_controller', 'config.yaml')
   if user_config_path.exists():
@@ -123,35 +133,10 @@ async def async_main() -> None:
 
   screen_geometry = qt_screen_geometry()
 
-  server = grpc.aio.server()
-  servicer = TaskControllerServicer()
-  task_controller_pb2_grpc.add_TaskControllerServicer_to_server(servicer, server)
-  listen_addr = f'[::]:50051'
-
-  server.add_insecure_port(listen_addr)
-  logging.info("Starting GRPC server on %s", listen_addr)
-  await server.start()
-
   if arguments.remote_executor:
     window = None
   else:
-    if arguments.ophanim_url:
-      ophanim_channel = grpc.insecure_channel(arguments.ophanim_url)
-      print('Waiting for ophanim')
-      grpc.channel_ready_future(ophanim_channel).result()
-      ophanim_stub = ophanim_pb2_grpc.OphanimStub(ophanim_channel)
-    else:
-      ophanim_stub = None
-
-    if arguments.recorder_url:
-      recorder_channel = grpc.insecure_channel(arguments.recorder_url)
-      print('Waiting for recorder')
-      grpc.channel_ready_future(recorder_channel).result()
-      recorder_stub = recorder2_pb2_grpc.RecorderStub(recorder_channel)
-    else:
-      recorder_stub = None
-
-    window = task_window.Window(config, done_future, recorder_stub, ophanim_stub, stub, arguments.port)
+    window = task_window.Window(config, done_future, None, None, stub, arguments.port)
     #node.create_timer(1/60, QApplication.processEvents)
 
     window.resize(1024, 768)

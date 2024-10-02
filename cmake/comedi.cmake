@@ -4,7 +4,7 @@ FetchContent_Declare(
   GIT_TAG        r0_12_0
 )
 
-FetchContent_Populate(comedi)
+FetchContent_MakeAvailable(comedi)
 file(MAKE_DIRECTORY ${comedi_BINARY_DIR}/Debug)
 file(MAKE_DIRECTORY ${comedi_BINARY_DIR}/Release)
 

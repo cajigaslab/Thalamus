@@ -11,7 +11,7 @@ FetchContent_Declare(
   GIT_REPOSITORY https://gitlab.gnome.org/GNOME/glib.git
   GIT_TAG        2.78.6
 )
-FetchContent_Populate(glib)
+FetchContent_MakeAvailable(glib)
 file(MAKE_DIRECTORY "${glib_BINARY_DIR}/Debug/install")
 file(MAKE_DIRECTORY "${glib_BINARY_DIR}/Release/install")
 

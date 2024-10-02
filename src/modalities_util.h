@@ -19,6 +19,9 @@ namespace thalamus {
 
   template <typename T>
   T node_cast(Node* node) {
+    if(node == nullptr) {
+      return nullptr;
+    }
     auto modalities = node->modalities();
     if constexpr (std::is_same<T, AnalogNode*>::value) {
       return (modalities & THALAMUS_MODALITY_ANALOG) ? dynamic_cast<T>(node) : nullptr;
