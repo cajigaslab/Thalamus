@@ -147,7 +147,7 @@ FetchContent_Declare(
   webrtc_content
   GIT_REPOSITORY https://webrtc.googlesource.com/src
   GIT_TAG 7b80d4480e85cec2ca6010a4912333bf3aa30a50)
-FetchContent_Populate(webrtc_content)
+FetchContent_MakeAvailable(webrtc_content)
 add_library(webrtc INTERFACE)
 target_link_libraries(webrtc INTERFACE absl::strings absl::str_format)
 target_include_directories(webrtc INTERFACE "${webrtc_content_SOURCE_DIR}")
@@ -243,15 +243,15 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thread_pool.cpp"
                      "${CMAKE_SOURCE_DIR}/src/nidaq_node.h"
                      "${CMAKE_SOURCE_DIR}/src/gentl.h"
-                     "${CMAKE_SOURCE_DIR}/src/genicam_node.h"
+                     "${CMAKE_SOURCE_DIR}/src/genicam_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/genicam_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/channel_picker_node.h"
                      "${CMAKE_SOURCE_DIR}/src/channel_picker_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/algebra_node.h"
+                     "${CMAKE_SOURCE_DIR}/src/algebra_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/algebra_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/normalize_node.h"
                      "${CMAKE_SOURCE_DIR}/src/normalize_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/lua_node.h"
+                     "${CMAKE_SOURCE_DIR}/src/lua_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/lua_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/intan_node.h"
                      "${CMAKE_SOURCE_DIR}/src/intan_node.cpp"
