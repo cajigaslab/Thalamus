@@ -156,8 +156,6 @@ def main():
         reboot_required = True
 
   elif sys.platform == 'darwin':
-    new_path = os.environ['PATH']
-
     if not shutil.which('brew'):
       subprocess.check_call(['curl', '-L', '--output', 'brew_install.sh', 'https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh'])
       subprocess.check_call(['bash', 'brew_install.sh'])
@@ -168,7 +166,6 @@ def main():
     #depot_tools
     if not shutil.which('gclient'):
       destination = home_path / 'depot_tools'
-      new_path.append(destination)
       subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
       with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
         bashrc.write(f'\nexport PATH={home_str}/depot_tools:$PATH\n')
@@ -258,7 +255,6 @@ def main():
     #depot_tools
     if not shutil.which('gclient'):
       destination = home_path / 'depot_tools'
-      new_path.append(destination)
       subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
       with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
         bashrc.write(f'\nexport PATH={home_str}/depot_tools:$PATH\n')
