@@ -25,7 +25,7 @@ class BoardsModel(QAbstractItemModel):
       self.beginInsertRows(QModelIndex(), key, key)
       self.endInsertRows()
       board.add_observer(lambda *args: self.on_board_change(board, *args), functools.partial(isdeleted, self))
-      for k, v in enumerate(board):
+      for k, v in board.items():
         self.on_board_change(board, ObservableCollection.Action.SET, k, v)
     else:
       self.beginRemoveRows(QModelIndex(), key, key)
@@ -34,23 +34,26 @@ class BoardsModel(QAbstractItemModel):
   def fill_ids(self, board):
     board_row = self.get_row(board)
     parent = self.index(board_row, 0, QModelIndex())
+    print('fill')
 
     new_size = board['Rows']*board['Columns']
     ids = board['ids']
     next_id = max(ids)+1 if ids else 0
     if new_size < len(ids):
-      self.beginRemoveRows(parent, new_size, len(ids)-1)
+      self.beginRemoveRows(parent, new_size+2, len(ids)-1+2)
       for i in range(len(ids)-1, new_size-1, -1):
         del ids[i]
       self.endRemoveRows()
     elif new_size > len(ids):
-      self.beginInsertRows(parent, len(ids), new_size-1)
+      self.beginInsertRows(parent, len(ids)+2, new_size-1+2)
       for i in range(len(ids), new_size):
         ids.append(next_id+i)
       self.endInsertRows()
+    print('filled')
 
   def on_board_change(self, board, action, key, value):
     i = self.get_row(board)
+    print('on_board_change', i, action, key, value)
     if key == 'Rows':
       index = self.index(i, 0, QModelIndex())
       self.dataChanged.emit(index, index)
@@ -96,10 +99,12 @@ class BoardsModel(QAbstractItemModel):
         self.on_ids_change(board, ObservableCollection.Action.SET, k, v)
 
   def on_ids_change(self, board, action, key, value):
+    print('on_ids_change', action, key, value)
     if action == ObservableCollection.Action.SET:
       i = self.get_row(board)
       parent = self.index(i, 0, QModelIndex())
       index = self.index(key+2, 1, parent)
+      print('on_ids_change', self.rowCount(parent), key+2, index.row(), index.column())
       self.dataChanged.emit(index, index)
 
   def data(self, index: QModelIndex, role: int) -> typing.Any:
@@ -153,6 +158,7 @@ class BoardsModel(QAbstractItemModel):
         return 'IDs:'
       elif index.column() == 1 and index.row() >= 2:
         ids = board['ids']
+        print('data', ids, index.row())
         return ids[index.row()-2]
 
   def setData(self, index: QModelIndex, value: typing.Any, role: int = Qt.ItemDataRole.EditRole) -> bool:
@@ -237,7 +243,7 @@ class BoardsModel(QAbstractItemModel):
     else:
       board = self.config[parent.row()]
       ids = board['ids']
-      result = self.createIndex(row, column, board) if row < len(ids) else QModelIndex()
+      result = self.createIndex(row, column, board) if row < len(ids)+2 else QModelIndex()
       return result
   
   def parent(self, index: QModelIndex) -> QModelIndex:
@@ -256,7 +262,8 @@ class BoardsModel(QAbstractItemModel):
       if board is None:
         board = self.config[parent.row()]
         ids = board['ids']
-        return len(ids)
+        print('rowCount', ids, len(ids) + 2)
+        return len(ids) + 2
       return 0
 
   def columnCount(self, _: QModelIndex) -> int:

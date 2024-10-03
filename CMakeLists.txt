@@ -262,6 +262,8 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/aruco_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/spikeglx_node.h"
                      "${CMAKE_SOURCE_DIR}/src/spikeglx_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/hexascope_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/hexascope_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/file.h"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/file.cpp"
                      "${CMAKE_SOURCE_DIR}/proto/thalamus.proto")

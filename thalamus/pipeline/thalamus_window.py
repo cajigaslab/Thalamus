@@ -34,6 +34,7 @@ from .wave_widget import WaveWidget
 from .intan_widget import IntanWidget
 from .spikeglx_widget import SpikeGlxWidget
 from .aruco_widget import ArucoWidget
+from .hexascope_widget import HexascopeWidget
 #from .analog_widget import AnalogWidget
 from ..util import NodeSelector
 from .. import thalamus_pb2
@@ -413,6 +414,7 @@ FACTORIES = {
       "DICT_APRILTAG_36h11",
       "DICT_ARUCO_MIP_36h12"])
   ]),
+  'HEXASCOPE': Factory(HexascopeWidget, []),
 }
 
 FACTORY_NAMES = {}
@@ -1471,16 +1473,16 @@ class ItemModel(QAbstractItemModel):
           async def create_widget():
             selector = thalamus_pb2.NodeSelector(name=node['name'])
             modalities = await self.stub.get_modalities(selector)
-            if thalamus_pb2.Modalities.MocapModality in modalities.values:
+            if thalamus_pb2.Modalities.ImageModality in modalities.values:
+              request = thalamus_pb2.NodeSelector(
+                name = node["name"]
+              )
+              self.plots[id(node)] = ImageWidget(node, self.stub.image(thalamus_pb2.ImageRequest(node=request, framerate=5)), self.stub)
+            elif thalamus_pb2.Modalities.MocapModality in modalities.values:
               request = thalamus_pb2.NodeSelector(
                 name = node["name"]
               )
               self.plots[id(node)] = XsensWidget(node, self.stub.xsens(request))
-            elif thalamus_pb2.Modalities.ImageModality in modalities.values:
-              request = thalamus_pb2.NodeSelector(
-                name = node["name"]
-              )
-              self.plots[id(node)] = ImageWidget(node, self.stub.image(thalamus_pb2.ImageRequest(node=request, framerate=30)), self.stub)
             elif thalamus_pb2.Modalities.AnalogModality in modalities.values:
               bin_ns = int(10e9/1920)
               request = thalamus_pb2.GraphRequest(
