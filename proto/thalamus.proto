@@ -8,6 +8,9 @@ service Thalamus {
   rpc events(stream Event) returns (util_grpc.Empty) {}
   rpc log(stream Text) returns (util_grpc.Empty) {}
   rpc observable_bridge(stream ObservableChange) returns (stream ObservableChange) {}
+  rpc observable_bridge_v2(stream ObservableTransaction) returns (stream ObservableTransaction) {}
+  rpc observable_bridge_read(ObservableReadRequest) returns (stream ObservableTransaction) {}
+  rpc observable_bridge_write(ObservableTransaction) returns (util_grpc.Empty) {}
   rpc graph(GraphRequest) returns (stream GraphResponse) {}
   rpc analog(AnalogRequest) returns (stream AnalogResponse) {}
   rpc spectrogram(SpectrogramRequest) returns (stream SpectrogramResponse) {}
@@ -21,10 +24,15 @@ service Thalamus {
   rpc remote_node(stream RemoteNodeMessage) returns (stream RemoteNodeMessage) {}
   rpc notification (util_grpc.Empty) returns (stream Notification) {}
   rpc node_request (NodeRequest) returns (NodeResponse) {}
+  rpc node_request_stream (stream NodeRequest) returns (stream NodeResponse) {}
   rpc inject_analog(stream InjectAnalogRequest) returns (util_grpc.Empty) {}
   rpc get_modalities(NodeSelector) returns (ModalitiesMessage) {}
   rpc ping(stream Ping) returns (stream Pong) {}
   rpc inject_text(stream InjectTextRequest) returns (stream Pong) {}
+}
+
+message ObservableReadRequest {
+  string peer_name = 1;
 }
 
 message ChannelId {
@@ -57,9 +65,16 @@ message NodeSelector {
 message NodeRequest {
   string node = 1;
   string json = 2;
+  uint64 id = 3;
 }
 message NodeResponse {
+  enum Status {
+    OK = 0;
+    NOT_FOUND = 1;
+  }
   string json = 1;
+  uint64 id = 2;
+  Status status = 3;
 }
 
 message Text {
@@ -91,6 +106,8 @@ message Image {
     YUYV422 = 2;
     YUV420P = 3;
     YUVJ420P = 4;
+    Gray16 = 5;
+    RGB16 = 6;
   }
   repeated bytes data = 1;
   uint32 width = 2;
@@ -98,6 +115,7 @@ message Image {
   Format format = 4;
   uint64 frame_interval = 5;
   bool last = 6;
+  bool bigendian = 7;
 }
 
 message Ping {
@@ -135,6 +153,7 @@ message XsensSegment {
     float q3 = 8;
     uint32 frame = 9;
     uint32 time = 10;
+    uint32 actor = 11;
 }
 
 message XsensResponse {
@@ -232,6 +251,14 @@ message ObservableChange {
   Action action = 3;
   uint64 id = 4;
   uint64 acknowledged = 5;
+}
+
+message ObservableTransaction {
+  repeated ObservableChange changes = 1;
+  uint64 id = 2;
+  uint64 acknowledged = 3;
+  string redirection = 4;
+  string peer_name = 5;
 }
 
 message Notification {

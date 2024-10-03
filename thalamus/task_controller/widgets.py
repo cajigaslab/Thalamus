@@ -73,6 +73,7 @@ class Form(QWidget):
     field: str
     default: float
     suffix: str = ''
+    precision: int = 2
 
   class String(typing.NamedTuple):
     '''
@@ -210,6 +211,7 @@ class Form(QWidget):
     self.grid_layout.addWidget(QLabel(config.label), self.row, 0)
 
     min_spin_box = QDoubleSpinBox()
+    min_spin_box.setDecimals(config.precision)
     min_spin_box.setObjectName(f'{config.field}')
     min_spin_box.setKeyboardTracking(False)
     min_spin_box.setRange(0, 1000000)

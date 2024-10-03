@@ -22,9 +22,9 @@ if HAS_QT6:
   from PyQt6.QtMultimedia import QSoundEffect, QMediaPlayer
   from PyQt6.QtOpenGL import (QOpenGLFramebufferObjectFormat, QOpenGLFramebufferObject, QOpenGLBuffer, QOpenGLShader,
                               QOpenGLShaderProgram)
-  from PyQt6.QtCore import (QPoint, QRect, QPointF, Qt, QSize, QDir, QModelIndex, QAbstractItemModel, QVariant,
-                            QAbstractListModel, QAbstractTableModel, QLineF, QRectF, QItemSelection, QUrl, QTimer,
-                            PYQT_VERSION_STR)
+  from PyQt6.QtCore import (QPoint, QRect, QPointF, Qt, QSize, QSizeF, QDir, QModelIndex, QAbstractItemModel, QVariant,
+                            QBuffer, QAbstractListModel, QAbstractTableModel, QLineF, QRectF, QItemSelection, QUrl,
+                            QTimer, PYQT_VERSION_STR)
 
   def qt_to_polygonf(polygon):
     return polygon.toPolygonF()
@@ -48,6 +48,9 @@ if HAS_QT6:
       super().__init__()
       self.setSource(QUrl.fromLocalFile(filename))
 
+  def qt_screen_geometry_mm() -> QSizeF:
+    return QApplication.screens()[0].physicalSize()
+
   def qt_screen_geometry() -> QRect:
     return QApplication.screens()[0].geometry()
 
@@ -66,8 +69,8 @@ else:
                                QListView, QMenuBar, QItemDelegate, QSplitter, QTreeWidget, QTreeWidgetItem,
                                QListWidget, QTableWidget, QTableWidgetItem, QWizard, QWizardPage, QProgressBar,
                                QStyleOptionViewItem, QScrollArea, QColorDialog)
-  from PyQt5.QtCore import (QPoint, QRect, QPointF, Qt, QSize, QDir, QItemSelectionModel, QModelIndex, QTimer,
-                            QAbstractListModel, QAbstractItemModel, QAbstractTableModel, QLineF, QRectF,
+  from PyQt5.QtCore import (QPoint, QRect, QPointF, Qt, QSize, QSizeF, QDir, QItemSelectionModel, QModelIndex, QTimer,
+                            QAbstractListModel, QAbstractItemModel, QAbstractTableModel, QLineF, QRectF, QBuffer,
                             QItemSelection, QVariant, QUrl, PYQT_VERSION_STR)
   from PyQt5.QtMultimedia import QSound, QMediaPlayer, QAbstractVideoSurface, QVideoFrame, QMediaContent
 
@@ -152,6 +155,9 @@ else:
     'Key_Y',
     'Key_Z']:
     qt_move_attr(Qt, Qt.Key, key)
+
+  def qt_screen_geometry_mm() -> QSizeF:
+    return QApplication.desktop().physicalSize()
 
   def qt_screen_geometry() -> QRect:
     return QApplication.desktop().screenGeometry()

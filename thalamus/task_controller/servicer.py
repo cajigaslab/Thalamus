@@ -97,7 +97,7 @@ class TaskControllerServicer(task_controller_pb2_grpc.TaskControllerServicer):
       self.connection_event.clear()
 
   async def wait_for_executor(self) -> None:
-    got, stopped = asyncio.create_task(self.connection_event.wait()), asyncio.create_task(self.stopped_event.wait())
+    got, stopped = asyncio.get_event_loop().create_task(self.connection_event.wait()), asyncio.get_event_loop().create_task(self.stopped_event.wait())
     done, _ = await asyncio.wait([got, stopped], return_when=asyncio.FIRST_COMPLETED)
     if self.stopped_event.is_set():
       raise asyncio.CancelledError()
@@ -106,7 +106,7 @@ class TaskControllerServicer(task_controller_pb2_grpc.TaskControllerServicer):
     await self.out_queue.put(config)
 
   async def get_result(self) -> task_controller_pb2.TaskResult:
-    got, stopped = asyncio.create_task(self.in_queue.get()), asyncio.create_task(self.stopped_event.wait())
+    got, stopped = asyncio.get_event_loop().create_task(self.in_queue.get()), asyncio.get_event_loop().create_task(self.stopped_event.wait())
     done, _ = await asyncio.wait([got, stopped], return_when=asyncio.FIRST_COMPLETED)
     if self.stopped_event.is_set():
       raise asyncio.CancelledError()

@@ -17,8 +17,13 @@ jobs:
     - name: Prepare
       run: python3 prepare.py
     - name: nasm
-      run: echo $PATH && echo $HOME && ls $HOME/nasm-2.15.05  && which nasm
+      run: echo $PATH && echo $HOME && which nasm
     - name: Version Bump
       run: python3 bump.py patch
     - name: Build
       run: python3 -m build -n -w -Crelease
+    - name: Archive Distribution
+      uses: actions/upload-artifact@v4
+      with:
+        name: dist
+        path: dist

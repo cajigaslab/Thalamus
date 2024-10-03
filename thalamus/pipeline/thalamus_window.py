@@ -41,6 +41,7 @@ from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
 from .data_widget import DataWidget
 import OpenGL.GL
+import grpc
 
 LOGGER = logging.getLogger(__name__)
 
@@ -1057,6 +1058,9 @@ class ImageWidget(QWidget):
         self.image = QImage(data, response.width, response.height, format)
         self.update()
         response = thalamus_pb2.Image()
+    except grpc.aio.AioRpcError as e:
+      if e.code() != grpc.StatusCode.CANCELLED:
+        raise
     except asyncio.CancelledError:
       pass
 

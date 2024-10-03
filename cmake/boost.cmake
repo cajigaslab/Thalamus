@@ -1,24 +1,18 @@
-if(NOT DEFINED BOOST_VERSION)
-  set(BOOST_VERSION 82)
-endif()
-
-if(NOT DEFINED BOOST_TAG)
-  set(BOOST_TAG boost-1.${BOOST_VERSION}.0)
-endif()
+set(BOOST_VERSION 86)
 
 if(DEFINED BOOST_BINARY_DIR)
   FetchContent_Declare(
     boost_content
-    GIT_REPOSITORY https://github.com/boostorg/boost.git
-    GIT_TAG ${BOOST_TAG}
+    URL https://archives.boost.io/release/1.86.0/source/boost_1_86_0.tar.gz
+    URL_HASH SHA256=2575e74ffc3ef1cd0babac2c1ee8bdb5782a0ee672b1912da40e5b4b591ca01f
     BINARY_DIR "${BOOST_BINARY_DIR}")
 else()
   FetchContent_Declare(
     boost_content
-    GIT_REPOSITORY https://github.com/boostorg/boost.git
-    GIT_TAG ${BOOST_TAG})
+    URL https://archives.boost.io/release/1.86.0/source/boost_1_86_0.tar.gz
+    URL_HASH SHA256=2575e74ffc3ef1cd0babac2c1ee8bdb5782a0ee672b1912da40e5b4b591ca01f)
 endif()
-FetchContent_Populate(boost_content)
+FetchContent_MakeAvailable(boost_content)
 
 if(WIN32)
   set(BOOTSTRAP call bootstrap.bat)
@@ -50,16 +44,14 @@ if(WIN32)
     set(DEBUG_ABI_TAG -d-x64)
     set(RELEASE_ABI_TAG -x64)
   endif()
-  if(NOT DEFINED BOOST_VC_TOOLSET)
-    if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-      execute_process(COMMAND cmd /c ${BOOTSTRAP} ${BOOST_TOOLSET} WORKING_DIRECTORY "${boost_content_SOURCE_DIR}" OUTPUT_VARIABLE BOOTSTRAP_STDOUT)
-      set(BOOST_VC_TOOLSET clang16 CACHE STRING "Visual Studio Toolset used to build Boost")
-    else()
-      execute_process(COMMAND cmd /c ${BOOTSTRAP} ${BOOST_TOOLSET} WORKING_DIRECTORY "${boost_content_SOURCE_DIR}" OUTPUT_VARIABLE BOOTSTRAP_STDOUT)
-      string(REGEX MATCH "### Using 'vc[0-9]+' toolset" VC_TOOLSET_LINE "${BOOTSTRAP_STDOUT}")
-      string(REGEX MATCH "vc[0-9]+" VC_TOOLSET_MATCH "${VC_TOOLSET_LINE}")
-      set(BOOST_VC_TOOLSET ${VC_TOOLSET_MATCH} CACHE STRING "Visual Studio Toolset used to build Boost")
-    endif()
+  if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+    execute_process(COMMAND cmd /c ${BOOTSTRAP} ${BOOST_TOOLSET} WORKING_DIRECTORY "${boost_content_SOURCE_DIR}" OUTPUT_VARIABLE BOOTSTRAP_STDOUT)
+    set(BOOST_VC_TOOLSET clang16 CACHE STRING "Visual Studio Toolset used to build Boost")
+  else()
+    execute_process(COMMAND cmd /c ${BOOTSTRAP} ${BOOST_TOOLSET} WORKING_DIRECTORY "${boost_content_SOURCE_DIR}" OUTPUT_VARIABLE BOOTSTRAP_STDOUT)
+    string(REGEX MATCH "### Using 'vc[0-9]+' toolset" VC_TOOLSET_LINE "${BOOTSTRAP_STDOUT}")
+    string(REGEX MATCH "vc[0-9]+" VC_TOOLSET_MATCH "${VC_TOOLSET_LINE}")
+    set(BOOST_VC_TOOLSET ${VC_TOOLSET_MATCH} CACHE STRING "Visual Studio Toolset used to build Boost")
   endif()
   message("USING TOOLSET ${BOOST_VC_TOOLSET}")
  

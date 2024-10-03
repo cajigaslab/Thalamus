@@ -13,12 +13,9 @@ def main():
     parts[1] = 0
     parts[2] = 0
   elif sys.argv[1] == 'minor':
-    parts[0] = 0
     parts[1] += 1
     parts[2] = 0
   elif sys.argv[1] == 'patch':
-    parts[0] = 0
-    parts[1] = 0
     parts[2] += 1
 
   new_version = '.'.join(str(i) for i in parts)

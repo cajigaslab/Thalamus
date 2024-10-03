@@ -8,7 +8,7 @@
 #include <string>
 #include <span>
 #include <chrono>
-#include <state.h>
+#include <state.hpp>
 #include <util.h>
 #include <grpcpp/channel.h>
 #include <boost/json.hpp>

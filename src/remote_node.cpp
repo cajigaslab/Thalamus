@@ -63,7 +63,11 @@ struct RemoteNode::Impl {
 
   ~Impl() {
     (*state)["Running"].assign(false, [] {});
-    running = false;
+    {
+      std::lock_guard<std::mutex> lock(mutex);
+      running = false;
+      condition.notify_all();
+    }
     if(grpc_thread.joinable()) {
       queue->Shutdown();
       grpc_thread.join();
@@ -79,6 +83,9 @@ struct RemoteNode::Impl {
     const size_t PING_CONNECT = 5;
     const size_t PING = 6;
     const size_t PONG = 7;
+    const size_t ANALOG_FINISH = 8;
+    const size_t XSENS_FINISH = 9;
+    const size_t PING_FINISH = 10;
 
     std::string probe_payload(probe_size, 0);
     for(auto i = 0ll;i < probe_size;++i) {
@@ -130,7 +137,10 @@ struct RemoteNode::Impl {
 
         {
           std::unique_lock<std::mutex> lock(mutex);
-          condition.wait(lock, [&] { return ready; });
+          condition.wait(lock, [&] { return ready || !running; });
+          if (!running) {
+            continue;
+          }
           ready = false;
           auto now = std::chrono::steady_clock::now();
           auto seconds = double(ping_interval.count())/decltype(ping_interval)::period::den;
@@ -150,7 +160,7 @@ struct RemoteNode::Impl {
             outer->ready(outer);
             has_analog_data = false;
             ready = true;
-            condition.notify_one();
+            condition.notify_all();
           });
         }
 
@@ -185,7 +195,10 @@ struct RemoteNode::Impl {
             ping_times.erase(i);
 
             std::unique_lock<std::mutex> lock(mutex);
-            condition.wait(lock, [&] { return ready; });
+            condition.wait(lock, [&] { return ready || !running; });
+            if (!running) {
+              continue;
+            }
             ready = false;
 
             boost::asio::post(io_context, [this, now, ping_time] {
@@ -202,7 +215,7 @@ struct RemoteNode::Impl {
               outer->ready(outer);
               has_analog_data = false;
               ready = true;
-              condition.notify_one();
+              condition.notify_all();
             });
             ping_stream->Read(&pong, reinterpret_cast<void*>(PONG));
             break;
@@ -211,7 +224,10 @@ struct RemoteNode::Impl {
           {
             bytes_transferred += analog_response.ByteSizeLong();
             std::unique_lock<std::mutex> lock(mutex);
-            condition.wait(lock, [&] { return ready; });
+            condition.wait(lock, [&] { return ready || !running; });
+            if (!running) {
+              continue;
+            }
             ready = false;
 
             auto channels_changed = false;
@@ -243,7 +259,7 @@ struct RemoteNode::Impl {
               outer->ready(outer);
               has_analog_data = false;
               ready = true;
-              condition.notify_one();
+              condition.notify_all();
             });
             analog_stream->Read(&analog_response, reinterpret_cast<void*>(ANALOG_READ));
             break;
@@ -252,7 +268,10 @@ struct RemoteNode::Impl {
           {
             bytes_transferred += xsens_response.ByteSizeLong();
             std::unique_lock<std::mutex> lock(mutex);
-            condition.wait(lock, [&] { return ready; });
+            condition.wait(lock, [&] { return ready || !running; });
+            if (!running) {
+              continue;
+            }
             ready = false;
 
             time = std::chrono::steady_clock::now().time_since_epoch();
@@ -278,13 +297,57 @@ struct RemoteNode::Impl {
               outer->ready(outer);
               has_xsens_data = false;
               ready = true;
-              condition.notify_one();
+              condition.notify_all();
             });
             xsens_stream->Read(&xsens_response, reinterpret_cast<void*>(XSENS_READ));
             break;
           }
       }
     }
+    analog_context.TryCancel();
+    xsens_context.TryCancel();
+    ping_context.TryCancel();
+    queue->Shutdown();
+    size_t tag;
+    auto ok = false;
+    while(queue->Next(reinterpret_cast<void**>(&tag), &ok)) {}
+    //auto ok_status = ::grpc::Status::OK;
+    //THALAMUS_LOG(info) << "Finishing streams";
+    //analog_stream->Finish(&ok_status, reinterpret_cast<void*>(ANALOG_FINISH));
+    //xsens_stream->Finish(&ok_status, reinterpret_cast<void*>(XSENS_FINISH));
+    //ping_stream->Finish(&ok_status, reinterpret_cast<void*>(PING_FINISH));
+    //auto analog_finished = false;
+    //auto xsens_finished = false;
+    //auto ping_finished = false;
+    //while(!analog_finished || !xsens_finished || !ping_finished) {
+    //  size_t tag;
+    //  auto ok = false;
+    //  auto status = queue->Next(reinterpret_cast<void**>(&tag), &ok);
+    //  if(status == grpc::CompletionQueue::SHUTDOWN) {
+    //    THALAMUS_LOG(info) << "Stream Shutdown";
+    //    break;
+    //  } else if (!ok) {
+    //    THALAMUS_LOG(info) << "Stream Closed";
+    //    break;
+    //  }
+    //  switch(tag) {
+    //    case ANALOG_FINISH:
+    //      analog_finished = true;
+    //      THALAMUS_LOG(info) << "Analog stream finished";
+    //      break;
+    //    case XSENS_FINISH:
+    //      xsens_finished = true;
+    //      THALAMUS_LOG(info) << "Xsens stream finished";
+    //      break;
+    //    case PING_FINISH:
+    //      ping_finished = true;
+    //      THALAMUS_LOG(info) << "Ping stream finished";
+    //      break;
+    //  }
+    //}
+    THALAMUS_LOG(info) << "Streams finished";
+
+
     boost::asio::post(io_context, [this] {
       ((*state)["Running"]).assign(false);
     });
@@ -302,7 +365,15 @@ struct RemoteNode::Impl {
     } else if (key_str == "Probe Size") {
       probe_size = std::get<long long>(v);
     } else if (key_str == "Running") {
-      running = std::get<bool>(v);
+      auto new_running = std::get<bool>(v);
+      if(new_running == running) {
+        return;
+      }
+      {
+        std::lock_guard<std::mutex> lock(mutex);
+        running = new_running;
+        condition.notify_all();
+      }
       if (!running) {
         if(grpc_thread.joinable()) {
           queue->Shutdown();
@@ -355,7 +426,7 @@ std::string RemoteNode::type_name() {
 std::span<MotionCaptureNode::Segment const> RemoteNode::segments() const {
   return std::span<MotionCaptureNode::Segment const>(impl->segments.begin(), impl->segments.end());
 }
-const std::string& RemoteNode::pose_name() const {
+const std::string_view RemoteNode::pose_name() const {
   return impl->pose_name;
 }
 void RemoteNode::inject(const std::span<Segment const>&) {

@@ -100,7 +100,7 @@ class SourcesModel(QAbstractItemModel):
       self.endInsertRows()
       value.add_observer(lambda *args: self.on_mapping_change(value, i_name, key, *args), functools.partial(isdeleted, self))
       for k, v in value.items():
-        self.on_mapping_change(value, i, key, ObservableCollection.Action.SET, k, v)
+        self.on_mapping_change(value, i_name, key, ObservableCollection.Action.SET, k, v)
     else:
       self.beginRemoveRows(parent, key, key)
       self.endRemoveRows()

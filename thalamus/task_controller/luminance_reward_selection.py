@@ -233,7 +233,7 @@ def toggle_brightness(brightness):
   return 0 if brightness == 255 else 255
 
 def next_state(context, new_state, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
-  asyncio.create_task(context.servicer.publish_state(task_controller_pb2.BehavState(state=new_state.name)))
+  asyncio.get_event_loop().create_task(context.servicer.publish_state(task_controller_pb2.BehavState(state=new_state.name)))
   return stimulator(context, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period) if new_state == stim_phase else nullcontext()
 
 @assert_behav_result_has(['selected_target_id'])

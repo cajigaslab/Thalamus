@@ -12,6 +12,7 @@ import datetime
 import asyncio
 import functools
 import subprocess
+import itertools
 
 from .. import native_exe
 
@@ -38,6 +39,14 @@ class ItemModel(QAbstractItemModel):
     self.config = config
     self.config.add_observer(self.on_rows_change, functools.partial(isdeleted, self))
     for k, v in enumerate(self.config):
+      if 'Image' not in v:
+        v['Image'] = ''
+      if 'Video' not in v:
+        v['Video'] = ''
+      if 'Hold' not in v:
+        v['Hold'] = ''
+      if 'Prompt' not in v:
+        v['Prompt'] = ''
       self.on_rows_change(ObservableCollection.Action.SET, k, v)
 
   def get_row(self, value):
@@ -66,48 +75,60 @@ class ItemModel(QAbstractItemModel):
     if not index.isValid():
       return None
 
-    if role != Qt.ItemDataRole.DisplayRole:
-      return None
-
     data = self.config[index.row()]
-    if index.column() == 0:
-      return data['Video']
-    elif index.column() == 1:
-      return data['Goal']
-    elif index.column() == 2:
-      return data['Duration']
+    if role == Qt.ItemDataRole.DisplayRole:
+      if index.column() == 0:
+        return data['Image']
+      elif index.column() == 1:
+        return data['Video']
+      elif index.column() == 3:
+        return data['Prompt']
+    elif role == Qt.ItemDataRole.EditRole:
+      if index.column() == 0:
+        return data['Image']
+      elif index.column() == 1:
+        return data['Video']
+      elif index.column() == 2:
+        return data['Hold']
+      elif index.column() == 3:
+        return data['Prompt']
+    elif role == Qt.ItemDataRole.CheckStateRole:
+      if index.column() == 2:
+        return Qt.CheckState.Checked if data['Hold'] else Qt.CheckState.Unchecked
 
   def setData(self, index: QModelIndex, value: typing.Any, role: int = Qt.ItemDataRole.EditRole) -> bool:
-    #print('setData', index, value, role)
-    if role != Qt.ItemDataRole.EditRole:
-      return super().setData(index, value, role)
-
+    print('setData', index, value, Qt.CheckState.Checked, role)
     data = self.config[index.row()]
     if index.column() == 0:
-      data['Video'] = value
+      data['Image'] = value
       return True
     elif index.column() == 1:
-      data['Goal'] = value
+      data['Video'] = value
       return True
     elif index.column() == 2:
-      try:
-        data['Duration'] = float(value)
-      except ValueError:
-        return False
+      data['Hold'] = value == Qt.CheckState.Checked.value
+      return True
+    elif index.column() == 3:
+      data['Prompt'] = value
       return True
     return False
 
   def flags(self, index: QModelIndex) -> Qt.ItemFlag:
-    return super().flags(index) | Qt.ItemFlag.ItemIsEditable
+    if index.column() == 2:
+      return super().flags(index) | Qt.ItemFlag.ItemIsEditable | Qt.ItemFlag.ItemIsUserCheckable
+    else:
+      return super().flags(index) | Qt.ItemFlag.ItemIsEditable
 
   def headerData(self, section: int, orientation: Qt.Orientation, role: int):
     if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole:
       if section == 0:
-        return "Video"
+        return "Image"
       elif section == 1:
-        return "Goal"
+        return "Video"
       elif section == 2:
-        return "Duration (s)"
+        return "Hold"
+      elif section == 3:
+        return "Prompt"
     return None
 
   def index(self, row: int, column: int, parent: QModelIndex) -> QModelIndex:
@@ -122,7 +143,7 @@ class ItemModel(QAbstractItemModel):
     return len(self.config) if not parent.isValid() else 0
 
   def columnCount(self, parent: QModelIndex) -> int:
-    return 3
+    return 4
 
 def create_widget(task_config: ObservableCollection) -> QWidget:
   """
@@ -148,7 +169,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   add_button = QPushButton('Add')
   remove_button = QPushButton('Remove')
 
-  add_button.clicked.connect(lambda: transitions.append({'Video': '', 'Goal': '', 'Duration': 1.0}))
+  add_button.clicked.connect(lambda: transitions.append({'Image': '', 'Video': '', 'Hold': False, 'Prompt': ''}))
 
   def on_remove():
     row_set = set(item.row() for item in qlist.selectedIndexes())
@@ -159,10 +180,9 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   remove_button.clicked.connect(on_remove)
 
   form = Form.build(task_config, ["Name:", "Value:"],
-    Form.Constant('Time Between Transisions (s)', 'inter_transition_interval', 1, 's'),
-    Form.File('Audio Queue', 'audio_file', '', 'Select sound file', ''),
-    Form.String('Feedback Node', 'feedback_node', ''),
-    Form.String('Feedback Channel', 'feedback_channel', '')
+    Form.Constant('Accumulator Increment', 'accumulator_increment', .015, '', 4),
+    Form.Constant('Go Threshold', 'go_threshold', .8, ''),
+    Form.Constant('Hold Threshold', 'hold_threshold', .3, ''),
   )
   layout.addWidget(form)
   layout.addWidget(error_label)
@@ -189,6 +209,41 @@ LAST_IMAGE = None
 current_pose = None
 xsens_task = None
 
+@functools.lru_cache(maxsize=None)
+def load_image(path: pathlib.Path):
+  return QImage(str(path))
+
+last_range = None
+images = []
+time_node = ''
+analog_task = None
+current_time = 0.0
+last_video_file = ''
+loaded_videos = {}
+feedback_node = ''
+feedback_channel = ''
+accumulator = 0
+accumulator_increment = .015
+video_frame = 0
+
+class State(enum.Enum):
+  PREP = enum.auto()
+  GO = enum.auto()
+  SUCCESS = enum.auto()
+  FAIL = enum.auto()
+
+async def analog_processor(stream):
+  global current_time, accumulator, video_frame
+  try:
+    async for message in stream:
+      for span in message.spans:
+        if span.name == 'prediction':
+          count = sum(1 for d in message.data[span.begin:span.end] if d > .5)
+          accumulator += count*accumulator_increment
+          video_frame += count
+  finally:
+    stream.cancel()
+
 async def load_video(path: pathlib.Path):
   images = []
   proc = await asyncio.create_subprocess_exec(native_exe, 'ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=s=x:p=0',
@@ -213,83 +268,33 @@ async def load_video(path: pathlib.Path):
 
   return images
 
-@functools.lru_cache(maxsize=None)
-def load_image(path: pathlib.Path):
-  return QImage(str(path))
-
-@functools.lru_cache(maxsize=None)
-def load_sound(path: pathlib.Path):
-  return QSound(str(path))
-
-last_range = None
-images = []
-time_node = ''
-analog_task = None
-current_time = 0.0
-last_video_file = ''
-loaded_videos = {}
-feedback_node = ''
-feedback_channel = ''
-
-async def analog_processor(stream):
-  global current_time
-  try:
-    async for message in stream:
-      if len(message.data) == 0:
-        continue
-      current_time = min(max(0, message.data[-1]), 1)
-  finally:
-    stream.cancel()
-
 @animate(60)
 async def run(context: TaskContextProtocol) -> TaskResult:
-  global channel, feedback_node, feedback_channel, stub, queue, analog_queue, log_call, LAST_IMAGE, current_pose, xsens_task, last_range, images, time_node, analog_task, last_video_file
+  global channel, feedback_node, feedback_channel, stub, queue, analog_queue, log_call, LAST_IMAGE, current_pose, xsens_task, last_range, images, time_node, analog_task, last_video_file, accumulator, video_frame, accumulator_increment
 
   if channel is None:
     channel = context.get_channel('localhost:50050')
     stub = thalamus_pb2_grpc.ThalamusStub(channel)
-    analog_queue = IterableQueue()
-    events_call = stub.inject_analog(analog_queue)
-    await analog_queue.put(thalamus_pb2.InjectAnalogRequest(node="gesture_signal"))
 
   task_config = context.task_config
+  accumulator_increment = task_config['accumulator_increment']
+  go_threshold = task_config['go_threshold']
+  hold_threshold = task_config['hold_threshold']
 
-  new_feedback_node, new_feedback_channel = task_config['feedback_node'], task_config['feedback_channel']
-  if (new_feedback_node, new_feedback_channel) != (feedback_node, feedback_channel):
-    feedback_node = new_feedback_node
-    feedback_channel = new_feedback_channel
-    if analog_task:
-      analog_task.cancel()
-    if not feedback_node or not feedback_channel:
-      analog_task = None
-    else:
-      request = thalamus_pb2.AnalogRequest(node=thalamus_pb2.NodeSelector(name=feedback_node),channel_names=[feedback_channel])
-      stream = stub.analog(request)
-      analog_task = create_task_with_exc_handling(analog_processor(stream))
+  if analog_task is None:
+    request = thalamus_pb2.AnalogRequest(node=thalamus_pb2.NodeSelector(name='Precision Motor Detection'))
+    stream = stub.analog(request)
+    analog_task = create_task_with_exc_handling(analog_processor(stream))
 
   transitions = task_config['Transitions']
-  inter_interval = datetime.timedelta(seconds=task_config['inter_transition_interval'])
-
-  audio_path = pathlib.Path(task_config['audio_file'])
-  sound = None
-  if audio_path.exists():
-    sound = load_sound(audio_path)
-
-  video_tasks = []
-  goals = []
-  task_config['error'] = ''
   seen_videos = set()
+  images = []
+  video_tasks = []
   for i, transition in enumerate(transitions):
-    video, goal = transition['Video'], transition['Goal']
+    video, image = transition['Video'], transition['Image']
 
-    if not goal:
-      task_config['error'] = f'goal image for tansition {i} is undefined'
-
-    goal_path = pathlib.Path(goal)
-    if not goal_path.exists():
-      task_config['error'] = f'goal image file for tansition {i} is undefined'
-
-    goals.append(load_image(goal))
+    image_path = pathlib.Path(image)
+    images.append(load_image(image_path))
 
     if not video:
       task_config['error'] = f'video for tansition {i} is undefined'
@@ -308,95 +313,93 @@ async def run(context: TaskContextProtocol) -> TaskResult:
 
   await asyncio.gather(*video_tasks)
 
-  if task_config['error']:
-    await context.sleep(datetime.timedelta(seconds=1))
-    return TaskResult(False)
-
   config_json = json.dumps(context.task_config.unwrap())
   await context.log(config_json)
 
-  def renderer(painter):
-    if not draw:
+  prompt = ''
+
+  def renderer(painter: QPainter):
+    font = painter.font()
+    font.setPointSize(150)
+    painter.setFont(font)
+    text_height = 200
+
+    if state == State.PREP:
+      painter.fillRect(0, 0, context.widget.width(), context.widget.height(), QColor(255, 255, 0))
+      if context.widget.height() <= text_height:
         return
+      if not start_image.isNull():
+        scale = min((context.widget.width())/start_image.width(), (context.widget.height() - text_height)/start_image.height())
+        scaled_width = int(start_image.width()*scale)
+        scaled_height = int(start_image.height()*scale)
+        painter.drawImage(QRect((context.widget.width() - scaled_width)//2, 0, scaled_width, scaled_height), start_image)
 
-    elapsed = time.perf_counter() - start_time
-    index = int(elapsed/duration*(len(frames)-1))
-    index = min(max(index, 0), len(frames)-1)
-    frame = frames[index]
+      painter.drawText(QRect(0, context.widget.height()-text_height, context.widget.width(), text_height), Qt.AlignmentFlag.AlignCenter, 'PREP')
+    elif state == State.GO:
+      color = QColor(255, 0, 0) if is_hold else QColor(0, 255, 0)
+      painter.fillRect(0, 0, context.widget.width(), context.widget.height(), color)
 
-    if analog_task is not None:
-      portion = 1/3
-      feedback_index = int(current_time*(len(frames)-1))
-      feedback_index = min(max(feedback_index, 0), len(frames)-1)
-      feedback_frame = frames[feedback_index]
+      if prompt:
+        text = prompt
+      else:
+        text = 'HOLD' if is_hold else 'GO'
+      end_image = video_frames[min(len(video_frames)-1, video_frame)]
 
-      scale = min((portion*context.widget.width())/frame.width(), (context.widget.height())/frame.height())
-      painter.drawImage(QRect(0, int((context.widget.height() - scale*frame.height())//2),
-                              int(scale*frame.width()), int(scale*frame.height())),
-                        feedback_frame)
+      scale = min((context.widget.width())/end_image.width(), (context.widget.height() - text_height)/end_image.height())
+      scaled_width = int(end_image.width()*scale)
+      scaled_height = int(end_image.height()*scale)
+      painter.drawImage(QRect((context.widget.width() - scaled_width)//2, 0, scaled_width, scaled_height), end_image)
+      painter.drawText(QRect(0, context.widget.height()-text_height, context.widget.width(), text_height), Qt.AlignmentFlag.AlignCenter, text)
+    elif state == State.SUCCESS:
+      painter.setPen(Qt.GlobalColor.white)
+      painter.drawText(QRect(0, 0, context.widget.width(), context.widget.height()), Qt.AlignmentFlag.AlignCenter, 'SUCCESS')
+    elif state == State.FAIL:
+      painter.setPen(Qt.GlobalColor.white)
+      painter.drawText(QRect(0, 0, context.widget.width(), context.widget.height()), Qt.AlignmentFlag.AlignCenter, 'MISS')
 
-      scale = min((portion*context.widget.width())/frame.width(), (context.widget.height())/frame.height())
-      painter.drawImage(QRect(int(portion*context.widget.width()), int((context.widget.height() - scale*frame.height())//2),
-                              int(scale*frame.width()), int(scale*frame.height())),
-                        frame)
-
-      scale = min((portion*context.widget.width())/goal.width(), (context.widget.height())/goal.height())
-      painter.drawImage(QRect(2*int(portion*context.widget.width()), int((context.widget.height() - scale*goal.height())//2),
-                              int(scale*goal.width()), int(scale*goal.height())),
-                        goal)
-    else:
-      portion = 1
-
-      scale = min(context.widget.width()/frame.width(), context.widget.height()/frame.height())
-      painter.drawImage(QRect(int((context.widget.width() - scale*frame.width())//2), int((context.widget.height() - scale*frame.height())//2),
-                              int(scale*frame.width()), int(scale*frame.height())),
-                        frame)
-
-      scale = min((context.widget.width()/4)/goal.width(), (context.widget.height()/4)/goal.height())
-      painter.drawImage(QRect(int(context.widget.width() - scale*goal.width()), 0,
-                              int(scale*goal.width()), int(scale*goal.height())),
-                        goal)
-
-    
-
-    if elapsed >= duration and future is not None:
-      future.set_result(None)
 
   context.widget.renderer = renderer
 
   space_pressed = False
   def on_key_release(e: QKeyEvent):
     nonlocal space_pressed
-    space_pressed = space_pressed or e.key() == Qt.Key.Key_Space
+    if e.key() == Qt.Key.Key_Space:
+      space_pressed = True
 
   context.widget.key_release_handler = on_key_release
 
   future = None
-  draw = False
   for i, transition in enumerate(transitions):
-    draw = False
-    space_pressed = False
-    await context.sleep(inter_interval)
-    print(sound, sound.source(), sound.status())
-    #if sound is not None:
-    sound.play()
-    await asyncio.gather(
-      analog_queue.put(thalamus_pb2.InjectAnalogRequest(signal=thalamus_pb2.AnalogResponse(
-        data=[5,0],
-        spans=[thalamus_pb2.Span(begin=0,end=2)],
-        sample_intervals=[100000000]))),
-      context.log(f'{i} start'))
+    start_filename, end_filename, is_hold = transition['Image'], transition['Video'], transition['Hold']
+    prompt = transition['Prompt']
 
-    
-    draw = True
-    start_time = time.perf_counter()
-    video, duration = transition['Video'], transition['Duration']
-    frames = loaded_videos[video]
-    goal = goals[i]
-    future = asyncio.get_event_loop().create_future()
-    await future
-    future = None
-    await context.log(f'{i} end')
+    await context.log(f'Entering {i} {end_filename}')
+
+    start_image = images[i]
+    video_frames = loaded_videos[end_filename]
+
+    state = State.PREP
+    space_pressed = False
+
+    await context.log('PREP')
     await context.until(lambda: space_pressed)
+
+    state = State.GO
+    video_frame = 0
+    accumulator = 0
+    threshold = hold_threshold if is_hold else go_threshold
+    duration = 3 if is_hold else 5
+
+    await context.log('HOLD' if is_hold else 'GO')
+    await context.any(context.sleep(datetime.timedelta(seconds=duration)), context.until(lambda: accumulator >= threshold))
+
+    if is_hold:
+      state = State.SUCCESS if accumulator < threshold else State.FAIL
+    else:
+      state = State.SUCCESS if accumulator >= threshold else State.FAIL
+
+    await context.log('SUCCESS' if state == State.SUCCESS else 'MISS')
+    await context.sleep(datetime.timedelta(seconds=1.5))
+    
 
   return TaskResult(True)

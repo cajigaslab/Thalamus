@@ -100,7 +100,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   if platform.system() == 'Windows':
     platform_tag = 'win_amd64'
   elif platform.system() == 'Darwin':
-    platform_tag = 'macosx_11_0_x86_64'
+    platform_tag = 'macosx_11_0_arm64' if 'arm' in platform.processor() else 'macosx_11_0_x86_64'
   elif platform.system() == 'Linux':
     ldd_output = subprocess.check_output(['ldd', '--version'], encoding='utf8')
     assert ldd_output is not None
@@ -162,7 +162,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   files = []
   with open(f'thalamus-{version}.dist-info/RECORD', 'w') as record_file:
     for path in pathlib.Path('thalamus').rglob('*'):
-      if not path.is_file() or path.suffix not in ('.py', '.vert', '.proto', '.comp', '.frag', '.exe', '.dll', '.so', '.h'):
+      if not path.is_file() or path.name != 'native' and path.suffix not in ('.py', '.vert', '.proto', '.comp', '.frag', '.exe', '.dll', '.so', '.dylib', '.h'):
         continue
       files.append(path)
       digest = hashlib.sha256()

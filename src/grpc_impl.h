@@ -6,7 +6,7 @@
 #include <boost/json.hpp>
 #include <boost/signals2.hpp>
 #include <future>
-#include <state.h>
+#include <state.hpp>
 #include <chrono>
 #include <thalamus.grpc.pb.h>
 #include <condition_variable>
@@ -22,14 +22,19 @@ namespace thalamus {
     boost::signals2::signal<void(::thalamus_grpc::Text&)> log_signal;
     //boost::signals2::signal<void(::thalamus_grpc::ObservableChange&)> change_signal;
 
-    Service(ObservableCollection::Value state, boost::asio::io_context& io_context, NodeGraph& node_graph);
+    Service(ObservableCollection::Value state, boost::asio::io_context& io_context, NodeGraph& node_graph, std::string observable_bridge_redirect);
     ~Service();
     
     ::grpc::Status get_type_name(::grpc::ServerContext* context, const ::thalamus_grpc::StringMessage* request, ::thalamus_grpc::StringMessage* response) override;
     ::grpc::Status node_request(::grpc::ServerContext* context, const ::thalamus_grpc::NodeRequest* request, ::thalamus_grpc::NodeResponse* response) override;
+    ::grpc::Status node_request_stream(::grpc::ServerContext* context, ::grpc::ServerReaderWriter< ::thalamus_grpc::NodeResponse, ::thalamus_grpc::NodeRequest>* stream) override;
     ::grpc::Status events(::grpc::ServerContext* context, ::grpc::ServerReader< ::thalamus_grpc::Event>* reader, ::util_grpc::Empty*) override;
     ::grpc::Status log(::grpc::ServerContext* context, ::grpc::ServerReader< ::thalamus_grpc::Text>* reader, ::util_grpc::Empty*) override;
     ::grpc::Status observable_bridge(::grpc::ServerContext* context, ::grpc::ServerReaderWriter< ::thalamus_grpc::ObservableChange, ::thalamus_grpc::ObservableChange>* stream) override;
+    ::grpc::Status observable_bridge_v2(::grpc::ServerContext* context, ::grpc::ServerReaderWriter< ::thalamus_grpc::ObservableTransaction, ::thalamus_grpc::ObservableTransaction>* stream) override;
+    ::grpc::Status observable_bridge_read(::grpc::ServerContext* context, const ::thalamus_grpc::ObservableReadRequest* request, ::grpc::ServerWriter<::thalamus_grpc::ObservableTransaction>* stream) override;
+    ::grpc::Status observable_bridge_write(::grpc::ServerContext* context, const ::thalamus_grpc::ObservableTransaction* request, ::util_grpc::Empty* response) override;
+
     ::grpc::Status graph(::grpc::ServerContext* context, const ::thalamus_grpc::GraphRequest* request, ::grpc::ServerWriter< ::thalamus_grpc::GraphResponse>* writer) override;
     ::grpc::Status get_recommended_channels(::grpc::ServerContext* context, const ::thalamus_grpc::NodeSelector* request, ::thalamus_grpc::StringListMessage* response) override;
     ::grpc::Status analog(::grpc::ServerContext* context, const ::thalamus_grpc::AnalogRequest* request, ::grpc::ServerWriter< ::thalamus_grpc::AnalogResponse>* writer) override;

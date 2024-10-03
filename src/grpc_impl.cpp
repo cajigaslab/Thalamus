@@ -5,7 +5,6 @@
 #include <boost/qvm/quat_access.hpp>
 #include <image_node.h>
 #include <text_node.h>
-#include <kfr/all.hpp>
 #include <modalities_util.h>
 
 namespace thalamus {
@@ -113,10 +112,10 @@ namespace thalamus {
   }
 
   struct Service::Impl {
-    boost::asio::io_context& io_context;
     ObservableCollection::Value state;
+    ObservableCollection* root;
+    boost::asio::io_context& io_context;
     std::atomic_ullong next_id;
-    std::atomic<std::thread::id> observable_bridge_thread_id;
     std::atomic<::grpc::ServerReaderWriter< ::thalamus_grpc::ObservableChange, ::thalamus_grpc::ObservableChange>*> observable_bridge_stream;
     std::atomic<::grpc::ServerReaderWriter< ::thalamus_grpc::EvalRequest, ::thalamus_grpc::EvalResponse>*> eval_stream;
     std::atomic<::grpc::ServerReaderWriter< ::thalamus_grpc::EvalRequest, ::thalamus_grpc::EvalResponse>*> graph_stream;
@@ -129,22 +128,76 @@ namespace thalamus {
     std::condition_variable condition;
     NodeGraph& node_graph;
     Service* outer;
-    Impl(ObservableCollection::Value state, boost::asio::io_context& io_context, NodeGraph& node_graph, Service* outer)
-      : io_context(io_context)
-      , state(state)
+    std::string observable_bridge_redirect;
+    std::vector<boost::signals2::scoped_connection> state_connections;
+    std::vector<::grpc::internal::WriterInterface<::thalamus_grpc::ObservableTransaction>*> observable_bridge_clients;
+    std::map<std::string, ::grpc::internal::WriterInterface<::thalamus_grpc::ObservableTransaction>*> peer_name_to_observable_bridge_client;
+
+    Impl(ObservableCollection::Value state, boost::asio::io_context& io_context, NodeGraph& node_graph, std::string observable_bridge_redirect, Service* outer)
+      : state(state)
+      , root(nullptr)
+      , io_context(io_context)
       , next_id(1)
       , observable_bridge_stream(nullptr)
       , notification_writer(nullptr)
       , node_graph(node_graph)
-      , outer(outer) {
+      , outer(outer)
+      , observable_bridge_redirect(observable_bridge_redirect) {
 
-      if (std::holds_alternative<ObservableListPtr>(state)) {
-        auto temp = std::get<ObservableListPtr>(state);
-        temp->set_remote_storage(std::bind(&Service::send_change, outer, _1, _2, _3, _4));
+      if(std::holds_alternative<ObservableListPtr>(state)) {
+        auto unwrapped = std::get<ObservableListPtr>(state);
+        root = unwrapped.get();
+        state_connections.push_back(unwrapped->changed.connect(std::bind(&Impl::on_change, this, root, _1, _2, _3)));
+        unwrapped->recap(std::bind(&Impl::on_change, this, unwrapped.get(), _1, _2, _3));
+      } else if(std::holds_alternative<ObservableDictPtr>(state)) {
+        auto unwrapped = std::get<ObservableDictPtr>(state);
+        root = unwrapped.get();
+        state_connections.push_back(unwrapped->changed.connect(std::bind(&Impl::on_change, this, root, _1, _2, _3)));
+        unwrapped->recap(std::bind(&Impl::on_change, this, unwrapped.get(), _1, _2, _3));
       }
-      else if (std::holds_alternative<ObservableDictPtr>(state)) {
-        auto temp = std::get<ObservableDictPtr>(state);
-        temp->set_remote_storage(std::bind(&Service::send_change, outer, _1, _2, _3, _4));
+    }
+
+    void on_change(ObservableCollection* self, ObservableCollection::Action a, const ObservableCollection::Key& k, ObservableCollection::Value& v) {
+      if(std::holds_alternative<ObservableListPtr>(v)) {
+        auto unwrapped = std::get<ObservableListPtr>(v);
+        state_connections.push_back(std::get<ObservableListPtr>(v)->changed.connect(std::bind(&Impl::on_change, this, unwrapped.get(), _1, _2, _3)));
+      } else if(std::holds_alternative<ObservableDictPtr>(v)) {
+        auto unwrapped = std::get<ObservableDictPtr>(v);
+        state_connections.push_back(std::get<ObservableDictPtr>(v)->changed.connect(std::bind(&Impl::on_change, this, unwrapped.get(), _1, _2, _3)));
+      }
+
+      std::lock_guard<std::mutex> lock(mutex);
+      if(observable_bridge_clients.empty()) {
+        return;
+      }
+
+      //Determin if this object is connected to root state.  If it isn't then the state change shouldn't be broadcast
+      auto root = self;
+      while(root->parent != nullptr) {
+        root = root->parent;
+      }
+      if(root != this->root) {
+        return;
+      }
+
+      std::string address = self->address();
+      if(std::holds_alternative<std::string>(k)) {
+        address += "['" + std::get<std::string>(k) + "']";
+      } else if(std::holds_alternative<long long>(k)) {
+        address = "[" + std::get<std::string>(k) + "]";;
+      }
+      thalamus_grpc::ObservableTransaction transaction;
+      auto change = transaction.add_changes();
+      if (a == ObservableCollection::Action::Set) {
+        change->set_action(thalamus_grpc::ObservableChange_Action_Set);
+      }
+      else {
+        change->set_action(thalamus_grpc::ObservableChange_Action_Delete);
+      }
+      change->set_address(address);
+      change->set_value(ObservableCollection::to_string(v));
+      for(auto stream : observable_bridge_clients) {
+        stream->Write(transaction);
       }
     }
 
@@ -191,7 +244,7 @@ namespace thalamus {
 
         AnalogNode* node = node_cast<AnalogNode*>(raw_node.get());
         std::vector<size_t> channels(request->channels().begin(), request->channels().end());
-        thalamus::vector<std::string> channel_names(request->channel_names().begin(), request->channel_names().begin());
+        thalamus::vector<std::string> channel_names(request->channel_names().begin(), request->channel_names().end());
         auto has_channels = !channels.empty() || !channel_names.empty();
 
         std::mutex connection_mutex;
@@ -277,7 +330,7 @@ namespace thalamus {
     }
   };
 
-  Service::Service(ObservableCollection::Value state, boost::asio::io_context& io_context, NodeGraph& node_graph) : impl(new Impl(state, io_context, node_graph, this)) {}
+  Service::Service(ObservableCollection::Value state, boost::asio::io_context& io_context, NodeGraph& node_graph, std::string observable_bridge_redirect) : impl(new Impl(state, io_context, node_graph, observable_bridge_redirect, this)) {}
   Service::~Service() {}
 
   ::grpc::Status Service::get_modalities(::grpc::ServerContext* context, const ::thalamus_grpc::NodeSelector* request, ::thalamus_grpc::ModalitiesMessage* response) {
@@ -360,6 +413,33 @@ namespace thalamus {
     return ::grpc::Status::OK;
   }
 
+  ::grpc::Status Service::node_request_stream(::grpc::ServerContext* context, ::grpc::ServerReaderWriter<::thalamus_grpc::NodeResponse, ::thalamus_grpc::NodeRequest>* stream) {
+    
+    std::weak_ptr<Node> weak;
+    ::thalamus_grpc::NodeRequest request;
+    ::thalamus_grpc::NodeResponse response;
+    while (stream->Read(&request)) {
+      if(!request.node().empty()) {
+        weak = impl->node_graph.get_node(request.node());
+      }
+      auto node = weak.lock();
+      response.set_id(request.id());
+      if(!node) {
+        response.clear_json();
+        response.set_status(thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
+        continue;
+      }
+
+      auto parsed = boost::json::parse(request.json());
+      auto json_response = node->process(parsed);
+      auto serialized_response = boost::json::serialize(json_response);
+      response.set_json(serialized_response);
+      response.set_status(thalamus_grpc::NodeResponse::Status::NodeResponse_Status_OK);
+      stream->Write(response);
+    }
+    return ::grpc::Status::OK;
+  }
+
   ::grpc::Status Service::events(::grpc::ServerContext* context, ::grpc::ServerReader< ::thalamus_grpc::Event>* reader, ::util_grpc::Empty*) {
     tracing::SetCurrentThreadName("events");
     Impl::ContextGuard guard(this, context);
@@ -397,48 +477,139 @@ namespace thalamus {
   }
 
   ::grpc::Status Service::observable_bridge(::grpc::ServerContext* context, ::grpc::ServerReaderWriter< ::thalamus_grpc::ObservableChange, ::thalamus_grpc::ObservableChange>* stream) {
-    tracing::SetCurrentThreadName("observable_bridge");
+    return ::grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "Unimplemented");
+  }
+
+  ::grpc::Status Service::observable_bridge_v2(::grpc::ServerContext* context, ::grpc::ServerReaderWriter< ::thalamus_grpc::ObservableTransaction, ::thalamus_grpc::ObservableTransaction>* stream) {
     Impl::ContextGuard guard(this, context);
-    impl->observable_bridge_thread_id = std::this_thread::get_id();
-    impl->observable_bridge_stream = stream;
-    thalamus_grpc::ObservableChange change;
-    while (stream->Read(&change)) {
-      TRACE_EVENT0("thalamus", "observable_bridge");
-      //std::cout << change.address() << " " << change.value() << "ACK: " << change.acknowledged() << std::endl;
-      if (change.acknowledged()) {
-        std::function<void()> callback;
-        {
-          std::unique_lock<std::mutex> lock(impl->mutex);
-          callback = impl->pending_changes.at(change.acknowledged());
-          TRACE_EVENT_ASYNC_END0("thalamus", "send_change", change.acknowledged());
-          impl->pending_changes.erase(change.acknowledged());
-        }
-        boost::asio::post(impl->io_context, callback);
-        continue;
-      }
-      THALAMUS_LOG(trace) << change.address() << " " << change.value() << std::endl;
+    thalamus_grpc::ObservableTransaction in;
+    thalamus_grpc::ObservableTransaction out;
+    bool thread_name_set = false;
 
-      boost::json::value parsed = boost::json::parse(change.value());
-      auto value = ObservableCollection::from_json(parsed);
-
-      std::promise<void> promise;
-      auto future = promise.get_future();
-      boost::asio::post(impl->io_context, [&] {
-        TRACE_EVENT0("thalamus", "observable_bridge(post)");
-        //change_signal(change);
-        if (change.action() == thalamus_grpc::ObservableChange_Action_Set) {
-          set_jsonpath(impl->state, change.address(), value, true);
-        }
-        else {
-          delete_jsonpath(impl->state, change.address(), true);
-        }
-        promise.set_value();
-        });
-      while (future.wait_for(1s) == std::future_status::timeout && !context->IsCancelled()) {}
+    if(!impl->observable_bridge_redirect.empty()) {
+      out.set_redirection(impl->observable_bridge_redirect);
+      stream->WriteLast(out, ::grpc::WriteOptions());
+      return ::grpc::Status::OK;
     }
 
-    impl->observable_bridge_stream = nullptr;
-    impl->io_context.stop();
+    {
+      std::unique_lock<std::mutex> lock(impl->mutex);
+      grpc::internal::WriterInterface<thalamus_grpc::ObservableTransaction>* writer = stream;
+      impl->observable_bridge_clients.push_back(writer);
+    }
+
+    while (stream->Read(&in)) {
+      TRACE_EVENT0("thalamus", "observable_bridge");
+      if(!thread_name_set && !in.peer_name().empty()) {
+        tracing::SetCurrentThreadName(absl::StrFormat("observable_bridge %s", in.peer_name()));
+        thread_name_set = true;
+      }
+
+      std::vector<std::promise<void>> promises;
+      std::vector<std::future<void>> futures;
+      for(auto& change : in.changes()) {
+        boost::json::value parsed = boost::json::parse(change.value());
+        auto value = ObservableCollection::from_json(parsed);
+        
+        promises.emplace_back();
+        futures.push_back(promises.back().get_future());
+        boost::asio::post(impl->io_context, [&promise=promises.back(),state=impl->state,action=change.action(),address=change.address(),value=std::move(value)] {
+          TRACE_EVENT0("thalamus", "observable_bridge(post)");
+          //change_signal(change);
+          if (action == thalamus_grpc::ObservableChange_Action_Set) {
+            set_jsonpath(state, address, value, true);
+          }
+          else {
+            delete_jsonpath(state, address, true);
+          }
+          promise.set_value();
+        });
+      }
+      for(auto& future : futures) {
+        while (future.wait_for(1s) == std::future_status::timeout && !context->IsCancelled() && !impl->io_context.stopped()) {}
+        if(context->IsCancelled() || impl->io_context.stopped()) {
+          return ::grpc::Status::OK;
+        }
+      }
+      out.set_acknowledged(in.id());
+      stream->Write(out);
+    }
+
+    {
+      std::unique_lock<std::mutex> lock(impl->mutex);
+      auto i = std::find(impl->observable_bridge_clients.begin(), impl->observable_bridge_clients.end(), stream);
+      impl->observable_bridge_clients.erase(i);
+    }
+    return ::grpc::Status::OK;
+  }
+
+  ::grpc::Status Service::observable_bridge_read(::grpc::ServerContext* context, const ::thalamus_grpc::ObservableReadRequest* request, ::grpc::ServerWriter<::thalamus_grpc::ObservableTransaction>* stream) {
+    Impl::ContextGuard guard(this, context);
+    thalamus_grpc::ObservableTransaction in;
+    thalamus_grpc::ObservableTransaction out;
+    bool thread_name_set = false;
+
+    if(!impl->observable_bridge_redirect.empty()) {
+      out.set_redirection(impl->observable_bridge_redirect);
+      stream->WriteLast(out, ::grpc::WriteOptions());
+      return ::grpc::Status::OK;
+    }
+
+    {
+      std::unique_lock<std::mutex> lock(impl->mutex);
+      impl->observable_bridge_clients.push_back(stream);
+      impl->peer_name_to_observable_bridge_client[request->peer_name()] = stream;
+    }
+    impl->condition.notify_all();
+
+    while(!context->IsCancelled() && !impl->io_context.stopped()) {
+      std::this_thread::sleep_for(1s);
+    }
+
+    {
+      std::unique_lock<std::mutex> lock(impl->mutex);
+      auto i = std::find(impl->observable_bridge_clients.begin(), impl->observable_bridge_clients.end(), stream);
+      impl->observable_bridge_clients.erase(i);
+    }
+    return ::grpc::Status::OK;
+  }
+
+  ::grpc::Status Service::observable_bridge_write(::grpc::ServerContext* context, const ::thalamus_grpc::ObservableTransaction* request, ::util_grpc::Empty* response) {
+    std::vector<std::promise<void>> promises;
+    std::vector<std::future<void>> futures;
+    for(auto& change : request->changes()) {
+      boost::json::value parsed = boost::json::parse(change.value());
+      auto value = ObservableCollection::from_json(parsed);
+      
+      promises.emplace_back();
+      futures.push_back(promises.back().get_future());
+      boost::asio::post(impl->io_context, [&promise=promises.back(),state=impl->state,action=change.action(),address=change.address(),value=std::move(value)] {
+        TRACE_EVENT0("thalamus", "observable_bridge(post)");
+        //change_signal(change);
+        if (action == thalamus_grpc::ObservableChange_Action_Set) {
+          set_jsonpath(state, address, value, true);
+        }
+        else {
+          delete_jsonpath(state, address, true);
+        }
+        promise.set_value();
+      });
+    }
+    for(auto& future : futures) {
+      while (future.wait_for(1s) == std::future_status::timeout && !context->IsCancelled() && !impl->io_context.stopped()) {}
+      if(context->IsCancelled() || impl->io_context.stopped()) {
+        return ::grpc::Status::OK;
+      }
+    }
+
+    {
+      std::unique_lock<std::mutex> lock(impl->mutex);
+      impl->condition.wait_for(lock, 5s, [&] { return impl->peer_name_to_observable_bridge_client.contains(request->peer_name()); } );
+      auto i = impl->peer_name_to_observable_bridge_client[request->peer_name()];
+      thalamus_grpc::ObservableTransaction acknowledgement;
+      acknowledgement.set_acknowledged(request->id());
+      i->Write(acknowledgement);
+    }
     return ::grpc::Status::OK;
   }
 
@@ -795,7 +966,10 @@ namespace thalamus {
 
         {
           std::unique_lock<std::mutex> lock2(info_mutex);
-          info_cond.wait(lock2, [&] { return context->IsCancelled() || !connection.connected() || impl->io_context.stopped() || got_info; });
+          auto predicate = [&] { return context->IsCancelled() || !connection.connected() || impl->io_context.stopped() || got_info; };
+          while (!predicate()) {
+            info_cond.wait_for(lock2, 1s, predicate);
+          }
         }
         connection.disconnect();
         std::lock_guard<std::mutex> lock2(connection_mutex);
@@ -833,11 +1007,11 @@ namespace thalamus {
       }
 
       AnalogNode* node = node_cast<AnalogNode*>(raw_node.get());
-      std::vector<kfr::univector<double>> accumulated_data(request->channels().size());
+      std::vector<std::vector<double>> accumulated_data(request->channels().size());
       std::chrono::nanoseconds window_ns(static_cast<size_t>(request->window_s()*1e9));
       std::vector<int> window_samples(request->channels().size());
       std::chrono::nanoseconds hop_ns(static_cast<size_t>(request->hop_s()*1e9));
-      std::map<int, kfr::univector<double>> windows;
+      std::map<int, std::vector<double>> windows;
       std::map<int, int> window_sizes;
 
       std::mutex connection_mutex;
@@ -930,7 +1104,10 @@ namespace thalamus {
             if(accumulated_channel.size() >= window_size) {
               auto samples = window_size;
               if(!windows.contains(samples)) {
-                windows[samples] = kfr::window_hamming(samples);
+                std::vector<double> window(256, 0);
+                for (auto n = 0ull; n < window.size(); ++n) {
+                  window[n] = .54 * (1 - .54) * std::cos(2 * M_PI * n / (window.size() - 1));
+                }
               }
               auto& window = windows.at(samples);
               std::vector<double> accumulated_copy(1);
@@ -1651,39 +1828,6 @@ namespace thalamus {
     auto writer = impl->notification_writer.load();
     BOOST_ASSERT_MSG(writer != nullptr, "Attempted to send notification with no stream");
     writer->Write(request);
-  }
-
-  bool Service::send_change(ObservableCollection::Action action, const std::string& address, ObservableCollection::Value value, std::function<void()> callback) {
-    TRACE_EVENT_ASYNC_BEGIN0("thalamus", "send_change", impl->next_id);
-    if (std::this_thread::get_id() == impl->observable_bridge_thread_id.load()) {
-      return false;
-    }
-    if (impl->io_context.stopped()) {
-      return true;
-    }
-    auto writer = impl->observable_bridge_stream.load();
-    BOOST_ASSERT_MSG(writer != nullptr, "Attempted to update state with no stream");
-
-    auto json_value = ObservableCollection::to_json(value);
-    auto string_value = boost::json::serialize(json_value);
-    thalamus_grpc::ObservableChange change;
-    change.set_address(address);
-    change.set_value(string_value);
-    if (action == ObservableCollection::Action::Set) {
-      change.set_action(thalamus_grpc::ObservableChange_Action_Set);
-    }
-    else {
-      change.set_action(thalamus_grpc::ObservableChange_Action_Delete);
-    }
-    change.set_id(++impl->next_id);
-
-    {
-      std::unique_lock<std::mutex> lock(impl->mutex);
-      impl->pending_changes[change.id()] = callback;
-    }
-
-    writer->Write(change);
-    return true;
   }
 
   void Service::stop() {

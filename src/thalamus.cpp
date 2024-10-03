@@ -3,7 +3,7 @@
 #include "node_graph_impl.h"
 #include <boost/asio.hpp>
 #include <boost/program_options.hpp>
-#include <state.h>
+#include <state.hpp>
 #ifdef _WIN32
 #include <timeapi.h>
 #endif
@@ -21,6 +21,7 @@
 #include <format>
 #include <boost/log/trivial.hpp>
 #include <thalamus/file.h>
+#include <state_manager.hpp>
 
 #ifdef __clang__
   #pragma clang diagnostic push
@@ -106,7 +107,7 @@ namespace thalamus {
       ("help,h", "produce help message")
       ("trace,t", "Enable tracing")
       ("port,p", boost::program_options::value<size_t>()->default_value(50050), "GRPC Port")
-      ("slave,s", "Defer state management to remote process");
+      ("state-url,s", boost::program_options::value<std::string>(), "Address of Thalamus instance that manages state");
 
     boost::program_options::variables_map vm;
     boost::program_options::store(boost::program_options::command_line_parser(argc, argv).options(desc).run(), vm);
@@ -117,7 +118,10 @@ namespace thalamus {
       return 0;
     }
 
-    auto slave = vm.count("slave") > 0;
+    std::string state_url;
+    if(vm.count("state-url") > 0) {
+      state_url = vm["state-url"].as<std::string>();
+    }
     auto port = vm["port"].as<size_t>();
     
     boost::asio::io_context io_context;
@@ -135,6 +139,18 @@ namespace thalamus {
     std::shared_ptr<ObservableDict> state = std::make_shared<ObservableDict>();
     ObservableListPtr nodes = std::make_shared<ObservableList>();
     (*state)["nodes"].assign(nodes);
+    
+    std::optional<StateManager> state_manager;
+    std::unique_ptr<thalamus_grpc::Thalamus::Stub> stub;
+    if(!state_url.empty()) {
+      auto channel = grpc::CreateChannel(state_url, grpc::InsecureChannelCredentials());
+      while(channel->GetState(true) != GRPC_CHANNEL_READY) {
+        THALAMUS_LOG(info) << "Waiting for state source";
+        std::this_thread::sleep_for(1s);
+      }
+      stub = thalamus_grpc::Thalamus::NewStub(channel);
+      state_manager.emplace(stub.get(), state, io_context);
+    }
 
     std::string server_address = absl::StrFormat("0.0.0.0:%d", port);
 
@@ -142,9 +158,9 @@ namespace thalamus {
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
     grpc::ServerBuilder builder;
     builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
-    NodeGraphImpl node_graph(nodes, io_context, system_start, steady_start);
-    Service service(slave ? state : std::make_shared<ObservableDict>(), io_context, node_graph);
-    node_graph.set_service(&service);
+    std::unique_ptr<NodeGraphImpl> node_graph(new NodeGraphImpl(nodes, io_context, system_start, steady_start));
+    Service service(state, io_context, *node_graph, state_url);
+    node_graph->set_service(&service);
     builder.RegisterService(&service);
     auto server = builder.BuildAndStart();
 
@@ -152,14 +168,6 @@ namespace thalamus {
     std::thread grpc_thread([&] {
       server->Wait();
     });
-
-    if (slave) {
-      service.wait();
-    }
-
-    if(!good_log_file) {
-      service.warn("Log creation failed", std::string("Unable to create log file ") + log_absolute_filename.string());
-    }
 
     boost::asio::high_resolution_timer timer(io_context);
     std::function<void(const boost::system::error_code&)> poll_function = [&](const boost::system::error_code& error) {
@@ -171,15 +179,37 @@ namespace thalamus {
     poll_function(boost::system::error_code());
 
     io_context.run();
+    THALAMUS_LOG(info) << "Shutting down";
+
+    auto shutdown_success = false;
+    std::condition_variable shutdown_condition;
+    std::mutex shutdown_mutex;
+    std::thread termination_thread([&] {
+      std::unique_lock<std::mutex> lock(shutdown_mutex);
+      shutdown_condition.wait_for(lock, 5s, [&] { return shutdown_success; });
+      if(!shutdown_success) {
+        THALAMUS_LOG(error) << "Clean shutdown taking too long, terminating" << std::endl;
+        std::terminate();
+      }
+    });
 
     service.stop();
     server->Shutdown();
     grpc_thread.join();
+    node_graph.reset();
 
     if (vm.count("trace")) {
       tracing::Stop();
       tracing::Wait();
     }
+
+    {
+      std::lock_guard<std::mutex> lock(shutdown_mutex);
+      shutdown_success = true;
+    }
+    shutdown_condition.notify_all();
+    termination_thread.join();
+    THALAMUS_LOG(info) << "Thalamus Ending";
 
     return 0;
   }
