@@ -13,5 +13,3 @@ To run we just check the runner node and to stop we uncheck it.
 Once we have aquired the data it will be saved as a capture file to the path which Thalamus was opened in. Before we can use the data, we need to hydrate it with the built in hydration tool which will convert it to an HDF5 file. To run the hydration tool we can input the following into any command prompt: python -m thalamus.hydrate filename. 
 
 The hydrated file can be downloaded from this guide
-
-# Data Visualization
