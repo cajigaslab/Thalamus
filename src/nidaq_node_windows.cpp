@@ -457,6 +457,8 @@ namespace thalamus {
     std::vector<bool> digital_levels;
     std::atomic_bool new_buffers = false;
     std::optional<std::string> current_source;
+    std::vector<double> analog_values;
+    std::vector<unsigned char> digital_values;
 
     Impl(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph, NidaqOutputNode* outer)
       : state(state)
@@ -584,7 +586,6 @@ namespace thalamus {
 #endif
 
     void on_change(ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
-#ifdef _WIN32
       auto key_str = std::get<std::string>(k);
       if(key_str == "Source") {
         std::string source_str = std::get<std::string>(v);
@@ -605,16 +606,7 @@ namespace thalamus {
           source_connection = locked_source->ready.connect(std::bind(&Impl::on_data, this, _1, analog_node.get()));
         });
       } else if (key_str == "Running" || key_str == "Channel" || key_str == "Digital") {
-        bool new_running = state->at("Running");
-        {
-          std::unique_lock<std::mutex> lock(mutex);
-          running = false;
-          condition_variable.notify_all();
-        }
-        
-        if (nidaq_thread.joinable()) {
-          nidaq_thread.join();
-        }
+        running = state->at("Running");
         if (task_handle != nullptr) {
           daqmxapi.DAQmxStopTask(task_handle);
           daqmxapi.DAQmxClearTask(task_handle);
@@ -622,7 +614,7 @@ namespace thalamus {
           //timer.cancel();
         }
 
-        if (new_running) {
+        if (running) {
           buffers.clear();
           counter = 0;
           //started = false;
@@ -635,7 +627,8 @@ namespace thalamus {
           buffer_size = static_cast<size_t>(16 * _num_channels);
           std::function<void()> reader;
           running = true;
-          nidaq_thread = std::thread(std::bind(&Impl::nidaq_target, this));
+          analog_values.resize(_num_channels, 0);
+          digital_values.resize(_num_channels, false);
 
           auto daq_error = daqmxapi.DAQmxCreateTask(name.c_str(), &task_handle);
           if(daq_error < 0) {
@@ -688,71 +681,39 @@ namespace thalamus {
           //  on_timer(reader, polling_interval, boost::system::error_code());
           //}
         }
-        else {
-          if (nidaq_thread.joinable()) {
-            nidaq_thread.join();
-          }
-        }
       }
-#else
-      auto key_str = std::get<std::string>(k);
-      if (key_str == "Source") {
-        source_connection.disconnect();
-
-        if (!state->contains("Source")) {
-          return;
-        }
-        std::string source_str = state->at("Source");
-        graph->get_node(source_str, [&](auto node) {
-          source = node;
-          auto locked_source = source.lock();
-          if (!locked_source || node_cast<AnalogNode*>(locked_source.get()) == nullptr) {
-            source.reset();
-            return;
-          }
-          source_connection = locked_source->ready.connect(std::bind(&NidaqOutputNode::on_data, this, _1));
-          });
-      }
-#endif
     }
 
     void on_data(Node* raw_node, AnalogNode* node) {
-#ifdef _WIN32
       TRACE_EVENT0("thalamus", "NidaqOutputNode::on_data");
       if (task_handle == nullptr || !node->has_analog_data()) {
         return;
       }
 
-      _time = node->time();
-      {
-        std::lock_guard<std::mutex> lock(mutex);
-        //buffers.assign(node->num_channels(), std::vector<double>());
-        _data.clear();
-        buffers.clear();
-        _sample_intervals.clear();
-        for (auto i = 0; i < node->num_channels(); ++i) {
-          auto data = node->data(i);
-          buffers.emplace_back(data.begin(), data.end());
-          _data.push_back(data);
-          _sample_intervals.emplace_back(node->sample_interval(i));
-        }
-        new_buffers = true;
+      if (digital) {
+          auto num_channels = std::min(_num_channels, digital_values.size());
+          for (auto i = 0ull; i < num_channels; ++i) {
+              auto node_data = node->data(i);
+              if (node_data.empty()) {
+                  continue;
+              }
+              digital_values[i] = node_data.back() > .5;
+          }
+          auto status = daqmxapi.DAQmxWriteDigitalLines(task_handle, 1, true, -1, DAQmx_Val_GroupByChannel, digital_values.data(), nullptr, nullptr);
+          THALAMUS_ASSERT(status >= 0, "DAQmxWriteDigitalLines failed: %d", status);
       }
-      condition_variable.notify_all();
-
-      outer->ready(outer);
-#else
-      TRACE_EVENT0("thalamus", "NidaqOutputNode::on_data");
-      auto node = reinterpret_cast<AnalogNode*>(raw_node);
-      _data.clear();
-      for (auto i = 0; i < node->num_channels(); ++i) {
-        auto next = node->data(i);
-        _data.push_back(next);
+      else {
+          auto num_channels = std::min(_num_channels, analog_values.size());
+          for (auto i = 0ull; i < num_channels; ++i) {
+              auto node_data = node->data(i);
+              if (node_data.empty()) {
+                  continue;
+              }
+              analog_values[i] = node_data.back();
+          }
+          auto status = daqmxapi.DAQmxWriteAnalogF64(task_handle, 1, true, -1, DAQmx_Val_GroupByChannel, analog_values.data(), nullptr, nullptr);
+          THALAMUS_ASSERT(status >= 0, "DAQmxWriteAnalogF64 failed: %d", status);
       }
-      _time = node->time();
-
-      ready(this);
-#endif
     }
   };
 
@@ -760,11 +721,7 @@ namespace thalamus {
   NidaqOutputNode::~NidaqOutputNode() {}
 
   std::string NidaqOutputNode::type_name() {
-#ifdef _WIN32
     return "NIDAQ_OUT (NIDAQMX)";
-#else
-    return "NIDAQ_OUT (MOCK)";
-#endif
   }
 
   bool NidaqNode::prepare() {
@@ -772,21 +729,6 @@ namespace thalamus {
   }
   bool NidaqOutputNode::prepare() {
     return prepare_nidaq();
-    //auto dll_name = "C:\\Program Files (x86)\\AlphaOmega\\Neuro Omega System SDK\\CPP_SDK\\win64\\NeuroOmega_x64.dll";
-    //alphaomega_handle = LoadLibrary(dll_name);
-    //if (alphaomega_handle == nullptr) {
-    //  QMessageBox::warning(nullptr, "DLL Error", (std::string("Failed to load ") + dll_name).c_str());
-    //  return false;
-    //}
-    //thalamus_DefaultStartConnection = (thalamus_DefaultStartConnectionType)GetProcAddress(alphaomega_handle, "DefaultStartConnection");
-    //thalamus_isConnected = (thalamus_isConnectedType)GetProcAddress(alphaomega_handle, "isConnected");
-    //thalamus_AddBufferChannel = (thalamus_AddBufferChannelType)GetProcAddress(alphaomega_handle, "AddBufferChannel");
-    //thalamus_GetAlignedData = (thalamus_GetAlignedDataType)GetProcAddress(alphaomega_handle, "GetAlignedData");
-    //thalamus_GetAllChannels = (thalamus_GetAllChannelsType)GetProcAddress(alphaomega_handle, "GetAllChannels");
-    //thalamus_GetChannelsCount = (thalamus_GetChannelsCountType)GetProcAddress(alphaomega_handle, "GetChannelsCount");
-
-
-    //return true;
   }
 
   size_t NidaqNode::modalities() const { return infer_modalities<NidaqNode>(); }
