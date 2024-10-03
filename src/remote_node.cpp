@@ -365,9 +365,13 @@ struct RemoteNode::Impl {
     } else if (key_str == "Probe Size") {
       probe_size = std::get<long long>(v);
     } else if (key_str == "Running") {
+      auto new_running = std::get<bool>(v);
+      if(new_running == running) {
+        return;
+      }
       {
         std::lock_guard<std::mutex> lock(mutex);
-        running = std::get<bool>(v);
+        running = new_running;
         condition.notify_all();
       }
       if (!running) {
