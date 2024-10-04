@@ -124,7 +124,7 @@ class Window(QMainWindow):
     self.target = target
     self.closed = False
     self.central_widget = CentralWidget(self.target, config)
-    self.render_loop = asyncio.create_task(self.__render_loop())
+    self.render_loop = asyncio.get_event_loop().create_task(self.__render_loop())
     self.setCentralWidget(self.central_widget)
 
   async def __render_loop(self):

@@ -1,4 +1,4 @@
-#include <state.h>
+#include <state.hpp>
 
 namespace thalamus {
   ObservableCollection::ValueWrapper::ValueWrapper(const Key& key, std::function<Value& ()> get_value, Changed* changed, ObservableCollection* collection)
@@ -803,15 +803,19 @@ namespace thalamus {
     auto pair = *i;
     auto next_i = i;
     ++next_i;
-    auto next_pair = *next_i;
     if (!callback) {
       callback = [](MapIteratorWrapper) {};
     }
 
     if (!from_remote && this->remote_storage) {
-      auto callback_wrapper = [this, next_pair, callback] {
-        callback(this->find(next_pair.first));
-      };
+      std::function<void()> callback_wrapper;
+      if (next_i == content.end()) {
+        callback_wrapper = [callback] { callback(MapIteratorWrapper()); };
+      } else {
+        callback_wrapper = [this, next_pair = *next_i, callback] {
+          callback(this->find(next_pair.first));
+        };
+      }
       auto address = this->address() + "['" + to_string(pair.first) + "']";
       if (this->remote_storage(Action::Delete, address, pair.second, callback_wrapper)) {
         return MapIteratorWrapper();

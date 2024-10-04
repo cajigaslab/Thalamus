@@ -6,19 +6,17 @@
 #include <task_controller_node.h>
 #include <oculomatic_node.h>
 #include <distortion_node.h>
-#include <genicam_node.h>
+#include <genicam_node.hpp>
 #include <channel_picker_node.h>
-#include <algebra_node.h>
+#include <algebra_node.hpp>
 #include <normalize_node.h>
 #include <thread_pool.h>
 #include <remote_node.h>
-#include <lua_node.h>
+#include <lua_node.hpp>
 #include <ros2_node.h>
 #include <thalamus_config.h>
-#ifdef WITH_CAIRO
 #include <pupil_node.h>
 #include <chessboard_node.h>
-#endif
 #include <log_node.h>
 #include <intan_node.h>
 #include <spikeglx_node.h>
@@ -87,10 +85,8 @@ namespace thalamus {
     {"ROS2", new NodeFactory<Ros2Node>()},
 #endif
     {"REMOTE", new NodeFactory<RemoteNode>()},
-#ifdef WITH_CAIRO
     {"CHESSBOARD", new NodeFactory<ChessBoardNode>()},
     {"PUPIL", new NodeFactory<PupilNode>()},
-#endif
     {"LOG", new NodeFactory<LogNode>()},
     {"INTAN", new NodeFactory<IntanNode>()},
     {"SPIKEGLX", new NodeFactory<SpikeGlxNode>()},
@@ -134,6 +130,7 @@ namespace thalamus {
     }
 
     ~Impl() {
+      node_impls.clear();
       auto i = node_factories.begin();
       while (i != node_factories.end()) {
         i->second->cleanup();

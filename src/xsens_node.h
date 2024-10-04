@@ -4,7 +4,7 @@
 
 #include <string>
 #include <base_node.h>
-#include <state.h>
+#include <state.hpp>
 #include <boost/qvm/vec.hpp>
 #include <boost/qvm/quat.hpp>
 
@@ -25,7 +25,7 @@ namespace thalamus {
     };
     virtual ~MotionCaptureNode() {}
     virtual std::span<Segment const> segments() const = 0;
-    virtual const std::string& pose_name() const = 0;
+    virtual const std::string_view pose_name() const = 0;
     virtual std::chrono::nanoseconds time() const = 0;
     virtual void inject(const std::span<Segment const>& segments) = 0;
     virtual bool has_motion_data() const {
@@ -41,7 +41,7 @@ namespace thalamus {
     ~XsensNode();
     static std::string type_name();
     std::span<Segment const> segments() const override;
-    const std::string& pose_name() const override;
+    const std::string_view pose_name() const override;
     std::chrono::nanoseconds time() const override;
     void inject(const std::span<Segment const>& segments) override;
 
@@ -66,7 +66,7 @@ namespace thalamus {
     ~HandEngineNode();
     static std::string type_name();
     std::span<Segment const> segments() const override;
-    const std::string& pose_name() const override;
+    const std::string_view pose_name() const override;
     std::chrono::nanoseconds time() const override;
     void inject(const std::span<Segment const>& segments) override;
 

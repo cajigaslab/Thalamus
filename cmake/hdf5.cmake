@@ -1,19 +1,19 @@
 set(HDF5_EXTERNALLY_CONFIGURED 1)
 set(HDF5_BUILD_TOOLS OFF)
 set(HDF5_ENABLE_Z_LIB_SUPPORT ON)
-set(ZLIB_LIBRARY "$<TARGET_FILE:zlibstatic>")
+set(H5_ZLIB_LIBRARIES "$<TARGET_FILE:zlibstatic>")
 set(HDF5_BUILD_EXAMPLES OFF)
 set(ZLIB_ROOT "${ZLIB_PROCESSED_HEADER_DIR}")
 set(H5_ZLIB_HEADER zlib.h)
 set(H5_HAVE_SYS_STAT_H ON)
 set(H5_HAVE_SYS_TYPES_H ON)
 set(H5_HAVE_VISUAL_STUDIO ON)
-set(ZLIB_INCLUDE_DIRS "${ZLIB_PROCESSED_HEADER_DIR}")
+set(H5_ZLIB_INCLUDE_DIRS "${ZLIB_PROCESSED_HEADER_DIR}")
 
 FetchContent_Declare(
   hdf5
-  GIT_REPOSITORY https://github.com/HDFGroup/hdf5.git
-  GIT_TAG        hdf5-1_13_1
+  URL      https://support.hdfgroup.org/releases/hdf5/v1_14/v1_14_5/downloads/hdf5-1.14.5.tar.gz
+  URL_HASH SHA256=ec2e13c52e60f9a01491bb3158cb3778c985697131fc6a342262d32a26e58e44
 )
 FetchContent_MakeAvailable(hdf5)
 add_dependencies(hdf5-static zlib_processed)

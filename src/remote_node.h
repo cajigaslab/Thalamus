@@ -19,7 +19,7 @@ namespace thalamus {
     bool has_analog_data() const override;
 
     std::span<Segment const> segments() const override;
-    const std::string& pose_name() const override;
+    const std::string_view pose_name() const override;
     void inject(const std::span<Segment const>& segments) override;
     bool has_motion_data() const override;
 
