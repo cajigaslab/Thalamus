@@ -158,9 +158,9 @@ namespace thalamus {
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
     grpc::ServerBuilder builder;
     builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
-    NodeGraphImpl node_graph(nodes, io_context, system_start, steady_start);
-    Service service(state, io_context, node_graph, state_url);
-    node_graph.set_service(&service);
+    std::unique_ptr<NodeGraphImpl> node_graph(new NodeGraphImpl(nodes, io_context, system_start, steady_start));
+    Service service(state, io_context, *node_graph, state_url);
+    node_graph->set_service(&service);
     builder.RegisterService(&service);
     auto server = builder.BuildAndStart();
 
@@ -196,6 +196,7 @@ namespace thalamus {
     service.stop();
     server->Shutdown();
     grpc_thread.join();
+    node_graph.reset();
 
     if (vm.count("trace")) {
       tracing::Stop();
