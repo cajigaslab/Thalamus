@@ -428,6 +428,12 @@ namespace thalamus {
       callback = [] {};
     }
 
+    auto& value = get_value();
+    if(value == new_value) {
+      callback();
+      return;
+    }
+
     if (!from_remote && collection->remote_storage) {
       auto address = collection->address();
       if (std::holds_alternative<std::string>(key)) {
@@ -442,7 +448,6 @@ namespace thalamus {
       }
     }
 
-    auto& value = get_value();
     value = new_value;
     if (std::holds_alternative<ObservableDictPtr>(value)) {
       thalamus::get<ObservableDictPtr>(value)->parent = collection;

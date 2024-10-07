@@ -63,8 +63,11 @@ class OculomaticWidget(QMainWindow):
     layout.addWidget(iii_y, 3, 1)
     layout.addWidget(iv_x, 3, 2)
     layout.addWidget(iv_y, 3, 3)
+    self.silent = False
 
     def value_changed(w, v):
+      if self.silent:
+        return
       if w is i_x:
         queue.send(('I', 'x', i_x.value()))
       elif w is i_y:
@@ -95,27 +98,31 @@ class OculomaticWidget(QMainWindow):
       if not queue.poll():
         return
 
-      quadrant, axis, value = queue.recv()
-      if quadrant == 'I':
-        if axis == 'x':
-          i_x.setValue(value)
-        else:
-          i_y.setValue(value)
-      elif quadrant == 'II':
-        if axis == 'x':
-          ii_x.setValue(value)
-        else:
-          ii_y.setValue(value)
-      elif quadrant == 'III':
-        if axis == 'x':
-          iii_x.setValue(value)
-        else:
-          iii_y.setValue(value)
-      elif quadrant == 'IV':
-        if axis == 'x':
-          iv_x.setValue(value)
-        else:
-          iv_y.setValue(value)
+      try:
+        self.silent = True
+        quadrant, axis, value = queue.recv()
+        if quadrant == 'I':
+          if axis == 'x':
+            i_x.setValue(value)
+          else:
+            i_y.setValue(value)
+        elif quadrant == 'II':
+          if axis == 'x':
+            ii_x.setValue(value)
+          else:
+            ii_y.setValue(value)
+        elif quadrant == 'III':
+          if axis == 'x':
+            iii_x.setValue(value)
+          else:
+            iii_y.setValue(value)
+        elif quadrant == 'IV':
+          if axis == 'x':
+            iv_x.setValue(value)
+          else:
+            iv_y.setValue(value)
+      finally:
+        self.silent = False
 
     self.timer = QTimer()
     self.timer.timeout.connect(on_timeout)

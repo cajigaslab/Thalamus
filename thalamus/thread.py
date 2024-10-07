@@ -30,6 +30,7 @@ class ThalamusThread:
     self.stub: typing.Optional[thalamus_pb2_grpc.ThalamusStub] = None
     self.running = False
     self.condition = threading.Condition()
+    self.async_condition = asyncio.Condition()
     self.loop: typing.Optional[asyncio.AbstractEventLoop] = None
     self.config = ObservableDict({})
     self.pending_callbacks = {}
@@ -55,27 +56,18 @@ class ThalamusThread:
     return True
 
   async def __async_main(self):
-    print(1)
     self.loop = asyncio.get_running_loop()
     try:
-      print(2)
       async with grpc.aio.insecure_channel(self.address) as channel:
-        print(3)
         await channel.channel_ready()
-        print(4, self.running)
 
         stub = thalamus_pb2_grpc.ThalamusStub(channel)
         bridge_channel = channel
         bridge_stub = stub
         while self.running:
-          print(4)
           self.queue = IterableQueue()
-          print(44)
           stream = bridge_stub.observable_bridge_v2(self.queue)
-          print(45)
           async for transaction in stream:
-            print(46)
-            print(transaction)
             if not self.running:
               break
             if transaction.redirection:
@@ -84,25 +76,23 @@ class ThalamusThread:
               bridge_stub = thalamus_pb2_grpc.ThalamusStub(bridge_channel)
               break
 
-            print(5)
             if transaction.acknowledged:
               callback = self.pending_callbacks[transaction.acknowledged]
               del self.pending_callbacks[transaction.acknowledged]
               callback()
               continue
 
-            print(5)
             for change in transaction.changes:
-              print(6)
               if change.address == '':
                 value = json.loads(change.value)
                 self.config = ObservableDict(value)
                 self.config.set_remote_storage(self.send_change)
                 with self.condition:
-                  self.stub = stub
-                  self.condition.notify_all()
+                  async with self.async_condition:
+                    self.stub = stub
+                    self.condition.notify_all()
+                    self.async_condition.notify_all()
                 continue
-              print(7)
 
               try:
                 jsonpath_expr = jsonpath_ng.parse(change.address)
@@ -140,29 +130,31 @@ class ThalamusThread:
     except:
       traceback.print_exc()
     finally:
+      self.running = False
       self.stub = None
       self.loop = None
 
 
   def __main(self):
-    print(22)
     asyncio.run(self.__async_main())
 
   def start(self):
-    print(11)
     self.thread = threading.Thread(target=self.__main)
-    print(12)
     self.running = True
-    print(13)
     self.thread.start()
-    print(14)
     with self.condition:
       self.condition.wait_for(lambda: self.stub is not None)
-    print(15)
+
+  async def async_start(self):
+    self.running = True
+    task = asyncio.create_task(self.__async_main())
+    async with self.async_condition:
+      await self.async_condition.wait_for(lambda: self.stub is not None)
+    return task
+
 
   def stop(self):
     if self.thread is not None:
       self.running = False
       self.thread.join()
-    
 
