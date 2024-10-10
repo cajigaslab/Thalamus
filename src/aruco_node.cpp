@@ -1,5 +1,5 @@
 #include <aruco_node.h>
-#include <image_node.h>
+#include <image_node.hpp>
 #include <modalities_util.h>
 #include <opencv2/objdetect/aruco_detector.hpp>
 #include <opencv2/core/quaternion.hpp>

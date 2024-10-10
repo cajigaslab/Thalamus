@@ -286,7 +286,7 @@ endif()
 target_compile_options(thalamus PRIVATE ${WARNING_FLAGS})
 
 target_compile_definitions(thalamus PRIVATE _USE_MATH_DEFINES)
-target_include_directories(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_include_directories(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/thorlabs")
 target_link_libraries(thalamus opencv hdf5-static lua
   tracing webrtc boost grpc++ grpc++_reflection 
   absl::str_format_internal absl::strings absl::str_format ffmpeg)

@@ -1,19 +1,14 @@
 #pragma once
 
-#include <string>
-#include <thalamus.pb.h>
-#include <thalamus_asio.h>
-#include <base_node.h>
-#include <state.hpp>
 #include <image_node.hpp>
 
 namespace thalamus {
-  class OculomaticNode : public Node, public ImageNode, public AnalogNode {
+  class ThorcamNode : public Node, public ImageNode, public AnalogNode {
     struct Impl;
     std::unique_ptr<Impl> impl;
   public:
-    OculomaticNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph*);
-    ~OculomaticNode();
+    ThorcamNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph*);
+    ~ThorcamNode();
     static std::string type_name();
     static bool prepare();
     Plane plane(int) const override;
@@ -24,7 +19,6 @@ namespace thalamus {
     std::chrono::nanoseconds frame_interval() const override;
     std::chrono::nanoseconds time() const override;
     void inject(const thalamus_grpc::Image&) override;
-    boost::json::value process(const boost::json::value&) override;
     bool has_image_data() const override;
 
     std::span<const double> data(int channel) const override;
@@ -34,7 +28,10 @@ namespace thalamus {
     std::span<const std::string> get_recommended_channels() const override;
     void inject(const thalamus::vector<std::span<double const>>&, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&) override;
     bool has_analog_data() const override;
+    boost::json::value process(const boost::json::value&) override;
     size_t modalities() const override;
+
+    static void cleanup();
   };
 }
 

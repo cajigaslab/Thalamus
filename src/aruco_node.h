@@ -1,5 +1,5 @@
 #include <xsens_node.h>
-#include <image_node.h>
+#include <image_node.hpp>
 
 namespace thalamus {
   class ArucoNode : public Node, public MotionCaptureNode, public AnalogNode, public ImageNode {

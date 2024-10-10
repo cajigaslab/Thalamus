@@ -3,7 +3,7 @@
 #include <modalities.h>
 #include <base_node.h>
 #include <xsens_node.h>
-#include <image_node.h>
+#include <image_node.hpp>
 #include <text_node.h>
 
 namespace thalamus {

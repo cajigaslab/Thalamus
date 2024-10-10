@@ -5,7 +5,7 @@
 #include <thalamus_asio.h>
 #include <base_node.h>
 #include <state.hpp>
-#include <image_node.h>
+#include <image_node.hpp>
 #include "opencv2/core.hpp"
 
 namespace thalamus {

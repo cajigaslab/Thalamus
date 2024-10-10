@@ -443,6 +443,9 @@ namespace thalamus {
     }
 
     auto& value = get_value();
+    if(value == new_value) {
+      return;
+    }
     value = new_value;
     if (std::holds_alternative<ObservableDictPtr>(value)) {
       thalamus::get<ObservableDictPtr>(value)->parent = collection;

@@ -1,4 +1,4 @@
-#include <image_node.h>
+#include <image_node.hpp>
 #include <modalities_util.h>
 #include <tracing/tracing.h>
 #include <atomic>

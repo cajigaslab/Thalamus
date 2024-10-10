@@ -1,5 +1,5 @@
 #include <storage_node.h>
-#include <image_node.h>
+#include <image_node.hpp>
 #include <text_node.h>
 #include <fstream>
 #include <util.h>

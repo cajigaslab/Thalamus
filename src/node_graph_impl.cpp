@@ -2,7 +2,7 @@
 #include <grpcpp/create_channel.h>
 #include <run_node.h>
 #include <ophanim_node.h>
-#include <image_node.h>
+#include <image_node.hpp>
 #include <task_controller_node.h>
 #include <oculomatic_node.h>
 #include <distortion_node.h>

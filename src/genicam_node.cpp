@@ -2088,42 +2088,42 @@ namespace thalamus {
 
       if (key_str == "Width") {
         auto value = variant_cast<long long int>(v);
-        if(streaming) {this->device->set("Width", value);}
+        if(!streaming) {this->device->set("Width", value);}
         auto new_value = variant_cast<long long int>(this->device->get("Width"));
         if(value != new_value) {
           (*state)["Width"].assign(new_value);
         }
       } else if (key_str == "Height") {
         auto value = variant_cast<long long int>(v);
-        if(streaming) {this->device->set("Height", value);}
+        if(!streaming) {this->device->set("Height", value);}
         auto new_value = variant_cast<long long int>(this->device->get("Height"));
         if(value != new_value) {
           (*state)["Height"].assign(new_value);
         }
       } else if (key_str == "OffsetX") {
         auto value = variant_cast<long long int>(v);
-        if(streaming) {this->device->set("OffsetX", value);}
+        if(!streaming) {this->device->set("OffsetX", value);}
         auto new_value = variant_cast<long long int>(this->device->get("OffsetX"));
         if(value != new_value) {
           (*state)["OffsetX"].assign(new_value);
         }
       } else if (key_str == "OffsetY") {
         auto value = variant_cast<long long int>(v);
-        if(streaming) {this->device->set("OffsetY", value);}
+        if(!streaming) {this->device->set("OffsetY", value);}
         auto new_value = variant_cast<long long int>(this->device->get("OffsetY"));
         if(value != new_value) {
           (*state)["OffsetY"].assign(new_value);
         }
       } else if (key_str == "ExposureTime") {
         auto value = variant_cast<double>(v);
-        if(streaming) {this->device->set("ExposureTime", value);}
+        if(!streaming) {this->device->set("ExposureTime", value);}
         auto new_value = variant_cast<double>(this->device->get("ExposureTime"));
         if(std::abs(value - new_value) > 1) {
           (*state)["ExposureTime"].assign(new_value);
         }
       } else if (key_str == "AcquisitionFrameRate") {
         auto value = variant_cast<double>(v);
-        if(streaming) {this->device->set("AcquisitionFrameRate", value);}
+        if(!streaming) {this->device->set("AcquisitionFrameRate", value);}
         auto new_value = variant_cast<double>(this->device->get("AcquisitionFrameRate"));
         target_framerate = new_value;
         if(std::abs(value - new_value) > 1) {
@@ -2131,7 +2131,7 @@ namespace thalamus {
         }
       } else if (key_str == "Gain") {
         auto value = variant_cast<double>(v);
-        if(streaming) {this->device->set("Gain", value);}
+        if(!streaming) {this->device->set("Gain", value);}
         auto new_value = variant_cast<double>(this->device->get("Gain"));
         if(std::abs(value - new_value) > 1) {
           (*state)["Gain"].assign(new_value);

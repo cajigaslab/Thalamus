@@ -1,5 +1,5 @@
 #include <ros2_node.h>
-#include <image_node.h>
+#include <image_node.hpp>
 #include <text_node.h>
 #include <distortion_node.h>
 #include <oculomatic_node.h>
