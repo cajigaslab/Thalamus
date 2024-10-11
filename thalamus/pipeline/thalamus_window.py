@@ -355,6 +355,10 @@ FACTORIES = {
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
   ]),
+  'THORCAM': Factory(lambda c, s: GenicamWidget(c, s), [
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+    UserData(UserDataType.CHECK_BOX, 'View', False, []),
+  ]),
   'CHANNEL_PICKER': Factory(lambda c, s: ChannelPickerWidget(c, s), []),
   'NORMALIZE': Factory(lambda c, s: NormalizeWidget(c, s), [
     UserData(UserDataType.DEFAULT, 'Source', '', []),

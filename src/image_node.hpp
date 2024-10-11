@@ -13,6 +13,7 @@ namespace thalamus {
     using Planes = std::array<Plane, 3>;
     enum class Format {
       Gray,
+      Gray16,
       RGB,
       YUYV422,
       YUV420P,

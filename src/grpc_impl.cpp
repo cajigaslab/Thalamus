@@ -1341,6 +1341,7 @@ namespace thalamus {
         while(position < data_count) {
           responses.emplace_back();
           auto& piece = responses.back();
+          piece.set_bigendian(std::endian::native == std::endian::big);
           piece.set_width(width);
           piece.set_height(height);
           piece.set_format(format);

@@ -1,21 +1,12 @@
 #include <thorcam_node.hpp>
-#include <fstream>
-#include <boost/endian/conversion.hpp> 
-#include <zlib.h>
-#include <boost/property_tree/xml_parser.hpp>
-#include <boost/property_tree/json_parser.hpp>
-#include <boost/spirit/include/qi.hpp>
-#include <numeric>
-#include <calculator.hpp>
-#include <filesystem>
 #include <modalities_util.h>
-#include <regex>
 #ifdef _WIN32
 #else
 #include <dlfcn.h>
 #endif
 
-#include <tl_camera_load_sdk.h>
+#include <tl_camera_sdk.h>
+#include <tl_camera_sdk_load.h>
 
 namespace thalamus {
   using namespace std::chrono_literals;
@@ -98,37 +89,18 @@ namespace thalamus {
     double framerate = 0;
     double target_framerate = 0;
 
-    void on_frame_ready(const unsigned char* data, int width, int height, std::chrono::steady_clock::time_point now) {
-      while (!frame_times.empty() && now - frame_times.front() >= 1s) {
-        std::pop_heap(frame_times.begin(), frame_times.end(), [](auto& l, auto& r) { return l > r; });
-        frame_times.pop_back();
-      }
-      if (!frame_times.empty()) {
-        auto duration = now - frame_times.front();
-        auto duration_seconds = double(duration.count())/decltype(duration)::period::den;
-        framerate = frame_times.size()/duration_seconds;
-      } else {
-        framerate = 0;
-      }
-      frame_times.push_back(now);
-      std::push_heap(frame_times.begin(), frame_times.end(), [](auto& l, auto& r) { return l > r; });
-
-
-      this->time = now.time_since_epoch();
-      this->data.clear();
-      this->data.emplace_back(data, data + width*height);
-      this->width = width;
-      this->height = height;
-      this->has_image = true;
-      this->has_analog = true;
-      analog_impl.inject({ std::span<const double>(&framerate, &framerate + 1) }, { std::chrono::nanoseconds(size_t(1e9 / target_framerate)) }, {""});
-    }
-
     std::string selected_camera;
     void* camera_handle = nullptr;
     bool streaming = false;
 
     void initialize_camera(bool apply_state = false) {
+      if(camera_handle) {
+        auto error = tl_camera_close_camera(camera_handle);
+        THALAMUS_ASSERT(error == 0, "tl_camera_close_camera failed %s", tl_camera_get_last_error());
+        selected_camera = "";
+        camera_handle = nullptr;
+      }
+
       std::string camera = state->at("Camera");
       auto i = std::find(camera_names.begin(), camera_names.end(), camera);
       if(i == camera_names.end()) {
@@ -136,7 +108,9 @@ namespace thalamus {
         camera_handle = nullptr;
       } else {
         selected_camera = *i;
-        auto error = tl_camera_open_camera(selected_camera.c_str(), &camera_handle);
+        std::unique_ptr<char> c_str(new char[selected_camera.size()+1]);
+        strcpy(c_str.get(), selected_camera.c_str());
+        auto error = tl_camera_open_camera(c_str.get(), &camera_handle);
         THALAMUS_ASSERT(error == 0, "tl_camera_open_camera failed %s", tl_camera_get_last_error());
       }
 
@@ -163,19 +137,19 @@ namespace thalamus {
         }
 
         if(state->contains("ExposureTime")) {
-          auto value = variant_cast<long long>(state->at("ExposureTime"));
+          long long value = state->at("ExposureTime");
           auto error = tl_camera_set_exposure_time(camera_handle, value*1000);
           THALAMUS_ASSERT(error == 0, "tl_camera_set_exposure_time failed %s", tl_camera_get_last_error());
         }
 
         if(state->contains("AcquisitionFrameRate")) {
-          auto value = variant_cast<double>(state->at("AcquisitionFrameRate"));
+          double value = state->at("AcquisitionFrameRate");
           auto error = tl_camera_set_frame_rate_control_value(camera_handle, value);
           THALAMUS_ASSERT(error == 0, "tl_camera_set_frame_rate_control_value failed %s", tl_camera_get_last_error());
         }
 
         if(state->contains("Gain")) {
-          auto value = variant_cast<long long>(state->at("Gain"));
+          long long value = state->at("Gain");
           auto error = tl_camera_set_gain(camera_handle, value);
           THALAMUS_ASSERT(error == 0, "tl_camera_set_gain failed %s", tl_camera_get_last_error());
         }
@@ -189,12 +163,12 @@ namespace thalamus {
         (*state)["Width"].assign(lr_x - ul_x);
         (*state)["Height"].assign(lr_y - ul_y);
 
-        int exposure_us;
+        long long exposure_us;
         error = tl_camera_get_exposure_time(camera_handle, &exposure_us);
         THALAMUS_ASSERT(error == 0, "tl_camera_get_exposure_time failed %s", tl_camera_get_last_error());
         (*state)["ExposureTime"].assign(exposure_us/1000);
 
-        int fps;
+        double fps;
         error = tl_camera_get_frame_rate_control_value(camera_handle, &fps);
         THALAMUS_ASSERT(error == 0, "tl_camera_get_frame_rate_control_value failed %s", tl_camera_get_last_error());
         (*state)["AcquisitionFrameRate"].assign(fps);
@@ -228,13 +202,22 @@ namespace thalamus {
       (*state)["Height"].assign(lr_y - ul_y);
     }
 
-    void on_frame_available(void* sender, unsigned short* image_buffer, int frame_count, unsigned char* metadata, int metadata_size_in_bytes, void* context) {
+    static void on_frame_available(void* sender, unsigned short* image_buffer, int frame_count, unsigned char* metadata, int metadata_size_in_bytes, void* context) {
       auto self = reinterpret_cast<Impl*>(context);
-      boost::asio::post(self->io_context, [self] {
-          auto outer = self->outer;
-          self->data = image_buffer;
-          outer->ready(outer);
+      auto time = std::chrono::steady_clock::now();
+      std::promise<void> promise;
+      auto future = promise.get_future();
+      boost::asio::post(self->io_context, [self,time,image_buffer,promise=std::move(promise)] () mutable {
+        self->time = time.time_since_epoch();
+        auto bytes = reinterpret_cast<unsigned char*>(image_buffer);
+        self->data.assign(1, std::span<unsigned char>(bytes, bytes + self->width*self->height));
+        auto outer = self->outer;
+        self->has_image = true;
+        self->has_analog = false;
+        outer->ready(outer);
+        promise.set_value();
       });
+      future.wait();
     }
 
     void start_stream() {
@@ -249,9 +232,20 @@ namespace thalamus {
 
       error = tl_camera_issue_software_trigger(camera_handle);
       THALAMUS_ASSERT(error == 0, "tl_camera_issue_software_trigger failed %s", tl_camera_get_last_error());
+
+      int ul_x, ul_y, lr_x, lr_y;
+      error = tl_camera_get_roi(camera_handle, &ul_x, &ul_y, &lr_x, &lr_y);
+      THALAMUS_ASSERT(error == 0, "tl_camera_get_roi failed %s", tl_camera_get_last_error());
+      width = lr_x - ul_x;
+      height = lr_y - ul_y;
+
+      error = tl_camera_get_frame_rate_control_value(camera_handle, &target_framerate);
+      THALAMUS_ASSERT(error == 0, "tl_camera_get_frame_rate_control_value failed %s", tl_camera_get_last_error());
     }
 
     void stop_stream() {
+      auto error = tl_camera_disarm(camera_handle);
+      THALAMUS_ASSERT(error == 0, "tl_camera_disarm failed %s", tl_camera_get_last_error());
     }
 
     void on_change(ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
@@ -289,8 +283,8 @@ namespace thalamus {
           auto error = tl_camera_set_exposure_time(camera_handle, value*1000);
           THALAMUS_ASSERT(error == 0, "tl_camera_set_exposure_time failed %s", tl_camera_get_last_error());
         }
-        int exposure_us;
-        error = tl_camera_get_exposure_time(camera_handle, &exposure_us);
+        long long exposure_us;
+        auto error = tl_camera_get_exposure_time(camera_handle, &exposure_us);
         THALAMUS_ASSERT(error == 0, "tl_camera_get_exposure_time failed %s", tl_camera_get_last_error());
         (*state)["ExposureTime"].assign(exposure_us/1000);
       } else if (key_str == "AcquisitionFrameRate") {
@@ -299,26 +293,21 @@ namespace thalamus {
           auto error = tl_camera_set_frame_rate_control_value(camera_handle, value);
           THALAMUS_ASSERT(error == 0, "tl_camera_set_frame_rate_control_value failed %s", tl_camera_get_last_error());
         }
-        error = tl_camera_get_frame_rate_control_value(camera_handle, &value);
+        auto error = tl_camera_get_frame_rate_control_value(camera_handle, &value);
         THALAMUS_ASSERT(error == 0, "tl_camera_get_frame_rate_control_value failed %s", tl_camera_get_last_error());
         (*state)["AcquisitionFrameRate"].assign(value);
       } else if (key_str == "Gain") {
-        auto value = variant_cast<long long>(v);
+        int value = variant_cast<long long>(v);
         if(!streaming) {
           auto error = tl_camera_set_gain(camera_handle, value);
           THALAMUS_ASSERT(error == 0, "tl_camera_set_gain failed %s", tl_camera_get_last_error());
         }
-        error = tl_camera_get_gain(camera_handle, &value);
+        auto error = tl_camera_get_gain(camera_handle, &value);
         THALAMUS_ASSERT(error == 0, "tl_camerga_get_gain failed %s", tl_camera_get_last_error());
         (*state)["Gain"].assign(value);
       }
     }
   };
-  calculator::parser<std::string::const_iterator> ThorcamNode::Impl::Cti::parser;        // Our grammar
-
-  std::vector<std::unique_ptr<ThorcamNode::Impl::Cti>> ThorcamNode::Impl::ctis;
-  std::mutex ThorcamNode::Impl::ctis_mutex;
-  bool ThorcamNode::Impl::ctis_loaded = false;
 
   ThorcamNode::ThorcamNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph*)
     : impl(new Impl(state, io_context, this)) {}
@@ -326,7 +315,7 @@ namespace thalamus {
   ThorcamNode::~ThorcamNode() {}
 
   std::string ThorcamNode::type_name() {
-    return "GENICAM";
+    return "THORCAM";
   }
 
   ImageNode::Plane ThorcamNode::plane(int i) const {
@@ -338,7 +327,7 @@ namespace thalamus {
   }
 
   ImageNode::Format ThorcamNode::format() const {
-    return ImageNode::Format::Gray;
+    return ImageNode::Format::Gray16;
   }
 
   size_t ThorcamNode::width() const {
@@ -376,9 +365,9 @@ namespace thalamus {
     }
 
     char ids[1024];
-    error = tl_camera_discover_available_cameras(camera_ids, 1024)
+    error = tl_camera_discover_available_cameras(ids, 1024);
     if(error) {
-      auto error_str = tl_camera_get_last_error():
+      auto error_str = tl_camera_get_last_error();
       THALAMUS_LOG(info) << "Camera discovery failed: " << error << ", " << error_str;
       return false;
     }
@@ -407,9 +396,15 @@ namespace thalamus {
   }
 
   void ThorcamNode::cleanup() {
-    auto error = tl_camera_sdk_dll_terminate();
+    auto error = tl_camera_close_sdk();
     if(error) {
-      THALAMUS_LOG(info) << "Thorlabs camera API not found, feature disabled: " << error;
+      THALAMUS_LOG(info) << "tl_camera_close_sdk failed";
+      return;
+    }
+
+    error = tl_camera_sdk_dll_terminate();
+    if(error) {
+      THALAMUS_LOG(info) << "tl_camera_sdk_dll_terminate failed" << error;
     }
   }
 
@@ -467,7 +462,4 @@ namespace thalamus {
     return boost::json::value();
   }
   size_t ThorcamNode::modalities() const { return infer_modalities<ThorcamNode>(); }
-
-
-  static bool ThorcamNode::Impl::loaded = false;
 }

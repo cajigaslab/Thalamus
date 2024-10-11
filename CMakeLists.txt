@@ -230,7 +230,7 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/ophanim_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/task_controller_node.h"
                      "${CMAKE_SOURCE_DIR}/src/task_controller_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/image_node.h"
+                     "${CMAKE_SOURCE_DIR}/src/image_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/image_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/oculomatic_node.h"
                      "${CMAKE_SOURCE_DIR}/src/oculomatic_node.cpp"
@@ -245,6 +245,8 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/gentl.h"
                      "${CMAKE_SOURCE_DIR}/src/genicam_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/genicam_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thorcam_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thorcam_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/channel_picker_node.h"
                      "${CMAKE_SOURCE_DIR}/src/channel_picker_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/algebra_node.hpp"
@@ -261,6 +263,8 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/spikeglx_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/file.h"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/file.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thorlabs/tl_camera_sdk_load.h"
+                     "${CMAKE_SOURCE_DIR}/src/thorlabs/tl_camera_sdk_load.c"
                      "${CMAKE_SOURCE_DIR}/proto/thalamus.proto")
 target_sources(thalamus PRIVATE 
                "${CMAKE_SOURCE_DIR}/src/pupil_node.h"
@@ -286,7 +290,7 @@ endif()
 target_compile_options(thalamus PRIVATE ${WARNING_FLAGS})
 
 target_compile_definitions(thalamus PRIVATE _USE_MATH_DEFINES)
-target_include_directories(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/thorlabs")
+target_include_directories(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/src/thorlabs")
 target_link_libraries(thalamus opencv hdf5-static lua
   tracing webrtc boost grpc++ grpc++_reflection 
   absl::str_format_internal absl::strings absl::str_format ffmpeg)

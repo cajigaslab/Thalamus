@@ -7,6 +7,7 @@
 #include <oculomatic_node.h>
 #include <distortion_node.h>
 #include <genicam_node.hpp>
+#include <thorcam_node.hpp>
 #include <channel_picker_node.h>
 #include <algebra_node.hpp>
 #include <normalize_node.h>
@@ -76,6 +77,7 @@ namespace thalamus {
     {"OCULOMATIC", new NodeFactory<OculomaticNode>()},
     {"DISTORTION", new NodeFactory<DistortionNode>()},
     {"GENICAM", new NodeFactory<GenicamNode>()},
+    {"THORCAM", new NodeFactory<ThorcamNode>()},
     {"THREAD_POOL", new NodeFactory<ThreadPoolNode>()},
     {"CHANNEL_PICKER", new NodeFactory<ChannelPickerNode>()},
     {"NORMALIZE", new NodeFactory<NormalizeNode>()},
