@@ -101,7 +101,7 @@ namespace thalamus {
       if(info->camera_info_publisher != -1) {
         auto& mat = info->distortion->camera_matrix();
         auto span = info->distortion->distortion_coefficients();
-        auto time = info->distortion->time();
+        auto time = std::chrono::system_clock::now().time_since_epoch();
         auto width = info->distortion->width();
         auto height = info->distortion->height();
         auto model = "plumb_bob";
@@ -111,7 +111,7 @@ namespace thalamus {
         thalamus_ros2_bridge_publish_camera_info(info->camera_info_publisher, time.count(), width, height, model, d, num_d, k);
       } 
       if (info->image_publisher != -1) {
-        auto time = info->distortion->time();
+        auto time = std::chrono::system_clock::now().time_since_epoch();
         auto width = info->distortion->width();
         auto height = info->distortion->height();
         auto data = info->distortion->plane(0);
@@ -125,14 +125,14 @@ namespace thalamus {
         auto y = info->oculomatic->data(1);
         auto diameter = info->oculomatic->data(2);
 
-        auto time = info->oculomatic->time();
+        auto time = std::chrono::system_clock::now().time_since_epoch();
         auto width = info->oculomatic->width();
         auto height = info->oculomatic->height();
 
         thalamus_ros2_bridge_publish_gaze(info->gaze_publisher, time.count(), x.front(), y.front(), width, height, diameter.front(), info->eye);
       } 
       if (info->image_publisher != -1 && info->image->has_image_data()) {
-        auto time = info->oculomatic->time();
+        auto time = std::chrono::system_clock::now().time_since_epoch();
         auto width = info->oculomatic->width();
         auto height = info->oculomatic->height();
         auto data = info->oculomatic->plane(0);
@@ -142,7 +142,7 @@ namespace thalamus {
 
     void on_image_data(Node*, std::shared_ptr<PublishInfo> info) {
       if (info->image_publisher != -1 && info->image->has_image_data()) {
-        auto time = info->image->time();
+        auto time = std::chrono::system_clock::now().time_since_epoch();
         auto width = info->image->width();
         auto height = info->image->height();
         auto data = info->image->plane(0);
@@ -152,16 +152,31 @@ namespace thalamus {
 
     void on_mocap_data(Node*, std::shared_ptr<PublishInfo> info) {
       if (info->mocap->has_motion_data()) {
-        auto time = info->mocap->time();
+        auto time = std::chrono::system_clock::now().time_since_epoch();
+        auto nanosecs = std::chrono::duration_cast<std::chrono::nanoseconds>(time);
         auto segments = info->mocap->segments();
-        if(segments.empty()) {
-          return;
+
+        auto child_frames = absl::StrSplit(info->child_frame, absl::ByAnyChar(", "), absl::SkipEmpty());
+        auto i = child_frames.begin();
+        auto j = segments.begin();
+        while(i != child_frames.end() && j != segments.end()) {
+          std::string child_frame(i->begin(), i->end());
+          auto segment = *j;
+          //hack, hexascope control expects camera1 to be a child of the microscope objective marker.
+          if(i->starts_with("microscope")) {
+            auto inverse_rotation = boost::qvm::conjugate(segment.rotation);
+            auto inverse_position = -(inverse_rotation*segment.position);
+            double translation[] = {boost::qvm::X(inverse_position), boost::qvm::Y(inverse_position), boost::qvm::Z(inverse_position)};
+            double rotation[] = {boost::qvm::X(inverse_rotation), boost::qvm::Y(inverse_rotation), boost::qvm::Z(inverse_rotation), boost::qvm::S(segment.rotation)};
+            thalamus_ros2_bridge_broadcast_transform(nanosecs.count(), child_frame.c_str(), info->parent_frame.c_str(), translation, rotation);
+          } else {
+            double translation[] = {boost::qvm::X(segment.position), boost::qvm::Y(segment.position), boost::qvm::Z(segment.position)};
+            double rotation[] = {boost::qvm::X(segment.rotation), boost::qvm::Y(segment.rotation), boost::qvm::Z(segment.rotation), boost::qvm::S(segment.rotation)};
+            thalamus_ros2_bridge_broadcast_transform(nanosecs.count(), info->parent_frame.c_str(), child_frame.c_str(), translation, rotation);
+          }
+          ++i;
+          ++j;
         }
-        auto& segment = segments.front();
-        double translation[] = {boost::qvm::X(segment.position), boost::qvm::Y(segment.position), boost::qvm::Z(segment.position)};
-        double rotation[] = {boost::qvm::X(segment.rotation), boost::qvm::Y(segment.rotation), boost::qvm::Z(segment.rotation), boost::qvm::S(segment.rotation)};
-        
-        thalamus_ros2_bridge_broadcast_transform(time.count(), info->parent_frame.c_str(), info->child_frame.c_str(), translation, rotation);
       }
     }
 
@@ -284,22 +299,22 @@ namespace thalamus {
   }
 
   std::chrono::nanoseconds Ros2Node::sample_interval(int) const {
-	  THALAMUS_ASSERT(false);
+	  THALAMUS_ASSERT(false, "Unimplemented");
     return 1s;
   }
 
   std::chrono::nanoseconds Ros2Node::time() const {
-	  THALAMUS_ASSERT(false);
+	  THALAMUS_ASSERT(false, "Unimplemented");
     return 0ns;
   }
 
   std::string_view Ros2Node::name(int) const {
-	  THALAMUS_ASSERT(false);
+	  THALAMUS_ASSERT(false, "Unimplemented");
     return std::string_view();
   }
 
   void Ros2Node::inject(const thalamus::vector<std::span<double const>>&, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&) {
-    THALAMUS_ASSERT(false);
+    THALAMUS_ASSERT(false, "Unimplemented");
   }
 
   template<typename T>
