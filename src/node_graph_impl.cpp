@@ -15,10 +15,8 @@
 #include <lua_node.hpp>
 #include <ros2_node.h>
 #include <thalamus_config.h>
-#ifdef WITH_CAIRO
 #include <pupil_node.h>
 #include <chessboard_node.h>
-#endif
 #include <log_node.h>
 #include <intan_node.h>
 #include <spikeglx_node.h>
@@ -87,10 +85,8 @@ namespace thalamus {
     {"ROS2", new NodeFactory<Ros2Node>()},
 #endif
     {"REMOTE", new NodeFactory<RemoteNode>()},
-#ifdef WITH_CAIRO
     {"CHESSBOARD", new NodeFactory<ChessBoardNode>()},
     {"PUPIL", new NodeFactory<PupilNode>()},
-#endif
     {"LOG", new NodeFactory<LogNode>()},
     {"INTAN", new NodeFactory<IntanNode>()},
     {"SPIKEGLX", new NodeFactory<SpikeGlxNode>()},

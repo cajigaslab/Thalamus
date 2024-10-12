@@ -10,6 +10,8 @@ import typing
 import pathlib
 import itertools
 
+RemoteStorage = typing.Callable[['ObservableCollection.Action', str, typing.Any, typing.Callable[[], None]], bool]
+
 class ObservableCollection(abc.ABC):
   """
   Wrapper for lists and dicts that allows observers to be notified when the contents change
@@ -36,7 +38,9 @@ class ObservableCollection(abc.ABC):
     self.content: typing.Collection[typing.Any] = type(initial_content)()
     self.next_observer_id = 1
     self.observers: typing.Dict[int, typing.Callable[[ObservableCollection.Action, typing.Any, typing.Any], None]] = {}
+    self.recursive_observers: typing.Dict[int, typing.Callable[[ObservableCollection, ObservableCollection.Action, typing.Any, typing.Any], None]] = {}
     self.parent = parent
+    self.remote_storage = None
 
     if isinstance(initial_content, dict):
       self.initialize_dict(initial_content)
@@ -110,7 +114,31 @@ class ObservableCollection(abc.ABC):
   def __contains__(self, key: typing.Any) -> typing.Any:
     return key in self.content
 
+  def set_remote_storage(self, value: typing.Optional[RemoteStorage]):
+    self.remote_storage = value
+    items = self.values() if isinstance(self, ObservableDict) else self
+    for v in items:
+      if isinstance(v, ObservableCollection):
+        v.set_remote_storage(value)
+
+  def address(self):
+    reverse_path = []
+    current = self
+    while current is not None and current.parent is not None:
+      items = current.parent.items() if isinstance(current.parent, ObservableDict) else enumerate(current.parent)
+      for k, v in items:
+        if v is current:
+          reverse_path.append(k)
+          break
+      current = current.parent
+
+    path = reverse_path[::-1]
+    return ''.join(f'[{repr(p)}]' for p in path)
+
   def __setitem__(self, key: typing.Any, value: typing.Any) -> None:
+    self.setitem(key, value)
+
+  def setitem(self, key: typing.Any, value: typing.Any, callback: typing.Callable[[], None] = lambda: None, from_remote = False):
     assert isinstance(self.content, (list, dict)), 'content is neither list or dict'
 
     if isinstance(key, slice):
@@ -118,7 +146,16 @@ class ObservableCollection(abc.ABC):
       step = 1 if key.step is None else key.step
       stop = len(self) if key.stop is None else key.stop
       for key2, value2 in zip(range(start, stop, step), value):
-        self[key2] = value2
+        self.setitem(key2, value2, callback, from_remote)
+      return
+
+    if isinstance(value, (int, float, str)) and self.content[key] == value:
+      callback()
+      return
+
+    if not from_remote and self.remote_storage is not None:
+      address = self.address() + f'[{repr(key)}]'
+      self.remote_storage(ObservableCollection.Action.SET, address, value, callback)
       return
 
     if not isinstance(value, ObservableCollection):
@@ -129,11 +166,11 @@ class ObservableCollection(abc.ABC):
 
     if isinstance(value, ObservableCollection):
       value.parent = self
+      value.set_remote_storage(self.remote_storage)
     self.content[key] = value
 
-    for observer in list(self.observers.values()):
-      observer(ObservableCollection.Action.SET, key, value)
-
+    self.__notify(self, ObservableCollection.Action.SET, key, value)
+    callback()
 
   def __add_impl(self, other, reverse=False):
     assert isinstance(self.content, list), 'content is not a list'
@@ -151,38 +188,54 @@ class ObservableCollection(abc.ABC):
     return self.__add_impl(other, True)
 
   def __delitem__(self, key: typing.Any) -> None:
+    self.delitem(key)
+
+  def delitem(self, key: typing.Any, callback: typing.Callable[[], None] = lambda: None, from_remote = False):
     assert isinstance(self.content, (list, dict)), 'content is neither list or dict'
+
+    if not from_remote and self.remote_storage is not None:
+      address = self.address() + f'[{repr(key)}]'
+      value = self[key]
+      self.remote_storage(ObservableCollection.Action.DELETE, address, value, callback)
+      return
 
     value = self.content[key]
     del self.content[key]
     if isinstance(value, ObservableCollection):
       value.parent = None
+      value.set_remote_storage(None)
 
-    for observer in list(self.observers.values()):
-      observer(ObservableCollection.Action.DELETE, key, value)
+    self.__notify(self, ObservableCollection.Action.DELETE, key, value)
+    callback()
 
-  def append(self, value: typing.Any) -> None:
+  def append(self, value: typing.Any, callback = lambda: None, from_remote = False) -> None:
     """
     Appends value to the underlying collection using the append function.  Also converts the value
     to an ObservableCollection if it is a dict or list
     """
-    self.insert(len(self), value)
+    self.insert(len(self), value, callback, from_remote)
 
-  def extend(self, value: typing.List[typing.Any]) -> None:
+  def extend(self, value: typing.List[typing.Any], callback = lambda: None, from_remote = False) -> None:
     """
     Appends value to the underlying collection using the append function.  Also converts the value
     to an ObservableCollection if it is a dict or list
     """
     for v in value:
-      self.insert(len(self), v)
+      self.insert(len(self), v, callback, from_remote)
 
-  def insert(self, i: int, value: typing.Any) -> None:
+  def insert(self, i: int, value: typing.Any, callback: typing.Callable[[], None] = lambda: None, from_remote = False) -> None:
     """
     Appends value to the underlying collection using the append function.  Also converts the value
     to an ObservableCollection if it is a dict or list
     """
     if not isinstance(self.content, list):
       raise RuntimeError("Attempted to append to ObservableCollection that doesn't wrap a list")
+
+    i = min(i, len(self.content))
+    if not from_remote and self.remote_storage is not None:
+      address = self.address() + f'[{i}]'
+      self.remote_storage(ObservableCollection.Action.SET, address, value, callback)
+      return
 
     if not isinstance(value, ObservableCollection):
       if isinstance(value, dict):
@@ -192,13 +245,13 @@ class ObservableCollection(abc.ABC):
 
     if isinstance(value, ObservableCollection):
       value.parent = self
-    i = min(i, len(self.content))
+      value.set_remote_storage(self.remote_storage)
     self.content.insert(i, value)
 
-    for observer in list(self.observers.values()):
-      observer(ObservableCollection.Action.SET, i, value)
+    self.__notify(self, ObservableCollection.Action.SET, i, value)
+    callback()
 
-  def remove(self, value: typing.Any) -> None:
+  def remove(self, value: typing.Any, callback: typing.Callable[[], None] = lambda: None, from_remote = False) -> None:
     """
     Removes value from the underlying collection using the remove function.
     """
@@ -206,9 +259,18 @@ class ObservableCollection(abc.ABC):
       raise RuntimeError("Attempted to append to ObservableCollection that doesn't wrap a list")
 
     index = self.content.index(value)
+
+    if not from_remote and self.remote_storage is not None:
+      address = self.address() + f'[{index}]'
+      self.remote_storage(ObservableCollection.Action.SET, address, value, callback)
+      return
+
     self.content.remove(value)
-    for observer in list(self.observers.values()):
-      observer(ObservableCollection.Action.DELETE, index, value)
+    if isinstance(value, ObservableCollection):
+      value.parent = None
+      value.set_remote_storage(None)
+    self.__notify(self, ObservableCollection.Action.DELETE, index, value)
+    callback()
 
   def __repr__(self) -> str:
     return repr(self.content)
@@ -273,7 +335,7 @@ class ObservableCollection(abc.ABC):
     """
     return iter(self.content)
 
-  def assign(self, other: typing.Union[typing.Dict[typing.Any, typing.Any], typing.List[typing.Any]]) -> None:
+  def assign(self, other: typing.Union[typing.Dict[typing.Any, typing.Any], typing.List[typing.Any]], callback = lambda: None, from_remote = False) -> None:
     """
     Recursively merges a dictionary into this ObservableCollection and removes keys not in the merged dictionary.  It
     starts with the leaves and moves inward, triggering observers along the way.
@@ -282,16 +344,16 @@ class ObservableCollection(abc.ABC):
     for key, value in items:
       current_value = self[key] if key in self else None
       if isinstance(current_value, ObservableCollection):
-        current_value.assign(value)
+        current_value.assign(value, callback, from_remote)
       else:
-        self[key] = value
+        self.setitem(key, value, callback, from_remote)
 
     current_keys = set(self.content.keys() if isinstance(self.content, dict) else range(len(self.content)))
     new_keys = set(i[0] for i in items)
     for key in current_keys - new_keys:
-      del self[key]
+      self.delitem(key, callback, from_remote)
 
-  def merge(self, other: typing.Union[typing.Dict[typing.Any, typing.Any], typing.List[typing.Any]]) -> None:
+  def merge(self, other: typing.Union[typing.Dict[typing.Any, typing.Any], typing.List[typing.Any]], callback = lambda: None, from_remote = False) -> None:
     """
     Recursively merges a dictionary into this ObservableCollection.  It starts with the leaves and moves inward,
     triggering observers along the way.
@@ -300,12 +362,12 @@ class ObservableCollection(abc.ABC):
     for key, value in items:
       current_value = self[key] if key in self else None
       if isinstance(current_value, ObservableCollection):
-        current_value.merge(value)
+        current_value.merge(value, callback, from_remote)
       else:
         if isinstance(self.content, list) and key == len(self.content):
-          self.append(value)
+          self.append(value, callback, from_remote)
         else:
-          self[key] = value
+          self.setitem(key, value, callback, from_remote)
 
   def add_observer(self,
                    observer: typing.Callable[['ObservableCollection.Action', typing.Any, typing.Any], None],
@@ -336,22 +398,75 @@ class ObservableCollection(abc.ABC):
     if recap:
       self.recap(callback)
 
-  def pop(self, i = -1) -> typing.Any:
+  def add_recursive_observer(self,
+                   observer: typing.Callable[['ObservableCollection', 'ObservableCollection.Action', typing.Any, typing.Any], None],
+                   remove_when: typing.Optional[typing.Callable[[], bool]] = None,
+                   recap: bool = False) -> None:
+    '''
+    Add an observer.  If remove_when is defined then the observer is removed if it returns fals.
+    '''
+    observer_id = self.next_observer_id
+    self.next_observer_id += 1
+
+    if not remove_when:
+      self.recursive_observers[observer_id] = observer
+      if recap:
+        self.recap(lambda *args: observer(self, *args))
+      return
+    valid_remove_when = remove_when
+
+    def callback(source: ObservableCollection, action: ObservableCollection.Action, key: typing.Any, value: typing.Any) -> None:
+      if valid_remove_when():
+        if observer_id in self.recursive_observers:
+          del self.recursive_observers[observer_id]
+      else:
+        observer(source, action, key, value)
+
+    self.recursive_observers[observer_id] = callback
+
+    if recap:
+      self.recap(lambda *args: callback(self, *args))
+
+  def pop(self, i = -1, callback = lambda: None, from_remote = False) -> typing.Any:
     if not isinstance(self.content, list):
       raise RuntimeError("Attempted to append to ObservableCollection that doesn't wrap a list")
     if i < 0:
       i = len(self) + i
-    value = self.content.pop(i)
 
-    for observer in list(self.observers.values()):
-      observer(ObservableCollection.Action.DELETE, i, value)
+    value = self.content[i]
+    if not from_remote and self.remote_storage is not None:
+      address = self.address() + f'[{i}]'
+      self.remote_storage(ObservableCollection.Action.SET, address, value, callback)
+      return
+
+    self.content.pop(i)
+    if isinstance(value, ObservableCollection):
+      value.parent = None
+      value.set_remote_storage(None)
+
+    self.__notify(self, ObservableCollection.Action.DELETE, i, value)
 
     return value
 
-  def recap(self, observer: typing.Callable[['ObservableCollection.Action', typing.Any, typing.Any], None]) -> None:
+  def recap(self, observer: typing.Optional[typing.Callable[['ObservableCollection.Action', typing.Any, typing.Any], None]] = None) -> None:
     items = (self.content.items() if isinstance(self.content, dict) else enumerate(self.content))
+
+    default_observer = lambda a, k, v: self.__notify(self, a, k, v)
+
+    observer = observer if observer is not None else default_observer
     for k, v in items:
       observer(ObservableCollection.Action.SET, k, v)
+
+  def __notify(self, source: 'ObservableCollection', action: 'ObservableCollection.Action', key: typing.Any, value: typing.Any):
+    if source == self:
+      for observer in list(self.observers.values()):
+        observer(action, key, value)
+
+    for observer in list(self.recursive_observers.values()):
+      observer(source, action, key, value)
+
+    if self.parent is not None:
+      self.parent.__notify(source, action, key, value)
 
 class ObservableDict(ObservableCollection, typing.Dict[typing.Any, typing.Any]):
   """

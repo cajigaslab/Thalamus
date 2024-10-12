@@ -1,12 +1,21 @@
 """
 Entrypoing
 """
+
+import pathlib
+
+#If proto/thalamus.proto exists (implies we are in repo checkout) then regenerate protobuf interfaces if they are out of date
+from ..build import generate
+THALAMUS_PROTO_PATH = pathlib.Path.cwd() / 'proto' / 'thalamus.proto'
+THALAMUS_PROTO_GEN_PATH = pathlib.Path.cwd() / 'thalamus' / 'thalamus_pb2.py'
+if THALAMUS_PROTO_PATH.exists() and not THALAMUS_PROTO_GEN_PATH.exists() or (THALAMUS_PROTO_GEN_PATH.stat().st_mtime < THALAMUS_PROTO_PATH.stat().st_mtime):
+  generate()
+
 import os
 import sys
 import typing
 import asyncio
 import logging
-import pathlib
 import argparse
 import itertools
 
