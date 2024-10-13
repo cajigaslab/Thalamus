@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+option go_package = "github.com/cajigaslab/Thalamus";
+option java_package = "org.pesaranlab.util_grpc";
+
+package util_grpc;
+
+message Empty {
+}
+
+message Header {
+  uint64 stamp = 1;
+}
