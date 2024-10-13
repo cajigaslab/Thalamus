@@ -6,4 +6,4 @@ Like all open-source projects, Thalamus will benefit from your involvement, sugg
 
 The code respository for Thalamus is hosted on GitHub at https://github.com/cajigaslab/thalamus. For detailed installation instructions and examples, refer to the documentation provided in the repository.
 
-If you use Thalamus in your work, please remember to cite the repository in any publications. Thalamus is protected by the GPL v2 Open Source License.
+If you use Thalamus in your work, please remember to cite the repository in any publications.
