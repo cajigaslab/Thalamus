@@ -4,7 +4,7 @@ Follow this tutorial to investigate how physical exercise, specifically hand mov
 Participants perform predefined hand movements while their heart rate was monitored. Synchronized time-series data of hand movements and heart rate was collected and stored. 
 
 # Setup
-First open Thalamus using the following command in the command prompt: *python -m thalamus.task_controller --config tutorial1.json.* After Thalamus opens you should see the following window:
+First open Thalamus using the following command in the command prompt: *python -m thalamus.task_controller --config SimpleUseCase.json.* After Thalamus opens you should see the following window without the Camera section:
 
 <img src="https://github.com/user-attachments/assets/6c460c7a-2a4c-47d4-909c-ab1f9c67800c" alt="Thalamus Window" width="400"/>
 
