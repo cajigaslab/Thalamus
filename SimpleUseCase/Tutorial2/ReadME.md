@@ -1,5 +1,5 @@
 # Overview
-Follow this tutorial to investigate how physical exercise, specifically hand movements, correlates with changes in heart rate by monitoring the relationship between hand movement and heart rate.
+Follow this tutorial to run the **heart rate variability use case** to investigate how physical exercise, specifically hand movements, correlates with changes in heart rate.
 
 Participants perform predefined hand movements while their heart rate was monitored. Synchronized time-series data of hand movements and heart rate was collected and stored. 
 
