@@ -2,7 +2,7 @@
 Follow this tutorial to run the synchronicity test use case. This can be used to measure the latency in motion capture.
 
 # Setup
-First open Thalamus using the following command in the command prompt: *python -m thalamus.task_controller --config tutorial1.json.* After Thalamus opens you should see the following window:
+First open Thalamus using the following command in the command prompt: *python -m thalamus.task_controller --config tutorial1.json.* After Thalamus opens you should see the following window without the Camera section:
 
 <img src="https://github.com/user-attachments/assets/6c460c7a-2a4c-47d4-909c-ab1f9c67800c" alt="Thalamus Window" width="400"/>
 
