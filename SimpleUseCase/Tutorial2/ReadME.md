@@ -13,7 +13,7 @@ Next, connect the National Instruments DAQ (NIDAQ) (1000 Hz sample rate) attache
 
 # Data Collection
 
-To run, just check the "Running" box under the RUNNER node. Instruct the participant to follow predefined hand movements, motion that is captured by gloves. Simultaneously their heart rate is monitored. To stop running, uncheck the "Running" box under the RUNNER node. 
+To run, just check the "Running" box under the RUNNER node. Instruct the participant to follow predefined hand movements, motion that is captured by gloves. For acceleration calculations, the pose of the finger is defined as the distance between the proximal phalanx and the distal phalanx. Simultaneously their heart rate is monitored. To stop running, uncheck the "Running" box under the RUNNER node. 
 
 # Hydration
 Once you have acquired the data, it will be saved as a capture file to the path in which Thalamus was opened. Before you can use the data, you need to hydrate it with the built in hydration tool which will convert it to an **HDF5 file**. To run the hydration tool, input the following into the command prompt: *python -m thalamus.hydrate filename.* 
@@ -21,4 +21,8 @@ Once you have acquired the data, it will be saved as a capture file to the path 
 Note: The hydrated file can be downloaded from this guide.
 
 # Analysis
-XXX
+Heart rate, in this test, is defined in beats per minute as measured by the pulse monitor, and motion is defined as an increase in finger acceleration detected by the glove. To visualize heart rate variabilty with motion, we recommend graphing the data in Matlab as follows: time (s) on x-axis, heart rate (bpm) on left y-axis, and finger acceleration (m/s^2) on right y-axis. See sample illustration of this plot below:
+
+<img src="https://github.com/user-attachments/assets/4a92252c-4930-4d52-96bc-2a37781ccc42" alt="Heart rate variability Graph" width="400"/>
+
+
