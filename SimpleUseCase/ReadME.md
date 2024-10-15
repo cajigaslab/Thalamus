@@ -1,1 +1,1 @@
-Select one of the tutorials above to walk through an example of synchronicity testing (**Tutorial 1**) or generate a wave (**Tutorial 2**). All required files can be found in the respective folders.
+Select one of the tutorials above to walk through an example of synchronicity testing (**Tutorial 1**), to generate a wave (**Tutorial 2**), or to generate Figure 5 with Thalamus data (**Tutorial 3**). All required files can be found in the respective folders.
