@@ -128,6 +128,8 @@ class ThalamusServicer(thalamus_pb2_grpc.ThalamusServicer):
     async def reader():
       try:
         async for transaction in stream:
+          print('transaction')
+          print(transaction)
           for change in transaction.changes:
             value = json.loads(change.value)
 

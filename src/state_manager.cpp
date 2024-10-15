@@ -40,6 +40,7 @@ struct StateManager::Impl {
     while(stream->Read(&in)) {
       TRACE_EVENT0("thalamus", "observable_bridge");
       if (in.acknowledged()) {
+        THALAMUS_LOG(trace) << "Acknowledged " << in.acknowledged();
         std::function<void()> callback;
         {
           std::unique_lock<std::mutex> lock(mutex);
@@ -133,9 +134,11 @@ struct StateManager::Impl {
     }
     transaction.set_id(++next_id);
 
+    THALAMUS_LOG(trace) << "Change " << transaction.id();
+
     {
       std::unique_lock<std::mutex> lock(mutex);
-      pending_changes[change->id()] = callback;
+      pending_changes[transaction.id()] = callback;
     }
 
     loaded_stream->Write(transaction);

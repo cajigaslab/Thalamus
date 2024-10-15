@@ -110,7 +110,6 @@ class TreeObservableCollectionModel(QAbstractItemModel):
     config.recap(functools.partial(self.__on_change, config))
 
   def __on_change(self, source: ObservableCollection, action: ObservableCollection.Action, key: typing.Any, value: typing.Any):
-    print(source, action, key ,value)
     if not source.is_descendent(self.config):
       return
 
@@ -119,7 +118,7 @@ class TreeObservableCollectionModel(QAbstractItemModel):
 
     is_column = key in self.columns
     if action == ObservableCollection.Action.SET:
-      if is_column:
+      if is_column and source is not self.config:
         #pdb.set_trace()
         j = bisect.bisect_left(self.columns, key)
         key_in_parent = source.key_in_parent()
@@ -172,25 +171,19 @@ class TreeObservableCollectionModel(QAbstractItemModel):
       del keys[i]
       self.endRemoveRows()
 
-      if isinstance(value, ObservableCollection):
-        value_index = self.index(i, 0, index)
-        del self.item_to_keys[id(value)]
-        del self.item_to_index[id(value)]
-        del self.index_to_item[value_index.internalId()]
-
   def data(self, index: QModelIndex, role: int) -> typing.Any:
     print('data', index.row(), index.column(), role)
     item = self.index_to_item[index.parent().internalId()]
     keys = self.item_to_keys[id(item)]
     if index.column() >= self.prefix_columns:
       print('column')
-      column_key = self.columns[index.column()-self.prefix_columns]
-      key = keys[index.row()]
-      sub_item = item[key]
-      if not isinstance(sub_item, ObservableCollection):
+      key = self.columns[index.column()-self.prefix_columns]
+      row_key = keys[index.row()]
+      item = item[row_key]
+      if not isinstance(item, ObservableCollection):
         return None
 
-      value = sub_item[column_key] if column_key in sub_item else None
+      value = item[key] if key in item else None
     else:
       print('key')
       key = keys[index.row()]
