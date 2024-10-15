@@ -81,7 +81,7 @@ def main():
     #depot_tools
     if not shutil.which('gclient'):
       destination = home_path / 'depot_tools'
-      new_path.append(destination)
+      #new_path.append(destination)
       subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
 
     #nasm
@@ -167,8 +167,8 @@ def main():
     if not shutil.which('gclient'):
       destination = home_path / 'depot_tools'
       subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
-      with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
-        bashrc.write(f'\nexport PATH={home_str}/depot_tools:$PATH\n')
+      #with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
+      #  bashrc.write(f'\nexport PATH={home_str}/depot_tools:$PATH\n')
 
     #nasm
     if not shutil.which('nasm'):
@@ -256,8 +256,8 @@ def main():
     if not shutil.which('gclient'):
       destination = home_path / 'depot_tools'
       subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
-      with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
-        bashrc.write(f'\nexport PATH={home_str}/depot_tools:$PATH\n')
+      #with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
+      #  bashrc.write(f'\nexport PATH={home_str}/depot_tools:$PATH\n')
     
     with open(str(home_path / '.bashrc'), 'r') as bashrc:
       bashrc_content = bashrc.read()
