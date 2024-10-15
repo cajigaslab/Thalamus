@@ -468,6 +468,22 @@ class ObservableCollection(abc.ABC):
     if self.parent is not None:
       self.parent.__notify(source, action, key, value)
 
+  def is_descendent(self, root):
+    current = self
+    while True:
+      if current is None:
+        return False
+      if current is root:
+        return True
+      current = current.parent
+
+  def key_in_parent(self):
+    assert self.parent is not None
+    items = self.parent.items() if isinstance(self.parent, ObservableDict) else enumerate(self.parent)
+    for k, v in items:
+      if v is self:
+        return k
+
 class ObservableDict(ObservableCollection, typing.Dict[typing.Any, typing.Any]):
   """
   ObservableCollection that also inherits dict

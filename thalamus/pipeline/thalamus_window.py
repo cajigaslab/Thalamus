@@ -35,6 +35,7 @@ from .intan_widget import IntanWidget
 from .spikeglx_widget import SpikeGlxWidget
 from .aruco_widget import ArucoWidget
 from .hexascope_widget import HexascopeWidget
+from .sync_widget import SyncWidget
 #from .analog_widget import AnalogWidget
 from ..util import NodeSelector
 from .. import thalamus_pb2
@@ -356,7 +357,8 @@ FACTORIES = {
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
   ]),
-  'CHANNEL_PICKER': Factory(lambda c, s: ChannelPickerWidget(c, s), []),
+  'CHANNEL_PICKER': Factory(ChannelPickerWidget, []),
+  'SYNC': Factory(SyncWidget, []),
   'NORMALIZE': Factory(lambda c, s: NormalizeWidget(c, s), [
     UserData(UserDataType.DEFAULT, 'Source', '', []),
     UserData(UserDataType.SPINBOX, 'Min', 0.0, []),

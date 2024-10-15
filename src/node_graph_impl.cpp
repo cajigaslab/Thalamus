@@ -7,7 +7,7 @@
 #include <oculomatic_node.h>
 #include <distortion_node.h>
 #include <genicam_node.hpp>
-#include <channel_picker_node.h>
+#include <channel_picker_node.hpp>
 #include <algebra_node.hpp>
 #include <normalize_node.h>
 #include <thread_pool.h>
@@ -19,7 +19,8 @@
 #include <chessboard_node.h>
 #include <log_node.h>
 #include <intan_node.h>
-#include <spikeglx_node.h>
+#include <spikeglx_node.hpp>
+#include <sync_node.hpp>
 #include <aruco_node.h>
 
 namespace thalamus {
@@ -90,6 +91,7 @@ namespace thalamus {
     {"LOG", new NodeFactory<LogNode>()},
     {"INTAN", new NodeFactory<IntanNode>()},
     {"SPIKEGLX", new NodeFactory<SpikeGlxNode>()},
+    {"SYNC", new NodeFactory<SyncNode>()},
     {"ARUCO", new NodeFactory<ArucoNode>()}
   };
 
