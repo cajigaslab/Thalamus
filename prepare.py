@@ -113,7 +113,7 @@ def main():
       if 'GITHUB_PATH' in os.environ:
         print('GITHUB_PATH', os.environ['GITHUB_PATH'])
         with open(os.environ['GITHUB_PATH'], 'a') as path_file:
-          path_file.writelines(p + os.linesep for p in new_path)
+          path_file.writelines(str(p) + os.linesep for p in new_path)
       new_path.append(old_path)
       new_path = os.pathsep.join(str(p) for p in new_path)
       print(new_path)
