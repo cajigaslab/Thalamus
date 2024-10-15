@@ -1,4 +1,4 @@
-#include <spikeglx_node.h>
+#include <spikeglx_node.hpp>
 #include <boost/asio.hpp>
 #include <vector>
 #include <map>

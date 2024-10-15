@@ -1,9 +1,9 @@
-#include <snyc_node.hpp>
+#include <sync_node.hpp>
 #include <vector>
 #include <modalities_util.h>
 
 namespace thalamus {
-  struct ChannelPickerNode::Impl {
+  struct SyncNode::Impl {
     ObservableDictPtr state;
     boost::signals2::scoped_connection state_connection;
     std::map<std::string, std::pair<boost::signals2::scoped_connection, boost::signals2::scoped_connection>> sources_connections;
@@ -21,7 +21,7 @@ namespace thalamus {
     bool has_analog_data = false;
     bool has_motion_data = false;
     unsigned int frame_count;
-    ChannelPickerNode* outer;
+    SyncNode* outer;
     std::string address_str;
     bool is_connected = false;
     double amplitude;
@@ -32,7 +32,7 @@ namespace thalamus {
     std::vector<std::weak_ptr<AnalogNode>> sources;
     size_t _max_channels = std::numeric_limits<size_t>::max();
   public:
-    Impl(ObservableDictPtr state, boost::asio::io_context&, NodeGraph* graph, ChannelPickerNode* outer)
+    Impl(ObservableDictPtr state, boost::asio::io_context&, NodeGraph* graph, SyncNode* outer)
       : state(state)
       , outer(outer)
       , graph(graph) {
@@ -46,159 +46,41 @@ namespace thalamus {
     std::set<AnalogNode*> names_collected;
     AnalogNode* current_node;
 
-    void on_source_mapping_change(std::weak_ptr<AnalogNode> node, long long in_channel, ObservableDictPtr mapping_dict, ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
-      auto k_str = std::get<std::string>(k);
-      if(k_str == "Out Channel") {
-        size_t v_int = std::get<long long>(v);
-        if(mappings.size() < v_int+1) {
-          mappings.resize(v_int+1);
-        }
-        auto& mapping = mappings.at(v_int);
-        std::get<std::weak_ptr<AnalogNode>>(mapping) = node;
-        std::get<int>(mapping) = int(in_channel);
-        if (mapping_dict->contains("Out Name")) {
-          std::string temp = mapping_dict->at("Out Name");
-          std::get<std::string>(mapping) = temp;
-        }
-      } else if (k_str == "Out Name") {
-        if (!mapping_dict->contains("Out Channel")) {
-          return;
-        }
-        size_t out_channel = mapping_dict->at("Out Channel");
-        if (mappings.size() < out_channel + 1) {
-          mappings.resize(out_channel + 1);
-        }
-        auto& mapping = mappings.at(out_channel);
-        std::string temp = mapping_dict->at("Out Name");
-        std::get<std::string>(mapping) = temp;
-      }
-      outer->channels_changed(outer);
-    }
-
-    void on_source_mappings_change(std::weak_ptr<AnalogNode> node, ObservableCollection::Action a, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
-      auto k_int = std::get<long long>(k);
-      if(a == ObservableCollection::Action::Set) {
-        auto v_dict = std::get<ObservableDictPtr>(v);
-        
-        single_source_map_connections.push_back(v_dict->changed.connect(std::bind(&Impl::on_source_mapping_change, this, node, k_int, v_dict, _1, _2, _3)));
-        v_dict->recap(std::bind(&Impl::on_source_mapping_change, this, node, k_int, v_dict, _1, _2, _3));
-      }
-    }
-
-    void on_sources_change(ObservableCollection::Action a, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
-      auto node_name = std::get<std::string>(k);
-      if(a == ObservableCollection::Action::Set) {
-        auto v_list = std::get<ObservableListPtr>(v);
-        graph->get_node(node_name, [&,node_name,v_list](auto node) {
-          auto locked_source = node.lock();
-          auto analog_node = std::dynamic_pointer_cast<AnalogNode>(locked_source);
-          if (!locked_source || analog_node == nullptr) {
-            return;
-          }
-          std::weak_ptr<AnalogNode> weak_analog(analog_node);
-
-          source_mapping_connections[node_name] = v_list->changed.connect(std::bind(&Impl::on_source_mappings_change, this, weak_analog, _1, _2, _3));
-          v_list->recap(std::bind(&Impl::on_source_mappings_change, this, weak_analog, _1, _2, _3));
-
-          sources_connections[node_name].first = analog_node->channels_changed.connect([&,weak_analog](auto) {
-              auto locked = weak_analog.lock().get();
-              names_collected.erase(locked);
-              outer->channels_changed(outer);
-          });
-          sources_connections[node_name].second = locked_source->ready.connect([&,node_name,v_list,weak_analog](auto) {
-            current_node = weak_analog.lock().get();
-            if(!current_node->has_analog_data()) {
-              return;
-            }
-            if(!names_collected.contains(current_node)) {
-              if(current_node) {
-                for(auto i = 0;i < current_node->num_channels();++i) {
-                  auto channel_name_view = current_node->name(i);
-                  std::string channel_name(channel_name_view.data(), channel_name_view.size());
-                  auto sample_interval = current_node->sample_interval(i);
-                  if(static_cast<size_t>(i) >= v_list->size()) {
-                    auto new_row = std::make_shared<ObservableDict>();
-                    (*new_row)["Name"].assign(channel_name);
-                    (*new_row)["Out Channel"].assign(static_cast<long long>(mappings.size()));
-                    (*new_row)["Out Name"].assign(node_name + ": " + channel_name);
-                    v_list->at(i).assign(new_row);
-                    mappings.emplace_back(weak_analog, i, node_name + ": " + channel_name, sample_interval);
-                  } else {
-                    ObservableDictPtr current_row = v_list->at(i);
-                    (*current_row)["Name"].assign(channel_name);
-                    long long out_channel = current_row->at("Out Channel");
-                    auto& mapping = mappings.at(out_channel);
-                    std::get<std::chrono::nanoseconds>(mapping) = sample_interval;
-                  }
-                }
-                names_collected.insert(current_node);
-              }
-            }
-            outer->ready(outer);
-          });
-        });
-      } else if(a == ObservableCollection::Action::Delete) {
-        source_mapping_connections.erase(node_name);
-        sources_connections.erase(node_name);
-      }
-    }
-
     std::map<std::string, boost::signals2::scoped_connection> source_mapping_connections;
     std::vector<boost::signals2::scoped_connection> single_source_map_connections;
     boost::signals2::scoped_connection sources_state_connection;
 
     void on_change(ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
-      auto key_str = std::get<std::string>(k);
-      if(key_str == "Sources") {
-        auto sources_dict = std::get<ObservableDictPtr>(v);
-        sources_connections.clear();
-        sources.clear();
-        sources_state_connection = sources_dict->changed.connect(std::bind(&Impl::on_sources_change, this, _1, _2, _3));
-        sources_dict->recap(std::bind(&Impl::on_sources_change, this, _1, _2, _3));
-      } else if (key_str == "Max Channels") {
-        _max_channels = std::get<long long>(v);
-      }
     }
   };
 
-  ChannelPickerNode::ChannelPickerNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph)
+  SyncNode::SyncNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph)
     : impl(new Impl(state, io_context, graph, this)) {}
 
-  ChannelPickerNode::~ChannelPickerNode() {}
+  SyncNode::~SyncNode() {}
 
-  std::string ChannelPickerNode::type_name() {
-    return "CHANNEL_PICKER";
+  std::string SyncNode::type_name() {
+    return "SYNC";
   }
 
-  std::chrono::nanoseconds ChannelPickerNode::time() const {
+  std::chrono::nanoseconds SyncNode::time() const {
     return impl->current_node->time();
   }
 
-  std::span<const double> ChannelPickerNode::data(int channel) const {
-    if(num_channels() <= channel) {
-      return std::span<const double>();
-    }
-    auto& pair = impl->mappings.at(channel);
-    auto locked = std::get<0>(pair).lock();
-    auto in_channel = std::get<1>(pair);
-    return locked.get() == impl->current_node && in_channel < impl->current_node->num_channels() ? locked->data(std::get<1>(pair)) : std::span<const double>();
+  std::span<const double> SyncNode::data(int channel) const {
+    return std::span<const double>();
   }
 
-  int ChannelPickerNode::num_channels() const {
-    return std::min(impl->mappings.size(), impl->_max_channels);
+  int SyncNode::num_channels() const {
+    return 0;
   }
 
-  static const std::string EMPTY = "";
 
-  std::string_view ChannelPickerNode::name(int channel) const {
-    if(num_channels() <= channel) {
-      return EMPTY;
-    }
-    auto& pair = impl->mappings.at(channel);
-    return std::get<2>(pair);
+  std::string_view SyncNode::name(int channel) const {
+    return "";
   }
 
-  std::chrono::nanoseconds ChannelPickerNode::sample_interval(int channel) const {
+  std::chrono::nanoseconds SyncNode::sample_interval(int channel) const {
     if(num_channels() <= channel) {
       return 0ns;
     }
@@ -206,14 +88,14 @@ namespace thalamus {
     return std::get<std::chrono::nanoseconds>(pair);
   }
 
-  void ChannelPickerNode::inject(const thalamus::vector<std::span<double const>>&, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&) {
+  void SyncNode::inject(const thalamus::vector<std::span<double const>>&, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&) {
     THALAMUS_ASSERT(false);
   }
    
-  bool ChannelPickerNode::has_analog_data() const {
+  bool SyncNode::has_analog_data() const {
     return true;
   }
 
-  size_t ChannelPickerNode::modalities() const { return infer_modalities<ChannelPickerNode>(); }
+  size_t SyncNode::modalities() const { return infer_modalities<SyncNode>(); }
 }
 

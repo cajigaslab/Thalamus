@@ -149,7 +149,7 @@ class ObservableCollection(abc.ABC):
         self.setitem(key2, value2, callback, from_remote)
       return
 
-    if isinstance(value, (int, float, str)) and self.content[key] == value:
+    if isinstance(value, (int, float, str)) and key in self.content and self.content[key] == value:
       callback()
       return
 
