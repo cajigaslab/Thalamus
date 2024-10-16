@@ -282,12 +282,6 @@ FACTORIES = {
   ]),
   'WAVE': Factory(WaveWidget, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
-    UserData(UserDataType.DOUBLE_SPINBOX, 'Frequency', 1.0, []),
-    UserData(UserDataType.DOUBLE_SPINBOX, 'Amplitude', 1.0, []),
-    UserData(UserDataType.COMBO_BOX, 'Shape', 'Sine', ['Sine', 'Square', 'Triangle', 'Random']),
-    UserData(UserDataType.DOUBLE_SPINBOX, 'Offset', 0.0, []),
-    UserData(UserDataType.DOUBLE_SPINBOX, 'Duty Cycle', 0.5, []),
-    UserData(UserDataType.DOUBLE_SPINBOX, 'Phase', 1.0, []),
     UserData(UserDataType.DOUBLE_SPINBOX, 'Sample Rate', 1000.0, []),
     UserData(UserDataType.SPINBOX, 'Poll Interval', 16, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, [])

@@ -6,7 +6,7 @@
 #include <mutex>
 #include <thread>
 #include <functional>
-#include <base_node.h>
+#include <base_node.hpp>
 
 namespace thalamus {
   class ThreadPool : public std::enable_shared_from_this<ThreadPool> {

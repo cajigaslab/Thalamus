@@ -1,7 +1,7 @@
 #pragma once
 
 #include <modalities.h>
-#include <base_node.h>
+#include <base_node.hpp>
 #include <xsens_node.h>
 #include <image_node.h>
 #include <text_node.h>

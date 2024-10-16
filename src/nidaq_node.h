@@ -4,7 +4,7 @@
 
 #include <functional>
 #include <string>
-#include <base_node.h>
+#include <base_node.hpp>
 #include <state.hpp>
 
 namespace thalamus {

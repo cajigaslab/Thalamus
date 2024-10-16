@@ -1,9 +1,11 @@
 import collections
 import functools
+import asyncio
 import random
 import bisect
 import typing
 import bisect
+import grpc
 import pdb
 
 from ..qt import *
@@ -107,9 +109,6 @@ class SyncWidget(QWidget):
     self.info_tasks = {}
 
   async def __channel_info(self, name, channels):
-    self.clear()
-    selected_node = self.config['selected_node']
-
     selector = thalamus_pb2.NodeSelector(name=name)
     stream = self.stub.channel_info(thalamus_pb2.AnalogRequest(node=selector))
     try:
@@ -127,26 +126,21 @@ class SyncWidget(QWidget):
 
         
         if i < len(channels):
-          for i2 in range(len(channels), i-1, -1):
+          for i2 in reversed(range(i, len(channels))):
             del channels[i2]
         elif j < len(new_channels):
           for j2 in range(j, len(new_channels)):
-            del channels[i2]
-
-
-
-
-        selected_channel = self.config[self.selected_channel_key]
-        self.clear()
-        self.addItems()
-        self.setCurrentText(selected_channel)
+            channels.insert(j2, {'Name': new_channels[j2], 'Is Sync': False})
     except asyncio.CancelledError:
       pass
     except grpc.aio.AioRpcError as e:
       if e.code() != grpc.StatusCode.CANCELLED:
         raise
 
-
   def __on_change(self, action, key, value):
+    if key in self.info_tasks:
+      self.info_tasks[key].cancel()
+
     if action == ObservableCollection.Action.SET:
-      self.info_tasks[key] = create_task_with_exc_handling(self.__channel_info_task())
+      self.info_tasks[key] = create_task_with_exc_handling(self.__channel_info_task(key, value))
+

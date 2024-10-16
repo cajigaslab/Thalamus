@@ -53,13 +53,14 @@ namespace thalamus {
   public:
     using Changed = boost::signals2::signal<void(Action, const Key&, Value&)>;
     Changed changed;
+    using RecursiveChanged = boost::signals2::signal<void(ObservableCollection*, Action, const Key&, Value&)>;
+    RecursiveChanged recursive_changed;
     class ValueWrapper {
       Key key;
       std::function<Value&()> get_value;
-      Changed* changed;
       ObservableCollection* collection;
     public:
-      ValueWrapper(const Key& key, std::function<Value& ()> get_value, Changed* changed, ObservableCollection* collection);
+      ValueWrapper(const Key& key, std::function<Value& ()> get_value, ObservableCollection* collection);
 
       void assign(const Value& new_value, std::function<void()> callback = nullptr, bool from_remote = false);
 
@@ -79,13 +80,12 @@ namespace thalamus {
     class VectorIteratorWrapper {
       size_t key;
       Vector::iterator iterator;
-      Changed* changed;
       ObservableCollection* collection;
       friend ObservableList;
       friend ObservableDict;
     public:
       VectorIteratorWrapper();
-      VectorIteratorWrapper(size_t key, Vector::iterator iterator, Changed* changed, ObservableCollection* collection);
+      VectorIteratorWrapper(size_t key, Vector::iterator iterator, ObservableCollection* collection);
       ValueWrapper operator*();
       VectorIteratorWrapper& operator+(size_t count);
       VectorIteratorWrapper& operator+=(size_t count);
@@ -101,14 +101,13 @@ namespace thalamus {
     class MapIteratorWrapper {
     protected:
       Map::iterator iterator;
-      Changed* changed;
       ObservableCollection* collection;
       std::optional<std::pair<Key, ValueWrapper>> pair;
       friend ObservableList;
       friend ObservableDict;
     public:
       MapIteratorWrapper();
-      MapIteratorWrapper(Map::iterator iterator, Changed* changed, ObservableCollection* collection);
+      MapIteratorWrapper(Map::iterator iterator, ObservableCollection* collection);
       ValueWrapper operator*();
       std::pair<Key, ValueWrapper>* operator->();
       MapIteratorWrapper& operator++();
@@ -128,6 +127,7 @@ namespace thalamus {
     virtual void set_remote_storage(std::function<bool(Action, const std::string&, ObservableCollection::Value, std::function<void()>)>) = 0;
 
     std::string address() const;
+    void notify(ObservableCollection*, Action, const Key&, Value&);
   };
 
   class ObservableList : public ObservableCollection {

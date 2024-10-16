@@ -3,7 +3,7 @@
 #include <string>
 #include <thalamus.pb.h>
 #include <thalamus_asio.h>
-#include <base_node.h>
+#include <base_node.hpp>
 #include <state.hpp>
 #include <image_node.h>
 #include "opencv2/core.hpp"

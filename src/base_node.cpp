@@ -1,4 +1,4 @@
-#include <base_node.h>
+#include <base_node.hpp>
 #include <chrono>
 #include <cmath>
 #include <map>
@@ -127,7 +127,6 @@ namespace thalamus {
     std::chrono::nanoseconds _sample_interval;
     std::chrono::nanoseconds _time;
     std::chrono::steady_clock::time_point last_time;
-    std::chrono::nanoseconds last_switch;
     std::chrono::steady_clock::time_point _start_time;
     AnalogNodeImpl analog_impl;
     WaveGeneratorNode* outer;
@@ -135,6 +134,62 @@ namespace thalamus {
     double offset;
     double duty_cycle;
     std::function<double(std::chrono::nanoseconds)> wave;
+    struct Wave {
+      enum class Shape {
+        SINE,
+        SQUARE,
+        TRIANGLE,
+        RANDOM
+      };
+      Shape shape;
+      double frequency;
+      double amplitude;
+      double phase;
+      double duty_cycle;
+      double offset;
+      double current;
+      std::chrono::nanoseconds last_switch;
+      std::mt19937& random_range;
+      std::uniform_int_distribution<std::mt19937::result_type>& random_distribution;
+      double operator()(std::chrono::nanoseconds time) {
+        switch(shape) {
+          case Shape::SINE: {
+            return amplitude * std::sin(2 * M_PI * (frequency * time.count() / 1e9 + phase)) + offset;
+          }
+          case Shape::SQUARE: {
+            size_t interval = 1e9 / frequency;
+            auto modulo = (time.count() - size_t(1e9*phase)) % interval;
+            auto duty_interval = interval * duty_cycle;
+            return (modulo < duty_interval ? amplitude : -amplitude) + offset;
+          }
+          case Shape::TRIANGLE: {
+            size_t interval = 1e9 / frequency;
+            size_t quarter_interval = interval / 4;
+            size_t three_quarter_interval = 3 * quarter_interval;
+            auto modulo = (time.count() - size_t(1e9 * phase)) % interval;
+            if (modulo < quarter_interval) {
+              return double(modulo) / quarter_interval * amplitude + offset;
+            } else if (modulo < three_quarter_interval) {
+              return (1 - (double(modulo) - quarter_interval) / quarter_interval) * amplitude + offset;
+            } else {
+              return (double(modulo) - three_quarter_interval) / quarter_interval * amplitude - amplitude + offset;
+            }
+          }
+          case Shape::RANDOM: {
+            size_t interval = 1e9 / frequency;
+            if((time - last_switch).count() > interval) {
+              current = amplitude*random_distribution(random_range) + offset;
+              last_switch = time;
+            }
+            return current;
+          }
+        }
+      }
+    };
+    std::vector<Wave> waves;
+    ObservableListPtr waves_state;
+
+
     Impl(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph, WaveGeneratorNode* outer)
       : state(state)
       , nodes(static_cast<ObservableList*>(state->parent))
@@ -146,14 +201,13 @@ namespace thalamus {
       , random_distribution(0, 1)
       , recommended_names(1, "0") {
       analog_impl.inject({ std::span<double const>() }, { 0ns }, {""});
-      state_connection = state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
-
+      state_connection = state->recursive_changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3, _4));
 
       analog_impl.ready.connect([outer](Node*) {
         outer->ready(outer);
       });
 
-      this->state->recap(std::bind(&Impl::on_change, this, _1, _2, _3));
+      this->state->recap(std::bind(&Impl::on_change, this, this, _1, _2, _3));
     }
 
     void on_timer(const boost::system::error_code& error) {
@@ -190,69 +244,63 @@ namespace thalamus {
       timer.async_wait(std::bind(&Impl::on_timer, this, _1));
     }
 
-    void on_change(ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
-      auto key_str = std::get<std::string>(k);
+    void on_change(ObservableCollection* source, ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
+      long long index;
+      std::string key_str;
+      if(source == state.get()) {
+        key_str = std::get<std::string>(k);
+        if(key_str == "Waves") {
+          waves_state = std::get<ObservableListPtr>(v);
+          waves_state->recap(std::bind(&Impl::on_change, this, waves_state.get(), _1, _2, _3));
+          return;
+        }
+        index = 0;
+      } else if (source == waves_state.get()) {
+        auto wave_state = std::get<ObservableDictPtr>(v);
+        wave_state->recap(std::bind(&Impl::on_change, this, wave_state.get(), _1, _2, _3));
+        return;
+      } else {
+        key_str = std::get<std::string>(k);
+        auto temp = waves_state->key_of(*source);
+        THALAMUS_ASSERT(temp.has_value(), "Failed to find index of wave");
+        index = std::get<long long>(*temp) + 1;
+      }
+      if(waves.size() <= index) {
+        waves.resize(index+1);
+      }
+      auto& wave = waves[index];
+
       if (key_str == "Frequency") {
-        frequency = std::get<double>(v);
+        wave.frequency = std::get<double>(v);
       }
       else if (key_str == "Amplitude") {
-        amplitude = std::get<double>(v);
+        wave.amplitude = std::get<double>(v);
       }
       else if (key_str == "Shape") {
         shape = std::get<std::string>(v);
         if (shape == "Sine") {
-          wave = [&](std::chrono::nanoseconds time) {
-            return amplitude * std::sin(2 * M_PI * (frequency * time.count() / 1e9 + phase)) + offset;
-          };
+          wave.shape = Wave::Shape::SINE;
         }
         else if (shape == "Square") {
-          wave = [&](std::chrono::nanoseconds time) {
-            size_t interval = 1e9 / frequency;
-            auto modulo = (time.count() - size_t(1e9*phase)) % interval;
-            auto duty_interval = interval * duty_cycle;
-            return (modulo < duty_interval ? amplitude : -amplitude) + offset;
-          };
+          wave.shape = Wave::Shape::SQUARE;
         }
         else if (shape == "Triangle") {
-          wave = [&](std::chrono::nanoseconds time) {
-            size_t interval = 1e9 / frequency;
-            size_t quarter_interval = interval / 4;
-            size_t three_quarter_interval = 3 * quarter_interval;
-            auto modulo = (time.count() - size_t(1e9 * phase)) % interval;
-            if (modulo < quarter_interval) {
-              return double(modulo) / quarter_interval * amplitude + offset;
-            } else if (modulo < three_quarter_interval) {
-              return (1 - (double(modulo) - quarter_interval) / quarter_interval) * amplitude + offset;
-            } else {
-              return (double(modulo) - three_quarter_interval) / quarter_interval * amplitude - amplitude + offset;
-            }
-          };
+          wave.shape = Wave::Shape::TRIANGLE;
         }
         else if (shape == "Random") {
-          last_switch = std::chrono::steady_clock::now().time_since_epoch();
-          wave = [&](std::chrono::nanoseconds time) {
-            size_t interval = 1e9 / frequency;
-            if((time - last_switch).count() > interval) {
-              current = amplitude*random_distribution(random_range) + offset;
-              last_switch = time;
-            }
-            return current;
-          };
-        }
-        else {
-          wave = [&](std::chrono::nanoseconds time) {
-            return amplitude * std::sin(2 * M_PI * (frequency * time.count() / 1e9 + phase)) + offset;
-          };
+          wave.shape = Wave::Shape::RANDOM;
+        } else {
+          wave.shape = Wave::Shape::SINE;
         }
       }
       else if (key_str == "Offset") {
-        offset = std::get<double>(v);
+        wave.offset = std::get<double>(v);
       }
       else if (key_str == "Duty Cycle") {
-        duty_cycle = std::get<double>(v);
+        wave.duty_cycle = std::get<double>(v);
       }
       else if (key_str == "Phase") {
-        phase = std::get<double>(v);
+        wave.phase = std::get<double>(v);
       }
       else if (key_str == "Poll Interval") {
         poll_interval = std::get<long long int>(v);

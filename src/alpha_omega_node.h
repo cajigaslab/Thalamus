@@ -1,6 +1,6 @@
 #pragma once
 
-#include <base_node.h>
+#include <base_node.hpp>
 #include <boost/asio.hpp>
 #include <string>
 //#include <plot.h>

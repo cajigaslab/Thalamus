@@ -1,6 +1,6 @@
 #pragma once
 
-#include <base_node.h>
+#include <base_node.hpp>
 #include <xsens_node.h>
 #include <boost/asio.hpp>
 #include <boost/json.hpp>

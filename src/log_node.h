@@ -1,6 +1,6 @@
 #pragma once
 
-#include <base_node.h>
+#include <base_node.hpp>
 #include <text_node.h>
 
 namespace thalamus {

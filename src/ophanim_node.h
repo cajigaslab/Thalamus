@@ -1,4 +1,4 @@
-#include <base_node.h>
+#include <base_node.hpp>
 
 namespace thalamus {
   class OphanimNode : public Node {

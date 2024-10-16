@@ -2,7 +2,7 @@
 
 #include <thalamus_asio.h>
 #include <string>
-#include <base_node.h>
+#include <base_node.hpp>
 #include <state.hpp>
 #include <xsens_node.h>
 #include <tracing/tracing.h>

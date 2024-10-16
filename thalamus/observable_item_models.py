@@ -280,6 +280,18 @@ class TreeObservableCollectionModel(QAbstractItemModel):
       self.index_to_parent[new_index.internalId()] = parent
       self.next_index_id += 1
     return self.index_cache[key]
+
+  def get_location(self, index: QModelIndex) -> typing.Tuple[ObservableCollection, typing.Any]:
+    item = self.index_to_item[index.parent().internalId()]
+    keys = self.item_to_keys[id(item)]
+    if index.column() >= self.prefix_columns:
+      key = self.columns[index.column()-self.prefix_columns]
+      row_key = keys[index.row()]
+      item = item[row_key]
+    else:
+      key = keys[index.row()]
+    return item, key
+
   
   def parent(self, index: QModelIndex) -> QModelIndex:
     #print('parent', index)
@@ -302,3 +314,63 @@ class TreeObservableCollectionModel(QAbstractItemModel):
     result = self.prefix_columns + len(self.columns)
     print('columnCount', _.isValid(), result)
     return result
+
+class TreeObservableCollectionDelegate(QItemDelegate):
+  def __init__(self, model: TreeObservableCollectionModel, precision = 3,
+               choices: typing.Callable[[ObservableCollection, typing.Any], typing.Optional[typing.List[str]]] = lambda a, b: None):
+    super().__init__()
+    self.model = model
+    self.precision = precision
+    self.choices = choices
+
+  def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
+    item, key = self.model.get_location(index)
+    choices = self.choices(item, key)
+    if choices is not None:
+      result = QComboBox(parent)
+      return result
+
+    value = item[key] if key in item else None
+    if isinstance(value, int):
+      result = QSpinBox(parent)
+      result.setRange(-1000000, 1000000)
+      return result
+    elif isinstance(value, float):
+      result = QDoubleSpinBox(parent)
+      result.setRange(-1000000, 1000000)
+      result.setDecimals(self.precision)
+      return result
+
+    return super().createEditor(parent, option, index)
+
+  def setEditorData(self, editor: QWidget, index: QModelIndex) -> None:
+    item, key = self.model.get_location(index)
+    value = item[key] if key in item else None
+
+    choices = self.choices(item, key)
+    if choices is not None:
+      editor.addItems(choices)
+      editor.setCurrentText(value)
+      return
+
+    if isinstance(editor, QSpinBox):
+      editor.setValue(value)
+      return
+    elif isinstance(editor, QDoubleSpinBox):
+      editor.setValue(value)
+      return
+    return super().setEditorData(editor, index)
+
+  def setModelData(self, editor: QWidget, model: QAbstractItemModel, index: QModelIndex):
+    item, key = self.model.get_location(index)
+    if isinstance(editor, QSpinBox):
+      item[key] = editor.value()
+      return
+    elif isinstance(editor, QDoubleSpinBox):
+      item[key] = editor.value()
+      return
+    elif isinstance(editor, QComboBox):
+      item[key] = editor.currentText()
+      return
+    return super().setModelData(editor, model, index)
+

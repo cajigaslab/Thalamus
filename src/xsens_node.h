@@ -3,7 +3,7 @@
 #include <thalamus_asio.h>
 
 #include <string>
-#include <base_node.h>
+#include <base_node.hpp>
 #include <state.hpp>
 #include <boost/qvm/vec.hpp>
 #include <boost/qvm/quat.hpp>
