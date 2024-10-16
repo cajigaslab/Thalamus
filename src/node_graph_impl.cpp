@@ -15,13 +15,13 @@
 #include <lua_node.hpp>
 #include <ros2_node.h>
 #include <thalamus_config.h>
-#include <pupil_node.h>
-#include <chessboard_node.h>
+#include <pupil_node.hpp>
+#include <chessboard_node.hpp>
 #include <log_node.h>
 #include <intan_node.h>
 #include <spikeglx_node.hpp>
 #include <sync_node.hpp>
-#include <aruco_node.h>
+#include <aruco_node.hpp>
 
 namespace thalamus {
   using namespace std::chrono_literals;

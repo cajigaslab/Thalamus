@@ -240,6 +240,8 @@ class TreeObservableCollectionModel(QAbstractItemModel):
     if index.column() >= self.prefix_columns:
       key = self.columns[index.column()-self.prefix_columns]
       row_key = keys[index.row()]
+      if row_key not in item:
+        return flags
       item = item[row_key]
     else:
       key = keys[index.row()]

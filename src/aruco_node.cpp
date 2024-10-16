@@ -1,4 +1,4 @@
-#include <aruco_node.h>
+#include <aruco_node.hpp>
 #include <image_node.h>
 #include <modalities_util.h>
 #include <opencv2/objdetect/aruco_detector.hpp>

@@ -7,7 +7,7 @@
 #include <grpc_impl.h>
 
 #include <nidaq_node.h>
-#include <alpha_omega_node.h>
+#include <alpha_omega_node.hpp>
 #include <xsens_node.h>
 #include <storage_node.h>
 

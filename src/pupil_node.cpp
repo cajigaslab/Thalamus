@@ -1,4 +1,4 @@
-#include <pupil_node.h>
+#include <pupil_node.hpp>
 #include <thread_pool.h>
 #include <boost/pool/object_pool.hpp>
 #include <modalities_util.h>

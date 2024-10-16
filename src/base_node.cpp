@@ -108,7 +108,11 @@ namespace thalamus {
     std::weak_ptr<Node> source;
     boost::asio::io_context& io_context;
     boost::asio::high_resolution_timer timer;
-    std::vector<double> buffer;
+    std::vector<std::vector<double>> buffers;
+    thalamus::vector<std::span<const double>> spans;
+    thalamus::vector<std::chrono::nanoseconds> sample_intervals;
+    thalamus::vector<std::string> names;
+    thalamus::vector<std::string_view> name_views;
     std::vector<std::string> recommended_names;
     size_t _num_channels;
     size_t buffer_size;
@@ -141,16 +145,19 @@ namespace thalamus {
         TRIANGLE,
         RANDOM
       };
-      Shape shape;
-      double frequency;
-      double amplitude;
-      double phase;
-      double duty_cycle;
-      double offset;
-      double current;
+      Shape shape = Shape::SINE;
+      double frequency = 1;
+      double amplitude = 1;
+      double phase = 0;
+      double duty_cycle = .5;
+      double offset = 0;
+      double current = 0;
       std::chrono::nanoseconds last_switch;
-      std::mt19937& random_range;
-      std::uniform_int_distribution<std::mt19937::result_type>& random_distribution;
+      Impl* impl;
+
+      Wave() = delete;
+      Wave(Impl* impl) : impl(impl) {}
+
       double operator()(std::chrono::nanoseconds time) {
         switch(shape) {
           case Shape::SINE: {
@@ -178,16 +185,20 @@ namespace thalamus {
           case Shape::RANDOM: {
             size_t interval = 1e9 / frequency;
             if((time - last_switch).count() > interval) {
-              current = amplitude*random_distribution(random_range) + offset;
+              current = amplitude*impl->random_distribution(impl->random_range) + offset;
               last_switch = time;
             }
             return current;
           }
+          default:
+            return 0;
         }
       }
     };
+    std::optional<Wave> default_wave;
     std::vector<Wave> waves;
     ObservableListPtr waves_state;
+    size_t last_wave_count = 0;
 
 
     Impl(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph, WaveGeneratorNode* outer)
@@ -207,7 +218,7 @@ namespace thalamus {
         outer->ready(outer);
       });
 
-      this->state->recap(std::bind(&Impl::on_change, this, this, _1, _2, _3));
+      this->state->recap(std::bind(&Impl::on_change, this, state.get(), _1, _2, _3));
     }
 
     void on_timer(const boost::system::error_code& error) {
@@ -216,24 +227,45 @@ namespace thalamus {
         return;
       }
       BOOST_ASSERT(!error);
+
       if (!_sample_interval.count()) {
         timer.expires_after(std::chrono::milliseconds(poll_interval));
         timer.async_wait(std::bind(&Impl::on_timer, this, _1));
         return;
       }
+
+      auto wave_count = waves.size();
+      if(wave_count != last_wave_count) {
+        outer->channels_changed(outer);
+      }
+      last_wave_count = wave_count;
+
       auto now = std::chrono::steady_clock::now();
       auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(now - _start_time);
-      //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(now - last_time).count();
-      //std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(now - last_time).count() << " ";
       last_time = now;
-      buffer.clear();
+      buffers.resize(wave_count);
+      spans.clear();
 
+      auto i = 0ull;
       auto new_time = _time;
-      while (new_time <= elapsed) {
-        buffer.push_back(wave(new_time));
-        new_time += _sample_interval;
+      for(auto& wave : waves) {
+        auto& buffer = buffers[i];
+        buffer.clear();
+        new_time = _time;
+        while (new_time <= elapsed) {
+          buffer.push_back(wave(new_time));
+          new_time += _sample_interval;
+        }
+        ++i;
+        spans.emplace_back(buffer.begin(), buffer.end());
       }
-      analog_impl.inject({ {buffer.begin(), buffer.end()} }, { _sample_interval }, {""}, now.time_since_epoch());
+      sample_intervals.assign(spans.size(), _sample_interval);
+      for(auto j = names.size();j < i;++j) {
+        names.emplace_back(std::to_string(j));
+      }
+      name_views.assign(names.begin(), names.end());
+
+      analog_impl.inject(spans, sample_intervals, name_views, now.time_since_epoch());
       _time = new_time;
       //auto after = std::chrono::steady_clock::now();
       //std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(after - now).count() << std::endl;
@@ -244,9 +276,11 @@ namespace thalamus {
       timer.async_wait(std::bind(&Impl::on_timer, this, _1));
     }
 
-    void on_change(ObservableCollection* source, ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
-      long long index;
+    const std::set<std::string> wave_properties = {"Frequency", "Amplitude", "Shape", "Offset", "Duty Cycle", "Phase"};
+
+    void on_change(ObservableCollection* source, ObservableCollection::Action action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
       std::string key_str;
+      Wave* wave = nullptr;
       if(source == state.get()) {
         key_str = std::get<std::string>(k);
         if(key_str == "Waves") {
@@ -254,53 +288,63 @@ namespace thalamus {
           waves_state->recap(std::bind(&Impl::on_change, this, waves_state.get(), _1, _2, _3));
           return;
         }
-        index = 0;
+        if(waves.empty()) {
+          waves.emplace_back(this);
+        }
+        wave = &waves[0];
       } else if (source == waves_state.get()) {
-        auto wave_state = std::get<ObservableDictPtr>(v);
-        wave_state->recap(std::bind(&Impl::on_change, this, wave_state.get(), _1, _2, _3));
+        if(action == ObservableCollection::Action::Set) {
+          auto wave_state = std::get<ObservableDictPtr>(v);
+          wave_state->recap(std::bind(&Impl::on_change, this, wave_state.get(), _1, _2, _3));
+        } else {
+          auto i = std::get<long long>(k);
+          waves.erase(waves.begin() + i);
+        }
         return;
-      } else {
+      } else if (source->parent == waves_state.get()) {
         key_str = std::get<std::string>(k);
         auto temp = waves_state->key_of(*source);
         THALAMUS_ASSERT(temp.has_value(), "Failed to find index of wave");
-        index = std::get<long long>(*temp) + 1;
+        auto index = std::get<long long>(*temp);
+        if(waves.size() <= index) {
+          waves.resize(index+1, Wave(this));
+        }
+        wave = &waves[index];
+      } else {
+        return;
       }
-      if(waves.size() <= index) {
-        waves.resize(index+1);
-      }
-      auto& wave = waves[index];
 
       if (key_str == "Frequency") {
-        wave.frequency = std::get<double>(v);
+        wave->frequency = std::get<double>(v);
       }
       else if (key_str == "Amplitude") {
-        wave.amplitude = std::get<double>(v);
+        wave->amplitude = std::get<double>(v);
       }
       else if (key_str == "Shape") {
         shape = std::get<std::string>(v);
         if (shape == "Sine") {
-          wave.shape = Wave::Shape::SINE;
+          wave->shape = Wave::Shape::SINE;
         }
         else if (shape == "Square") {
-          wave.shape = Wave::Shape::SQUARE;
+          wave->shape = Wave::Shape::SQUARE;
         }
         else if (shape == "Triangle") {
-          wave.shape = Wave::Shape::TRIANGLE;
+          wave->shape = Wave::Shape::TRIANGLE;
         }
         else if (shape == "Random") {
-          wave.shape = Wave::Shape::RANDOM;
+          wave->shape = Wave::Shape::RANDOM;
         } else {
-          wave.shape = Wave::Shape::SINE;
+          wave->shape = Wave::Shape::SINE;
         }
       }
       else if (key_str == "Offset") {
-        wave.offset = std::get<double>(v);
+        wave->offset = std::get<double>(v);
       }
       else if (key_str == "Duty Cycle") {
-        wave.duty_cycle = std::get<double>(v);
+        wave->duty_cycle = std::get<double>(v);
       }
       else if (key_str == "Phase") {
-        wave.phase = std::get<double>(v);
+        wave->phase = std::get<double>(v);
       }
       else if (key_str == "Poll Interval") {
         poll_interval = std::get<long long int>(v);
@@ -334,7 +378,7 @@ namespace thalamus {
   }
 
   std::string_view WaveGeneratorNode::name(int channel) const {
-    return impl->recommended_names.at(channel);
+    return impl->analog_impl.name(channel);
   }
   std::span<const std::string> WaveGeneratorNode::get_recommended_channels() const {
     return std::span<const std::string>(impl->recommended_names.begin(), impl->recommended_names.end());

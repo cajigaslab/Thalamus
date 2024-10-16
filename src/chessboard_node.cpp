@@ -1,4 +1,4 @@
-#include <chessboard_node.h>
+#include <chessboard_node.hpp>
 #include <thread_pool.h>
 #include <boost/pool/object_pool.hpp>
 #include <modalities_util.h>
