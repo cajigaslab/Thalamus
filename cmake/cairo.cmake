@@ -25,6 +25,7 @@ file(MAKE_DIRECTORY "${pixman_BINARY_DIR}/Debug/install")
 file(MAKE_DIRECTORY "${pixman_BINARY_DIR}/Release/install")
 
 add_custom_command(
+  DEPENDS glib
   OUTPUT "${pixman_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/build.ninja"
   COMMAND cmake -E env 
   ${CAIRO_COMPILER}
