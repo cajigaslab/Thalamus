@@ -109,7 +109,7 @@ class TreeObservableCollectionModel(QAbstractItemModel):
     config.add_recursive_observer(self.__on_change, lambda: isdeleted(self))
     config.recap(functools.partial(self.__on_change, config))
 
-  def __on_change(self, source: ObservableCollection, action: ObservableCollection.Action, key: typing.Any, value: typing.Any):
+  def __on_change(self, source: ObservableCollection, action: ObservableCollection.Action, key: typing.Any, value: typing.Any, recursed = False):
     if not source.is_descendent(self.config):
       return
 
@@ -171,6 +171,13 @@ class TreeObservableCollectionModel(QAbstractItemModel):
       del keys[i]
       self.endRemoveRows()
 
+      if isinstance(source, ObservableList):
+        for k in range(key, len(source)):
+          self.__on_change(source, ObservableCollection.Action.SET, k, source[k])
+        if not recursed:
+          self.__on_change(source, ObservableCollection.Action.DELETE, len(source), None, True)
+        
+
   def data(self, index: QModelIndex, role: int) -> typing.Any:
     print('data', index.row(), index.column(), role)
     item = self.index_to_item[index.parent().internalId()]
@@ -179,11 +186,12 @@ class TreeObservableCollectionModel(QAbstractItemModel):
       print('column')
       key = self.columns[index.column()-self.prefix_columns]
       row_key = keys[index.row()]
-      item = item[row_key]
+      print('data10', item, row_key)
+      item = item.get(row_key, None)
       if not isinstance(item, ObservableCollection):
         return None
 
-      value = item[key] if key in item else None
+      value = item.get(key, None)
     else:
       print('key')
       key = keys[index.row()]
@@ -212,7 +220,7 @@ class TreeObservableCollectionModel(QAbstractItemModel):
     if index.column() >= self.prefix_columns:
       key = self.columns[index.column()-self.prefix_columns]
       row_key = keys[index.row()]
-      item = item[row_key]
+      item = item.get(row_key, None)
       if not isinstance(item, ObservableCollection):
         return False
     else:
@@ -232,7 +240,7 @@ class TreeObservableCollectionModel(QAbstractItemModel):
       return super().setData(index, value, role)
 
   def flags(self, index: QModelIndex) -> Qt.ItemFlag:
-    #print('flags', index)
+    print('flags1', index)
     flags = super().flags(index)
 
     item = self.index_to_item[index.parent().internalId()]
@@ -240,18 +248,20 @@ class TreeObservableCollectionModel(QAbstractItemModel):
     if index.column() >= self.prefix_columns:
       key = self.columns[index.column()-self.prefix_columns]
       row_key = keys[index.row()]
-      if row_key not in item:
+      print('flags10', item, key, row_key)
+      item = item.get(row_key, None)
+      if item is None:
         return flags
-      item = item[row_key]
     else:
       key = keys[index.row()]
-    if self.is_editable(item, key):
+    if index.column() > 0 and self.is_editable(item, key):
       value = item[key] if key in item else None
-      print('flags', key, isinstance(value, bool))
+      print('flags2', key, isinstance(value, bool))
       if isinstance(value, bool):
         flags |= Qt.ItemFlag.ItemIsUserCheckable
       else:
         flags |= Qt.ItemFlag.ItemIsEditable
+    print('flags3', index.row(), index.column(), flags, Qt.ItemFlag.ItemIsEditable)
     return flags
 
   def headerData(self, section: int, orientation: Qt.Orientation, role: int):
@@ -270,7 +280,7 @@ class TreeObservableCollectionModel(QAbstractItemModel):
           return self.columns[section-self.prefix_columns]
 
   def index(self, row: int, column: int, parent: QModelIndex) -> QModelIndex:
-    #print('index', row, column, parent, self.hasIndex(row, column, parent))
+    #print('index', row, column, parent)
     parent_id = 0
     if parent.isValid():
       parent_id = parent.internalId()
@@ -296,13 +306,14 @@ class TreeObservableCollectionModel(QAbstractItemModel):
 
   
   def parent(self, index: QModelIndex) -> QModelIndex:
-    #print('parent', index)
+    print('parent', index)
 
     #print(self.index_to_item)
     #print(index.row(), index.column(), index.internalId())
     return self.index_to_parent[index.internalId()]
 
   def rowCount(self, parent: QModelIndex) -> int:
+    print('rowCount', parent.isValid())
     if parent.internalId() not in self.index_to_item:
       return 0
 
@@ -326,6 +337,7 @@ class TreeObservableCollectionDelegate(QItemDelegate):
     self.choices = choices
 
   def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
+    print('createEditor')
     item, key = self.model.get_location(index)
     choices = self.choices(item, key)
     if choices is not None:

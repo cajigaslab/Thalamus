@@ -106,10 +106,10 @@ class ObservableCollection(abc.ABC):
     """
     Reads from context using the dict.get function
     """
-    if not isinstance(self.content, dict):
-      raise RuntimeError("Attempted to append to ObservableCollection that doesn't wrap a list")
-
-    return self.content.get(key, default)
+    if isinstance(self.content, dict):
+      return self.content.get(key, default)
+    else:
+      return self.content[key] if key >= 0 and key < len(self.content) else default
 
   def __contains__(self, key: typing.Any) -> typing.Any:
     return key in self.content
@@ -248,7 +248,8 @@ class ObservableCollection(abc.ABC):
       value.set_remote_storage(self.remote_storage)
     self.content.insert(i, value)
 
-    self.__notify(self, ObservableCollection.Action.SET, i, value)
+    for j in range(i, len(self.content)):
+      self.__notify(self, ObservableCollection.Action.SET, j, value)
     callback()
 
   def remove(self, value: typing.Any, callback: typing.Callable[[], None] = lambda: None, from_remote = False) -> None:
@@ -483,6 +484,13 @@ class ObservableCollection(abc.ABC):
     for k, v in items:
       if v is self:
         return k
+
+  def has_key(self, k):
+    if not isinstance(self.content, list):
+      return k >= 0 and k < len(self.content)
+    else:
+      return k in self.content
+
 
 class ObservableDict(ObservableCollection, typing.Dict[typing.Any, typing.Any]):
   """

@@ -69,7 +69,7 @@ class WaveWidget(QWidget):
       if key == 'Shape':
         return ['Sine', 'Square', 'Triangle', 'Random']
 
-    model = TreeObservableCollectionModel(self.waves, key_column='', columns=['Frequency', 'Amplitude', 'Shape', 'Offset', 'Duty Cycle', 'Phase'],
+    model = TreeObservableCollectionModel(self.waves, key_column='#', columns=['Frequency', 'Amplitude', 'Shape', 'Offset', 'Duty Cycle', 'Phase'],
                                           show_extra_values=False,
                                           is_editable = lambda o, k: True)
     delegate = TreeObservableCollectionDelegate(model, 3, choices)
