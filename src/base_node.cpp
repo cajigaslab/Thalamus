@@ -2,7 +2,7 @@
 #include <chrono>
 #include <cmath>
 #include <map>
-#include <util.h>
+#include <util.hpp>
 #include <tracing/tracing.h>
 #include <random>
 #include <modalities_util.h>

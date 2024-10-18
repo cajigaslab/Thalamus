@@ -2,7 +2,7 @@
 #include <image_node.h>
 #include <text_node.h>
 #include <fstream>
-#include <util.h>
+#include <util.hpp>
 #include <absl/strings/str_format.h>
 #include <absl/time/time.h>
 #include <boost/qvm/vec_access.hpp>

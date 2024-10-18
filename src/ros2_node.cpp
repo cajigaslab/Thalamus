@@ -3,7 +3,7 @@
 #include <text_node.h>
 #include <distortion_node.h>
 #include <oculomatic_node.h>
-#include <util.h>
+#include <util.hpp>
 #include <absl/strings/str_format.h>
 #include <absl/time/time.h>
 #include <modalities_util.h>

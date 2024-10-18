@@ -9,7 +9,7 @@
 #include <span>
 #include <chrono>
 #include <state.hpp>
-#include <util.h>
+#include <util.hpp>
 #include <grpcpp/channel.h>
 #include <boost/json.hpp>
 #include <thalamus.pb.h>
@@ -45,7 +45,7 @@ namespace thalamus {
     virtual std::weak_ptr<Node> get_node(const thalamus_grpc::NodeSelector&) = 0;
     virtual void get_node(const std::string&, std::function<void(std::weak_ptr<Node>)>) = 0;
     virtual void get_node(const thalamus_grpc::NodeSelector&, std::function<void(std::weak_ptr<Node>)>) = 0;
-    using NodeConnection = std::shared_ptr<boost::signals2::scoped_connection>;
+    using NodeConnection = boost::signals2::scoped_connection;
     virtual NodeConnection get_node_scoped(const std::string&, std::function<void(std::weak_ptr<Node>)>) = 0;
     virtual NodeConnection get_node_scoped(const thalamus_grpc::NodeSelector&, std::function<void(std::weak_ptr<Node>)>) = 0;
     virtual Service& get_service() = 0;

@@ -2,7 +2,7 @@
 #include <vector>
 #include <map>
 #include <functional>
-#include <util.h>
+#include <util.hpp>
 #include <tracing/tracing.h>
 #include <boost/json.hpp>
 #include <boost/qvm/vec_access.hpp>
