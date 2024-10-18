@@ -5,7 +5,7 @@ Follow this tutorial to generate **Figure 5** using data output from Thalamus. *
 Download the **Thalamus_Figure5.mlx** file and the .m files in the **functions** folder. Open them in MATLAB and run as directed. See **Thalamus_Figure5.pdf** for a print-out of how this should run and the associated output. 
 
 # Data
-The data will be made accessible on Kaggle and the link added here for ease of access.
+The data will be made accessible on Box and the link added here for ease of access: https://upenn.box.com/v/restorelab-thalamus
 
 # Analysis
 You should be able to replicate the result below:
