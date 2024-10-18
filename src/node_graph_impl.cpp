@@ -1,4 +1,4 @@
-#include <node_graph_impl.h>
+#include <node_graph_impl.hpp>
 #include <grpcpp/create_channel.h>
 #include <run_node.h>
 #include <ophanim_node.h>
@@ -297,16 +297,12 @@ namespace thalamus {
     auto value = get_node(selector);
     if (!value.lock()) {
       impl->signals.emplace_back(selector, boost::signals2::signal<void(std::weak_ptr<Node>)>());
-      auto connection = new boost::signals2::scoped_connection(impl->signals.back().second.connect(callback));
-      return NodeConnection(connection, [this] (boost::signals2::scoped_connection* c) {
-        delete c;
-        impl->notify([] (auto&) { return false; },
-                     std::weak_ptr<Node>());
-      });
+      boost::signals2::scoped_connection connection(impl->signals.back().second.connect(callback));
+      return connection;
     }
     else {
       callback(value);
-      return std::make_shared<NodeConnection::element_type>();
+      return NodeConnection();
     }
   }
 

@@ -1,6 +1,6 @@
 //#include <QApplication>
 //#include <QScreen>
-#include "node_graph_impl.h"
+#include "node_graph_impl.hpp"
 #include <boost/asio.hpp>
 #include <boost/program_options.hpp>
 #include <state.hpp>
@@ -17,7 +17,7 @@
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
 
-#include "grpc_impl.h"
+#include "grpc_impl.hpp"
 #include <tracing/systemclock.h>
 #include <format>
 #include <boost/log/trivial.hpp>

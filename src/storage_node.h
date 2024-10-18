@@ -17,7 +17,7 @@
 #include <tracing/tracing.h>
 
 #include <thalamus.pb.h>
-#include <grpc_impl.h>
+#include <grpc_impl.hpp>
 
 namespace thalamus {
   class StorageNode : public Node, public AnalogNode {

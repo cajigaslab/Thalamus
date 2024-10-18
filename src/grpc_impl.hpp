@@ -11,7 +11,7 @@
 #include <thalamus.grpc.pb.h>
 #include <condition_variable>
 #include <tracing/tracing.h>
-#include <util.h>
+#include <util.hpp>
 
 namespace thalamus {
   class Service : public thalamus_grpc::Thalamus::Service {

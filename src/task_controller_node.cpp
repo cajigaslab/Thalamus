@@ -1,5 +1,5 @@
 #include <task_controller_node.h>
-#include <util.h>
+#include <util.hpp>
 #include <grpcpp/create_channel.h>
 #include <tracing/tracing.h>
 #include <task_controller.grpc.pb.h>

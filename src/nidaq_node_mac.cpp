@@ -3,7 +3,7 @@
 #include <absl/strings/numbers.h>
 #include <tracing/tracing.h>
 #include <numeric>
-#include <grpc_impl.h>
+#include <grpc_impl.hpp>
 #include <modalities_util.h>
 
 namespace thalamus {

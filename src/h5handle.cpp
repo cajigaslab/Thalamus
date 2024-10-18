@@ -1,9 +1,9 @@
-#include <h5handle.h>
+#include <h5handle.hpp>
 #include <map>
 #include <memory>
 #include <functional>
 #include <hdf5.h>
-#include <util.h>
+#include <util.hpp>
 #include <xsens_node.h>
 
 namespace thalamus {

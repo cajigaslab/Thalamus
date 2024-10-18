@@ -27,18 +27,48 @@ namespace thalamus {
     double amplitude;
     double value;
     std::chrono::milliseconds duration;
+    std::chrono::nanoseconds time;
     ObservableListPtr channels;
     NodeGraph* graph;
     std::vector<std::weak_ptr<AnalogNode>> sources;
     size_t _max_channels = std::numeric_limits<size_t>::max();
+    struct Pair {
+      enum class Algo {
+        THRESHOLD,
+        CROSS_CORRELATION
+      };
+      ObservableDict* state = nullptr;
+      Node* node1 = nullptr;
+      std::string channel1_name;
+      std::string node1_name;
+      int channel1_index = -1;
+      Node* node2 = nullptr;
+      std::string channel2_name;
+      std::string node2_name;
+      int channel2_index = -1;
+      Algo algo = Algo::THRESHOLD;
+      double threshold = 1.6;
+      std::chrono::nanoseconds window = 500'000'000ns;
+      std::chrono::nanoseconds cross1;
+      std::chrono::nanoseconds cross2;
+      std::vector<double> data1;
+      std::vector<double> data2;
+      double lag = 0;
+      std::string out_channel_name;
+    };
+    std::vector<Pair> pairs;
+    std::map<std::string, boost::signals2::scoped_connection> data_connections;
+    std::map<std::string, boost::signals2::scoped_connection> channels_connections;
+    std::map<std::string, boost::signals2::scoped_connection> node_connections;
+    ObservableCollection* pairs_state;
   public:
     Impl(ObservableDictPtr state, boost::asio::io_context&, NodeGraph* graph, SyncNode* outer)
       : state(state)
       , outer(outer)
       , graph(graph) {
 
-      state_connection = state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
-      state->recap(std::bind(&Impl::on_change, this, _1, _2, _3));
+      state_connection = state->recursive_changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
+      state->recap(std::bind(&Impl::on_change, this, state.get(), _1, _2, _3));
     }
 
     std::vector<std::tuple<std::weak_ptr<AnalogNode>, int, std::string, std::chrono::nanoseconds>> mappings;
@@ -50,7 +80,140 @@ namespace thalamus {
     std::vector<boost::signals2::scoped_connection> single_source_map_connections;
     boost::signals2::scoped_connection sources_state_connection;
 
-    void on_change(ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
+    void compute(AnalogNode* analog, std::vector<double>& pdata, int& channel_index, std::string& channel_name,
+                 double threshold, std::chrono::nanoseconds& cross, Pair::Algo algo) {
+      if(channel_index == -1) {
+        for(auto i = 0;i < analog->num_channels();++i) {
+          if(analog->name(i) == channel_name) {
+            channel_index = i;
+            break;
+          }
+        }
+      }
+      if(channel_index == -1) {
+        return;
+      }
+      auto data = analog->data(channel_index);
+      if(data.empty()) {
+        return;
+      }
+      auto sample_interval = analog->sample_interval(channel_index);
+      if(algo == Pair::Algo::THRESHOLD) {
+        size_t i;
+        double last;
+        if(pdata.empty()) {
+          i = 1;
+          last = data[0];
+        } else {
+          i = 0;
+          last = pdata.back();
+        }
+        auto time = analog->time() - (data.size()-1)*sample_interval;
+        while(i < data.size()) {
+          auto d = data[i++];
+          if(last < threshold && d >= threshold) {
+            cross = time;
+            break;
+          }
+          time += sample_interval;
+          last = d;
+        }
+        pdata.assign(1, last);
+      }
+    }
+
+    void on_data(AnalogNode* analog, Node* node) {
+      if(!analog->has_analog_data()) {
+        return;
+      }
+      auto publish = true;
+      for(auto& p : pairs) {
+        if(p.node1 == node) {
+          compute(analog, p.data1, p.channel1_index, p.channel1_name, p.threshold, p.cross1, p.algo);
+        }
+        if(p.node2 == node) {
+          compute(analog, p.data2, p.channel2_index, p.channel2_name, p.threshold, p.cross2, p.algo);
+        }
+        if(p.algo == Pair::Algo::THRESHOLD) {
+          auto diff = p.cross1 - p.cross2;
+          if(p.cross1 > 0ns && p.cross2 > 0ns && abs(diff.count()) < p.window.count()) {
+            p.lag = diff.count();
+            publish = true;
+          }
+        }
+      }
+      if(publish) {
+        time = analog->time();
+        outer->ready(outer);
+      }
+    }
+
+    void on_channels_changed(AnalogNode* node) {
+      for(auto& p : pairs) {
+        p.channel1_index = -1;
+        p.channel2_index = -1;
+      }
+    }
+
+    Pair& get_pair(ObservableCollection* source) {
+      for(auto& p : pairs) {
+        if(p.state == source) {
+          return p;
+        }
+      }
+      THALAMUS_ASSERT(false, "Failed to find pair")
+    }
+
+    void on_change(ObservableCollection* source, ObservableCollection::Action action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
+      if(source == state.get()) {
+        auto key_str = std::get<std::string>(k);
+        if(key_str == "Pairs") {
+          auto list = std::get<ObservableListPtr>(v);
+          pairs_state = list.get();
+          list->recap(std::bind(&Impl::on_change, this, pairs_state, _1, _2, _3));
+        }
+      } else if (source == pairs_state) {
+        size_t key_int = std::get<long long>(k);
+        if(action == ObservableCollection::Action::Delete) {
+          pairs.erase(pairs.begin() + key_int);
+          return;
+        }
+        if(pairs.size() <= key_int) {
+          pairs.resize(key_int + 1);
+        }
+        auto dict = std::get<ObservableDictPtr>(v);
+        pairs[key_int].state = dict.get();
+        dict->recap(std::bind(&Impl::on_change, this, dict.get(), _1, _2, _3));
+      } else {
+        auto key_str = std::get<std::string>(k);
+        if(key_str == "Node1" || key_str == "Node2") {
+          auto value_str = std::get<std::string>(v);
+          node_connections[value_str] = graph->get_node_scoped(value_str, [this,key_str,value_str,source] (auto node) {
+            auto locked = node.lock();
+            auto& pair = get_pair(source);
+            if(key_str == "Node1") {
+              pair.node1 = locked.get();
+              pair.node1_name = value_str;
+            } else if(key_str == "Node2") {
+              pair.node2 = locked.get();
+              pair.node2_name = value_str;
+            }
+            pair.out_channel_name = absl::StrFormat("%s[%s]-%s[%s]", pair.node1_name, pair.channel1_name, pair.node2_name, pair.channel2_name);
+
+            auto analog_node = node_cast<AnalogNode*>(locked.get());
+            data_connections[value_str] = locked->ready.connect(std::bind(&Impl::on_data, this, analog_node, _1));
+            channels_connections[value_str] = analog_node->channels_changed.connect(std::bind(&Impl::on_channels_changed, this, _1));
+          });
+        } else if(key_str == "Channel1") {
+          auto& pair = get_pair(source);
+          auto value_str = std::get<std::string>(v);
+          pair.channel1_name = value_str;
+        } else if(key_str == "Channel2") {
+          auto& pair = get_pair(source);
+          auto value_str = std::get<std::string>(v);
+          pair.channel2_name = value_str;
+        }
+      }
     }
   };
 
@@ -64,28 +227,25 @@ namespace thalamus {
   }
 
   std::chrono::nanoseconds SyncNode::time() const {
-    return impl->current_node->time();
+    return impl->time;
   }
 
   std::span<const double> SyncNode::data(int channel) const {
-    return std::span<const double>();
+    auto& pair = impl->pairs[channel];
+    return std::span<const double>(&pair.lag, &pair.lag+1);
   }
 
   int SyncNode::num_channels() const {
-    return 0;
+    return impl->pairs.size();
   }
 
 
   std::string_view SyncNode::name(int channel) const {
-    return "";
+    return impl->pairs[channel].out_channel_name;
   }
 
   std::chrono::nanoseconds SyncNode::sample_interval(int channel) const {
-    if(num_channels() <= channel) {
-      return 0ns;
-    }
-    auto& pair = impl->mappings.at(channel);
-    return std::get<std::chrono::nanoseconds>(pair);
+    return 0ns;
   }
 
   void SyncNode::inject(const thalamus::vector<std::span<double const>>&, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&) {

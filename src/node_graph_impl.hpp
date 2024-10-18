@@ -4,7 +4,7 @@
 #include <memory>
 //#include <QMainWindow>
 #include <state.hpp>
-#include <grpc_impl.h>
+#include <grpc_impl.hpp>
 
 #include <nidaq_node.h>
 #include <alpha_omega_node.hpp>

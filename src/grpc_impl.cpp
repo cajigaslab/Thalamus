@@ -1,6 +1,6 @@
-#include <grpc_impl.h>
+#include <grpc_impl.hpp>
 #include <algorithm>
-#include <h5handle.h>
+#include <h5handle.hpp>
 #include <boost/qvm/vec_access.hpp>
 #include <boost/qvm/quat_access.hpp>
 #include <image_node.h>

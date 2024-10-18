@@ -1,5 +1,5 @@
 #include <run_node.h>
-#include <util.h>
+#include <util.hpp>
 #include <grpcpp/create_channel.h>
 #include <thalamus.grpc.pb.h>
 #include <tracing/tracing.h>
