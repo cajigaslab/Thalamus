@@ -1,4 +1,4 @@
-#include <xsens_node.h>
+#include <xsens_node.hpp>
 #include <vector>
 #include <map>
 #include <functional>

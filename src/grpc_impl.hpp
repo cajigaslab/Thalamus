@@ -1,7 +1,7 @@
 #pragma once
 
 #include <base_node.hpp>
-#include <xsens_node.h>
+#include <xsens_node.hpp>
 #include <boost/asio.hpp>
 #include <boost/json.hpp>
 #include <boost/signals2.hpp>

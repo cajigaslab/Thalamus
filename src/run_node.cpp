@@ -1,4 +1,4 @@
-#include <run_node.h>
+#include <run_node.hpp>
 #include <util.hpp>
 #include <grpcpp/create_channel.h>
 #include <thalamus.grpc.pb.h>

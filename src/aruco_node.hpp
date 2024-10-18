@@ -1,4 +1,4 @@
-#include <xsens_node.h>
+#include <xsens_node.hpp>
 #include <image_node.h>
 
 namespace thalamus {

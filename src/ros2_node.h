@@ -4,7 +4,7 @@
 #include <string>
 #include <base_node.hpp>
 #include <state.hpp>
-#include <xsens_node.h>
+#include <xsens_node.hpp>
 #include <tracing/tracing.h>
 
 #include <thalamus.pb.h>

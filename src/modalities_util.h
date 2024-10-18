@@ -2,7 +2,7 @@
 
 #include <modalities.h>
 #include <base_node.hpp>
-#include <xsens_node.h>
+#include <xsens_node.hpp>
 #include <image_node.h>
 #include <text_node.h>
 

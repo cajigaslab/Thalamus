@@ -1,4 +1,4 @@
-#include <storage_node.h>
+#include <storage_node.hpp>
 #include <image_node.h>
 #include <text_node.h>
 #include <fstream>

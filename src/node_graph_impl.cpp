@@ -1,7 +1,7 @@
 #include <node_graph_impl.hpp>
 #include <grpcpp/create_channel.h>
-#include <run_node.h>
-#include <ophanim_node.h>
+#include <run_node.hpp>
+#include <ophanim_node.hpp>
 #include <image_node.h>
 #include <task_controller_node.h>
 #include <oculomatic_node.h>
@@ -11,7 +11,7 @@
 #include <algebra_node.hpp>
 #include <normalize_node.h>
 #include <thread_pool.h>
-#include <remote_node.h>
+#include <remote_node.hpp>
 #include <lua_node.hpp>
 #include <ros2_node.h>
 #include <thalamus_config.h>

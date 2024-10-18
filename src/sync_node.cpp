@@ -53,6 +53,10 @@ namespace thalamus {
       std::chrono::nanoseconds cross2;
       std::vector<double> data1;
       std::vector<double> data2;
+      std::chrono::nanoseconds start_time1;
+      std::chrono::nanoseconds start_time2;
+      std::chrono::nanoseconds sample_interval1;
+      std::chrono::nanoseconds sample_interval2;
       double lag = 0;
       std::string out_channel_name;
     };
@@ -71,17 +75,9 @@ namespace thalamus {
       state->recap(std::bind(&Impl::on_change, this, state.get(), _1, _2, _3));
     }
 
-    std::vector<std::tuple<std::weak_ptr<AnalogNode>, int, std::string, std::chrono::nanoseconds>> mappings;
-    std::vector<std::string> recommended_channels;
-    std::set<AnalogNode*> names_collected;
-    AnalogNode* current_node;
-
-    std::map<std::string, boost::signals2::scoped_connection> source_mapping_connections;
-    std::vector<boost::signals2::scoped_connection> single_source_map_connections;
-    boost::signals2::scoped_connection sources_state_connection;
-
     void compute(AnalogNode* analog, std::vector<double>& pdata, int& channel_index, std::string& channel_name,
-                 double threshold, std::chrono::nanoseconds& cross, Pair::Algo algo) {
+                 double threshold, std::chrono::nanoseconds& cross, std::chrono::nanoseconds& start_time,
+                 std::chrono::nanoseconds& sample_interval, Pair::Algo algo) {
       if(channel_index == -1) {
         for(auto i = 0;i < analog->num_channels();++i) {
           if(analog->name(i) == channel_name) {
@@ -97,7 +93,8 @@ namespace thalamus {
       if(data.empty()) {
         return;
       }
-      auto sample_interval = analog->sample_interval(channel_index);
+      sample_interval = analog->sample_interval(channel_index);
+      auto time = analog->time() - (data.size()-1)*sample_interval;
       if(algo == Pair::Algo::THRESHOLD) {
         size_t i;
         double last;
@@ -108,7 +105,6 @@ namespace thalamus {
           i = 0;
           last = pdata.back();
         }
-        auto time = analog->time() - (data.size()-1)*sample_interval;
         while(i < data.size()) {
           auto d = data[i++];
           if(last < threshold && d >= threshold) {
@@ -119,6 +115,11 @@ namespace thalamus {
           last = d;
         }
         pdata.assign(1, last);
+      } else {
+        if(pdata.empty()) {
+          start_time = time;
+        }
+        pdata.insert(pdata.end(), data.begin(), data.end());
       }
     }
 
@@ -129,16 +130,78 @@ namespace thalamus {
       auto publish = true;
       for(auto& p : pairs) {
         if(p.node1 == node) {
-          compute(analog, p.data1, p.channel1_index, p.channel1_name, p.threshold, p.cross1, p.algo);
+          compute(analog, p.data1, p.channel1_index, p.channel1_name, p.threshold, p.cross1, p.start_time1, p.sample_interval1, p.algo);
         }
         if(p.node2 == node) {
-          compute(analog, p.data2, p.channel2_index, p.channel2_name, p.threshold, p.cross2, p.algo);
+          compute(analog, p.data2, p.channel2_index, p.channel2_name, p.threshold, p.cross2, p.start_time2, p.sample_interval2, p.algo);
         }
         if(p.algo == Pair::Algo::THRESHOLD) {
           auto diff = p.cross1 - p.cross2;
           if(p.cross1 > 0ns && p.cross2 > 0ns && abs(diff.count()) < p.window.count()) {
-            p.lag = diff.count();
+            p.lag = diff.count()/1e9;
             publish = true;
+          }
+        } else {
+          auto window1_size = p.sample_interval1 > 0ns ? p.sample_interval1*p.data1.size() : (analog->time() - p.start_time1);
+          auto window2_size = p.sample_interval2 > 0ns ? p.sample_interval2*p.data2.size() : (analog->time() - p.start_time2);
+          auto sample_interval1 = p.sample_interval1 > 0ns ? p.sample_interval1 : (window1_size/p.data1.size());
+          auto sample_interval2 = p.sample_interval2 > 0ns ? p.sample_interval2 : (window2_size/p.data2.size());
+          if(window1_size > p.window && window2_size > p.window) {
+            auto data1 = &p.data1;
+            auto data2 = &p.data2;
+            auto i = 0ull;
+            auto j = 0ull;
+            auto time1 = 0ns;
+            auto time2 = 0ns;
+            std::vector<double> resampled;
+            if(sample_interval1 < sample_interval2) {
+              while(resampled.size() < data1->size()) {
+                if(time1 > time2 + sample_interval2) {
+                  time2 += sample_interval2;
+                  ++j;
+                }
+                time1 += sample_interval1;
+                if(j < data2->size()) {
+                  resampled.push_back((*data2)[j]);
+                } else {
+                  resampled.push_back(resampled.back());
+                }
+              }
+              data2 = &resampled;
+            } else if (sample_interval1 > sample_interval2) {
+              while(resampled.size() < data2->size()) {
+                if(time2 > time1 + sample_interval1) {
+                  time1 += sample_interval1;
+                  ++i;
+                }
+                time2 += sample_interval2;
+                if(i < data1->size()) {
+                  resampled.push_back((*data1)[i]);
+                } else {
+                  resampled.push_back(resampled.back());
+                }
+              }
+              data1 = &resampled;
+            }
+            auto max = 0.0;
+            auto max_index = 0;
+            for(auto lag = -(int(data2->size())-1);lag < int(data1->size());++lag) {
+              i = std::max(0, -lag);
+              j = std::max(0, lag);
+              auto count = std::min(data2->size() - i, data1->size() - j);
+              auto sum = 0;
+              for(auto k = 0;k < count;++k) {
+                sum += (*data2)[i+k]*(*data1)[j+k];
+              }
+              if(sum > max) {
+                max = sum;
+                max_index = lag;
+              }
+            }
+            p.lag = max_index*sample_interval1/1e9;
+            publish = true;
+            p.data1.clear();
+            p.data2.clear();
           }
         }
       }
@@ -208,10 +271,12 @@ namespace thalamus {
           auto& pair = get_pair(source);
           auto value_str = std::get<std::string>(v);
           pair.channel1_name = value_str;
+          pair.out_channel_name = absl::StrFormat("%s[%s]-%s[%s]", pair.node1_name, pair.channel1_name, pair.node2_name, pair.channel2_name);
         } else if(key_str == "Channel2") {
           auto& pair = get_pair(source);
           auto value_str = std::get<std::string>(v);
           pair.channel2_name = value_str;
+          pair.out_channel_name = absl::StrFormat("%s[%s]-%s[%s]", pair.node1_name, pair.channel1_name, pair.node2_name, pair.channel2_name);
         }
       }
     }

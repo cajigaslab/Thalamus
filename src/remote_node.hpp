@@ -1,5 +1,5 @@
 #include <base_node.hpp>
-#include <xsens_node.h>
+#include <xsens_node.hpp>
 
 namespace thalamus {
 

@@ -8,8 +8,8 @@
 
 #include <nidaq_node.h>
 #include <alpha_omega_node.hpp>
-#include <xsens_node.h>
-#include <storage_node.h>
+#include <xsens_node.hpp>
+#include <storage_node.hpp>
 
 #include <boost/asio.hpp>
 

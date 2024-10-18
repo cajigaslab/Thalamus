@@ -1,4 +1,4 @@
-#include <ophanim_node.h>
+#include <ophanim_node.hpp>
 #include <util.h>
 #include <grpcpp/create_channel.h>
 #include <ophanim.grpc.pb.h>

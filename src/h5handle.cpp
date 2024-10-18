@@ -4,7 +4,7 @@
 #include <functional>
 #include <hdf5.h>
 #include <util.hpp>
-#include <xsens_node.h>
+#include <xsens_node.hpp>
 
 namespace thalamus {
 
