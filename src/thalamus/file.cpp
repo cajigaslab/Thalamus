@@ -1,4 +1,4 @@
-#include <thalamus/file.h>
+#include <thalamus/file.hpp>
 #include <util.hpp>
 #include <fstream>
 

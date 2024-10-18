@@ -3,9 +3,9 @@
 #include <cmath>
 #include <map>
 #include <util.hpp>
-#include <tracing/tracing.h>
+#include <tracing/tracing.hpp>
 #include <random>
-#include <modalities_util.h>
+#include <modalities_util.hpp>
 //#include <plot.h>
 
 namespace thalamus {

@@ -2,18 +2,19 @@
 
 #include <string>
 #include <thalamus.pb.h>
-#include <thalamus_asio.h>
+#include <thalamus_asio.hpp>
 #include <base_node.hpp>
 #include <state.hpp>
-#include <image_node.h>
+#include <image_node.hpp>
+#include "opencv2/core.hpp"
 
 namespace thalamus {
-  class OculomaticNode : public Node, public ImageNode, public AnalogNode {
+  class DistortionNode : public Node, public ImageNode, public AnalogNode {
     struct Impl;
     std::unique_ptr<Impl> impl;
   public:
-    OculomaticNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph*);
-    ~OculomaticNode();
+    DistortionNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph*);
+    ~DistortionNode();
     static std::string type_name();
     static bool prepare();
     Plane plane(int) const override;
@@ -31,9 +32,11 @@ namespace thalamus {
     int num_channels() const override;
     std::chrono::nanoseconds sample_interval(int channel) const override;
     std::string_view name(int channel) const override;
-    std::span<const std::string> get_recommended_channels() const override;
     void inject(const thalamus::vector<std::span<double const>>&, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&) override;
     bool has_analog_data() const override;
+
+    const cv::Mat& camera_matrix() const;
+    std::span<const double> distortion_coefficients() const;
     size_t modalities() const override;
   };
 }

@@ -1,7 +1,7 @@
 #pragma once
 
-#include <thalamus_asio.h>
-#include <thalamus_signals2.h>
+#include <thalamus_asio.hpp>
+#include <thalamus_signals2.hpp>
 
 #include <vector>
 #include <functional>

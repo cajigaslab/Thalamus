@@ -1,4 +1,4 @@
-#include <tracing/iclock.h>
+#include <tracing/iclock.hpp>
 
 class SystemClock : public IClock
 {

@@ -1,6 +1,6 @@
 #include <alpha_omega_node.hpp>
 #include <regex>
-#include <modalities_util.h>
+#include <modalities_util.hpp>
 
 #ifdef _WIN32
   #ifdef __clang__
@@ -56,7 +56,7 @@ int ErrorHandlingfunc(int* pErrorCount, cChar* sError, int nError) {
 #endif
 #include <absl/strings/numbers.h>
 //#include <QMessageBox>
-#include <tracing/tracing.h>
+#include <tracing/tracing.hpp>
 
 namespace thalamus {
   using namespace std::placeholders;

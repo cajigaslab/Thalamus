@@ -2,7 +2,7 @@
 
 #include <string>
 #include <thalamus.pb.h>
-#include <thalamus_asio.h>
+#include <thalamus_asio.hpp>
 #include <base_node.hpp>
 #include <state.hpp>
 

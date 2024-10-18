@@ -6,7 +6,7 @@
 #include <state.hpp>
 #include <grpc_impl.hpp>
 
-#include <nidaq_node.h>
+#include <nidaq_node.hpp>
 #include <alpha_omega_node.hpp>
 #include <xsens_node.hpp>
 #include <storage_node.hpp>

@@ -80,7 +80,6 @@ add_custom_command(OUTPUT "${opencv_BINARY_DIR}/$<CONFIG>/CMakeCache.txt"
                    DEPENDS ${ZLIB_PROCESSED_HEADER_PATHS} ffmpeg
                    COMMAND 
                    cmake "${opencv_SOURCE_DIR}" -Wno-dev 
-                      -DCMAKE_POSITION_INDEPENDENT_CODE=ON
                       -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
                       -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
                       -DCMAKE_LINKER=${CMAKE_LINKER}

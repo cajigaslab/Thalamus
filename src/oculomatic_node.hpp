@@ -2,42 +2,18 @@
 
 #include <string>
 #include <thalamus.pb.h>
-#include <thalamus_asio.h>
+#include <thalamus_asio.hpp>
 #include <base_node.hpp>
 #include <state.hpp>
+#include <image_node.hpp>
 
 namespace thalamus {
-  class ImageNode {
-  public:
-    using Plane = std::span<const unsigned char>;
-    using Planes = std::array<Plane, 3>;
-    enum class Format {
-      Gray,
-      RGB,
-      YUYV422,
-      YUV420P,
-      YUVJ420P,
-    };
-    virtual ~ImageNode() {}
-    virtual Plane plane(int) const = 0;
-    virtual size_t num_planes() const = 0;
-    virtual Format format() const = 0;
-    virtual size_t width() const = 0;
-    virtual size_t height() const = 0;
-    virtual std::chrono::nanoseconds frame_interval() const = 0;
-    virtual std::chrono::nanoseconds time() const = 0;
-    virtual void inject(const thalamus_grpc::Image&) = 0;
-    virtual bool has_image_data() const {
-      return true;
-    }
-  };
-
-  class FfmpegNode : public Node, public ImageNode, public AnalogNode {
+  class OculomaticNode : public Node, public ImageNode, public AnalogNode {
     struct Impl;
     std::unique_ptr<Impl> impl;
   public:
-    FfmpegNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph*);
-    ~FfmpegNode();
+    OculomaticNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph*);
+    ~OculomaticNode();
     static std::string type_name();
     static bool prepare();
     Plane plane(int) const override;
@@ -48,6 +24,7 @@ namespace thalamus {
     std::chrono::nanoseconds frame_interval() const override;
     std::chrono::nanoseconds time() const override;
     void inject(const thalamus_grpc::Image&) override;
+    boost::json::value process(const boost::json::value&) override;
     bool has_image_data() const override;
 
     std::span<const double> data(int channel) const override;

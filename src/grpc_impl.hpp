@@ -10,7 +10,7 @@
 #include <chrono>
 #include <thalamus.grpc.pb.h>
 #include <condition_variable>
-#include <tracing/tracing.h>
+#include <tracing/tracing.hpp>
 #include <util.hpp>
 
 namespace thalamus {

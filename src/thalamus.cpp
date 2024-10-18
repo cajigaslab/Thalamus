@@ -17,10 +17,10 @@
 #include <grpcpp/health_check_service_interface.h>
  
 #include "grpc_impl.hpp"
-#include <tracing/systemclock.h>
+#include <tracing/systemclock.hpp>
 #include <format>
 #include <boost/log/trivial.hpp>
-#include <thalamus/file.h>
+#include <thalamus/file.hpp>
 #include <state_manager.hpp>
 
 #ifdef __clang__

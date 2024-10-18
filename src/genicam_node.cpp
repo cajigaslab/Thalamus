@@ -9,7 +9,7 @@
 #include <numeric>
 #include <calculator.hpp>
 #include <filesystem>
-#include <modalities_util.h>
+#include <modalities_util.hpp>
 #include <regex>
 #ifdef _WIN32
 #else

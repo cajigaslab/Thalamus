@@ -1,7 +1,7 @@
 #pragma once
 
 #include <base_node.hpp>
-#include <text_node.h>
+#include <text_node.hpp>
 
 namespace thalamus {
   class LogNode : public Node, public TextNode {

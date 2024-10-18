@@ -14,7 +14,7 @@
 #include <state.hpp>
 #include <boost/signals2.hpp>
 #include <modalities.h>
-#include <thread_pool.h>
+#include <thread_pool.hpp>
 #include <thalamus/atoi.h>
 
 using namespace thalamus;

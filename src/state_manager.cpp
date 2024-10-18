@@ -1,5 +1,5 @@
 #include <state_manager.hpp>
-#include <tracing/tracing.h>
+#include <tracing/tracing.hpp>
 #include <chrono>
 #include <boost/signals2.hpp>
 

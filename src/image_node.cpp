@@ -1,6 +1,6 @@
-#include <image_node.h>
-#include <modalities_util.h>
-#include <tracing/tracing.h>
+#include <image_node.hpp>
+#include <modalities_util.hpp>
+#include <tracing/tracing.hpp>
 #include <atomic>
 
 extern "C" {
@@ -310,7 +310,7 @@ namespace thalamus {
         absl::StripAsciiWhitespace(&val_str);
         data_connection.disconnect();
         if(val_str.empty()) {
-          node_connection.reset();
+          node_connection.disconnect();
           stream_time = -1;
           return;
         }

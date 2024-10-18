@@ -35,7 +35,6 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 set(ABSL_PROPAGATE_CXX_STD ON)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 include(FetchContent)
 
@@ -57,7 +56,7 @@ if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
   list(APPEND ALL_COMPILE_OPTIONS /Zi /MP)
   list(APPEND ALL_LINK_OPTIONS /DEBUG)
 else()
-  list(APPEND ALL_COMPILE_OPTIONS -g -fPIC)
+  list(APPEND ALL_COMPILE_OPTIONS -g)
 endif()
   
 if("${SANITIZER}" STREQUAL thread)
@@ -177,10 +176,10 @@ set(WEBRTC_FILES
   "${webrtc_content_SOURCE_DIR}/api/task_queue/task_queue_base.cc")
 
 add_library(tracing OBJECT
-  "${CMAKE_SOURCE_DIR}/src/tracing/tracing.h"
+  "${CMAKE_SOURCE_DIR}/src/tracing/tracing.hpp"
   "${CMAKE_SOURCE_DIR}/src/tracing/tracing.cpp"
-  "${CMAKE_SOURCE_DIR}/src/tracing/iclock.h"
-  "${CMAKE_SOURCE_DIR}/src/tracing/systemclock.h"
+  "${CMAKE_SOURCE_DIR}/src/tracing/iclock.hpp"
+  "${CMAKE_SOURCE_DIR}/src/tracing/systemclock.hpp"
   "${CMAKE_SOURCE_DIR}/src/tracing/systemclock.cpp"
   ${WEBRTC_FILES})
 target_link_libraries(tracing PUBLIC webrtc)
@@ -228,20 +227,20 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/remote_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/ophanim_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/ophanim_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/task_controller_node.h"
+                     "${CMAKE_SOURCE_DIR}/src/task_controller_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/task_controller_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/image_node.h"
+                     "${CMAKE_SOURCE_DIR}/src/image_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/image_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/oculomatic_node.h"
+                     "${CMAKE_SOURCE_DIR}/src/oculomatic_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/oculomatic_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/distortion_node.h"
+                     "${CMAKE_SOURCE_DIR}/src/distortion_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/distortion_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/text_node.h"
-                     "${CMAKE_SOURCE_DIR}/src/log_node.h"
+                     "${CMAKE_SOURCE_DIR}/src/text_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/log_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/log_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/thread_pool.h"
+                     "${CMAKE_SOURCE_DIR}/src/thread_pool.hpp"
                      "${CMAKE_SOURCE_DIR}/src/thread_pool.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/nidaq_node.h"
+                     "${CMAKE_SOURCE_DIR}/src/nidaq_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/gentl.h"
                      "${CMAKE_SOURCE_DIR}/src/genicam_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/genicam_node.cpp"
@@ -249,11 +248,11 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/channel_picker_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/algebra_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/algebra_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/normalize_node.h"
+                     "${CMAKE_SOURCE_DIR}/src/normalize_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/normalize_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/lua_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/lua_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/intan_node.h"
+                     "${CMAKE_SOURCE_DIR}/src/intan_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/intan_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/aruco_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/aruco_node.cpp"
@@ -263,7 +262,7 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/sync_node.cpp"
                      #"${CMAKE_SOURCE_DIR}/src/hexascope_node.hpp"
                      #"${CMAKE_SOURCE_DIR}/src/hexascope_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/thalamus/file.h"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/file.hpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/file.cpp"
                      "${CMAKE_SOURCE_DIR}/proto/thalamus.proto")
 target_sources(thalamus PRIVATE 
@@ -293,48 +292,26 @@ target_compile_definitions(thalamus PRIVATE _USE_MATH_DEFINES)
 target_include_directories(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(thalamus opencv hdf5-static lua
   tracing webrtc boost grpc++ grpc++_reflection 
-  absl::str_format_internal absl::strings absl::str_format ffmpeg)
+  absl::str_format_internal absl::strings absl::str_format ffmpeg cairo)
 if(NOT APPLE)
   target_link_libraries(thalamus zlib_processed)
 endif()
 add_dependencies(thalamus protoc_generated)
 
-add_library(native_lib SHARED src/plugin.cpp)
-target_compile_options(native_lib PRIVATE ${WARNING_FLAGS})
-target_include_directories(native_lib PRIVATE "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(native_lib 
-  thalamus 
-  hydrate
-  thalamus_ffmpeg
-  tracing webrtc ffmpeg sdl protoc_generated lua)
-if(NOT WIN32 AND NOT APPLE)
-  target_link_options(native_lib PRIVATE -Wl,-Bsymbolic)
-endif()
-target_link_libraries(thalamus cairo)
-target_link_libraries(native_lib cairo)
-
-if(WIN32)
-  target_compile_definitions(native_lib PRIVATE _WIN32_WINNT=0x0A00)
-endif()
-target_compile_definitions(native_lib PRIVATE _GNU_SOURCE)
-
 add_executable(native src/main.cpp)
-target_compile_options(native PRIVATE ${WARNING_FLAGS})
+
 if(WIN32)
-else()
-  target_link_libraries(native PRIVATE dl)
+  target_compile_definitions(native PRIVATE _WIN32_WINNT=0x0A00)
 endif()
+target_compile_definitions(native PRIVATE _GNU_SOURCE)
+
+target_compile_options(native PRIVATE ${WARNING_FLAGS})
+target_include_directories(native PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(native PRIVATE thalamus hydrate thalamus_ffmpeg tracing webrtc ffmpeg sdl protoc_generated lua cairo)
 
 if(APPLE)
-  target_link_options(native PRIVATE -pagezero_size 10000)
-  target_link_options(native_lib PRIVATE -image_base 7fff04c4a000)
+  target_link_options(native PRIVATE -pagezero_size 10000 -image_base 7fff04c4a000)
 endif()
 
-if(ENABLE_SWIG)
-  add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "$<TARGET_FILE:native>" "${FINAL_DIRECTORY}" 
-                                                        && cmake -E copy "$<TARGET_FILE:native>" "${CMAKE_SOURCE_DIR}/thalamus")
-else()
-  add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "$<TARGET_FILE:native>" "${CMAKE_SOURCE_DIR}/thalamus")
-  add_custom_command(TARGET native_lib POST_BUILD COMMAND cmake -E copy "$<TARGET_FILE:native_lib>" "${CMAKE_SOURCE_DIR}/thalamus")
-endif()
+add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "$<TARGET_FILE:native>" "${CMAKE_SOURCE_DIR}/thalamus")
 

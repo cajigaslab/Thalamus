@@ -3,9 +3,9 @@
 #include <h5handle.hpp>
 #include <boost/qvm/vec_access.hpp>
 #include <boost/qvm/quat_access.hpp>
-#include <image_node.h>
-#include <text_node.h>
-#include <modalities_util.h>
+#include <image_node.hpp>
+#include <text_node.hpp>
+#include <modalities_util.hpp>
 
 namespace thalamus {
   using namespace std::chrono_literals;

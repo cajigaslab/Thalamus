@@ -1,4 +1,4 @@
-#include <tracing/tracing.h>
+#include <tracing/tracing.hpp>
 #include <absl/strings/str_replace.h>
 #include <absl/types/variant.h>
 #include <assert.h>
@@ -10,7 +10,7 @@ namespace filesystem = std::filesystem;
 namespace filesystem = std::experimental::filesystem;
 #endif
 #include <condition_variable>
-#include <tracing/iclock.h>
+#include <tracing/iclock.hpp>
 #include <mutex>
 #include <rtc_base/thread.h>
 #include <rtc_base/trace_event.h>

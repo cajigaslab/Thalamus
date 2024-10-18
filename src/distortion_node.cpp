@@ -1,11 +1,11 @@
-#include <distortion_node.h>
-#include <thread_pool.h>
+#include <distortion_node.hpp>
+#include <thread_pool.hpp>
 #include <shared_mutex>
 #include <boost/pool/object_pool.hpp>
 
 #include "opencv2/imgproc.hpp"
 #include "opencv2/calib3d.hpp"
-#include <modalities_util.h>
+#include <modalities_util.hpp>
 
 namespace thalamus {
   using namespace std::chrono_literals;

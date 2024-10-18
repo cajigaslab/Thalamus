@@ -3,7 +3,7 @@
 #include <map>
 #include <functional>
 #include <util.hpp>
-#include <tracing/tracing.h>
+#include <tracing/tracing.hpp>
 #include <boost/json.hpp>
 #include <boost/qvm/vec_access.hpp>
 #include <boost/qvm/vec_operations.hpp>
@@ -14,7 +14,7 @@
 #include <iostream>
 #include <fstream>
 #include <filesystem>
-#include <modalities_util.h>
+#include <modalities_util.hpp>
 
 namespace thalamus {
   class RateTracker {

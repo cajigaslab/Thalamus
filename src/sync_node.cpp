@@ -1,6 +1,6 @@
 #include <sync_node.hpp>
 #include <vector>
-#include <modalities_util.h>
+#include <modalities_util.hpp>
 
 namespace thalamus {
   struct SyncNode::Impl {
@@ -71,7 +71,7 @@ namespace thalamus {
       , outer(outer)
       , graph(graph) {
 
-      state_connection = state->recursive_changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
+      state_connection = state->recursive_changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3, _4));
       state->recap(std::bind(&Impl::on_change, this, state.get(), _1, _2, _3));
     }
 
@@ -142,10 +142,12 @@ namespace thalamus {
             publish = true;
           }
         } else {
-          auto window1_size = p.sample_interval1 > 0ns ? p.sample_interval1*p.data1.size() : (analog->time() - p.start_time1);
-          auto window2_size = p.sample_interval2 > 0ns ? p.sample_interval2*p.data2.size() : (analog->time() - p.start_time2);
-          auto sample_interval1 = p.sample_interval1 > 0ns ? p.sample_interval1 : (window1_size/p.data1.size());
-          auto sample_interval2 = p.sample_interval2 > 0ns ? p.sample_interval2 : (window2_size/p.data2.size());
+          long long data1_size = p.data1.size();
+          long long data2_size = p.data2.size();
+          auto window1_size = p.sample_interval1 > 0ns ? p.sample_interval1*data1_size : (analog->time() - p.start_time1);
+          auto window2_size = p.sample_interval2 > 0ns ? p.sample_interval2*data2_size : (analog->time() - p.start_time2);
+          auto sample_interval1 = p.sample_interval1 > 0ns ? p.sample_interval1 : (window1_size/data1_size);
+          auto sample_interval2 = p.sample_interval2 > 0ns ? p.sample_interval2 : (window2_size/data2_size);
           if(window1_size > p.window && window2_size > p.window) {
             auto data1 = &p.data1;
             auto data2 = &p.data2;
@@ -198,7 +200,7 @@ namespace thalamus {
                 max_index = lag;
               }
             }
-            p.lag = max_index*sample_interval1/1e9;
+            p.lag = (max_index*sample_interval1).count()/1e9;
             publish = true;
             p.data1.clear();
             p.data2.clear();

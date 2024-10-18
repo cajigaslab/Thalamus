@@ -1,9 +1,9 @@
 #include <ophanim_node.hpp>
-#include <util.h>
+#include <util.hpp>
 #include <grpcpp/create_channel.h>
 #include <ophanim.grpc.pb.h>
-#include <tracing/tracing.h>
-#include <modalities_util.h>
+#include <tracing/tracing.hpp>
+#include <modalities_util.hpp>
 
 using namespace thalamus;
 

@@ -1,4 +1,4 @@
-#include <intan_node.h>
+#include <intan_node.hpp>
 #include <boost/asio.hpp>
 #include <vector>
 #include <map>

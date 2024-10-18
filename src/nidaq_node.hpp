@@ -1,6 +1,6 @@
 #pragma once
 
-#include <thalamus_asio.h>
+#include <thalamus_asio.hpp>
 
 #include <functional>
 #include <string>

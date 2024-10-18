@@ -1,12 +1,12 @@
 #include <aruco_node.hpp>
-#include <image_node.h>
-#include <modalities_util.h>
+#include <image_node.hpp>
+#include <modalities_util.hpp>
 #include <opencv2/objdetect/aruco_detector.hpp>
 #include <opencv2/core/quaternion.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/calib3d.hpp>
-#include <thread_pool.h>
-#include <distortion_node.h>
+#include <thread_pool.hpp>
+#include <distortion_node.hpp>
 #include <boost/qvm/vec_access.hpp>
 #include <boost/qvm/vec_operations.hpp>
 #include <boost/qvm/quat_access.hpp>
