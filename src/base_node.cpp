@@ -148,8 +148,10 @@ namespace thalamus {
       Shape shape = Shape::SINE;
       double frequency = 1;
       double amplitude = 1;
-      double phase = 0;
+      long long phase = 0;
+      long long interval = 1e9;
       double duty_cycle = .5;
+      long long duty_interval = .5e9;
       double offset = 0;
       double current = 0;
       std::chrono::nanoseconds last_switch;
@@ -161,16 +163,13 @@ namespace thalamus {
       double operator()(std::chrono::nanoseconds time) {
         switch(shape) {
           case Shape::SINE: {
-            return amplitude * std::sin(2 * M_PI * (frequency * time.count() / 1e9 + phase)) + offset;
+            return amplitude * std::sin(2 * M_PI * (frequency * time.count() + phase) / 1e9) + offset;
           }
           case Shape::SQUARE: {
-            size_t interval = 1e9 / frequency;
-            auto modulo = (time.count() - size_t(1e9*phase)) % interval;
-            auto duty_interval = interval * duty_cycle;
+            auto modulo = (time.count() - phase) % interval;
             return (modulo < duty_interval ? amplitude : -amplitude) + offset;
           }
           case Shape::TRIANGLE: {
-            size_t interval = 1e9 / frequency;
             size_t quarter_interval = interval / 4;
             size_t three_quarter_interval = 3 * quarter_interval;
             auto modulo = (time.count() - size_t(1e9 * phase)) % interval;
@@ -183,7 +182,6 @@ namespace thalamus {
             }
           }
           case Shape::RANDOM: {
-            size_t interval = 1e9 / frequency;
             if((time - last_switch).count() > interval) {
               current = amplitude*impl->random_distribution(impl->random_range) + offset;
               last_switch = time;
@@ -316,6 +314,8 @@ namespace thalamus {
 
       if (key_str == "Frequency") {
         wave->frequency = std::get<double>(v);
+        wave->interval = 1e9/wave->frequency;
+        wave->duty_interval = wave->interval*wave->duty_cycle;
       }
       else if (key_str == "Amplitude") {
         wave->amplitude = std::get<double>(v);
@@ -342,9 +342,10 @@ namespace thalamus {
       }
       else if (key_str == "Duty Cycle") {
         wave->duty_cycle = std::get<double>(v);
+        wave->duty_interval = wave->interval*wave->duty_cycle;
       }
       else if (key_str == "Phase") {
-        wave->phase = std::get<double>(v);
+        wave->phase = 1e9*std::get<double>(v);
       }
       else if (key_str == "Poll Interval") {
         poll_interval = std::get<long long int>(v);

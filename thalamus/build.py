@@ -26,12 +26,12 @@ def generate():
   ]
   for service in services:
     shutil.copy(f'proto/{service}.proto', f'thalamus/{service}.proto')
-    subprocess.check_call([sys.executable, '-m', 'grpc_tools.protoc', '-Iproto', '--python_out=thalamus',
+    subprocess.check_call([sys.executable, '-m', 'grpc_tools.protoc', '-Iproto', '--python_out=thalamus', '--pyi_out=thalamus', '--grpc_pyi_out=thalamus',
                            '--grpc_python_out=thalamus', f'proto/{service}.proto'])
   dot = "\\."
   regex = re.compile(f'^(from \\w+ )?import ({"|".join(s.split("/")[-1] for s in services).replace("/", dot)})_pb2 as')
   for service in services:
-    for suffix in ['_pb2', '_pb2_grpc']:
+    for suffix in ['_pb2.py', '_pb2_grpc.py']:
       old_path, new_path = pathlib.Path(f'thalamus/{service}{suffix}.py'), pathlib.Path(f'thalamus/{service}{suffix}.py.new')
       with open(str(old_path)) as old_file, open(str(new_path), 'w') as new_file:
         for line in old_file:

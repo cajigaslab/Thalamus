@@ -47,7 +47,7 @@ namespace thalamus {
       std::string node2_name;
       int channel2_index = -1;
       Algo algo = Algo::THRESHOLD;
-      double threshold = 1.6;
+      double threshold = .5;
       std::chrono::nanoseconds window = 500'000'000ns;
       std::chrono::nanoseconds cross1;
       std::chrono::nanoseconds cross2;
@@ -109,6 +109,7 @@ namespace thalamus {
           auto d = data[i++];
           if(last < threshold && d >= threshold) {
             cross = time;
+            last = *(data.end()-1);
             break;
           }
           time += sample_interval;
@@ -136,9 +137,11 @@ namespace thalamus {
           compute(analog, p.data2, p.channel2_index, p.channel2_name, p.threshold, p.cross2, p.start_time2, p.sample_interval2, p.algo);
         }
         if(p.algo == Pair::Algo::THRESHOLD) {
-          auto diff = p.cross1 - p.cross2;
+          auto diff = p.cross2 - p.cross1;
           if(p.cross1 > 0ns && p.cross2 > 0ns && abs(diff.count()) < p.window.count()) {
             p.lag = diff.count()/1e9;
+            p.cross1 = 0ns;
+            p.cross2 = 0ns;
             publish = true;
           }
         } else {
@@ -218,6 +221,7 @@ namespace thalamus {
         p.channel1_index = -1;
         p.channel2_index = -1;
       }
+      outer->channels_changed(outer);
     }
 
     Pair& get_pair(ObservableCollection* source) {
@@ -251,15 +255,15 @@ namespace thalamus {
         dict->recap(std::bind(&Impl::on_change, this, dict.get(), _1, _2, _3));
       } else {
         auto key_str = std::get<std::string>(k);
-        if(key_str == "Node1" || key_str == "Node2") {
+        if(key_str == "Node 1" || key_str == "Node 2") {
           auto value_str = std::get<std::string>(v);
           node_connections[value_str] = graph->get_node_scoped(value_str, [this,key_str,value_str,source] (auto node) {
             auto locked = node.lock();
             auto& pair = get_pair(source);
-            if(key_str == "Node1") {
+            if(key_str == "Node 1") {
               pair.node1 = locked.get();
               pair.node1_name = value_str;
-            } else if(key_str == "Node2") {
+            } else if(key_str == "Node 2") {
               pair.node2 = locked.get();
               pair.node2_name = value_str;
             }
@@ -268,18 +272,29 @@ namespace thalamus {
             auto analog_node = node_cast<AnalogNode*>(locked.get());
             data_connections[value_str] = locked->ready.connect(std::bind(&Impl::on_data, this, analog_node, _1));
             channels_connections[value_str] = analog_node->channels_changed.connect(std::bind(&Impl::on_channels_changed, this, _1));
+            outer->channels_changed(outer);
           });
-        } else if(key_str == "Channel1") {
+        } else if(key_str == "Channel 1") {
           auto& pair = get_pair(source);
           auto value_str = std::get<std::string>(v);
           pair.channel1_name = value_str;
           pair.out_channel_name = absl::StrFormat("%s[%s]-%s[%s]", pair.node1_name, pair.channel1_name, pair.node2_name, pair.channel2_name);
-        } else if(key_str == "Channel2") {
+          outer->channels_changed(outer);
+        } else if(key_str == "Channel 2") {
           auto& pair = get_pair(source);
           auto value_str = std::get<std::string>(v);
           pair.channel2_name = value_str;
           pair.out_channel_name = absl::StrFormat("%s[%s]-%s[%s]", pair.node1_name, pair.channel1_name, pair.node2_name, pair.channel2_name);
+          outer->channels_changed(outer);
+        } else if (key_str == "Threshold") {
+          auto& pair = get_pair(source);
+          pair.threshold = std::get<double>(v);
+        } else if (key_str == "Window (s)") {
+          auto& pair = get_pair(source);
+          long long milliseconds = 1e3*std::get<double>(v);
+          pair.window = std::chrono::milliseconds(milliseconds);
         }
+        
       }
     }
   };

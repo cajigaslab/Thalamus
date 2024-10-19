@@ -18,14 +18,14 @@ class FlatObservableCollectionModel(QAbstractItemModel):
     self.config.recap(functools.partial(self.__on_change, depth))
 
   def __update(self):
-    print('__update')
+    #print('__update')
     items = self.config.values() if isinstance(self.config, ObservableDict) else self.config
     new_values = sorted(self.transformer(i) for i in items)
 
     i, j = 0, 0
 
     while i < len(self.values) and j < len(new_values):
-      print(i, j)
+      #print(i, j)
       if self.values[i] < new_values[j]:
         self.beginRemoveRows(QModelIndex(), i, i)
         del self.values[i]
@@ -179,26 +179,26 @@ class TreeObservableCollectionModel(QAbstractItemModel):
         
 
   def data(self, index: QModelIndex, role: int) -> typing.Any:
-    print('data', index.row(), index.column(), role)
+    #print('data', index.row(), index.column(), role)
     item = self.index_to_item[index.parent().internalId()]
     keys = self.item_to_keys[id(item)]
     if index.column() >= self.prefix_columns:
-      print('column')
+      #print('column')
       key = self.columns[index.column()-self.prefix_columns]
       row_key = keys[index.row()]
-      print('data10', item, row_key)
+      #print('data10', item, row_key)
       item = item.get(row_key, None)
       if not isinstance(item, ObservableCollection):
         return None
 
       value = item.get(key, None)
     else:
-      print('key')
+      #print('key')
       key = keys[index.row()]
       value = item[key] if index.column() == 1 else key
       if isinstance(value, ObservableCollection):
         value = ''
-    print(key, value)
+    #print(key, value)
 
     if role == Qt.ItemDataRole.DisplayRole:
       if isinstance(value, bool):
@@ -214,7 +214,7 @@ class TreeObservableCollectionModel(QAbstractItemModel):
       return Qt.CheckState.Checked if value else Qt.CheckState.Unchecked
 
   def setData(self, index: QModelIndex, value: typing.Any, role: int = Qt.ItemDataRole.EditRole) -> bool:
-    print('setData', index, value, role)
+    #print('setData', index, value, role)
     item = self.index_to_item[index.parent().internalId()]
     keys = self.item_to_keys[id(item)]
     if index.column() >= self.prefix_columns:
@@ -225,7 +225,7 @@ class TreeObservableCollectionModel(QAbstractItemModel):
         return False
     else:
       key = keys[index.row()]
-    print(item,key)
+    #print(item,key)
 
     if role == Qt.ItemDataRole.DisplayRole:
       item[key] = value
@@ -240,7 +240,7 @@ class TreeObservableCollectionModel(QAbstractItemModel):
       return super().setData(index, value, role)
 
   def flags(self, index: QModelIndex) -> Qt.ItemFlag:
-    print('flags1', index)
+    #print('flags1', index)
     flags = super().flags(index)
 
     item = self.index_to_item[index.parent().internalId()]
@@ -248,7 +248,7 @@ class TreeObservableCollectionModel(QAbstractItemModel):
     if index.column() >= self.prefix_columns:
       key = self.columns[index.column()-self.prefix_columns]
       row_key = keys[index.row()]
-      print('flags10', item, key, row_key)
+      #print('flags10', item, key, row_key)
       item = item.get(row_key, None)
       if item is None:
         return flags
@@ -256,12 +256,12 @@ class TreeObservableCollectionModel(QAbstractItemModel):
       key = keys[index.row()]
     if index.column() > 0 and self.is_editable(item, key):
       value = item[key] if key in item else None
-      print('flags2', key, isinstance(value, bool))
+      #print('flags2', key, isinstance(value, bool))
       if isinstance(value, bool):
         flags |= Qt.ItemFlag.ItemIsUserCheckable
       else:
         flags |= Qt.ItemFlag.ItemIsEditable
-    print('flags3', index.row(), index.column(), flags, Qt.ItemFlag.ItemIsEditable)
+    #print('flags3', index.row(), index.column(), flags, Qt.ItemFlag.ItemIsEditable)
     return flags
 
   def headerData(self, section: int, orientation: Qt.Orientation, role: int):
@@ -286,7 +286,7 @@ class TreeObservableCollectionModel(QAbstractItemModel):
       parent_id = parent.internalId()
     key = parent_id, row, column
     if key not in self.index_cache:
-      print('createIndex', row, column, self.next_index_id)
+      #print('createIndex', row, column, self.next_index_id)
       new_index = self.createIndex(row, column, self.next_index_id)
       self.index_cache[key] = new_index
       self.index_to_parent[new_index.internalId()] = parent
@@ -306,26 +306,26 @@ class TreeObservableCollectionModel(QAbstractItemModel):
 
   
   def parent(self, index: QModelIndex) -> QModelIndex:
-    print('parent', index)
+    #print('parent', index)
 
     #print(self.index_to_item)
     #print(index.row(), index.column(), index.internalId())
     return self.index_to_parent[index.internalId()]
 
   def rowCount(self, parent: QModelIndex) -> int:
-    print('rowCount', parent.isValid())
+    #print('rowCount', parent.isValid())
     if parent.internalId() not in self.index_to_item:
       return 0
 
     item = self.index_to_item[parent.internalId()]
     keys = self.item_to_keys[id(item)]
     result = len(keys)
-    print('rowCount', parent.isValid(), result)
+    #print('rowCount', parent.isValid(), result)
     return result
 
   def columnCount(self, _: QModelIndex) -> int:
     result = self.prefix_columns + len(self.columns)
-    print('columnCount', _.isValid(), result)
+    #print('columnCount', _.isValid(), result)
     return result
 
 class TreeObservableCollectionDelegate(QItemDelegate):
@@ -337,7 +337,7 @@ class TreeObservableCollectionDelegate(QItemDelegate):
     self.choices = choices
 
   def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
-    print('createEditor')
+    #print('createEditor')
     item, key = self.model.get_location(index)
     choices = self.choices(item, key)
     if choices is not None:
@@ -372,6 +372,9 @@ class TreeObservableCollectionDelegate(QItemDelegate):
       return
     elif isinstance(editor, QDoubleSpinBox):
       editor.setValue(value)
+      return
+    elif isinstance(editor, QComboBox):
+      editor.setCurrentText(value)
       return
     return super().setEditorData(editor, index)
 
