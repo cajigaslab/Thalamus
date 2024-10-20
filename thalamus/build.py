@@ -26,13 +26,13 @@ def generate():
   ]
   for service in services:
     shutil.copy(f'proto/{service}.proto', f'thalamus/{service}.proto')
-    subprocess.check_call([sys.executable, '-m', 'grpc_tools.protoc', '-Iproto', '--python_out=thalamus', '--pyi_out=thalamus', '--grpc_pyi_out=thalamus',
+    subprocess.check_call([sys.executable, '-m', 'grpc_tools.protoc', '-Iproto', '--python_out=thalamus', '--pyi_out=thalamus',
                            '--grpc_python_out=thalamus', f'proto/{service}.proto'])
   dot = "\\."
   regex = re.compile(f'^(from \\w+ )?import ({"|".join(s.split("/")[-1] for s in services).replace("/", dot)})_pb2 as')
   for service in services:
-    for suffix in ['_pb2.py', '_pb2_grpc.py']:
-      old_path, new_path = pathlib.Path(f'thalamus/{service}{suffix}.py'), pathlib.Path(f'thalamus/{service}{suffix}.py.new')
+    for suffix in ['_pb2.py', '_pb2_grpc.py', '_pb2.pyi']:
+      old_path, new_path = pathlib.Path(f'thalamus/{service}{suffix}'), pathlib.Path(f'thalamus/{service}{suffix}.py.new')
       with open(str(old_path)) as old_file, open(str(new_path), 'w') as new_file:
         for line in old_file:
           new_line = regex.sub('from . import \\2_pb2 as', line)
@@ -127,7 +127,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     '-DENABLE_SWIG=OFF',
     '-DENABLE_SWIG=OFF',
     '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
-    '-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0'
+    '-DCMAKE_OSX_DEPLOYMENT_TARGET=10.15'
   ]
   cmake_command += ['-G', generator]
 

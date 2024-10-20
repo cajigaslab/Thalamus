@@ -8,8 +8,8 @@ endif()
 
 FetchContent_Declare(
   glib 
-  GIT_REPOSITORY https://gitlab.gnome.org/GNOME/glib.git
-  GIT_TAG        2.78.6
+  URL      https://download.gnome.org/sources/glib/2.78/glib-2.78.6.tar.xz
+  URL_HASH SHA256=244854654dd82c7ebcb2f8e246156d2a05eb9cd1ad07ed7a779659b4602c9fae
 )
 FetchContent_MakeAvailable(glib)
 file(MAKE_DIRECTORY "${glib_BINARY_DIR}/Debug/install")
@@ -22,6 +22,7 @@ endif()
 add_custom_command(
   OUTPUT "${glib_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/build.ninja"
   COMMAND cmake -E env 
+  "CFLAGS=${OSX_TARGET_PARAMETER}"
   ${GLIB_COMPILER}
   meson setup "${glib_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>"
     -Dtests=false ${GLIB_SANITIZER} -Dselinux=disabled -Dlibmount=disabled -Db_lundef=false -Ddefault_library=static -Db_vscrt=static_from_buildtype

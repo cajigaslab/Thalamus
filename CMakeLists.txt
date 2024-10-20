@@ -22,6 +22,7 @@ endif()
 
 if(APPLE)
   set(OSX_TARGET_PARAMETER -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET})
+  list(APPEND ALL_COMPILE_OPTIONS ${OSX_TARGET_PARAMETER})
 endif()
 
 # Default to C99
