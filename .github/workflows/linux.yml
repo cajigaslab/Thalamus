@@ -8,8 +8,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    container: ubuntu:18.04
     steps:
     - uses: actions/checkout@v4
+      env:
+        ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     - name: Set Git name 
       run: git config --global user.name "Github Actions"
     - name: Set Git email 
@@ -24,6 +27,8 @@ jobs:
       run: python3 -m build -n -w -Crelease
     - name: Archive Distribution
       uses: actions/upload-artifact@v4
+      env:
+        ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
       with:
         name: dist
         path: dist
