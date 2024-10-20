@@ -96,12 +96,15 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   maintainer = metadata['maintainer']
   maintainer_email = metadata['maintainer_email']
   license = metadata['license']
+  osx_target = '10.15'
+  osx_target_underscored = osx_target.replace('.', '_')
 
   platform_tag = None
   if platform.system() == 'Windows':
     platform_tag = 'win_amd64'
   elif platform.system() == 'Darwin':
-    platform_tag = 'macosx_11_0_arm64' if 'arm' in platform.processor() else 'macosx_11_0_x86_64'
+    processor = 'arm64' if 'arm' in platform.processor() else 'x86_64'
+    platform_tag = f'macosx_{osx_target_underscored}_{processor}'
   elif platform.system() == 'Linux':
     ldd_output = subprocess.check_output(['ldd', '--version'], encoding='utf8')
     assert ldd_output is not None
@@ -127,7 +130,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     '-DENABLE_SWIG=OFF',
     '-DENABLE_SWIG=OFF',
     '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
-    '-DCMAKE_OSX_DEPLOYMENT_TARGET=10.15'
+    f'-DCMAKE_OSX_DEPLOYMENT_TARGET={osx_target}'
   ]
   cmake_command += ['-G', generator]
 
@@ -148,6 +151,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   if sanitizer:
     cmake_command += [f'-DSANITIZER={sanitizer}']
 
+  print(cmake_command)
   if not (build_path / 'CMakeCache.txt').exists() or do_config:
     subprocess.check_call(cmake_command)
   shutil.copy(build_path / 'compile_commands.json', 'compile_commands.json')
