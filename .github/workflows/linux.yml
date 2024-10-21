@@ -13,7 +13,9 @@ jobs:
         env | awk -F= '{ print $1 }'
         if [ ! -d .git ]; then
           git init
-          git remote add origin git@github.com:$GITHUB_REPOSITORY.git
+          git remote add origin https://${{ secrets.GITHUB_TOKEN }}:@github.com:$GITHUB_REPOSITORY.git
+        else
+          git remote set-url origin https://${{ secrets.GITHUB_TOKEN }}:@github.com:$GITHUB_REPOSITORY.git
         fi
         git fetch origin $GITHUB_SHA
         git checkout $GITHUB_SHA
