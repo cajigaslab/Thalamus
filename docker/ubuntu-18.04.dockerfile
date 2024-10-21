@@ -25,6 +25,7 @@ COPY requirements.txt requirements.txt
 RUN adduser --shell /bin/bash builder
 RUN source py36/bin/activate && python3 prepare.py --home /home/builder
 
+RUN apt -y install curl
 USER builder
 WORKDIR /home/builder
 
@@ -34,12 +35,14 @@ RUN git config --global user.name jenkins
 RUN curl -o actions-runner-linux-x64-2.319.1.tar.gz -L https://github.com/actions/runner/releases/download/v2.319.1/actions-runner-linux-x64-2.319.1.tar.gz
 RUN tar xzf ./actions-runner-linux-x64-2.319.1.tar.gz
 
-ARG REPO
-RUN --mount=type=secret,id=TOKEN,mode=0444 cat /run/secrets/TOKEN && ./config.sh --url ${REPO} --replace --token $(cat /run/secrets/TOKEN)
+RUN curl -o install.sh https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh
+RUN bash install.sh
+RUN source ~/.nvm/nvm.sh && nvm install 17
+RUN source ~/.nvm/nvm.sh && nvm use 17 && npm install -g @actions/artifact
 
-RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/insta.sh | bash
-RUN nvm install 17
-RUN nvm use 17 && npm install -g @actions/artifact
+RUN echo redo1
+ARG REPO
+RUN --mount=type=secret,id=TOKEN,mode=0444 ./config.sh --url ${REPO} --replace --name builder --token $(cat /run/secrets/TOKEN)
 
 CMD ["./run.sh"]
 
