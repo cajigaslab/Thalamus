@@ -10,7 +10,6 @@ jobs:
     runs-on: self-hosted
     steps:
     - run: |
-        env | awk -F= '{ print $1 }'
         if [ ! -d .git ]; then
           git init
           git remote add origin https://${{ secrets.GITHUB_TOKEN }}:@github.com/$GITHUB_REPOSITORY
@@ -20,9 +19,9 @@ jobs:
         git fetch origin $GITHUB_SHA
         git checkout $GITHUB_SHA
     - name: Version Bump
-      run: python3 bump.py patch
+      run: source /py36/bin/activate && python bump.py patch
     - name: Build
-      run: python3 -m build -n -w -Crelease
+      run: source /py36/bin/activate && python -m build -n -w -Crelease
     - name: Archive Distribution
       uses: actions/upload-artifact@v3
       with:
