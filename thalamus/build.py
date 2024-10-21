@@ -36,6 +36,8 @@ def generate():
   for service in services:
     for suffix in ['_pb2.py', '_pb2_grpc.py', '_pb2.pyi']:
       old_path, new_path = pathlib.Path(f'thalamus/{service}{suffix}'), pathlib.Path(f'thalamus/{service}{suffix}.py.new')
+      if not old_path.exists():
+        continue
       with open(str(old_path)) as old_file, open(str(new_path), 'w') as new_file:
         for line in old_file:
           new_line = regex.sub('from . import \\2_pb2 as', line)
