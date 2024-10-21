@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: self-hosted
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v3
     - name: Set Git name 
       run: git config --global user.name "Github Actions"
     - name: Set Git email 
@@ -23,7 +23,7 @@ jobs:
     - name: Build
       run: python3 -m build -n -w -Crelease
     - name: Archive Distribution
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v3
       with:
         name: dist
         path: dist
