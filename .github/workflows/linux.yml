@@ -9,6 +9,8 @@ jobs:
   build:
     runs-on: self-hosted
     steps:
+    - name: Archive Distribution
+      uses: cajigaslab/upload-artifact@461173809c6f9ab4d04aceaf2c7db070c3948b5a
     - run: |
         if [ ! -d .git ]; then
           git init
