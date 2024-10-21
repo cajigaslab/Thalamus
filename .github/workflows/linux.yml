@@ -10,12 +10,12 @@ jobs:
     runs-on: self-hosted
     steps:
     - run: |
-      if [ ! -d .git ]; then
-        git init
-        git remote add origin git@github.com:$GITHUB_REPOSITORY.git
-      fi
-      git fetch origin $GITHUB_SHA
-      git checkout $GITHUB_SHA
+        if [ ! -d .git ]; then
+          git init
+          git remote add origin git@github.com:$GITHUB_REPOSITORY.git
+        fi
+        git fetch origin $GITHUB_SHA
+        git checkout $GITHUB_SHA
     - name: Version Bump
       run: python3 bump.py patch
     - name: Build
