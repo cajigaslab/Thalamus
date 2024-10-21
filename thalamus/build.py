@@ -24,10 +24,13 @@ def generate():
       'util',
       'thalamus'
   ]
+  if int(platform.python_version_tuple()[1]) > 6:
+    base_args = [sys.executable, '-m', 'grpc_tools.protoc', '-Iproto', '--python_out=thalamus', '--grpc_python_out=thalamus', '--pyi_out=thalamus']
+  else:
+    base_args = [sys.executable, '-m', 'grpc_tools.protoc', '-Iproto', '--python_out=thalamus', '--grpc_python_out=thalamus']
   for service in services:
     shutil.copy(f'proto/{service}.proto', f'thalamus/{service}.proto')
-    subprocess.check_call([sys.executable, '-m', 'grpc_tools.protoc', '-Iproto', '--python_out=thalamus', '--pyi_out=thalamus',
-                           '--grpc_python_out=thalamus', f'proto/{service}.proto'])
+    subprocess.check_call(base_args + [f'proto/{service}.proto'])
   dot = "\\."
   regex = re.compile(f'^(from \\w+ )?import ({"|".join(s.split("/")[-1] for s in services).replace("/", dot)})_pb2 as')
   for service in services:
