@@ -28,4 +28,5 @@ jobs:
         source ~/.nvm/nvm.sh
         nvm use 17
         export NODE_PATH=$(npm root --quiet -g)
+        export ACTIONS_RUNTIME_TOKEN=${{ secrets.GITHUB_TOKEN }}
         node js/upload-artifact.js dist
