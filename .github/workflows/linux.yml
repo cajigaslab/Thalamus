@@ -25,6 +25,7 @@ jobs:
       run: source /home/builder/.thalamusrc && echo PATH $PATH && source /py36/bin/activate && python -m build -n -w -Crelease
     - name: Archive Distribution
       run: |
+        source ~/.nvm/nvm.sh
         nvm use 17
         export NODE_PATH=$(npm root --quiet -g)
         node js/upload-artifact.js dist
