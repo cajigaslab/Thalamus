@@ -22,7 +22,7 @@ jobs:
     - name: Version Bump
       run: source ~/.bashrc && source /py36/bin/activate && python bump.py patch
     - name: Build
-      run: source ~/.bashrc && source /py36/bin/activate && python -m build -n -w -Crelease
+      run: source ~/.bashrc && echo PATH $PATH && source /py36/bin/activate && python -m build -n -w -Crelease
     - name: Archive Distribution
       uses: actions/upload-artifact@v3
       with:
