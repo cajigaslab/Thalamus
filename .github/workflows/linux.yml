@@ -10,7 +10,7 @@ jobs:
     runs-on: self-hosted
     steps:
     - run: |
-        env
+        env | awk -F= '{ print $1 }'
         if [ ! -d .git ]; then
           git init
           git remote add origin git@github.com:$GITHUB_REPOSITORY.git
