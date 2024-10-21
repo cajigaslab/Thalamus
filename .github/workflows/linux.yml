@@ -26,6 +26,7 @@ jobs:
       run: source /home/builder/.thalamusrc && echo PATH $PATH && source /py36/bin/activate && python -m build -n -w -Crelease
     - run: cp -r dist /artifacts
   upload:
+    needs: build
     runs-on: uploader
     steps:
     - name: Archive Distribution
