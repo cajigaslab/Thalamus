@@ -7,10 +7,8 @@ on:
 
 jobs:
   build:
-    runs-on: self-hosted
+    runs-on: builder
     steps:
-    - name: Archive Distribution
-      uses: cajigaslab/upload-artifact@main
     - run: |
         if [ ! -d .git ]; then
           git init
@@ -23,12 +21,16 @@ jobs:
         git tag -d $(git tag -l)
     - name: Version Bump
       run: source /home/builder/.thalamusrc && source /py36/bin/activate && python bump.py patch
+    - run: rm -rf dist && rm -rf /artifacts/dist
     - name: Build
       run: source /home/builder/.thalamusrc && echo PATH $PATH && source /py36/bin/activate && python -m build -n -w -Crelease
+    - run: cp -r dist /artifacts
+  upload:
+    runs-on: uploader
+    steps:
     - name: Archive Distribution
-      run: |
-        source ~/.nvm/nvm.sh
-        nvm use 17
-        export NODE_PATH=$(npm root --quiet -g)
-        export ACTIONS_RUNTIME_TOKEN=${{ secrets.GITHUB_TOKEN }}
-        node js/upload-artifact.js dist
+      uses: actions/upload-artifact@v4
+      with:
+        name: dist
+        path: /artifacts/dist
+       
