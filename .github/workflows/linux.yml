@@ -20,9 +20,9 @@ jobs:
         git checkout $GITHUB_SHA
         git tag -d $(git tag -l)
     - name: Version Bump
-      run: source /py36/bin/activate && python bump.py patch
+      run: source ~/.bashrc && source /py36/bin/activate && python bump.py patch
     - name: Build
-      run: source /py36/bin/activate && python -m build -n -w -Crelease
+      run: source ~/.bashrc && source /py36/bin/activate && python -m build -n -w -Crelease
     - name: Archive Distribution
       uses: actions/upload-artifact@v3
       with:
