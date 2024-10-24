@@ -1,12 +1,11 @@
-#include <remote_node.h>
-#include <util.h>
+#include <remote_node.hpp>
+#include <util.hpp>
 #include <grpcpp/create_channel.h>
 #include <thalamus.grpc.pb.h>
-#include <tracing/tracing.h>
 #include <boost/qvm/vec_access.hpp>
 #include <boost/qvm/quat_access.hpp>
-#include <tracing/tracing.h>
-#include <modalities_util.h>
+#include <tracing/tracing.hpp>
+#include <modalities_util.hpp>
 
 using namespace thalamus;
 

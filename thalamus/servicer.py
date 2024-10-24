@@ -32,10 +32,14 @@ class ThalamusServicer(thalamus_pb2_grpc.ThalamusServicer):
     self.peer_name_to_queue = {}
     self.condition = asyncio.Condition()
     self.install_observer(config)
+    self.pending_out = []
 
   async def stop(self):
     for queue in self.queues:
       await queue.put(STOP)
+    if self.pending_out:
+      await asyncio.wait(self.pending_out)
+      self.pending_out = []
 
   def __combine(self, pre: str, end: typing.Union[str, int]) -> str:
     if pre is None:
@@ -107,7 +111,8 @@ class ThalamusServicer(thalamus_pb2_grpc.ThalamusServicer):
       changes = [message]
     )
     for queue in self.queues:
-      create_task_with_exc_handling(queue.put(transaction))
+      task = create_task_with_exc_handling(queue.put(transaction))
+      self.pending_out.append(task)
 
   async def observable_bridge_v2(self, stream, context):
     message = thalamus_pb2.ObservableTransaction(changes = [
@@ -123,6 +128,8 @@ class ThalamusServicer(thalamus_pb2_grpc.ThalamusServicer):
     async def reader():
       try:
         async for transaction in stream:
+          print('transaction')
+          print(transaction)
           for change in transaction.changes:
             value = json.loads(change.value)
 
@@ -157,7 +164,8 @@ class ThalamusServicer(thalamus_pb2_grpc.ThalamusServicer):
                   match.context.value[match.path.index] = value
               elif isinstance(match.path, jsonpath_ng.Fields):
                 match.context.value[match.path.fields[0]] = value
-            
+          await asyncio.wait(self.pending_out)
+          self.pending_out = []
           await queue.put(thalamus_pb2.ObservableTransaction(acknowledged = transaction.id))
       except asyncio.CancelledError:
         pass

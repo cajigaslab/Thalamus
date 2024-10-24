@@ -111,6 +111,26 @@ class NodeSelector(QWidget):
 
     self.setLayout(layout)
 
+    def on_name_change(target_node, action, key, value):
+      if key != 'name':
+        return
+      
+      for i in range(combo.count()):
+        if combo.itemData() is target_node:
+          current_text = combo.itemText(i)
+          combo.setItemText(i, value)
+          if multi_select:
+            filtered = set(t.strip() for t in node[selector_key].split(','))
+            filtered.remove(current_text)
+            filtered.add(value)
+            node[selector_key] = ','.join(sorted(filtered))
+          else:
+            if node[selector_key] == current_text:
+              node[selector_key] = value
+          break
+
+      
+
     nodes = node.parent
     assert nodes is not None, "nodes list not found"
     combo.addItem('', None)
@@ -119,6 +139,8 @@ class NodeSelector(QWidget):
         continue
       name = target_node['name']
       combo.addItem(name, target_node)
+
+      target_node.add_observer(lambda *args: on_name_change(target_node, *args), lambda: isdeleted(self))
 
     if not multi_select:
       def text_changed(text):

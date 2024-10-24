@@ -1,6 +1,6 @@
 #pragma once
 
-#include <image_node.h>
+#include <image_node.hpp>
 
 namespace thalamus {
   class GenicamNode : public Node, public ImageNode, public AnalogNode {

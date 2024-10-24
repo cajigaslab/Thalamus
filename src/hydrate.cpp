@@ -10,9 +10,9 @@
 #include <WinSock2.h>
 #endif
 #include <hdf5.h>
-#include <base_node.h>
-#include <xsens_node.h>
-#include <h5handle.h>
+#include <base_node.hpp>
+#include <xsens_node.hpp>
+#include <h5handle.hpp>
 #include <boost/qvm/vec.hpp>
 #include <boost/qvm/quat.hpp>
 

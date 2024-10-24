@@ -1,5 +1,5 @@
-#include <log_node.h>
-#include <modalities_util.h>
+#include <log_node.hpp>
+#include <modalities_util.hpp>
 
 namespace thalamus {
   struct LogNode::Impl {

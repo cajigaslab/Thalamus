@@ -1,5 +1,5 @@
-#include <thalamus/file.h>
-#include <util.h>
+#include <thalamus/file.hpp>
+#include <util.hpp>
 #include <fstream>
 
 namespace thalamus {

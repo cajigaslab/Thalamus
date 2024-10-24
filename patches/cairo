@@ -1,0 +1,4 @@
+198c198
+< lzo_dep = dependency('lzo2', required: false)
+---
+> lzo_dep = dependency('disabled_lzo2', required: false)

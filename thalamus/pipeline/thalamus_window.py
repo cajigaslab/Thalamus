@@ -34,6 +34,8 @@ from .wave_widget import WaveWidget
 from .intan_widget import IntanWidget
 from .spikeglx_widget import SpikeGlxWidget
 from .aruco_widget import ArucoWidget
+from .hexascope_widget import HexascopeWidget
+from .sync_widget import SyncWidget
 #from .analog_widget import AnalogWidget
 from ..util import NodeSelector
 from .. import thalamus_pb2
@@ -280,12 +282,6 @@ FACTORIES = {
   ]),
   'WAVE': Factory(WaveWidget, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
-    UserData(UserDataType.DOUBLE_SPINBOX, 'Frequency', 1.0, []),
-    UserData(UserDataType.DOUBLE_SPINBOX, 'Amplitude', 1.0, []),
-    UserData(UserDataType.COMBO_BOX, 'Shape', 'Sine', ['Sine', 'Square', 'Triangle', 'Random']),
-    UserData(UserDataType.DOUBLE_SPINBOX, 'Offset', 0.0, []),
-    UserData(UserDataType.DOUBLE_SPINBOX, 'Duty Cycle', 0.5, []),
-    UserData(UserDataType.DOUBLE_SPINBOX, 'Phase', 1.0, []),
     UserData(UserDataType.DOUBLE_SPINBOX, 'Sample Rate', 1000.0, []),
     UserData(UserDataType.SPINBOX, 'Poll Interval', 16, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, [])
@@ -355,7 +351,8 @@ FACTORIES = {
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
   ]),
-  'CHANNEL_PICKER': Factory(lambda c, s: ChannelPickerWidget(c, s), []),
+  'CHANNEL_PICKER': Factory(ChannelPickerWidget, []),
+  'SYNC': Factory(SyncWidget, []),
   'NORMALIZE': Factory(lambda c, s: NormalizeWidget(c, s), [
     UserData(UserDataType.DEFAULT, 'Source', '', []),
     UserData(UserDataType.SPINBOX, 'Min', 0.0, []),
@@ -414,6 +411,7 @@ FACTORIES = {
       "DICT_APRILTAG_36h11",
       "DICT_ARUCO_MIP_36h12"])
   ]),
+  'HEXASCOPE': Factory(HexascopeWidget, []),
 }
 
 FACTORY_NAMES = {}
@@ -1475,16 +1473,16 @@ class ItemModel(QAbstractItemModel):
           async def create_widget():
             selector = thalamus_pb2.NodeSelector(name=node['name'])
             modalities = await self.stub.get_modalities(selector)
-            if thalamus_pb2.Modalities.MocapModality in modalities.values:
+            if thalamus_pb2.Modalities.ImageModality in modalities.values:
+              request = thalamus_pb2.NodeSelector(
+                name = node["name"]
+              )
+              self.plots[id(node)] = ImageWidget(node, self.stub.image(thalamus_pb2.ImageRequest(node=request, framerate=5)), self.stub)
+            elif thalamus_pb2.Modalities.MocapModality in modalities.values:
               request = thalamus_pb2.NodeSelector(
                 name = node["name"]
               )
               self.plots[id(node)] = XsensWidget(node, self.stub.xsens(request))
-            elif thalamus_pb2.Modalities.ImageModality in modalities.values:
-              request = thalamus_pb2.NodeSelector(
-                name = node["name"]
-              )
-              self.plots[id(node)] = ImageWidget(node, self.stub.image(thalamus_pb2.ImageRequest(node=request, framerate=30)), self.stub)
             elif thalamus_pb2.Modalities.AnalogModality in modalities.values:
               bin_ns = int(10e9/1920)
               request = thalamus_pb2.GraphRequest(

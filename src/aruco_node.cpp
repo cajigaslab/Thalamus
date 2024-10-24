@@ -1,12 +1,12 @@
-#include <aruco_node.h>
-#include <image_node.h>
-#include <modalities_util.h>
+#include <aruco_node.hpp>
+#include <image_node.hpp>
+#include <modalities_util.hpp>
 #include <opencv2/objdetect/aruco_detector.hpp>
 #include <opencv2/core/quaternion.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/calib3d.hpp>
-#include <thread_pool.h>
-#include <distortion_node.h>
+#include <thread_pool.hpp>
+#include <distortion_node.hpp>
 #include <boost/qvm/vec_access.hpp>
 #include <boost/qvm/vec_operations.hpp>
 #include <boost/qvm/quat_access.hpp>
@@ -74,7 +74,7 @@ struct ArucoNode::Impl {
   }
 
   void on_ids_change(ObservableDictPtr self, ObservableCollection::Action action, const ObservableCollection::Key& key, const ObservableCollection::Value& value) {
-    auto key_int = std::get<long long>(key);
+    size_t key_int = std::get<long long>(key);
     auto value_int = std::get<long long>(value);
 
     auto& board = boards[self];
@@ -88,7 +88,7 @@ struct ArucoNode::Impl {
     }
   }
 
-  void on_board_change(ObservableDictPtr self, ObservableCollection::Action action, const ObservableCollection::Key& key, const ObservableCollection::Value& value) {
+  void on_board_change(ObservableDictPtr self, ObservableCollection::Action, const ObservableCollection::Key& key, const ObservableCollection::Value& value) {
     auto key_str = std::get<std::string>(key);
     auto& board = boards[self];
     if(key_str == "Rows") {
@@ -118,7 +118,7 @@ struct ArucoNode::Impl {
     }
   }
 
-  void on_boards_change(ObservableCollection::Action action, const ObservableCollection::Key& key, const ObservableCollection::Value& value) {
+  void on_boards_change(ObservableCollection::Action action, const ObservableCollection::Key&, const ObservableCollection::Value& value) {
     if(action == ObservableCollection::Action::Set) {
       auto value_dict = std::get<ObservableDictPtr>(value);
       board_connections.push_back(value_dict->changed.connect(std::bind(&Impl::on_board_change, this, value_dict, _1, _2, _3)));
@@ -237,7 +237,7 @@ struct ArucoNode::Impl {
     auto distortion_parameters = distortion_source ? distortion_source->distortion_coefficients() : std::span<const double>();
 
     pool.push([frame_id=next_input_frame++,
-               width, height, in,
+               in,
                boards=this->boards, 
                dict=this->dict, 
                running=this->running,
@@ -307,16 +307,31 @@ struct ArucoNode::Impl {
               _segments.back().segment_id = board_index;
               _segments.back().time = std::chrono::duration_cast<std::chrono::milliseconds>(time).count();
 
-              boost::qvm::X(_segments.back().position) = tvec[0];
-              boost::qvm::Y(_segments.back().position) = tvec[1];
-              boost::qvm::Z(_segments.back().position) = tvec[2];
+              cv::Mat rvecMat(3, 3, CV_64F);
+              cv::Rodrigues(rvec, rvecMat);
 
-              auto quaternion = cv::Quat<float>::createFromRvec(board.rotation);
+              //auto boardRvecX = board.rotation[0]*rvecMat.at<double>(0, 0) + board.rotation[1]*rvecMat.at<double>(0, 1) + board.rotation[2]*rvecMat.at<double>(0, 2);
+              //auto boardRvecY = board.rotation[0]*rvecMat.at<double>(1, 0) + board.rotation[1]*rvecMat.at<double>(1, 1) + board.rotation[2]*rvecMat.at<double>(1, 2);
+              //auto boardRvecZ = board.rotation[0]*rvecMat.at<double>(2, 0) + board.rotation[1]*rvecMat.at<double>(2, 1) + board.rotation[2]*rvecMat.at<double>(2, 2);
+              //cv::Vec3d boardRvec(boardRvecX, boardRvecY, boardRvecZ);
 
-              boost::qvm::S(_segments.back().rotation) = quaternion.w;
-              boost::qvm::X(_segments.back().rotation) = quaternion.x;
-              boost::qvm::Y(_segments.back().rotation) = quaternion.y;
-              boost::qvm::Z(_segments.back().rotation) = quaternion.z;
+              auto quaternion = cv::Quat<float>::createFromRvec(rvec);
+              auto boardQuaterion = cv::Quat<float>::createFromRvec(board.rotation);
+              auto total_quaternion = quaternion*boardQuaterion;
+
+              boost::qvm::S(_segments.back().rotation) = total_quaternion.w;
+              boost::qvm::X(_segments.back().rotation) = total_quaternion.x;
+              boost::qvm::Y(_segments.back().rotation) = total_quaternion.y;
+              boost::qvm::Z(_segments.back().rotation) = total_quaternion.z;
+
+              auto boardTvecX = board.translation_x*rvecMat.at<double>(0, 0) + board.translation_y*rvecMat.at<double>(0, 1) + board.translation_z*rvecMat.at<double>(0, 2);
+              auto boardTvecY = board.translation_x*rvecMat.at<double>(1, 0) + board.translation_y*rvecMat.at<double>(1, 1) + board.translation_z*rvecMat.at<double>(1, 2);
+              auto boardTvecZ = board.translation_x*rvecMat.at<double>(2, 0) + board.translation_y*rvecMat.at<double>(2, 1) + board.translation_z*rvecMat.at<double>(2, 2);
+              cv::Vec3d boardTvec(boardTvecX, boardTvecY, boardTvecZ);
+
+              boost::qvm::X(_segments.back().position) = tvec[0] + boardTvecX;
+              boost::qvm::Y(_segments.back().position) = tvec[1] + boardTvecY;
+              boost::qvm::Z(_segments.back().position) = tvec[2] + boardTvecZ;
             } catch(cv::Exception& e) {
               THALAMUS_LOG(error) << e.what();
             }
@@ -358,7 +373,7 @@ const std::string_view ArucoNode::pose_name() const {
   return "";
 }
 
-void ArucoNode::inject(const std::span<Segment const>& segments) {
+void ArucoNode::inject(const std::span<Segment const>&) {
   ready(this);
 }
 
@@ -375,7 +390,7 @@ int ArucoNode::num_channels() const {
   return 0;
 }
 
-std::string_view ArucoNode::name(int channel) const {
+std::string_view ArucoNode::name(int) const {
   return "";
 }
 
@@ -384,8 +399,8 @@ std::chrono::nanoseconds ArucoNode::sample_interval(int) const {
 }
 
 void ArucoNode::inject(const thalamus::vector<std::span<double const>>& spans, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&) {
-  THALAMUS_ASSERT(spans.size() == 1);
-  THALAMUS_ASSERT(spans.front().size() == 1);
+  THALAMUS_ASSERT(spans.size() == 1, "Error");
+  THALAMUS_ASSERT(spans.front().size() == 1, "Error");
 }
  
 bool ArucoNode::has_analog_data() const {
@@ -396,7 +411,7 @@ bool ArucoNode::has_motion_data() const {
   return true;
 }
 
-boost::json::value ArucoNode::process(const boost::json::value& value) {
+boost::json::value ArucoNode::process(const boost::json::value&) {
   return boost::json::value();
 }
 

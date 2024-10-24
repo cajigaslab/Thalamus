@@ -1,7 +1,7 @@
-#include <thread_pool.h>
+#include <thread_pool.hpp>
 #include <boost/pool/object_pool.hpp>
-#include <tracing/tracing.h>
-#include <modalities_util.h>
+#include <tracing/tracing.hpp>
+#include <modalities_util.hpp>
 
 namespace thalamus {
   using namespace std::chrono_literals;

@@ -1,28 +1,27 @@
-#include <node_graph_impl.h>
+#include <node_graph_impl.hpp>
 #include <grpcpp/create_channel.h>
-#include <run_node.h>
-#include <ophanim_node.h>
-#include <image_node.h>
-#include <task_controller_node.h>
-#include <oculomatic_node.h>
-#include <distortion_node.h>
+#include <run_node.hpp>
+#include <ophanim_node.hpp>
+#include <image_node.hpp>
+#include <task_controller_node.hpp>
+#include <oculomatic_node.hpp>
+#include <distortion_node.hpp>
 #include <genicam_node.hpp>
-#include <channel_picker_node.h>
+#include <channel_picker_node.hpp>
 #include <algebra_node.hpp>
-#include <normalize_node.h>
-#include <thread_pool.h>
-#include <remote_node.h>
+#include <normalize_node.hpp>
+#include <thread_pool.hpp>
+#include <remote_node.hpp>
 #include <lua_node.hpp>
-#include <ros2_node.h>
+#include <ros2_node.hpp>
 #include <thalamus_config.h>
-#ifdef WITH_CAIRO
-#include <pupil_node.h>
-#include <chessboard_node.h>
-#endif
-#include <log_node.h>
-#include <intan_node.h>
-#include <spikeglx_node.h>
-#include <aruco_node.h>
+#include <pupil_node.hpp>
+#include <chessboard_node.hpp>
+#include <log_node.hpp>
+#include <intan_node.hpp>
+#include <spikeglx_node.hpp>
+#include <sync_node.hpp>
+#include <aruco_node.hpp>
 
 namespace thalamus {
   using namespace std::chrono_literals;
@@ -87,13 +86,12 @@ namespace thalamus {
     {"ROS2", new NodeFactory<Ros2Node>()},
 #endif
     {"REMOTE", new NodeFactory<RemoteNode>()},
-#ifdef WITH_CAIRO
     {"CHESSBOARD", new NodeFactory<ChessBoardNode>()},
     {"PUPIL", new NodeFactory<PupilNode>()},
-#endif
     {"LOG", new NodeFactory<LogNode>()},
     {"INTAN", new NodeFactory<IntanNode>()},
     {"SPIKEGLX", new NodeFactory<SpikeGlxNode>()},
+    {"SYNC", new NodeFactory<SyncNode>()},
     {"ARUCO", new NodeFactory<ArucoNode>()}
   };
 
@@ -299,16 +297,12 @@ namespace thalamus {
     auto value = get_node(selector);
     if (!value.lock()) {
       impl->signals.emplace_back(selector, boost::signals2::signal<void(std::weak_ptr<Node>)>());
-      auto connection = new boost::signals2::scoped_connection(impl->signals.back().second.connect(callback));
-      return NodeConnection(connection, [this] (boost::signals2::scoped_connection* c) {
-        delete c;
-        impl->notify([] (auto&) { return false; },
-                     std::weak_ptr<Node>());
-      });
+      boost::signals2::scoped_connection connection(impl->signals.back().second.connect(callback));
+      return connection;
     }
     else {
       callback(value);
-      return std::make_shared<NodeConnection::element_type>();
+      return NodeConnection();
     }
   }
 

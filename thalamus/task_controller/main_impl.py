@@ -1,12 +1,21 @@
 """
 Entrypoing
 """
+
+import pathlib
+
+#If proto/thalamus.proto exists (implies we are in repo checkout) then regenerate protobuf interfaces if they are out of date
+from ..build import generate
+THALAMUS_PROTO_PATH = pathlib.Path.cwd() / 'proto' / 'thalamus.proto'
+THALAMUS_PROTO_GEN_PATH = pathlib.Path.cwd() / 'thalamus' / 'thalamus_pb2.py'
+if THALAMUS_PROTO_PATH.exists() and not THALAMUS_PROTO_GEN_PATH.exists() or (THALAMUS_PROTO_GEN_PATH.stat().st_mtime < THALAMUS_PROTO_PATH.stat().st_mtime):
+  generate()
+
 import os
 import sys
 import typing
 import asyncio
 import logging
-import pathlib
 import argparse
 import itertools
 
@@ -28,6 +37,7 @@ from .. import thalamus_pb2_grpc
 from .servicer import TaskControllerServicer
 from .observable_bridge import ObservableBridge
 from ..pipeline.thalamus_window import ThalamusWindow
+from ..servicer import ThalamusServicer
 from ..qt import *
 
 UNHANDLED_EXCEPTION: typing.List[Exception] = []
@@ -61,7 +71,7 @@ def parse_args() -> argparse.Namespace:
 
   parser = argparse.ArgumentParser(description='Touch Task ROS node')
   parser.add_argument('-c', '--config', help='Config file location')
-  parser.add_argument('-p', '--port', help='Config file location')
+  parser.add_argument('-p', '--port', type=int, default=50050, help='GRPC port')
   parser.add_argument('-e', '--recorder-url', help='Recorder URL')
   parser.add_argument('-o', '--ophanim-url', help='Ophanim URL')
   parser.add_argument('-t', '--trace', action='store_true', help='Enable tracing')
@@ -153,8 +163,8 @@ async def async_main() -> None:
 
   task_context = task_context_module.TaskContext(config,
                                           window.get_canvas() if window else None,
-                                          tasks.DESCRIPTIONS_MAP, servicer, stub)
-  servicer.task_context = task_context
+                                          tasks.DESCRIPTIONS_MAP, task_controller_servicer, stub)
+  task_controller_servicer.task_context = task_context
   task_context.start()
   if window:
     window.set_task_context(task_context)
@@ -187,12 +197,12 @@ async def async_main() -> None:
   except KeyboardInterrupt:
     pass
 
+  if servicer is not None:
+    await servicer.stop()
+
   await channel.close()
   if bmbi_native_proc:
     await bmbi_native_proc.wait()
-
-  if servicer is not None:
-    servicer.stop()
   print('DONE')
 
 def main() -> None:

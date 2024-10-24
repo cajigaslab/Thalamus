@@ -1,10 +1,9 @@
 #include <state.hpp>
 
 namespace thalamus {
-  ObservableCollection::ValueWrapper::ValueWrapper(const Key& key, std::function<Value& ()> get_value, Changed* changed, ObservableCollection* collection)
+  ObservableCollection::ValueWrapper::ValueWrapper(const Key& key, std::function<Value& ()> get_value, ObservableCollection* collection)
       : key(key)
       , get_value(get_value)
-      , changed(changed)
       , collection(collection) {}
 
   ObservableCollection::ValueWrapper::operator ObservableDictPtr() {
@@ -109,18 +108,16 @@ namespace thalamus {
   ObservableCollection::VectorIteratorWrapper::VectorIteratorWrapper()
     : key(0)
     , iterator()
-    , changed(nullptr)
     , collection(nullptr)
   {}
-  ObservableCollection::VectorIteratorWrapper::VectorIteratorWrapper(size_t key, Vector::iterator iterator, Changed* changed, ObservableCollection* collection)
+  ObservableCollection::VectorIteratorWrapper::VectorIteratorWrapper(size_t key, Vector::iterator iterator, ObservableCollection* collection)
     : key(key)
     , iterator(iterator)
-    , changed(changed)
     , collection(collection) {}
 
   ObservableCollection::ValueWrapper ObservableCollection::VectorIteratorWrapper::operator*() {
     auto iterator = this->iterator;
-    return ValueWrapper(static_cast<long long int>(key), [iterator]() -> Value& { return *iterator; }, changed, collection);
+    return ValueWrapper(static_cast<long long int>(key), [iterator]() -> Value& { return *iterator; }, collection);
   }
 
   ObservableCollection::VectorIteratorWrapper& ObservableCollection::VectorIteratorWrapper::operator+(size_t count) {
@@ -168,22 +165,20 @@ namespace thalamus {
 
   ObservableCollection::MapIteratorWrapper::MapIteratorWrapper()
     : iterator()
-    , changed(nullptr)
     , collection(nullptr) {}
 
-  ObservableCollection::MapIteratorWrapper::MapIteratorWrapper(Map::iterator iterator, Changed* changed, ObservableCollection* collection)
+  ObservableCollection::MapIteratorWrapper::MapIteratorWrapper(Map::iterator iterator, ObservableCollection* collection)
     : iterator(iterator)
-    , changed(changed)
     , collection(collection) {}
 
   ObservableCollection::ValueWrapper ObservableCollection::MapIteratorWrapper::operator*() {
     auto iterator = this->iterator;
-    return ValueWrapper(iterator->first, [iterator]() -> Value& { return iterator->second; }, changed, collection);
+    return ValueWrapper(iterator->first, [iterator]() -> Value& { return iterator->second; }, collection);
   }
 
   std::pair<ObservableCollection::Key, ObservableCollection::ValueWrapper>* ObservableCollection::MapIteratorWrapper::operator->() {
     auto iterator = this->iterator;
-    pair = std::make_pair(iterator->first, ValueWrapper(iterator->first, [iterator]() -> Value& { return iterator->second; }, changed, collection));
+    pair = std::make_pair(iterator->first, ValueWrapper(iterator->first, [iterator]() -> Value& { return iterator->second; }, collection));
     return &pair.value();
   }
 
@@ -217,8 +212,6 @@ namespace thalamus {
   ObservableCollection::ObservableCollection(ObservableCollection* parent)
     : parent(parent) {}
 
-
-
   std::string ObservableCollection::address() const {
     if (!parent) {
       return "";
@@ -244,6 +237,17 @@ namespace thalamus {
     }
   }
 
+  void ObservableCollection::notify(ObservableCollection* source, Action action, const Key& key, Value& value) {
+    if(source == this) {
+      changed(action, key, value);
+    }
+
+    recursive_changed(source, action, key, value);
+
+    if(parent) {
+      parent->notify(source, action, key, value);
+    }
+  }
 
   ObservableList::ObservableList(ObservableCollection* parent)
     : ObservableCollection(parent)
@@ -251,7 +255,7 @@ namespace thalamus {
   }
 
   ObservableList::ValueWrapper ObservableList::operator[](size_t i) {
-    return ValueWrapper(static_cast<long long int>(i), [this, i]() -> Value& { return content[i]; }, &changed, this);
+    return ValueWrapper(static_cast<long long int>(i), [this, i]() -> Value& { return content[i]; }, this);
   }
 
   const ObservableList::Value& ObservableList::operator[](size_t i) const {
@@ -259,7 +263,7 @@ namespace thalamus {
   }
 
   ObservableList::ValueWrapper ObservableList::at(size_t i) {
-    return ValueWrapper(static_cast<long long int>(i), [this, i]() -> Value& { return content.at(i); }, &changed, this);
+    return ValueWrapper(static_cast<long long int>(i), [this, i]() -> Value& { return content.at(i); }, this);
   }
 
   const ObservableList::Value& ObservableList::at(size_t i) const {
@@ -267,7 +271,7 @@ namespace thalamus {
   }
 
   ObservableList::VectorIteratorWrapper ObservableList::begin() {
-    return VectorIteratorWrapper(0, content.begin(), &changed, this);
+    return VectorIteratorWrapper(0, content.begin(), this);
   }
 
   ObservableList::Vector::const_iterator ObservableList::begin() const {
@@ -275,7 +279,7 @@ namespace thalamus {
   }
 
   ObservableList::VectorIteratorWrapper ObservableList::end() {
-    return VectorIteratorWrapper(content.size(), content.end(), &changed, this);
+    return VectorIteratorWrapper(content.size(), content.end(), this);
   }
 
   ObservableList::Vector::const_iterator ObservableList::end() const {
@@ -295,7 +299,7 @@ namespace thalamus {
     if (!from_remote && this->remote_storage) {
       auto callback_wrapper = [this, key, callback] {
         auto key_after = std::min(key, ptrdiff_t(content.size()));
-        callback(VectorIteratorWrapper(key_after, content.begin() + key_after, &changed, this));
+        callback(VectorIteratorWrapper(key_after, content.begin() + key_after, this));
       };
       if (this->remote_storage(Action::Delete, address() + "[" + std::to_string(key) + "]", *i, callback_wrapper)) {
         return VectorIteratorWrapper();
@@ -313,10 +317,10 @@ namespace thalamus {
 
     auto value = *i;
     auto i2 = content.erase(i);
-    changed(Action::Delete, key, value);
+    notify(this, Action::Delete, key, value);
 
     auto distance = std::distance(content.begin(), i2);
-    return VectorIteratorWrapper(distance, i2, &changed, this);
+    return VectorIteratorWrapper(distance, i2, this);
   }
 
   ObservableList::VectorIteratorWrapper ObservableList::erase(size_t i, std::function<void(VectorIteratorWrapper)> callback, bool from_remote) {
@@ -332,7 +336,7 @@ namespace thalamus {
   void ObservableList::recap() {
     long long int i = 0;
     for (auto& v : content) {
-      changed(Action::Set, i++, v);
+      notify(this, Action::Set, i++, v);
     }
   }
 
@@ -398,7 +402,7 @@ namespace thalamus {
       thalamus::get<ObservableListPtr>(value)->set_remote_storage(remote_storage);
     }
     content.push_back(value);
-    changed(Action::Set, static_cast<long long>(content.size() - 1), content.back());
+    notify(this, Action::Set, static_cast<long long>(content.size() - 1), content.back());
   }
 
   void ObservableList::pop_back(std::function<void()> callback, bool from_remote) {
@@ -420,12 +424,18 @@ namespace thalamus {
       thalamus::get<ObservableListPtr>(value)->parent = nullptr;
     }
     content.pop_back();
-    changed(Action::Delete, static_cast<long long>(content.size()), value);
+    notify(this, Action::Delete, static_cast<long long>(content.size()), value);
   }
 
   void ObservableCollection::ValueWrapper::assign(const Value& new_value, std::function<void()> callback, bool from_remote) {
     if (!callback) {
       callback = [] {};
+    }
+
+    auto& value = get_value();
+    if(value == new_value) {
+      callback();
+      return;
     }
 
     if (!from_remote && collection->remote_storage) {
@@ -442,7 +452,6 @@ namespace thalamus {
       }
     }
 
-    auto& value = get_value();
     value = new_value;
     if (std::holds_alternative<ObservableDictPtr>(value)) {
       thalamus::get<ObservableDictPtr>(value)->parent = collection;
@@ -452,7 +461,7 @@ namespace thalamus {
         thalamus::get<ObservableListPtr>(value)->parent = collection;
       thalamus::get<ObservableListPtr>(value)->set_remote_storage(collection->remote_storage);
     }
-    (*changed)(Action::Set, key, value);
+    collection->notify(collection, Action::Set, key, value);
     return;
   }
 
@@ -764,11 +773,11 @@ namespace thalamus {
   }
 
   ObservableDict::ValueWrapper ObservableDict::operator[](const Key& i) {
-    return ValueWrapper(i, [this, i]() -> Value& { return content[i]; }, &changed, this);
+    return ValueWrapper(i, [this, i]() -> Value& { return content[i]; }, this);
   }
 
   ObservableDict::ValueWrapper ObservableDict::at(const Key& i) {
-    return ValueWrapper(i, [this, i]() -> Value& { return content.at(i); }, &changed, this);
+    return ValueWrapper(i, [this, i]() -> Value& { return content.at(i); }, this);
   }
 
   const ObservableDict::Value& ObservableDict::at(const ObservableDict::Key& i) const {
@@ -780,7 +789,7 @@ namespace thalamus {
   }
 
   ObservableDict::MapIteratorWrapper ObservableDict::begin() {
-    return MapIteratorWrapper(content.begin(), &changed, this);
+    return MapIteratorWrapper(content.begin(), this);
   }
 
   ObservableDict::Map::const_iterator ObservableDict::begin() const {
@@ -788,7 +797,7 @@ namespace thalamus {
   }
 
   ObservableDict::MapIteratorWrapper ObservableDict::end() {
-    return MapIteratorWrapper(content.end(), &changed, this);
+    return MapIteratorWrapper(content.end(), this);
   }
 
   ObservableDict::Map::const_iterator ObservableDict::end() const {
@@ -832,9 +841,9 @@ namespace thalamus {
     }
 
     auto i2 = content.erase(i);
-    changed(Action::Delete, pair.first, pair.second);
+    notify(this, Action::Delete, pair.first, pair.second);
 
-    return MapIteratorWrapper(i2, &changed, this);
+    return MapIteratorWrapper(i2, this);
   }
 
   ObservableDict::MapIteratorWrapper ObservableDict::erase(const ObservableCollection::Key& i, std::function<void(MapIteratorWrapper)> callback, bool from_remote) {
@@ -842,7 +851,7 @@ namespace thalamus {
   }
 
   ObservableDict::MapIteratorWrapper ObservableDict::find(const Key& i) {
-    return MapIteratorWrapper(content.find(i), &changed, this);
+    return MapIteratorWrapper(content.find(i), this);
   }
 
   ObservableDict::Map::const_iterator ObservableDict::find(const Key& i) const {
@@ -859,7 +868,7 @@ namespace thalamus {
 
   void ObservableDict::recap() {
     for (auto& i : content) {
-      changed(Action::Set, i.first, i.second);
+      notify(this, Action::Set, i.first, i.second);
     }
   }
 

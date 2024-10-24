@@ -9,6 +9,7 @@ import tarfile
 import hashlib
 import pathlib
 import platform
+import itertools
 import subprocess
 import configparser
 
@@ -23,15 +24,20 @@ def generate():
       'util',
       'thalamus'
   ]
+  if int(platform.python_version_tuple()[1]) > 6:
+    base_args = [sys.executable, '-m', 'grpc_tools.protoc', '-Iproto', '--python_out=thalamus', '--grpc_python_out=thalamus', '--pyi_out=thalamus']
+  else:
+    base_args = [sys.executable, '-m', 'grpc_tools.protoc', '-Iproto', '--python_out=thalamus', '--grpc_python_out=thalamus']
   for service in services:
     shutil.copy(f'proto/{service}.proto', f'thalamus/{service}.proto')
-    subprocess.check_call([sys.executable, '-m', 'grpc_tools.protoc', '-Iproto', '--python_out=thalamus',
-                           '--grpc_python_out=thalamus', f'proto/{service}.proto'])
+    subprocess.check_call(base_args + [f'proto/{service}.proto'])
   dot = "\\."
   regex = re.compile(f'^(from \\w+ )?import ({"|".join(s.split("/")[-1] for s in services).replace("/", dot)})_pb2 as')
   for service in services:
-    for suffix in ['_pb2', '_pb2_grpc']:
-      old_path, new_path = pathlib.Path(f'thalamus/{service}{suffix}.py'), pathlib.Path(f'thalamus/{service}{suffix}.py.new')
+    for suffix in ['_pb2.py', '_pb2_grpc.py', '_pb2.pyi']:
+      old_path, new_path = pathlib.Path(f'thalamus/{service}{suffix}'), pathlib.Path(f'thalamus/{service}{suffix}.py.new')
+      if not old_path.exists():
+        continue
       with open(str(old_path)) as old_file, open(str(new_path), 'w') as new_file:
         for line in old_file:
           new_line = regex.sub('from . import \\2_pb2 as', line)
@@ -95,12 +101,15 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   maintainer = metadata['maintainer']
   maintainer_email = metadata['maintainer_email']
   license = metadata['license']
+  osx_target = '10.15'
+  osx_target_underscored = osx_target.replace('.', '_')
 
   platform_tag = None
   if platform.system() == 'Windows':
     platform_tag = 'win_amd64'
   elif platform.system() == 'Darwin':
-    platform_tag = 'macosx_11_0_arm64' if 'arm' in platform.processor() else 'macosx_11_0_x86_64'
+    processor = 'arm64' if 'arm' in platform.processor() else 'x86_64'
+    platform_tag = f'macosx_{osx_target_underscored}_{processor}'
   elif platform.system() == 'Linux':
     ldd_output = subprocess.check_output(['ldd', '--version'], encoding='utf8')
     assert ldd_output is not None
@@ -126,7 +135,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     '-DENABLE_SWIG=OFF',
     '-DENABLE_SWIG=OFF',
     '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
-    '-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0'
+    f'-DCMAKE_OSX_DEPLOYMENT_TARGET={osx_target}'
   ]
   cmake_command += ['-G', generator]
 
@@ -147,6 +156,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   if sanitizer:
     cmake_command += [f'-DSANITIZER={sanitizer}']
 
+  print(cmake_command)
   if not (build_path / 'CMakeCache.txt').exists() or do_config:
     subprocess.check_call(cmake_command)
   shutil.copy(build_path / 'compile_commands.json', 'compile_commands.json')
@@ -161,8 +171,8 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
 
   files = []
   with open(f'thalamus-{version}.dist-info/RECORD', 'w') as record_file:
-    for path in pathlib.Path('thalamus').rglob('*'):
-      if not path.is_file() or path.name != 'native' and path.suffix not in ('.py', '.vert', '.proto', '.comp', '.frag', '.exe', '.dll', '.so', '.dylib', '.h'):
+    for path in itertools.chain(pathlib.Path('thalamus').rglob('*'), pathlib.Path('cortex').rglob('*')):
+      if not path.is_file() or path.name != 'native' and path.suffix not in ('.py', '.vert', '.proto', '.comp', '.frag', '.exe', '.h'):
         continue
       files.append(path)
       digest = hashlib.sha256()

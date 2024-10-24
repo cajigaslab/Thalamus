@@ -81,7 +81,6 @@ def main():
     #depot_tools
     if not shutil.which('gclient'):
       destination = home_path / 'depot_tools'
-      new_path.append(destination)
       subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
 
     #nasm
@@ -113,7 +112,7 @@ def main():
       if 'GITHUB_PATH' in os.environ:
         print('GITHUB_PATH', os.environ['GITHUB_PATH'])
         with open(os.environ['GITHUB_PATH'], 'a') as path_file:
-          path_file.writelines(p + os.linesep for p in new_path)
+          path_file.writelines(str(p) + os.linesep for p in new_path)
       new_path.append(old_path)
       new_path = os.pathsep.join(str(p) for p in new_path)
       print(new_path)
@@ -167,8 +166,6 @@ def main():
     if not shutil.which('gclient'):
       destination = home_path / 'depot_tools'
       subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
-      with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
-        bashrc.write(f'\nexport PATH={home_str}/depot_tools:$PATH\n')
 
     #nasm
     if not shutil.which('nasm'):
@@ -198,7 +195,7 @@ def main():
     (home_path / '.thalamusrc').touch()
     subprocess.check_call(['sudo', 'apt', 'install', '-y', 
                           'python3-pip', 'git', 'wget', 'sudo', 'curl', 'ninja-build', 'lsb-release',
-                          'libsm-dev', 'libice-dev', 'libudev-dev', 'libdbus-1-dev', 'libzstd-dev',
+                          'libsm-dev', 'libice-dev', 'libudev-dev', 'libdbus-1-dev', 'libzstd-dev', 'libbz2-dev',
                           'libgles2-mesa-dev',
                           'libfontconfig1-dev',
                           'libfreetype6-dev',
@@ -256,8 +253,6 @@ def main():
     if not shutil.which('gclient'):
       destination = home_path / 'depot_tools'
       subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
-      with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
-        bashrc.write(f'\nexport PATH={home_str}/depot_tools:$PATH\n')
     
     with open(str(home_path / '.bashrc'), 'r') as bashrc:
       bashrc_content = bashrc.read()

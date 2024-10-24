@@ -1,4 +1,4 @@
-#include <spikeglx_node.h>
+#include <spikeglx_node.hpp>
 #include <boost/asio.hpp>
 #include <vector>
 #include <map>
@@ -9,12 +9,12 @@
 #include <regex>
 #include <thread>
 //#include <plot.h>
-#include <base_node.h>
+#include <base_node.hpp>
 #include <absl/strings/str_split.h>
 #include <state.hpp>
 #include <boost/signals2.hpp>
 #include <modalities.h>
-#include <thread_pool.h>
+#include <thread_pool.hpp>
 #include <thalamus/atoi.h>
 
 using namespace thalamus;

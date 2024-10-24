@@ -1,10 +1,10 @@
-#include <normalize_node.h>
+#include <normalize_node.hpp>
 #include <vector>
 #include <boost/spirit/include/qi.hpp>
 #include <fstream>
 #include <iostream>
 #include <filesystem>
-#include <modalities_util.h>
+#include <modalities_util.hpp>
 
 using Range = std::pair<double, double>;
 
