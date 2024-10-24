@@ -25,7 +25,9 @@ jobs:
         echo "#!/bin/bash" > prepare_and_build.sh
         echo "export DEBIAN_FRONTEND=noninteractive" >> prepare_and_build.sh
         echo "apt update" >> prepare_and_build.sh
-        echo "apt install -y python3 python3-pip python3-venv curl sudo clang-10 libclang-10-dev" >> prepare_and_build.sh
+        echo "apt install -y python3 python3-pip python3-venv curl sudo clang-10 libclang-10-dev git" >> prepare_and_build.sh
+        echo "git config --global --add safe.directory '*'" >> prepare_and_build.sh
+        echo "git log -1 --format=%h" >> prepare_and_build.sh
         echo "update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-10 100" >> prepare_and_build.sh
         echo "update-alternatives --install /usr/bin/clang clang /usr/bin/clang-10 100" >> prepare_and_build.sh
         echo "python3 -m venv pyenv" >> prepare_and_build.sh
