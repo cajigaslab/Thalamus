@@ -18,7 +18,6 @@ add_custom_command(OUTPUT "${sdl_BINARY_DIR}/$<CONFIG>/CMakeCache.txt"
                    cmake "${sdl_SOURCE_DIR}" -Wno-dev 
 		      -DSDL_LIBSAMPLERATE=OFF
 		      -DSDL_SNDIO=OFF
-                      -DCMAKE_POSITION_INDEPENDENT_CODE=ON
                       -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
                       -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
                       -DCMAKE_LINKER=${CMAKE_LINKER}

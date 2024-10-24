@@ -1,12 +1,11 @@
-#include <remote_node.h>
-#include <util.h>
+#include <remote_node.hpp>
+#include <util.hpp>
 #include <grpcpp/create_channel.h>
 #include <thalamus.grpc.pb.h>
-#include <tracing/tracing.h>
 #include <boost/qvm/vec_access.hpp>
 #include <boost/qvm/quat_access.hpp>
-#include <tracing/tracing.h>
-#include <modalities_util.h>
+#include <tracing/tracing.hpp>
+#include <modalities_util.hpp>
 
 using namespace thalamus;
 
@@ -365,9 +364,13 @@ struct RemoteNode::Impl {
     } else if (key_str == "Probe Size") {
       probe_size = std::get<long long>(v);
     } else if (key_str == "Running") {
+      auto new_running = std::get<bool>(v);
+      if(new_running == running) {
+        return;
+      }
       {
         std::lock_guard<std::mutex> lock(mutex);
-        running = std::get<bool>(v);
+        running = new_running;
         condition.notify_all();
       }
       if (!running) {

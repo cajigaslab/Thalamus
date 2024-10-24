@@ -1,11 +1,11 @@
-#include <oculomatic_node.h>
-#include <thread_pool.h>
+#include <oculomatic_node.hpp>
+#include <thread_pool.hpp>
 #include <boost/pool/object_pool.hpp>
 
 #include "opencv2/core.hpp"
 #include "opencv2/imgproc.hpp"
 #include "opencv2/imgcodecs.hpp"
-#include <modalities_util.h>
+#include <modalities_util.hpp>
 
 namespace thalamus {
   using namespace std::chrono_literals;

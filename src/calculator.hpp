@@ -14,7 +14,7 @@
 #include <variant>
 #include <string>
 #include <map>
-#include <util.h>
+#include <util.hpp>
 
 namespace thalamus { 
   namespace calculator {

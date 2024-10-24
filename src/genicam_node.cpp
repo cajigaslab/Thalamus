@@ -9,7 +9,7 @@
 #include <numeric>
 #include <calculator.hpp>
 #include <filesystem>
-#include <modalities_util.h>
+#include <modalities_util.hpp>
 #include <regex>
 #ifdef _WIN32
 #else
@@ -975,7 +975,7 @@ namespace thalamus {
                 }
                 offset += compressed_size;
                 {
-                  std::ofstream output("stream.xml");
+                  std::ofstream output(cti->name + id + "-stream.xml");
                   output.write(xml.data(), xml.size());
                 }
                 try {
@@ -1487,13 +1487,15 @@ namespace thalamus {
           if (!streaming) {
             return;
           }
+          THALAMUS_LOG(info) << "Stopping Stream";
+          std::this_thread::sleep_for(1s);
           streaming = false;
           auto error = cti->EventKill(event_handle);
           THALAMUS_ASSERT(error == GenTL::GC_ERR_SUCCESS, "EventKill failed: %d", error);
           stream_thread.join();
           execute("AcquisitionStop");
           error = cti->DSStopAcquisition(ds_handle, GenTL::ACQ_STOP_FLAGS_DEFAULT);
-          THALAMUS_ASSERT(error == GenTL::GC_ERR_SUCCESS, "DSStopAcquisition failed: %d", error)
+          THALAMUS_ASSERT(error == GenTL::GC_ERR_SUCCESS, "DSStopAcquisition failed: %d", error);
           error = cti->DSFlushQueue(ds_handle, GenTL::ACQ_QUEUE_ALL_DISCARD);
           THALAMUS_ASSERT(error == GenTL::GC_ERR_SUCCESS, "DSFlushQueue failed: %d", error)
 
@@ -1983,19 +1985,23 @@ namespace thalamus {
         return;
       }
 
-      if (device->is_writable("GainAuto")) {
-        device->set("GainAuto", "Off");
+      if(!device) {
+        return;
       }
-      if (device->is_writable("ExposureAuto")) {
-        device->set("ExposureAuto", "Off");
-      }
-      if (device->is_writable("ExposureMode")) {
-        device->set("ExposureMode", "Timed");
-      }
-      if (device->is_writable("AcquisitionFrameRateAuto")) {
-        device->set("AcquisitionFrameRateAuto", "Off");
-      }
-      if(!running) {
+
+      if(!device->streaming) {
+        if (device->is_writable("GainAuto")) {
+          device->set("GainAuto", "Off");
+        }
+        if (device->is_writable("ExposureAuto")) {
+          device->set("ExposureAuto", "Off");
+        }
+        if (device->is_writable("ExposureMode")) {
+          device->set("ExposureMode", "Timed");
+        }
+        if (device->is_writable("AcquisitionFrameRateAuto")) {
+          device->set("AcquisitionFrameRateAuto", "Off");
+        }
         device->set("AcquisitionMode", "Continuous");
       }
 
@@ -2061,6 +2067,7 @@ namespace thalamus {
       auto key_str = std::get<std::string>(k);
       if (key_str == "Camera") {
         initialize_camera();
+        return;
       } else if (key_str == "Running") {
         running = variant_cast<bool>(v);
         if(device) {
@@ -2070,44 +2077,53 @@ namespace thalamus {
             device->stop_stream();
           }
         }
-      } else if (key_str == "Width") {
+        return;
+      }
+      
+      if(!device) {
+        return;
+      }
+
+      auto streaming = device->streaming.load();
+
+      if (key_str == "Width") {
         auto value = variant_cast<long long int>(v);
-        this->device->set("Width", value);
+        if(streaming) {this->device->set("Width", value);}
         auto new_value = variant_cast<long long int>(this->device->get("Width"));
         if(value != new_value) {
           (*state)["Width"].assign(new_value);
         }
       } else if (key_str == "Height") {
         auto value = variant_cast<long long int>(v);
-        this->device->set("Height", value);
+        if(streaming) {this->device->set("Height", value);}
         auto new_value = variant_cast<long long int>(this->device->get("Height"));
         if(value != new_value) {
           (*state)["Height"].assign(new_value);
         }
       } else if (key_str == "OffsetX") {
         auto value = variant_cast<long long int>(v);
-        this->device->set("OffsetX", value);
+        if(streaming) {this->device->set("OffsetX", value);}
         auto new_value = variant_cast<long long int>(this->device->get("OffsetX"));
         if(value != new_value) {
           (*state)["OffsetX"].assign(new_value);
         }
       } else if (key_str == "OffsetY") {
         auto value = variant_cast<long long int>(v);
-        this->device->set("OffsetY", value);
+        if(streaming) {this->device->set("OffsetY", value);}
         auto new_value = variant_cast<long long int>(this->device->get("OffsetY"));
         if(value != new_value) {
           (*state)["OffsetY"].assign(new_value);
         }
       } else if (key_str == "ExposureTime") {
         auto value = variant_cast<double>(v);
-        this->device->set("ExposureTime", value);
+        if(streaming) {this->device->set("ExposureTime", value);}
         auto new_value = variant_cast<double>(this->device->get("ExposureTime"));
         if(std::abs(value - new_value) > 1) {
           (*state)["ExposureTime"].assign(new_value);
         }
       } else if (key_str == "AcquisitionFrameRate") {
         auto value = variant_cast<double>(v);
-        this->device->set("AcquisitionFrameRate", value);
+        if(streaming) {this->device->set("AcquisitionFrameRate", value);}
         auto new_value = variant_cast<double>(this->device->get("AcquisitionFrameRate"));
         target_framerate = new_value;
         if(std::abs(value - new_value) > 1) {
@@ -2115,7 +2131,7 @@ namespace thalamus {
         }
       } else if (key_str == "Gain") {
         auto value = variant_cast<double>(v);
-        this->device->set("Gain", value);
+        if(streaming) {this->device->set("Gain", value);}
         auto new_value = variant_cast<double>(this->device->get("Gain"));
         if(std::abs(value - new_value) > 1) {
           (*state)["Gain"].assign(new_value);
@@ -2232,14 +2248,6 @@ namespace thalamus {
         }
       }
       return result;
-    } else if(request_str == "start_stream") {
-      if(impl->device) {
-        impl->device->start_stream(impl->io_context);
-      }
-    } else if(request_str == "stop_stream") {
-      if(impl->device) {
-        impl->device->stop_stream();
-      }
     }
     return boost::json::value();
   }

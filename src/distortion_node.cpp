@@ -1,11 +1,11 @@
-#include <distortion_node.h>
-#include <thread_pool.h>
+#include <distortion_node.hpp>
+#include <thread_pool.hpp>
 #include <shared_mutex>
 #include <boost/pool/object_pool.hpp>
 
 #include "opencv2/imgproc.hpp"
 #include "opencv2/calib3d.hpp"
-#include <modalities_util.h>
+#include <modalities_util.hpp>
 
 namespace thalamus {
   using namespace std::chrono_literals;
@@ -47,8 +47,8 @@ namespace thalamus {
     double y_gain;
     bool invert_x;
     bool invert_y;
-    int source_width = -1;
-    int source_height = -1;
+    size_t source_width = std::numeric_limits<size_t>::max();
+    size_t source_height = std::numeric_limits<size_t>::max();
     size_t next_input_frame = 0;
     size_t next_output_frame = 0;
     std::set<cv::Mat*> mat_pool;
@@ -61,6 +61,7 @@ namespace thalamus {
       bool has_image = false;
       bool has_analog = false;
       double latency = 0;
+      std::chrono::nanoseconds time = 0ns;
     };
     std::map<size_t, Result> output_frames;
     Result current_result;
@@ -124,6 +125,7 @@ namespace thalamus {
 
       pool.push([frame_id,
                   &busy=this->busy,
+                  time=image_source->time(),
                   //out,
                   state=this->state,
                   frame_interval,
@@ -199,6 +201,7 @@ namespace thalamus {
         auto elapsed = std::chrono::steady_clock::now() - start;
         boost::asio::post(io_context, [undistorted, elapsed,
                                        //&mat_pool,
+                                       time,
                                        collecting,
                                        &busy,
                                        frame_id,
@@ -207,11 +210,11 @@ namespace thalamus {
                                        &current_result,frame_interval,outer] {
           double latency = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
           if(collecting) {
-            current_result = Result{ undistorted, frame_interval, true, true, latency };
+            current_result = Result{ undistorted, frame_interval, true, true, latency, time };
             outer->ready(outer.get());
             return;
           }
-          output_frames[frame_id] = Result{ undistorted, frame_interval, true, true, latency };
+          output_frames[frame_id] = Result{ undistorted, frame_interval, true, true, latency, time };
           for(auto i = output_frames.begin();i != output_frames.end();) {
             if(i->first == next_output_frame) {
               ++next_output_frame;
@@ -255,7 +258,7 @@ namespace thalamus {
                       square_size=this->square_size,
                       height=this->source_height] {
             std::vector<std::vector<cv::Point3f>> object_points;
-            for(const auto& _ : local_computations) {
+            for([[maybe_unused]]const auto& _ : local_computations) {
               object_points.emplace_back();
               for(size_t y = 0;y < rows;++y) {
                 for(size_t x = 0;x < columns;++x) {
@@ -309,8 +312,8 @@ namespace thalamus {
               camera_matrix.at<double>(r, c) = row->at(c);
             }
           }
-          source_width = -1;
-          source_height = -1;
+          source_width = std::numeric_limits<size_t>::max();
+          source_height = std::numeric_limits<size_t>::max();
         };
         mat_connection = rows->changed.connect(update_matrix);
         mat0_connection = row0->changed.connect(update_matrix);
@@ -325,8 +328,8 @@ namespace thalamus {
           for(size_t i = 0;i < list->size();++i) {
             distortion_coefficients.push_back(list->at(i));
           }
-          source_width = -1;
-          source_height = -1;
+          source_width = std::numeric_limits<size_t>::max();
+          source_height = std::numeric_limits<size_t>::max();
         };
         distortion_connection = list->changed.connect(update_distortion);
         update_distortion(a, k, v);
@@ -394,7 +397,7 @@ namespace thalamus {
   }
 
   std::chrono::nanoseconds DistortionNode::time() const {
-    return impl->time;
+    return impl->current_result.time;
   }
 
   bool DistortionNode::prepare() {
@@ -424,9 +427,9 @@ namespace thalamus {
     return LATENCY;
   }
   void DistortionNode::inject(const thalamus::vector<std::span<double const>>& data, const thalamus::vector<std::chrono::nanoseconds>& interval, const thalamus::vector<std::string_view>&)  {
-    THALAMUS_ASSERT(data.size() >= 1);
-    THALAMUS_ASSERT(data[0].size() >= 1);
-    THALAMUS_ASSERT(interval.size() >= 1);
+    THALAMUS_ASSERT(data.size() >= 1, "Error");
+    THALAMUS_ASSERT(data[0].size() >= 1, "Error");
+    THALAMUS_ASSERT(interval.size() >= 1, "Error");
     this->impl->current_result.latency = data[0][0];
     this->impl->current_result.has_analog = true;
     this->impl->current_result.has_image = false;

@@ -66,7 +66,7 @@ if(WIN32)
                             "${boost_content_SOURCE_DIR}/stage/lib/libboost_chrono-${BOOST_VC_TOOLSET}-mt${DEBUG_ABI_TAG}-1_${BOOST_VERSION}.lib"
                             "${boost_content_SOURCE_DIR}/stage/lib/libboost_json-${BOOST_VC_TOOLSET}-mt${DEBUG_ABI_TAG}-1_${BOOST_VERSION}.lib"
                             "${boost_content_SOURCE_DIR}/stage/lib/libboost_atomic-${BOOST_VC_TOOLSET}-mt${DEBUG_ABI_TAG}-1_${BOOST_VERSION}.lib"
-		    COMMAND "${BUILD_SCRIPT}" "${BOOST_ALL_COMPILE_OPTIONS_SPACED} -DBOOST_ASIO_HAS_STD_INVOKE_RESULT -D_WIN32_WINNT=0x0A00 -D_DEBUG ${OSX_TARGET_PARAMETER}" "${ALL_LINK_OPTIONS_SPACED} " "${boost_content_BINARY_DIR}" debug
+		    COMMAND "${BUILD_SCRIPT}" "${BOOST_ALL_COMPILE_OPTIONS_SPACED} -DBOOST_ASIO_HAS_STD_INVOKE_RESULT -D_WIN32_WINNT=0x0A00 -D_DEBUG" "${ALL_LINK_OPTIONS_SPACED} " "${boost_content_BINARY_DIR}" debug
                     WORKING_DIRECTORY ${boost_content_SOURCE_DIR})
   add_custom_command(OUTPUT "${boost_content_SOURCE_DIR}/stage/lib/libboost_date_time-${BOOST_VC_TOOLSET}-mt${RELEASE_ABI_TAG}-1_${BOOST_VERSION}.lib"
                             "${boost_content_SOURCE_DIR}/stage/lib/libboost_filesystem-${BOOST_VC_TOOLSET}-mt${RELEASE_ABI_TAG}-1_${BOOST_VERSION}.lib"
@@ -79,7 +79,7 @@ if(WIN32)
                             "${boost_content_SOURCE_DIR}/stage/lib/libboost_chrono-${BOOST_VC_TOOLSET}-mt${RELEASE_ABI_TAG}-1_${BOOST_VERSION}.lib"
                             "${boost_content_SOURCE_DIR}/stage/lib/libboost_json-${BOOST_VC_TOOLSET}-mt${RELEASE_ABI_TAG}-1_${BOOST_VERSION}.lib"
                             "${boost_content_SOURCE_DIR}/stage/lib/libboost_atomic-${BOOST_VC_TOOLSET}-mt${RELEASE_ABI_TAG}-1_${BOOST_VERSION}.lib"
-                    COMMAND "${BUILD_SCRIPT}" "${BOOST_ALL_COMPILE_OPTIONS_SPACED} -DBOOST_ASIO_HAS_STD_INVOKE_RESULT -D_WIN32_WINNT=0x0A00 ${OSX_TARGET_PARAMETER}" "${ALL_LINK_OPTIONS_SPACED} " "${boost_content_BINARY_DIR}" release
+                    COMMAND "${BUILD_SCRIPT}" "${BOOST_ALL_COMPILE_OPTIONS_SPACED} -DBOOST_ASIO_HAS_STD_INVOKE_RESULT -D_WIN32_WINNT=0x0A00" "${ALL_LINK_OPTIONS_SPACED} " "${boost_content_BINARY_DIR}" release
                     WORKING_DIRECTORY ${boost_content_SOURCE_DIR})
   add_library(boost INTERFACE
     "$<IF:$<CONFIG:Debug>,${boost_content_SOURCE_DIR}/stage/lib/libboost_date_time-${BOOST_VC_TOOLSET}-mt${DEBUG_ABI_TAG}-1_${BOOST_VERSION}.lib,${boost_content_SOURCE_DIR}/stage/lib/libboost_date_time-${BOOST_VC_TOOLSET}-mt${RELEASE_ABI_TAG}-1_${BOOST_VERSION}.lib>"
@@ -129,7 +129,7 @@ else()
                             "${boost_content_SOURCE_DIR}/stage-debug/lib/libboost_json.a"
                             "${boost_content_SOURCE_DIR}/stage-debug/lib/libboost_atomic.a"
                     COMMAND ${BOOTSTRAP} ${BOOST_TOOLSET} 
-                    && sh ${CMAKE_SOURCE_DIR}/build_boost.sh "${ALL_COMPILE_OPTIONS_SPACED} -fPIC -DBOOST_ASIO_HAS_STD_INVOKE_RESULT ${OSX_TARGET_PARAMETER}" " ${ALL_LINK_OPTIONS_SPACED}" debug
+                    && sh ${CMAKE_SOURCE_DIR}/build_boost.sh "${ALL_COMPILE_OPTIONS_SPACED} -DBOOST_ASIO_HAS_STD_INVOKE_RESULT" " ${ALL_LINK_OPTIONS_SPACED}" debug
                     WORKING_DIRECTORY ${boost_content_SOURCE_DIR})
   add_custom_command(OUTPUT "${boost_content_SOURCE_DIR}/stage-release/lib/libboost_date_time.a"
                             "${boost_content_SOURCE_DIR}/stage-release/lib/libboost_filesystem.a"
@@ -143,7 +143,7 @@ else()
                             "${boost_content_SOURCE_DIR}/stage-release/lib/libboost_json.a"
                             "${boost_content_SOURCE_DIR}/stage-release/lib/libboost_atomic.a"
                     COMMAND ${BOOTSTRAP} ${BOOST_TOOLSET} 
-                    && sh ${CMAKE_SOURCE_DIR}/build_boost.sh "${ALL_COMPILE_OPTIONS_SPACED} -fPIC -DBOOST_ASIO_HAS_STD_INVOKE_RESULT ${OSX_TARGET_PARAMETER}" " ${ALL_LINK_OPTIONS_SPACED}" release
+                    && sh ${CMAKE_SOURCE_DIR}/build_boost.sh "${ALL_COMPILE_OPTIONS_SPACED} -DBOOST_ASIO_HAS_STD_INVOKE_RESULT" " ${ALL_LINK_OPTIONS_SPACED}" release
                     WORKING_DIRECTORY ${boost_content_SOURCE_DIR})
   add_library(boost INTERFACE
     "$<IF:$<CONFIG:Debug>,${boost_content_SOURCE_DIR}/stage-debug/lib/libboost_date_time.a,${boost_content_SOURCE_DIR}/stage-release/lib/libboost_date_time.a>"

@@ -1,10 +1,10 @@
-#include <nidaq_node.h>
+#include <nidaq_node.hpp>
 #include <regex>
 #include <absl/strings/numbers.h>
-#include <tracing/tracing.h>
+#include <tracing/tracing.hpp>
 #include <numeric>
-#include <grpc_impl.h>
-#include <modalities_util.h>
+#include <grpc_impl.hpp>
+#include <modalities_util.hpp>
 
 namespace thalamus {
   struct NidaqNode::Impl {

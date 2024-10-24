@@ -1,7 +1,7 @@
-#include <chessboard_node.h>
-#include <thread_pool.h>
+#include <chessboard_node.hpp>
+#include <thread_pool.hpp>
 #include <boost/pool/object_pool.hpp>
-#include <modalities_util.h>
+#include <modalities_util.hpp>
 extern "C" {
 #include <cairo.h>
 }

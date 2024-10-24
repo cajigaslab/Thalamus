@@ -7,23 +7,31 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: builder
     steps:
-    - uses: actions/checkout@v4
-    - name: Set Git name 
-      run: git config --global user.name "Github Actions"
-    - name: Set Git email 
-      run: git config --global user.email "no@email.com"
-    - name: Prepare
-      run: python3 prepare.py
-    - name: nasm
-      run: echo $PATH && echo $HOME && which nasm
+    - run: |
+        if [ ! -d .git ]; then
+          git init
+          git remote add origin https://${{ secrets.GITHUB_TOKEN }}:@github.com/$GITHUB_REPOSITORY
+        else
+          git remote set-url origin https://${{ secrets.GITHUB_TOKEN }}:@github.com/$GITHUB_REPOSITORY
+        fi
+        git fetch origin $GITHUB_SHA
+        git checkout $GITHUB_SHA
+        git tag -d $(git tag -l)
     - name: Version Bump
-      run: python3 bump.py patch
+      run: source /home/builder/.thalamusrc && source /py36/bin/activate && python bump.py patch
+    - run: rm -rf dist && rm -rf /artifacts/dist
     - name: Build
-      run: python3 -m build -n -w -Crelease
+      run: source /home/builder/.thalamusrc && echo PATH $PATH && source /py36/bin/activate && python -m build -n -w -Crelease
+    - run: cp -r dist /artifacts
+  upload:
+    needs: build
+    runs-on: uploader
+    steps:
     - name: Archive Distribution
       uses: actions/upload-artifact@v4
       with:
         name: dist
-        path: dist
+        path: /artifacts/dist
+       

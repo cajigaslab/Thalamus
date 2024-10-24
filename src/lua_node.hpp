@@ -1,9 +1,9 @@
 #pragma once
 
-#include <thalamus_asio.h>
+#include <thalamus_asio.hpp>
 
 #include <string>
-#include <base_node.h>
+#include <base_node.hpp>
 #include <state.hpp>
 
 namespace thalamus {

@@ -1,11 +1,11 @@
-#include <intan_node.h>
+#include <intan_node.hpp>
 #include <boost/asio.hpp>
 #include <vector>
 #include <map>
 #include <functional>
 #include <string>
 #include <iostream>
-#include <base_node.h>
+#include <base_node.hpp>
 #include <absl/strings/str_split.h>
 #include <state.hpp>
 #include <boost/signals2.hpp>

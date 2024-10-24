@@ -1,13 +1,13 @@
-#include <storage_node.h>
-#include <image_node.h>
-#include <text_node.h>
+#include <storage_node.hpp>
+#include <image_node.hpp>
+#include <text_node.hpp>
 #include <fstream>
-#include <util.h>
+#include <util.hpp>
 #include <absl/strings/str_format.h>
 #include <absl/time/time.h>
 #include <boost/qvm/vec_access.hpp>
 #include <boost/qvm/quat_access.hpp>
-#include <modalities_util.h>
+#include <modalities_util.hpp>
 
 #ifdef _WIN32
 #include <winsock2.h>

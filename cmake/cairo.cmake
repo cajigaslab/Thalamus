@@ -21,10 +21,12 @@ FetchContent_Declare(
   URL https://cairographics.org/releases/pixman-0.43.4.tar.gz
   URL_HASH SHA512=08802916648bab51fd804fc3fd823ac2c6e3d622578a534052b657491c38165696d5929d03639c52c4f29d8850d676a909f0299d1a4c76a07df18a34a896e43d)
 FetchContent_MakeAvailable(pixman)
+
 file(MAKE_DIRECTORY "${pixman_BINARY_DIR}/Debug/install")
 file(MAKE_DIRECTORY "${pixman_BINARY_DIR}/Release/install")
 
 add_custom_command(
+  DEPENDS glib
   OUTPUT "${pixman_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/build.ninja"
   COMMAND cmake -E env 
   ${CAIRO_COMPILER}
@@ -56,6 +58,9 @@ FetchContent_Declare(
   URL https://www.cairographics.org/releases/cairo-1.18.0.tar.xz
   URL_HASH SHA256=243a0736b978a33dee29f9cca7521733b78a65b5418206fef7bd1c3d4cf10b64)
 FetchContent_MakeAvailable(cairo)
+
+execute_process(COMMAND patch -N  "${cairo_SOURCE_DIR}/meson.build" "${CMAKE_SOURCE_DIR}/patches/cairo")
+
 file(MAKE_DIRECTORY "${cairo_BINARY_DIR}/Debug/install")
 file(MAKE_DIRECTORY "${cairo_BINARY_DIR}/Release/install")
 
