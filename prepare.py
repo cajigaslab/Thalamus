@@ -253,8 +253,10 @@ def main():
     if not shutil.which('gclient'):
       destination = home_path / 'depot_tools'
       subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
-    
-    with open(str(home_path / '.bashrc'), 'r') as bashrc:
+
+    bashrc_path = home_path / '.bashrc'
+    bashrc_path.touch()
+    with open(str(bashrc_path), 'r') as bashrc:
       bashrc_content = bashrc.read()
     if "source ~/.thalamusrc" not in bashrc_content:
       with open(str(home_path / '.bashrc'), 'a') as bashrc:
