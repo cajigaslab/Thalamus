@@ -4,34 +4,49 @@ on:
   workflow_dispatch: {}
   schedule:
     - cron: "0 0 * * 1"
-
+    
+permissions:
+  contents: write
+  
 jobs:
   build:
-    runs-on: builder
+    runs-on: ubuntu-latest
     steps:
-    - run: |
-        if [ ! -d .git ]; then
-          git init
-          git remote add origin https://${{ secrets.GITHUB_TOKEN }}:@github.com/$GITHUB_REPOSITORY
-        else
-          git remote set-url origin https://${{ secrets.GITHUB_TOKEN }}:@github.com/$GITHUB_REPOSITORY
-        fi
-        git fetch origin $GITHUB_SHA
-        git checkout $GITHUB_SHA
-        git tag -d $(git tag -l)
+    - uses: actions/checkout@v4
+    - name: Set Git name 
+      run: git config --global user.name "Github Actions"
+    - name: Set Git email 
+      run: git config --global user.email "no@email.com"
     - name: Version Bump
-      run: source /home/builder/.thalamusrc && source /py36/bin/activate && python bump.py patch
-    - run: rm -rf dist && rm -rf /artifacts/dist
+      run: |
+        python3 -m pip install toml
+        python3 bump.py patch
+    - run: |
+        echo "#!/bin/bash" > prepare_and_build.sh
+        echo "export DEBIAN_FRONTEND=noninteractive" >> prepare_and_build.sh
+        echo "apt update" >> prepare_and_build.sh
+        echo "apt install -y python3 python3-pip python3-venv curl sudo clang-10 libclang-10-dev" >> prepare_and_build.sh
+        echo "update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-10 100" >> prepare_and_build.sh
+        echo "update-alternatives --install /usr/bin/clang clang /usr/bin/clang-10 100" >> prepare_and_build.sh
+        echo "python3 -m venv pyenv" >> prepare_and_build.sh
+        echo "source pyenv/bin/activate" >> prepare_and_build.sh
+        echo "pip install -U pip setuptools" >> prepare_and_build.sh
+        echo "python prepare.py" >> prepare_and_build.sh
+        echo "source ~/.thalamusrc" >> prepare_and_build.sh
+        echo "cmake --version" >> prepare_and_build.sh
+        echo "python -m build -n -w -Crelease" >> prepare_and_build.sh
+        chmod +x prepare_and_build.sh
+        echo prepare_and_build.sh
+        cat prepare_and_build.sh
+        
     - name: Build
-      run: source /home/builder/.thalamusrc && echo PATH $PATH && source /py36/bin/activate && python -m build -n -w -Crelease
-    - run: cp -r dist /artifacts
-  upload:
-    needs: build
-    runs-on: uploader
-    steps:
+      uses: docker://ubuntu:18.04
+      with:
+        entrypoint: ./prepare_and_build.sh
     - name: Archive Distribution
       uses: actions/upload-artifact@v4
       with:
         name: dist
-        path: /artifacts/dist
+        path: dist
+    - run: git push
        
