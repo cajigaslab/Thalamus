@@ -26,7 +26,7 @@ jobs:
         echo "ls" >> prepare_and_build.sh
         echo "export DEBIAN_FRONTEND=noninteractive" >> prepare_and_build.sh
         echo "apt update" >> prepare_and_build.sh
-        echo "apt install -y python3 python3-pip curl" >> prepare_and_build.sh
+        echo "apt install -y python3 python3-pip curl sudo" >> prepare_and_build.sh
         echo "python3 prepare.py" >> prepare_and_build.sh
         echo "python3 -m build -n -w -Crelease" >> prepare_and_build.sh
         chmod +x prepare_and_build.sh
