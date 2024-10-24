@@ -21,10 +21,11 @@ jobs:
       run: |
         python3 -m pip install toml
         python3 bump.py patch
-    - run: git push
     - run: |
         echo "#!/bin/bash" > prepare_and_build.sh
         echo "ls" >> prepare_and_build.sh
+        echo "apt update" >> prepare_and_build.sh
+        echo "apt install python3 python3-pip curl" >> prepare_and_build.sh
         echo "python3 prepare.py" >> prepare_and_build.sh
         echo "python3 -m build -n -w -Crelease" >> prepare_and_build.sh
         chmod +x prepare_and_build.sh
@@ -40,4 +41,5 @@ jobs:
       with:
         name: dist
         path: dist
+    - run: git push
        
