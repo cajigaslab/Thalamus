@@ -140,7 +140,7 @@ async def async_main() -> None:
   if arguments.remote_executor:
     window = None
   else:
-    window = task_window.Window(config, done_future, None, None, stub, arguments.port)
+    window = task_window.Window(config, done_future, None, None, stub, None)
     #node.create_timer(1/60, QApplication.processEvents)
 
     window.resize(1024, 768)
