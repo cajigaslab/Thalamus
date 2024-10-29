@@ -164,7 +164,8 @@ class ThalamusServicer(thalamus_pb2_grpc.ThalamusServicer):
                   match.context.value[match.path.index] = value
               elif isinstance(match.path, jsonpath_ng.Fields):
                 match.context.value[match.path.fields[0]] = value
-          await asyncio.wait(self.pending_out)
+          if self.pending_out:
+            await asyncio.wait(self.pending_out)
           self.pending_out = []
           await queue.put(thalamus_pb2.ObservableTransaction(acknowledged = transaction.id))
       except asyncio.CancelledError:

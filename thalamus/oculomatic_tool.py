@@ -3,6 +3,7 @@ import typing
 import asyncio
 import traceback
 import threading
+import subprocess
 import multiprocessing
 import multiprocessing.connection
 
@@ -222,6 +223,7 @@ class OculomaticTool():
         self.loop.create_task(self.__oculomatic_loop())
         self.loop.create_task(self.__ui_loop())
 
+        multiprocessing.set_start_method('spawn')
         self.process = multiprocessing.Process(target=ui_process, args=[self.remote])
         self.process.start()
       except:
@@ -285,5 +287,3 @@ class OculomaticTool():
         pass
     except:
       traceback.print_exc()
-
-
