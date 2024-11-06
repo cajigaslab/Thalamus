@@ -58,9 +58,10 @@ namespace thalamus {
     class ValueWrapper {
       Key key;
       std::function<Value&()> get_value;
+      std::function<bool()> has_value;
       ObservableCollection* collection;
     public:
-      ValueWrapper(const Key& key, std::function<Value& ()> get_value, ObservableCollection* collection);
+      ValueWrapper(const Key& key, std::function<Value& ()> get_value, std::function<bool ()> has_value, ObservableCollection* collection);
 
       void assign(const Value& new_value, std::function<void()> callback = nullptr, bool from_remote = false);
 
@@ -80,12 +81,13 @@ namespace thalamus {
     class VectorIteratorWrapper {
       size_t key;
       Vector::iterator iterator;
+      Vector::iterator end;
       ObservableCollection* collection;
       friend ObservableList;
       friend ObservableDict;
     public:
       VectorIteratorWrapper();
-      VectorIteratorWrapper(size_t key, Vector::iterator iterator, ObservableCollection* collection);
+      VectorIteratorWrapper(size_t key, Vector::iterator iterator, Vector::iterator end, ObservableCollection* collection);
       ValueWrapper operator*();
       VectorIteratorWrapper& operator+(size_t count);
       VectorIteratorWrapper& operator+=(size_t count);
@@ -101,13 +103,14 @@ namespace thalamus {
     class MapIteratorWrapper {
     protected:
       Map::iterator iterator;
+      Map::iterator end;
       ObservableCollection* collection;
       std::optional<std::pair<Key, ValueWrapper>> pair;
       friend ObservableList;
       friend ObservableDict;
     public:
       MapIteratorWrapper();
-      MapIteratorWrapper(Map::iterator iterator, ObservableCollection* collection);
+      MapIteratorWrapper(Map::iterator iterator, Map::iterator end, ObservableCollection* collection);
       ValueWrapper operator*();
       std::pair<Key, ValueWrapper>* operator->();
       MapIteratorWrapper& operator++();
@@ -142,6 +145,7 @@ namespace thalamus {
     Vector::const_iterator begin() const;
     VectorIteratorWrapper end();
     Vector::const_iterator end() const;
+    Vector::const_iterator cend() const;
     VectorIteratorWrapper erase(VectorIteratorWrapper i);
     VectorIteratorWrapper erase(Vector::const_iterator i, std::function<void(VectorIteratorWrapper)> callback = nullptr, bool from_remote = false);
     VectorIteratorWrapper erase(size_t i, std::function<void(VectorIteratorWrapper)> callback = nullptr, bool from_remote = false);
@@ -173,6 +177,7 @@ namespace thalamus {
     Map::const_iterator begin() const;
     MapIteratorWrapper end();
     Map::const_iterator end() const;
+    Map::const_iterator cend() const;
     MapIteratorWrapper erase(MapIteratorWrapper i);
     MapIteratorWrapper erase(Map::const_iterator i, std::function<void(MapIteratorWrapper)> callback = nullptr, bool from_remote = false);
     MapIteratorWrapper erase(const ObservableCollection::Key& i, std::function<void(MapIteratorWrapper)> callback = nullptr, bool from_remote = false);
