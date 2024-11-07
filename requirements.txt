@@ -22,7 +22,6 @@ Pillow
 lark
 jsonpath_ng
 nidaqmx
-vtk
 wheel
 toml
 build

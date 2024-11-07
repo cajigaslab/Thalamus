@@ -27,7 +27,37 @@ namespace thalamus {
       if constexpr (std::is_convertible<M, T>()) {
         return static_cast<T>(arg);
       } else {
-        THALAMUS_ASSERT(false, "Not convertable");
+        std::string arg_text = "???";
+        std::string m_name = "???";
+        if constexpr(std::is_same<M, long long int>()) {
+          m_name = "long long int";
+          arg_text = std::to_string(arg);
+        } else if constexpr(std::is_same<M, std::string>()) {
+          m_name = "std::string";
+          arg_text = arg;
+        } else if constexpr(std::is_same<M, double>()) {
+          m_name = "double";
+          arg_text = std::to_string(arg);
+        } else if constexpr(std::is_same<M, int>()) {
+          m_name = "int";
+          arg_text = std::to_string(arg);
+        } else if constexpr(std::is_same<M, std::monostate>()) {
+          m_name = "std::monostate";
+          arg_text = "std::monostate";
+        }
+
+        std::string t_name = "???";
+        if constexpr(std::is_same<T, long long int>()) {
+          t_name = "long long int";
+        } else if constexpr(std::is_same<T, std::string>()) {
+          t_name = "std::string";
+        } else if constexpr(std::is_same<T, double>()) {
+          t_name = "double";
+        } else if constexpr(std::is_same<T, int>()) {
+          t_name = "int";
+        }
+        
+        THALAMUS_ASSERT(false, "Not convertable: %s %s->%s", arg_text, m_name, t_name);
       }
     }
   };
@@ -1552,6 +1582,13 @@ namespace thalamus {
         }
 
         void set(const std::string& reg, const std::variant<long long int, std::string, double>& value) {
+          if (std::holds_alternative<long long int>(value)) {
+            THALAMUS_LOG(debug) << reg << " int=" << std::get<long long int>(value);
+          } else if (std::holds_alternative<std::string>(value)) {
+            THALAMUS_LOG(debug) << reg << " string=" << std::get<std::string>(value);
+          } else if (std::holds_alternative<double>(value)) {
+            THALAMUS_LOG(debug) << reg << " double=" << std::get<double>(value);
+          }
           auto i = nodes.find(reg);
           THALAMUS_ASSERT(i != nodes.end(), "Register not found: %s", reg);
           if (std::holds_alternative<Integer>(i->second)) {
@@ -2002,6 +2039,9 @@ namespace thalamus {
         if (device->is_writable("AcquisitionFrameRateAuto")) {
           device->set("AcquisitionFrameRateAuto", "Off");
         }
+        if (device->is_writable("AcquisitionFrameRateMode")) {
+          device->set("AcquisitionFrameRateMode", "Basic");
+        }
         device->set("AcquisitionMode", "Continuous");
       }
 
@@ -2084,46 +2124,44 @@ namespace thalamus {
         return;
       }
 
-      auto streaming = device->streaming.load();
-
       if (key_str == "Width") {
         auto value = variant_cast<long long int>(v);
-        if(streaming) {this->device->set("Width", value);}
+        this->device->set("Width", value);
         auto new_value = variant_cast<long long int>(this->device->get("Width"));
         if(value != new_value) {
           (*state)["Width"].assign(new_value);
         }
       } else if (key_str == "Height") {
         auto value = variant_cast<long long int>(v);
-        if(streaming) {this->device->set("Height", value);}
+        this->device->set("Height", value);
         auto new_value = variant_cast<long long int>(this->device->get("Height"));
         if(value != new_value) {
           (*state)["Height"].assign(new_value);
         }
       } else if (key_str == "OffsetX") {
         auto value = variant_cast<long long int>(v);
-        if(streaming) {this->device->set("OffsetX", value);}
+        this->device->set("OffsetX", value);
         auto new_value = variant_cast<long long int>(this->device->get("OffsetX"));
         if(value != new_value) {
           (*state)["OffsetX"].assign(new_value);
         }
       } else if (key_str == "OffsetY") {
         auto value = variant_cast<long long int>(v);
-        if(streaming) {this->device->set("OffsetY", value);}
+        this->device->set("OffsetY", value);
         auto new_value = variant_cast<long long int>(this->device->get("OffsetY"));
         if(value != new_value) {
           (*state)["OffsetY"].assign(new_value);
         }
       } else if (key_str == "ExposureTime") {
         auto value = variant_cast<double>(v);
-        if(streaming) {this->device->set("ExposureTime", value);}
+        this->device->set("ExposureTime", value);
         auto new_value = variant_cast<double>(this->device->get("ExposureTime"));
         if(std::abs(value - new_value) > 1) {
           (*state)["ExposureTime"].assign(new_value);
         }
       } else if (key_str == "AcquisitionFrameRate") {
         auto value = variant_cast<double>(v);
-        if(streaming) {this->device->set("AcquisitionFrameRate", value);}
+        this->device->set("AcquisitionFrameRate", value);
         auto new_value = variant_cast<double>(this->device->get("AcquisitionFrameRate"));
         target_framerate = new_value;
         if(std::abs(value - new_value) > 1) {
@@ -2131,7 +2169,7 @@ namespace thalamus {
         }
       } else if (key_str == "Gain") {
         auto value = variant_cast<double>(v);
-        if(streaming) {this->device->set("Gain", value);}
+        this->device->set("Gain", value);
         auto new_value = variant_cast<double>(this->device->get("Gain"));
         if(std::abs(value - new_value) > 1) {
           (*state)["Gain"].assign(new_value);
