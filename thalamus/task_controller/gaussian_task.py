@@ -1,5 +1,5 @@
 """
-Implementation of the simple task
+Implementation of the Gaussian delayed saccade task
 """
 import typing
 import logging
@@ -61,9 +61,10 @@ class TargetWidget(QWidget):
     layout.addWidget(copy_button, 0, 2)
 
     fixed_form = Form.build(config, ['Name:', 'Value:'],
-      Form.Constant('Width', 'width', 10, '\u00B0'),
-      Form.Constant('Height', 'height', 10, '\u00B0'),
+      Form.Constant('Width', 'width', 1, '\u00B0'),
+      Form.Constant('Height', 'height', 1, '\u00B0'),
       Form.Constant('Orientation', 'orientation', 0, '\u00B0'),
+      Form.Constant('Opacity', 'opacity', 1),
       Form.Constant('Window Size', 'window_size', 0, '\u00B0'),
       Form.Constant('Reward Channel', 'reward_channel', 0),
       Form.Constant('Audio Scale Left', 'audio_scale_left', 0),
@@ -87,7 +88,7 @@ class TargetWidget(QWidget):
       Form.Uniform('Auditory Spatial Offset Around Fixation', 'auditory_spatial_offset_around_fixation', 0, 0),
       Form.Uniform('On Luminance', 'on_luminance', 0, 0),
       Form.Uniform('Off Luminance', 'off_luminance', 0, 0),
-      Form.Choice('Shape', 'shape', shapes)  # Randomly select the shape
+      Form.Constant('Shape', 'shape', random.choice(shapes))  # Randomly select the shape
     )
     layout.addWidget(random_form, 1, 3, 1, 2)
 
@@ -107,8 +108,10 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   listeners to update the task_config when changes are made.
   """
   form = Form.build(task_config, ["Name:", "Min:", "Max:"],
-    Form.Constant('Width', 'width', 1, '\u00B0'),
-    Form.Constant('Height', 'height', 0.75, '\u00B0'),
+    Form.Constant('Target Width (0.1-1.0)', 'width', 1, '\u00B0'),
+    Form.Constant('Target Height (0.1-1.0)', 'height', 1, '\u00B0'),
+    Form.Constant('Orientation (0-150)', 'orientation', 0, '\u00B0'),
+    Form.Constant('Opacity  (0-1.0)', 'opacity', 1),
     Form.Bool('Lock Height to Width?', 'is_height_locked', False),
     Form.Constant('Center X', 'center_x', 0, '\u00B0'),
     Form.Constant('Center Y', 'center_y', 0, '\u00B0'),
@@ -118,11 +121,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Uniform('Decision Interval', 'decision_timeout', 1, 2, 's'),
     Form.Uniform('Failure Interval', 'fail_timeout', 1, 1, 's'),
     Form.Uniform('Success Interval', 'success_timeout', 1, 1, 's'),
-    Form.Uniform('Target X', 'target_x', 300, 300, 'px'),
-    Form.Uniform('Target Y', 'target_y', 300, 300, 'px'),
-    Form.Uniform('Target Width', 'target_width', 333, 333, 'px'),
-    Form.Uniform('Target Height', 'target_height', 333, 333, 'px'),
-    Form.Color('Color', 'target_color', QColor(255, 255, 255)),
+    Form.Color('Target Color', 'target_color', QColor(255, 255, 255)),
     Form.Constant('Shape', 'shape',  random.choice(shapes))  # Add the shape attribute
   )
   layout.addWidget(form)
@@ -131,6 +130,15 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   width_spinbox = form.findChild(QDoubleSpinBox, "width")
   width_spinbox.setRange(.1, 1.0)
   width_spinbox.setSingleStep(.1)
+  height_spinbox = form.findChild(QDoubleSpinBox, "height")
+  height_spinbox.setRange(.1, 1.0)
+  height_spinbox.setSingleStep(.1)
+  orientation_spinbox = form.findChild(QDoubleSpinBox, "orientation")
+  orientation_spinbox.setRange(0, 150)
+  orientation_spinbox.setSingleStep(30)
+  opacity_spinbox = form.findChild(QDoubleSpinBox, "opacity")
+  opacity_spinbox.setRange(.1, 1.0)
+  opacity_spinbox.setSingleStep(.1)
 
   new_target_button = QPushButton('Add Target')
   new_target_button.setObjectName('new_target_button')
