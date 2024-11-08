@@ -10,6 +10,8 @@ Welcome to Thalamus's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   dev_environment
+   build
    usage
 
 Indices and tables

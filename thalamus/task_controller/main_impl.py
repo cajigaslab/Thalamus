@@ -8,7 +8,7 @@ import pathlib
 from ..build import generate
 THALAMUS_PROTO_PATH = pathlib.Path.cwd() / 'proto' / 'thalamus.proto'
 THALAMUS_PROTO_GEN_PATH = pathlib.Path.cwd() / 'thalamus' / 'thalamus_pb2.py'
-if THALAMUS_PROTO_PATH.exists() and not THALAMUS_PROTO_GEN_PATH.exists() or (THALAMUS_PROTO_GEN_PATH.stat().st_mtime < THALAMUS_PROTO_PATH.stat().st_mtime):
+if THALAMUS_PROTO_PATH.exists() and not THALAMUS_PROTO_GEN_PATH.exists() or (THALAMUS_PROTO_PATH.exists() and THALAMUS_PROTO_GEN_PATH.exists() and THALAMUS_PROTO_GEN_PATH.stat().st_mtime < THALAMUS_PROTO_PATH.stat().st_mtime):
   generate()
 
 import os
