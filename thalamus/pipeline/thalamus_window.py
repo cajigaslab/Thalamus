@@ -43,6 +43,7 @@ from .. import thalamus_pb2_grpc
 from .data_widget import DataWidget
 import OpenGL.GL
 import grpc
+import cv2
 
 from ..observable_item_models import TreeObservableCollectionModel
 
@@ -266,6 +267,11 @@ FACTORIES = {
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
     #UserData(UserDataType.DEFAULT, 'Time Source', '', []),
+  ]),
+  'VIDEO': Factory(None, [
+    UserData(UserDataType.DEFAULT, 'File Name', '', []),
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+    UserData(UserDataType.CHECK_BOX, 'View', False, []),
   ]),
   'ANALOG': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Widget is Touchpad', False, [])
@@ -1426,7 +1432,7 @@ class ItemModel(QAbstractItemModel):
               request = thalamus_pb2.NodeSelector(
                 name = node["name"]
               )
-              self.plots[id(node)] = ImageWidget(node, self.stub.image(thalamus_pb2.ImageRequest(node=request, framerate=5)), self.stub)
+              self.plots[id(node)] = ImageWidget(node, self.stub.image(thalamus_pb2.ImageRequest(node=request, framerate=30)), self.stub)
             elif thalamus_pb2.Modalities.MocapModality in modalities.values:
               request = thalamus_pb2.NodeSelector(
                 name = node["name"]

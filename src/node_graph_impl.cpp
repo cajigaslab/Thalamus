@@ -22,6 +22,7 @@
 #include <spikeglx_node.hpp>
 #include <sync_node.hpp>
 #include <aruco_node.hpp>
+#include <video_node.hpp>
 
 namespace thalamus {
   using namespace std::chrono_literals;
@@ -74,6 +75,7 @@ namespace thalamus {
     {"TASK_CONTROLLER", new NodeFactory<TaskControllerNode>()},
     {"ANALOG", new NodeFactory<AnalogNodeImpl>()},
     {"FFMPEG", new NodeFactory<FfmpegNode>()},
+    {"VIDEO", new NodeFactory<VideoNode>()},
     {"OCULOMATIC", new NodeFactory<OculomaticNode>()},
     {"DISTORTION", new NodeFactory<DistortionNode>()},
     {"GENICAM", new NodeFactory<GenicamNode>()},
