@@ -1,0 +1,110 @@
+{
+  "nodes": [
+    {
+      "name": "DAQ",
+      "type": "NIDAQ",
+      "Running": true,
+      "Sample Rate": 1000.0,
+      "Poll Interval": 16,
+      "Channel": "Dev1/ai0:7",
+      "View": false
+    },
+    {
+      "name": "DAQ Out",
+      "type": "NIDAQ_OUT",
+      "Running": true,
+      "Source": "Random",
+      "Channel": "Dev1/ao0",
+      "View": false
+    },
+    {
+      "name": "Random",
+      "type": "WAVE",
+      "Running": true,
+      "Frequency": 1.0,
+      "Amplitude": 1.0,
+      "Shape": "Random",
+      "Offset": 0.0,
+      "Duty Cycle": 0.5,
+      "Phase": 1.0,
+      "Sample Rate": 1000.0,
+      "Poll Interval": 16,
+      "View": false,
+      "Min Offset": -10,
+      "Max Offset": 10,
+      "Min Amplitude": 0,
+      "Max Amplitude": 10,
+      "Min Frequency": 0,
+      "Max Frequency": 10
+    },
+    {
+      "name": "Runner",
+      "type": "RUNNER",
+      "Running": true,
+      "Targets": "DAQ,DAQ Out,Random"
+    }
+  ],
+  "thalamus_view_geometry": [
+    64,
+    104,
+    698,
+    768
+  ],
+  "data_views": [
+    {
+      "view_geometry": [
+        783,
+        216,
+        1116,
+        400
+      ],
+      "rows": 2,
+      "columns": 1,
+      "views": [
+        {
+          "row": 0,
+          "column": 0,
+          "selected_node": "DAQ",
+          "selected_channel": "Dev1/ai7",
+          "view_type": "Time Series",
+          "draw_value": false,
+          "static_range": false,
+          "range_min": 0,
+          "range_max": 10
+        },
+        {
+          "row": 1,
+          "column": 0,
+          "selected_node": "Random",
+          "selected_channel": "0",
+          "view_type": "Time Series",
+          "draw_value": false,
+          "static_range": false,
+          "range_min": 0,
+          "range_max": 10
+        }
+      ]
+    }
+  ],
+  "node_widgets": [
+    {
+      "node": "Runner",
+      "dock_area": "right",
+      "view_geometry": [
+        365,
+        22,
+        333,
+        746
+      ]
+    }
+  ],
+  "queue": [],
+  "reward_schedule": {
+    "schedules": [
+      [
+        0
+      ]
+    ],
+    "index": 0
+  }
+}

@@ -1,0 +1,73 @@
+commit d2b79dee3565baacbf3242461e23ad693ffea2a5
+Author: dmitrijs-c <dmitrijs.celinskis@fulbrightmail.org>
+Date:   Tue Sep 24 16:52:12 2024 -0400
+
+    Modified Gaussian task user interface and started working on ultimate task sequence with OCULOMATIC feedback
+
+commit 9ce0c3c5edd0e21f30db893bb11023f9fa4923fa
+Author: dmitrijs-c <dmitrijs.celinskis@fulbrightmail.org>
+Date:   Thu Sep 19 16:48:36 2024 -0400
+
+    dmitrijs_test.py has a simple demo of all parameters we can control for a Gaussian
+
+commit 4252c9b63cccbbe8aa76d4a8e723beeb71825ee0
+Author: dmitrijs-c <dmitrijs.celinskis@fulbrightmail.org>
+Date:   Wed Sep 18 16:59:31 2024 -0400
+
+    Implemented delayed saccade timing, added polar grid plot, and random positioning
+
+commit a0ae40967cba120cf5d5963b05c66cbe5b7d95b6
+Author: dmitrijs-c <dmitrijs.celinskis@fulbrightmail.org>
+Date:   Tue Sep 17 16:21:41 2024 -0400
+
+    Changed visual target dimensions into degrees. Corrected the fixation cross.
+
+commit 21858f333028a8d16fde029a0c7196803caf64b4
+Author: dmitrijs-c <dmitrijs.celinskis@fulbrightmail.org>
+Date:   Thu Sep 12 13:03:43 2024 -0400
+
+    Added OCULOMATIC data read-out and fixation cross to the visual task
+
+commit 09b088a67555110ea952b90a8442f43c93e76e17
+Author: dmitrijs-c <dmitrijs.celinskis@fulbrightmail.org>
+Date:   Fri Sep 6 17:19:01 2024 -0400
+
+    Added finer control over Gaussian parameters
+
+commit 4a78766878975096a9fa98ceaa0562ce8eba2158
+Author: dmitrijs-c <dmitrijs.celinskis@fulbrightmail.org>
+Date:   Thu Sep 5 17:46:42 2024 -0400
+
+    Added timing control for the Gaussian
+
+commit 104848f7bb032c57272e292a9aafaa83030885f2
+Author: dmitrijs-c <dmitrijs.celinskis@fulbrightmail.org>
+Date:   Thu Sep 5 11:21:12 2024 -0400
+
+    1st working version of PsychoPy Gaussian drawing
+
+commit 386eefedbbdd61eb568378957d6fd7d2198bef6c
+Merge: 1746cc1 614d106
+Author: dmitrijs-c <dmitrijs.celinskis@fulbrightmail.org>
+Date:   Thu Sep 5 11:08:23 2024 -0400
+
+    Merge branch 'beauchamplab-backup2' into beauchamplab to merge
+    PsychoPyii`
+
+commit 1746cc18077adeda8982edaf1d68055962e9b542
+Author: dmitrijs-c <dmitrijs.celinskis@fulbrightmail.org>
+Date:   Fri Aug 23 15:57:39 2024 -0400
+
+    Added pix-by-pix drawn Gaussian target to the simple_task
+
+commit 614d1067e86d5287c9c1e8c54161bf8ee977a9d1
+Author: dmitrijs-c <dmitrijs.celinskis@fulbrightmail.org>
+Date:   Thu Sep 5 10:52:04 2024 -0400
+
+    Backup for the 1st implementation of PsychoPy Gaussian
+
+commit 82baed5a3066e1636b269b53322fabeea1f2a77b
+Author: dmitrijs-c <dmitrijs.celinskis@fulbrightmail.org>
+Date:   Fri Aug 23 15:57:39 2024 -0400
+
+    Added pix-by-pix drawn Gaussian target to the simple_task
