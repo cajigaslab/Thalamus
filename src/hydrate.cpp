@@ -445,12 +445,42 @@ namespace hydrate {
       last_time = time;
     }
     auto average_interval = total_diffs/(times.size()-1);
-    auto framerate = 1'000'000'000/average_interval;
+
+    std::vector<std::pair<double, std::string>> framerates = {
+      {24000.0/1001, "24000/1001"},
+      {24, "24"},
+      {25, "25"},
+      {30000.0/1001, "30000/1001"},
+      {30, "30"},
+      {50, "50"},
+      {60000.0/1001, "60000/1001"},
+      {60, "60"},
+      {15, "15"}, 
+      {5, "5"}, 
+      {10, "10"}, 
+      {12, "12"}, 
+      {15, "15"}
+    };
+    std::sort(framerates.begin(), framerates.end());
+    auto framerate = 1e9/average_interval;
+    auto framerate_i = std::lower_bound(framerates.begin(), framerates.end(), std::make_pair(framerate, ""));
+    std::string ffmpeg_framerate;
+    if(framerate_i == framerates.begin()) {
+      ffmpeg_framerate = framerates.front().second;
+    } else if (framerate_i == framerates.end()) {
+      ffmpeg_framerate = framerates.back().second;
+    } else {
+      if(framerate - (framerate_i-1)->first < framerate_i->first - framerate) {
+        ffmpeg_framerate = (framerate_i-1)->second;
+      } else {
+        ffmpeg_framerate = framerate_i->second;
+      }
+    }
 
     auto location = boost::dll::program_location();
     auto command = absl::StrFormat("%s ffmpeg -y -f rawvideo -pixel_format %s -video_size %dx%d -i pipe: "
-                                   "-codec mpeg1video -f matroska -qscale:v 2 -b:v 100M -r %d \"%s\"",
-                                   location.string(), pixel_format, width, height, framerate, output);
+                                   "-codec mpeg1video -f matroska -qscale:v 2 -b:v 100M -r %s \"%s\"",
+                                   location.string(), pixel_format, width, height, ffmpeg_framerate, output);
     std::cout << "command " << command;
     boost::process::opstream in;
     boost::process::child ffmpeg(command, boost::process::std_in < in, boost::process::std_out > stdout,  boost::process::std_err > stderr);
