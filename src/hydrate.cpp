@@ -16,6 +16,8 @@
 #include <boost/qvm/vec.hpp>
 #include <boost/qvm/quat.hpp>
 #include <boost/endian.hpp>
+#include <boost/dll.hpp>
+#include <boost/process.hpp>
 #include <absl/strings/str_replace.h>
 
 #ifdef _WIN32
@@ -376,6 +378,201 @@ namespace hydrate {
     }
   }
 
+  int generate_video(boost::program_options::variables_map& vm) {
+    auto video = vm.contains("video") ? vm["video"].as<std::string>() : std::string();
+    std::string input = vm["input"].as<std::string>();
+
+    std::string output;
+    if (vm.count("output")) {
+      output = vm["output"].as<std::string>();
+    }
+    else {
+      output = input + "_" + video + ".mpg";
+    }
+
+    int width = 0;
+    int height = 0;
+    std::string pixel_format;
+    std::set<size_t> times;
+    {
+      std::ifstream input_stream(input, std::ios::binary);
+      std::optional<thalamus_grpc::StorageRecord> record;
+      double progress;
+      while((record = read_record(input_stream, &progress))) {
+        if(record->body_case() == thalamus_grpc::StorageRecord::kImage && record->node() == video) {
+          times.insert(record->time());
+          if(width) {
+            continue;
+          }
+          auto image = record->image();
+          width = image.width();
+          height = image.height();
+          switch(image.format()) {
+            case thalamus_grpc::Image::Format::Image_Format_Gray:
+              pixel_format = "gray";
+              break;
+            case thalamus_grpc::Image::Format::Image_Format_RGB:
+              pixel_format = "rgb24";
+              break;
+            case thalamus_grpc::Image::Format::Image_Format_YUYV422:
+              pixel_format = "yuyv422";
+              break;
+            case thalamus_grpc::Image::Format::Image_Format_YUV420P:
+              pixel_format = "yuv420p";
+              break;
+            case thalamus_grpc::Image::Format::Image_Format_YUVJ420P:
+              pixel_format = "yuvj420p";
+              break;
+            case thalamus_grpc::Image::Format::Image_Format_Gray16:
+              pixel_format = image.bigendian() ? "gray16be" : "gray16le";
+              break;
+            case thalamus_grpc::Image::Format::Image_Format_RGB16:
+              pixel_format = image.bigendian() ? "rgb48be" : "rgb48le";
+              break;
+            default:
+              THALAMUS_ASSERT(false, "Unexpected image format %d", image.format());
+          }
+        }
+      }
+    }
+    THALAMUS_ASSERT(width > 0 && height > 0, "Failed to detect video dimensions");
+    size_t total_diffs = 0;
+    size_t last_time = 0;
+    for(auto time : times) {
+      if(last_time > 0) {
+        total_diffs += time - last_time;
+      }
+      last_time = time;
+    }
+    auto average_interval = total_diffs/(times.size()-1);
+    auto framerate = 1'000'000'000/average_interval;
+
+    auto location = boost::dll::program_location();
+    auto command = absl::StrFormat("%s ffmpeg -y -f rawvideo -pixel_format %s -video_size %dx%d -i pipe: "
+                                   "-codec mpeg1video -f matroska -qscale:v 2 -b:v 100M -r %d \"%s\"",
+                                   location.string(), pixel_format, width, height, framerate, output);
+    std::cout << "command " << command;
+    boost::process::opstream in;
+    boost::process::child ffmpeg(command, boost::process::std_in < in, boost::process::std_out > stdout,  boost::process::std_err > stderr);
+    {
+      std::ifstream input_stream(input, std::ios::binary);
+      std::optional<thalamus_grpc::StorageRecord> record;
+      double progress;
+      while((record = read_record(input_stream, &progress))) {
+        if(record->body_case() == thalamus_grpc::StorageRecord::kImage && record->node() == video) {
+          auto image = record->image();
+          width = image.width();
+          height = image.height();
+          switch(image.format()) {
+            case thalamus_grpc::Image::Format::Image_Format_Gray:
+              {
+                auto data = image.data(0);
+                auto width = image.width();
+                auto height = image.height();
+                auto linesize = data.size()/height;
+                auto char_ptr = reinterpret_cast<const char*>(data.data());
+                for(auto i = 0;i < height;++i) {
+                  in.write(char_ptr + i*linesize, width);
+                }
+                break;
+              }
+            case thalamus_grpc::Image::Format::Image_Format_RGB:
+              {
+                auto data = image.data(0);
+                auto width = image.width();
+                auto height = image.height();
+                auto linesize = data.size()/height;
+                auto char_ptr = reinterpret_cast<const char*>(data.data());
+                for(auto i = 0;i < height;++i) {
+                  in.write(char_ptr + i*linesize, 3*width);
+                }
+                break;
+              }
+            case thalamus_grpc::Image::Format::Image_Format_YUYV422:
+              {
+                auto data = image.data(0);
+                auto width = image.width();
+                auto height = image.height();
+                auto linesize = data.size()/height;
+                auto char_ptr = reinterpret_cast<const char*>(data.data());
+                for(auto i = 0;i < height;++i) {
+                  in.write(char_ptr + i*linesize, 2*width);
+                }
+                break;
+              }
+            case thalamus_grpc::Image::Format::Image_Format_YUV420P:
+              {
+                for (auto i = 0; i < 3; ++i) {
+                  auto data = image.data(i);
+                  auto width = image.width();
+                  auto height = image.height();
+                  if (i) {
+                    width /= 2;
+                    height /= 2;
+                  }
+                  auto linesize = data.size() / height;
+                  auto char_ptr = reinterpret_cast<const char*>(data.data());
+                  for (auto i = 0; i < height; ++i) {
+                    in.write(char_ptr + i * linesize, width);
+                  }
+                }
+                break;
+              }
+            case thalamus_grpc::Image::Format::Image_Format_YUVJ420P:
+              {
+                for (auto i = 0; i < 3; ++i) {
+                  auto data = image.data(i);
+                  auto width = image.width();
+                  auto height = image.height();
+                  if (i) {
+                    width /= 2;
+                    height /= 2;
+                  }
+                  auto linesize = data.size() / height;
+                  auto char_ptr = reinterpret_cast<const char*>(data.data());
+                  for (auto i = 0; i < height; ++i) {
+                    in.write(char_ptr + i * linesize, width);
+                  }
+                }
+                break;
+              }
+            case thalamus_grpc::Image::Format::Image_Format_Gray16:
+              {
+                auto data = image.data(0);
+                auto width = image.width();
+                auto height = image.height();
+                auto linesize = data.size()/height;
+                auto char_ptr = reinterpret_cast<const char*>(data.data());
+                for(auto i = 0;i < height;++i) {
+                  in.write(char_ptr + i*linesize, 2*width);
+                }
+                break;
+              }
+            case thalamus_grpc::Image::Format::Image_Format_RGB16:
+              {
+                auto data = image.data(0);
+                auto width = image.width();
+                auto height = image.height();
+                auto linesize = data.size()/height;
+                auto char_ptr = reinterpret_cast<const char*>(data.data());
+                for(auto i = 0;i < height;++i) {
+                  in.write(char_ptr + i*linesize, 6*width);
+                }
+                break;
+              }
+            default:
+              THALAMUS_ASSERT(false, "Unexpected image format %d", image.format());
+          }
+        }
+      }
+    }
+
+    in.flush();
+    in.pipe().close();
+    ffmpeg.join();
+    return 0;
+  }
+
   int generate_csv(boost::program_options::variables_map& vm) {
     auto csv = vm.contains("csv") ? vm["csv"].as<std::string>() : std::string();
     std::string input = vm["input"].as<std::string>();
@@ -541,6 +738,9 @@ namespace hydrate {
 
     if(!csv.empty()) {
       return generate_csv(vm);
+    }
+    else if (!video.empty()) {
+      return generate_video(vm);
     }
 
     if(vm.count("output")) {
