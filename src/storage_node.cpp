@@ -164,6 +164,12 @@ namespace thalamus {
       case ImageNode::Format::YUYV422:
         body->set_format(thalamus_grpc::Image::Format::Image_Format_YUYV422);
         break;
+      case ImageNode::Format::YUV420P:
+        body->set_format(thalamus_grpc::Image::Format::Image_Format_YUV420P);
+        break;
+      case ImageNode::Format::YUVJ420P:
+        body->set_format(thalamus_grpc::Image::Format::Image_Format_YUVJ420P);
+        break;
       }
 
       for (auto i = 0; i < locked_analog->num_planes(); ++i) {
