@@ -43,6 +43,9 @@ from .. import thalamus_pb2_grpc
 from .data_widget import DataWidget
 import OpenGL.GL
 import grpc
+import cv2
+
+from ..observable_item_models import TreeObservableCollectionModel
 
 LOGGER = logging.getLogger(__name__)
 
@@ -145,72 +148,20 @@ class AlphaOmegaTableModel(QAbstractTableModel):
 def create_alpha_omega_widget(node: ObservableDict, stub: thalamus_pb2_grpc.ThalamusStub):
   if 'all_channels' not in node:
     node['all_channels'] = {}
+  all_channels = node['all_channels']
   result = QWidget()
   layout = QVBoxLayout()
   refresh_button = QPushButton('Refresh')
   tree = QTableView()
   tree.verticalHeader().hide()
-  model = AlphaOmegaTableModel([])
-  tree.setModel(model)
+  model = TreeObservableCollectionModel(all_channels, key_column="ID", columns=['Name', 'Frequency', 'Selected'], show_extra_values=False, is_editable=lambda c, k: k == 'Selected')
+  sort_model = QSortFilterProxyModel()
+  sort_model.setSourceModel(model)
+  tree.setModel(sort_model)
+  tree.setSortingEnabled(True)
   layout.addWidget(refresh_button)
   layout.addWidget(tree)
   result.setLayout(layout)
-
-  def on_channels_field_changed(action, key, value):
-    print('on_channels_field_changed', key, value)
-    if key != 'Channels':
-      return
-
-    channels_set = set(c.strip() for c in value.split(','))
-
-    #for i, channel in enumerate(sorted(node['all_channels'].values(), key=lambda c: c['name'])):
-    for channel in node['all_channels'].values():
-      if channel['name'] in channels_set and not channel['selected']:
-        channel['selected'] = True
-      elif channel['name'] not in channels_set and channel['selected']:
-        channel['selected'] = False
-    
-    tree.model().dataChanged.emit(model.index(0, 3), model.index(len(node['all_channels'])-1, 3))
-    tree.update()
-
-  node.add_observer(on_channels_field_changed, functools.partial(isdeleted, result))
-
-  def on_selected_change(channel, action, key, value):
-    print('on_selected_change', key, value)
-    if key == 'selected':
-      channels_str = node['Channels']
-      channels_set = set(c.strip() for c in channels_str.split(',') if c.strip())
-      name = channel['name']
-      if value and name not in channels_set:
-        channels_set.add(name)
-      elif not value and name in channels_set:
-        channels_set.remove(name)
-      node['Channels'] = ','.join(sorted(channels_set))
-
-  def on_channel_change(action, key, value):
-    print('on_channel_change', key, value)
-    all_channels = node['all_channels']
-    values = sorted(all_channels.values(), key=lambda v: v['name'])
-    model = AlphaOmegaTableModel(values)
-    tree.setModel(model)
-    if action == ObservableCollection.Action.SET:
-      value.add_observer(lambda a, k, v: on_selected_change(value, a, k, v), functools.partial(isdeleted, result))
-
-
-  def on_channels_change(action, key, value):
-    if key != 'all_channels':
-      return
-
-    values = sorted(value.values(), key=lambda v: v['name'])
-    model = AlphaOmegaTableModel(values)
-    tree.setModel(model)
-
-    value.add_observer(on_channel_change, functools.partial(isdeleted, result))
-    for k, v in value.items():
-      on_channel_change(ObservableCollection.Action.SET, k, v)
-
-  on_channels_change(None, 'all_channels', node['all_channels'])
-  node.add_observer(on_channels_change, functools.partial(isdeleted, result))
 
   def on_refresh():
     request = thalamus_pb2.NodeRequest(
@@ -242,7 +193,6 @@ FACTORIES = {
   'ALPHA_OMEGA': Factory(create_alpha_omega_widget, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.DEFAULT, 'MAC Address', '', []),
-    UserData(UserDataType.DEFAULT, 'Channels', '', []),
     UserData(UserDataType.SPINBOX, 'Polling Interval', 16, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
   ]),
@@ -317,6 +267,11 @@ FACTORIES = {
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
     #UserData(UserDataType.DEFAULT, 'Time Source', '', []),
+  ]),
+  'VIDEO': Factory(None, [
+    UserData(UserDataType.DEFAULT, 'File Name', '', []),
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+    UserData(UserDataType.CHECK_BOX, 'View', False, []),
   ]),
   'ANALOG': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Widget is Touchpad', False, [])
@@ -1477,7 +1432,7 @@ class ItemModel(QAbstractItemModel):
               request = thalamus_pb2.NodeSelector(
                 name = node["name"]
               )
-              self.plots[id(node)] = ImageWidget(node, self.stub.image(thalamus_pb2.ImageRequest(node=request, framerate=5)), self.stub)
+              self.plots[id(node)] = ImageWidget(node, self.stub.image(thalamus_pb2.ImageRequest(node=request, framerate=30)), self.stub)
             elif thalamus_pb2.Modalities.MocapModality in modalities.values:
               request = thalamus_pb2.NodeSelector(
                 name = node["name"]

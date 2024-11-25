@@ -23,6 +23,8 @@ from .util import create_task_with_exc_handling, isdeleted
 from ..qt import *
 from .touch_dialog import TouchDialog
 
+from ..orchestration import OrchestrationDialog
+
 class TaskWidget(QWidget):
   """
   Implements the UI for editing a task
@@ -349,6 +351,7 @@ class ControlWindow(QMainWindow):
 
     settings_menu = self.menuBar().addMenu("&Settings")
     add_action(settings_menu, 'Touch Screen', lambda: self.on_touch_screen())
+    add_action(settings_menu, 'Orchestration', lambda: self.on_orchestration())
 
     self.task_cluster_tabs = QTabWidget()
     self.setObjectName('task_cluster_tabs')
@@ -424,6 +427,14 @@ class ControlWindow(QMainWindow):
     touch_dialog.show()
     touch_dialog.activateWindow()
 
+  def on_orchestration(self) -> None:
+    if 'Orchestration' not in self.task_context.config:
+      self.task_context.config['Orchestration'] = {}
+
+    dialog = OrchestrationDialog(self.task_context.config['Orchestration'])
+    dialog.resize(self.width()//2, self.height()//2)
+    dialog.show()
+    dialog.activateWindow()
 
   def on_operator_view(self, subject_window: typing.Optional[SubjectWindow]) -> None:
     """

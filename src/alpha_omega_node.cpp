@@ -286,7 +286,6 @@ namespace thalamus {
     thalamus::vector<std::vector<int>> bands;
     thalamus::vector<size_t> counts;
     thalamus::vector<double> frequencies;
-    thalamus::vector<std::string> recommended_channels;
     std::chrono::steady_clock::time_point last_frequency_update;
     AlphaOmegaNode* outer;
     thalamus::vector<std::pair<int, std::string>> channel_ids;
@@ -314,63 +313,20 @@ namespace thalamus {
       , outer(outer) {
     }
 
-    void parse_recommended_channels() {
-      recommended_channels.clear();
-      if(!state->contains("all_channels")) {
-        return;
-      }
-      auto wrapper = state->at("all_channels");
-      auto dict = std::get<ObservableDictPtr>(wrapper.get());
-      for(auto i = dict->begin();i != dict->end();++i) {
-        ObservableDictPtr value = i->second;
-
-        if(!value->contains("selected")) {
-          continue;
-        }
-        bool selected = value->at("selected");
-        if(!selected) {
-          continue;
-        }
-
-        if(!value->contains("name")) {
-          continue;
-        }
-        std::string name = value->at("name");
-
-        recommended_channels.push_back(name);
-        recommended_channels.push_back(name + " Frequency");
-      }
-    }
-
     void load_channels() {
       THALAMUS_LOG(info) << "loading channels";
       auto impl = [this] {
-
         auto current = std::make_shared<ObservableDict>();
-        if(state->contains("all_channels")) {
-          auto wrapper = state->at("all_channels");
-          auto dict = std::get<ObservableDictPtr>(wrapper.get());
-          current->assign(*dict);
-        }
         THALAMUS_LOG(info) << name_to_id.size();
         for(const auto& i : name_to_id) {
           THALAMUS_LOG(info) << i.first << " " << i.second;
           auto current_channel = std::make_shared<ObservableDict>();
-          if(current->contains(i.second)) {
-            auto wrapper = current->at(i.second);
-            auto dict = std::get<ObservableDictPtr>(wrapper.get());
-            current_channel->assign(*dict);
-          }
-          (*current_channel)["name"].assign(i.first);
-          (*current_channel)["id"].assign(i.second);
-          if(!current_channel->contains("frequency")) {
-            auto interval = channel_sample_interval(i.second);
-            auto frequency = std::chrono::nanoseconds::period::den / interval.count();
-            (*current_channel)["frequency"].assign(frequency);
-          }
-          if(!current_channel->contains("selected")) {
-            (*current_channel)["selected"].assign(false);
-          }
+          (*current_channel)["Name"].assign(i.first);
+          (*current_channel)["ID"].assign(i.second);
+          auto interval = channel_sample_interval(i.second);
+          auto frequency = std::chrono::nanoseconds::period::den / interval.count();
+          (*current_channel)["Frequency"].assign(frequency);
+          (*current_channel)["Selected"].assign(false);
           (*current)[i.second].assign(current_channel);
         }
         (*state)["all_channels"].assign(current, [current] {
@@ -538,15 +494,16 @@ namespace thalamus {
           return std::pair<std::string, int>(s.channelName, s.channelID);
         });
 
-      std::string channel_str = state->at("Channels");
-      std::vector<std::string> tokens = absl::StrSplit(channel_str, ',');
-      std::transform(tokens.begin(), tokens.end(), std::back_inserter(channels), [&](auto& s) {
-        auto i = name_to_id.find(s);
-        auto id = i == name_to_id.end() ? -1 : i->second;
-        return std::make_pair(id, s);
-      });
-      auto i = std::remove_if(channels.begin(), channels.end(), [](auto i) { return i.first < 0; });
-      channels.erase(i, channels.end());
+      ObservableDictPtr all_channels = state->at("all_channels");
+      for(auto i = all_channels->begin();i != all_channels->end();++i) {
+        ObservableDictPtr value = i->second;
+        bool is_selected = value->at("Selected");
+        long long int id = value->at("ID");
+        std::string name = value->at("Name");
+        if(is_selected) {
+          channels.emplace_back(int(id), name);
+        }
+      }
       _num_channels = channels.size();
 
       bands.assign(3, std::vector<int>());
@@ -626,18 +583,7 @@ namespace thalamus {
           double scale;
           auto j = 0;
           for (auto i = 0u; i < captured * band.size(); ++i) {
-            if (i % captured == 0) {
-              channel_id = band.at(j++);
-              //Headstage
-              if ((10'000 <= channel_id && channel_id <= 10'015) || (10'128 <= channel_id && channel_id <= 10'143) || (10'256 <= channel_id && channel_id <= 10'271) || (10'384 <= channel_id && channel_id <= 10'399)) {
-                scale = (2'500'000.0 / (1 << 16)) / 20;
-              }
-              //Headbox
-              else {
-                scale = (2'500'000.0 / (1 << 16)) / 55;
-              }
-            }
-            double_buffer.at(initial_length+i) = short_buffer.at(i)* scale;
+            double_buffer.at(initial_length+i) = short_buffer.at(i);
           }
           counts.insert(counts.end(), band.size(), captured);
         }
@@ -752,8 +698,7 @@ namespace thalamus {
   }
 
   std::span<const std::string> AlphaOmegaNode::get_recommended_channels() const {
-    impl->parse_recommended_channels();
-    return std::span<const std::string>(impl->recommended_channels.begin(), impl->recommended_channels.end());
+    return std::span<const std::string>();
   }
 
   int AlphaOmegaNode::num_channels() const {
@@ -806,12 +751,7 @@ namespace thalamus {
       impl->address[3] = std::stoul(match_result[4].str(), nullptr, 16);
       impl->address[4] = std::stoul(match_result[5].str(), nullptr, 16);
       impl->address[5] = std::stoul(match_result[6].str(), nullptr, 16);
-    }
-    else if (key_str == "Channels") {
-      auto channel_str = std::get<std::string>(v);
-      std::vector<std::string> tokens = absl::StrSplit(channel_str, ',');
-    }
-    else if (key_str == "Running") {
+    } else if (key_str == "Running") {
       impl->is_running = std::get<bool>(v);
       if (impl->is_running) {
         impl->StartConnection([this] {

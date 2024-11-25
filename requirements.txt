@@ -27,3 +27,4 @@ toml
 build
 meson
 ninja
+oslex

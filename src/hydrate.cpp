@@ -15,6 +15,10 @@
 #include <h5handle.hpp>
 #include <boost/qvm/vec.hpp>
 #include <boost/qvm/quat.hpp>
+#include <boost/endian.hpp>
+#include <boost/dll.hpp>
+#include <boost/process.hpp>
+#include <absl/strings/str_replace.h>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -178,10 +182,12 @@ namespace hydrate {
 
   struct DataCount {
     std::map<std::string, size_t> counts;
+    std::map<std::string, std::tuple<size_t, size_t, size_t>> dimensions;
+    std::map<std::string, hid_t> datatypes;
     size_t max_pose_length = 0;
   };
 
-  DataCount count_data(const std::string& filename) {
+  DataCount count_data(const std::string& filename, const std::optional<std::string> slash_replace) {
     std::optional<thalamus_grpc::StorageRecord> record;
     std::ifstream input_stream(filename, std::ios::binary);
     DataCount result;
@@ -195,6 +201,10 @@ namespace hydrate {
         std::cout << progress << "%" << std::endl;
         last_time = now;
       }
+      auto node_name = record->node();
+      if(slash_replace) {
+        node_name = absl::StrReplaceAll(node_name, {{"/", *slash_replace}});
+      }
       switch(record->body_case()) {
         case thalamus_grpc::StorageRecord::kAnalog:
           {
@@ -204,8 +214,11 @@ namespace hydrate {
             for(auto& span : spans) {
               hsize_t span_size = span.end() - span.begin();
               auto span_name = span.name().empty() ? "" : span.name();
-              counts["analog/" + record->node() + "/" + span_name + "/data"] += span_size;
-              ++counts["analog/" + record->node() + "/" + span_name + "/received"];
+              if(slash_replace) {
+                span_name = absl::StrReplaceAll(span_name, {{"/", *slash_replace}});
+              }
+              counts["analog/" + node_name + "/" + span_name + "/data"] += span_size;
+              ++counts["analog/" + node_name + "/" + span_name + "/received"];
             }
           }
           break;
@@ -213,7 +226,7 @@ namespace hydrate {
           {
             auto xsens = record->xsens();
             result.max_pose_length = std::max(result.max_pose_length, xsens.pose_name().size());
-            auto key = std::pair<std::string, std::string>(record->node(), "");
+            auto key = std::pair<std::string, std::string>(node_name, "");
             counts["xsens/" + key.first + "/data"] += xsens.segments().size();
             ++counts["xsens/" + key.first + "/received"];
           }
@@ -221,13 +234,66 @@ namespace hydrate {
         case thalamus_grpc::StorageRecord::kText:
           {
             auto text = record->text();
-            auto key = std::pair<std::string, std::string>(record->node(), "");
+            auto key = std::pair<std::string, std::string>(node_name, "");
             if(key.first.empty()) {
               ++counts["log/data"];
               ++counts["log/received"];
             } else {
               ++counts["text/" + key.first + "/data"];
               ++counts["text/" + key.first + "/received"];
+            }
+          }
+          break;
+        case thalamus_grpc::StorageRecord::kImage:
+          {
+            auto image = record->image();
+            auto key = std::pair<std::string, std::string>(node_name, "");
+            switch(image.format()) {
+              case thalamus_grpc::Image::Format::Image_Format_Gray:
+                ++counts["image/" + key.first + "/data"];
+                ++counts["image/" + key.first + "/received"];
+                result.dimensions["image/" + key.first + "/data"] = std::make_tuple(image.width(), image.height(), 0);
+                result.datatypes["image/" + key.first + "/data"] = H5T_NATIVE_UCHAR;
+                break;
+              case thalamus_grpc::Image::Format::Image_Format_RGB:
+                ++counts["image/" + key.first + "/data"];
+                ++counts["image/" + key.first + "/received"];
+                result.dimensions["image/" + key.first + "/data"] = std::make_tuple(image.width(), image.height(), 3);
+                result.datatypes["image/" + key.first + "/data"] = H5T_NATIVE_UCHAR;
+                break;
+              case thalamus_grpc::Image::Format::Image_Format_YUYV422:
+                ++counts["image/" + key.first + "/data"];
+                ++counts["image/" + key.first + "/received"];
+                result.dimensions["image/" + key.first + "/data"] = std::make_tuple(2*image.width(), image.height(), 0);
+                result.datatypes["image/" + key.first + "/data"] = H5T_NATIVE_UCHAR;
+                break;
+              case thalamus_grpc::Image::Format::Image_Format_YUV420P:
+              case thalamus_grpc::Image::Format::Image_Format_YUVJ420P:
+                ++counts["image/" + key.first + "/y"];
+                ++counts["image/" + key.first + "/u"];
+                ++counts["image/" + key.first + "/v"];
+                ++counts["image/" + key.first + "/received"];
+                result.dimensions["image/" + key.first + "/y"] = std::make_tuple(image.width(), image.height(), 0);
+                result.datatypes["image/" + key.first + "/y"] = H5T_NATIVE_UCHAR;
+                result.dimensions["image/" + key.first + "/u"] = std::make_tuple(image.width()/2, image.height()/2, 0);
+                result.datatypes["image/" + key.first + "/u"] = H5T_NATIVE_UCHAR;
+                result.dimensions["image/" + key.first + "/v"] = std::make_tuple(image.width()/2, image.height()/2, 0);
+                result.datatypes["image/" + key.first + "/v"] = H5T_NATIVE_UCHAR;
+                break;
+              case thalamus_grpc::Image::Format::Image_Format_Gray16:
+                ++counts["image/" + key.first + "/data"];
+                ++counts["image/" + key.first + "/received"];
+                result.dimensions["image/" + key.first + "/data"] = std::make_tuple(image.width(), image.height(), 0);
+                result.datatypes["image/" + key.first + "/data"] = H5T_NATIVE_USHORT;
+                break;
+              case thalamus_grpc::Image::Format::Image_Format_RGB16:
+                ++counts["image/" + key.first + "/data"];
+                ++counts["image/" + key.first + "/received"];
+                result.dimensions["image/" + key.first + "/data"] = std::make_tuple(image.width(), image.height(), 3);
+                result.datatypes["image/" + key.first + "/data"] = H5T_NATIVE_USHORT;
+                break;
+              default:
+                THALAMUS_ASSERT(false, "Unexpected image format %d", image.format());
             }
           }
           break;
@@ -248,20 +314,31 @@ namespace hydrate {
   }
 
   template<typename T>
-  void write_data(size_t time, size_t length, hid_t data, hid_t received, size_t& data_written, size_t& received_written, hid_t h5_type, const T* data_buffer, std::vector<T>& data_cache, std::vector<size_t>& received_cache, size_t data_chunk, size_t received_chunk) {
+  void write_data(size_t time, size_t length, hid_t data, hid_t received, size_t& data_written, size_t& received_written, hid_t h5_type, const T* data_buffer, std::vector<T>& data_cache, std::vector<size_t>& received_cache, size_t data_chunk, size_t received_chunk, std::vector<hsize_t> dims = {}, bool update_received = true) {
     herr_t error;
     {
       auto& cache = data_cache;
       cache.insert(cache.end(), data_buffer, data_buffer + length);
       if(cache.size() >= data_chunk) {
-        hsize_t hlength = data_chunk;
-        H5Handle mem_space = H5Screate_simple(1, &hlength, NULL);
+        std::vector<hsize_t> hlength(1, data_chunk);
+        hlength.insert(hlength.end(), dims.begin(), dims.end());
+        for(auto i : dims) {
+          hlength[0] /= i;
+        }
+
+        H5Handle mem_space = H5Screate_simple(hlength.size(), hlength.data(), NULL);
         THALAMUS_ASSERT(mem_space);
 
         H5Handle file_space = H5Dget_space(data);
         THALAMUS_ASSERT(file_space);
-        hsize_t start[] = { data_written };
-        error = H5Sselect_hyperslab(file_space, H5S_SELECT_SET, start, nullptr, &hlength, NULL);
+
+        std::vector<hsize_t> start(hlength.size(), 0);
+        start[0] = data_written;
+        for (auto i : dims) {
+          start[0] /= i;
+        }
+
+        error = H5Sselect_hyperslab(file_space, H5S_SELECT_SET, start.data(), nullptr, hlength.data(), NULL);
         THALAMUS_ASSERT(error >= 0);
     
         error = H5Dwrite(data, h5_type, mem_space, file_space, H5P_DEFAULT, cache.data());
@@ -274,10 +351,13 @@ namespace hydrate {
         cache.erase(cache.begin(), cache.begin() + data_chunk);
       }
     }
-    {
+    if (update_received) {
       auto& cache = received_cache;
       cache.push_back(time);
       cache.push_back(data_written + data_cache.size());
+      for (auto i : dims) {
+        cache.back() /= i;
+      }
       if(cache.size() >= 2*received_chunk) {
         hsize_t one_row[] = {received_chunk, 2};
         H5Handle mem_space = H5Screate_simple(2, one_row, NULL);
@@ -298,6 +378,337 @@ namespace hydrate {
     }
   }
 
+  int generate_video(boost::program_options::variables_map& vm) {
+    auto video = vm.contains("video") ? vm["video"].as<std::string>() : std::string();
+    std::string input = vm["input"].as<std::string>();
+
+    std::string output;
+    if (vm.count("output")) {
+      output = vm["output"].as<std::string>();
+    }
+    else {
+      output = input + "_" + video + ".mpg";
+    }
+
+    int width = 0;
+    int height = 0;
+    std::string pixel_format;
+    std::set<size_t> times;
+    {
+      std::ifstream input_stream(input, std::ios::binary);
+      std::optional<thalamus_grpc::StorageRecord> record;
+      double progress;
+      while((record = read_record(input_stream, &progress))) {
+        if(record->body_case() == thalamus_grpc::StorageRecord::kImage && record->node() == video) {
+          times.insert(record->time());
+          if(width) {
+            continue;
+          }
+          auto image = record->image();
+          width = image.width();
+          height = image.height();
+          switch(image.format()) {
+            case thalamus_grpc::Image::Format::Image_Format_Gray:
+              pixel_format = "gray";
+              break;
+            case thalamus_grpc::Image::Format::Image_Format_RGB:
+              pixel_format = "rgb24";
+              break;
+            case thalamus_grpc::Image::Format::Image_Format_YUYV422:
+              pixel_format = "yuyv422";
+              break;
+            case thalamus_grpc::Image::Format::Image_Format_YUV420P:
+              pixel_format = "yuv420p";
+              break;
+            case thalamus_grpc::Image::Format::Image_Format_YUVJ420P:
+              pixel_format = "yuvj420p";
+              break;
+            case thalamus_grpc::Image::Format::Image_Format_Gray16:
+              pixel_format = image.bigendian() ? "gray16be" : "gray16le";
+              break;
+            case thalamus_grpc::Image::Format::Image_Format_RGB16:
+              pixel_format = image.bigendian() ? "rgb48be" : "rgb48le";
+              break;
+            default:
+              THALAMUS_ASSERT(false, "Unexpected image format %d", image.format());
+          }
+        }
+      }
+    }
+    THALAMUS_ASSERT(width > 0 && height > 0, "Failed to detect video dimensions");
+    size_t total_diffs = 0;
+    size_t last_time = 0;
+    for(auto time : times) {
+      if(last_time > 0) {
+        total_diffs += time - last_time;
+      }
+      last_time = time;
+    }
+    auto average_interval = total_diffs/(times.size()-1);
+
+    std::vector<std::pair<double, std::string>> framerates = {
+      {24000.0/1001, "24000/1001"},
+      {24, "24"},
+      {25, "25"},
+      {30000.0/1001, "30000/1001"},
+      {30, "30"},
+      {50, "50"},
+      {60000.0/1001, "60000/1001"},
+      {60, "60"},
+      {15, "15"}, 
+      {5, "5"}, 
+      {10, "10"}, 
+      {12, "12"}, 
+      {15, "15"}
+    };
+    std::sort(framerates.begin(), framerates.end());
+    auto framerate = 1e9/average_interval;
+    auto framerate_i = std::lower_bound(framerates.begin(), framerates.end(), std::make_pair(framerate, ""));
+    std::string ffmpeg_framerate;
+    if(framerate_i == framerates.begin()) {
+      ffmpeg_framerate = framerates.front().second;
+    } else if (framerate_i == framerates.end()) {
+      ffmpeg_framerate = framerates.back().second;
+    } else {
+      if(framerate - (framerate_i-1)->first < framerate_i->first - framerate) {
+        ffmpeg_framerate = (framerate_i-1)->second;
+      } else {
+        ffmpeg_framerate = framerate_i->second;
+      }
+    }
+
+    auto location = boost::dll::program_location();
+    auto command = absl::StrFormat("%s ffmpeg -y -f rawvideo -pixel_format %s -video_size %dx%d -i pipe: "
+                                   "-codec mpeg1video -f matroska -qscale:v 2 -b:v 100M -r %s \"%s\"",
+                                   location.string(), pixel_format, width, height, ffmpeg_framerate, output);
+    std::cout << "command " << command;
+    boost::process::opstream in;
+    boost::process::child ffmpeg(command, boost::process::std_in < in, boost::process::std_out > stdout,  boost::process::std_err > stderr);
+    {
+      std::ifstream input_stream(input, std::ios::binary);
+      std::optional<thalamus_grpc::StorageRecord> record;
+      double progress;
+      while((record = read_record(input_stream, &progress))) {
+        if(record->body_case() == thalamus_grpc::StorageRecord::kImage && record->node() == video) {
+          auto image = record->image();
+          width = image.width();
+          height = image.height();
+          switch(image.format()) {
+            case thalamus_grpc::Image::Format::Image_Format_Gray:
+              {
+                auto data = image.data(0);
+                auto width = image.width();
+                auto height = image.height();
+                auto linesize = data.size()/height;
+                auto char_ptr = reinterpret_cast<const char*>(data.data());
+                for(auto i = 0;i < height;++i) {
+                  in.write(char_ptr + i*linesize, width);
+                }
+                break;
+              }
+            case thalamus_grpc::Image::Format::Image_Format_RGB:
+              {
+                auto data = image.data(0);
+                auto width = image.width();
+                auto height = image.height();
+                auto linesize = data.size()/height;
+                auto char_ptr = reinterpret_cast<const char*>(data.data());
+                for(auto i = 0;i < height;++i) {
+                  in.write(char_ptr + i*linesize, 3*width);
+                }
+                break;
+              }
+            case thalamus_grpc::Image::Format::Image_Format_YUYV422:
+              {
+                auto data = image.data(0);
+                auto width = image.width();
+                auto height = image.height();
+                auto linesize = data.size()/height;
+                auto char_ptr = reinterpret_cast<const char*>(data.data());
+                for(auto i = 0;i < height;++i) {
+                  in.write(char_ptr + i*linesize, 2*width);
+                }
+                break;
+              }
+            case thalamus_grpc::Image::Format::Image_Format_YUV420P:
+              {
+                for (auto i = 0; i < 3; ++i) {
+                  auto data = image.data(i);
+                  auto width = image.width();
+                  auto height = image.height();
+                  if (i) {
+                    width /= 2;
+                    height /= 2;
+                  }
+                  auto linesize = data.size() / height;
+                  auto char_ptr = reinterpret_cast<const char*>(data.data());
+                  for (auto i = 0; i < height; ++i) {
+                    in.write(char_ptr + i * linesize, width);
+                  }
+                }
+                break;
+              }
+            case thalamus_grpc::Image::Format::Image_Format_YUVJ420P:
+              {
+                for (auto i = 0; i < 3; ++i) {
+                  auto data = image.data(i);
+                  auto width = image.width();
+                  auto height = image.height();
+                  if (i) {
+                    width /= 2;
+                    height /= 2;
+                  }
+                  auto linesize = data.size() / height;
+                  auto char_ptr = reinterpret_cast<const char*>(data.data());
+                  for (auto i = 0; i < height; ++i) {
+                    in.write(char_ptr + i * linesize, width);
+                  }
+                }
+                break;
+              }
+            case thalamus_grpc::Image::Format::Image_Format_Gray16:
+              {
+                auto data = image.data(0);
+                auto width = image.width();
+                auto height = image.height();
+                auto linesize = data.size()/height;
+                auto char_ptr = reinterpret_cast<const char*>(data.data());
+                for(auto i = 0;i < height;++i) {
+                  in.write(char_ptr + i*linesize, 2*width);
+                }
+                break;
+              }
+            case thalamus_grpc::Image::Format::Image_Format_RGB16:
+              {
+                auto data = image.data(0);
+                auto width = image.width();
+                auto height = image.height();
+                auto linesize = data.size()/height;
+                auto char_ptr = reinterpret_cast<const char*>(data.data());
+                for(auto i = 0;i < height;++i) {
+                  in.write(char_ptr + i*linesize, 6*width);
+                }
+                break;
+              }
+            default:
+              THALAMUS_ASSERT(false, "Unexpected image format %d", image.format());
+          }
+        }
+      }
+    }
+
+    in.flush();
+    in.pipe().close();
+    ffmpeg.join();
+    return 0;
+  }
+
+  int generate_csv(boost::program_options::variables_map& vm) {
+    auto csv = vm.contains("csv") ? vm["csv"].as<std::string>() : std::string();
+    std::string input = vm["input"].as<std::string>();
+
+    std::set<std::string> channels;
+    if(vm.contains("channels")) {
+      auto text = vm["channels"].as<std::string>();
+      auto tokens = absl::StrSplit(text, ',');
+      channels.insert(tokens.begin(), tokens.end());
+    }
+
+    std::string output;
+    if(vm.count("output")) {
+      output = vm["output"].as<std::string>();
+    } else {
+      output = input + "_" + csv + ".csv";
+    }
+
+    std::map<std::string, std::string> tmpnames;
+    std::map<std::string, std::ofstream> column_outputs;
+    std::ifstream input_stream(input, std::ios::binary);
+    std::optional<thalamus_grpc::StorageRecord> record;
+    double progress;
+    auto last_time = std::chrono::steady_clock::now();
+    auto line_count = 0l;
+
+    std::cout << "Extracting Channel CSVs" << std::endl;
+    while((record = read_record(input_stream, &progress))) {
+      auto now = std::chrono::steady_clock::now();
+      if(now - last_time >= 5s) {
+        std::cout << progress << "%" << std::endl;
+        last_time = now;
+      }
+
+      auto node_name = record->node();
+      if(node_name != csv) {
+        continue;
+      }
+      switch(record->body_case()) {
+        case thalamus_grpc::StorageRecord::kAnalog: {
+          auto analog = record->analog();
+          auto spans = analog.spans();
+
+          for(auto& span : spans) {
+            auto span_name = span.name().empty() ? "" : span.name();
+            if(!channels.empty() && !channels.contains(span_name)) {
+              continue;
+            }
+            if(!tmpnames.contains(span_name)) {
+              tmpnames[span_name] = std::tmpnam(nullptr);
+              column_outputs[span_name] = std::ofstream(tmpnames[span_name]);
+              column_outputs[span_name] << "Time (ns)," << span_name << "," << std::endl;
+              ++line_count;
+            }
+
+            for(auto i = span.begin();i < span.end();++i) {
+              column_outputs[span_name] << record->time() << "," << analog.data(i) << "," << std::endl;
+            }
+            line_count += span.end() - span.begin();
+          }
+          break;
+        }
+      default:
+        break;
+      }
+    }
+    column_outputs.clear();
+
+    std::cout << "Merging Channel CSVs" << std::endl;
+    std::ofstream total_output = std::ofstream(output);
+    std::map<std::string, std::ifstream> column_inputs;
+    for(auto& pair : tmpnames) {
+      column_inputs[pair.first] = std::ifstream(pair.second);
+    }
+    auto working = true;
+    std::string line;
+    auto merged_lines = 0;
+    last_time = std::chrono::steady_clock::now();
+    while(working) {
+      auto now = std::chrono::steady_clock::now();
+      if(now - last_time >= 5s) {
+        std::cout << (100.0*merged_lines/line_count) << "%" << std::endl;
+        last_time = now;
+      }
+
+      working = false;
+      for (auto& pair : column_inputs) {
+        if(pair.second.eof()) {
+          total_output << ",,";
+        } else {
+          std::getline(pair.second, line);
+          line = absl::StripAsciiWhitespace(line);
+          if(line.empty()) {
+            total_output << ",,";
+            continue;
+          }
+          total_output << line;
+          working = true;
+          ++merged_lines;
+        }
+      }
+      total_output << std::endl;
+    }
+    return 0;
+  }
+
   int main(int argc, char **argv) {
     boost::program_options::positional_options_description p;
     p.add("input", 1);
@@ -311,6 +722,10 @@ namespace hydrate {
       ("chunk,c", boost::program_options::value<size_t>(), "Chunk size")
       ("repeat,r", boost::program_options::value<size_t>(), "Run indefinitely, executing every N ms")
       ("input,i", boost::program_options::value<std::string>(), "Input file")
+      ("csv", boost::program_options::value<std::string>(), "Output this node's data as csv")
+      ("video", boost::program_options::value<std::string>(), "Output this node's data as video")
+      ("channels", boost::program_options::value<std::string>(), "Channels to output")
+      ("slash-replace", boost::program_options::value<std::string>(), "Text to replace slashes with")
       ("output,o", boost::program_options::value<std::string>(), "Output file");
 
     boost::program_options::variables_map vm;
@@ -328,6 +743,12 @@ namespace hydrate {
     }
 
     auto gzip = vm.contains("gzip") ? vm["gzip"].as<size_t>() : 0;
+    std::optional<std::string> slash_replace;
+    if (vm.contains("slash-replace")) {
+      slash_replace = vm["slash-replace"].as<std::string>();
+    }
+    auto video = vm.contains("video") ? vm["video"].as<std::string>() : std::string();
+    auto csv = vm.contains("csv") ? vm["csv"].as<std::string>() : std::string();
     auto chunk_size = vm.contains("chunk") ? vm["chunk"].as<size_t>() : std::numeric_limits<size_t>::max();
 
     if(!vm.count("input")) {
@@ -345,6 +766,13 @@ namespace hydrate {
     std::string input = vm["input"].as<std::string>();
     std::string output;
 
+    if(!csv.empty()) {
+      return generate_csv(vm);
+    }
+    else if (!video.empty()) {
+      return generate_video(vm);
+    }
+
     if(vm.count("output")) {
       output = vm["output"].as<std::string>();
     } else {
@@ -356,7 +784,7 @@ namespace hydrate {
       auto start = std::chrono::steady_clock::now();
 
       std::cout << "Measuring Capture File" << std::endl;
-      DataCount data_count = count_data(input);
+      DataCount data_count = count_data(input, slash_replace);
       auto& dataset_counts = data_count.counts;
       std::map<std::string, H5Handle> datasets;
       std::map<std::string, size_t> written;
@@ -440,6 +868,10 @@ namespace hydrate {
           THALAMUS_ASSERT(datasets[pair.first]);
         } else {
           hid_t type;
+          hsize_t dims[] = { pair.second, 0, 0, 0 };
+          hsize_t max_dims[] = { pair.second, 0, 0, 0 };
+          int rank = 1;
+
           if(tokens.front() == "analog") {
             type = H5T_NATIVE_DOUBLE;
           } else if(tokens.front() == "xsens") {
@@ -450,18 +882,35 @@ namespace hydrate {
             type = str_type;
           } else if(tokens.front() == "log") {
             type = str_type;
+          } else if(tokens.front() == "image") {
+            type = data_count.datatypes[pair.first];
+            auto image_dims = data_count.dimensions[pair.first];
+            if(std::get<0>(image_dims) != 0) {
+              dims[1] = std::get<0>(image_dims);
+              max_dims[1] = std::get<0>(image_dims);
+              ++rank;
+            }
+            if(std::get<1>(image_dims) != 0) {
+              dims[2] = std::get<1>(image_dims);
+              max_dims[2] = std::get<1>(image_dims);
+              ++rank;
+            }
+            if(std::get<2>(image_dims) != 0) {
+              dims[3] = std::get<2>(image_dims);
+              max_dims[3] = std::get<2>(image_dims);
+              ++rank;
+            }
           }
-          hsize_t dims[] = { pair.second };
-          hsize_t max_dims[] = { pair.second };
-          H5Handle file_space = H5Screate_simple(1, dims, max_dims);
+          H5Handle file_space = H5Screate_simple(rank, dims, max_dims);
           THALAMUS_ASSERT(file_space);
 
           H5Handle plist_id = H5P_DEFAULT;
           if(gzip && dims[0] > 0) {
             plist_id = H5Pcreate(H5P_DATASET_CREATE);
 
-            hsize_t chunk = std::min(dims[0], hsize_t(chunk_size));
-            error = H5Pset_chunk(plist_id, 1, &chunk);
+            std::vector<hsize_t> chunk_dims(std::begin(dims), std::end(dims));
+            chunk_dims[0] = std::min(chunk_dims[0], hsize_t(chunk_size));
+            error = H5Pset_chunk(plist_id, chunk_dims.size(), chunk_dims.data());
             THALAMUS_ASSERT(error >= 0);
 
             error = H5Pset_deflate(plist_id, gzip);
@@ -483,6 +932,8 @@ namespace hydrate {
       std::map<hid_t, std::vector<double>> data_caches;
       std::map<hid_t, std::vector<Segment>> segment_caches;
       std::map<hid_t, std::vector<char*>> text_caches;
+      std::map<hid_t, std::vector<unsigned char>> image_caches;
+      std::map<hid_t, std::vector<unsigned short>> short_image_caches;
       std::vector<Event> event_cache;
       std::map<hid_t, std::vector<size_t>> received_caches;
 
@@ -491,6 +942,10 @@ namespace hydrate {
         if(now - last_time >= 5s) {
           std::cout << progress << "%" << std::endl;
           last_time = now;
+        }
+        auto node_name = record->node();
+        if(slash_replace) {
+          node_name = absl::StrReplaceAll(node_name, {{"/", *slash_replace}});
         }
 
         switch(record->body_case()) {
@@ -503,8 +958,11 @@ namespace hydrate {
               for(auto& span : spans) {
                 hsize_t span_size = span.end() - span.begin();
                 auto span_name = span.name().empty() ? "" : span.name();
-                auto data_path = "analog/" + record->node() + "/" + span_name + "/data";
-                auto received_path = "analog/" + record->node() + "/" + span_name + "/received";
+                if(slash_replace) {
+                  span_name = absl::StrReplaceAll(span_name, {{"/", *slash_replace}});
+                }
+                auto data_path = "analog/" + node_name + "/" + span_name + "/data";
+                auto received_path = "analog/" + node_name + "/" + span_name + "/received";
                 auto data = datasets[data_path];
                 auto received = datasets[received_path];
                 auto& data_written = written[data_path];
@@ -520,8 +978,8 @@ namespace hydrate {
             {
               auto xsens = record->xsens();
 
-              auto data_path = "xsens/" + record->node() + "/data";
-              auto received_path = "xsens/" + record->node() + "/received";
+              auto data_path = "xsens/" + node_name + "/data";
+              auto received_path = "xsens/" + node_name + "/received";
               auto data = datasets[data_path];
               auto received = datasets[received_path];
               auto& data_written = written[data_path];
@@ -554,8 +1012,8 @@ namespace hydrate {
               auto text_data = new char[text.size()+1];
               strcpy(text_data, text.data());
 
-              auto data_path = record->node().empty() ? "log/data" : "text/" + record->node() + "/data";
-              auto received_path = record->node().empty() ? "log/received" : "text/" + record->node() + "/received";
+              auto data_path = record->node().empty() ? "log/data" : "text/" + node_name + "/data";
+              auto received_path = record->node().empty() ? "log/received" : "text/" + node_name + "/received";
               auto data = datasets[data_path];
               auto received = datasets[received_path];
               auto& data_written = written[data_path];
@@ -565,6 +1023,201 @@ namespace hydrate {
 
               write_data(record->time(), 1, data, received, data_written, received_written, str_type, &text_data,
                          text_caches[data], received_caches[received], data_count, received_count);
+            }
+            break;
+          case thalamus_grpc::StorageRecord::kImage:
+            {
+              auto image = record->image();
+
+              const unsigned char* bytes_pointer;
+              std::vector<unsigned char> bytes_vector;
+              std::vector<unsigned short> shorts_vector;
+
+              switch(image.format()) {
+                case thalamus_grpc::Image::Format::Image_Format_Gray: 
+                  {
+                    auto data_path = "image/" + node_name + "/data";
+                    auto received_path = "image/" + node_name + "/received";
+                    auto data = datasets[data_path];
+                    auto received = datasets[received_path];
+                    auto& data_written = written[data_path];
+                    auto& received_written = written[received_path];
+                    auto data_count = gzip ? std::min(dataset_counts[data_path] - data_written, chunk_size) : 1;
+                    auto received_count = gzip ? std::min(dataset_counts[received_path] - received_written, chunk_size) : 1;
+                    auto length = image.width()*image.height();
+                    auto linesize = image.data(0).size() / image.height();
+                    data_count *= length;
+
+                    bytes_pointer = reinterpret_cast<const unsigned char*>(image.data(0).data());
+                    if (image.width() != linesize) {
+                      bytes_vector.clear();
+                      for (auto i = 0; i < image.height(); ++i) {
+                        bytes_vector.insert(bytes_vector.end(), bytes_pointer, bytes_pointer + linesize * i + image.width());
+                      }
+                      bytes_pointer = bytes_vector.data();
+                    }
+
+                    write_data(record->time(), length, data, received, data_written, received_written, H5T_NATIVE_UCHAR, bytes_pointer,
+                        image_caches[data], received_caches[received], data_count, received_count, {image.width(), image.height()});
+                    break;
+                  }
+                case thalamus_grpc::Image::Format::Image_Format_RGB:
+                  {
+                    auto data_path = "image/" + node_name + "/data";
+                    auto received_path = "image/" + node_name + "/received";
+                    auto data = datasets[data_path];
+                    auto received = datasets[received_path];
+                    auto& data_written = written[data_path];
+                    auto& received_written = written[received_path];
+                    auto data_count = gzip ? std::min(dataset_counts[data_path] - data_written, chunk_size) : 1;
+                    auto received_count = gzip ? std::min(dataset_counts[received_path] - received_written, chunk_size) : 1;
+                    auto length = image.width()*image.height()*3;
+                    auto linesize = image.data(0).size() / image.height();
+                    data_count *= length;
+
+                    bytes_pointer = reinterpret_cast<const unsigned char*>(image.data(0).data());
+                    if (3*image.width() != linesize) {
+                      bytes_vector.clear();
+                      for (auto i = 0; i < image.height(); ++i) {
+                        bytes_vector.insert(bytes_vector.end(), bytes_pointer, bytes_pointer + linesize * i + 3*image.width());
+                      }
+                      bytes_pointer = bytes_vector.data();
+                    }
+
+                    write_data(record->time(), length, data, received, data_written, received_written, H5T_NATIVE_UCHAR, bytes_pointer,
+                        image_caches[data], received_caches[received], data_count, received_count, {image.width(), image.height(), 3});
+                    break;
+                  }
+                case thalamus_grpc::Image::Format::Image_Format_YUYV422:
+                  {
+                    auto data_path = "image/" + node_name + "/data";
+                    auto received_path = "image/" + node_name + "/received";
+                    auto data = datasets[data_path];
+                    auto received = datasets[received_path];
+                    auto& data_written = written[data_path];
+                    auto& received_written = written[received_path];
+                    auto data_count = gzip ? std::min(dataset_counts[data_path] - data_written, chunk_size) : 1;
+                    auto received_count = gzip ? std::min(dataset_counts[received_path] - received_written, chunk_size) : 1;
+                    auto length = 2*image.width()*image.height();
+                    auto linesize = image.data(0).size() / image.height();
+                    data_count *= length;
+
+                    bytes_pointer = reinterpret_cast<const unsigned char*>(image.data(0).data());
+                    if (2*image.width() != linesize) {
+                      bytes_vector.clear();
+                      for (auto i = 0; i < image.height(); ++i) {
+                        bytes_vector.insert(bytes_vector.end(), bytes_pointer, bytes_pointer + linesize * i + 2*image.width());
+                      }
+                      bytes_pointer = bytes_vector.data();
+                    }
+
+                    write_data(record->time(), length, data, received, data_written, received_written, H5T_NATIVE_UCHAR, bytes_pointer,
+                        image_caches[data], received_caches[received], data_count, received_count, {2*image.width(), image.height()});
+                    break;
+                  }
+                case thalamus_grpc::Image::Format::Image_Format_YUV420P:
+                case thalamus_grpc::Image::Format::Image_Format_YUVJ420P:
+                  {
+                    std::vector<std::string> data_paths = {
+                      "image/" + node_name + "/y",
+                      "image/" + node_name + "/u",
+                      "image/" + node_name + "/v",
+                    };
+                    auto update_received = true;
+                    auto i = 0;
+                    for(auto& data_path : data_paths) {
+                      auto received_path = "image/" + node_name + "/received";
+                      auto data = datasets[data_path];
+                      auto received = datasets[received_path];
+                      auto& data_written = written[data_path];
+                      auto& received_written = written[received_path];
+                      auto data_count = gzip ? std::min(dataset_counts[data_path] - data_written, chunk_size) : 1;
+                      auto received_count = gzip ? std::min(dataset_counts[received_path] - received_written, chunk_size) : 1;
+                      auto width = image.width();
+                      auto height = image.height();
+                      if(i > 0) {
+                        width /= 2;
+                        height /= 2;
+                      }
+                      auto length = width*height;
+                      data_count *= length;
+                      auto linesize = image.data(i).size() / height;
+
+                      bytes_pointer = reinterpret_cast<const unsigned char*>(image.data(i).data());
+                      if (width != linesize) {
+                        bytes_vector.clear();
+                        for (auto j = 0; j < height; ++j) {
+                          bytes_vector.insert(bytes_vector.end(), bytes_pointer + linesize * j, bytes_pointer + linesize * j + width);
+                        }
+                        bytes_pointer = bytes_vector.data();
+                      }
+
+                      write_data(record->time(), length, data, received, data_written, received_written, H5T_NATIVE_UCHAR, bytes_pointer,
+                          image_caches[data], received_caches[received], data_count, received_count, {width, height}, update_received);
+                      update_received = false;
+                      ++i;
+                    }
+                    break;
+                  }
+                case thalamus_grpc::Image::Format::Image_Format_Gray16:
+                  {
+                    auto data_path = "image/" + node_name + "/data";
+                    auto received_path = "image/" + node_name + "/received";
+                    auto data = datasets[data_path];
+                    auto received = datasets[received_path];
+                    auto& data_written = written[data_path];
+                    auto& received_written = written[received_path];
+                    auto data_count = gzip ? std::min(dataset_counts[data_path] - data_written, chunk_size) : 1;
+                    auto received_count = gzip ? std::min(dataset_counts[received_path] - received_written, chunk_size) : 1;
+                    auto length = image.width()*image.height();
+                    data_count *= length;
+
+                    bytes_pointer = reinterpret_cast<const unsigned char*>(image.data(0).data());
+                    shorts_vector.clear();
+                    for(auto j = 0;j < length;++j) {
+                      shorts_vector.push_back((bytes_pointer[2*j] << 8) | bytes_pointer[2*j+1]);
+                      if(image.bigendian()) {
+                        boost::endian::big_to_native_inplace(shorts_vector.back());
+                      } else {
+                        boost::endian::little_to_native_inplace(shorts_vector.back());
+                      }
+                    }
+
+                    write_data(record->time(), length, data, received, data_written, received_written, H5T_NATIVE_USHORT, shorts_vector.data(),
+                        short_image_caches[data], received_caches[received], data_count, received_count, {image.width(), image.height()});
+                    break;
+                  }
+                case thalamus_grpc::Image::Format::Image_Format_RGB16:
+                  {
+                    auto data_path = "image/" + node_name + "/data";
+                    auto received_path = "image/" + node_name + "/received";
+                    auto data = datasets[data_path];
+                    auto received = datasets[received_path];
+                    auto& data_written = written[data_path];
+                    auto& received_written = written[received_path];
+                    auto data_count = gzip ? std::min(dataset_counts[data_path] - data_written, chunk_size) : 1;
+                    auto received_count = gzip ? std::min(dataset_counts[received_path] - received_written, chunk_size) : 1;
+                    auto length = 3*image.width()*image.height();
+                    data_count *= length;
+
+                    bytes_pointer = reinterpret_cast<const unsigned char*>(image.data(0).data());
+                    shorts_vector.clear();
+                    for(auto j = 0;j < length;++j) {
+                      shorts_vector.push_back((bytes_pointer[2*j] << 8) | bytes_pointer[2*j+1]);
+                      if(image.bigendian()) {
+                        boost::endian::big_to_native_inplace(shorts_vector.back());
+                      } else {
+                        boost::endian::little_to_native_inplace(shorts_vector.back());
+                      }
+                    }
+
+                    write_data(record->time(), length, data, received, data_written, received_written, H5T_NATIVE_USHORT, shorts_vector.data(),
+                        short_image_caches[data], received_caches[received], data_count, received_count, {image.width(), image.height(), 3});
+                    break;
+                  }
+                default:
+                  THALAMUS_ASSERT(false, "Unexpected image format %d", image.format());
+              }
             }
             break;
           case thalamus_grpc::StorageRecord::kEvent:
