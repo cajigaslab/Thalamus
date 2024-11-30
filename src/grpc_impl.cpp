@@ -1800,6 +1800,69 @@ namespace thalamus {
     return ::grpc::Status::OK;
   }
 
+  ::grpc::Status Service::stim(::grpc::ServerContext* context, ::grpc::ServerReaderWriter< ::thalamus_grpc::StimResponse, ::thalamus_grpc::StimRequest>* reader) {
+    tracing::SetCurrentThreadName("stim");
+    Impl::ContextGuard guard(this, context);
+    ::thalamus_grpc::StimRequest request;
+    thalamus_grpc::NodeSelector node_name;
+    if(!reader->Read(&request)) {
+      THALAMUS_LOG(error) << "Couldn't read name of node to inject into";
+      return ::grpc::Status::OK;
+    }
+    if(!request.has_node()) {
+      THALAMUS_LOG(error) << "First message of inject_analog request should contain node name";
+      return ::grpc::Status::OK;
+    }
+
+    node_name = request.node();
+
+    while (!context->IsCancelled()) {
+      std::promise<void> promise;
+      auto future = promise.get_future();
+      std::shared_ptr<Node> raw_node;
+      boost::asio::post(impl->io_context, [&] {
+        impl->node_graph.get_node(node_name, [&](auto ptr) {
+          raw_node = ptr.lock();
+          promise.set_value();
+        });
+      });
+      THALAMUS_LOG(info) << "Waiting for node";
+      while (future.wait_for(1s) == std::future_status::timeout && !context->IsCancelled()) {
+        if (impl->io_context.stopped()) {
+          return ::grpc::Status::OK;
+        }
+      }
+      if(context->IsCancelled()) {
+        continue;
+      }
+      THALAMUS_LOG(info) << "Got node";
+
+      auto node = node_cast<StimNode*>(raw_node.get());
+      THALAMUS_LOG(info) << "stimnode " << node;
+      if (!node) {
+        std::this_thread::sleep_for(1s);
+        continue;
+      }
+
+      bool first = true;
+      while(reader->Read(&request)) {
+        if(request.has_node()) {
+          node_name = request.node();
+          break;
+        }
+
+        std::promise<void> promise;
+        auto future = promise.get_future();
+        boost::asio::post(impl->io_context, [&] {
+          node->stim(request);
+          promise.set_value();
+        });
+        while (future.wait_for(1s) == std::future_status::timeout && !context->IsCancelled()) {}
+      }
+    }
+    return ::grpc::Status::OK;
+  }
+
   std::future<ObservableCollection::Value> Service::evaluate(const std::string& code) {
     TRACE_EVENT_ASYNC_BEGIN0("thalamus", "evaluate", impl->next_id);
 

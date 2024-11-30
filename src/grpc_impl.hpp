@@ -49,6 +49,7 @@ namespace thalamus {
     ::grpc::Status inject_analog(::grpc::ServerContext* context, ::grpc::ServerReader< ::thalamus_grpc::InjectAnalogRequest>* reader, ::util_grpc::Empty*) override;
     ::grpc::Status get_modalities(::grpc::ServerContext* context, const ::thalamus_grpc::NodeSelector* request, ::thalamus_grpc::ModalitiesMessage* response) override;
     ::grpc::Status ping(::grpc::ServerContext* context, ::grpc::ServerReaderWriter< ::thalamus_grpc::Pong, ::thalamus_grpc::Ping>* stream) override;
+    ::grpc::Status stim(::grpc::ServerContext* context, ::grpc::ServerReaderWriter< ::thalamus_grpc::StimResponse, ::thalamus_grpc::StimRequest>* reader) override;
 
     std::future<ObservableCollection::Value> evaluate(const std::string& code);
     bool send_change(ObservableCollection::Action action, const std::string& address, ObservableCollection::Value value, std::function<void()> callback);
