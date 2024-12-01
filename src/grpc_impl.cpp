@@ -1851,13 +1851,18 @@ namespace thalamus {
           break;
         }
 
-        std::promise<void> promise;
+        std::promise<thalamus_grpc::StimResponse> promise;
         auto future = promise.get_future();
         boost::asio::post(impl->io_context, [&] {
-          node->stim(request);
-          promise.set_value();
+          auto response = node->stim(request);
+          promise.set_value(response);
         });
         while (future.wait_for(1s) == std::future_status::timeout && !context->IsCancelled()) {}
+        if(!context->IsCancelled()) {
+          auto response = future.get();
+          response.set_id(request.id());
+          reader->Write(response);
+        }
       }
     }
     return ::grpc::Status::OK;

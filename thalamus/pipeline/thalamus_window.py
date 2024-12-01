@@ -36,6 +36,7 @@ from .spikeglx_widget import SpikeGlxWidget
 from .aruco_widget import ArucoWidget
 from .hexascope_widget import HexascopeWidget
 from .sync_widget import SyncWidget
+from .stim_widget import StimWidget
 #from .analog_widget import AnalogWidget
 from ..util import NodeSelector
 from .. import thalamus_pb2
@@ -184,7 +185,7 @@ FACTORIES = {
     UserData(UserDataType.DEFAULT, 'Channel', 'Dev1/ai0', []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
   ]),
-  'NIDAQ_OUT': Factory(None, [
+  'NIDAQ_OUT': Factory(StimWidget, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.DEFAULT, 'Source', '', []),
     UserData(UserDataType.DEFAULT, 'Channel', 'Dev1/ao0', []),
@@ -1534,7 +1535,7 @@ class ThalamusWindow(QMainWindow):
     self.filename = None
     self.grid_layout = QGridLayout()
     self.data_views = {}
-    self.dock_widgets = []
+    self.dock_widgets: typing.List[ThalamusDockWidget] = []
     self.channel_viewer: typing.Optional[QWidget] = None
 
   def enable_config_menu(self, filename: typing.Optional[str]):
@@ -1542,6 +1543,10 @@ class ThalamusWindow(QMainWindow):
     self.config_menu_enabled = True
 
   def closeEvent(self, a0: QCloseEvent) -> None:
+    for v in self.dock_widgets:
+      widget = v.widget()
+      if widget is not None and hasattr(widget, 'cleanup'):
+        widget.cleanup()
     if self.channel_viewer:
       self.channel_viewer.close()
     self.done_future.set_result(None)
@@ -1670,6 +1675,9 @@ class ThalamusWindow(QMainWindow):
       w = self.dock_widgets[key]
       del self.dock_widgets[key]
       self.removeDockWidget(w)
+      widget = w.widget()
+      if widget is not None and hasattr(widget, 'cleanup'):
+        widget.cleanup()
       w.deleteLater()
     else:
       node_name = value['node']
@@ -1704,6 +1712,9 @@ class ThalamusWindow(QMainWindow):
             new_widget = factory.create_widget(node, self.stub)
             dock.setWidget(new_widget)
           if previous_widget is not None:
+            widget = previous_widget.widget()
+            if widget is not None and hasattr(widget, 'cleanup'):
+              widget.cleanup()
             previous_widget.deleteLater()
       node.add_observer(type_observer, dock_is_deleted)
       type_observer(None, 'type', node_type)

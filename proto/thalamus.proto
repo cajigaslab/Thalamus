@@ -39,17 +39,23 @@ message Error {
 
 message StimDeclaration {
   AnalogResponse data = 1;
-  uint32 id = 2;
+  string trigger = 2;
+  uint32 id = 3;
 }
 
 message StimRequest {
   NodeSelector node = 1;
   StimDeclaration declaration = 2;
-  uint32 trigger = 3;
+  optional uint32 arm = 3;
+  optional uint32 trigger = 4;
+  optional uint32 retrieve = 5;
+  uint32 id = 6;
 }
 
 message StimResponse {
   Error error = 1;
+  StimDeclaration declaration = 2;
+  uint32 id = 3;
 }
 
 message ObservableReadRequest {

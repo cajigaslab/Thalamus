@@ -5,6 +5,7 @@
 #include <numeric>
 #include <grpc_impl.hpp>
 #include <modalities_util.hpp>
+#include <base64.hpp>
 
 #include <thalamus_nidaqmx.h>
 
@@ -28,7 +29,8 @@ namespace thalamus {
     decltype(&::DAQmxWriteAnalogF64) DAQmxWriteAnalogF64;
     decltype(&::DAQmxCreateDOChan) DAQmxCreateDOChan;
     decltype(&::DAQmxCreateAOVoltageChan) DAQmxCreateAOVoltageChan;
-    decltype(&::DAQmxRegisterDoneEvent) DAQmxRegisterDoneEvent;
+    decltype(&::DAQmxRegisterDoneEvent) DAQmxRegisterDoneEvent; 
+    decltype(&::DAQmxCfgDigEdgeStartTrig) DAQmxCfgDigEdgeStartTrig;
   };
   static DAQmxAPI daqmxapi;
 
@@ -130,11 +132,16 @@ namespace thalamus {
       THALAMUS_LOG(info) << "Failed to load DAQmxRegisterDoneEvent.  NI features disabled";
       return false;
     }
+    daqmxapi.DAQmxCfgDigEdgeStartTrig = reinterpret_cast<decltype(&DAQmxCfgDigEdgeStartTrig)>(::GetProcAddress(nidaq_dll_handle, "DAQmxCfgDigEdgeStartTrig"));
+    if (!daqmxapi.DAQmxCfgDigEdgeStartTrig) {
+      THALAMUS_LOG(info) << "Failed to load DAQmxCfgDigEdgeStartTrig.  NI features disabled";
+      return false;
+    }
     daqmxapi.loaded = true;
     THALAMUS_LOG(info) << "DAQmx API loaded";
     return true;
   }
-
+  
   static std::regex nidaq_regex("([a-zA-Z0-9/]+)(\\d+)(:(\\d+))?$");
 
   static thalamus::vector<std::string> get_channels(const std::string& channel) {
@@ -475,8 +482,8 @@ namespace thalamus {
       , outer(outer)
       , running(false) {
       using namespace std::placeholders;
-      state_connection = state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
-      this->state->recap(std::bind(&Impl::on_change, this, _1, _2, _3));
+      state_connection = state->recursive_changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3, _4));
+      this->state->recap(std::bind(&Impl::on_change, this, state.get(), _1, _2, _3));
     }
 
     ~Impl() {
@@ -591,9 +598,27 @@ namespace thalamus {
 #else
 #endif
 
-    void on_change(ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
+    ObservableListPtr stims_state;
+    void on_change(ObservableCollection* source, ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
+      if(source == stims_state.get()) {
+        auto key_int = std::get<long long>(k);
+        if(std::holds_alternative<std::string>(v)) {
+          stims[key_int] = std::get<std::string>(v);
+        } else {
+          stims.erase(key_int);
+        }
+        return;
+      }
+      if(source != state.get()) {
+        return;
+      }
+
       auto key_str = std::get<std::string>(k);
-      if(key_str == "Source") {
+
+      if(key_str == "Stims") {
+        stims_state = std::get<ObservableListPtr>(v);
+        stims_state->recap(std::bind(&Impl::on_change, this, stims_state.get(), _1, _2, _3));
+      } else if(key_str == "Source") {
         std::string source_str = std::get<std::string>(v);
         if (current_source.has_value() && current_source.value() == source_str) {
           return;
@@ -608,7 +633,7 @@ namespace thalamus {
           if (!locked_source || analog_node == nullptr) {
             return;
           }
-          source = std::weak_ptr<AnalogNode>(analog_node);
+          this->source = std::weak_ptr<AnalogNode>(analog_node);
           source_connection = locked_source->ready.connect(std::bind(&Impl::on_data, this, _1, analog_node.get()));
         });
       } else if (key_str == "Running" || key_str == "Channel" || key_str == "Digital") {
@@ -690,36 +715,86 @@ namespace thalamus {
       }
     }
 
-    static int32 CVICALLBACK DoneCallback(TaskHandle taskHandle, int32 status, void *callbackData) {
+    static int32 CVICALLBACK DoneCallback(TaskHandle taskHandle, int32 status, void *restart) {
       THALAMUS_LOG(info) << "Stim done";
       if(status < 0) {
         THALAMUS_LOG(error) << absl::StrFormat("DAQmx Task failed %d", status);
       }
       daqmxapi.DAQmxStopTask(taskHandle);
+      if (restart) {
+        daqmxapi.DAQmxStartTask(taskHandle);
+      }
       return 0;
     }
 
-    std::vector<TaskHandle> stims;
-    thalamus_grpc::Error declare_stim(const thalamus_grpc::StimDeclaration& declaration) {
+    TaskHandle stim_task = nullptr;
+    int armed_stim = -1;
+    thalamus::map<int, std::string> stims;
+    thalamus_grpc::StimResponse declare_stim(const thalamus_grpc::StimDeclaration& declaration) {
       THALAMUS_LOG(info) << "Declaring stim";
-
-      if(stims.size() <= declaration.id()) {
-        stims.resize(declaration.id()+1, nullptr);
+      thalamus_grpc::StimResponse response;
+      auto& error = *response.mutable_error();
+      if(!stims_state) {
+        error.set_code(1);
+        error.set_message("Not ready, try again later");
+        return response;
       }
-      if(stims[declaration.id()]) {
-        daqmxapi.DAQmxClearTask(stims[declaration.id()]);
-        stims[declaration.id()] = nullptr;
+      auto binary = declaration.SerializeAsString();
+      auto encoded = base64_encode(binary);
+      for(auto i = stims_state->size();i <= declaration.id();++i) {
+        stims_state->at(i).assign(std::monostate());
+      }
+      stims_state->at(declaration.id()).assign(encoded);
+      stims[declaration.id()] = encoded;
+      return response;
+    }
+
+    thalamus_grpc::StimResponse retrieve_stim(int id) {
+      THALAMUS_LOG(info) << "Arming stim";
+      thalamus_grpc::StimResponse response;
+      auto& error = *response.mutable_error();
+
+      if(!stims.contains(id)) {
+        error.set_code(2);
+        error.set_message("Stim not defined");
+        return response;
+      }
+      auto encoded = stims[id];
+      auto binary = base64_decode(encoded);
+      thalamus_grpc::StimDeclaration declaration;
+      declaration.ParseFromString(binary);
+      *response.mutable_declaration() = declaration;
+      return response;
+    }
+
+    thalamus_grpc::StimResponse arm_stim(int id) {
+      THALAMUS_LOG(info) << "Arming stim";
+      thalamus_grpc::StimResponse response;
+      auto& error = *response.mutable_error();
+
+      if (stim_task) {
+        daqmxapi.DAQmxClearTask(stim_task);
+        stim_task = nullptr;
+      }
+      armed_stim = -1;
+
+      if(!stims.contains(id)) {
+        error.set_code(2);
+        error.set_message("Stim not defined");
+        return response;
       }
 
-      TaskHandle handle;
-      auto name = absl::StrFormat("Stim %d %d", declaration.id(), std::chrono::steady_clock::now().time_since_epoch().count());
-      auto daq_error = daqmxapi.DAQmxCreateTask(name.c_str(), &task_handle);
+      auto encoded = stims[id];
+      auto binary = base64_decode(encoded);
+      thalamus_grpc::StimDeclaration declaration;
+      declaration.ParseFromString(binary);
+
+      auto daq_error = daqmxapi.DAQmxCreateTask("Stim", &stim_task);
       if(daq_error < 0) {
-        thalamus_grpc::Error error;
         error.set_code(daq_error);
         error.set_message(absl::StrFormat("DAQmxCreateTask failed %d", daq_error));
         THALAMUS_LOG(error) << error.message();
-        return error;
+        return response;
       }
 
       std::vector<std::string> channel_names;
@@ -729,102 +804,114 @@ namespace thalamus {
       for(auto& span : declaration.data().spans()) {
         int span_size = span.end() - span.begin();
         if(span_size != samples_per_channel) {
-          daqmxapi.DAQmxClearTask(task_handle);
-          thalamus_grpc::Error error;
+          daqmxapi.DAQmxClearTask(stim_task);
+          stim_task = nullptr;
           error.set_code(-1);
           error.set_message("All Spans must have the same length");
           THALAMUS_LOG(error) << error.message();
-          return error;
+          return response;
         }
         channel_names.push_back(span.name());
       }
       auto physical_channels = absl::StrJoin(channel_names, ",");
-      daq_error = daqmxapi.DAQmxCreateAOVoltageChan(task_handle, physical_channels.c_str(), "", -10.0, 10.0, DAQmx_Val_Volts, nullptr);
+      daq_error = daqmxapi.DAQmxCreateAOVoltageChan(stim_task, physical_channels.c_str(), "", -10.0, 10.0, DAQmx_Val_Volts, nullptr);
       if(daq_error < 0) {
-        daqmxapi.DAQmxClearTask(task_handle);
-        thalamus_grpc::Error error;
+        daqmxapi.DAQmxClearTask(stim_task);
+        stim_task = nullptr;
         error.set_code(daq_error);
         error.set_message(absl::StrFormat("DAQmxCreateAOVoltageChan failed %d", daq_error));
         THALAMUS_LOG(error) << error.message();
-        return error;
+        return response;
       }
 
       size_t sample_interval = declaration.data().sample_intervals().empty() ? 0 : declaration.data().sample_intervals()[0];
       for(auto s : declaration.data().sample_intervals()) {
         if(sample_interval != s) {
-          daqmxapi.DAQmxClearTask(task_handle);
-          thalamus_grpc::Error error;
+          daqmxapi.DAQmxClearTask(stim_task);
+          stim_task = nullptr;
           error.set_code(-1);
           error.set_message("All sample intervals must be the same");
           THALAMUS_LOG(error) << error.message();
-          return error;
+          return response;
         }
       }
       double frequency = 1e9/sample_interval;
 
-      daq_error = daqmxapi.DAQmxCfgSampClkTiming(task_handle, "", frequency, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps, samples_per_channel);
+      daq_error = daqmxapi.DAQmxCfgSampClkTiming(stim_task, "", frequency, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps, samples_per_channel);
       if(daq_error < 0) {
-        daqmxapi.DAQmxClearTask(task_handle);
-        thalamus_grpc::Error error;
+        daqmxapi.DAQmxClearTask(stim_task);
+        stim_task = nullptr;
         error.set_code(daq_error);
         error.set_message(absl::StrFormat("DAQmxCfgSampClkTiming failed %d", daq_error));
         THALAMUS_LOG(error) << error.message();
-        return error;
+        return response;
       }
 
       std::vector<double> data(declaration.data().data().begin(), declaration.data().data().end());
       size_t offset = 0;
       while(offset < samples_per_channel) {
         int32 count = 0;
-        daq_error = daqmxapi.DAQmxWriteAnalogF64(task_handle,samples_per_channel-offset,0,10.0,
+        daq_error = daqmxapi.DAQmxWriteAnalogF64(stim_task,samples_per_channel-offset,0,10.0,
                                                  DAQmx_Val_GroupByChannel,data.data()+num_channels*offset,&count,
                                                  nullptr);
         THALAMUS_LOG(info) << "Wrote " << count << " samples " << offset << " " << samples_per_channel;
 
         if(daq_error < 0) {
-          daqmxapi.DAQmxClearTask(task_handle);
-          thalamus_grpc::Error error;
+          daqmxapi.DAQmxClearTask(stim_task);
+          stim_task = nullptr;
           error.set_code(daq_error);
           error.set_message(absl::StrFormat("DAQmxWriteAnalogF64 failed %d", daq_error));
           THALAMUS_LOG(error) << error.message();
-          return error;
+          return response;
         }
         offset += count;
       }
 
-      daq_error = daqmxapi.DAQmxRegisterDoneEvent(task_handle,0,DoneCallback,nullptr);
+      if (!declaration.trigger().empty()) {
+        daq_error = daqmxapi.DAQmxCfgDigEdgeStartTrig(stim_task, declaration.trigger().c_str(), DAQmx_Val_Rising);
+        if (daq_error < 0) {
+          daqmxapi.DAQmxClearTask(stim_task);
+          stim_task = nullptr;
+          error.set_code(daq_error);
+          error.set_message(absl::StrFormat("DAQmxCfgDigEdgeStartTrig failed %d", daq_error));
+          THALAMUS_LOG(error) << error.message();
+          return response;
+        }
+      }
+
+      daq_error = daqmxapi.DAQmxRegisterDoneEvent(stim_task,0,DoneCallback, reinterpret_cast<void*>(declaration.trigger().empty() ? 0 : 1));
       if(daq_error < 0) {
-        daqmxapi.DAQmxClearTask(task_handle);
-        thalamus_grpc::Error error;
+        daqmxapi.DAQmxClearTask(stim_task);
+        stim_task = nullptr;
         error.set_code(daq_error);
         error.set_message(absl::StrFormat("DAQmxRegisterDoneEvent failed %d", daq_error));
         THALAMUS_LOG(error) << error.message();
-        return error;
+        return response;
       }
 
-      stims[declaration.id()] = task_handle;
-      return thalamus_grpc::Error();
+      armed_stim = id;
+
+      return response;
     }
 
-    thalamus_grpc::Error trigger_stim(size_t id) {
-      if(id >= stims.size() || !stims[id]) {
-        thalamus_grpc::Error error;
-        error.set_code(id);
-        error.set_message(absl::StrFormat("Stim not defined %d", id));
-        THALAMUS_LOG(error) << error.message();
-        return error;
+    thalamus_grpc::StimResponse trigger_stim(size_t id) {
+      if(armed_stim != id) {
+        thalamus_grpc::StimResponse response = arm_stim(id);
+        if(response.error().code()) {
+          return response;
+        }
       }
+      thalamus_grpc::StimResponse response;
+      auto& error = *response.mutable_error();
 
-      auto task = stims[id];
-      auto daq_error = daqmxapi.DAQmxStartTask(task);
+      auto daq_error = daqmxapi.DAQmxStartTask(stim_task);
       if(daq_error < 0) {
-        thalamus_grpc::Error error;
         error.set_code(daq_error);
         error.set_message(absl::StrFormat("DAQmxStartTask failed %d", daq_error));
         THALAMUS_LOG(error) << error.message();
-        return error;
+        return response;
       }
-      return thalamus_grpc::Error();
+      return response;
     }
 
     void on_data(Node* raw_node, AnalogNode* node) {
@@ -877,9 +964,13 @@ namespace thalamus {
   thalamus_grpc::StimResponse NidaqOutputNode::stim(const thalamus_grpc::StimRequest& request) {
     thalamus_grpc::StimResponse response;
     if(request.has_declaration()) {
-      *response.mutable_error() = impl->declare_stim(request.declaration());
-    } else {
-      *response.mutable_error() = impl->trigger_stim(request.trigger());
+      response = impl->declare_stim(request.declaration());
+    } else if (request.has_arm()) {
+      response = impl->arm_stim(request.arm());
+    } else if (request.has_trigger()) {
+      response = impl->trigger_stim(request.trigger());
+    } else if (request.has_retrieve()) {
+      response = impl->retrieve_stim(request.retrieve());
     }
     return response;
   }
