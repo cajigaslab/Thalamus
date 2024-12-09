@@ -332,7 +332,7 @@ public:
       outer->channels_changed(outer);
 
       THALAMUS_LOG(info) << "Starting " << sample_interval.count();
-      command = "set runmode run;\n";
+      command = "set runmode record;\n";
       co_await boost::asio::async_write(command_socket.socket, boost::asio::const_buffer(command.data(), command.size()));
 
     } catch(boost::system::system_error& e) {
