@@ -24,6 +24,7 @@ Config = typing.NamedTuple('Config', [
   ('fix2_timeout', datetime.timedelta),
   ('blink_timeout', datetime.timedelta),
   ('success_timeout', datetime.timedelta),
+  ('penalty_delay', datetime.timedelta),
   ('target_rectangle', QRect),
   ('target_color', QColor),
   ('shape', str)  # Add the shape attribute
@@ -121,6 +122,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Uniform('Decision Interval', 'decision_timeout', 1, 2, 's'),
     Form.Uniform('Failure Interval', 'fail_timeout', 1, 1, 's'),
     Form.Uniform('Success Interval', 'success_timeout', 1, 1, 's'),
+    Form.Uniform('Penalty Delay', 'penalty_delay', 3, 3, 's'),
     Form.Color('Target Color', 'target_color', QColor(255, 255, 255)),
     Form.Constant('Shape', 'shape',  random.choice(shapes))  # Add the shape attribute
   )
