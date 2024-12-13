@@ -272,7 +272,7 @@ namespace thalamus {
           if(!channel_names.empty()) {
             std::vector<int> named_channels;
             for(auto& name : channel_names) {
-              for(auto i = 0;i < num_channels;++i) {
+              for(auto i = 0ull;i < num_channels;++i) {
                 if(node->name(i) == name) {
                   named_channels.push_back(i);
                   break;
@@ -413,7 +413,7 @@ namespace thalamus {
     return ::grpc::Status::OK;
   }
 
-  ::grpc::Status Service::node_request_stream(::grpc::ServerContext* context, ::grpc::ServerReaderWriter<::thalamus_grpc::NodeResponse, ::thalamus_grpc::NodeRequest>* stream) {
+  ::grpc::Status Service::node_request_stream(::grpc::ServerContext*, ::grpc::ServerReaderWriter<::thalamus_grpc::NodeResponse, ::thalamus_grpc::NodeRequest>* stream) {
     
     std::weak_ptr<Node> weak;
     ::thalamus_grpc::NodeRequest request;
@@ -476,7 +476,7 @@ namespace thalamus {
     return ::grpc::Status::OK;
   }
 
-  ::grpc::Status Service::observable_bridge(::grpc::ServerContext* context, ::grpc::ServerReaderWriter< ::thalamus_grpc::ObservableChange, ::thalamus_grpc::ObservableChange>* stream) {
+  ::grpc::Status Service::observable_bridge(::grpc::ServerContext*, ::grpc::ServerReaderWriter< ::thalamus_grpc::ObservableChange, ::thalamus_grpc::ObservableChange>*) {
     return ::grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "Unimplemented");
   }
 
@@ -547,7 +547,6 @@ namespace thalamus {
     Impl::ContextGuard guard(this, context);
     thalamus_grpc::ObservableTransaction in;
     thalamus_grpc::ObservableTransaction out;
-    bool thread_name_set = false;
 
     if(!impl->observable_bridge_redirect.empty()) {
       out.set_redirection(impl->observable_bridge_redirect);
@@ -574,7 +573,7 @@ namespace thalamus {
     return ::grpc::Status::OK;
   }
 
-  ::grpc::Status Service::observable_bridge_write(::grpc::ServerContext* context, const ::thalamus_grpc::ObservableTransaction* request, ::util_grpc::Empty* response) {
+  ::grpc::Status Service::observable_bridge_write(::grpc::ServerContext* context, const ::thalamus_grpc::ObservableTransaction* request, ::util_grpc::Empty*) {
     std::vector<std::promise<void>> promises;
     std::vector<std::future<void>> futures;
     for(auto& change : request->changes()) {
@@ -782,7 +781,7 @@ namespace thalamus {
         if(!channel_names.empty()) {
           std::vector<int> named_channels;
           for(auto& name : channel_names) {
-            for(auto i = 0;i < num_channels;++i) {
+            for(auto i = 0ull;i < num_channels;++i) {
               if(node->name(i) == name) {
                 named_channels.push_back(i);
                 break;
@@ -814,8 +813,6 @@ namespace thalamus {
           auto channel = channels[c];
           auto& min = mins[c];
           auto& max = maxs[c];
-          auto& previous_min = previous_mins[c];
-          auto& previous_max = previous_maxes[c];
           auto& current_time = current_times[c];
           auto& bin_end = bin_ends[c];
           if (channel >= num_channels) {
@@ -898,7 +895,6 @@ namespace thalamus {
       AnalogNode* node = node_cast<AnalogNode*>(raw_node.get());
       std::vector<size_t> channels(request->channels().begin(), request->channels().end());
       thalamus::vector<std::string> channel_names(request->channel_names().begin(), request->channel_names().begin());
-      auto has_channels = !channels.empty() || !channel_names.empty();
 
       std::mutex connection_mutex;
       std::mutex cond_mutex;
@@ -947,7 +943,7 @@ namespace thalamus {
           std::lock_guard<std::mutex> lock(connection_mutex, std::adopt_lock_t());
           ::thalamus_grpc::AnalogResponse response;
 
-          for (auto c = 0u; c < node->num_channels(); ++c) {
+          for (auto c = 0; c < node->num_channels(); ++c) {
             auto span = response.add_spans();
             auto name = node->name(c);
             span->set_name(name.data(), name.size());
@@ -1011,8 +1007,8 @@ namespace thalamus {
       std::chrono::nanoseconds window_ns(static_cast<size_t>(request->window_s()*1e9));
       std::vector<int> window_samples(request->channels().size());
       std::chrono::nanoseconds hop_ns(static_cast<size_t>(request->hop_s()*1e9));
-      std::map<int, std::vector<double>> windows;
-      std::map<int, int> window_sizes;
+      std::map<size_t, std::vector<double>> windows;
+      std::map<int, size_t> window_sizes;
 
       std::mutex connection_mutex;
       std::vector<std::chrono::nanoseconds> countdowns;
@@ -1043,7 +1039,7 @@ namespace thalamus {
         size_t num_channels = node->num_channels();
 
         if(!unlocated_channels.empty()) {
-          for(auto i = 0;i < num_channels;++i) {
+          for(auto i = 0ull;i < num_channels;++i) {
             auto name_view = node->name(i);
             std::string name(name_view.begin(), name_view.end());
             if(unlocated_channels.contains(name)) {
@@ -1065,7 +1061,7 @@ namespace thalamus {
           auto data = node->data(channel);
           auto interval = node->sample_interval(channel);
           auto& countdown = countdowns[channel];
-          auto skips = countdown/interval;
+          size_t skips = countdown/interval;
           if(skips > data.size()) {
             skips = data.size();
           }
@@ -1083,7 +1079,6 @@ namespace thalamus {
           for (auto c = 0u; c < channel_ids.size(); ++c) {
             auto channel = channel_ids[c];
             auto interval = node->sample_interval(channel);
-            auto data = node->data(channel);
             auto name = node->name(channel);
             auto& countdown = countdowns[channel];
             if(countdown >= interval) {
@@ -1113,7 +1108,7 @@ namespace thalamus {
               std::vector<double> accumulated_copy(1);
               accumulated_copy.insert(accumulated_copy.end(), accumulated_channel.begin(), accumulated_channel.begin()+samples);
 
-              for(auto j = 0;j < window.size();++j) {
+              for(auto j = 0ull;j < window.size();++j) {
                 accumulated_copy[1+j] *= window[j];
               }
               realft(accumulated_copy.data(), accumulated_copy.size()-1, 1);
@@ -1171,7 +1166,7 @@ namespace thalamus {
 
     std::thread ping_thread([&] {
       while (stream->Read(&message)) {
-        THALAMUS_ASSERT(message.has_ping());
+        THALAMUS_ASSERT(message.has_ping(), "Expected ping message");
         auto ping = message.ping();
 
         ::thalamus_grpc::RemoteNodeMessage response;
@@ -1313,7 +1308,7 @@ namespace thalamus {
         }
 
         size_t data_count = 0;
-        for(auto i = 0;i < node->num_planes();++i) {
+        for(auto i = 0ull;i < node->num_planes();++i) {
           auto data = node->plane(i);
           data_count += data.size();
         }
@@ -1347,7 +1342,7 @@ namespace thalamus {
           
           size_t plane_offset = 0;
           size_t remaining_chunk = image_chunk_size;
-          for(auto i = 0;i < node->num_planes();++i) {
+          for(auto i = 0ull;i < node->num_planes();++i) {
             auto data = node->plane(i);
             if(position > plane_offset + data.size() || !remaining_chunk) {
               piece.add_data();
@@ -1395,7 +1390,7 @@ namespace thalamus {
     return ::grpc::Status::OK;
   }
 
-  ::grpc::Status Service::notification(::grpc::ServerContext* context, const ::util_grpc::Empty* request, ::grpc::ServerWriter< ::thalamus_grpc::Notification>* writer) {
+  ::grpc::Status Service::notification(::grpc::ServerContext* context, const ::util_grpc::Empty*, ::grpc::ServerWriter< ::thalamus_grpc::Notification>* writer) {
     impl->notification_writer = writer;
     THALAMUS_LOG(info) << "Notification stream received";
     while(!context->IsCancelled()) {
@@ -1844,7 +1839,6 @@ namespace thalamus {
         continue;
       }
 
-      bool first = true;
       while(reader->Read(&request)) {
         if(request.has_node()) {
           node_name = request.node();

@@ -33,7 +33,7 @@ from .thalamus_window import ThalamusWindow
 from ..servicer import ThalamusServicer
 
 from ..qt import *
-
+from .. import process
 UNHANDLED_EXCEPTION: typing.List[Exception] = []
 
 def exception_handler(loop: asyncio.AbstractEventLoop, context: typing.Mapping[str, typing.Any]) -> None:
@@ -150,6 +150,7 @@ def main() -> None:
     if not UNHANDLED_EXCEPTION:
       raise
   finally:
+    process.cleanup()
     if UNHANDLED_EXCEPTION:
       raise UNHANDLED_EXCEPTION[0] from None
 

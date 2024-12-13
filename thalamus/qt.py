@@ -25,6 +25,7 @@ if HAS_QT6:
   from PyQt6.QtCore import (QPoint, QRect, QPointF, Qt, QSize, QSizeF, QDir, QModelIndex, QAbstractItemModel, QVariant,
                             QBuffer, QAbstractListModel, QAbstractTableModel, QLineF, QRectF, QItemSelection, QUrl,
                             QTimer, QSortFilterProxyModel, PYQT_VERSION_STR)
+  from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 
   def qt_to_polygonf(polygon):
     return polygon.toPolygonF()
@@ -73,6 +74,7 @@ else:
                             QAbstractListModel, QAbstractItemModel, QAbstractTableModel, QLineF, QRectF, QBuffer,
                             QItemSelection, QVariant, QUrl, QSortFilterProxyModel, PYQT_VERSION_STR)
   from PyQt5.QtMultimedia import QSound, QMediaPlayer, QAbstractVideoSurface, QVideoFrame, QMediaContent
+  from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 
   def qt_to_polygonf(polygon) -> QPolygonF:
     return QPolygonF(polygon)

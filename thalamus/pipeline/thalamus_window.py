@@ -47,6 +47,7 @@ from .data_widget import DataWidget
 import OpenGL.GL
 import grpc
 import cv2
+from .. import process
 
 from ..observable_item_models import TreeObservableCollectionModel
 
@@ -1445,7 +1446,7 @@ class ItemModel(QAbstractItemModel):
               request = thalamus_pb2.NodeSelector(
                 name = node["name"]
               )
-              self.procs[id(node)] = await asyncio.create_subprocess_exec(
+              self.procs[id(node)] = await process.create_subprocess_exec(
                 sys.executable, 
                 "-m", "thalamus.image_viewer", '--address', self.address, '--node', node['name'])
             elif thalamus_pb2.Modalities.MocapModality in modalities.values:

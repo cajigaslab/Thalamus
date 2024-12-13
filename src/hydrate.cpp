@@ -463,7 +463,7 @@ namespace hydrate {
     };
     std::sort(framerates.begin(), framerates.end());
     auto framerate = 1e9/average_interval;
-    auto framerate_i = std::lower_bound(framerates.begin(), framerates.end(), std::make_pair(framerate, ""));
+    auto framerate_i = std::lower_bound(framerates.begin(), framerates.end(), std::make_pair(framerate, std::string("")));
     std::string ffmpeg_framerate;
     if(framerate_i == framerates.begin()) {
       ffmpeg_framerate = framerates.front().second;

@@ -25,6 +25,7 @@ from . import task_context as task_context_module
 from . import tasks
 from . import window as task_window
 from ..config import *
+from .. import process
 
 from pkg_resources import resource_string, resource_filename
 
@@ -228,6 +229,7 @@ def main() -> None:
     if not UNHANDLED_EXCEPTION:
       raise
   finally:
+    process.cleanup()
     if UNHANDLED_EXCEPTION:
       raise UNHANDLED_EXCEPTION[0] from None
 

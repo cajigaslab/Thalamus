@@ -8,7 +8,6 @@ import traceback
 import threading
 import multiprocessing
 
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 from thalamus.qt import *
 
