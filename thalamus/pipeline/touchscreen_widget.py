@@ -14,10 +14,9 @@ class CalibrationWidget(QWidget):
     super().__init__()
     self.config = config
 
-    geometry = qt_screen_geometry()
-    self.screen_points = [QPoint(geometry.width()//3, geometry.height()//3),
-                          QPoint(2*geometry.width()//3, geometry.height()//3),
-                          QPoint(geometry.width()//3, 2*geometry.height()//3)]
+    self.screen_points = [QPoint(),
+                          QPoint(),
+                          QPoint()]
     self.touch_points = [[] for _ in self.screen_points]
     self.current_point = len(self.screen_points) if skip_calibration else 0
     self.path = QPainterPath()
@@ -27,6 +26,18 @@ class CalibrationWidget(QWidget):
     self.task = create_task_with_exc_handling(self.stream_processor(stream))
     self.px = 0
     self.py = 0
+
+    def on_change(source, action, key, value):
+      monitor = config['Monitor']
+      screen = QApplication.screens()[monitor]
+      geometry = screen.geometry()
+      self.screen_points = [QPoint(geometry.x() + geometry.width()//3,   geometry.y() + geometry.height()//3),
+                            QPoint(geometry.x() + 2*geometry.width()//3, geometry.y() + geometry.height()//3),
+                            QPoint(geometry.x() + geometry.width()//3,   geometry.y() + 2*geometry.height()//3)]
+      self.update()
+
+    config.add_recursive_observer(on_change, lambda: isdeleted(self))
+    config.recap(lambda *args: on_change(config, *args))
 
   async def stream_processor(self, stream: typing.AsyncIterable[AnalogResponse]):
     try:
@@ -51,8 +62,10 @@ class CalibrationWidget(QWidget):
             continue
           self.touch_points[self.current_point].append([self.px, self.py, 1])
           self.touch = touch
+          self.update()
         elif self.transform is not None:
-          screen = self.transform.map(touch)
+          screenf = self.transform.map(touch)
+          screen = QPoint(screenf.x(), screenf.y())
           widget = self.mapFromGlobal(screen)
           self.path.moveTo(widget.x(), widget.y())
           self.path.addEllipse(widget, 4, 4)
@@ -107,7 +120,7 @@ class CalibrationWidget(QWidget):
 
       painter.setPen(Qt.GlobalColor.white)
       painter.drawText(QRect(0, 0, self.width(), self.height()), Qt.AlignmentFlag.AlignCenter,
-        'Touch target then press any key to progress')
+        f'Touch target then press any key to progress.  Got {len(self.touch_points[self.current_point])} samples')
     else:
       painter.setPen(Qt.GlobalColor.white)
       painter.drawText(QRect(0, 0, self.width(), self.height()), Qt.AlignmentFlag.AlignCenter,
@@ -125,9 +138,18 @@ class TouchScreenWidget(QWidget):
         [0.0, 0.0, 1.0]
       ]
 
+    if 'Monitor' not in config:
+      config['Monitor'] = 0
+
     layout = QVBoxLayout()
+    monitor_spinbox = QSpinBox()
+    monitor_spinbox.setMaximum(len(QApplication.screens())-1)
+    monitor_layout = QHBoxLayout()
+    monitor_layout.addWidget(QLabel('Monitor:'))
+    monitor_layout.addWidget(monitor_spinbox)
     calibrate_button = QPushButton('Calibrate')
     test_button = QPushButton('Test')
+    layout.addLayout(monitor_layout)
     layout.addWidget(calibrate_button)
     layout.addWidget(test_button)
     layout.addStretch(1)
@@ -156,3 +178,15 @@ class TouchScreenWidget(QWidget):
 
     calibrate_button.clicked.connect(lambda: on_calibrate(False))
     test_button.clicked.connect(lambda: on_calibrate(True))
+
+    def on_monitor(v):
+      config.update({'Monitor': v})
+
+    monitor_spinbox.valueChanged.connect(on_monitor)
+
+    def on_change(source, action, key, value):
+      if key == 'Monitor':
+        monitor_spinbox.setValue(value)
+
+    config.add_recursive_observer(on_change, lambda: isdeleted(self))
+    config.recap(lambda *args: on_change(config, *args))
