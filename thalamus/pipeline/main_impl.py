@@ -118,7 +118,7 @@ async def async_main() -> None:
 
   screen_geometry = qt_screen_geometry()
 
-  thalamus = ThalamusWindow(config, stub, done_future)
+  thalamus = ThalamusWindow(f'localhost:{arguments.port}', config, stub, done_future)
   thalamus.enable_config_menu(arguments.config)
   await thalamus.load()
   thalamus.show()

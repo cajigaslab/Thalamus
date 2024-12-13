@@ -1,5 +1,6 @@
 from ..qt import *
 import typing
+import sys
 import enum
 import math
 import time
@@ -31,13 +32,14 @@ from .xsens_widget import XsensEditorWidget
 from .lua_widget import LuaWidget
 from .log_widget import LogWidget
 from .wave_widget import WaveWidget
+from .touchscreen_widget import TouchScreenWidget
 from .intan_widget import IntanWidget
 from .spikeglx_widget import SpikeGlxWidget
 from .aruco_widget import ArucoWidget
 from .hexascope_widget import HexascopeWidget
 from .sync_widget import SyncWidget
 from .stim_widget import StimWidget
-#from .analog_widget import AnalogWidget
+from .analog_widget import AnalogWidget
 from ..util import NodeSelector
 from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
@@ -276,7 +278,7 @@ FACTORIES = {
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
   ]),
-  'ANALOG': Factory(None, [
+  'ANALOG': Factory(AnalogWidget, [
     UserData(UserDataType.CHECK_BOX, 'Widget is Touchpad', False, [])
   ]),
   'OCULOMATIC': Factory(lambda c, s: OculomaticWidget(c, s) , [
@@ -320,6 +322,8 @@ FACTORIES = {
     UserData(UserDataType.DEFAULT, 'Source', '', []),
     UserData(UserDataType.DEFAULT, 'Equation', '', [])]),
   'LUA': Factory(lambda c, s: LuaWidget(c, s), [
+    UserData(UserDataType.DEFAULT, 'Source', '', [])]),
+  'TOUCH_SCREEN': Factory(TouchScreenWidget, [
     UserData(UserDataType.DEFAULT, 'Source', '', [])]),
   'REMOTE': Factory(None, [
     UserData(UserDataType.DEFAULT, 'Address', '', []),
@@ -1206,11 +1210,13 @@ class Plot(QWidget):
       self.update()
 
 class ItemModel(QAbstractItemModel):
-  def __init__(self, nodes: ObservableList, stub: thalamus_pb2_grpc.ThalamusStub):
+  def __init__(self, nodes: ObservableList, stub: thalamus_pb2_grpc.ThalamusStub, address: str):
     super().__init__()
     self.nodes = nodes
     self.stub = stub
+    self.address = address
     self.plots = {}
+    self.procs: typing.Dict[int, asyncio.subprocess.Process] = {}
     for node in self.nodes:
       if 'Running' in node:
         node['Running'] = False
@@ -1220,6 +1226,10 @@ class ItemModel(QAbstractItemModel):
     self.node_types = []
     for i, node in enumerate(self.nodes):
       self.on_nodes(ObservableCollection.Action.SET, i, node)
+
+  def close(self):
+    for k, v in self.procs.items():
+      v.kill()
 
   def get_node_type(self, node: ObservableDict):
     for t, n in zip(self.node_types, self.nodes):
@@ -1435,7 +1445,9 @@ class ItemModel(QAbstractItemModel):
               request = thalamus_pb2.NodeSelector(
                 name = node["name"]
               )
-              self.plots[id(node)] = ImageWidget(node, self.stub.image(thalamus_pb2.ImageRequest(node=request, framerate=30)), self.stub)
+              self.procs[id(node)] = await asyncio.create_subprocess_exec(
+                sys.executable, 
+                "-m", "thalamus.image_viewer", '--address', self.address, '--node', node['name'])
             elif thalamus_pb2.Modalities.MocapModality in modalities.values:
               request = thalamus_pb2.NodeSelector(
                 name = node["name"]
@@ -1449,7 +1461,12 @@ class ItemModel(QAbstractItemModel):
               )
               self.plots[id(node)] = PlotStack(node, self.stub.graph(request), bin_ns)
           create_task_with_exc_handling(create_widget())
-        #else:
+        else:
+          if id(node) in self.procs:
+            proc = self.procs[id(node)]
+            del self.procs[id(node)]
+            proc.kill()
+
         #  self.plots[id(node)].close()
       elif key == "type":
         front_index = self.createIndex(node_index, 0, self.nodes)
@@ -1528,10 +1545,12 @@ class PlaybackDialog(QDialog):
     return selected
 
 class ThalamusWindow(QMainWindow):
-  def __init__(self, state: ObservableDict, stub: thalamus_pb2_grpc.ThalamusStub, done_future: asyncio.Future):
+  def __init__(self, address, state: ObservableDict, stub: thalamus_pb2_grpc.ThalamusStub, done_future: asyncio.Future):
     super().__init__()
+    self.model: typing.Optional[ItemModel] = None
     self.state = state
     self.stub = stub
+    self.address = address
     self.done_future = done_future
     self.config_menu_enabled = False
     self.filename = None
@@ -1546,11 +1565,11 @@ class ThalamusWindow(QMainWindow):
 
   def closeEvent(self, a0: QCloseEvent) -> None:
     for v in self.dock_widgets:
-      widget = v.widget()
-      if widget is not None and hasattr(widget, 'cleanup'):
-        widget.cleanup()
+      v.close()
     if self.channel_viewer:
       self.channel_viewer.close()
+    if self.model is not None:
+      self.model.close()
     self.done_future.set_result(None)
 
   async def load(self):
@@ -1580,7 +1599,7 @@ class ThalamusWindow(QMainWindow):
     self.view = QTreeView()
     self.view.setItemDelegate(Delegate())
 
-    self.model = ItemModel(self.state['nodes'], self.stub)
+    self.model = ItemModel(self.state['nodes'], self.stub, self.address)
     self.view.setModel(self.model)
     self.model.dataChanged.connect(self.on_data_changed)
 
@@ -1677,9 +1696,7 @@ class ThalamusWindow(QMainWindow):
       w = self.dock_widgets[key]
       del self.dock_widgets[key]
       self.removeDockWidget(w)
-      widget = w.widget()
-      if widget is not None and hasattr(widget, 'cleanup'):
-        widget.cleanup()
+      w.close()
       w.deleteLater()
     else:
       node_name = value['node']
@@ -1714,9 +1731,7 @@ class ThalamusWindow(QMainWindow):
             new_widget = factory.create_widget(node, self.stub)
             dock.setWidget(new_widget)
           if previous_widget is not None:
-            widget = previous_widget.widget()
-            if widget is not None and hasattr(widget, 'cleanup'):
-              widget.cleanup()
+            previous_widget.close()
             previous_widget.deleteLater()
       node.add_observer(type_observer, dock_is_deleted)
       type_observer(None, 'type', node_type)
@@ -1838,7 +1853,7 @@ class ThalamusWindow(QMainWindow):
       del nodes[index.parent().row()]
 
 class ThalamusDockWidget(QDockWidget):
-  def __init__(self, config, *args, **kwargs):
+  def __init__(self, config: ObservableDict, *args, **kwargs):
     super().__init__(*args, **kwargs)
     self.config = config
     self.view_geometry_updater = MeteredUpdater(config['view_geometry'], datetime.timedelta(seconds=1), lambda: isdeleted(self))
@@ -1864,3 +1879,14 @@ class ThalamusDockWidget(QDockWidget):
   def resizeEvent(self, a0: QResizeEvent) -> None:
     self.view_geometry_updater[2:] = a0.size().width(), a0.size().height()
     return super().resizeEvent(a0)
+
+  def closeEvent(self, e):
+    if self.config.parent is not None:
+      for i, v in enumerate(self.config.parent):
+        if v is self.config:
+          del self.config.parent[i]
+
+    widget = self.widget()
+    if widget is not None:
+      widget.closeEvent(e)
+    super().closeEvent(e)

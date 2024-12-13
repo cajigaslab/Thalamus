@@ -260,7 +260,8 @@ class StimWidget(QWidget):
       create_task_with_exc_handling(message_queue.put(request))
     view.clicked.connect(on_retrieve)
 
-  def cleanup(self):
+  def closeEvent(self, e):
+    self.cleanup()
     print('STIMCLOSE')
     self.running = False
     print(1)
@@ -274,7 +275,4 @@ class StimWidget(QWidget):
       print(5)
       self.process.join()
       print(6)
-
-  def closeEvent(self, e):
-    self.cleanup()
 

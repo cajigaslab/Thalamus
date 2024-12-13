@@ -237,7 +237,7 @@ async def main():
 
     _ = QApplication(sys.argv)
 
-    thread = ThalamusThread('localhost:50050')
+    thread = ThalamusThread(args.address)
     task = await thread.async_start()
     try:
 
