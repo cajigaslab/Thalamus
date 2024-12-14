@@ -263,6 +263,7 @@ class TaskContext(TaskContextProtocol):
     self.running = False
     self.servicer = servicer
     self.stub = stub
+    self.stim_streams: typing.Dict[str, typing.Tuple[IterableQueue, typing.AsyncIterable[thalamus_pb2.StimResponse]]] = {}
     self.log_queue = IterableQueue()
     self.log_stream = stub.log(self.log_queue)
     self.task_config = ObservableDict({})
@@ -295,6 +296,25 @@ class TaskContext(TaskContextProtocol):
 
   async def log(self, text: str):
     await self.log_queue.put(thalamus_pb2.Text(text=text,time=time.perf_counter_ns()))
+
+  async def get_stim_stream(self, name: str) -> typing.Tuple[IterableQueue, typing.AsyncIterable[thalamus_pb2.StimResponse]]:
+    result = self.stim_streams.get(name, None)
+    if result is None:
+      input = IterableQueue()
+      output = self.stub.stim(input)
+      await input.put(thalamus_pb2.StimRequest(node=thalamus_pb2.NodeSelector(name=name)))
+      result = input, output
+      self.stim_streams[name] = result
+    return result
+
+  async def arm_stim(self, name: str, stim: thalamus_pb2.StimDeclaration):
+    input, output = await self.get_stim_stream(name)
+    await input.put(thalamus_pb2.StimRequest(stim=stim))
+    await input.put(thalamus_pb2.StimRequest(arm=stim.id))
+
+  async def start_stim(self, name: str, stim: int):
+    input, output = await self.get_stim_stream(name)
+    await input.put(thalamus_pb2.StimRequest(trigger=stim))
 
   @property
   def behav_result(self) -> typing.Dict[str, typing.Any]:

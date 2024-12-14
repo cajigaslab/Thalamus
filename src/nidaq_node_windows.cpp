@@ -603,7 +603,11 @@ namespace thalamus {
       if(source == stims_state.get()) {
         auto key_int = std::get<long long>(k);
         if(std::holds_alternative<std::string>(v)) {
-          stims[key_int] = std::get<std::string>(v);
+          auto encoded = std::get<std::string>(v);
+          auto binary = base64_decode(encoded);
+          thalamus_grpc::StimDeclaration declaration;
+          declaration.ParseFromString(binary);
+          stims[key_int] = declaration;
         } else {
           stims.erase(key_int);
         }
@@ -729,11 +733,31 @@ namespace thalamus {
 
     TaskHandle stim_task = nullptr;
     int armed_stim = -1;
-    thalamus::map<int, std::string> stims;
-    thalamus_grpc::StimResponse declare_stim(const thalamus_grpc::StimDeclaration& declaration) {
+    thalamus::map<int, thalamus_grpc::StimDeclaration> stims;
+    thalamus_grpc::StimResponse declare_stim(thalamus_grpc::StimDeclaration&& declaration) {
+      if(declaration.has_pulse()) {
+        thalamus_grpc::AnalogResponse wave;
+        for(auto& p : declaration.pulse()) {
+          wave.sample_intervals.push_back(1000000)
+          auto previous_size = wave.data().size()
+          wave.data().resize(wave.data().size() + p.duration_ns()/1000000 + 1, p.amplitude());
+          wave.data().back() = 0;
+          wave.spans().emplace_back();
+          wave.spans().back().set_begin(previous_size);
+          wave.spans().back().set_end(wave.data());
+          wave.spans().back().set_name(p.name());
+        }
+        *declaration.mutable_data() = wave;
+      }
       THALAMUS_LOG(info) << "Declaring stim";
       thalamus_grpc::StimResponse response;
       auto& error = *response.mutable_error();
+
+      if(!declaration.save()) {
+        stims[declaration.id()] = declaration;
+        return response;
+      }
+
       if(!stims_state) {
         error.set_code(1);
         error.set_message("Not ready, try again later");
@@ -964,7 +988,7 @@ namespace thalamus {
   std::future<thalamus_grpc::StimResponse> NidaqOutputNode::stim(thalamus_grpc::StimRequest&& request) {
     std::promise<thalamus_grpc::StimResponse> response;
     if(request.has_declaration()) {
-      response.set_value(impl->declare_stim(request.declaration()));
+      response.set_value(impl->declare_stim(std::move(request.declaration())));
     } else if (request.has_arm()) {
       response.set_value(impl->arm_stim(request.arm()));
     } else if (request.has_trigger()) {

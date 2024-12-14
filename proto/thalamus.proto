@@ -37,10 +37,18 @@ message Error {
   string message = 2;
 }
 
+message Pulse {
+  double amplitude = 1;
+  uint64 duration_ns = 2;
+  string channel = 3;
+}
+
 message StimDeclaration {
   AnalogResponse data = 1;
+  repeated Pulse pulse = 4;
   string trigger = 2;
   uint32 id = 3;
+  bool save = 5;
 }
 
 message StimRequest {
