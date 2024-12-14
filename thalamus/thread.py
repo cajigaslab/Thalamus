@@ -51,13 +51,13 @@ class ThalamusThread:
     self.next_id += 1
     self.pending_callbacks[transaction.id] = callback
 
-    asyncio.create_task(self.queue.put(transaction))
+    asyncio.get_event_loop().create_task(self.queue.put(transaction))
 
     return True
 
   async def __async_main(self):
-    self.loop = asyncio.get_running_loop()
     try:
+      self.loop = asyncio.get_event_loop()
       async with grpc.aio.insecure_channel(self.address) as channel:
         await channel.channel_ready()
 
@@ -147,7 +147,7 @@ class ThalamusThread:
 
   async def async_start(self):
     self.running = True
-    task = asyncio.create_task(self.__async_main())
+    task = asyncio.get_event_loop().create_task(self.__async_main())
     async with self.async_condition:
       await self.async_condition.wait_for(lambda: self.stub is not None)
     return task

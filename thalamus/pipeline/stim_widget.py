@@ -8,7 +8,6 @@ import traceback
 import threading
 import multiprocessing
 
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 from thalamus.qt import *
 
@@ -261,7 +260,6 @@ class StimWidget(QWidget):
     view.clicked.connect(on_retrieve)
 
   def closeEvent(self, e):
-    self.cleanup()
     print('STIMCLOSE')
     self.running = False
     print(1)

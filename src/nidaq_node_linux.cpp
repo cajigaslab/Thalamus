@@ -1,4 +1,4 @@
-#include "boost/asio.hpp"
+#include "thalamus_asio.hpp"
 #include <nidaq_node.hpp>
 #include <regex>
 #include <absl/strings/numbers.h>
@@ -553,5 +553,12 @@ namespace thalamus {
     return true;
   }
 
+  thalamus_grpc::StimResponse NidaqOutputNode::stim(const thalamus_grpc::StimRequest&) {
+    THALAMUS_ASSERT(false, "Unimplemented")
+    thalamus_grpc::StimResponse response;
+    return response;
+  }
+
   size_t NidaqNode::modalities() const { return infer_modalities<NidaqNode>(); }
+  size_t NidaqOutputNode::modalities() const { return infer_modalities<NidaqOutputNode>(); }
 }
