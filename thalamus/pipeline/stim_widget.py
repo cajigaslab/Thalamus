@@ -260,7 +260,6 @@ class StimWidget(QWidget):
     view.clicked.connect(on_retrieve)
 
   def closeEvent(self, e):
-    self.cleanup()
     print('STIMCLOSE')
     self.running = False
     print(1)

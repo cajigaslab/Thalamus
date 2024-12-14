@@ -921,7 +921,7 @@ namespace thalamus {
       }
 
       if (digital) {
-          auto num_channels = std::min(_num_channels, digital_values.size());
+          auto num_channels = std::min(_num_channels, size_t(node->num_channels()));
           for (auto i = 0ull; i < num_channels; ++i) {
               auto node_data = node->data(i);
               if (node_data.empty()) {
@@ -933,7 +933,7 @@ namespace thalamus {
           THALAMUS_ASSERT(status >= 0, "DAQmxWriteDigitalLines failed: %d", status);
       }
       else {
-          auto num_channels = std::min(_num_channels, analog_values.size());
+          auto num_channels = std::min(_num_channels, size_t(node->num_channels()));
           for (auto i = 0ull; i < num_channels; ++i) {
               auto node_data = node->data(i);
               if (node_data.empty()) {
