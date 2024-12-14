@@ -73,18 +73,50 @@ struct RemoteNode::Impl {
     }
   }
 
+  enum StreamState {
+    ANALOG_CONNECT,
+    XSENS_CONNECT,
+    ANALOG_READ,
+    XSENS_READ,
+    PING_CONNECT,
+    PING,
+    PONG,
+    ANALOG_FINISH,
+    XSENS_FINISH,
+    PING_FINISH,
+    STIM_CONNECT,
+    STIM_NODE_WRITE,
+    STIM_READ
+  };
+  thalamus_grpc::StimRequest stim_request;
+  std::list<thalamus_grpc::StimRequest> stim_queue;
+  std::unique_ptr<::grpc::ClientAsyncReaderWriter< ::thalamus_grpc::StimRequest, ::thalamus_grpc::StimResponse>> stim_stream;
+  bool stim_ready = false;
+  std::list<std::promise<thalamus_grpc::StimResponse>> stim_promise_queue;
+
+  std::future<thalamus_grpc::StimResponse> queue_stim(thalamus_grpc::StimRequest&& request) {
+    stim_queue.emplace_back(std::move(request));
+    stim_promise_queue.emplace_back();
+    return stim_promise_queue.back().get_future();
+  }
+
+  void send_stim() {
+    if(stim_ready && !stim_queue.empty()) {
+      stim_request = std::move(stim_queue.front());
+      stim_queue.pop_front();
+      stim_stream->Write(stim_request, reinterpret_cast<void*>(STIM_NODE_WRITE));
+      stim_ready = false;
+    }
+  }
+
   void grpc_target(std::unique_ptr<thalamus_grpc::Thalamus::Stub>&& stub, std::string node, std::chrono::milliseconds ping_interval, long long probe_size) {
     tracing::SetCurrentThreadName("Remote Node GRPC");
-    const size_t ANALOG_CONNECT = 1;
-    const size_t XSENS_CONNECT = 2;
-    const size_t ANALOG_READ = 3;
-    const size_t XSENS_READ = 4;
-    const size_t PING_CONNECT = 5;
-    const size_t PING = 6;
-    const size_t PONG = 7;
-    const size_t ANALOG_FINISH = 8;
-    const size_t XSENS_FINISH = 9;
-    const size_t PING_FINISH = 10;
+    {
+      std::unique_lock<std::mutex> lock(mutex);
+      stim_ready = false;
+      stim_queue.clear();
+      stim_promise_queue.clear();
+    }
 
     std::string probe_payload(probe_size, 0);
     for(auto i = 0ll;i < probe_size;++i) {
@@ -96,6 +128,7 @@ struct RemoteNode::Impl {
     grpc::ClientContext analog_context;
     grpc::ClientContext xsens_context;
     grpc::ClientContext ping_context;
+    grpc::ClientContext stim_context;
     thalamus_grpc::NodeSelector selector;
     selector.set_name(node);
 
@@ -103,11 +136,13 @@ struct RemoteNode::Impl {
     *analog_request.mutable_node() = selector;
     auto analog_stream = stub->Asyncanalog(&analog_context, analog_request, queue.get(), reinterpret_cast<void*>(ANALOG_CONNECT));
     auto xsens_stream = stub->Asyncxsens(&xsens_context, selector, queue.get(), reinterpret_cast<void*>(XSENS_CONNECT));
+    stim_stream = stub->Asyncstim(&stim_context, queue.get(), reinterpret_cast<void*>(STIM_CONNECT));
     auto ping_stream = stub->Asyncping(&ping_context, queue.get(), reinterpret_cast<void*>(PING_CONNECT));
 
     thalamus_grpc::AnalogResponse analog_response;
     thalamus_grpc::XsensResponse xsens_response;
     thalamus_grpc::Ping ping;
+    thalamus_grpc::StimResponse stim_response;
     ping.set_id(0);
     ping.mutable_payload()->assign(probe_payload);
 
@@ -180,6 +215,32 @@ struct RemoteNode::Impl {
         case PING_CONNECT:
           ping_ready = true;
           ping_stream->Read(&pong, reinterpret_cast<void*>(PONG));
+          break;
+        case STIM_CONNECT:
+          {
+            std::lock_guard<std::mutex> lock(mutex);
+            stim_ready = true;
+            thalamus_grpc::StimRequest request;
+            *request.mutable_node() = selector;
+            queue_stim(std::move(request));
+            send_stim();
+            stim_stream->Read(&stim_response, reinterpret_cast<void*>(STIM_READ));
+          }
+          break;
+        case STIM_NODE_WRITE:
+          {
+            std::lock_guard<std::mutex> lock(mutex);
+            stim_ready = true;
+            send_stim();
+          }
+          break;
+        case STIM_READ:
+          {
+            std::lock_guard<std::mutex> lock(mutex);
+            stim_promise_queue.front().set_value(std::move(stim_response));
+            stim_promise_queue.pop_front();
+            stim_stream->Read(&stim_response, reinterpret_cast<void*>(STIM_READ));
+          }
           break;
         case PING:
           ping_ready = true;
@@ -306,10 +367,22 @@ struct RemoteNode::Impl {
     analog_context.TryCancel();
     xsens_context.TryCancel();
     ping_context.TryCancel();
+    stim_context.TryCancel();
+    {
+      std::unique_lock<std::mutex> lock(mutex);
+      stim_ready = false;
+      stim_queue.clear();
+      for(auto& p : stim_promise_queue) {
+        p.set_value(thalamus_grpc::StimResponse());
+      }
+      stim_promise_queue.clear();
+    }
+
     queue->Shutdown();
     size_t tag;
     auto ok = false;
     while(queue->Next(reinterpret_cast<void**>(&tag), &ok)) {}
+    stim_stream.reset();
     //auto ok_status = ::grpc::Status::OK;
     //THALAMUS_LOG(info) << "Finishing streams";
     //analog_stream->Finish(&ok_status, reinterpret_cast<void*>(ANALOG_FINISH));
@@ -440,6 +513,13 @@ bool RemoteNode::has_analog_data() const {
 
 std::span<const std::string> RemoteNode::get_recommended_channels() const {
   return std::span<const std::string>(impl->names.begin(), impl->names.end());
+}
+
+std::future<thalamus_grpc::StimResponse> RemoteNode::stim(thalamus_grpc::StimRequest&& request) {
+  std::lock_guard<std::mutex> lock(impl->mutex);
+  auto result = impl->queue_stim(std::move(request));
+  impl->send_stim();
+  return result;
 }
 
 size_t RemoteNode::modalities() const { return infer_modalities<RemoteNode>(); }

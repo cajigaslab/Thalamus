@@ -961,18 +961,18 @@ namespace thalamus {
     return prepare_nidaq();
   }
 
-  thalamus_grpc::StimResponse NidaqOutputNode::stim(const thalamus_grpc::StimRequest& request) {
-    thalamus_grpc::StimResponse response;
+  std::future<thalamus_grpc::StimResponse> NidaqOutputNode::stim(thalamus_grpc::StimRequest&& request) {
+    std::promise<thalamus_grpc::StimResponse> response;
     if(request.has_declaration()) {
-      response = impl->declare_stim(request.declaration());
+      response.set_value(impl->declare_stim(request.declaration()));
     } else if (request.has_arm()) {
-      response = impl->arm_stim(request.arm());
+      response.set_value(impl->arm_stim(request.arm()));
     } else if (request.has_trigger()) {
-      response = impl->trigger_stim(request.trigger());
+      response.set_value(impl->trigger_stim(request.trigger()));
     } else if (request.has_retrieve()) {
-      response = impl->retrieve_stim(request.retrieve());
+      response.set_value(impl->retrieve_stim(request.retrieve()));
     }
-    return response;
+    return response.get_future();
   }
 
   size_t NidaqNode::modalities() const { return infer_modalities<NidaqNode>(); }

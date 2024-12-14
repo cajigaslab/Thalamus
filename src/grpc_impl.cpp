@@ -1844,6 +1844,10 @@ namespace thalamus {
         continue;
       }
 
+      thalamus_grpc::StimResponse response;
+      response.set_id(request.id());
+      reader->Write(response);
+
       bool first = true;
       while(reader->Read(&request)) {
         if(request.has_node()) {
@@ -1851,16 +1855,19 @@ namespace thalamus {
           break;
         }
 
-        std::promise<thalamus_grpc::StimResponse> promise;
+        std::promise<void> promise;
         auto future = promise.get_future();
+        std::future<thalamus_grpc::StimResponse> inner_future;
+        auto id = request.id();
         boost::asio::post(impl->io_context, [&] {
-          auto response = node->stim(request);
-          promise.set_value(response);
+          inner_future = node->stim(std::move(request));
+          promise.set_value();
         });
         while (future.wait_for(1s) == std::future_status::timeout && !context->IsCancelled()) {}
         if(!context->IsCancelled()) {
-          auto response = future.get();
-          response.set_id(request.id());
+          future.get();
+          auto response = inner_future.get();
+          response.set_id(id);
           reader->Write(response);
         }
       }

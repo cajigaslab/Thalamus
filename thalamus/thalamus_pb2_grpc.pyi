@@ -1,9 +1,12 @@
 import typing
 
-from . import thalamus_pb2
+import grpc.aio
+
 from . import util_pb2
+from . import thalamus_pb2
 
 class ThalamusStub:
+  def __init__(self, channel: grpc.aio.Channel) -> None: ...
   def channel_info(self, request: thalamus_pb2.AnalogRequest) -> typing.AsyncIterable[thalamus_pb2.AnalogResponse]: ...
   def analog(self, request: thalamus_pb2.AnalogRequest) -> typing.AsyncIterable[thalamus_pb2.AnalogResponse]: ...
   def image(self, request: thalamus_pb2.ImageRequest) -> typing.AsyncIterable[thalamus_pb2.Image]: ...

@@ -180,6 +180,7 @@ def create_alpha_omega_widget(node: ObservableDict, stub: thalamus_pb2_grpc.Thal
 
 FACTORIES = {
   'NONE': Factory(None, []),
+  'STIM_PRINTER': Factory(None, []),
   'NIDAQ': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.DOUBLE_SPINBOX, 'Sample Rate', 1000.0, []),

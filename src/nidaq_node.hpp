@@ -36,7 +36,7 @@ namespace thalamus {
     ~NidaqOutputNode();
     static std::string type_name();
 
-    thalamus_grpc::StimResponse stim(const thalamus_grpc::StimRequest&) override;
+    std::future<thalamus_grpc::StimResponse> stim(thalamus_grpc::StimRequest&&) override;
 
     static bool prepare();
     size_t modalities() const override;
