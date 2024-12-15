@@ -136,7 +136,7 @@ struct RemoteNode::Impl {
     *analog_request.mutable_node() = selector;
     auto analog_stream = stub->Asyncanalog(&analog_context, analog_request, queue.get(), reinterpret_cast<void*>(ANALOG_CONNECT));
     auto xsens_stream = stub->Asyncxsens(&xsens_context, selector, queue.get(), reinterpret_cast<void*>(XSENS_CONNECT));
-    stim_stream = stub->Asyncstim(&stim_context, queue.get(), reinterpret_cast<void*>(STIM_CONNECT));
+    //stim_stream = stub->Asyncstim(&stim_context, queue.get(), reinterpret_cast<void*>(STIM_CONNECT));
     auto ping_stream = stub->Asyncping(&ping_context, queue.get(), reinterpret_cast<void*>(PING_CONNECT));
 
     thalamus_grpc::AnalogResponse analog_response;
