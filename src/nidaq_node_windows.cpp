@@ -637,7 +637,16 @@ namespace thalamus {
           source_connection = locked_source->ready.connect(std::bind(&Impl::on_data, this, _1, analog_node.get()));
         });
       } else if (key_str == "Running" || key_str == "Channel" || key_str == "Digital") {
-        running = state->at("Running");
+        bool new_running = state->at("Running");
+        {
+          std::unique_lock<std::mutex> lock(mutex);
+          running = false;
+          condition_variable.notify_all();
+        }
+
+        if (nidaq_thread.joinable()) {
+          nidaq_thread.join();
+        }
         if (task_handle != nullptr) {
           daqmxapi.DAQmxStopTask(task_handle);
           daqmxapi.DAQmxClearTask(task_handle);
@@ -645,7 +654,7 @@ namespace thalamus {
           //timer.cancel();
         }
 
-        if (running) {
+        if (new_running) {
           buffers.clear();
           counter = 0;
           //started = false;
@@ -658,8 +667,7 @@ namespace thalamus {
           buffer_size = static_cast<size_t>(16 * _num_channels);
           std::function<void()> reader;
           running = true;
-          analog_values.resize(_num_channels, 0);
-          digital_values.resize(_num_channels, false);
+          nidaq_thread = std::thread(std::bind(&Impl::nidaq_target, this));
 
           auto daq_error = daqmxapi.DAQmxCreateTask(name.c_str(), &task_handle);
           if(daq_error < 0) {
@@ -711,6 +719,11 @@ namespace thalamus {
           //if (reader) {
           //  on_timer(reader, polling_interval, boost::system::error_code());
           //}
+        }
+        else {
+          if (nidaq_thread.joinable()) {
+            nidaq_thread.join();
+          }
         }
       }
     }
@@ -920,30 +933,28 @@ namespace thalamus {
         return;
       }
 
-      if (digital) {
-          auto num_channels = std::min(_num_channels, size_t(node->num_channels()));
-          for (auto i = 0ull; i < num_channels; ++i) {
-              auto node_data = node->data(i);
-              if (node_data.empty()) {
-                  continue;
-              }
-              digital_values[i] = node_data.back() > .5;
-          }
-          auto status = daqmxapi.DAQmxWriteDigitalLines(task_handle, 1, true, -1, DAQmx_Val_GroupByChannel, digital_values.data(), nullptr, nullptr);
-          THALAMUS_ASSERT(status >= 0, "DAQmxWriteDigitalLines failed: %d", status);
+      _time = node->time();
+      {
+        std::lock_guard<std::mutex> lock(mutex);
+        //buffers.assign(node->num_channels(), std::vector<double>());
+        _data.clear();
+        buffers.clear();
+        _sample_intervals.clear();
+        int data_count = 0;
+        auto num_channels = std::min(int(_num_channels), node->num_channels());
+        for (auto i = 0; i < num_channels; ++i) {
+          auto data = node->data(i);
+          data_count += data.size();
+          buffers.emplace_back(data.begin(), data.end());
+          _data.push_back(data);
+          _sample_intervals.emplace_back(node->sample_interval(i));
+        }
+        if(data_count == 0) {
+          return;
+        }
+        new_buffers = true;
       }
-      else {
-          auto num_channels = std::min(_num_channels, size_t(node->num_channels()));
-          for (auto i = 0ull; i < num_channels; ++i) {
-              auto node_data = node->data(i);
-              if (node_data.empty()) {
-                  continue;
-              }
-              analog_values[i] = node_data.back();
-          }
-          auto status = daqmxapi.DAQmxWriteAnalogF64(task_handle, 1, true, -1, DAQmx_Val_GroupByChannel, analog_values.data(), nullptr, nullptr);
-          THALAMUS_ASSERT(status >= 0, "DAQmxWriteAnalogF64 failed: %d", status);
-      }
+      condition_variable.notify_all();
     }
   };
 
