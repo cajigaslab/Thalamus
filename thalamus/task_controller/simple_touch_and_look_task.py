@@ -21,6 +21,7 @@ from .widgets import Form, ListAsTabsWidget
 from .util import wait_for, wait_for_hold, wait_for_dual_hold, RenderOutput, animate
 from .. import task_controller_pb2
 from ..config import ObservableCollection
+from .. import thalamus_pb2
 
 LOGGER = logging.getLogger(__name__)
 
@@ -201,11 +202,6 @@ def get_start_gaze_target_index(context):
 def distance(lhs, rhs):
   return ((lhs.x() - rhs.x())**2 + (lhs.y() - rhs.y())**2)**.5
 
-async def stamp_msg(context, msg):
-  msg.header.stamp = context.ros_manager.node.node.get_clock().now().to_msg()
-  #context.pulse_digital_channel()
-  return msg
-
 def toggle_brightness(brightness):
   return 0 if brightness == 255 else 255
 
@@ -364,20 +360,20 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     failed = True
     show_start_target = False    
     context.behav_result = behav_result
-    await context.servicer.publish_state(task_controller_pb2.BehavState(state='fail'))
+    await context.log('BehavState=fail')
     state_brightness = toggle_brightness(state_brightness)
     fail_sound.play()
     context.widget.update()
           
   
   while True:
-    await context.servicer.publish_state(task_controller_pb2.BehavState(state='intertrial'))
+    await context.log('BehavState=intertrial')
     state_brightness = 0
     show_start_target = False
     context.widget.update()
     await context.sleep(config.intertrial_timeout)
 
-    await context.servicer.publish_state(task_controller_pb2.BehavState(state='start_on'))
+    await context.log('BehavState=start_on')
     state_brightness = toggle_brightness(state_brightness)
     show_start_target = True
     context.widget.update()
@@ -390,7 +386,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       context.widget.update
 
   # state: startacq
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='start_acq'))
+  await context.log('BehavState=start_acq')
   success = await wait_for_dual_hold(context, config.baseline_timeout, 
     lambda: start_target_touched, lambda: start_target_gazed, 
     config.hand_blink, config.eye_blink)    
@@ -408,16 +404,18 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   we can wait (optionally) by success_timeout or fail_timeout.
   """
   show_start_target = False
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='success'))
+  await context.log('BehavState=success')
   state_brightness = toggle_brightness(state_brightness)
   context.widget.update()
-  reward_message = RewardDeliveryCmd()
 
-  reward_message.header.stamp = context.ros_manager.node.node.get_clock().now().to_msg()
-  reward_message.on_time_ms = int(context.get_reward(all_reward_channels[final_i_touched_target]))
-  
-  print("delivering reward %d"%(reward_message.on_time_ms,) )
-  context.publish(RewardDeliveryCmd, 'deliver_reward', reward_message)
+  on_time_ms = int(context.get_reward(all_reward_channels[final_i_touched_target]))
+
+  signal = thalamus_pb2.AnalogResponse(
+      data=[5,0],
+      spans=[thalamus_pb2.Span(begin=0,end=2,name='Reward')],
+      sample_intervals=[1_000_000*on_time_ms])
+
+  await context.inject_analog('Reward', signal)
     
   success_sound.play()      
 

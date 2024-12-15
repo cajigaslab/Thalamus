@@ -45,6 +45,9 @@ namespace thalamus {
       if(!y_channel.empty()) {
         input.second = y_channel.front();
       }
+      if(input.first < -5 || input.second < -5) {
+        return;
+      }
       output.first = mat[0][0]*input.first + mat[0][1]*input.second + mat[0][2];
       output.second = mat[1][0]*input.first + mat[1][1]*input.second + mat[1][2];
       outer->ready(outer);

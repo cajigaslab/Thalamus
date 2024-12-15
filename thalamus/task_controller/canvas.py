@@ -781,31 +781,21 @@ class Canvas(QOpenGLWidget):
     """
     # TODO: check if this indexing is correct, because it seems wrong.
     try:
+      x, y = 0.0, 0.0
       async for message in messages:
-        x, y = None, None
         for span in message.spans:
-          if span.name == self.x_channel and span.begin < span.end:
+          if span.name == 'X' and span.begin < span.end:
             x = message.data[span.end-1]
-          elif span.name == self.y_channel and span.begin < span.end:
+          elif span.name == 'Y' and span.begin < span.end:
             y = message.data[span.end-1]
-        assert x is not None and y is not None
         
         voltage = QPointF(x, y)
         if voltage.x() < -5 or voltage.y() < -5:
           self.on_touch(QPoint(-1, -1))
           continue
         self.last_voltage = voltage
-        if self.input_config.touch_calibration.calibrating_touch:
-          # self.touch_target_voltage[-1][0] += voltage.x()
-          # self.touch_target_voltage[-1][1] += voltage.y()
-          # self.touch_target_voltage_count += 1
 
-          self.input_config.touch_calibration.touch_target_voltage[-1][0] = voltage.x()
-          self.input_config.touch_calibration.touch_target_voltage[-1][1] = voltage.y()
-          self.input_config.touch_calibration.touch_target_voltage_count = 1
-          continue
-
-        global_point = self.input_config.touch_calibration.touch_transform.map(voltage)
+        global_point = voltage
         local_point = self.mapFromGlobal(QPoint(int(global_point.x()), int(global_point.y())))
 
         self.on_touch(local_point)

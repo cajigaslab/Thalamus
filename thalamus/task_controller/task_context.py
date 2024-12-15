@@ -16,7 +16,12 @@ import os
 import time
 import threading
 import grpc
-import contextvars
+try:
+  import contextvars
+  HAS_CONTEXTVARS = True
+except ImportError:
+  HAS_CONTEXTVARS = False
+
 
 try:    
   import comedi.comedi as c
@@ -75,6 +80,8 @@ class Sleeper():
     Sleeps until duration time has passed
     """
     #pdb.set_trace()
+    if not HAS_CONTEXTVARS:
+      return self.sleep_simple(duration)
 
     condition = threading.Condition()
     def inner() -> None:
@@ -93,6 +100,23 @@ class Sleeper():
 
     if not self.running:
       task.cancel()
+
+    return task
+
+  def sleep_simple(self, duration: datetime.timedelta) -> 'typing.Awaitable[None]':
+    """
+    Sleeps until duration time has passed
+    """
+    #pdb.set_trace()
+    async def inner() -> None:
+      await self.asyncio_sleep(duration.total_seconds())
+      self.tasks.remove(task)
+
+    task = asyncio.get_event_loop().create_task(inner())
+    if not self.running:
+      task.cancel()
+    else:
+      self.tasks.append(task)
 
     return task
 
@@ -265,6 +289,7 @@ class TaskContext(TaskContextProtocol):
     self.stub = stub
     self.log_queue = IterableQueue()
     self.log_stream = stub.log(self.log_queue)
+    self.inject_analog_streams: typing.Dict[str, IterableQueue] = {}
     self.task_config = ObservableDict({})
     self.channels: typing.Mapping[str, grpc.aio.Channel] = {}
     self.task: asyncio.tasks.Task[typing.Any] = create_task_with_exc_handling(asyncio.sleep(0))
@@ -293,8 +318,21 @@ class TaskContext(TaskContextProtocol):
     else:
       self.use_comedi = False
 
+  async def get_inject_stream(self, name: str):
+    queue = self.inject_analog_streams.get(name, None)
+    if queue is None:
+      queue = IterableQueue()
+      self.stub.inject_analog(queue)
+      await queue.put(thalamus_pb2.InjectAnalogRequest(node=name))
+      self.inject_analog_streams[name] = queue
+    return queue
+
+  async def inject_analog(self, name: str, payload: thalamus_pb2.AnalogResponse):
+    queue = await self.get_inject_stream(name)
+    await queue.put(thalamus_pb2.InjectAnalogRequest(signal=payload))
+
   async def log(self, text: str):
-    await self.log_queue.put(thalamus_pb2.Text(text=text,time=time.perf_counter_ns()))
+    await self.log_queue.put(thalamus_pb2.Text(text=text,time=int(time.perf_counter()*1e9)))
 
   @property
   def behav_result(self) -> typing.Dict[str, typing.Any]:
