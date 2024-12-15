@@ -892,7 +892,11 @@ namespace thalamus {
         }
       }
 
-      daq_error = daqmxapi.DAQmxRegisterDoneEvent(stim_task,0,DoneCallback, reinterpret_cast<void*>(declaration.trigger().empty() ? 0 : 1));
+      char* restart = nullptr;
+      if(!declaration.trigger().empty()) {
+        ++restart;
+      }
+      daq_error = daqmxapi.DAQmxRegisterDoneEvent(stim_task,0,DoneCallback, restart);
       if(daq_error < 0) {
         daqmxapi.DAQmxClearTask(stim_task);
         stim_task = nullptr;

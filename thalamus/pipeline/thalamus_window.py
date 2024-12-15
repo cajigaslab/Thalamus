@@ -1107,14 +1107,19 @@ class PlotStack(QWidget):
 
   async def __stream_task(self, stream: typing.AsyncIterable[thalamus_pb2.GraphResponse]):
     plots = []
-    async for response in stream:
-      for i, span in enumerate(response.spans):
-        if len(plots) == i:
-          new_plot = Plot(self.node, IterableQueue(), self.bin_ns)
-          plots.append(new_plot)
-          self.__layout.addWidget(new_plot)
-        
-        await plots[i].stream.put(GraphResponsePart(response, i))
+    try:
+      async for response in stream:
+        for i, span in enumerate(response.spans):
+          if len(plots) == i:
+            new_plot = Plot(self.node, IterableQueue(), self.bin_ns)
+            plots.append(new_plot)
+            self.__layout.addWidget(new_plot)
+          
+          await plots[i].stream.put(GraphResponsePart(response, i))
+    except asyncio.CancelledError:
+      pass
+    except grpc.aio.AioRpcError:
+      pass
 
 class Plot(QWidget):
   position = None
