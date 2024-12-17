@@ -25,6 +25,7 @@ from . import task_context as task_context_module
 from . import tasks
 from . import window as task_window
 from ..config import *
+from .. import process
 
 from pkg_resources import resource_string, resource_filename
 
@@ -185,7 +186,7 @@ async def async_main() -> None:
     (screen_geometry.height()-controller.height()) // 2 + 50)
   controller.show()
 
-  thalamus = ThalamusWindow(config, stub, done_future)
+  thalamus = ThalamusWindow(f'localhost:{arguments.port}', config, stub, done_future)
   await thalamus.load()
   thalamus.resize(384, 768)
   thalamus.move(100, 100)
@@ -228,6 +229,7 @@ def main() -> None:
     if not UNHANDLED_EXCEPTION:
       raise
   finally:
+    process.cleanup()
     if UNHANDLED_EXCEPTION:
       raise UNHANDLED_EXCEPTION[0] from None
 

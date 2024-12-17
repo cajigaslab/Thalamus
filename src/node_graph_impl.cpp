@@ -23,6 +23,8 @@
 #include <sync_node.hpp>
 #include <aruco_node.hpp>
 #include <video_node.hpp>
+#include <touchscreen_node.hpp>
+#include <stim_printer_node.hpp>
 
 namespace thalamus {
   using namespace std::chrono_literals;
@@ -94,6 +96,8 @@ namespace thalamus {
     {"INTAN", new NodeFactory<IntanNode>()},
     {"SPIKEGLX", new NodeFactory<SpikeGlxNode>()},
     {"SYNC", new NodeFactory<SyncNode>()},
+    {"TOUCH_SCREEN", new NodeFactory<TouchScreenNode>()},
+    {"STIM_PRINTER", new NodeFactory<StimPrinterNode>()},
     {"ARUCO", new NodeFactory<ArucoNode>()}
   };
 

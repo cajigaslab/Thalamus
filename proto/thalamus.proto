@@ -29,6 +29,33 @@ service Thalamus {
   rpc get_modalities(NodeSelector) returns (ModalitiesMessage) {}
   rpc ping(stream Ping) returns (stream Pong) {}
   rpc inject_text(stream InjectTextRequest) returns (stream Pong) {}
+  rpc stim(stream StimRequest) returns (stream StimResponse) {}
+}
+
+message Error {
+  int32 code = 1;
+  string message = 2;
+}
+
+message StimDeclaration {
+  AnalogResponse data = 1;
+  string trigger = 2;
+  uint32 id = 3;
+}
+
+message StimRequest {
+  NodeSelector node = 1;
+  StimDeclaration declaration = 2;
+  optional uint32 arm = 3;
+  optional uint32 trigger = 4;
+  optional uint32 retrieve = 5;
+  uint32 id = 6;
+}
+
+message StimResponse {
+  Error error = 1;
+  StimDeclaration declaration = 2;
+  uint32 id = 3;
 }
 
 message ObservableReadRequest {

@@ -192,7 +192,7 @@ class BrowserReflectingPainter(QPainter):
       'args': [rect.x(), rect.y(), rect.width(), rect.height(), id(image)]
     })
 
-class CanvasPainter(BrowserReflectingPainter):
+class CanvasPainter(QPainter):
   """
   Extends QPainter with ability to selectively render to subject or operator views.  Also provides addition functions
   for OpenGL rendering
@@ -441,13 +441,6 @@ class Canvas(QOpenGLWidget):
     super().__init__()
     self.config = config
 
-    if 'touch_config' not in config:
-      config['touch_config'] = {
-        'selected_node': '',
-        'x': '',
-        'y': '',
-      }
-    self.touch_config = config['touch_config']
     self.thalamus = thalamus
 
     self.sent_images = set()
@@ -463,12 +456,10 @@ class Canvas(QOpenGLWidget):
 
     self.current_output_mask = RenderOutput.SUBJECT
 
-    self.touch_stream = None
-    self.touch_config.add_observer(self.on_touch_config_change, lambda: isdeleted(self))
-    self.on_touch_config_change(None, None, None)
-
     request = thalamus_pb2.AnalogRequest(node=thalamus_pb2.NodeSelector(type='OCULOMATIC'), channel_names=['X','Y'])
     create_task_with_exc_handling(self.on_ros_gaze(thalamus.analog(request)))
+    request = thalamus_pb2.AnalogRequest(node=thalamus_pb2.NodeSelector(type='TOUCH_SCREEN'), channel_names=['X','Y'])
+    create_task_with_exc_handling(self.on_ros_touch(thalamus.analog(request)))
 
     self.handles = Handles()
     if port:
@@ -483,21 +474,6 @@ class Canvas(QOpenGLWidget):
     self.opengl_config: typing.Optional[CanvasOpenGLConfig] = None
 
     self.handles.clear_loop = asyncio.get_event_loop().create_task(self.__clear_periodically())
-
-  def on_touch_config_change(self, action, key, value):
-    node = self.touch_config['selected_node']
-    self.x_channel = self.touch_config['x']
-    self.y_channel = self.touch_config['y']
-
-    if not all([node, self.x_channel, self.y_channel]) or self.x_channel == self.y_channel:
-      return
-
-    if self.touch_stream:
-      self.touch_stream.cancel()
-
-    request = thalamus_pb2.AnalogRequest(node=thalamus_pb2.NodeSelector(name=node), channel_names=[self.x_channel, self.y_channel])
-    self.touch_stream = self.thalamus.analog(request)
-    create_task_with_exc_handling(self.on_ros_touch(self.touch_stream))
 
   def set_task_context(self, task_context: TaskContextProtocol):
     self.task_context = task_context
@@ -619,16 +595,12 @@ class Canvas(QOpenGLWidget):
     '''
     assert self.opengl_config, 'opengl_config is None'
 
-    if self.input_config.touch_calibration.calibrating_touch:
-      self.paint_touch_calibration()
-      return
-
     locations = GlslLocations(0, 1, self.opengl_config.color_loc, self.opengl_config.mv_matrix_loc,
                               self.opengl_config.proj_matrix_loc, self.opengl_config.normal_matrix_loc)
     geometry = qt_screen_geometry()
     painter = CanvasPainter(self.current_output_mask,
                             OpenGLConfig(self.opengl_config.proj, self.opengl_config.program, locations,
-                                         self.opengl_config.vbo_cache), self.send, self)
+                                         self.opengl_config.vbo_cache), self)
     with painter:
       painter.fillRect(QRect(0, 0, 4000, 4000), QColor(0, 0, 0))
       self.listeners.renderer(painter)
@@ -809,31 +781,21 @@ class Canvas(QOpenGLWidget):
     """
     # TODO: check if this indexing is correct, because it seems wrong.
     try:
+      x, y = 0.0, 0.0
       async for message in messages:
-        x, y = None, None
         for span in message.spans:
-          if span.name == self.x_channel and span.begin < span.end:
+          if span.name == 'X' and span.begin < span.end:
             x = message.data[span.end-1]
-          elif span.name == self.y_channel and span.begin < span.end:
+          elif span.name == 'Y' and span.begin < span.end:
             y = message.data[span.end-1]
-        assert x is not None and y is not None
         
         voltage = QPointF(x, y)
         if voltage.x() < -5 or voltage.y() < -5:
           self.on_touch(QPoint(-1, -1))
           continue
         self.last_voltage = voltage
-        if self.input_config.touch_calibration.calibrating_touch:
-          # self.touch_target_voltage[-1][0] += voltage.x()
-          # self.touch_target_voltage[-1][1] += voltage.y()
-          # self.touch_target_voltage_count += 1
 
-          self.input_config.touch_calibration.touch_target_voltage[-1][0] = voltage.x()
-          self.input_config.touch_calibration.touch_target_voltage[-1][1] = voltage.y()
-          self.input_config.touch_calibration.touch_target_voltage_count = 1
-          continue
-
-        global_point = self.input_config.touch_calibration.touch_transform.map(voltage)
+        global_point = voltage
         local_point = self.mapFromGlobal(QPoint(int(global_point.x()), int(global_point.y())))
 
         self.on_touch(local_point)
@@ -910,45 +872,6 @@ class Canvas(QOpenGLWidget):
     Progresses touch calibration on key presses
     '''
     self.listeners.key_release_handler(e)
-    touch_calibration = self.input_config.touch_calibration
-    print(e, touch_calibration.calibrating_touch, touch_calibration.touch_target_voltage_count)
-    if touch_calibration.calibrating_touch and touch_calibration.touch_target_voltage_count:
-      touch_calibration.touch_target_voltage[-1][0] /= touch_calibration.touch_target_voltage_count
-      touch_calibration.touch_target_voltage[-1][1] /= touch_calibration.touch_target_voltage_count
-
-      LOGGER.info("x voltage: %f", touch_calibration.touch_target_voltage[-1][0])
-      LOGGER.info("y voltage: %f", touch_calibration.touch_target_voltage[-1][1])
-
-
-      point = QPoint(touch_calibration.touch_targets[touch_calibration.touch_target_index][0],
-                                  touch_calibration.touch_targets[touch_calibration.touch_target_index][1])
-      point = self.mapFromGlobal(point)
-
-      self.input_config.touch_path.addEllipse(QPointF(point), 2, 2)
-      touch_calibration.touch_target_index += 1
-
-      if touch_calibration.touch_target_index < len(touch_calibration.touch_targets):
-        touch_calibration.touch_target_voltage.append([0, 0, 1])
-        touch_calibration.touch_target_voltage_count = 0
-      else:
-        targets = numpy.array(touch_calibration.touch_targets).transpose()
-        voltages = numpy.array(touch_calibration.touch_target_voltage).transpose()
-        transform = numpy.linalg.lstsq(voltages.T, targets.T, rcond=None)[0].T # type: ignore
-
-        touch_calibration.touch_transform.setMatrix(
-          transform[0,0], transform[1,0], transform[2,0],
-          transform[0,1], transform[1,1], transform[2,1],
-          transform[0,2], transform[1,2], transform[2,2]
-        )
-
-        touch_transform = touch_calibration.touch_transform
-        self.config['touch_transform'] = {
-          'm11': touch_transform.m11(), 'm12': touch_transform.m12(), 'm13': touch_transform.m13(),
-          'm21': touch_transform.m21(), 'm22': touch_transform.m22(), 'm23': touch_transform.m23(),
-          'm31': touch_transform.m31(), 'm32': touch_transform.m32(), 'm33': touch_transform.m33()
-        }
-        touch_calibration.calibrating_touch = False
-      self.update()
 
   def clear_accumulation(self) -> None:
     '''
@@ -1006,59 +929,3 @@ class Canvas(QOpenGLWidget):
 
       create_task_with_exc_handling(self.on_ros_gaze(async_yield(gaze_message)))
 
-  def calibrate_touch(self) -> None:
-    '''
-    Initiate touch calibration
-    '''
-    self.input_config.touch_calibration.calibrating_touch = True
-    self.input_config.touch_calibration.touch_target_index = 0
-
-    self.input_config.touch_calibration.touch_targets = [
-      [self.width()//2, self.height()//2, 1],
-      [self.width()//4, self.height()//2, 1],
-      [self.width()//2, self.height()//4, 1],
-      [self.width()//4, self.height()*3//4, 1],
-      [self.width()*3//4, self.height()*3//4, 1]
-    ]
-
-    for target in self.input_config.touch_calibration.touch_targets:
-      point = QPoint(target[0], target[1])
-      global_point = self.mapToGlobal(point)
-      target[0], target[1] = global_point.x(), global_point.y()
-
-    self.input_config.touch_calibration.touch_target_voltage = [[0, 0, 1]]
-    self.input_config.touch_calibration.touch_target_voltage_count = 0
-    self.update()
-
-  def paint_touch_calibration(self) -> None:
-    '''
-    Render the touch calibration UI
-    '''
-    painter = QPainter(self)
-    geometry = qt_screen_geometry()
-    painter.fillRect(QRect(0, 0, geometry.width(), geometry.height()), QColor(0, 0, 0))
-    point = QPoint(
-      self.input_config.touch_calibration.touch_targets[self.input_config.touch_calibration.touch_target_index][0],
-      self.input_config.touch_calibration.touch_targets[self.input_config.touch_calibration.touch_target_index][1])
-    point = self.mapFromGlobal(point)
-
-    path = QPainterPath()
-    path.moveTo(0, point.y())
-    path.lineTo(self.width(), point.y())
-    path.moveTo(point.x(), 0)
-    path.lineTo(point.x(), self.height())
-
-    pen = painter.pen()
-
-    pen.setColor(QColor(255, 0, 0))
-    painter.setPen(pen)
-    painter.drawPath(path)
-
-    pen.setColor(QColor(255, 255, 255))
-    painter.setPen(pen)
-    total_targets = len(self.input_config.touch_calibration.touch_targets)
-    painter.drawText(QRect(0, 0, self.width(), self.height()), Qt.AlignmentFlag.AlignCenter,
-      'Touch target then press any key to progress, do not move window, '
-      f'{total_targets-self.input_config.touch_calibration.touch_target_index-1} more targets')
-
-    painter.fillPath(self.input_config.touch_path, QColor(255, 0, 0))

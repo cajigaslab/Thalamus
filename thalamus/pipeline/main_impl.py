@@ -33,7 +33,7 @@ from .thalamus_window import ThalamusWindow
 from ..servicer import ThalamusServicer
 
 from ..qt import *
-
+from .. import process
 UNHANDLED_EXCEPTION: typing.List[Exception] = []
 
 def exception_handler(loop: asyncio.AbstractEventLoop, context: typing.Mapping[str, typing.Any]) -> None:
@@ -118,7 +118,7 @@ async def async_main() -> None:
 
   screen_geometry = qt_screen_geometry()
 
-  thalamus = ThalamusWindow(config, stub, done_future)
+  thalamus = ThalamusWindow(f'localhost:{arguments.port}', config, stub, done_future)
   thalamus.enable_config_menu(arguments.config)
   await thalamus.load()
   thalamus.show()
@@ -143,6 +143,9 @@ def main() -> None:
   '''
   Setup before running async_main
   '''
+  if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
   loop = asyncio.get_event_loop()
   try:
     loop.run_until_complete(async_main())
@@ -150,6 +153,7 @@ def main() -> None:
     if not UNHANDLED_EXCEPTION:
       raise
   finally:
+    process.cleanup()
     if UNHANDLED_EXCEPTION:
       raise UNHANDLED_EXCEPTION[0] from None
 

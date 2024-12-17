@@ -1,4 +1,4 @@
-import cv2
+#import cv2
 import sys
 import grpc
 import json
@@ -86,7 +86,7 @@ class ImageWidget(QWidget):
     self.move(x, y)
     self.resize(w, h)
 
-    asyncio.create_task(self.__stream_task(stream))
+    asyncio.get_event_loop().create_task(self.__stream_task(stream))
     
     self.show()
 
@@ -103,7 +103,7 @@ class ImageWidget(QWidget):
       node = self.node['name'],
       json = json.dumps(event)
     )
-    asyncio.create_task(self.stub.node_request(request))
+    asyncio.get_event_loop().create_task(self.stub.node_request(request))
 
   def keyReleaseEvent(self, a0):
     self.key_event(a0, 'keyup')
@@ -237,7 +237,7 @@ async def main():
 
     _ = QApplication(sys.argv)
 
-    thread = ThalamusThread('localhost:50050')
+    thread = ThalamusThread(args.address)
     task = await thread.async_start()
     try:
 
@@ -270,6 +270,5 @@ async def main():
     traceback.print_exc()
 
 if __name__ == '__main__':
-  asyncio.run(main())
-
-
+  loop = asyncio.get_event_loop()
+  loop.run_until_complete(main())

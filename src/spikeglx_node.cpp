@@ -4,11 +4,6 @@
 #include <map>
 #include <functional>
 #include <string>
-#include <iostream>
-#include <variant>
-#include <regex>
-#include <thread>
-//#include <plot.h>
 #include <base_node.hpp>
 #include <absl/strings/str_split.h>
 #include <state.hpp>
@@ -16,6 +11,8 @@
 #include <modalities.h>
 #include <thread_pool.hpp>
 #include <thalamus/atoi.h>
+#include <thalamus/async.hpp>
+#include <boost/exception/diagnostic_information.hpp>
 
 using namespace thalamus;
 using namespace std::chrono_literals;
@@ -64,12 +61,6 @@ struct SpikeGlxNode::Impl {
   bool queue_busy = false;
   ThreadPool& pool;
 
-  enum class FetchState {
-    READ_HEADER,
-    READ_DATA,
-    READ_OK
-  };
-
   enum class Device {
     IMEC, NI
   };
@@ -86,101 +77,521 @@ struct SpikeGlxNode::Impl {
         THALAMUS_ASSERT(false, "Invalid Device");
     }
   }
-  static const char* state_to_string(FetchState d) {
-    switch (d) {
-    case FetchState::READ_HEADER:
-      return "READ_HEADER";
-    case FetchState::READ_DATA:
-      return "READ_DATA";
-    case FetchState::READ_OK:
-      return "READ_OK";
-    default:
-      THALAMUS_ASSERT(false, "Invalid FetchState");
-    }
-  }
 
   std::vector<std::vector<double>> ni_data;
   std::vector<std::vector<std::vector<double>>> imec_data;
   std::vector<std::string> ni_names;
   std::vector<std::vector<std::string>> imec_names;
-  std::atomic_int pending_bands = 0;
   std::chrono::steady_clock::time_point fetch_start;
   double latency = 0;
   Device current_js;
   int current_ip;
 
-  void on_fetch(Device js, int ip, FetchState fetch_state, std::function<void()> callback) {
-    //THALAMUS_LOG(info) << "on_fetch " << device_to_string(js) << " " << ip << " " << state_to_string(fetch_state);
-    auto& data = js == Device::IMEC ? imec_data[ip] : ni_data;
-    auto& names = js == Device::IMEC ? imec_names[ip] : ni_names;
-    auto& sample_count = sample_counts[std::make_pair(js, ip)];
-    auto prefix = (js == Device::IMEC ? "IMEC:" : "NI:") + std::to_string(ip) + ":";
-    switch(fetch_state) {
-      case FetchState::READ_HEADER: {
-        char* chars = reinterpret_cast<char*>(buffer);
-        for(auto i = buffer_offset;i < buffer_offset+buffer_length;++i) {
-          if(chars[i] == '\n') {
-            chars[i] = 0;
-            //THALAMUS_LOG(info) << "fetch header " << chars;
-            if(std::string_view(chars, chars+i).starts_with("ERROR FETCH: No data")) {
-              for (auto& d : data) {
-                d.clear();
-              }
-              process_queue();
-              callback();
-              return;
-            }
-            auto count = sscanf(chars, "BINARY_DATA %d %d uint64(%llu)", &nchans, &nsamples, &from_count);
-            SPIKEGLX_ASSERT(count == 3, std::string("Failed to read BINARY_DATA header: ") + chars);
-            data.resize(nchans);
-            for (auto& d : data) {
-              d.clear();
-            }
-            names.resize(nchans);
-            for(size_t i = 0;i < names.size();++i) {
-              auto& name = names[i];
-              if(name.empty()) {
-                name = prefix + std::to_string(i);
-              }
-            }
-            samples_read = 0;
-            next_channel = 0;
-            complete_samples = 0;
+  Impl(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph, SpikeGlxNode* outer)
+    : state(state)
+    , io_context(io_context)
+    , timer(io_context)
+    , socket(io_context)
+    , outer(outer)
+    , pool(graph->get_thread_pool())
+    //, queue(io_context)
+    , connecting_condition(io_context)
+    , turnstile(io_context)
+  {
+    //queue.start();
+    state_connection = state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
+    (*state)["Running"].assign(false);
+    memset(&address, 0, sizeof(address));
+    state->recap(std::bind(&Impl::on_change, this, _1, _2, _3));
+  }
 
-            buffer_offset = i+1;
-            buffer_length = buffer_total - buffer_offset;
-            skip_offset = true;
-            on_fetch(js, ip, FetchState::READ_DATA, callback);
-            return;
-          }
-        }
-        fill_buffer(std::bind(&Impl::on_fetch, this, js, ip, FetchState::READ_HEADER, callback));
+  ~Impl() {
+    (*state)["Running"].assign(false);
+  }
+
+  //struct CoQueue {
+  //  boost::asio::io_context& io_context;
+  //  CoCondition in_condition;
+  //  CoCondition out_condition;
+  //  std::list<std::function<boost::asio::awaitable<void>()>> queue;
+  //  bool running = false;
+  //  bool self_delete = false;
+
+  //  CoQueue(boost::asio::io_context& io_context) : io_context(io_context), in_condition(io_context), out_condition(io_context) {}
+
+  //  boost::asio::awaitable<void> run() {
+  //    while(running) {
+  //      co_await in_condition.wait([&] { return !queue.empty() || !running; });
+  //      if(self_delete) {
+  //        delete this;
+  //        break;
+  //      }
+  //      if(!running) {
+  //        break;
+  //      }
+  //      co_await queue.front()();
+  //      queue.pop_front();
+  //      out_condition.notify();
+  //    }
+  //  }
+
+  //  void start() {
+  //    running = true;
+  //    boost::asio::co_spawn(io_context, run(), boost::asio::detached);
+  //  }
+  //  void stop() {
+  //    running = false;
+  //    in_condition.notify();
+  //  }
+
+  //  template<typename T>
+  //  boost::asio::awaitable<T> execute(std::function<boost::asio::awaitable<T>()> work) {
+  //    std::optional<T> result;
+  //    auto f = [&,work]() -> boost::asio::awaitable<void> {
+  //      result = co_await work();
+  //    };
+  //    queue.push_back(f);
+  //    in_condition.notify();
+  //    co_await out_condition.wait([&]() { return result.has_value(); });
+  //    co_return *result;
+  //  }
+
+  //  boost::asio::awaitable<void> execute(std::function<boost::asio::awaitable<void>()> work) {
+  //    bool done = false;
+  //    auto f = [&, work]() -> boost::asio::awaitable<void> {
+  //      co_await work();
+  //      done = true;
+  //    };
+  //    queue.push_back(f);
+  //    in_condition.notify();
+  //    co_await out_condition.wait([&]() { return done; });
+  //  }
+  //};
+
+  //struct CoQueueHolder {
+  //  CoQueue* queue;
+  //  CoQueueHolder(boost::asio::io_context& io_context) : queue(new CoQueue(io_context)) {}
+  //  ~CoQueueHolder() {
+  //    if(queue->running) {
+  //      queue->running = true;
+  //      queue->self_delete = true;
+  //      queue->stop();
+  //    } else {
+  //      delete queue;
+  //    }
+  //  }
+
+  //  void start() {
+  //    queue->start();
+  //  }
+  //  void stop() {
+  //    queue->stop();
+  //  }
+
+  //  template<typename T>
+  //  boost::asio::awaitable<T> execute(std::function<boost::asio::awaitable<T>()> work) {
+  //    return queue->execute(work);
+  //  }
+
+  //  boost::asio::awaitable<void> execute(std::function<boost::asio::awaitable<void>()> work) {
+  //    return queue->execute(work);
+  //  }
+  //};
+
+  //CoQueueHolder queue;
+  struct CoTurnstile {
+    CoCondition condition;
+    size_t next = 0;
+    size_t current = 0;
+    CoTurnstile(boost::asio::io_context& io_context) : condition(io_context) {}
+
+    struct Turn {
+      CoTurnstile& turnstile;
+      bool holds = true;
+      Turn() = delete;
+      Turn(Turn&) = delete;
+      Turn(const Turn&) = delete;
+
+      Turn(CoTurnstile& t) : turnstile(t) {}
+      Turn(Turn&& t) : turnstile(t.turnstile) {
+        t.holds = false;
       }
-      break;
-      case FetchState::READ_DATA: {
-        size_t position = 0;
+      ~Turn() {
+        if(holds) {
+          ++turnstile.current;
+          turnstile.condition.notify();
+        }
+      }
+    };
 
-        unsigned char* bytes = buffer + (skip_offset ? buffer_offset : 0);
+    boost::asio::awaitable<Turn> wait() {
+      auto ticket = next++;
+      auto v = co_await condition.wait([&] { return ticket == current; });
+      co_return Turn(*this);
+    }
+  };
 
-        size_t end = skip_offset ? buffer_length : buffer_total;
+  CoTurnstile turnstile;
 
-        //THALAMUS_LOG(info) << "fetch data " << position_shorts << " " << end_shorts;
-        //for(auto& d : data) {
-        //  d.erase(d.begin(), d.begin() + complete_samples);
-        //}
-        //short lower = std::numeric_limits<short>::max();
-        //short upper = std::numeric_limits<short>::min();
-        auto band_size = std::max(1u, nchans/pool.num_threads);
-        band_size += (nchans % band_size) ? 1 : 0;
+  boost::asio::awaitable<std::string> co_query(std::string command) {
+    auto turn = turnstile.wait();
+ 
+    auto command_nl = command + "\n";
+    co_await boost::asio::async_write(socket, boost::asio::buffer(command_nl.data(), command_nl.size()), boost::asio::use_awaitable);
 
-        pending_bands = nchans/band_size;
-        pending_bands += (nchans % band_size) ? 1 : 0;
+    std::string data;
+    co_await boost::asio::async_read_until(socket, boost::asio::dynamic_buffer(data), "OK\n", boost::asio::use_awaitable);
 
-        auto post_deinterlace = [&,js,ip,callback,end] {
-          //THALAMUS_LOG(info) << "post_deinterlace";
-          samples_read += end / sizeof(short);
-          
-          if(samples_read / nchans == nsamples) {
+    auto end = data.find("\n");
+    data.resize(end);
+    co_return data;
+  }
+
+  boost::asio::awaitable<void> co_command(std::string command) {
+    auto turn = turnstile.wait();
+
+    auto command_nl = command + "\n";
+
+    co_await boost::asio::async_write(socket, boost::asio::buffer(command_nl.data(), command_nl.size()), boost::asio::use_awaitable);
+  }
+
+  void disconnect() {
+    if(!is_connected) {
+      return;
+    }
+    boost::system::error_code ec;
+    ec = socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+    if(ec) {
+      THALAMUS_LOG(error) << ec.what();
+      (*state)["Error"].assign(ec.what());
+    }
+
+    ec = socket.close(ec);
+    if(ec) {
+      THALAMUS_LOG(error) << ec.what();
+      (*state)["Error"].assign(ec.what());
+    }
+    connected = false;
+  }
+
+  bool connected = false;
+  bool connecting = false;
+  CoCondition connecting_condition;
+
+  boost::asio::awaitable<void> connect() {
+    if (connected) {
+      co_return;
+    }
+    if(connecting) {
+      co_await connecting_condition.wait();
+      co_return;
+    }
+    connecting = true;
+    connected = false;
+    Finally f([&] { 
+      connecting = false;
+      connecting_condition.notify();
+    });
+
+    try {
+      if(!state->contains("Address")) {
+        throw std::runtime_error("No Address defined");
+      }
+
+      std::string address_str = state->at("Address");
+      std::vector<std::string> address_tokens = absl::StrSplit(address_str, ':');
+      if (address_tokens.size() == 1) {
+        address_tokens.push_back("4142");
+      }
+
+      if(address_tokens.size() != 2) {
+        throw std::runtime_error(std::string("Failed to parse address :") + address_str);
+      }
+
+      boost::asio::ip::tcp::resolver resolver(io_context);
+      auto endpoints = co_await resolver.async_resolve(address_tokens.at(0), address_tokens.at(1), boost::asio::use_awaitable);
+      co_await boost::asio::async_connect(socket, endpoints, boost::asio::use_awaitable);
+
+      auto text = co_await co_query("GETVERSION");
+      std::vector<std::string_view> tokens = absl::StrSplit(text, absl::ByAnyChar(".,"));
+      if(tokens.size() < 2) {
+        throw std::runtime_error(std::string("Failed to parse SpikeGLX version: ") + text);
+      }
+
+      auto success = absl::SimpleAtoi(tokens[1], &spike_glx_version);
+      if(!success) {
+        throw std::runtime_error(std::string("Failed to parse SpikeGLX version :") + text);
+      }
+
+      auto command = spike_glx_version < 20240000 ? "GETIMPROBECOUNT" : "GETSTREAMNP 2";
+      text = co_await co_query(command);
+      imec_count = parse_number<long long>(text);
+      //imec_data.resize(imec_count);
+      //imec_names.resize(imec_count);
+
+      //int imec_pending = 1;
+      //CoCondition condition(io_context);
+      //auto tracker = [&] () {
+      //  --imec_pending;
+      //  condition.notify();
+      //};
+      //(*state)["imec_count"].assign(imec_count, tracker);
+
+      //for(auto i = 0ll;i < imec_count;++i) {
+      //  auto text = absl::StrFormat("imec_subset_%d", i);
+      //  if(state->contains(text)) {
+      //    continue;
+      //  }
+
+      //  ++imec_pending;
+      //  (*state)[text].assign("*", tracker);
+      //}
+
+      //co_await condition.wait([&] { return imec_pending == 0; });
+      connected = true;
+    } catch(std::exception& e) {
+      THALAMUS_LOG(error) << boost::diagnostic_information(e);
+      (*state)["Error"].assign(e.what());
+      (*state)["Connected"].assign(false);
+      disconnect();
+      co_return;
+    }
+  }
+
+  long long imec_count = 0;
+  long long imec_pending = 0;
+
+  std::vector<std::string> imec_subsets;
+  bool streaming = false;
+
+  size_t spike_glx_version;
+
+  std::string scan_count_command(Device js) {
+    if(js == Device::IMEC) {
+      if(spike_glx_version < 20240000) {
+        return absl::StrFormat("GETSCANCOUNT %d", 0);
+      } else {
+        return absl::StrFormat("GETSTREAMSAMPLECOUNT %d 0", 2);
+      }
+    } else {
+      if(spike_glx_version < 20240000) {
+        return absl::StrFormat("GETSCANCOUNT %d", -1);
+      } else {
+        return absl::StrFormat("GETSTREAMSAMPLECOUNT %d 0", 0);
+      }
+    }
+  }
+
+  std::string sample_rate_command(Device js) {
+    if (js == Device::IMEC) {
+      if (spike_glx_version < 20240000) {
+        return absl::StrFormat("GETSAMPLERATE %d", 0);
+      } else {
+        return absl::StrFormat("GETSTREAMSAMPLERATE %d 0", 2);
+      }
+    }
+    else {
+      if (spike_glx_version < 20240000) {
+        return absl::StrFormat("GETSAMPLERATE %d", -1);
+      } else {
+        return absl::StrFormat("GETSTREAMSAMPLERATE %d 0", 0);
+      }
+    }
+  }
+
+  std::string fetch_command(Device js, size_t offset, const std::string& subset) {
+    if(js == Device::IMEC) {
+      if(spike_glx_version < 20240000) {
+        return absl::StrFormat("FETCH %d %d 50000 %s", 0, offset, subset);
+      } else {
+        return absl::StrFormat("FETCH %d 0 %d 50000 %s", 2, offset, subset);
+      }
+    } else {
+      if(spike_glx_version < 20240000) {
+        return absl::StrFormat("FETCH %d %d 50000 %s", -1, offset, subset);
+      } else {
+        return absl::StrFormat("FETCH %d 0 %d 50000 %s", 0, offset, subset);
+      }
+    }
+  }
+
+  boost::asio::awaitable<void> stream() {
+    try {
+      co_await connect();
+      if(!connected) {
+        co_return;
+      }
+
+      if(streaming) {
+        co_return;
+      }
+      streaming = true;
+      Finally f([&] { 
+        streaming = false;
+      });
+
+      std::map<std::pair<Device, int>, size_t> sample_counts;
+      sample_intervals.clear();
+      std::vector<std::pair<Device, int>> inputs;
+      for(auto i = 0;i < imec_count;++i) {
+        inputs.emplace_back(Device::IMEC, i);
+      }
+      inputs.emplace_back(Device::NI, 0);
+
+      for(auto& pair : inputs) {
+        auto [js, ip] = pair;
+        auto text = co_await co_query(scan_count_command(js));
+        THALAMUS_LOG(info) << "scan_count_command " << text;
+
+        size_t count;
+        auto success = absl::SimpleAtoi(text, &count);
+        sample_counts[std::make_pair(js, ip)] = count;
+        if(!success) {
+          throw std::runtime_error(std::string("Failed to parse sample count: ") + text);
+        }
+
+        text = co_await co_query(sample_rate_command(js));
+        THALAMUS_LOG(info) << "sample_rate_command " << text;
+
+        double rate;
+        success = absl::SimpleAtod(text, &rate);
+        sample_intervals[std::make_pair(js, ip)] = std::chrono::nanoseconds(size_t(1000000000/rate));
+        if(!success) {
+          throw std::runtime_error(std::string("Failed to parse sample rate: ") + text);
+        }
+      }
+
+      size_t offset = 0;
+      size_t fill = 0;
+      char* char_buffer = reinterpret_cast<char*>(buffer);
+      auto skip_read = false;
+      size_t total_samples = 0;
+      size_t count = 0;
+
+      auto do_read = [&]() -> boost::asio::awaitable<void> {
+        if(fill == sizeof(buffer)) {
+          std::copy(buffer + offset, buffer + fill, buffer);
+          fill -= offset;
+          offset = 0;
+        }
+        count = co_await socket.async_receive(boost::asio::buffer(buffer+fill, sizeof(buffer)-fill), boost::asio::use_awaitable);
+        fill += count;
+      };
+
+      co_await co_query("SETRECORDENAB 1");
+
+      std::vector<std::chrono::steady_clock::time_point> fetch_starts(inputs.size());
+      while(streaming) {
+        auto k = 0;
+        for(auto& pair : inputs) {
+          auto [js, ip] = pair;
+          auto j = sample_counts.find(pair);
+          auto subset = js == Device::IMEC ? imec_subsets[ip] : "";
+          auto command = fetch_command(js, j->second, subset);
+          fetch_starts[k++] = std::chrono::steady_clock::now();
+          co_await co_command(command);
+        }
+
+        k = 0;
+        for(auto& pair : inputs) {
+          auto [js, ip] = pair;
+          auto fetch_start = fetch_starts[k++];
+
+          auto& data = js == Device::IMEC ? imec_data[ip] : ni_data;
+          auto& names = js == Device::IMEC ? imec_names[ip] : ni_names;
+          auto& sample_count = sample_counts[std::make_pair(js, ip)];
+          auto prefix = (js == Device::IMEC ? "IMEC:" : "NI:") + std::to_string(ip) + ":";
+          while(true) {
+            if(!skip_read) {
+              co_await do_read();
+            }
+            skip_read = false;
+            auto no_data = false;
+            auto found_header = false;
+            for(auto i = fill-count;i < fill;++i) {
+              if(char_buffer[i] == '\n') {
+                char_buffer[i] = 0;
+                found_header = true;
+                if(std::string_view(char_buffer + offset, i).starts_with("ERROR FETCH: No data")) {
+                  for (auto& d : data) {
+                    d.clear();
+                  }
+                  no_data = true;
+                  total_samples = 0;
+                  offset = i+1;
+                  break;
+                }
+
+                auto count = sscanf(char_buffer + offset, "BINARY_DATA %d %d uint64(%llu)", &nchans, &nsamples, &from_count);
+                if(count < 3) {
+                  throw std::runtime_error(std::string("Failed to read BINARY_DATA header: ") + (char_buffer + offset));
+                }
+                data.resize(nchans);
+                for (auto& d : data) {
+                  d.clear();
+                }
+                names.resize(nchans);
+                for(size_t i = 0;i < names.size();++i) {
+                  auto& name = names[i];
+                  if(name.empty()) {
+                    name = prefix + std::to_string(i);
+                  }
+                }
+                samples_read = 0;
+                next_channel = 0;
+                complete_samples = 0;
+                total_samples = nchans*nsamples;
+
+                offset = i+1;
+                break;
+              }
+            }
+            if(!found_header) {
+              continue;
+            }
+            if(no_data) {
+              skip_read = true;
+              break;
+            }
+
+            auto band_size = std::max(1u, nchans/pool.num_threads);
+            band_size += (nchans % band_size) ? 1 : 0;
+            int total_bands = nchans/band_size;
+            total_bands += (nchans % band_size) ? 1 : 0;
+            std::mutex mutex;
+            std::condition_variable cond;
+
+            while(samples_read < total_samples) {
+              int pending_bands = total_bands;
+              auto data_end = std::min(offset + 2*(total_samples - samples_read), fill);
+              for(auto c = 0;c < nchans;c+=band_size) {
+                pool.push([&,c] {
+                  for(auto subc = 0;subc < band_size && c+subc < nchans;++subc) {
+                    auto channel = (samples_read+c+subc) % nchans;
+                    for(auto i = offset + 2*(c+subc);i+1 < data_end;i += 2*nchans) {
+                      short sample = buffer[i] + (buffer[i+1] << 8);
+                      data[channel].push_back(sample);
+                    }
+                  }
+                  {
+                    std::lock_guard<std::mutex> lock(mutex);
+                    --pending_bands;
+                  }
+                  cond.notify_all();
+                });
+              }
+
+              std::unique_lock<std::mutex> lock(mutex);
+              cond.wait(lock, [&] { return pending_bands == 0; });
+
+              samples_read += (fill-offset) / sizeof(short);
+              offset += (fill - offset) % 2;
+
+              if(samples_read < total_samples) {
+                co_await do_read();
+              }
+            }
+
             auto now = std::chrono::steady_clock::now();
             time = now.time_since_epoch();
             latency = (now - fetch_start).count()/1e6;
@@ -203,332 +614,36 @@ struct SpikeGlxNode::Impl {
             }
             //THALAMUS_LOG(info) << "fetch done";
             sample_count += nsamples;
-            on_fetch(js, ip, FetchState::READ_OK, callback);
-            return;
-          }
 
-          consume_buffer(buffer_total - (end % 2));
-          skip_offset = false;
-          fill_buffer(std::bind(&Impl::on_fetch, this, js, ip, FetchState::READ_DATA, callback));
-        };
-        for(auto c = 0;c < nchans;c+=band_size) {
-          pool.push([&,c,post_deinterlace,band_size,end,bytes] {
-            for(auto subc = 0;subc < band_size && c+subc < nchans;++subc) {
-              auto channel = (samples_read+c+subc) % nchans;
-              for(auto i = 2*(c+subc);i+1 < end;i += 2*nchans) {
-                short sample = bytes[i] + (bytes[i+1] << 8);
-                data[channel].push_back(sample);
+            auto found_ok = false;
+            while(!found_ok) {
+              while(offset+3 <= fill) {
+                found_ok = std::string_view(char_buffer + offset, 3) == "OK\n";
+                if(found_ok) {
+                  offset += 3;
+                  break;
+                }
+                ++offset;
+              }
+              if(!found_ok) {
+                co_await do_read();
               }
             }
-            if(--pending_bands == 0) {
-              boost::asio::post(io_context, post_deinterlace);
-            }
-          });
+            break;
+          }
         }
       }
-      break;
-      case FetchState::READ_OK: {
-        char* chars = reinterpret_cast<char*>(buffer);
-        auto end = chars + buffer_total;
-        if(buffer_total >= 3 && std::string_view(end-3, end) == "OK\n") {
-          process_queue();
-          callback();
-          return;
-        }
-        
-        fill_buffer(std::bind(&Impl::on_fetch, this, js, ip, FetchState::READ_OK, callback));
-      }
-      break;
+    } catch(std::exception& e) {
+      THALAMUS_LOG(error) << boost::diagnostic_information(e);
+      (*state)["Error"].assign(e.what());
+      (*state)["Running"].assign(false);
+      co_return;
     }
   }
 
-  void fetch(Device js, int ip, const std::string& subset, std::function<void()> callback) {
-    //THALAMUS_LOG(info) << "fetch " << device_to_string(js) << " " << ip << " " << subset;
-    auto i = sample_counts.find(std::make_pair(js, ip));
-    auto j = sample_intervals.find(std::make_pair(js, ip));
-    if(i == sample_counts.end()) {
-      std::string command;
-      if(js == Device::IMEC) {
-        if(spike_glx_version < 20240000) {
-          command = absl::StrFormat("GETSCANCOUNT %d", 0);
-        } else {
-          command = absl::StrFormat("GETSTREAMSAMPLECOUNT %d 0", 2);
-        }
-      } else {
-        if(spike_glx_version < 20240000) {
-          command = absl::StrFormat("GETSCANCOUNT %d", -1);
-        } else {
-          command = absl::StrFormat("GETSTREAMSAMPLECOUNT %d 0", 0);
-        }
-      }
-
-      query_string(command, [this,js,ip,subset,callback](auto& text) {
-        //THALAMUS_LOG(info) << "scancount " << text;
-        size_t count;
-        auto success = absl::SimpleAtoi(text, &count);
-        sample_counts[std::make_pair(js, ip)] = count;
-        SPIKEGLX_ASSERT(success, std::string("Failed to parse sample count: ") + text);
-        fetch(js, ip, subset, callback);
-      });
-    } else if (j == sample_intervals.end()) {
-      std::string command;
-      if (js == Device::IMEC) {
-        if (spike_glx_version < 20240000) {
-          command = absl::StrFormat("GETSAMPLERATE %d", 0);
-        }
-        else {
-          command = absl::StrFormat("GETSTREAMSAMPLERATE %d 0", 2);
-        }
-      }
-      else {
-        if (spike_glx_version < 20240000) {
-          command = absl::StrFormat("GETSAMPLERATE %d", -1);
-        }
-        else {
-          command = absl::StrFormat("GETSTREAMSAMPLERATE %d 0", 0);
-        }
-      }
-
-      query_string(command, [this, js, ip, subset, callback](auto& text) {
-        //THALAMUS_LOG(info) << "samplerate " << text;
-        double rate;
-        auto success = absl::SimpleAtod(text, &rate);
-        sample_intervals[std::make_pair(js, ip)] = std::chrono::nanoseconds(size_t(1000000000/rate));
-        SPIKEGLX_ASSERT(success, std::string("Failed to parse sample rate: ") + text);
-        fetch(js, ip, subset, callback);
-      });
-    } else {
-      fetch_start = std::chrono::steady_clock::now();
-      std::string command;
-      if(js == Device::IMEC) {
-        if(spike_glx_version < 20240000) {
-          command = absl::StrFormat("FETCH %d %d 50000 %s", 0, i->second, subset);
-        } else {
-          command = absl::StrFormat("FETCH %d 0 %d 50000 %s", 2, i->second, subset);
-        }
-      } else {
-        if(spike_glx_version < 20240000) {
-          command = absl::StrFormat("FETCH %d %d 50000 %s", -1, i->second, subset);
-        } else {
-          command = absl::StrFormat("FETCH %d 0 %d 50000 %s", 0, i->second, subset);
-        }
-      }
-      
-      enqueue(command, std::bind(&Impl::on_fetch, this, js, ip, FetchState::READ_HEADER, callback));
-    }
-  }
-  
-  void on_query_string(std::function<void(const std::string&)> callback) {
-    char* chars = reinterpret_cast<char*>(buffer);
-    auto end = chars + buffer_total;
-    if(buffer_total >= 3 && std::string_view(end-3, end) == "OK\n") {
-      std::string_view view(chars, end);
-      auto offset = view.find('\n');
-      std::string result(chars, chars+offset);
-      //THALAMUS_LOG(info) << "on_query_string " << result;
-      process_queue();
-      callback(result);
-      return;
-    }
-    
-    fill_buffer(std::bind(&Impl::on_query_string, this, callback));
-  }
-
-  void query_string(const std::string& command, std::function<void(const std::string&)> callback) {
-    enqueue(command, std::bind(&Impl::on_query_string, this, callback));
-  }
-
-  void consume_buffer(size_t count = BUFFER_SIZE) {
-    if(count < buffer_offset + buffer_length) {
-      std::copy(buffer + count, buffer + buffer_offset + buffer_length, buffer);
-      buffer_offset = buffer_offset + buffer_length - count;
-      buffer_length = 0;
-    } else {
-      buffer_offset = 0;
-      buffer_length = 0;
-    }
-    buffer_total = buffer_offset + buffer_length;
-  }
-
-  void on_fill_buffer(std::function<void()> callback, const boost::system::error_code& ec, size_t length) {
-    SPIKEGLX_ASSERT(!ec, ec);
-    if(!queue_busy) {
-      return;
-    }
-    buffer_length = length;
-    buffer_total = buffer_offset + buffer_length;
-    callback();
-  }
-
-  void fill_buffer(std::function<void()> callback) {
-    buffer_offset += buffer_length;
-    //THALAMUS_LOG(info) << buffer_offset << " " << (sizeof(buffer) - buffer_offset);
-    socket.async_receive(boost::asio::buffer(buffer + buffer_offset, sizeof(buffer) - buffer_offset), std::bind(&Impl::on_fill_buffer, this, callback, _1, _2));
-  }
-
-  void process_queue() {
-    queue_busy = false;
-    //THALAMUS_LOG(info) << "queue free";
-    if(spikeglx_queue.empty()) {
-      return;
-    }
-    auto& pair = spikeglx_queue.front();
-    std::string command_nl = pair.first + "\n";
-    boost::system::error_code ec;
-    socket.send(boost::asio::const_buffer(command_nl.data(), command_nl.size()), 0, ec);
-    SPIKEGLX_ASSERT(!ec, ec);
-
-    //THALAMUS_LOG(info) << "process_queue " << pair.first;
-    consume_buffer();
-    fill_buffer(pair.second);
-    spikeglx_queue.erase(spikeglx_queue.begin());
-    queue_busy = true;
-    //THALAMUS_LOG(info) << "queue busy";
-  }
-
-  void enqueue(const std::string& command, std::function<void()> callback) {
-    //THALAMUS_LOG(info) << "enqueue " << queue_busy << " " << command;
-    spikeglx_queue.emplace_back(command, callback);
-    if(!queue_busy) {
-      process_queue();
-    }
-  }
-
-  Impl(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph, SpikeGlxNode* outer)
-    : state(state)
-    , io_context(io_context)
-    , timer(io_context)
-    , socket(io_context)
-    , outer(outer)
-    , pool(graph->get_thread_pool()) {
-    state_connection = state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
-    (*state)["Running"].assign(false);
-    memset(&address, 0, sizeof(address));
-    state->recap(std::bind(&Impl::on_change, this, _1, _2, _3));
-  }
-
-  ~Impl() {
-    (*state)["Running"].assign(false);
-  }
-
-  void handle_error(const std::string& message, bool do_disconnect = true) {
-    THALAMUS_LOG(error) << message;
-    (*state)["Error"].assign(message);
-    queue_busy = false;
-    //THALAMUS_LOG(info) << "error free";
-    if(do_disconnect) {
-      disconnect();
-    }
-  }
-
-  void handle_error(const boost::system::error_code& ec, bool do_disconnect = true) {
-    handle_error(ec.what(), do_disconnect);
-  }
-
-  void disconnect() {
-    if(!is_connected) {
-      return;
-    }
-    boost::system::error_code ec;
-    socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
-    handle_error(ec, false);
-    socket.close(ec);
-    handle_error(ec, false);
-    is_connected = false;
-    is_running = false;
-    (*state)["Running"].assign(false);
-  }
-
-  void connect(std::function<void()> callback) {
-    if(is_connected) {
-      callback();
-    }
-
-    SPIKEGLX_ASSERT(state->contains("Address"), "No Address defined");
-
-    std::string address_str = state->at("Address");
-    std::vector<std::string> address_tokens = absl::StrSplit(address_str, ':');
-    if (address_tokens.size() == 1) {
-      address_tokens.push_back("4142");
-    }
-
-    SPIKEGLX_ASSERT(address_tokens.size() == 2, std::string("Failed to parse address :") + address_str);
-
-    boost::asio::ip::tcp::resolver resolver(io_context);
-    auto endpoints = resolver.resolve(address_tokens.at(0), address_tokens.at(1));
-    boost::system::error_code ec;
-    boost::asio::async_connect(socket, endpoints, std::bind(&Impl::on_connect, this, callback, _1));
-  }
-
-  void on_connect(std::function<void()> callback, const boost::system::error_code& e) {
-    SPIKEGLX_ASSERT(!e, e);
-    load_version(callback);
-  }
-
-  void load_version(std::function<void()> callback) {
-    query_string("GETVERSION",  [&, callback](auto& text) {
-      //THALAMUS_LOG(info) << text;
-      std::vector<std::string_view> tokens = absl::StrSplit(text, absl::ByAnyChar(".,"));
-      SPIKEGLX_ASSERT(tokens.size() >= 2, std::string("Failed to parse SpikeGLX version: ") + text);
-
-      auto success = absl::SimpleAtoi(tokens[1], &spike_glx_version);
-      SPIKEGLX_ASSERT(success, std::string("Failed to parse SpikeGLX version :") + text);
-
-      is_connected = true;
-      count_probes(callback);
-    });
-  }
-
-  void on_fetch_space(const boost::system::error_code& ec) {
-    fetch_continuously();
-  }
-
-  void fetch_continuously() {
-    if(!is_running) {
-      return;
-    }
-    //THALAMUS_LOG(info) << "fetch_continuously " << device_to_string(js) << " " << ip;
-    for(auto i = 0;i < imec_count;++i) {
-      fetch(Device::IMEC, i, imec_subsets[i], [] {});
-    }
-    fetch(Device::NI, 0, "", [&] {
-      //fetch_continuously(js, ip, subset);
-      timer.expires_after(2ms);
-      timer.async_wait(std::bind(&Impl::on_fetch_space, this, _1));
-    });
-  }
-
-  long long imec_count = 0;
-  long long imec_pending = 0;
-
-  std::vector<std::string> imec_subsets;
-
-  void count_probes(std::function<void()> callback) {
-    auto command = spike_glx_version < 20240000 ? "GETIMPROBECOUNT" : "GETSTREAMNP 2";
-    query_string(command, [&,callback](const auto& text) {
-      auto callback_wrapper = [&,callback] () {
-        if(--imec_pending == 0) {
-          callback();
-        }
-      };
-
-      imec_count = parse_number<long long>(text);
-      imec_data.resize(imec_count);
-      imec_names.resize(imec_count);
-
-      imec_pending = 1;
-      (*state)["imec_count"].assign(imec_count, callback_wrapper);
-
-      for(auto i = 0ll;i < imec_count;++i) {
-        auto text = absl::StrFormat("imec_subset_%d", i);
-        if(state->contains(text)) {
-          continue;
-        }
-
-        ++imec_pending;
-        (*state)[text].assign("*", callback_wrapper);
-      }
-    });
+  boost::asio::awaitable<void> stop_stream() {
+    streaming = false;
+    co_await co_query("SETRECORDENAB 0");
   }
 
   void on_change(ObservableCollection::Action a, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
@@ -538,21 +653,22 @@ struct SpikeGlxNode::Impl {
       auto index = parse_number<size_t>(tokens.back());
       imec_subsets.resize(index+1, "*");
       imec_subsets[index] = std::get<std::string>(v);
-    } else if (key_str == "Running") {
-      is_running = std::get<bool>(v);
-      if (is_running) {
-        sample_counts.clear();
-        connect([&] {
-          fetch_continuously();
-        });
-      }
-      else {
+    } else if (key_str == "Connected") {
+      auto is_connected = std::get<bool>(v);
+      if (is_connected) {
+        boost::asio::co_spawn(io_context, connect(), boost::asio::detached);
+      } else {
         disconnect();
+      }
+    } else if (key_str == "Running") {
+      auto is_running = std::get<bool>(v);
+      if (is_running) {
+        boost::asio::co_spawn(io_context, stream(), boost::asio::detached);
+      } else {
+        boost::asio::co_spawn(io_context, stop_stream(), boost::asio::detached);
       }
     }
   }
-
-  size_t spike_glx_version;
 };
 
 SpikeGlxNode::SpikeGlxNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph)
@@ -645,7 +761,7 @@ size_t SpikeGlxNode::modalities() const {
 }
 
 boost::json::value SpikeGlxNode::process(const boost::json::value&) {
-  impl->connect([]{});
+  boost::asio::co_spawn(impl->io_context, impl->connect(), boost::asio::detached);
   return boost::json::value();
   //impl->connect([&] {
   //  auto command = impl->spike_glx_version < 20240000 ? "GETIMPROBECOUNT" : "GETSTREAMNP";

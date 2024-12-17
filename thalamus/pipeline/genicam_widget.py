@@ -173,6 +173,8 @@ class GenicamComboBox(QComboBox):
     cameras = json.loads(response.json)
     print('asyncShowPopup', cameras)
     self.clear()
+    if cameras is None:
+      return
     self.addItems(cameras)
     for i, v in enumerate(cameras):
       if v == current_camera:

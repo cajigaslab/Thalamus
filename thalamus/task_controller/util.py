@@ -342,7 +342,7 @@ async def wait_for(context: TaskContextProtocol, condition: typing.Callable[[], 
   '''
   condition_future = context.until(condition)
   timeout_future = context.sleep(timeout)
-  await context.any(condition_future, timeout_future)
+  temp = await context.any(condition_future, timeout_future)
   return condition()
 
 async def wait_for_dual_hold(context: TaskContextProtocol,
@@ -364,6 +364,8 @@ async def wait_for_dual_hold(context: TaskContextProtocol,
 
     remaining_time = hold_duration - elapsed_time + td_spent_blinking
     #remaining_time = hold_duration - elapsed_time
+    if remaining_time.total_seconds() < 0:
+      break 
     blinked = await wait_for(context, lambda: not is_held1() or not is_held2(), remaining_time)
 
     if not blinked:
@@ -448,6 +450,8 @@ async def wait_for_hold(context: TaskContextProtocol,
     
     remaining_time = hold_duration - elapsed_time + td_spent_blinking
     #remaining_time = hold_duration - elapsed_time
+    if remaining_time.total_seconds() < 0:
+      break 
     blinked = await wait_for(context, lambda: not is_held(), remaining_time)
 
     if not blinked:

@@ -156,6 +156,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   if sanitizer:
     cmake_command += [f'-DSANITIZER={sanitizer}']
 
+  cmake_command = [str(c) for c in cmake_command]
   print(cmake_command)
   if not (build_path / 'CMakeCache.txt').exists() or do_config:
     subprocess.check_call(cmake_command)
@@ -165,6 +166,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   if target:
     command += ['--target', target]
 
+  command = [str(c) for c in command]
   print(command)
   subprocess.check_call(command)
   shutil.copy('src/plugin.h', 'thalamus/plugin.h')
