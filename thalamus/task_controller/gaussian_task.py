@@ -195,11 +195,10 @@ class Converter:
 def gaussian_gradient(center: QPointF, radius: float, deviations: float = 1):
   gradient = QRadialGradient(center, radius)
   resolution = 1000
-  for i in range(resolution+1):
+  for i in range(resolution):
     level = int(255*np.exp(-(deviations*i/resolution)**2/(2)))
-    if level < 10:
-      level = 0
     gradient.setColorAt(i/resolution, QColor(level, level, level))
+  gradient.setColorAt(1, Qt.GlobalColor.black)
   return gradient
 
 class State(enum.Enum):
