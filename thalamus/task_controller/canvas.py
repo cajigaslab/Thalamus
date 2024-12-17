@@ -192,7 +192,7 @@ class BrowserReflectingPainter(QPainter):
       'args': [rect.x(), rect.y(), rect.width(), rect.height(), id(image)]
     })
 
-class CanvasPainter(BrowserReflectingPainter):
+class CanvasPainter(QPainter):
   """
   Extends QPainter with ability to selectively render to subject or operator views.  Also provides addition functions
   for OpenGL rendering
@@ -600,7 +600,7 @@ class Canvas(QOpenGLWidget):
     geometry = qt_screen_geometry()
     painter = CanvasPainter(self.current_output_mask,
                             OpenGLConfig(self.opengl_config.proj, self.opengl_config.program, locations,
-                                         self.opengl_config.vbo_cache), self.send, self)
+                                         self.opengl_config.vbo_cache), self)
     with painter:
       painter.fillRect(QRect(0, 0, 4000, 4000), QColor(0, 0, 0))
       self.listeners.renderer(painter)

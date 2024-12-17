@@ -148,7 +148,7 @@ class Sleeper():
     async def inner() -> typing.Awaitable[typing.Any]:
       done, _ = await asyncio.wait(futures, return_when=asyncio.FIRST_COMPLETED)
       self.tasks.remove(task)
-      return next(iter(done))
+      return await next(iter(done))
 
     task = asyncio.get_event_loop().create_task(inner())
     if not self.running:
