@@ -31,13 +31,13 @@ class HexascopeWidget(QWidget):
     layout.addWidget(QLabel('Field Pose'), 2, 0)
     layout.addWidget(field_spinbox, 2, 1)
 
-    orient_button = QPushButton('Orient to Field')
-    descend_button = QPushButton('Descend')
-    ascend_button = QPushButton('Ascend')
+    calibrate_button = QPushButton('Calibrate')
+    #descend_button = QPushButton('Descend')
+    #ascend_button = QPushButton('Ascend')
 
-    layout.addWidget(orient_button, 3, 0, 1, 2)
-    layout.addWidget(descend_button, 4, 0, 1, 2)
-    layout.addWidget(ascend_button, 5, 0, 1, 2)
+    layout.addWidget(calibrate_button, 3, 0, 1, 2)
+    #layout.addWidget(descend_button, 4, 0, 1, 2)
+    #layout.addWidget(ascend_button, 5, 0, 1, 2)
 
     def send_request(request):
       request = thalamus_pb2.NodeRequest(
@@ -45,9 +45,9 @@ class HexascopeWidget(QWidget):
         json = json.dumps(request)
       )
       create_task_with_exc_handling(stub.node_request(request))
-    orient_button.clicked.connect(lambda: send_request({'type': 'orient'}))
-    descend_button.clicked.connect(lambda: send_request({'type': 'descend'}))
-    ascend_button.clicked.connect(lambda: send_request({'type': 'ascend'}))
+    calibrate_button.clicked.connect(lambda: send_request({'type': 'calibrate'}))
+    #descend_button.clicked.connect(lambda: send_request({'type': 'descend'}))
+    #ascend_button.clicked.connect(lambda: send_request({'type': 'ascend'}))
 
     def on_change(a, k, v):
       if k == 'Objective Pose':
