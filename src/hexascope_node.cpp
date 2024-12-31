@@ -10,7 +10,7 @@ namespace thalamus {
   struct HexascopeNode::Impl {
     boost::asio::io_context& io_context;
     ObservableDictPtr state;
-    ObservableDictPtr hexa_to_objective_state;
+    ObservableDictPtr hexa_to_camera_state;
     boost::signals2::scoped_connection state_connection;
     boost::signals2::scoped_connection source_connection;
     boost::signals2::scoped_connection get_node_connection;
@@ -166,6 +166,10 @@ namespace thalamus {
     boost::asio::awaitable<void> go_home() {
       co_await move(0, 0, 0, 0, 0, 0);
     }
+    boost::asio::awaitable<void> rotate(float theta, float phi, float psi) {
+      auto current_pose = co_await read_hexa_pose_raw();
+      co_await move(current_pose[0], current_pose[1], current_pose[2], theta, phi, psi);
+    }
 
     boost::asio::awaitable<void> move(float x, float y, float z) {
       auto current_pose = co_await read_hexa_pose_raw();
@@ -197,6 +201,8 @@ namespace thalamus {
       floats[5] = theta;
       floats[6] = phi;
       floats[7] = psi;
+      THALAMUS_LOG(info) << "Moving to " << floats[2] << " " << floats[3] << " " << floats[4]<< " "
+                                         << floats[5] << " " << floats[6] << " " << floats[7] << " ";
       co_await boost::asio::async_write(port, boost::asio::buffer(buffer, message_size), boost::asio::use_awaitable);
 
       Leg leg;
@@ -206,6 +212,7 @@ namespace thalamus {
         timer.expires_after(1s);
         co_await timer.async_wait(boost::asio::use_awaitable);
         moving = false;
+        std::stringstream status;
         for(auto i = 0;i < 6 && !moving;++i) {
           buffer[0] = 0x80;
           buffer[1] = 0x04;
@@ -218,7 +225,9 @@ namespace thalamus {
           co_await boost::asio::async_read(port, boost::asio::buffer(buffer, 20), boost::asio::use_awaitable);
           leg.load_leg_response(buffer);
           moving = moving || leg.ccw_move || leg.cw_move;
+          status << (leg.ccw_move ? "1" : "0") << (leg.cw_move ? "1" : "0") << " ";
         }
+        THALAMUS_LOG(info) << "Waiting for stop " << status.str();
       }
       return;
     }
@@ -243,28 +252,28 @@ namespace thalamus {
       timer.expires_after(duration);
       co_await timer.async_wait(boost::asio::use_awaitable);
       accumulating = false;
-      if(objective_position_accum.empty()) {
+      if(accumulator.position.empty()) {
         return {};
       }
 
       boost::qvm::vec<float, 3> position_mean;
-      for(auto& pos : objective_position_accum) {
+      for(auto& pos : accumulator.position) {
         position_mean += pos;
       }
-      position_mean /= objective_position_accum.size();
+      position_mean /= accumulator.position.size();
 
       float min_distance = std::numeric_limits<float>::max();
       size_t median = std::numeric_limits<size_t>::max();
 
-      for(auto i = 0ull;i < objective_position_accum.size();++i) {
-        float distance = boost::qvm::mag_sqr(objective_position_accum[i] - position_mean);
+      for(auto i = 0ull;i < accumulator.position.size();++i) {
+        float distance = boost::qvm::mag_sqr(accumulator.position[i] - position_mean);
         if(distance < min_distance) {
           min_distance = distance;
           median = i
         }
       }
 
-      return Pose {objective_position_accum[median], objective_rotation_accum[median]};
+      return Pose {accumulator.position[median], accumulator.rotation[median]};
     }
 
     template<typename T>
@@ -330,10 +339,25 @@ namespace thalamus {
       return Pose { position, boost_quaternion };
     }
 
-    boost::qvm::mat<float, 4, 4> objective_to_hexa;
-    boost::qvm::mat<float, 4, 4> hexa_to_objective;
+    boost::qvm::mat<float, 4, 4> camera_to_hexa;
+    boost::qvm::mat<float, 4, 4> hexa_to_camera;
 
     const float CALIBRATION_STEP_SIZE = 20;
+
+    boost::qvm::mat<float, 4, 4> quat_to_mat(const boost::qvm::quat<float>& arg) {
+      cv::Quat<float> quat(boost::qvm::S(arg),
+                           boost::qvm::X(arg),
+                           boost::qvm::Y(arg),
+                           boost::qvm::Z(arg));
+      auto mat = quat.toRotMat4x4();
+      boost::qvm::mat<float, 4, 4> qvm = {
+        {mat(0, 0), mat(0, 1), mat(0, 2), mat(0, 3)},
+        {mat(1, 0), mat(1, 1), mat(1, 2), mat(1, 3)},
+        {mat(2, 0), mat(2, 1), mat(2, 2), mat(2, 3)},
+        {mat(3, 0), mat(3, 1), mat(3, 2), mat(3, 3)}
+      };
+      return qvm;
+    }
 
     boost::asio::awaitable<void> align() {
       busy = true;
@@ -349,27 +373,41 @@ namespace thalamus {
       auto field_pose = *field_pose_opt;
 
       auto hexa_pose = co_await read_hexa_pose();
-      auto objective_position = hexa_to_objective*hexa_pose.position;
+      auto camera_position = hexa_to_camera*hexa_pose.position;
 
-      cv::Quat<float> hexa_rot_quat(boost::qvm::S(hexa_pose.rotation),
-                                    boost::qvm::X(hexa_pose.rotation),
-                                    boost::qvm::Y(hexa_pose.rotation),
-                                    boost::qvm::Z(hexa_pose.rotation));
-      auto hexa_rot_mat = hexa_rot_quat.toRotMat4x4();
-      boost::qvm::mat<float, 4, 4> hexa_rot_qvm = {
-        {hexa_rot_mat(0, 0), hexa_rot_mat(0, 1), hexa_rot_mat(0, 2), hexa_rot_mat(0, 3)},
-        {hexa_rot_mat(1, 0), hexa_rot_mat(1, 1), hexa_rot_mat(1, 2), hexa_rot_mat(1, 3)},
-        {hexa_rot_mat(2, 0), hexa_rot_mat(2, 1), hexa_rot_mat(2, 2), hexa_rot_mat(2, 3)},
-        {hexa_rot_mat(3, 0), hexa_rot_mat(3, 1), hexa_rot_mat(3, 2), hexa_rot_mat(3, 3)}
-      };
+      auto hexa_rot_qvm = quat_to_mat(hexa_pose.rotation);
+      auto field_rot = quat_to_mat(field_pose.rotation);
 
-      auto objective_rot = hexa_to_objective*hexa_rot_qvm;
+      auto camera_rot = hexa_to_camera*hexa_rot_qvm;
 
-      objective_to_field = field_pose.position - objective_position
-      auto objective_to_field_in_objective_coord = boost::qvm::inverse(objective_rot)*objective_to_field;
-      auto x = boost::qvm::X(objective_to_field_in_objective_coord);
-      auto y = boost::qvm::Y(objective_to_field_in_objective_coord);
-      co_await move_objective(0, x, y);
+      auto field_z_axis = field_pose.rotation * boost::qvm::vec<float,3>{1, 0, 0};
+      auto camera_z_axis = camera_rot * boost::qvm::vec<float,3>{1, 0, 0};
+      auto z_dot = boost::qvm::dot(camera_z_axis, field_z_axis);
+      if(z_dot < 0) {
+        z_dot *= -1;
+        field_z_axis *= -1;
+      }
+      auto rotation_axis = boost::qvm::cross(camera_z_axis, field_z_axis);
+      auto rotation_angle = acos(z_dot);
+      auto camera_rotation_vector = rotation_angle*rotation_axis;
+      auto hexa_rotation_vector = camera_to_hexa*camera_rotation_vector;
+
+      cv::Vec3f rvec{boost::qvm::X(hexa_rotation_vector), boost::qvm::Y(hexa_rotation_vector), boost::qvm::Z(hexa_rotation_vector)};
+      auto quaternion = cv::Quat<float>::createFromRvec(rvec);
+      auto eulerAngles = cv::Quat<float>::toEulerAngles(cv::QuatEnum::EulerAnglesType::EXT_XYZ);
+      eulerAngles *= -180/M_PI;
+
+      co_await rotate(eulerAngles[0], eulerAngles[1], eulerAngles[2]);
+
+      auto objective_to_field = field_pose.position - camera_position
+      
+      auto camera_x_axis = camera_rot * boost::qvm::vec<float,3>{1, 0, 0};
+      auto camera_y_axis = camera_rot * boost::qvm::vec<float,3>{0, 1, 0};
+
+      auto x = boost::qvm::dot(objective_to_field, camera_x_axis);
+      auto y = boost::qvm::dot(objective_to_field, camera_y_axis);
+
+      co_await move_objective(x, y, 0);
     }
      
     boost::asio::awaitable<void> calibrate() {
@@ -380,46 +418,46 @@ namespace thalamus {
       
       try {
         co_await move(0, 0, 0, 0, 0, 0);
-        auto objective_origin_pose_opt = co_await measure_objective_pose(1s);
-        if(!objective_origin_pose_opt) {
+        auto camera_origin_pose_opt = co_await measure_objective_pose(1s);
+        if(!camera_origin_pose_opt) {
           THALAMUS_LOG(warning) << "No position samples received";
           co_return;
         }
-        auto objective_origin_pose = *objective_origin_pose_opt;
-        THALAMUS_LOG(info) << "objective_origin_pose " << boost::qvm::X(objective_origin_pose.position) << " " << boost::qvm::Y(objective_origin_pose.position) << " " << boost::qvm::Z(objective_origin_pose.position);
+        auto camera_origin_pose = *camera_origin_pose_opt;
+        THALAMUS_LOG(info) << "camera_origin_pose " << boost::qvm::X(camera_origin_pose.position) << " " << boost::qvm::Y(camera_origin_pose.position) << " " << boost::qvm::Z(camera_origin_pose.position);
         auto hexa_origin_pose = co_await read_hexa_pose();
         THALAMUS_LOG(info) << "hexa_origin_pose " << boost::qvm::X(hexa_origin_pose.position) << " " << boost::qvm::Y(hexa_origin_pose.position) << " " << boost::qvm::Z(hexa_origin_pose.position);
 
         co_await move(CALIBRATION_STEP_SIZE, 0, 0, 0, 0, 0);
-        auto objective_x_pose_opt = co_await measure_objective_pose(1s);
-        if(!objective_x_pose_opt) {
+        auto camera_x_pose_opt = co_await measure_objective_pose(1s);
+        if(!camera_x_pose_opt) {
           THALAMUS_LOG(warning) << "No position samples received";
           co_return;
         }
-        auto objective_x_pose = *objective_x_pose_opt;
-        THALAMUS_LOG(info) << "objective_x_pose " << boost::qvm::X(objective_x_pose.position) << " " << boost::qvm::Y(objective_x_pose.position) << " " << boost::qvm::Z(objective_x_pose.position);
+        auto camera_x_pose = *camera_x_pose_opt;
+        THALAMUS_LOG(info) << "camera_x_pose " << boost::qvm::X(camera_x_pose.position) << " " << boost::qvm::Y(camera_x_pose.position) << " " << boost::qvm::Z(camera_x_pose.position);
         auto hexa_x_pose = co_await read_hexa_pose();
         THALAMUS_LOG(info) << "hexa_x_pose " << boost::qvm::X(hexa_x_pose.position) << " " << boost::qvm::Y(hexa_x_pose.position) << " " << boost::qvm::Z(hexa_x_pose.position);
 
         co_await move(0, CALIBRATION_STEP_SIZE, 0, 0, 0, 0);
-        auto objective_y_pose_opt = co_await measure_objective_pose(1s);
-        if(!objective_y_pose_opt) {
+        auto camera_y_pose_opt = co_await measure_objective_pose(1s);
+        if(!camera_y_pose_opt) {
           THALAMUS_LOG(warning) << "No position samples received";
           co_return;
         }
-        auto objective_y_pose = *objective_y_pose_opt;
-        THALAMUS_LOG(info) << "objective_y_pose " << boost::qvm::X(objective_y_pose.position) << " " << boost::qvm::Y(objective_y_pose.position) << " " << boost::qvm::Z(objective_y_pose.position);
+        auto camera_y_pose = *camera_y_pose_opt;
+        THALAMUS_LOG(info) << "camera_y_pose " << boost::qvm::X(camera_y_pose.position) << " " << boost::qvm::Y(camera_y_pose.position) << " " << boost::qvm::Z(camera_y_pose.position);
         auto hexa_y_pose = co_await read_hexa_pose();
         THALAMUS_LOG(info) << "hexa_y_pose " << boost::qvm::X(hexa_y_pose.position) << " " << boost::qvm::Y(hexa_y_pose.position) << " " << boost::qvm::Z(hexa_y_pose.position);
 
         co_await move(0, 0, CALIBRATION_STEP_SIZE, 0, 0, 0);
-        auto objective_z_pose_opt = co_await measure_objective_pose(1s);
-        if(!objective_z_pose_opt) {
+        auto camera_z_pose_opt = co_await measure_objective_pose(1s);
+        if(!camera_z_pose_opt) {
           THALAMUS_LOG(warning) << "No position samples received";
           co_return;
         }
-        auto objective_z_pose = *objective_z_pose_opt;
-        THALAMUS_LOG(info) << "objective_z_pose " << boost::qvm::X(objective_z_pose.position) << " " << boost::qvm::Y(objective_z_pose.position) << " " << boost::qvm::Z(objective_z_pose.position);
+        auto camera_z_pose = *camera_z_pose_opt;
+        THALAMUS_LOG(info) << "camera_z_pose " << boost::qvm::X(camera_z_pose.position) << " " << boost::qvm::Y(camera_z_pose.position) << " " << boost::qvm::Z(camera_z_pose.position);
         auto hexa_z_pose = co_await read_hexa_pose();
         THALAMUS_LOG(info) << "hexa_z_pose " << boost::qvm::X(hexa_z_pose.position) << " " << boost::qvm::Y(hexa_z_pose.position) << " " << boost::qvm::Z(hexa_z_pose.position);
 
@@ -430,34 +468,34 @@ namespace thalamus {
           {1, 1, 1, 1}
         };
 
-        boost::qvm::mat<float, 4, 4> objective = {
-          {boost::qvm::X(origin_origin_pose.position), boost::qvm::X(origin_x_pose.position), boost::qvm::X(origin_y_pose.position), boost::qvm::X(origin_z_pose.position)},
-          {boost::qvm::Y(origin_origin_pose.position), boost::qvm::Y(origin_x_pose.position), boost::qvm::Y(origin_y_pose.position), boost::qvm::Y(origin_z_pose.position)},
-          {boost::qvm::Z(origin_origin_pose.position), boost::qvm::Z(origin_x_pose.position), boost::qvm::Z(origin_y_pose.position), boost::qvm::Z(origin_z_pose.position)},
+        boost::qvm::mat<float, 4, 4> camera = {
+          {boost::qvm::X(camera_origin_pose.position), boost::qvm::X(camera_x_pose.position), boost::qvm::X(camera_y_pose.position), boost::qvm::X(camera_z_pose.position)},
+          {boost::qvm::Y(camera_origin_pose.position), boost::qvm::Y(camera_x_pose.position), boost::qvm::Y(camera_y_pose.position), boost::qvm::Y(camera_z_pose.position)},
+          {boost::qvm::Z(camera_origin_pose.position), boost::qvm::Z(camera_x_pose.position), boost::qvm::Z(camera_y_pose.position), boost::qvm::Z(camera_z_pose.position)},
           {1, 1, 1, 1}
         };
 
-        objective_to_hexa = hexa*boost::qvm::inverse(objective);
-        hexa_to_objective = boost::qvm::inverse(objective_to_hexa);
+        camera_to_hexa = hexa*boost::qvm::inverse(camera);
+        hexa_to_camera = boost::qvm::inverse(camera_to_hexa);
 
-        THALAMUS_LOG(info) << "objective_to_hexa";
-        THALAMUS_LOG(info) << "  " << boost::qvm::R<0,0>(objective_to_hexa) << " " << boost::qvm::R<0,1>(objective_to_hexa) << " " << boost::qvm::R<0,2>(objective_to_hexa) << " " << boost::qvm::R<0,3>(objective_to_hexa);
-        THALAMUS_LOG(info) << "  " << boost::qvm::R<1,0>(objective_to_hexa) << " " << boost::qvm::R<1,1>(objective_to_hexa) << " " << boost::qvm::R<1,2>(objective_to_hexa) << " " << boost::qvm::R<1,3>(objective_to_hexa);
-        THALAMUS_LOG(info) << "  " << boost::qvm::R<2,0>(objective_to_hexa) << " " << boost::qvm::R<2,1>(objective_to_hexa) << " " << boost::qvm::R<2,2>(objective_to_hexa) << " " << boost::qvm::R<2,3>(objective_to_hexa);
-        THALAMUS_LOG(info) << "  " << boost::qvm::R<3,0>(objective_to_hexa) << " " << boost::qvm::R<3,1>(objective_to_hexa) << " " << boost::qvm::R<3,2>(objective_to_hexa) << " " << boost::qvm::R<3,3>(objective_to_hexa);
-        THALAMUS_LOG(info) << "hexa_to_objective";
-        THALAMUS_LOG(info) << "  " << boost::qvm::R<0,0>(hexa_to_objective) << " " << boost::qvm::R<0,1>(hexa_to_objective) << " " << boost::qvm::R<0,2>(hexa_to_objective) << " " << boost::qvm::R<0,3>(hexa_to_objective);
-        THALAMUS_LOG(info) << "  " << boost::qvm::R<1,0>(hexa_to_objective) << " " << boost::qvm::R<1,1>(hexa_to_objective) << " " << boost::qvm::R<1,2>(hexa_to_objective) << " " << boost::qvm::R<1,3>(hexa_to_objective);
-        THALAMUS_LOG(info) << "  " << boost::qvm::R<2,0>(hexa_to_objective) << " " << boost::qvm::R<2,1>(hexa_to_objective) << " " << boost::qvm::R<2,2>(hexa_to_objective) << " " << boost::qvm::R<2,3>(hexa_to_objective);
-        THALAMUS_LOG(info) << "  " << boost::qvm::R<3,0>(hexa_to_objective) << " " << boost::qvm::R<3,1>(hexa_to_objective) << " " << boost::qvm::R<3,2>(hexa_to_objective) << " " << boost::qvm::R<3,3>(hexa_to_objective);
+        THALAMUS_LOG(info) << "camera_to_hexa";
+        THALAMUS_LOG(info) << "  " << boost::qvm::R<0,0>(camera_to_hexa) << " " << boost::qvm::R<0,1>(camera_to_hexa) << " " << boost::qvm::R<0,2>(camera_to_hexa) << " " << boost::qvm::R<0,3>(camera_to_hexa);
+        THALAMUS_LOG(info) << "  " << boost::qvm::R<1,0>(camera_to_hexa) << " " << boost::qvm::R<1,1>(camera_to_hexa) << " " << boost::qvm::R<1,2>(camera_to_hexa) << " " << boost::qvm::R<1,3>(camera_to_hexa);
+        THALAMUS_LOG(info) << "  " << boost::qvm::R<2,0>(camera_to_hexa) << " " << boost::qvm::R<2,1>(camera_to_hexa) << " " << boost::qvm::R<2,2>(camera_to_hexa) << " " << boost::qvm::R<2,3>(camera_to_hexa);
+        THALAMUS_LOG(info) << "  " << boost::qvm::R<3,0>(camera_to_hexa) << " " << boost::qvm::R<3,1>(camera_to_hexa) << " " << boost::qvm::R<3,2>(camera_to_hexa) << " " << boost::qvm::R<3,3>(camera_to_hexa);
+        THALAMUS_LOG(info) << "hexa_to_camera";
+        THALAMUS_LOG(info) << "  " << boost::qvm::R<0,0>(hexa_to_camera) << " " << boost::qvm::R<0,1>(hexa_to_camera) << " " << boost::qvm::R<0,2>(hexa_to_camera) << " " << boost::qvm::R<0,3>(hexa_to_camera);
+        THALAMUS_LOG(info) << "  " << boost::qvm::R<1,0>(hexa_to_camera) << " " << boost::qvm::R<1,1>(hexa_to_camera) << " " << boost::qvm::R<1,2>(hexa_to_camera) << " " << boost::qvm::R<1,3>(hexa_to_camera);
+        THALAMUS_LOG(info) << "  " << boost::qvm::R<2,0>(hexa_to_camera) << " " << boost::qvm::R<2,1>(hexa_to_camera) << " " << boost::qvm::R<2,2>(hexa_to_camera) << " " << boost::qvm::R<2,3>(hexa_to_camera);
+        THALAMUS_LOG(info) << "  " << boost::qvm::R<3,0>(hexa_to_camera) << " " << boost::qvm::R<3,1>(hexa_to_camera) << " " << boost::qvm::R<3,2>(hexa_to_camera) << " " << boost::qvm::R<3,3>(hexa_to_camera);
         
         ObservableListPtr state_value = std::make_shared<ObservableList>();
         for(auto a : mat_accessors) {
-          state_value->push_back(a(hexa_to_objective));
+          state_value->push_back(a(hexa_to_camera));
         }
         
-        (*state)["hexa_to_objective"].assign(state_value, [] {
-          THALAMUS_LOG(info) << "hexa_to_objective commited to state"
+        (*state)["hexa_to_camera"].assign(state_value, [] {
+          THALAMUS_LOG(info) << "hexa_to_camera commited to state"
         });
       } catch(std::exception& e) {
         THALAMUS_ASSERT(false, "Calibration failed: %s", e.what());
@@ -470,7 +508,7 @@ namespace thalamus {
         busy = false;
       });
       auto hexa_pose = co_await read_hexa_pose();
-      auto objective_position = hexa_to_objective*hexa_pose.position;
+      auto camera_position = hexa_to_camera*hexa_pose.position;
 
       cv::Quat<float> hexa_rot_quat(boost::qvm::S(hexa_pose.rotation),
                                     boost::qvm::X(hexa_pose.rotation),
@@ -484,9 +522,10 @@ namespace thalamus {
         {hexa_rot_mat(3, 0), hexa_rot_mat(3, 1), hexa_rot_mat(3, 2), hexa_rot_mat(3, 3)}
       };
 
-      auto objective_rot = hexa_to_objective*hexa_rot_qvm;
+      auto camera_rot = hexa_to_camera*hexa_rot_qvm;
+      auto camera_offset = camera_rot*boost::qvm::vec<float, 3>{x, y, z};
 
-      auto new_objective_position = objective_position + boost::qvm::vec<float, 3>(x, y, z);
+      auto new_camera_position = camera_position + boost::qvm::vec<float, 3>(x, y, z);
 
       auto new_hexa_position = objective_to_hexa*new_objective_position;
       co_await move(boost::qvm::X(new_hexa_position), boost::qvm::Y(new_hexa_position), boost::qvm::Z(new_hexa_position));
@@ -523,10 +562,10 @@ namespace thalamus {
         return;
       }
       
-      if(source == hexa_to_objective_state.get()) {
+      if(source == hexa_to_camera_state.get()) {
         auto key_int = std::get<long long>(k);
         auto value_float = std::get<double>(v);
-        mat_accessors[key_int](hexa_to_objective) = value_float;
+        mat_accessors[key_int](hexa_to_camera) = value_float;
       }
       
       if(source != state.get()) {
@@ -566,9 +605,9 @@ namespace thalamus {
         objective_accumulator.pose = std::get<long long>(v);
       } else if(key_str == "Field Pose") {
         field_accumulator.pose = std::get<long long>(v);
-      } else if(key_str == "hexa_to_objective") {
-        hexa_to_objective_state = std::get<ObservableListPtr>(v);
-        hexa_to_objective_state.recap(std::bind(&Impl::on_change, this, hexa_to_objective_state.get(), _1, _2, _3));
+      } else if(key_str == "hexa_to_camera") {
+        hexa_to_camera_state = std::get<ObservableListPtr>(v);
+        hexa_to_camera_state.recap(std::bind(&Impl::on_change, this, hexa_to_camera_state.get(), _1, _2, _3));
       }
     }
   };
@@ -603,7 +642,7 @@ namespace thalamus {
 
     auto type = request["type"].as_string();
     if(type == "lock") {
-      impl->objective_to_hexa = boost::qvm::inverse(impl->hexa_to_objective);
+      impl->camera_to_hexa = boost::qvm::inverse(impl->hexa_to_camera);
       impl->locked = true;
       return response;
     }
@@ -626,14 +665,13 @@ namespace thalamus {
 
     if(type == "calibrate") {
       boost::asio::co_spawn(impl->io_context, impl->calibrate(), boost::asio::detached);
-    } else if(type == "get_hexa_to_objective") {
+    } else if(type == "get_hexa_to_camera") {
       boost::json::array value;
       for(auto a : impl->mat_accessors) {
-        value.push_back(a(impl->hexa_to_objective));
+        value.push_back(a(impl->hexa_to_camera));
       }
-      response["hexa_to_objective"] = value;
+      response["hexa_to_camera"] = value;
     } else if(type == "align") {
-      auto value = request["value"].as_array();
       boost::asio::co_spawn(impl->io_context, impl->align(), boost::asio::detached);
     } else if(type == "move_objective") {
       auto value = request["value"].as_array();

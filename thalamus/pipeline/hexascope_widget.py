@@ -18,6 +18,10 @@ class HexascopeWidget(QWidget):
       config['Objective Pose'] = 0
     if 'Field Pose' not in config:
       config['Field Pose'] = 1
+    if 'hexa_to_camera' not in config:
+      config['hexa_to_camera'] = [1, 0, 0,
+                                  0, 1, 0,
+                                  0, 0, 1]
 
     layout = QGridLayout()
     node_selector = NodeSelector(config, 'Motion Tracking Node', False)
@@ -32,6 +36,7 @@ class HexascopeWidget(QWidget):
     layout.addWidget(field_spinbox, 2, 1)
 
     calibrate_button = QPushButton('Calibrate')
+    align_button = QPushButton('Align')
     #descend_button = QPushButton('Descend')
     #ascend_button = QPushButton('Ascend')
 
@@ -46,8 +51,12 @@ class HexascopeWidget(QWidget):
       )
       create_task_with_exc_handling(stub.node_request(request))
     calibrate_button.clicked.connect(lambda: send_request({'type': 'calibrate'}))
+    align_button.clicked.connect(lambda: send_request({'type': 'align'}))
     #descend_button.clicked.connect(lambda: send_request({'type': 'descend'}))
     #ascend_button.clicked.connect(lambda: send_request({'type': 'ascend'}))
+
+    objective_spinbox.valueChanged.connect(lambda v: config.update({'Objective Pose' : v}))
+    field_spinbox.valueChanged.connect(lambda v: config.update({'Field Pose' : v}))
 
     def on_change(a, k, v):
       if k == 'Objective Pose':
