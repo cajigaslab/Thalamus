@@ -60,11 +60,6 @@ class Window(QMainWindow):
 
     self.is_fullscreen = False
 
-    file_menu = self.menuBar().addMenu("&File")
-    action = QAction('&Calibrate Touch', self)
-    action.triggered.connect(self.canvas.calibrate_touch)
-    file_menu.addAction(action)
-
     view_menu = self.menuBar().addMenu("&View")
     action = QAction('Enter &Fullscreen', self)
     action.setShortcut('Ctrl+F')

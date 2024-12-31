@@ -47,8 +47,7 @@ class AnalogWidget(QWidget):
 
   def mousePressEvent(self, e: QMouseEvent):
     self.holding = True
-    geometry = qt_screen_geometry()
-    self.position = geometry.width()*qt_get_x(e)/self.width(), geometry.height()*qt_get_y(e)/self.height()
+    self.position = qt_get_x(e), qt_get_y(e)
     pass
 
   def mouseReleaseEvent(self, e: QMouseEvent):
@@ -58,6 +57,4 @@ class AnalogWidget(QWidget):
 
   def mouseMoveEvent(self, e: QMouseEvent):
     if self.holding:
-      geometry = qt_screen_geometry()
-      self.position = geometry.width()*qt_get_x(e)/self.width(), geometry.height()*qt_get_y(e)/self.height()
-    pass
+      self.position = qt_get_x(e), qt_get_y(e)

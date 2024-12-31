@@ -6,6 +6,7 @@
 #include <string>
 #include <base_node.hpp>
 #include <state.hpp>
+#include <stim_node.hpp>
 
 namespace thalamus {
   class NidaqNode : public Node, public AnalogNode {
@@ -27,7 +28,7 @@ namespace thalamus {
     size_t modalities() const override;
   };
 
-  class NidaqOutputNode : public Node {
+  class NidaqOutputNode : public Node, public StimNode {
     struct Impl;
     std::unique_ptr<Impl> impl;
   public:
@@ -35,9 +36,9 @@ namespace thalamus {
     ~NidaqOutputNode();
     static std::string type_name();
 
+    std::future<thalamus_grpc::StimResponse> stim(thalamus_grpc::StimRequest&&) override;
+
     static bool prepare();
-    size_t modalities() const override {
-      return 0;
-    }
+    size_t modalities() const override;
   };
 }

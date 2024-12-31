@@ -303,6 +303,17 @@ async def run(context: TaskContextProtocol) -> TaskResult:
 
   config_json = json.dumps(context.task_config.unwrap())
   await queue.put(thalamus_pb2.Event(payload=config_json.encode(),time=time.perf_counter_ns()))
+
+  async def pulse():
+    await analog_queue.put(thalamus_pb2.InjectAnalogRequest(signal=thalamus_pb2.AnalogResponse(
+        data=[5],
+        spans=[thalamus_pb2.Span(begin=0,end=1)],
+        sample_intervals=[0])))
+    await context.sleep(datetime.timedelta(seconds=.1))
+    await analog_queue.put(thalamus_pb2.InjectAnalogRequest(signal=thalamus_pb2.AnalogResponse(
+        data=[0],
+        spans=[thalamus_pb2.Span(begin=0,end=1)],
+        sample_intervals=[0])))
     
   async def show_images(indexes, duration: typing.Optional[datetime.timedelta] = None):
     nonlocal rendered_images, space_pressed
@@ -320,10 +331,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       tasks.append(context.sleep(duration))
 
     if indexes:
-      tasks.append(asyncio.get_event_loop().create_task(analog_queue.put(thalamus_pb2.InjectAnalogRequest(signal=thalamus_pb2.AnalogResponse(
-        data=[5,0],
-        spans=[thalamus_pb2.Span(begin=0,end=2)],
-        sample_intervals=[100000000])))))
+      tasks.append(create_task_with_exc_handling(pulse()))
 
     await asyncio.gather(*tasks)
     space_pressed = False

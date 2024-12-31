@@ -130,13 +130,6 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
 
   return result
 
-def stamp_msg(context: TaskContextProtocol, msg: 'BehavState') -> 'BehavState':
-  '''
-  Set the timestamp field to the current time
-  '''
-  msg.header.stamp = context.ros_now().to_msg()
-  return msg
-
 async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-many-statements
   """
   Implementation of the state machine for the simple task

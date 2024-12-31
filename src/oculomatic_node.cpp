@@ -122,13 +122,13 @@ namespace thalamus {
     }
 
     void on_data(Node*) {
-      if(image_source->format() != ImageNode::Format::Gray || pool.full()) {
+      if(pool.full()) {
         return;
       }
 
       unsigned char* data = const_cast<unsigned char*>(image_source->plane(0).data());
-      int width = image_source->width();
       int height = image_source->height();
+      int width = image_source->plane(0).size() / height;
       auto frame_interval = image_source->frame_interval();
 
       auto need_recenter = this->need_recenter;
@@ -139,7 +139,16 @@ namespace thalamus {
       auto out = *mat_pool.begin();
       mat_pool.erase(out);
 
-      cv::Mat in = cv::Mat(height, width, CV_8UC1, data).clone();
+      cv::Mat in;
+      if(image_source->format() != ImageNode::Format::Gray 
+          || image_source->format() != ImageNode::Format::YUV420P 
+          || image_source->format() != ImageNode::Format::YUVJ420P) {
+        in = cv::Mat(height, width, CV_8UC1, data).clone();
+      } else if (image_source->format() != ImageNode::Format::RGB) {
+        cv::cvtColor(cv::Mat(height, width, CV_8UC3, data), in, cv::COLOR_GRAY2RGB);
+      } else if (image_source->format() != ImageNode::Format::YUYV422) {
+        cv::extractChannel(cv::Mat(height, width, CV_8UC3, data), in, 0);
+      }
       pool.push([width,
                   height,
                   frame_id=next_input_frame++,

@@ -359,7 +359,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
 
     
 
-    if elapsed >= duration and future is not None:
+    if elapsed >= duration and future is not None and not future.done():
       future.set_result(None)
 
   context.widget.renderer = renderer

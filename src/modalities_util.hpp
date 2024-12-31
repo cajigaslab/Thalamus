@@ -5,6 +5,7 @@
 #include <xsens_node.hpp>
 #include <image_node.hpp>
 #include <text_node.hpp>
+#include <stim_node.hpp>
 
 namespace thalamus {
   template <typename T>
@@ -14,6 +15,7 @@ namespace thalamus {
     result |= std::is_base_of<MotionCaptureNode, T>::value ? THALAMUS_MODALITY_MOCAP : 0;
     result |= std::is_base_of<ImageNode, T>::value ? THALAMUS_MODALITY_IMAGE : 0;
     result |= std::is_base_of<TextNode, T>::value ? THALAMUS_MODALITY_TEXT : 0;
+    result |= std::is_base_of<StimNode, T>::value ? THALAMUS_MODALITY_STIM : 0;
     return result;
   }
 
@@ -31,6 +33,8 @@ namespace thalamus {
       return (modalities & THALAMUS_MODALITY_IMAGE) ? dynamic_cast<T>(node) : nullptr;
     } else if constexpr (std::is_same<T, TextNode*>::value) {
       return (modalities & THALAMUS_MODALITY_TEXT) ? dynamic_cast<T>(node) : nullptr;
+    } else if constexpr (std::is_same<T, StimNode*>::value) {
+      return (modalities & THALAMUS_MODALITY_STIM) ? dynamic_cast<T>(node) : nullptr;
     } else {
       return dynamic_cast<T>(node);
     }

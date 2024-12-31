@@ -8,7 +8,7 @@ import pathlib
 from ..build import generate
 THALAMUS_PROTO_PATH = pathlib.Path.cwd() / 'proto' / 'thalamus.proto'
 THALAMUS_PROTO_GEN_PATH = pathlib.Path.cwd() / 'thalamus' / 'thalamus_pb2.py'
-if THALAMUS_PROTO_PATH.exists() and not THALAMUS_PROTO_GEN_PATH.exists() or (THALAMUS_PROTO_GEN_PATH.stat().st_mtime < THALAMUS_PROTO_PATH.stat().st_mtime):
+if THALAMUS_PROTO_PATH.exists() and not THALAMUS_PROTO_GEN_PATH.exists() or (THALAMUS_PROTO_PATH.exists() and THALAMUS_PROTO_GEN_PATH.exists() and THALAMUS_PROTO_GEN_PATH.stat().st_mtime < THALAMUS_PROTO_PATH.stat().st_mtime):
   generate()
 
 import os
@@ -25,6 +25,7 @@ from . import task_context as task_context_module
 from . import tasks
 from . import window as task_window
 from ..config import *
+from .. import process
 
 from pkg_resources import resource_string, resource_filename
 
@@ -39,6 +40,7 @@ from .observable_bridge import ObservableBridge
 from ..pipeline.thalamus_window import ThalamusWindow
 from ..servicer import ThalamusServicer
 from ..qt import *
+from ..orchestration import Orchestrator
 
 UNHANDLED_EXCEPTION: typing.List[Exception] = []
 
@@ -75,6 +77,7 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument('-e', '--recorder-url', help='Recorder URL')
   parser.add_argument('-o', '--ophanim-url', help='Ophanim URL')
   parser.add_argument('-t', '--trace', action='store_true', help='Enable tracing')
+  parser.add_argument('-n', '--no-orchestration', action='store_true', help='Disable orchestration')
   parser.add_argument('-r', '--remote-executor', action='store_true',
                       help='Send task configs to remote ROS node to execute')
   return parser.parse_args(self_args[1:])
@@ -111,6 +114,9 @@ async def async_main() -> None:
   if 'reward_schedule' not in config:
     config['reward_schedule'] = {'schedules': [[0]], 'index': 0}
 
+  if 'Orchestration' not in config:
+    config['Orchestration'] = {'Remote Executor': False, 'Processes': []}
+
   if 'nodes' not in config:
     config['nodes'] = []
   for node in config['nodes']:
@@ -137,6 +143,10 @@ async def async_main() -> None:
   await channel.channel_ready()
   stub = thalamus_pb2_grpc.ThalamusStub(channel)
 
+  orchestrator = Orchestrator()
+  if not arguments.no_orchestration:
+    await orchestrator.start(config['Orchestration']['Processes'])
+
   user_config_path = pathlib.Path.home().joinpath('.task_controller', 'config.yaml')
   if user_config_path.exists():
     with open(str(user_config_path)) as user_config_file:
@@ -147,7 +157,7 @@ async def async_main() -> None:
 
   screen_geometry = qt_screen_geometry()
 
-  if arguments.remote_executor:
+  if arguments.remote_executor or config['Orchestration'].get('Remote Executor', False):
     window = None
   else:
     window = task_window.Window(config, done_future, None, None, stub, None)
@@ -176,7 +186,7 @@ async def async_main() -> None:
     (screen_geometry.height()-controller.height()) // 2 + 50)
   controller.show()
 
-  thalamus = ThalamusWindow(config, stub, done_future)
+  thalamus = ThalamusWindow(f'localhost:{arguments.port}', config, stub, done_future)
   await thalamus.load()
   thalamus.resize(384, 768)
   thalamus.move(100, 100)
@@ -197,6 +207,9 @@ async def async_main() -> None:
   except KeyboardInterrupt:
     pass
 
+  if not arguments.no_orchestration:
+    await orchestrator.stop()
+
   if servicer is not None:
     await servicer.stop()
 
@@ -216,6 +229,7 @@ def main() -> None:
     if not UNHANDLED_EXCEPTION:
       raise
   finally:
+    process.cleanup()
     if UNHANDLED_EXCEPTION:
       raise UNHANDLED_EXCEPTION[0] from None
 

@@ -357,6 +357,9 @@ namespace thalamus {
       }
       else if (key_str == "Running") {
         is_running = std::get<bool>(v);
+        for(auto& wave : waves) {
+          wave.last_switch = 0ns;
+        }
         if (is_running) {
           last_time = std::chrono::steady_clock::now();
           _start_time = last_time;
