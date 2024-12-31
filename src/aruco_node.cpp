@@ -272,6 +272,9 @@ struct ArucoNode::Impl {
             cv::Mat obj_points, img_points;
             grid_board.matchImagePoints(corners, ids, obj_points, img_points);
             cv::Vec3d rvec, tvec;
+            if(obj_points.total() == 0) {
+              continue;
+            }
             try {
               cv::solvePnP(obj_points, img_points, camera_matrix, distortion_parameters, rvec, tvec);
 
