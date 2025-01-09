@@ -97,7 +97,7 @@ namespace tracing
   static bool enabled = false;
   static std::vector<TraceEvent> traceEvents;
   static std::unordered_map<std::thread::id, std::string> threadIds;
-  static int64_t startUs;
+  static int64_t startUs = 0;
   static int64_t durationUs;
   static std::string outputFolderName;
   static std::thread serializationThread;
@@ -152,6 +152,10 @@ namespace tracing
     localTraceEvents.reserve(1048576);
 
     while (is_running()) {
+      {
+        std::lock_guard<std::mutex> lock(mutex);
+        startUs = 0;
+      }
       std::stringstream stream;
       stream << outputFolderName << "/" << serializeCounter++ << ".json";
       std::ofstream output(stream.str());
@@ -165,10 +169,13 @@ namespace tracing
         auto interval = std::chrono::milliseconds(10);
         auto start = std::chrono::high_resolution_clock::now();
         auto end = start;
+        int64_t startUsCopy;
+        
         std::chrono::milliseconds duration;
         {
           std::lock_guard<std::mutex> lock(mutex);
           localTraceEvents.swap(traceEvents);
+          startUsCopy = startUs;
         }
         for (const auto& e : localTraceEvents)
         {
@@ -185,7 +192,7 @@ namespace tracing
         }
         localTraceEvents.clear();
 
-        auto counter_ts = clock->GetEpochUs() - startUs;
+        auto counter_ts = clock->GetEpochUs() - startUsCopy;
         auto num_counters = NEXT_COUNTER.load();
         for (size_t i = 0; i < num_counters; ++i) {
           auto count = COUNTERS[i].count.exchange(0);
@@ -234,9 +241,22 @@ namespace tracing
     std::lock_guard<std::mutex> lock(mutex);
 
     auto now = clock->GetEpochUs();
+    if(startUs == 0) {
+      startUs = now;
+    }
     auto sinceStart = now - startUs;
 
     auto threadId = std::this_thread::get_id();
+    switch(phase) {
+      case 'S':
+        phase = 'b';
+        break;
+      case 'F':
+        phase = 'e';
+        break;
+      default:
+        break;
+    }
 
     traceEvents.push_back(TraceEvent{ phase, category_enabled, name, num_args, {}, sinceStart, threadId, id });
 
@@ -310,7 +330,7 @@ namespace tracing
 
     assert(clock);
 
-    startUs = clock->GetEpochUs();
+    startUs = 0;
     running = true;
     serializeCounter = 0;
     serializationThread = std::thread(serializeEvents);

@@ -74,9 +74,12 @@ namespace thalamus {
       update_metrics(1, 0, 1, [&] { return "Events"; });
 
       thalamus_grpc::StorageRecord record;
-      auto body = record.mutable_event();
-      *body = e;
-      record.set_time(e.time());
+      {
+        TRACE_EVENT0("thalamus", "StorageNode::on_event(build record)");
+        auto body = record.mutable_event();
+        *body = e;
+        record.set_time(e.time());
+      }
 
       queue_record(std::move(record));
     }
@@ -90,9 +93,12 @@ namespace thalamus {
       update_metrics(1, 0, 1, [&] { return "Log"; });
 
       thalamus_grpc::StorageRecord record;
-      auto body = record.mutable_text();
-      *body = e;
-      record.set_time(e.time());
+      {
+        TRACE_EVENT0("thalamus", "StorageNode::on_event(build record)");
+        auto body = record.mutable_text();
+        *body = e;
+        record.set_time(e.time());
+      }
 
       queue_record(std::move(record));
     }
@@ -102,34 +108,39 @@ namespace thalamus {
         return;
       }
 
-      TRACE_EVENT0("thalamus", "StorageNode::on_data");
+      TRACE_EVENT0("thalamus", "StorageNode::on_analog_data");
 
       thalamus_grpc::StorageRecord record;
-      auto body = record.mutable_analog();
-      for (auto i = 0; i < locked_analog->num_channels(); ++i) {
-        auto data = locked_analog->data(i);
-        auto channel_name_view = locked_analog->name(i);
-        std::string channel_name(channel_name_view.begin(), channel_name_view.end());
 
-        update_metrics(metrics_index, i, data.size(), [&] { return name + "(" + channel_name + ")"; });
-        auto span = body->add_spans();
+      {
+        TRACE_EVENT0("thalamus", "StorageNode::on_analog_data(build record)");
+        auto body = record.mutable_analog();
+        for (auto i = 0; i < locked_analog->num_channels(); ++i) {
+          auto data = locked_analog->data(i);
+          auto channel_name_view = locked_analog->name(i);
+          std::string channel_name(channel_name_view.begin(), channel_name_view.end());
 
-        span->set_begin(body->mutable_data()->size());
-        body->mutable_data()->Add(data.begin(), data.end());
-        span->set_end(body->mutable_data()->size());
-        span->set_name(channel_name);
+          update_metrics(metrics_index, i, data.size(), [&] { return name + "(" + channel_name + ")"; });
+          auto span = body->add_spans();
 
-        body->add_sample_intervals(locked_analog->sample_interval(i).count());
+          span->set_begin(body->mutable_data()->size());
+          body->mutable_data()->Add(data.begin(), data.end());
+          span->set_end(body->mutable_data()->size());
+          span->set_name(channel_name);
+
+          body->add_sample_intervals(locked_analog->sample_interval(i).count());
+        }
+
+        record.set_time(locked_analog->time().count());
+        record.set_node(name);
       }
-
-      record.set_time(locked_analog->time().count());
-      record.set_node(name);
 
       queue_record(std::move(record));
     }
 
     template <typename T>
     void update_metrics(int metrics_index, int sub_index, size_t count, T name, bool is_rate = true) {
+      TRACE_EVENT0("thalamus", "StorageNode::update_metrics");
       auto key = std::make_pair(metrics_index, sub_index);
       auto offset = offsets.find(key);
       if(offset == offsets.end()) {
@@ -147,38 +158,41 @@ namespace thalamus {
         return;
       }
 
-      TRACE_EVENT0("thalamus", "StorageNode::on_data");
+      TRACE_EVENT0("thalamus", "StorageNode::on_image_data");
       update_metrics(metrics_index, 0, 1, [&] { return name; });
 
       thalamus_grpc::StorageRecord record;
-      auto body = record.mutable_image();
-      body->set_width(locked_analog->width());
-      body->set_height(locked_analog->height());
-      switch(locked_analog->format()) {
-      case ImageNode::Format::Gray:
-        body->set_format(thalamus_grpc::Image::Format::Image_Format_Gray);
-        break;
-      case ImageNode::Format::RGB:
-        body->set_format(thalamus_grpc::Image::Format::Image_Format_RGB);
-        break;
-      case ImageNode::Format::YUYV422:
-        body->set_format(thalamus_grpc::Image::Format::Image_Format_YUYV422);
-        break;
-      case ImageNode::Format::YUV420P:
-        body->set_format(thalamus_grpc::Image::Format::Image_Format_YUV420P);
-        break;
-      case ImageNode::Format::YUVJ420P:
-        body->set_format(thalamus_grpc::Image::Format::Image_Format_YUVJ420P);
-        break;
-      }
+      {
+        TRACE_EVENT0("thalamus", "StorageNode::on_image_data(build record)");
+        auto body = record.mutable_image();
+        body->set_width(locked_analog->width());
+        body->set_height(locked_analog->height());
+        switch(locked_analog->format()) {
+        case ImageNode::Format::Gray:
+          body->set_format(thalamus_grpc::Image::Format::Image_Format_Gray);
+          break;
+        case ImageNode::Format::RGB:
+          body->set_format(thalamus_grpc::Image::Format::Image_Format_RGB);
+          break;
+        case ImageNode::Format::YUYV422:
+          body->set_format(thalamus_grpc::Image::Format::Image_Format_YUYV422);
+          break;
+        case ImageNode::Format::YUV420P:
+          body->set_format(thalamus_grpc::Image::Format::Image_Format_YUV420P);
+          break;
+        case ImageNode::Format::YUVJ420P:
+          body->set_format(thalamus_grpc::Image::Format::Image_Format_YUVJ420P);
+          break;
+        }
 
-      for (auto i = 0; i < locked_analog->num_planes(); ++i) {
-        auto data = locked_analog->plane(i);
-        body->add_data(data.data(), data.size());
-      }
+        for (auto i = 0; i < locked_analog->num_planes(); ++i) {
+          auto data = locked_analog->plane(i);
+          body->add_data(data.data(), data.size());
+        }
 
-      record.set_time(locked_analog->time().count());
-      record.set_node(name);
+        record.set_time(locked_analog->time().count());
+        record.set_node(name);
+      }
 
       queue_record(std::move(record));
     }
@@ -188,15 +202,20 @@ namespace thalamus {
         return;
       }
 
+      TRACE_EVENT0("thalamus", "StorageNode::on_text_data");
+
       update_metrics(metrics_index, 0, 1, [&] { return name; });
       thalamus_grpc::StorageRecord record;
-      auto body = record.mutable_text();
-      auto text = locked_text->text();
+      {
+        TRACE_EVENT0("thalamus", "StorageNode::on_text_data(build record)");
+        auto body = record.mutable_text();
+        auto text = locked_text->text();
 
-      body->set_text(text.data(), text.size());
+        body->set_text(text.data(), text.size());
 
-      record.set_time(locked_text->time().count());
-      record.set_node(name);
+        record.set_time(locked_text->time().count());
+        record.set_node(name);
+      }
 
       queue_record(std::move(record));
     }
@@ -206,29 +225,32 @@ namespace thalamus {
         return;
       }
 
-      TRACE_EVENT0("thalamus", "StorageNode::on_xsens_data");
+      TRACE_EVENT0("thalamus", "StorageNode::on_motion_data");
       update_metrics(metrics_index, 0, 1, [&] { return name; });
 
       thalamus_grpc::StorageRecord record;
-      auto body = record.mutable_xsens();
-      body->set_pose_name(locked_xsens->pose_name());
-      auto segments = locked_xsens->segments();
-      for (auto& segment : segments) {
-        auto protobuf_segment = body->add_segments();
-        protobuf_segment->set_id(segment.segment_id);
-        protobuf_segment->set_frame(segment.frame);
-        protobuf_segment->set_time(segment.time);
-        protobuf_segment->set_actor(segment.actor);
-        protobuf_segment->set_x(boost::qvm::X(segment.position));
-        protobuf_segment->set_y(boost::qvm::Y(segment.position));
-        protobuf_segment->set_z(boost::qvm::Z(segment.position));
-        protobuf_segment->set_q0(boost::qvm::S(segment.rotation));
-        protobuf_segment->set_q1(boost::qvm::X(segment.rotation));
-        protobuf_segment->set_q2(boost::qvm::Y(segment.rotation));
-        protobuf_segment->set_q3(boost::qvm::Z(segment.rotation));
+      {
+        TRACE_EVENT0("thalamus", "StorageNode::on_motion_data(build record)");
+        auto body = record.mutable_xsens();
+        body->set_pose_name(locked_xsens->pose_name());
+        auto segments = locked_xsens->segments();
+        for (auto& segment : segments) {
+          auto protobuf_segment = body->add_segments();
+          protobuf_segment->set_id(segment.segment_id);
+          protobuf_segment->set_frame(segment.frame);
+          protobuf_segment->set_time(segment.time);
+          protobuf_segment->set_actor(segment.actor);
+          protobuf_segment->set_x(boost::qvm::X(segment.position));
+          protobuf_segment->set_y(boost::qvm::Y(segment.position));
+          protobuf_segment->set_z(boost::qvm::Z(segment.position));
+          protobuf_segment->set_q0(boost::qvm::S(segment.rotation));
+          protobuf_segment->set_q1(boost::qvm::X(segment.rotation));
+          protobuf_segment->set_q2(boost::qvm::Y(segment.rotation));
+          protobuf_segment->set_q3(boost::qvm::Z(segment.rotation));
+        }
+        record.set_time(locked_xsens->time().count());
+        record.set_node(name);
       }
-      record.set_time(locked_xsens->time().count());
-      record.set_node(name);
 
       queue_record(std::move(record));
     }
@@ -249,21 +271,31 @@ namespace thalamus {
     std::atomic_ullong queued_bytes = 0;
 
     void thread_target(std::string output_file) {
+      tracing::SetCurrentThreadName("STORAGE");
       prepare_storage(output_file);
       while(is_running) {
+        TRACE_EVENT0("thalamus", "loop");
         std::vector<thalamus_grpc::StorageRecord> local_records;
         {
+          TRACE_EVENT0("thalamus", "waiting");
           std::unique_lock<std::mutex> lock(records_mutex);
           records_condition.wait_for(lock, 1s, [&] { return !records.empty() || !is_running; });
           local_records.swap(records);
         }
         for(auto& record : local_records) {
-          auto serialized = record.SerializePartialAsString();
+          std::string serialized;
+          {
+            TRACE_EVENT0("thalamus", "serialize");
+            serialized = record.SerializePartialAsString();
+          }
           auto size = serialized.size();
           auto bigendian_size = htonll(size);
           auto size_bytes = reinterpret_cast<char*>(&bigendian_size);
-          output_stream.write(size_bytes, sizeof(bigendian_size));
-          output_stream.write(serialized.data(), size);
+          {
+            TRACE_EVENT0("thalamus", "write");
+            output_stream.write(size_bytes, sizeof(bigendian_size));
+            output_stream.write(serialized.data(), size);
+          }
           --queued_records;
           queued_bytes -= record.ByteSizeLong();
         }
@@ -272,6 +304,7 @@ namespace thalamus {
     }
 
     void queue_record(thalamus_grpc::StorageRecord&& record) {
+      TRACE_EVENT0("thalamus", "StorageNode::queue_record");
       ++queued_records;
       queued_bytes += record.ByteSizeLong();
       std::lock_guard<std::mutex> lock(records_mutex);
@@ -280,6 +313,7 @@ namespace thalamus {
     }
 
     void on_stats_timer(const boost::system::error_code& error) {
+      TRACE_EVENT0("thalamus", "StorageNode::on_stats_timer");
       if (error.value() == boost::asio::error::operation_aborted) {
         return;
       }

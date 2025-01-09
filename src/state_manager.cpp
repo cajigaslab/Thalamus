@@ -110,7 +110,8 @@ struct StateManager::Impl {
   }
 
   bool send_change(ObservableCollection::Action action, const std::string& address, ObservableCollection::Value value, std::function<void()> callback) {
-    TRACE_EVENT_ASYNC_BEGIN0("thalamus", "send_change", next_id);
+    auto id = ++next_id; 
+    TRACE_EVENT_ASYNC_BEGIN0("thalamus", "send_change", id);
     if (io_context.stopped()) {
       return true;
     }
@@ -132,7 +133,7 @@ struct StateManager::Impl {
     else {
       change->set_action(thalamus_grpc::ObservableChange_Action_Delete);
     }
-    transaction.set_id(++next_id);
+    transaction.set_id(id);
 
     THALAMUS_LOG(trace) << "Change " << transaction.id();
 
