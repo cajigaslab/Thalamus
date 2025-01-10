@@ -295,6 +295,7 @@ namespace thalamus {
     }
 
     void on_change(ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
+      TRACE_EVENT0("thalamus", "NidaqNode::on_change");
 #ifdef _WIN32
       auto key_str = std::get<std::string>(k);
       if (key_str == "Channel") {
@@ -600,6 +601,7 @@ namespace thalamus {
 
     ObservableListPtr stims_state;
     void on_change(ObservableCollection* source, ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
+      TRACE_EVENT0("thalamus", "NidaqOutputNode::on_change");
       if(source == stims_state.get()) {
         auto key_int = std::get<long long>(k);
         if(std::holds_alternative<std::string>(v)) {
@@ -729,6 +731,7 @@ namespace thalamus {
     }
 
     static int32 CVICALLBACK DoneCallback(TaskHandle taskHandle, int32 status, void *restart) {
+      TRACE_EVENT0("thalamus", "NidaqOutputNode::DoneCallback");
       THALAMUS_LOG(info) << "Stim done";
       if(status < 0) {
         THALAMUS_LOG(error) << absl::StrFormat("DAQmx Task failed %d", status);
@@ -744,6 +747,7 @@ namespace thalamus {
     int armed_stim = -1;
     thalamus::map<int, std::string> stims;
     thalamus_grpc::StimResponse declare_stim(const thalamus_grpc::StimDeclaration& declaration) {
+      TRACE_EVENT0("thalamus", "NidaqOutputNode::declare_stim");
       THALAMUS_LOG(info) << "Declaring stim";
       thalamus_grpc::StimResponse response;
       auto& error = *response.mutable_error();
@@ -763,6 +767,7 @@ namespace thalamus {
     }
 
     thalamus_grpc::StimResponse retrieve_stim(int id) {
+      TRACE_EVENT0("thalamus", "NidaqOutputNode::retrieve_stim");
       THALAMUS_LOG(info) << "Arming stim";
       thalamus_grpc::StimResponse response;
       auto& error = *response.mutable_error();
@@ -781,6 +786,7 @@ namespace thalamus {
     }
 
     thalamus_grpc::StimResponse arm_stim(int id) {
+      TRACE_EVENT0("thalamus", "NidaqOutputNode::arm_stim");
       THALAMUS_LOG(info) << "Arming stim";
       thalamus_grpc::StimResponse response;
       auto& error = *response.mutable_error();
@@ -912,6 +918,7 @@ namespace thalamus {
     }
 
     thalamus_grpc::StimResponse trigger_stim(size_t id) {
+      TRACE_EVENT0("thalamus", "NidaqOutputNode::trigger_stim");
       if(armed_stim != id) {
         thalamus_grpc::StimResponse response = arm_stim(id);
         if(response.error().code()) {

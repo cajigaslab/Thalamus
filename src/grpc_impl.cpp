@@ -222,24 +222,27 @@ namespace thalamus {
         std::promise<void> promise;
         auto future = promise.get_future();
         std::shared_ptr<Node> raw_node;
-        boost::asio::post(io_context, [&] {
-          node_graph.get_node(request->node(), [&](auto ptr) {
-            raw_node = ptr.lock();
-            promise.set_value();
+        {
+          TRACE_EVENT0("thalamus", "Service::analog(get node)");
+          boost::asio::post(io_context, [&] {
+            node_graph.get_node(request->node(), [&](auto ptr) {
+              raw_node = ptr.lock();
+              promise.set_value();
+            });
           });
-        });
-        while (future.wait_for(1s) == std::future_status::timeout && !context->IsCancelled()) {
-          if (io_context.stopped()) {
-            ::thalamus_grpc::AnalogResponse response;
-            ::grpc::WriteOptions options;
-            options.set_last_message();
-            writer(response, options);
-            return ::grpc::Status::OK;
+          while (future.wait_for(1s) == std::future_status::timeout && !context->IsCancelled()) {
+            if (io_context.stopped()) {
+              ::thalamus_grpc::AnalogResponse response;
+              ::grpc::WriteOptions options;
+              options.set_last_message();
+              writer(response, options);
+              return ::grpc::Status::OK;
+            }
           }
-        }
-        if (!node_cast<AnalogNode*>(raw_node.get())) {
-          std::this_thread::sleep_for(1s);
-          continue;
+          if (!node_cast<AnalogNode*>(raw_node.get())) {
+            std::this_thread::sleep_for(1s);
+            continue;
+          }
         }
 
         AnalogNode* node = node_cast<AnalogNode*>(raw_node.get());
@@ -258,6 +261,7 @@ namespace thalamus {
 
         using signal_type = decltype(raw_node->ready);
         auto connection = raw_node->ready.connect(signal_type::slot_type([&](const Node*) {
+          TRACE_EVENT0("thalamus", "Service::analog(on ready)");
           std::lock_guard<std::mutex> lock(connection_mutex);
           ::thalamus_grpc::AnalogResponse response;
 
@@ -1193,21 +1197,24 @@ namespace thalamus {
       std::promise<void> promise;
       auto future = promise.get_future();
       std::shared_ptr<Node> raw_node;
-      boost::asio::post(impl->io_context, [&] {
-        impl->node_graph.get_node(*request, [&](auto ptr) {
-          raw_node = ptr.lock();
-          promise.set_value();
+      {
+        TRACE_EVENT0("thalamus", "Service::xsens(get node)");
+        boost::asio::post(impl->io_context, [&] {
+          impl->node_graph.get_node(*request, [&](auto ptr) {
+            raw_node = ptr.lock();
+            promise.set_value();
+            });
           });
-        });
-      while (future.wait_for(1s) == std::future_status::timeout && !context->IsCancelled()) {
-        if (impl->io_context.stopped()) {
-          writer->WriteLast(::thalamus_grpc::XsensResponse(), ::grpc::WriteOptions());
-          return ::grpc::Status::OK;
+        while (future.wait_for(1s) == std::future_status::timeout && !context->IsCancelled()) {
+          if (impl->io_context.stopped()) {
+            writer->WriteLast(::thalamus_grpc::XsensResponse(), ::grpc::WriteOptions());
+            return ::grpc::Status::OK;
+          }
         }
-      }
-      if (!node_cast<MotionCaptureNode*>(raw_node.get())) {
-        std::this_thread::sleep_for(1s);
-        continue;
+        if (!node_cast<MotionCaptureNode*>(raw_node.get())) {
+          std::this_thread::sleep_for(1s);
+          continue;
+        }
       }
 
       auto node = node_cast<MotionCaptureNode*>(raw_node.get());
@@ -1216,6 +1223,7 @@ namespace thalamus {
 
       using signal_type = decltype(raw_node->ready);
       auto connection = raw_node->ready.connect(signal_type::slot_type([&](const Node*) {
+        TRACE_EVENT0("thalamus", "Service::xsens(on ready)");
         std::lock_guard<std::mutex> lock(connection_mutex);
         ::thalamus_grpc::XsensResponse response;
         response.set_pose_name(node->pose_name());
@@ -1258,21 +1266,24 @@ namespace thalamus {
       std::promise<void> promise;
       auto future = promise.get_future();
       std::shared_ptr<Node> raw_node;
-      boost::asio::post(impl->io_context, [&] {
-        impl->node_graph.get_node(request->node(), [&](auto ptr) {
-          raw_node = ptr.lock();
-          promise.set_value();
+      {
+        TRACE_EVENT0("thalamus", "Service::image(get node)");
+        boost::asio::post(impl->io_context, [&] {
+          impl->node_graph.get_node(request->node(), [&](auto ptr) {
+            raw_node = ptr.lock();
+            promise.set_value();
+            });
           });
-        });
-      while (future.wait_for(1s) == std::future_status::timeout && !context->IsCancelled()) {
-        if (impl->io_context.stopped()) {
-          writer->WriteLast(::thalamus_grpc::Image(), ::grpc::WriteOptions());
-          return ::grpc::Status::OK;
+        while (future.wait_for(1s) == std::future_status::timeout && !context->IsCancelled()) {
+          if (impl->io_context.stopped()) {
+            writer->WriteLast(::thalamus_grpc::Image(), ::grpc::WriteOptions());
+            return ::grpc::Status::OK;
+          }
         }
-      }
-      if (!node_cast<ImageNode*>(raw_node.get())) {
-        std::this_thread::sleep_for(1s);
-        continue;
+        if (!node_cast<ImageNode*>(raw_node.get())) {
+          std::this_thread::sleep_for(1s);
+          continue;
+        }
       }
 
       auto node = node_cast<ImageNode*>(raw_node.get());
@@ -1285,6 +1296,7 @@ namespace thalamus {
 
       using signal_type = decltype(raw_node->ready);
       auto connection = raw_node->ready.connect(signal_type::slot_type([&](const Node*) {
+        TRACE_EVENT0("thalamus", "Service::image(on ready)");
         std::lock_guard<std::mutex> lock(connection_mutex);
         std::vector<::thalamus_grpc::Image> responses;
         size_t position = 0;

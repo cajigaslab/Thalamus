@@ -220,7 +220,7 @@ namespace thalamus {
     }
 
     void on_timer(const boost::system::error_code& error) {
-      TRACE_EVENT0("thalamus", "WaveGeneratorNode::Impl::on_timer");
+      TRACE_EVENT0("thalamus", "WaveGeneratorNode::on_timer");
       if (error.value() == boost::asio::error::operation_aborted) {
         return;
       }
@@ -277,6 +277,7 @@ namespace thalamus {
     const std::set<std::string> wave_properties = {"Frequency", "Amplitude", "Shape", "Offset", "Duty Cycle", "Phase"};
 
     void on_change(ObservableCollection* source, ObservableCollection::Action action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
+      TRACE_EVENT0("thalamus", "WaveGeneratorNode::on_change");
       std::string key_str;
       Wave* wave = nullptr;
       if(source == state.get()) {
