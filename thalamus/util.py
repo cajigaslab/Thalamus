@@ -116,7 +116,7 @@ class NodeSelector(QWidget):
         return
       
       for i in range(combo.count()):
-        if combo.itemData() is target_node:
+        if combo.itemData(i) is target_node:
           current_text = combo.itemText(i)
           combo.setItemText(i, value)
           if multi_select:

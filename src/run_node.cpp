@@ -2,7 +2,6 @@
 #include <util.hpp>
 #include <grpcpp/create_channel.h>
 #include <thalamus.grpc.pb.h>
-#include <tracing/tracing.hpp>
 
 using namespace thalamus;
 

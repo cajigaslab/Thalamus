@@ -1,9 +1,9 @@
+#include <thalamus/tracing.hpp>
 #include <base_node.hpp>
 #include <chrono>
 #include <cmath>
 #include <map>
 #include <util.hpp>
-#include <tracing/tracing.hpp>
 #include <random>
 #include <modalities_util.hpp>
 //#include <plot.h>
@@ -47,7 +47,7 @@ namespace thalamus {
     }
 
     void on_data(Node* raw_node, AnalogNode* node) {
-      TRACE_EVENT0("thalamus", "StarterNode::Impl::on_data");
+      TRACE_EVENT("thalamus", "StarterNode::Impl::on_data");
       const auto& buffer = node->data(channel);
 
       std::for_each(buffer.begin(), buffer.end(), [&](double d) {
@@ -220,7 +220,7 @@ namespace thalamus {
     }
 
     void on_timer(const boost::system::error_code& error) {
-      TRACE_EVENT0("thalamus", "WaveGeneratorNode::Impl::on_timer");
+      TRACE_EVENT("thalamus", "WaveGeneratorNode::on_timer");
       if (error.value() == boost::asio::error::operation_aborted) {
         return;
       }
@@ -277,6 +277,7 @@ namespace thalamus {
     const std::set<std::string> wave_properties = {"Frequency", "Amplitude", "Shape", "Offset", "Duty Cycle", "Phase"};
 
     void on_change(ObservableCollection* source, ObservableCollection::Action action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
+      TRACE_EVENT("thalamus", "WaveGeneratorNode::on_change");
       std::string key_str;
       Wave* wave = nullptr;
       if(source == state.get()) {
@@ -462,7 +463,7 @@ namespace thalamus {
     }
 
     void on_data(Node* raw_node, AnalogNode* node) {
-      TRACE_EVENT0("thalamus", "ToggleNode::Impl::on_data");
+      TRACE_EVENT("thalamus", "ToggleNode::Impl::on_data");
       auto source = node->data(channel);
 
       buffer.assign(source.begin(), source.end());

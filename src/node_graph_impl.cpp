@@ -26,6 +26,7 @@
 #include <touchscreen_node.hpp>
 #include <stim_printer_node.hpp>
 #include <hexascope_node.hpp>
+#include <loop_test_node.hpp>
 
 namespace thalamus {
   using namespace std::chrono_literals;
@@ -99,8 +100,9 @@ namespace thalamus {
     {"SYNC", new NodeFactory<SyncNode>()},
     {"TOUCH_SCREEN", new NodeFactory<TouchScreenNode>()},
     {"STIM_PRINTER", new NodeFactory<StimPrinterNode>()},
-    {"ARUCO", new NodeFactory<ArucoNode>()},
-    {"HEXASCOPE", new NodeFactory<HexascopeNode>()}
+    {"HEXASCOPE", new NodeFactory<HexascopeNode>()},
+    {"LOOP_TEST", new NodeFactory<LoopTestNode>()},
+    {"ARUCO", new NodeFactory<ArucoNode>()}
   };
 
   struct NodeGraphImpl::Impl {

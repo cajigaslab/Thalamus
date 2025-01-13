@@ -345,6 +345,10 @@ FACTORIES = {
     UserData(UserDataType.SPINBOX, 'Rows', 8, []),
     UserData(UserDataType.SPINBOX, 'Columns', 8, []),
   ]),
+  'LOOP_TEST': Factory(None, [
+    UserData(UserDataType.DEFAULT, 'Source', '', []),
+    UserData(UserDataType.DEFAULT, 'Channel', '', []),
+  ]),
   'LOG': Factory(lambda c, s: LogWidget(c, s), []),
   'ARUCO': Factory(lambda c, s: ArucoWidget(c, s), [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),

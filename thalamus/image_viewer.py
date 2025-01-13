@@ -1,4 +1,8 @@
-#import cv2
+try:
+  import cv2
+except ImportError:
+  print('cv2 import failed, yuv video unavailable')
+
 import sys
 import grpc
 import json

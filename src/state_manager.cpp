@@ -1,5 +1,6 @@
+#include <thalamus/tracing.hpp>
 #include <state_manager.hpp>
-#include <tracing/tracing.hpp>
+#include <thalamus/thread.hpp>
 #include <chrono>
 #include <boost/signals2.hpp>
 
@@ -27,7 +28,7 @@ struct StateManager::Impl {
 
 
   void grpc_target() {
-    tracing::SetCurrentThreadName("StateManager");
+    set_current_thread_name("StateManager");
 
     thalamus_grpc::ObservableTransaction in;
     thalamus_grpc::ObservableTransaction out;
@@ -38,14 +39,14 @@ struct StateManager::Impl {
     this->stream = stream.get();
 
     while(stream->Read(&in)) {
-      TRACE_EVENT0("thalamus", "observable_bridge");
+      TRACE_EVENT("thalamus", "observable_bridge");
       if (in.acknowledged()) {
         THALAMUS_LOG(trace) << "Acknowledged " << in.acknowledged();
         std::function<void()> callback;
         {
           std::unique_lock<std::mutex> lock(mutex);
           callback = pending_changes.at(in.acknowledged());
-          TRACE_EVENT_ASYNC_END0("thalamus", "send_change", in.acknowledged());
+          TRACE_EVENT_END("thalamus", perfetto::Track(in.acknowledged()));
           pending_changes.erase(in.acknowledged());
         }
         boost::asio::post(io_context, callback);
@@ -64,7 +65,7 @@ struct StateManager::Impl {
         promises.emplace_back();
         futures.push_back(promises.back().get_future());
         boost::asio::post(io_context, [&promise=promises.back(),state=state,action=change.action(),address=change.address(),value=std::move(value)] {
-          TRACE_EVENT0("thalamus", "observable_bridge(post)");
+          TRACE_EVENT("thalamus", "observable_bridge(post)");
           if (action == thalamus_grpc::ObservableChange_Action_Set) {
             set_jsonpath(state, address, value, true);
           }
@@ -110,7 +111,8 @@ struct StateManager::Impl {
   }
 
   bool send_change(ObservableCollection::Action action, const std::string& address, ObservableCollection::Value value, std::function<void()> callback) {
-    TRACE_EVENT_ASYNC_BEGIN0("thalamus", "send_change", next_id);
+    auto id = ++next_id; 
+    TRACE_EVENT_BEGIN("thalamus", "send_change", perfetto::Track(id));
     if (io_context.stopped()) {
       return true;
     }
@@ -132,7 +134,7 @@ struct StateManager::Impl {
     else {
       change->set_action(thalamus_grpc::ObservableChange_Action_Delete);
     }
-    transaction.set_id(++next_id);
+    transaction.set_id(id);
 
     THALAMUS_LOG(trace) << "Change " << transaction.id();
 

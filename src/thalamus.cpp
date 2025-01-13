@@ -1,5 +1,6 @@
 //#include <QApplication>
 //#include <QScreen>
+#include <thalamus/tracing.hpp>
 #include "node_graph_impl.hpp"
 #include <boost/asio.hpp>
 #include <boost/program_options.hpp>
@@ -17,7 +18,7 @@
 #include <grpcpp/health_check_service_interface.h>
  
 #include "grpc_impl.hpp"
-#include <tracing/systemclock.hpp>
+#include <thalamus/thread.hpp>
 #include <format>
 #include <boost/log/trivial.hpp>
 #include <thalamus/file.hpp>
@@ -50,6 +51,8 @@
 
 #include <boost/log/support/date_time.hpp>
 
+PERFETTO_TRACK_EVENT_STATIC_STORAGE();
+
 namespace thalamus {
   using namespace std::chrono_literals;
 
@@ -59,13 +62,14 @@ namespace thalamus {
 #endif
     std::srand(std::time(nullptr));
 
-    std::string temp = "hello";
-
     auto steady_start = std::chrono::steady_clock::now();
     auto system_start = std::chrono::system_clock::now();
 
     const auto start_time = absl::FromChrono(system_start);
-    auto start_time_str = absl::FormatTime("%Y%m%dT%H%M%SZ%z", start_time, absl::LocalTimeZone());
+    std::string start_time_str = absl::FormatTime("%Y%m%dT%H%M%SZ%z", start_time, absl::LocalTimeZone());
+
+    std::string temp = "hello";
+
     auto log_filename = absl::StrFormat("thalamus_%s.log", start_time_str);
     auto log_absolute_filename = get_home() / std::filesystem::path(log_filename);
     auto good_log_file = can_write_file(log_absolute_filename);
@@ -127,13 +131,25 @@ namespace thalamus {
     boost::asio::io_context io_context;
 
     //QApplication app (argc, argv); 
+    set_current_thread_name("main");
 
-    SystemClock clock;
+    std::unique_ptr<perfetto::TracingSession> tracing_session;
+    perfetto::TracingInitArgs tracing_args;
+    tracing_args.backends |= perfetto::kInProcessBackend;
+
+    perfetto::TraceConfig cfg;
+    cfg.add_buffers()->set_size_kb(1024);  // Record up to 1 MiB.
+    cfg.set_output_path("thalamus_" + start_time_str + ".perfetto-trace");
+    cfg.set_write_into_file(true);
+    auto* ds_cfg = cfg.add_data_sources()->mutable_config();
+    ds_cfg->set_name("track_event");
+
     if (vm.count("trace")) {
-      tracing::SetClock(&clock);
-      tracing::Enable(20, "thalamus_trace");
-      tracing::Start();
-      tracing::SetCurrentThreadName("main");
+      perfetto::Tracing::Initialize(tracing_args);
+      perfetto::TrackEvent::Register();
+      tracing_session = perfetto::Tracing::NewTrace();
+      tracing_session->Setup(cfg);
+      tracing_session->StartBlocking();
     }
 
     std::shared_ptr<ObservableDict> state = std::make_shared<ObservableDict>();
@@ -199,8 +215,7 @@ namespace thalamus {
     node_graph.reset();
 
     if (vm.count("trace")) {
-      tracing::Stop();
-      tracing::Wait();
+      tracing_session->StopBlocking();
     }
 
     {
