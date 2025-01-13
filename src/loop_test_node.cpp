@@ -38,11 +38,13 @@ namespace thalamus {
       boost::asio::co_spawn(io_context, generate(), boost::asio::detached);
     }
 
+    std::chrono::milliseconds interval = 10ms;
+
     boost::asio::awaitable<void> generate() {
-      auto interval = 1ms;
       auto synth_time = 0.0;
+      auto interval_to_seconds = 1.0/decltype(interval)::period::den;
+      auto start_time = std::chrono::steady_clock::now();
       while(true) {
-        TRACE_EVENT("thalamus", "LoopTestNode_loop");
         timer.expires_after(interval);
         try {
           co_await timer.async_wait();
@@ -52,13 +54,17 @@ namespace thalamus {
             co_return;
           }
         }
+        TRACE_EVENT("thalamus", "LoopTestNode_loop");
         //generate sin wave using differential equation
-        auto derivative = 2 * M_PI * frequency * std::cos(2*M_PI*synth_time);
-        value += (1.0/decltype(interval)::period::den)* derivative;
-        time += interval;
-        synth_time += frequency * 1e-3;
-        TRACE_EVENT("thalamus", "LoopTestNode::ready");
-        outer->ready(outer);
+        auto current_time = std::chrono::steady_clock::now();
+        while(time < current_time - start_time) {
+          auto derivative = 2 * M_PI * frequency * std::cos(2*M_PI*synth_time);
+          value += interval.count()*interval_to_seconds* derivative;
+          time += interval;
+          synth_time += frequency * interval.count()*interval_to_seconds;
+          TRACE_EVENT("thalamus", "LoopTestNode::ready");
+          outer->ready(outer);
+        }
       }
     }
 
@@ -134,7 +140,7 @@ namespace thalamus {
   }
 
   std::chrono::nanoseconds LoopTestNode::sample_interval(int channel) const {
-    return 1000000ns;
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(impl->interval);
   }
 
   std::string_view LoopTestNode::name(int channel) const {
