@@ -1,7 +1,8 @@
+#include <thalamus/tracing.hpp>
 #include <nidaq_node.hpp>
 #include <regex>
 #include <absl/strings/numbers.h>
-#include <tracing/tracing.hpp>
+#include <thalamus/thread.hpp>
 #include <numeric>
 #include <grpc_impl.hpp>
 #include <modalities_util.hpp>
@@ -219,12 +220,12 @@ namespace thalamus {
 
     static int32 CVICALLBACK NidaqCallback(TaskHandle task_handle, int32, uInt32, void* callbackData) {
 #ifdef _WIN32
-      TRACE_EVENT0("thalamus", "NidaqCallback");
+      TRACE_EVENT("thalamus", "NidaqCallback");
       auto now = std::chrono::steady_clock::now();
       static std::set<std::thread::id> threads;
       auto id = std::this_thread::get_id();
       if (!threads.contains(id)) {
-        tracing::SetCurrentThreadName("NIDAQ " + std::to_string(threads.size()));
+        set_current_thread_name("NIDAQ " + std::to_string(threads.size()));
         threads.insert(id);
       }
       auto weak_ptr = static_cast<std::weak_ptr<Node>*>(callbackData);
@@ -244,7 +245,7 @@ namespace thalamus {
       impl->counter += num_samples;
 
       boost::asio::post(impl->io_context, [node,buffer=std::move(buffer),now]() {
-        TRACE_EVENT0("thalamus", "NidaqCallback(post)");
+        TRACE_EVENT("thalamus", "NidaqCallback(post)");
         auto& impl = node->impl;
         impl->output_buffer = std::move(buffer);
         impl->spans.clear();
@@ -295,7 +296,7 @@ namespace thalamus {
     }
 
     void on_change(ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
-      TRACE_EVENT0("thalamus", "NidaqNode::on_change");
+      TRACE_EVENT("thalamus", "NidaqNode::on_change");
 #ifdef _WIN32
       auto key_str = std::get<std::string>(k);
       if (key_str == "Channel") {
@@ -495,7 +496,7 @@ namespace thalamus {
       std::vector<double> values;
       std::vector<unsigned char> digital_values;
       while (running) {
-        TRACE_EVENT0("thalamus", "NidaqOutputNode::on_data");
+        TRACE_EVENT("thalamus", "NidaqOutputNode::on_data");
         std::vector<std::vector<double>> buffers;
         std::vector<std::chrono::nanoseconds> sample_intervals;
         {
@@ -539,7 +540,7 @@ namespace thalamus {
             now = std::chrono::steady_clock::now();
 
             {
-              TRACE_EVENT0("thalamus", "NidaqOutputNode::write_signal(analog)");
+              TRACE_EVENT("thalamus", "NidaqOutputNode::write_signal(analog)");
               auto advanced = false;
               for (auto c = 0u; c < buffers.size(); ++c) {
                 auto& buffer = buffers.at(c);
@@ -574,7 +575,7 @@ namespace thalamus {
             now = std::chrono::steady_clock::now();
 
             {
-              TRACE_EVENT0("thalamus", "NidaqOutputNode::write_signal(analog)");
+              TRACE_EVENT("thalamus", "NidaqOutputNode::write_signal(analog)");
               auto advanced = false;
               for (auto c = 0u; c < buffers.size(); ++c) {
                 auto& buffer = buffers.at(c);
@@ -601,7 +602,7 @@ namespace thalamus {
 
     ObservableListPtr stims_state;
     void on_change(ObservableCollection* source, ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
-      TRACE_EVENT0("thalamus", "NidaqOutputNode::on_change");
+      TRACE_EVENT("thalamus", "NidaqOutputNode::on_change");
       if(source == stims_state.get()) {
         auto key_int = std::get<long long>(k);
         if(std::holds_alternative<std::string>(v)) {
@@ -731,7 +732,7 @@ namespace thalamus {
     }
 
     static int32 CVICALLBACK DoneCallback(TaskHandle taskHandle, int32 status, void *restart) {
-      TRACE_EVENT0("thalamus", "NidaqOutputNode::DoneCallback");
+      TRACE_EVENT("thalamus", "NidaqOutputNode::DoneCallback");
       THALAMUS_LOG(info) << "Stim done";
       if(status < 0) {
         THALAMUS_LOG(error) << absl::StrFormat("DAQmx Task failed %d", status);
@@ -747,7 +748,7 @@ namespace thalamus {
     int armed_stim = -1;
     thalamus::map<int, std::string> stims;
     thalamus_grpc::StimResponse declare_stim(const thalamus_grpc::StimDeclaration& declaration) {
-      TRACE_EVENT0("thalamus", "NidaqOutputNode::declare_stim");
+      TRACE_EVENT("thalamus", "NidaqOutputNode::declare_stim");
       THALAMUS_LOG(info) << "Declaring stim";
       thalamus_grpc::StimResponse response;
       auto& error = *response.mutable_error();
@@ -767,7 +768,7 @@ namespace thalamus {
     }
 
     thalamus_grpc::StimResponse retrieve_stim(int id) {
-      TRACE_EVENT0("thalamus", "NidaqOutputNode::retrieve_stim");
+      TRACE_EVENT("thalamus", "NidaqOutputNode::retrieve_stim");
       THALAMUS_LOG(info) << "Arming stim";
       thalamus_grpc::StimResponse response;
       auto& error = *response.mutable_error();
@@ -786,7 +787,7 @@ namespace thalamus {
     }
 
     thalamus_grpc::StimResponse arm_stim(int id) {
-      TRACE_EVENT0("thalamus", "NidaqOutputNode::arm_stim");
+      TRACE_EVENT("thalamus", "NidaqOutputNode::arm_stim");
       THALAMUS_LOG(info) << "Arming stim";
       thalamus_grpc::StimResponse response;
       auto& error = *response.mutable_error();
@@ -918,7 +919,7 @@ namespace thalamus {
     }
 
     thalamus_grpc::StimResponse trigger_stim(size_t id) {
-      TRACE_EVENT0("thalamus", "NidaqOutputNode::trigger_stim");
+      TRACE_EVENT("thalamus", "NidaqOutputNode::trigger_stim");
       if(armed_stim != id) {
         thalamus_grpc::StimResponse response = arm_stim(id);
         if(response.error().code()) {
@@ -939,7 +940,7 @@ namespace thalamus {
     }
 
     void on_data(Node* raw_node, AnalogNode* node) {
-      TRACE_EVENT0("thalamus", "NidaqOutputNode::on_data");
+      TRACE_EVENT("thalamus", "NidaqOutputNode::on_data");
       if (task_handle == nullptr || !node->has_analog_data()) {
         return;
       }

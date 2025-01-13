@@ -1,3 +1,4 @@
+#include <thalamus/tracing.hpp>
 #include <storage_node.hpp>
 #include <image_node.hpp>
 #include <text_node.hpp>
@@ -8,6 +9,7 @@
 #include <boost/qvm/vec_access.hpp>
 #include <boost/qvm/quat_access.hpp>
 #include <modalities_util.hpp>
+#include <thalamus/thread.hpp>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -66,7 +68,7 @@ namespace thalamus {
     }
 
     void on_event(const thalamus_grpc::Event& e) {
-      TRACE_EVENT0("thalamus", "StorageNode::on_event");
+      TRACE_EVENT("thalamus", "StorageNode::on_event");
       if (!is_running) {
         return;
       }
@@ -75,7 +77,7 @@ namespace thalamus {
 
       thalamus_grpc::StorageRecord record;
       {
-        TRACE_EVENT0("thalamus", "StorageNode::on_event(build record)");
+        TRACE_EVENT("thalamus", "StorageNode::on_event(build record)");
         auto body = record.mutable_event();
         *body = e;
         record.set_time(e.time());
@@ -85,7 +87,7 @@ namespace thalamus {
     }
 
     void on_log(const thalamus_grpc::Text& e) {
-      TRACE_EVENT0("thalamus", "StorageNode::on_log");
+      TRACE_EVENT("thalamus", "StorageNode::on_log");
       if (!is_running) {
         return;
       }
@@ -94,7 +96,7 @@ namespace thalamus {
 
       thalamus_grpc::StorageRecord record;
       {
-        TRACE_EVENT0("thalamus", "StorageNode::on_event(build record)");
+        TRACE_EVENT("thalamus", "StorageNode::on_event(build record)");
         auto body = record.mutable_text();
         *body = e;
         record.set_time(e.time());
@@ -108,12 +110,12 @@ namespace thalamus {
         return;
       }
 
-      TRACE_EVENT0("thalamus", "StorageNode::on_analog_data");
+      TRACE_EVENT("thalamus", "StorageNode::on_analog_data");
 
       thalamus_grpc::StorageRecord record;
 
       {
-        TRACE_EVENT0("thalamus", "StorageNode::on_analog_data(build record)");
+        TRACE_EVENT("thalamus", "StorageNode::on_analog_data(build record)");
         auto body = record.mutable_analog();
         for (auto i = 0; i < locked_analog->num_channels(); ++i) {
           auto data = locked_analog->data(i);
@@ -140,7 +142,7 @@ namespace thalamus {
 
     template <typename T>
     void update_metrics(int metrics_index, int sub_index, size_t count, T name, bool is_rate = true) {
-      TRACE_EVENT0("thalamus", "StorageNode::update_metrics");
+      TRACE_EVENT("thalamus", "StorageNode::update_metrics");
       auto key = std::make_pair(metrics_index, sub_index);
       auto offset = offsets.find(key);
       if(offset == offsets.end()) {
@@ -158,12 +160,12 @@ namespace thalamus {
         return;
       }
 
-      TRACE_EVENT0("thalamus", "StorageNode::on_image_data");
+      TRACE_EVENT("thalamus", "StorageNode::on_image_data");
       update_metrics(metrics_index, 0, 1, [&] { return name; });
 
       thalamus_grpc::StorageRecord record;
       {
-        TRACE_EVENT0("thalamus", "StorageNode::on_image_data(build record)");
+        TRACE_EVENT("thalamus", "StorageNode::on_image_data(build record)");
         auto body = record.mutable_image();
         body->set_width(locked_analog->width());
         body->set_height(locked_analog->height());
@@ -202,12 +204,12 @@ namespace thalamus {
         return;
       }
 
-      TRACE_EVENT0("thalamus", "StorageNode::on_text_data");
+      TRACE_EVENT("thalamus", "StorageNode::on_text_data");
 
       update_metrics(metrics_index, 0, 1, [&] { return name; });
       thalamus_grpc::StorageRecord record;
       {
-        TRACE_EVENT0("thalamus", "StorageNode::on_text_data(build record)");
+        TRACE_EVENT("thalamus", "StorageNode::on_text_data(build record)");
         auto body = record.mutable_text();
         auto text = locked_text->text();
 
@@ -225,12 +227,12 @@ namespace thalamus {
         return;
       }
 
-      TRACE_EVENT0("thalamus", "StorageNode::on_motion_data");
+      TRACE_EVENT("thalamus", "StorageNode::on_motion_data");
       update_metrics(metrics_index, 0, 1, [&] { return name; });
 
       thalamus_grpc::StorageRecord record;
       {
-        TRACE_EVENT0("thalamus", "StorageNode::on_motion_data(build record)");
+        TRACE_EVENT("thalamus", "StorageNode::on_motion_data(build record)");
         auto body = record.mutable_xsens();
         body->set_pose_name(locked_xsens->pose_name());
         auto segments = locked_xsens->segments();
@@ -271,13 +273,13 @@ namespace thalamus {
     std::atomic_ullong queued_bytes = 0;
 
     void thread_target(std::string output_file) {
-      tracing::SetCurrentThreadName("STORAGE");
+      set_current_thread_name("STORAGE");
       prepare_storage(output_file);
       while(is_running) {
-        TRACE_EVENT0("thalamus", "loop");
+        TRACE_EVENT("thalamus", "loop");
         std::vector<thalamus_grpc::StorageRecord> local_records;
         {
-          TRACE_EVENT0("thalamus", "waiting");
+          TRACE_EVENT("thalamus", "waiting");
           std::unique_lock<std::mutex> lock(records_mutex);
           records_condition.wait_for(lock, 1s, [&] { return !records.empty() || !is_running; });
           local_records.swap(records);
@@ -285,14 +287,14 @@ namespace thalamus {
         for(auto& record : local_records) {
           std::string serialized;
           {
-            TRACE_EVENT0("thalamus", "serialize");
+            TRACE_EVENT("thalamus", "serialize");
             serialized = record.SerializePartialAsString();
           }
           auto size = serialized.size();
           auto bigendian_size = htonll(size);
           auto size_bytes = reinterpret_cast<char*>(&bigendian_size);
           {
-            TRACE_EVENT0("thalamus", "write");
+            TRACE_EVENT("thalamus", "write");
             output_stream.write(size_bytes, sizeof(bigendian_size));
             output_stream.write(serialized.data(), size);
           }
@@ -304,7 +306,7 @@ namespace thalamus {
     }
 
     void queue_record(thalamus_grpc::StorageRecord&& record) {
-      TRACE_EVENT0("thalamus", "StorageNode::queue_record");
+      TRACE_EVENT("thalamus", "StorageNode::queue_record");
       ++queued_records;
       queued_bytes += record.ByteSizeLong();
       std::lock_guard<std::mutex> lock(records_mutex);
@@ -313,7 +315,7 @@ namespace thalamus {
     }
 
     void on_stats_timer(const boost::system::error_code& error) {
-      TRACE_EVENT0("thalamus", "StorageNode::on_stats_timer");
+      TRACE_EVENT("thalamus", "StorageNode::on_stats_timer");
       if (error.value() == boost::asio::error::operation_aborted) {
         return;
       }

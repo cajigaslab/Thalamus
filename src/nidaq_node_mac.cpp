@@ -1,7 +1,7 @@
+#include <thalamus/tracing.hpp>
 #include <nidaq_node.hpp>
 #include <regex>
 #include <absl/strings/numbers.h>
-#include <tracing/tracing.hpp>
 #include <numeric>
 #include <grpc_impl.hpp>
 #include <modalities_util.hpp>
@@ -231,7 +231,7 @@ namespace thalamus {
     }
 
     void on_data(Node* raw_node) {
-      TRACE_EVENT0("thalamus", "NidaqOutputNode::on_data");
+      TRACE_EVENT("thalamus", "NidaqOutputNode::on_data");
       auto node = reinterpret_cast<AnalogNode*>(raw_node);
       _data.clear();
       for (auto i = 0; i < node->num_channels(); ++i) {

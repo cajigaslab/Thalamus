@@ -5,7 +5,6 @@
 #include <base_node.hpp>
 #include <state.hpp>
 #include <xsens_node.hpp>
-#include <tracing/tracing.hpp>
 
 #include <thalamus.pb.h>
 #include <grpc_impl.hpp>

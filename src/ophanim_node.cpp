@@ -2,7 +2,6 @@
 #include <util.hpp>
 #include <grpcpp/create_channel.h>
 #include <ophanim.grpc.pb.h>
-#include <tracing/tracing.hpp>
 #include <modalities_util.hpp>
 
 using namespace thalamus;

@@ -1,6 +1,6 @@
 #include <image_node.hpp>
 #include <modalities_util.hpp>
-#include <tracing/tracing.hpp>
+#include <thalamus/thread.hpp>
 #include <atomic>
 
 extern "C" {
@@ -86,7 +86,7 @@ namespace thalamus {
     };
 
     void ffmpeg_target(const std::string input_format_name, const std::string input_name, AVDictionary* options) {
-      tracing::SetCurrentThreadName("FFMPEG");
+      set_current_thread_name("FFMPEG");
       FfmpegContext context;
       context.options = options;
       context.input_format = avformat_alloc_context();

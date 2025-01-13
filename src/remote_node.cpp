@@ -4,7 +4,7 @@
 #include <thalamus.grpc.pb.h>
 #include <boost/qvm/vec_access.hpp>
 #include <boost/qvm/quat_access.hpp>
-#include <tracing/tracing.hpp>
+#include <thalamus/thread.hpp>
 #include <modalities_util.hpp>
 
 using namespace thalamus;
@@ -132,7 +132,7 @@ struct RemoteNode::Impl {
 
 
   void grpc_target(std::shared_ptr<grpc::Channel> channel, std::string node, std::chrono::milliseconds ping_interval, long long probe_size) {
-    tracing::SetCurrentThreadName("Remote Node GRPC");
+    set_current_thread_name("Remote Node GRPC");
 
     while(running) {
       {

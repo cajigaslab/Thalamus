@@ -1,9 +1,9 @@
+#include <thalamus/tracing.hpp>
 #include <lua_node.hpp>
 #include <vector>
 #include <calculator.hpp>
 #include <boost/spirit/include/qi.hpp>
 #include <modalities_util.hpp>
-#include <tracing/tracing.hpp>
 
 extern "C" {
 #include <lua.h>
@@ -203,7 +203,7 @@ namespace thalamus {
           channels_changed = true;
           outer->channels_changed(outer);
           source_connection = locked->ready.connect([&] (auto) {
-            TRACE_EVENT0("thalamus", "LuaNode::on_data");
+            TRACE_EVENT("thalamus", "LuaNode::on_data");
             if(!source->has_analog_data()) {
               return;
             }
@@ -251,7 +251,7 @@ namespace thalamus {
 
             auto start = std::chrono::steady_clock::now();
             {
-              TRACE_EVENT0("thalamus", "compute lua");
+              TRACE_EVENT("thalamus", "compute lua");
               for(auto i = 0;i < num_channels;++i) {
                 auto span = source->data(i);
                 auto& transformed = data.at(i);
@@ -274,7 +274,7 @@ namespace thalamus {
 
                   int status;
                   {
-                    TRACE_EVENT0("thalamus", "lua_pcall");
+                    TRACE_EVENT("thalamus", "lua_pcall");
                     status = lua_pcall(L, 1, 1, 0);
                   }
                   if (status == LUA_ERRRUN) {
@@ -294,7 +294,7 @@ namespace thalamus {
             std::chrono::nanoseconds compute_time = std::chrono::steady_clock::now() - start;
             data.back().assign(1, compute_time.count());
             time = source->time();
-            TRACE_EVENT0("thalamus", "LuaNode_ready");
+            TRACE_EVENT("thalamus", "LuaNode_ready");
             outer->ready(outer);
           });
         });

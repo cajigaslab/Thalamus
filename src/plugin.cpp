@@ -123,7 +123,7 @@ extern "C" {
       tracing::SetClock(&clock);
       tracing::Enable(20, "thalamus_trace");
       tracing::Start();
-      tracing::SetCurrentThreadName("main");
+      set_current_thread_name("main");
     }
 
     std::unique_ptr<std::istream> json_buffer;

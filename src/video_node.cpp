@@ -1,6 +1,7 @@
+#include <thalamus/tracing.hpp>
 #include <video_node.hpp>
 #include <modalities_util.hpp>
-#include <tracing/tracing.hpp>
+#include <thalamus/thread.hpp>
 #include <atomic>
 
 extern "C" {
@@ -84,7 +85,7 @@ namespace thalamus {
     static std::atomic_int frame_id;
 
     void ffmpeg_target(const std::string input_name) {
-      tracing::SetCurrentThreadName("FFMPEG");
+      set_current_thread_name("FFMPEG");
       VideoContext context;
       context.format_context = avformat_alloc_context();
 
@@ -143,9 +144,9 @@ namespace thalamus {
       std::set<std::chrono::steady_clock::time_point> frame_times;
       std::set<std::pair<std::chrono::steady_clock::time_point, int>> time_bits;
       while(running) {
-        TRACE_EVENT0("thalamus", "loop");
+        TRACE_EVENT("thalamus", "loop");
         {
-          TRACE_EVENT0("thalamus", "av_read_frame");
+          TRACE_EVENT("thalamus", "av_read_frame");
           err = av_read_frame(context.format_context, context.packet);
         }
         if(err < 0) {
@@ -154,7 +155,7 @@ namespace thalamus {
           return;
         }
         if(context.packet->stream_index != stream_index) {
-          TRACE_EVENT_INSTANT0("thalamus", "wrong stream");
+          TRACE_EVENT_INSTANT("thalamus", "wrong stream");
           av_packet_unref(context.packet);
           continue;
         }
@@ -172,13 +173,13 @@ namespace thalamus {
           auto target = start_time + std::chrono::nanoseconds(pts);
           sleep_time = target - now;
           if (now < target) {
-            TRACE_EVENT0("thalamus", "sleep_for");
+            TRACE_EVENT("thalamus", "sleep_for");
             std::this_thread::sleep_for(target - now);
           }
         }
 
         {
-          TRACE_EVENT0("thalamus", "avcodec_send_packet");
+          TRACE_EVENT("thalamus", "avcodec_send_packet");
           err = avcodec_send_packet(context.codec, context.packet);
         }
         if(err < 0) {
@@ -189,13 +190,13 @@ namespace thalamus {
         av_packet_unref(context.packet);
 
         while(true) {
-          TRACE_EVENT0("thalamus", "read frame");
+          TRACE_EVENT("thalamus", "read frame");
           {
-            TRACE_EVENT0("thalamus", "avcodec_receive_frame");
+            TRACE_EVENT("thalamus", "avcodec_receive_frame");
             err = avcodec_receive_frame(context.codec, context.frame.get());
           }
           if(err == AVERROR(EAGAIN)) {
-            TRACE_EVENT_INSTANT0("thalamus", "need more data");
+            TRACE_EVENT_INSTANT("thalamus", "need more data");
             break;
           } else if(err < 0) {
             THALAMUS_LOG(error) << "Failed to receive decode frame, stopping Video capture";
@@ -267,16 +268,16 @@ namespace thalamus {
           context.new_frame();
           frame_pending = true;
           int current_frame_id = ++frame_id;
-          TRACE_EVENT_ASYNC_BEGIN0("thalamus", "VideoNode_queue", current_frame_id);
+          TRACE_EVENT_BEGIN("thalamus", "VideoNode_queue", perfetto::Track(current_frame_id));
           boost::asio::post(io_context, [&,now,frame_copy,new_framerate=frame_times.size(),new_bps, current_frame_id] {
-            TRACE_EVENT_ASYNC_END0("thalamus", "VideoNode_queue", current_frame_id);
+            TRACE_EVENT_END("thalamus", perfetto::Track(current_frame_id));
             this->time = now.time_since_epoch();
             this->has_image = true;
             this->has_analog = true;
             this->framerate = new_framerate;
             this->bps = new_bps;
             frame_pending = false;
-            TRACE_EVENT0("thalamus", "VideoNode_ready");
+            TRACE_EVENT("thalamus", "VideoNode_ready");
             outer->ready(outer);
           });
         }

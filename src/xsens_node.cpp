@@ -1,9 +1,9 @@
+#include <thalamus/tracing.hpp>
 #include <xsens_node.hpp>
 #include <vector>
 #include <map>
 #include <functional>
 #include <util.hpp>
-#include <tracing/tracing.hpp>
 #include <boost/json.hpp>
 #include <boost/qvm/vec_access.hpp>
 #include <boost/qvm/vec_operations.hpp>
@@ -166,7 +166,7 @@ namespace thalamus {
     }
 
     void on_receive(const boost::system::error_code& error, size_t) {
-      TRACE_EVENT0("thalamus", "XsensNode::on_receive");
+      TRACE_EVENT("thalamus", "XsensNode::on_receive");
       if (error.value() == boost::asio::error::operation_aborted) {
         return;
       }
@@ -273,7 +273,7 @@ namespace thalamus {
     boost::asio::ip::udp::endpoint xsens_endpoint;
 
     void on_change(ObservableCollection::Action, const ObservableCollection::Key& key, const ObservableCollection::Value& value) {
-      TRACE_EVENT0("thalamus", "XsensNode::on_change");
+      TRACE_EVENT("thalamus", "XsensNode::on_change");
       auto key_str = std::get<std::string>(key);
       if(key_str == "Poses") {
         poses = std::get<ObservableListPtr>(value);
@@ -392,7 +392,7 @@ namespace thalamus {
   const size_t MotionCaptureNode::Segment::serialized_size = 32;
 
   XsensNode::Segment XsensNode::Segment::parse(unsigned char* data) {
-    TRACE_EVENT0("thalamus", "XsensNode::Segment::parse");
+    TRACE_EVENT("thalamus", "XsensNode::Segment::parse");
     Segment segment;
     segment.segment_id = ntohl(*reinterpret_cast<unsigned int*>(data));
 
@@ -468,7 +468,7 @@ namespace thalamus {
   }
 
   boost::json::value XsensNode::process(const boost::json::value& value) {
-    TRACE_EVENT0("thalamus", "XsensNode::process");
+    TRACE_EVENT("thalamus", "XsensNode::process");
     auto text = value.as_string();
     if(text == "Cache") {
       std::ofstream output(".xsens_cache", std::ios::out | std::ios::binary | std::ios::ate);
@@ -588,7 +588,7 @@ namespace thalamus {
     double pinky_distance;
 
     void on_change(ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
-      TRACE_EVENT0("thalamus", "HandEngineNode::on_change");
+      TRACE_EVENT("thalamus", "HandEngineNode::on_change");
       auto key_str = std::get<std::string>(k);
       if (key_str == "Running") {
         auto old_is_running = is_running;
@@ -633,7 +633,7 @@ namespace thalamus {
     }
 
     void update_pose_name(const boost::json::string& new_pose_name) {
-      TRACE_EVENT0("thalamus", "HandEngineNode::update_pose_name");
+      TRACE_EVENT("thalamus", "HandEngineNode::update_pose_name");
       if(pose_name == new_pose_name) {
         return;
       }
@@ -645,7 +645,7 @@ namespace thalamus {
       has_analog_data = false;
       this->timer.expires_after(duration);
       this->timer.async_wait([this] (const boost::system::error_code& error) {
-        TRACE_EVENT0("thalamus", "on_event(down)");
+        TRACE_EVENT("thalamus", "on_event(down)");
         if (error) {
           THALAMUS_LOG(info) << "update_pose_name " << error.message();
         }
@@ -657,7 +657,7 @@ namespace thalamus {
     }
 
     void on_receive(const boost::system::error_code& error, size_t length) {
-      TRACE_EVENT0("thalamus", "XsensNode::on_receive");
+      TRACE_EVENT("thalamus", "XsensNode::on_receive");
       if (error.value() == boost::asio::error::operation_aborted) {
         THALAMUS_LOG(info) << "HandEngineNode disconnected from " << address_str;
         is_connected = false;

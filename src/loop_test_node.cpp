@@ -1,6 +1,6 @@
+#include <thalamus/tracing.hpp>
 #include <loop_test_node.hpp>
 #include <modalities_util.hpp>
-#include <tracing/tracing.hpp>
 #include <boost/asio.hpp>
 
 
@@ -42,7 +42,7 @@ namespace thalamus {
       auto interval = 1ms;
       auto synth_time = 0.0;
       while(true) {
-        TRACE_EVENT0("thalamus", "LoopTestNode_loop");
+        TRACE_EVENT("thalamus", "LoopTestNode_loop");
         timer.expires_after(interval);
         try {
           co_await timer.async_wait();
@@ -57,7 +57,7 @@ namespace thalamus {
         value += (1.0/decltype(interval)::period::den)* derivative;
         time += interval;
         synth_time += frequency * 1e-3;
-        TRACE_EVENT0("thalamus", "LoopTestNode::ready");
+        TRACE_EVENT("thalamus", "LoopTestNode::ready");
         outer->ready(outer);
       }
     }
@@ -67,7 +67,7 @@ namespace thalamus {
     }
 
     void on_change(ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
-      TRACE_EVENT0("thalamus", "LoopTestNode::on_change");
+      TRACE_EVENT("thalamus", "LoopTestNode::on_change");
       auto key_str = std::get<std::string>(k);
       if (key_str == "Source") {
         auto value_str = std::get<std::string>(v);

@@ -1,8 +1,8 @@
+#include <thalamus/tracing.hpp>
 #include "thalamus_asio.hpp"
 #include <nidaq_node.hpp>
 #include <regex>
 #include <absl/strings/numbers.h>
-#include <tracing/tracing.hpp>
 #include <numeric>
 #include <grpc_impl.hpp>
 #include <comedilib.h>
@@ -501,7 +501,7 @@ namespace thalamus {
     std::vector<lsampl_t> maxdata;
 
     void on_data(Node*) {
-      TRACE_EVENT0("thalamus", "NidaqOutputNode::on_data");
+      TRACE_EVENT("thalamus", "NidaqOutputNode::on_data");
       if(!source->has_analog_data() || device == nullptr) {
         return;
       }
