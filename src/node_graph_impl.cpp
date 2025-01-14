@@ -25,6 +25,7 @@
 #include <video_node.hpp>
 #include <touchscreen_node.hpp>
 #include <stim_printer_node.hpp>
+#include <hexascope_node.hpp>
 #include <loop_test_node.hpp>
 
 namespace thalamus {
@@ -99,6 +100,7 @@ namespace thalamus {
     {"SYNC", new NodeFactory<SyncNode>()},
     {"TOUCH_SCREEN", new NodeFactory<TouchScreenNode>()},
     {"STIM_PRINTER", new NodeFactory<StimPrinterNode>()},
+    {"HEXASCOPE", new NodeFactory<HexascopeNode>()},
     {"LOOP_TEST", new NodeFactory<LoopTestNode>()},
     {"ARUCO", new NodeFactory<ArucoNode>()}
   };

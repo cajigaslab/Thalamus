@@ -1,3 +1,4 @@
+#include <thalamus/tracing.hpp>
 #include <distortion_node.hpp>
 #include <thread_pool.hpp>
 #include <shared_mutex>
@@ -95,12 +96,16 @@ namespace thalamus {
     }
 
     void on_data(Node*) {
+      auto id = get_unique_id();
+      TRACE_EVENT_BEGIN("thalamus", "DistortionNode::on_data", perfetto::Flow::ProcessScoped(id));
       if(image_source->format() != ImageNode::Format::Gray || pool.full()) {
+        TRACE_EVENT_END("thalamus");
         return;
       }
 
       unsigned char* data = const_cast<unsigned char*>(image_source->plane(0).data());
       if(source_width != image_source->width() || source_height != image_source->height()) {
+        TRACE_EVENT("thalamus", "cv::initUndistortRectifyMap");
         source_width = image_source->width();
         source_height = image_source->height();
         auto R = cv::Mat::eye(3,3, CV_64FC1);
@@ -110,7 +115,12 @@ namespace thalamus {
         cv::initUndistortRectifyMap(camera_matrix, distortion_coefficients, R, new_camera_matrix, cv::Size(source_width, source_height), CV_16SC2, map1, map2);
       }
       auto frame_interval = image_source->frame_interval();
-      cv::Mat in = cv::Mat(source_height, source_width, CV_8UC1, data).clone();
+      cv::Mat in = cv::Mat(source_height, source_width, CV_8UC1, data);
+      auto run_in_pool = collecting || computing;
+      if(apply_threshold || run_in_pool) {
+        TRACE_EVENT("thalamus", "cv::Mat::clone");
+        in = in.clone();
+      }
       busy = true;
 
       //if(mat_pool.empty()) {
@@ -123,7 +133,9 @@ namespace thalamus {
         frame_id = next_input_frame++;
       }
 
-      pool.push([frame_id,
+
+      auto execution = [frame_id,
+                  run_in_pool, id,
                   &busy=this->busy,
                   time=image_source->time(),
                   //out,
@@ -148,11 +160,13 @@ namespace thalamus {
                   map1=this->map1, map2=this->map2,
                   thresholded=in,
                   outer=outer->shared_from_this()] {
+        TRACE_EVENT_BEGIN("thalamus", "DistortionNode::compute", perfetto::Flow::ProcessScoped(id));
         auto start = std::chrono::steady_clock::now();
         std::vector<std::vector<cv::Point> > contours;
         std::vector<cv::Vec4i> hierarchy;
         
         if(apply_threshold) {
+          TRACE_EVENT("thalamus", "cv::threshold");
           cv::threshold(thresholded, thresholded, threshold, 255, invert ? cv::THRESH_BINARY_INV : cv::THRESH_BINARY);
         }
 
@@ -160,16 +174,26 @@ namespace thalamus {
 
         cv::Size board_size(columns, rows);
         if(collecting) {
-          cv::cvtColor(thresholded, out, cv::COLOR_GRAY2RGB);
+          {
+            TRACE_EVENT("thalamus", "cv::cvtColor");
+            cv::cvtColor(thresholded, out, cv::COLOR_GRAY2RGB);
+          }
           undistorted = out;
 
           std::vector<cv::Point2f> corners;
-          auto found = cv::findChessboardCorners(thresholded, board_size, corners,
-                                                 cv::CALIB_CB_FAST_CHECK | cv::CALIB_CB_NORMALIZE_IMAGE | cv::CALIB_CB_ADAPTIVE_THRESH);
+          bool found;
+          {
+            TRACE_EVENT("thalamus", "cv::findChessboardCorners");
+            auto found = cv::findChessboardCorners(thresholded, board_size, corners,
+                                                  cv::CALIB_CB_FAST_CHECK | cv::CALIB_CB_NORMALIZE_IMAGE | cv::CALIB_CB_ADAPTIVE_THRESH);
+          }
           std::shared_lock<std::shared_mutex> lock(mutex);
           if(found) {
             cv::TermCriteria criteria(cv::TermCriteria::EPS + cv::TermCriteria::MAX_ITER, 30, .1);
-            cv::cornerSubPix(thresholded, corners, cv::Size(11, 11), cv::Size(-1, -1), criteria);
+            {
+              TRACE_EVENT("thalamus", "cv::cornerSubPix");
+              cv::cornerSubPix(thresholded, corners, cv::Size(11, 11), cv::Size(-1, -1), criteria);
+            }
 
             if (computations.size()) {
               auto distance = 0.0;
@@ -188,29 +212,36 @@ namespace thalamus {
               computations.emplace_back(std::move(corners));
             }
           }
-          for(const auto& comp : computations) {
-            cv::drawChessboardCorners(out, board_size, comp, true);
+          {
+            TRACE_EVENT("thalamus", "cv::drawChessboardCorners");
+            for(const auto& comp : computations) {
+              cv::drawChessboardCorners(out, board_size, comp, true);
+            }
           }
         } else {
           if(computing) {
+            TRACE_EVENT("thalamus", "cv::remap");
             cv::remap(thresholded, undistorted, map1, map2, cv::INTER_LINEAR, cv::BORDER_CONSTANT);
           } else {
             undistorted = thresholded;
           }
         }
         auto elapsed = std::chrono::steady_clock::now() - start;
-        boost::asio::post(io_context, [undistorted, elapsed,
+        auto finish = [undistorted, elapsed,
                                        //&mat_pool,
                                        time,
                                        collecting,
                                        &busy,
                                        frame_id,
+                                       id,
                                        &output_frames,
                                        &next_output_frame,
                                        &current_result,frame_interval,outer] {
+          TRACE_EVENT("thalamus", "DistortionNode Post to Main", perfetto::TerminatingFlow::ProcessScoped(id));
           double latency = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
           if(collecting) {
             current_result = Result{ undistorted, frame_interval, true, true, latency, time };
+            TRACE_EVENT("thalamus", "DistortionNode::ready");
             outer->ready(outer.get());
             return;
           }
@@ -219,6 +250,7 @@ namespace thalamus {
             if(i->first == next_output_frame) {
               ++next_output_frame;
               current_result = i->second;
+              TRACE_EVENT("thalamus", "DistortionNode::ready");
               outer->ready(outer.get());
               i = output_frames.erase(i);
             } else {
@@ -226,8 +258,22 @@ namespace thalamus {
             }
           }
           busy = false;
-        });
-      });
+        };
+        if(run_in_pool) {
+          TRACE_EVENT_END("thalamus");
+          boost::asio::post(io_context, std::move(finish));
+        } else {
+          finish();
+          TRACE_EVENT_END("thalamus");
+        }
+      };
+      if(run_in_pool) {
+        TRACE_EVENT_END("thalamus");
+        pool.push(std::move(execution));
+      } else {
+        execution();
+        TRACE_EVENT_END("thalamus");
+      }
     }
 
     void on_change(ObservableCollection::Action a, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {

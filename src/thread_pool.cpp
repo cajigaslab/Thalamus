@@ -1,3 +1,4 @@
+#include <thalamus/tracing.hpp>
 #include <thread_pool.hpp>
 #include <boost/pool/object_pool.hpp>
 #include <thalamus/thread.hpp>
@@ -22,6 +23,7 @@ namespace thalamus {
         jobs.pop_front();
       }
 
+      TRACE_EVENT("thalamus", "ThreadPool::thread_target");
       job();
     }
   }
@@ -86,6 +88,7 @@ namespace thalamus {
     }
 
     void on_timer(const boost::system::error_code& error) {
+      TRACE_EVENT("thalamus", "ThreadPool::on_timer");
       if (error.value() == boost::asio::error::operation_aborted) {
         return;
       }

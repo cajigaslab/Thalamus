@@ -1,3 +1,4 @@
+#include <thalamus/tracing.hpp>
 #include <genicam_node.hpp>
 #include <gentl.h>
 #include <fstream>
@@ -15,6 +16,7 @@
 #else
 #include <dlfcn.h>
 #endif
+#include <thalamus/thread.hpp>
 
 namespace thalamus {
   using namespace std::chrono_literals;
@@ -245,9 +247,11 @@ namespace thalamus {
         std::optional<calculator::program> from_program;    // Our program (AST)
 
         long long int read() {
+          TRACE_EVENT("thalamus", "IntConverter::read");
           if(!from_program) {
             auto iter = from_code.cbegin();
             boost::spirit::ascii::space_type space;
+            TRACE_EVENT("thalamus", "boost::spirit::qi::phrase_parse");
             auto success = phrase_parse(iter, from_code.cend(), parser, space, from_program);
             THALAMUS_ASSERT(success, "Failed to parse expression: %s", from_code);
           }
@@ -261,14 +265,17 @@ namespace thalamus {
           substitutions["TO"] = reg_to_number(to_val);
 
           calculator::eval eval{substitutions};
+          TRACE_EVENT("thalamus", "calculator::eval");
           auto result = eval(*from_program);
           return variant_cast<long long int>(result);
         }
 
         void write(long long int from) {
+          TRACE_EVENT("thalamus", "IntConverter::write");
           if(!to_program) {
             auto iter = to_code.cbegin();
             boost::spirit::ascii::space_type space;
+            TRACE_EVENT("thalamus", "boost::spirit::qi::phrase_parse");
             auto success = phrase_parse(iter, to_code.cend(), parser, space, to_program);
             THALAMUS_ASSERT(success, "Failed to parse expression: %s", to_code);
           }
@@ -281,6 +288,7 @@ namespace thalamus {
           substitutions["FROM"] = from;
 
           calculator::eval eval{substitutions};
+          TRACE_EVENT("thalamus", "calculator::eval");
           auto result = eval(*to_program);
           device->set(this->p_value, number_to_reg(result));
         }
@@ -309,9 +317,11 @@ namespace thalamus {
         std::optional<calculator::program> from_program;    // Our program (AST)
 
         double read() {
+          TRACE_EVENT("thalamus", "Converter::read");
           if(!from_program) {
             auto iter = from_code.cbegin();
             boost::spirit::ascii::space_type space;
+            TRACE_EVENT("thalamus", "boost::spirit::qi::phrase_parse");
             auto success = phrase_parse(iter, from_code.cend(), parser, space, from_program);
             THALAMUS_ASSERT(success, "Failed to parse expression: %s", from_code);
           }
@@ -325,14 +335,17 @@ namespace thalamus {
           substitutions["TO"] = reg_to_number(to_val);
 
           calculator::eval eval{substitutions};
+          TRACE_EVENT("thalamus", "calculator::eval");
           auto result = eval(*from_program);
           return variant_cast<double>(result);
         }
 
         void write(double from) {
+          TRACE_EVENT("thalamus", "Converter::write");
           if(!to_program) {
             auto iter = to_code.cbegin();
             boost::spirit::ascii::space_type space;
+            TRACE_EVENT("thalamus", "boost::spirit::qi::phrase_parse");
             auto success = phrase_parse(iter, to_code.cend(), parser, space, to_program);
             THALAMUS_ASSERT(success, "Failed to parse expression: %s", to_code);
           }
@@ -345,6 +358,7 @@ namespace thalamus {
           substitutions["FROM"] = from;
 
           calculator::eval eval{substitutions};
+          TRACE_EVENT("thalamus", "calculator::eval");
           auto result = eval(*to_program);
           device->set(this->p_value, number_to_reg(result));
         }
@@ -370,9 +384,11 @@ namespace thalamus {
         std::optional<calculator::program> program;    // Our program (AST)
 
         long long int read() {
+          TRACE_EVENT("thalamus", "IntSwissKnife::read");
           if(!program) {
             auto iter = code.cbegin();
             boost::spirit::ascii::space_type space;
+            TRACE_EVENT("thalamus", "boost::spirit::qi::phrase_parse");
             auto success = phrase_parse(iter, code.cend(), parser, space, program);
             THALAMUS_ASSERT(success, "Failed to parse expression: %s", code);
           }
@@ -384,6 +400,7 @@ namespace thalamus {
           }
 
           calculator::eval eval{substitutions};
+          TRACE_EVENT("thalamus", "calculator::eval");
           auto result = eval(*program);
           return variant_cast<long long int>(result);
         }
@@ -405,9 +422,11 @@ namespace thalamus {
         std::optional<calculator::program> program;    // Our program (AST)
 
         double read() {
+          TRACE_EVENT("thalamus", "SwissKnife::read");
           if(!program) {
             auto iter = code.cbegin();
             boost::spirit::ascii::space_type space;
+            TRACE_EVENT("thalamus", "boost::spirit::qi::phrase_parse");
             auto success = phrase_parse(iter, code.cend(), parser, space, program);
             THALAMUS_ASSERT(success, "Failed to parse expression: %s", code);
           }
@@ -419,6 +438,7 @@ namespace thalamus {
           }
 
           calculator::eval eval{substitutions};
+          TRACE_EVENT("thalamus", "calculator::eval");
           auto result = eval(*program);
           return variant_cast<double>(result);
         }
@@ -435,6 +455,7 @@ namespace thalamus {
         AccessMode access_mode;
         std::string buffer;
         std::string read() {
+          TRACE_EVENT("thalamus", "StringRed::read");
           buffer.resize(length);
 
           auto total_address = address;
@@ -471,6 +492,7 @@ namespace thalamus {
         std::optional<long long int> msb;
         std::vector<unsigned char> buffer;
         long long int read() {
+          TRACE_EVENT("thalamus", "IntReg::read");
           buffer.resize(length);
 
           auto total_address = address;
@@ -510,6 +532,7 @@ namespace thalamus {
         }
 
         void write(long long int value) {
+          TRACE_EVENT("thalamus", "IntReg::write");
           std::vector<unsigned char> mask;
           for(auto i = 0ull;i < length;++i) {
             unsigned char mask_byte = 255;
@@ -594,6 +617,7 @@ namespace thalamus {
         AccessMode access_mode;
         std::vector<unsigned char> buffer;
         double read() {
+          TRACE_EVENT("thalamus", "FloatReg::read");
           buffer.resize(length);
 
           auto total_address = address;
@@ -634,6 +658,7 @@ namespace thalamus {
         }
 
         void write(double new_value) {
+          TRACE_EVENT("thalamus", "FloatReg::write");
           auto total_address = address;
           if(!p_address.empty()) {
             total_address += std::get<long long int>(device->get(p_address));
@@ -727,11 +752,13 @@ namespace thalamus {
         std::optional<std::string> inc;
 
         double read() {
+          TRACE_EVENT("thalamus", "Float::read");
           auto value = variant_cast<double>(device->get(this->value));
           return value;
         }
 
         void write(double value) {
+          TRACE_EVENT("thalamus", "Float::write");
           std::optional<double> min = this->min ? std::optional<double>(variant_cast<double>(device->get(*this->min))) : std::nullopt;
           std::optional<double> max = this->max ? std::optional<double>(variant_cast<double>(device->get(*this->max))) : std::nullopt;
           std::optional<double> inc = this->inc ? std::optional<double>(variant_cast<double>(device->get(*this->inc))) : std::nullopt;
@@ -769,6 +796,7 @@ namespace thalamus {
         std::variant<std::string, long long int> command_value;
 
         void execute() {
+          TRACE_EVENT("thalamus", "Command::execute");
           long long int output;
           if(std::holds_alternative<std::string>(command_value)) {
             auto command_value_str = std::get<std::string>(command_value);
@@ -788,6 +816,7 @@ namespace thalamus {
         std::map<long long int, std::string> reverse_enums;
 
         std::string read() {
+          TRACE_EVENT("thalamus", "Enumeration::read");
           if(reverse_enums.empty()) {
             for(auto& i : enums) {
               reverse_enums[i.second] = i.first;
@@ -799,6 +828,7 @@ namespace thalamus {
         }
 
         void write(std::string value) {
+          TRACE_EVENT("thalamus", "Enumeration::write");
           auto translated = enums.at(value);
           device->set(this->value, translated);
         }
@@ -816,11 +846,13 @@ namespace thalamus {
         std::optional<std::string> inc;
 
         long long int read() {
+          TRACE_EVENT("thalamus", "Integer::read");
           auto value = variant_cast<long long int>(device->get(this->value));
           return value;
         }
 
         void write(long long int value) {
+          TRACE_EVENT("thalamus", "Integer::write");
           std::optional<long long int> min = this->min ? std::optional<long long int>(variant_cast<long long int>(device->get(*this->min))) : std::nullopt;
           std::optional<long long int> max = this->max ? std::optional<long long int>(variant_cast<long long int>(device->get(*this->max))) : std::nullopt;
           std::optional<long long int> inc = this->inc ? std::optional<long long int>(variant_cast<long long int>(device->get(*this->inc))) : std::nullopt;
@@ -880,6 +912,7 @@ namespace thalamus {
         }
 
         bool load_xml() {
+          TRACE_EVENT("thalamus", "DeviceImpl::load_xml");
           uint32_t num_urls;
           auto error = cti->GCGetNumPortURLs(port_handle, &num_urls);
           if(error != GenTL::GC_ERR_SUCCESS) {
@@ -1067,6 +1100,7 @@ namespace thalamus {
         }
 
         bool setup_registry() {
+          TRACE_EVENT("thalamus", "DeviceImpl::setup_registry");
           std::vector<std::pair<std::string, const boost::property_tree::ptree*>> open;
           open.emplace_back("", &tree);
           while(!open.empty()) {
@@ -1353,6 +1387,7 @@ namespace thalamus {
         DeviceImpl(GenTL::DEV_HANDLE dev_handle, Cti* cti)
           : cti(cti)
           , dev_handle(dev_handle) {
+          TRACE_EVENT("thalamus", "DeviceImpl::DeviceImpl");
 
           auto error = cti->DevGetPort(dev_handle, &port_handle);
           if(error != GenTL::GC_ERR_SUCCESS) {
@@ -1435,6 +1470,7 @@ namespace thalamus {
         boost::asio::io_context* io_context;
 
         void start_stream(boost::asio::io_context& io_context) {
+          TRACE_EVENT("thalamus", "DeviceImpl::start_stream");
           if (streaming) {
             return;
           }
@@ -1490,7 +1526,10 @@ namespace thalamus {
           stream_thread = std::thread(std::bind(&DeviceImpl::stream_target, this, width, height));
         }
 
+        static std::atomic_uint global_frame;
+
         void stream_target(long long int width, long long int height) {
+          set_current_thread_name("GENTL");
           while(streaming) {
             GenTL::EVENT_NEW_BUFFER_DATA data;
             size_t size = sizeof(GenTL::EVENT_NEW_BUFFER_DATA);
@@ -1499,14 +1538,19 @@ namespace thalamus {
               break;
             }
             THALAMUS_ASSERT(error == GenTL::GC_ERR_SUCCESS, "EventGetData failed: %d", error);
+            auto frame_id = get_unique_id();
+            TRACE_EVENT_BEGIN("thalamus", "Cti::GotFrame", perfetto::Flow::ProcessScoped(frame_id));
 
             auto now = std::chrono::steady_clock::now();
             auto index = reinterpret_cast<size_t>(data.pUserPointer);
-            io_context->post([this, &buffer=buffer_data.at(index), handle=data.BufferHandle, width, height, now] {
+            TRACE_EVENT_END("thalamus");
+            io_context->post([this, &buffer=buffer_data.at(index),frame_id, handle=data.BufferHandle, width, height, now] {
+              TRACE_EVENT("thalamus", "GenicamNode Post Main", perfetto::TerminatingFlow::ProcessScoped(frame_id));
               if(!streaming) {
                 return;
               }
               frame_ready(buffer.data(), width, height, now);
+              TRACE_EVENT("thalamus", "Cti::DSQueueBuffer");
               auto error = cti->DSQueueBuffer(ds_handle, handle);
               THALAMUS_ASSERT(error == GenTL::GC_ERR_SUCCESS, "DSQueueBuffer failed: %d", error)
             });
@@ -1514,6 +1558,7 @@ namespace thalamus {
         }
 
         void stop_stream() {
+          TRACE_EVENT("thalamus", "DeviceImpl::stop_stream");
           if (!streaming) {
             return;
           }
@@ -1538,6 +1583,7 @@ namespace thalamus {
         }
 
         void execute(const std::string& reg) {
+          TRACE_EVENT("thalamus", "DeviceImpl::execute");
           auto i = nodes.find(reg);
           THALAMUS_ASSERT(i != nodes.end(), "Register not found: %s", reg);
           if(std::holds_alternative<Command>(i->second)) {
@@ -1547,6 +1593,7 @@ namespace thalamus {
         }
 
         std::variant<long long int, std::string, double> get(const std::string& reg) {
+          TRACE_EVENT("thalamus", "DeviceImpl::get");
           auto i = nodes.find(reg);
           THALAMUS_ASSERT(i != nodes.end(), "Register not found: %s", reg);
           if(std::holds_alternative<long long int>(i->second)) {
@@ -1582,6 +1629,7 @@ namespace thalamus {
         }
 
         void set(const std::string& reg, const std::variant<long long int, std::string, double>& value) {
+          TRACE_EVENT("thalamus", "DeviceImpl::set");
           if (std::holds_alternative<long long int>(value)) {
             THALAMUS_LOG(debug) << reg << " int=" << std::get<long long int>(value);
           } else if (std::holds_alternative<std::string>(value)) {
@@ -1670,6 +1718,7 @@ namespace thalamus {
       GenTL::IF_HANDLE if_handle = nullptr;
 
       Cti(const std::string& name, const std::string& path) : name(name) {
+        TRACE_EVENT("thalamus", "Cti::Cti");
 #ifdef _WIN32
         library_handle = LoadLibrary(path.c_str());
 #else
@@ -1895,6 +1944,7 @@ namespace thalamus {
     static std::mutex ctis_mutex;
 
     static bool load_ctis() {
+      TRACE_EVENT("thalamus", "Cti::load_ctis");
       std::lock_guard<std::mutex> lock(ctis_mutex);
       if(ctis_loaded) {
         return true;
@@ -1938,6 +1988,7 @@ namespace thalamus {
       : io_context(io_context)
       , state(state)
       , outer(outer) {
+      TRACE_EVENT("thalamus", "GenicamNode::Impl::Impl");
       using namespace std::placeholders;
 
       load_ctis();
@@ -1975,6 +2026,7 @@ namespace thalamus {
     double target_framerate = 0;
 
     void on_frame_ready(const unsigned char* data, int width, int height, std::chrono::steady_clock::time_point now) {
+      TRACE_EVENT("thalamus", "GenicamNode::on_frame_ready");
       while (!frame_times.empty() && now - frame_times.front() >= 1s) {
         std::pop_heap(frame_times.begin(), frame_times.end(), [](auto& l, auto& r) { return l > r; });
         frame_times.pop_back();
@@ -1997,10 +2049,12 @@ namespace thalamus {
       this->height = height;
       this->has_image = true;
       this->has_analog = true;
+      TRACE_EVENT("thalamus", "GenicamNode::on_frame_ready");
       analog_impl.inject({ std::span<const double>(&framerate, &framerate + 1) }, { std::chrono::nanoseconds(size_t(1e9 / target_framerate)) }, {""});
     }
 
     void initialize_camera(bool apply_state = false) {
+      TRACE_EVENT("thalamus", "GenicamNode::initialize_camera");
       std::string camera = state->at("Camera");
       std::vector<std::string> tokens = absl::StrSplit(camera, ':');
       if (tokens.size() < 2) {
@@ -2104,6 +2158,7 @@ namespace thalamus {
     }
 
     void on_change(ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
+      TRACE_EVENT("thalamus", "GenicamNode::on_change");
       auto key_str = std::get<std::string>(k);
       if (key_str == "Camera") {
         initialize_camera();
@@ -2273,6 +2328,7 @@ namespace thalamus {
   }
 
   boost::json::value GenicamNode::process(const boost::json::value& request) {
+    TRACE_EVENT("thalamus", "GenicamNode::process");
     if(request.kind() != boost::json::kind::string) {
       return boost::json::value();
     }
@@ -2290,4 +2346,6 @@ namespace thalamus {
     return boost::json::value();
   }
   size_t GenicamNode::modalities() const { return infer_modalities<GenicamNode>(); }
+
+  std::atomic_uint GenicamNode::Impl::Cti::DeviceImpl::global_frame = 0;
 }
