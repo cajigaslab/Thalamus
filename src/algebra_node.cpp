@@ -1,3 +1,4 @@
+#include <thalamus/tracing.hpp>
 #include <algebra_node.hpp>
 #include <vector>
 #include <calculator.hpp>

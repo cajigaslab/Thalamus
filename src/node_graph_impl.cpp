@@ -100,7 +100,7 @@ namespace thalamus {
     {"SYNC", new NodeFactory<SyncNode>()},
     {"TOUCH_SCREEN", new NodeFactory<TouchScreenNode>()},
     {"STIM_PRINTER", new NodeFactory<StimPrinterNode>()},
-    {"HEXASCOPE", new NodeFactory<HexascopeNode>()},
+    //{"HEXASCOPE", new NodeFactory<HexascopeNode>()},
     {"LOOP_TEST", new NodeFactory<LoopTestNode>()},
     {"ARUCO", new NodeFactory<ArucoNode>()}
   };
