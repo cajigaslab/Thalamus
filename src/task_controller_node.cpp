@@ -1,7 +1,6 @@
 #include <task_controller_node.hpp>
 #include <util.hpp>
 #include <grpcpp/create_channel.h>
-#include <tracing/tracing.hpp>
 #include <task_controller.grpc.pb.h>
 #include <modalities_util.hpp>
 

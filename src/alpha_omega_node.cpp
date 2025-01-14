@@ -1,3 +1,4 @@
+#include <thalamus/tracing.hpp>
 #include <alpha_omega_node.hpp>
 #include <regex>
 #include <modalities_util.hpp>
@@ -56,7 +57,6 @@ int ErrorHandlingfunc(int* pErrorCount, cChar* sError, int nError) {
 #endif
 #include <absl/strings/numbers.h>
 //#include <QMessageBox>
-#include <tracing/tracing.hpp>
 
 namespace thalamus {
   using namespace std::placeholders;
@@ -359,11 +359,11 @@ namespace thalamus {
       BOOST_ASSERT(!error);
       if (!async_id) {
         async_id = next_async_id++;
-        TRACE_EVENT_ASYNC_BEGIN0("thalamus", "wait_for_connection", async_id);
+        //TRACE_EVENT_ASYNC_BEGIN0("thalamus", "wait_for_connection", async_id);
       }
 
       if (eAO_CONNECTED == alpha_omega->isConnected()) {
-        TRACE_EVENT_ASYNC_END0("thalamus", "wait_for_connection", async_id);
+        //TRACE_EVENT_ASYNC_END0("thalamus", "wait_for_connection", async_id);
         callback();
         return;
       }
@@ -373,7 +373,7 @@ namespace thalamus {
     }
 
     void StartConnection(std::function<void()> callback) {
-      TRACE_EVENT0("thalamus", "StartConnection");
+      TRACE_EVENT("thalamus", "StartConnection");
       MAC_ADDR mac_address;
       mac_address.addr[0] = address[0];
       mac_address.addr[1] = address[1];
@@ -399,7 +399,7 @@ namespace thalamus {
       BOOST_ASSERT(!error);
       if (!async_id) {
         async_id = next_async_id++;
-        TRACE_EVENT_ASYNC_BEGIN0("thalamus", "GetChannelsCount", async_id);
+        //TRACE_EVENT_ASYNC_BEGIN0("thalamus", "GetChannelsCount", async_id);
       }
       if (initial) {
         channel_count = 0;
@@ -413,7 +413,7 @@ namespace thalamus {
       }
 
       if (new_channel_count && new_channel_count == channel_count) {
-        TRACE_EVENT_ASYNC_END0("thalamus", "GetChannelsCount", async_id);
+        //TRACE_EVENT_ASYNC_END0("thalamus", "GetChannelsCount", async_id);
         callback();
         return;
       }
@@ -429,7 +429,7 @@ namespace thalamus {
       BOOST_ASSERT(!error);
       if (!async_id) {
         async_id = next_async_id++;
-        TRACE_EVENT_ASYNC_BEGIN0("thalamus", "GetAllChannels", async_id);
+        //TRACE_EVENT_ASYNC_BEGIN0("thalamus", "GetAllChannels", async_id);
       }
       if (initial) {
         ao_channels.resize(channel_count);
@@ -441,7 +441,7 @@ namespace thalamus {
       }
       if (ao_error == eAO_OK) {
         parse_channels();
-        TRACE_EVENT_ASYNC_END0("thalamus", "GetAllChannels", async_id);
+        //TRACE_EVENT_ASYNC_END0("thalamus", "GetAllChannels", async_id);
         callback();
         return;
       }
@@ -459,7 +459,7 @@ namespace thalamus {
       BOOST_ASSERT(!error);
       if (!async_id) {
         async_id = next_async_id++;
-        TRACE_EVENT_ASYNC_BEGIN0("thalamus", "AddBufferChannels", async_id);
+        //TRACE_EVENT_ASYNC_BEGIN0("thalamus", "AddBufferChannels", async_id);
       }
       auto ao_error = alpha_omega->AddBufferChannel(channels.back().first, 20'000);
       BOOST_ASSERT(ao_error == eAO_OK || ao_error == eAO_NOT_CONNECTED);
@@ -471,7 +471,7 @@ namespace thalamus {
       if (ao_error == eAO_OK) {
         remaining_channels.pop_back();
         if (remaining_channels.empty()) {
-          TRACE_EVENT_ASYNC_END0("thalamus", "AddBufferChannels", async_id);
+          //TRACE_EVENT_ASYNC_END0("thalamus", "AddBufferChannels", async_id);
           timer.expires_after(ao_interval);
           timer.async_wait([callback](const boost::system::error_code& error) {
             callback();
@@ -485,7 +485,7 @@ namespace thalamus {
     }
 
     std::vector<std::pair<int, std::string>> parse_channels() {
-      TRACE_EVENT0("thalamus", "parse_channels");
+      TRACE_EVENT("thalamus", "parse_channels");
       channel_ids.clear();
       auto& channels = channel_ids;
       name_to_id.clear();
@@ -541,7 +541,7 @@ namespace thalamus {
     }
 
     void on_timer(const boost::system::error_code& error, std::chrono::milliseconds polling_interval, size_t async_id = 0) {
-      TRACE_EVENT0("thalamus", "AlphaOmegaNode::on_timer");
+      TRACE_EVENT("thalamus", "AlphaOmegaNode::on_timer");
       if (error.value() == boost::asio::error::operation_aborted || is_running == false) {
         return;
       }
@@ -549,7 +549,7 @@ namespace thalamus {
 
       if (!async_id) {
         async_id = next_async_id++;
-        TRACE_EVENT_ASYNC_BEGIN0("thalamus", "AlphaOmegaNode::on_timer", async_id);
+        //TRACE_EVENT_ASYNC_BEGIN0("thalamus", "AlphaOmegaNode::on_timer", async_id);
       }
 
       ULONG timestamp;
@@ -620,7 +620,7 @@ namespace thalamus {
       total_captured += captured;
       time = now.time_since_epoch();
       outer->ready(outer);
-      TRACE_EVENT_ASYNC_END0("thalamus", "AlphaOmegaNode::on_timer", async_id);
+      //TRACE_EVENT_ASYNC_END0("thalamus", "AlphaOmegaNode::on_timer", async_id);
       double_buffer.clear();
       counts.clear();
       if(frequencies_updated) {

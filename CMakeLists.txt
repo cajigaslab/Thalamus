@@ -106,6 +106,7 @@ string(REPLACE ";" " " ALL_LINK_OPTIONS_SPACED "${ALL_LINK_OPTIONS}")
 add_definitions(-DPRINTSYNC)
 
 include(cmake/grpc.cmake)
+include(cmake/perfetto.cmake)
 include(cmake/zlib_processed.cmake)
 include(cmake/opencv.cmake)
 include(cmake/boost.cmake)
@@ -147,57 +148,6 @@ if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
   set_target_properties(zlib_processed PROPERTIES VS_GLOBAL_IntDir "zlib_processed_intermediate/x64/$(Configuration)/")
   set_target_properties(ffmpeg PROPERTIES VS_GLOBAL_IntDir "ffmpeg_intermediate/x64/$(Configuration)/")
 endif()
-
-FetchContent_Declare(
-  webrtc_content
-  GIT_REPOSITORY https://webrtc.googlesource.com/src
-  GIT_TAG 7b80d4480e85cec2ca6010a4912333bf3aa30a50)
-FetchContent_MakeAvailable(webrtc_content)
-add_library(webrtc INTERFACE)
-target_link_libraries(webrtc INTERFACE absl::strings absl::str_format)
-target_include_directories(webrtc INTERFACE "${webrtc_content_SOURCE_DIR}")
-if(WIN32)
-  target_compile_definitions(webrtc INTERFACE WEBRTC_WIN NOMINMAX WIN32_LEAN_AND_MEAN)
-elseif(APPLE)
-  target_compile_definitions(webrtc INTERFACE WEBRTC_POSIX WEBRTC_MAC)
-else()
-  target_compile_definitions(webrtc INTERFACE WEBRTC_POSIX WEBRTC_LINUX)
-endif()
-
-set(WEBRTC_FILES 
-  "${webrtc_content_SOURCE_DIR}/rtc_base/event.cc"
-  "${webrtc_content_SOURCE_DIR}/rtc_base/checks.cc"
-  "${webrtc_content_SOURCE_DIR}/rtc_base/logging.cc"
-  "${webrtc_content_SOURCE_DIR}/rtc_base/time_utils.cc"
-  "${webrtc_content_SOURCE_DIR}/rtc_base/task_queue.cc"
-  "${webrtc_content_SOURCE_DIR}/rtc_base/system_time.cc"
-  "${webrtc_content_SOURCE_DIR}/rtc_base/string_utils.cc"
-  "${webrtc_content_SOURCE_DIR}/rtc_base/event_tracer.cc"
-  "${webrtc_content_SOURCE_DIR}/rtc_base/string_encode.cc"
-  "${webrtc_content_SOURCE_DIR}/rtc_base/platform_thread.cc"
-  "${webrtc_content_SOURCE_DIR}/rtc_base/platform_thread_types.cc"
-  "${webrtc_content_SOURCE_DIR}/rtc_base/strings/string_builder.cc"
-  "${webrtc_content_SOURCE_DIR}/rtc_base/synchronization/yield_policy.cc"
-  "${webrtc_content_SOURCE_DIR}/rtc_base/synchronization/sequence_checker_internal.cc"
-  "${webrtc_content_SOURCE_DIR}/api/task_queue/task_queue_base.cc")
-
-add_library(tracing OBJECT
-  "${CMAKE_SOURCE_DIR}/src/tracing/tracing.hpp"
-  "${CMAKE_SOURCE_DIR}/src/tracing/tracing.cpp"
-  "${CMAKE_SOURCE_DIR}/src/tracing/iclock.hpp"
-  "${CMAKE_SOURCE_DIR}/src/tracing/systemclock.hpp"
-  "${CMAKE_SOURCE_DIR}/src/tracing/systemclock.cpp"
-  ${WEBRTC_FILES})
-target_link_libraries(tracing PUBLIC webrtc)
-if(WIN32)
-  target_link_libraries(tracing PUBLIC winmm.lib)
-elseif(APPLE)
-else()
-  target_link_libraries(tracing PUBLIC stdc++fs)
-  #target_compile_options(tracing PRIVATE -fPIC)
-endif()
-target_include_directories(tracing PUBLIC "${CMAKE_SOURCE_DIR}/src")
-target_compile_options(tracing PRIVATE ${WARNING_FLAGS})
 
 add_library(hydrate "src/hydrate.cpp")
 target_link_libraries(hydrate boost grpc++ hdf5-static)
@@ -274,10 +224,14 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/touchscreen_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/stim_printer_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/stim_printer_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/loop_test_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/loop_test_node.cpp"
                      #"${CMAKE_SOURCE_DIR}/src/hexascope_node.hpp"
                      #"${CMAKE_SOURCE_DIR}/src/hexascope_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/file.hpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/file.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/thread.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/thread.cpp"
                      "${CMAKE_SOURCE_DIR}/proto/thalamus.proto")
 target_sources(thalamus PRIVATE 
                "${CMAKE_SOURCE_DIR}/src/pupil_node.hpp"
@@ -286,9 +240,9 @@ target_sources(thalamus PRIVATE
                "${CMAKE_SOURCE_DIR}/src/chessboard_node.cpp")
 
 if(WIN32)
-  target_compile_definitions(thalamus PRIVATE _WIN32_WINNT=0x0A00 _CRT_SECURE_NO_WARNINGS)
+  target_compile_definitions(thalamus PRIVATE _WIN32_WINNT=0x0A00 _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN)
   if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
-    target_compile_options(thalamus PRIVATE /bigobj)
+    target_compile_options(thalamus PRIVATE /bigobj /permissive-)
   endif()
   target_sources(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src/nidaq_node_windows.cpp")
 elseif(APPLE)
@@ -305,8 +259,8 @@ target_compile_options(thalamus PRIVATE ${WARNING_FLAGS})
 target_compile_definitions(thalamus PRIVATE _USE_MATH_DEFINES)
 target_include_directories(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(thalamus opencv hdf5-static lua
-  tracing webrtc boost grpc++ grpc++_reflection 
-  absl::str_format_internal absl::strings absl::str_format ffmpeg cairo)
+  boost grpc++ grpc++_reflection 
+  absl::str_format_internal absl::strings absl::str_format ffmpeg cairo perfetto)
 if(NOT APPLE)
   target_link_libraries(thalamus zlib_processed)
 endif()
@@ -321,7 +275,7 @@ target_compile_definitions(native PRIVATE _GNU_SOURCE)
 
 target_compile_options(native PRIVATE ${WARNING_FLAGS})
 target_include_directories(native PRIVATE "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(native PRIVATE thalamus hydrate thalamus_ffmpeg tracing webrtc ffmpeg sdl protoc_generated lua cairo)
+target_link_libraries(native PRIVATE thalamus hydrate thalamus_ffmpeg ffmpeg sdl protoc_generated lua cairo)
 
 if(APPLE)
   target_link_options(native PRIVATE -pagezero_size 10000 -image_base 7fff04c4a000)

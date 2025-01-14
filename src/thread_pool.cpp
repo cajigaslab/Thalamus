@@ -1,13 +1,13 @@
 #include <thread_pool.hpp>
 #include <boost/pool/object_pool.hpp>
-#include <tracing/tracing.hpp>
+#include <thalamus/thread.hpp>
 #include <modalities_util.hpp>
 
 namespace thalamus {
   using namespace std::chrono_literals;
 
   void ThreadPool::thread_target(std::string thread_name) {
-    tracing::SetCurrentThreadName(thread_name);
+    set_current_thread_name(thread_name);
     while(true) {
       std::function<void()> job;
       {

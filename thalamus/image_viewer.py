@@ -1,4 +1,8 @@
-#import cv2
+try:
+  import cv2
+except ImportError:
+  print('cv2 import failed, yuv video unavailable')
+
 import sys
 import grpc
 import json
@@ -103,7 +107,10 @@ class ImageWidget(QWidget):
       node = self.node['name'],
       json = json.dumps(event)
     )
-    asyncio.get_event_loop().create_task(self.stub.node_request(request))
+    async def request_func():
+      response = await self.stub.node_request(request)
+      print(response)
+    asyncio.get_event_loop().create_task(request_func())
 
   def keyReleaseEvent(self, a0):
     self.key_event(a0, 'keyup')

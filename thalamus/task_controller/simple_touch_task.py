@@ -184,11 +184,6 @@ def get_target_rectangles(context, dpi):
 def distance(lhs, rhs):
   return ((lhs.x() - rhs.x())**2 + (lhs.y() - rhs.y())**2)**.5
 
-async def stamp_msg(context, msg):
-  msg.header.stamp = context.ros_manager.node.node.get_clock().now().to_msg()
-  #context.pulse_digital_channel()
-  return msg
-
 @animate(30)
 async def run(context: task_context.TaskContextProtocol) -> task_context.TaskResult: #pylint: disable=too-many-statements
   """
@@ -355,7 +350,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     behav_result['presented_target_ids'] = [i_presented_targ]
 
   async def fail_trial():
-    await context.servicer.publish_state(task_controller_pb2.BehavState(state='fail'))
+    await context.log('BehavState=fail')
     context.behav_result = behav_result
     show_presented_target = False
     state_brightness = 0    
@@ -363,14 +358,14 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     context.widget.update()
 
   while True:
-    await context.servicer.publish_state(task_controller_pb2.BehavState(state='intertrial'))
+    await context.log('BehavState=intertrial')
     state_brightness = 0
     
     context.widget.update()
     await context.sleep(config.intertrial_timeout)
 
     blank_space_touched = False
-    await context.servicer.publish_state(task_controller_pb2.BehavState(state='start_on'))
+    await context.log('BehavState=start_on')
     state_brightness = 255
     show_presented_target = True
     context.widget.update()
@@ -385,7 +380,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   # state: startacq
   final_i_selected_target = last_selected_target
   behav_result['selected_target_id'] = final_i_selected_target
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='start_acq'))
+  await context.log('BehavState=start_acq')
   success = await wait_for_hold(context, lambda: presented_targ_acquired, config.hold_timeout, config.blink_timeout)
   if not success:
     await fail_trial()
@@ -399,25 +394,21 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   show_presented_target = False
   context.widget.update()
 
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='success'))
+  await context.log('BehavState=success')
   state_brightness = 0 
 
-  
-  reward_message = RewardDeliveryCmd()
+  on_time_ms = int(context.get_reward(all_reward_channels[final_i_touched_target]))
 
-  reward_message.header.stamp = context.ros_manager.node.node.get_clock().now().to_msg()
-  reward_message.on_time_ms = int(context.get_reward(all_reward_channels[final_i_selected_target]))
-  
-  print("delivering reward %d"%(reward_message.on_time_ms,) )
-  context.publish(RewardDeliveryCmd, 'deliver_reward', reward_message)      
+  signal = thalamus_pb2.AnalogResponse(
+      data=[5,0],
+      spans=[thalamus_pb2.Span(begin=0,end=2,name='Reward')],
+      sample_intervals=[1_000_000*on_time_ms])
+
+  await context.inject_analog('Reward', signal)
 
   success_sound.play()
 
   await context.sleep(config.success_timeout)
- 
-  
-  
-  
 
   context.behav_result = behav_result
   return task_context.TaskResult(True)
