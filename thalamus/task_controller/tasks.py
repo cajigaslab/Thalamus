@@ -107,10 +107,7 @@ DESCRIPTIONS = [
 
   TaskDescription('psychopy', 'Psychopy',
     psychopy_task.create_widget,
-    psychopy_task.run),
-  TaskDescription('gaussian', 'Gaussian',
-    gaussian_task.create_widget,
-    gaussian_task.run)
+    psychopy_task.run)
 ]
 
 DESCRIPTIONS_MAP = dict((description.code, description) for description in DESCRIPTIONS)

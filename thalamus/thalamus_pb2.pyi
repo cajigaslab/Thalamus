@@ -18,6 +18,50 @@ MocapModality: Modalities
 ImageModality: Modalities
 TextModality: Modalities
 
+class Error(_message.Message):
+    __slots__ = ("code", "message")
+    CODE_FIELD_NUMBER: _ClassVar[int]
+    MESSAGE_FIELD_NUMBER: _ClassVar[int]
+    code: int
+    message: str
+    def __init__(self, code: _Optional[int] = ..., message: _Optional[str] = ...) -> None: ...
+
+class StimDeclaration(_message.Message):
+    __slots__ = ("data", "trigger", "id")
+    DATA_FIELD_NUMBER: _ClassVar[int]
+    TRIGGER_FIELD_NUMBER: _ClassVar[int]
+    ID_FIELD_NUMBER: _ClassVar[int]
+    data: AnalogResponse
+    trigger: str
+    id: int
+    def __init__(self, data: _Optional[_Union[AnalogResponse, _Mapping]] = ..., trigger: _Optional[str] = ..., id: _Optional[int] = ...) -> None: ...
+
+class StimRequest(_message.Message):
+    __slots__ = ("node", "declaration", "arm", "trigger", "retrieve", "id")
+    NODE_FIELD_NUMBER: _ClassVar[int]
+    DECLARATION_FIELD_NUMBER: _ClassVar[int]
+    ARM_FIELD_NUMBER: _ClassVar[int]
+    TRIGGER_FIELD_NUMBER: _ClassVar[int]
+    RETRIEVE_FIELD_NUMBER: _ClassVar[int]
+    ID_FIELD_NUMBER: _ClassVar[int]
+    node: NodeSelector
+    declaration: StimDeclaration
+    arm: int
+    trigger: int
+    retrieve: int
+    id: int
+    def __init__(self, node: _Optional[_Union[NodeSelector, _Mapping]] = ..., declaration: _Optional[_Union[StimDeclaration, _Mapping]] = ..., arm: _Optional[int] = ..., trigger: _Optional[int] = ..., retrieve: _Optional[int] = ..., id: _Optional[int] = ...) -> None: ...
+
+class StimResponse(_message.Message):
+    __slots__ = ("error", "declaration", "id")
+    ERROR_FIELD_NUMBER: _ClassVar[int]
+    DECLARATION_FIELD_NUMBER: _ClassVar[int]
+    ID_FIELD_NUMBER: _ClassVar[int]
+    error: Error
+    declaration: StimDeclaration
+    id: int
+    def __init__(self, error: _Optional[_Union[Error, _Mapping]] = ..., declaration: _Optional[_Union[StimDeclaration, _Mapping]] = ..., id: _Optional[int] = ...) -> None: ...
+
 class ObservableReadRequest(_message.Message):
     __slots__ = ("peer_name",)
     PEER_NAME_FIELD_NUMBER: _ClassVar[int]
