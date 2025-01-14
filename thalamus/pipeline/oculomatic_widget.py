@@ -1,4 +1,7 @@
 from ..qt import *
+from .. import  thalamus_pb2
+import json
+import asyncio
 
 class OculomaticWidget(QWidget):
   def __init__(self, config, stub):
@@ -69,6 +72,20 @@ class OculomaticWidget(QWidget):
     self.invert_y_checkbox = QCheckBox('Invert Y')
     self.invert_y_checkbox.toggled.connect(lambda value: config.update({'Invert Y': value}))
     layout.addWidget(self.invert_y_checkbox)
+
+    def on_recenter():
+      request = thalamus_pb2.NodeRequest(
+        node = config['name'],
+        json = json.dumps({'type': 'recenter'})
+      )
+      async def on_recenter_async():
+        response = await self.stub.node_request(request)
+        print(response)
+      asyncio.get_event_loop().create_task(on_recenter_async())
+
+    self.recenter_button = QPushButton('Recenter')
+    self.recenter_button.clicked.connect(on_recenter)
+    layout.addWidget(self.recenter_button)
 
     layout.addStretch(1)
 
