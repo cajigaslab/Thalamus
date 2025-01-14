@@ -1,3 +1,4 @@
+#include <thalamus/tracing.hpp>
 #include <oculomatic_node.hpp>
 #include <thread_pool.hpp>
 #include <boost/pool/object_pool.hpp>
@@ -96,6 +97,7 @@ namespace thalamus {
       double y_gain,
       bool invert_x,
       bool invert_y) {
+        TRACE_EVENT("thalamus", "OculomaticNode::normalize_center");
         auto [center_pix_x, center_pix_y] = centering_pix;
         auto [center_offset_x, center_offset_y] = centering_offset;
     
@@ -122,7 +124,10 @@ namespace thalamus {
     }
 
     void on_data(Node*) {
+      auto event_id = get_unique_id();
+      TRACE_EVENT_BEGIN("thalamus", "OculomaticNode::on_data", perfetto::Flow::ProcessScoped(event_id));
       if(pool.full()) {
+        TRACE_EVENT_END("thalamus");
         return;
       }
 
@@ -143,51 +148,66 @@ namespace thalamus {
       if(image_source->format() != ImageNode::Format::Gray 
           || image_source->format() != ImageNode::Format::YUV420P 
           || image_source->format() != ImageNode::Format::YUVJ420P) {
+        TRACE_EVENT("thalamus", "cv::Mat::clone");
         in = cv::Mat(height, width, CV_8UC1, data).clone();
       } else if (image_source->format() != ImageNode::Format::RGB) {
+        TRACE_EVENT("thalamus", "cv::cvtColor");
         cv::cvtColor(cv::Mat(height, width, CV_8UC3, data), in, cv::COLOR_GRAY2RGB);
       } else if (image_source->format() != ImageNode::Format::YUYV422) {
+        TRACE_EVENT("thalamus", "cv::extractChannel");
         cv::extractChannel(cv::Mat(height, width, CV_8UC3, data), in, 0);
       }
+      TRACE_EVENT_END("thalamus");
       pool.push([width,
-                  height,
-                  frame_id=next_input_frame++,
-                  need_recenter,
-                  out,
-                  frame_interval,
-                  &current_result=current_result,
-                  &mat_pool=this->mat_pool,
-                  &output_frames=this->output_frames,
-                  &next_output_frame=this->next_output_frame,
-                  &io_context=io_context,
-                  centering_pix=this->centering_pix,
-                  centering_offset=this->centering_offset,
-                  &ref_centering_pix=this->centering_pix,
-                  &ref_centering_offset=this->centering_offset,
-                  x_gain=this->x_gain,
-                  y_gain=this->y_gain,
-                  computing=this->computing,
-                  min_area=this->min_area,
-                  max_area=this->max_area,
-                  invert_x=this->invert_x,
-                  invert_y=this->invert_y,
-                  threshold=this->threshold,
-                  in=std::move(in),
-                  outer=outer->shared_from_this()] {
+                 event_id,
+                 height,
+                 frame_id=next_input_frame++,
+                 need_recenter,
+                 out,
+                 frame_interval,
+                 &current_result=current_result,
+                 &mat_pool=this->mat_pool,
+                 &output_frames=this->output_frames,
+                 &next_output_frame=this->next_output_frame,
+                 &io_context=io_context,
+                 centering_pix=this->centering_pix,
+                 centering_offset=this->centering_offset,
+                 &ref_centering_pix=this->centering_pix,
+                 &ref_centering_offset=this->centering_offset,
+                 x_gain=this->x_gain,
+                 y_gain=this->y_gain,
+                 computing=this->computing,
+                 min_area=this->min_area,
+                 max_area=this->max_area,
+                 invert_x=this->invert_x,
+                 invert_y=this->invert_y,
+                 threshold=this->threshold,
+                 in=std::move(in),
+                 outer=outer->shared_from_this()] {
+        TRACE_EVENT_BEGIN("thalamus", "OculomaticNode::compute", perfetto::Flow::ProcessScoped(event_id));
         std::vector<std::vector<cv::Point> > contours;
         std::vector<cv::Vec4i> hierarchy;
         
-
-        cv::threshold(in, in, threshold, 255, cv::THRESH_BINARY_INV);
-        cv::cvtColor(in, *out, cv::COLOR_GRAY2RGB);
+        {
+          TRACE_EVENT("thalamus", "cv:threshold");
+          cv::threshold(in, in, threshold, 255, cv::THRESH_BINARY_INV);
+        }
+        {
+          TRACE_EVENT("thalamus", "cv:cvtColor");
+          cv::cvtColor(in, *out, cv::COLOR_GRAY2RGB);
+        }
+        auto post_id = get_unique_id();
         if(!computing) {
-          boost::asio::post(io_context, [&current_result,&next_output_frame,&output_frames,&mat_pool,out,frame_id,outer,frame_interval] {
+          TRACE_EVENT_END("thalamus");
+          boost::asio::post(io_context, [&current_result,&next_output_frame,&output_frames,&mat_pool,event_id,post_id,out,frame_id,outer,frame_interval] {
+            TRACE_EVENT("thalamus", "OculomaticNode Post Main", perfetto::TerminatingFlow::ProcessScoped(event_id));
             output_frames[frame_id] = Result{ 0, 0, 0, *out, true, false, frame_interval };
             mat_pool.insert(out);
             for(auto i = output_frames.begin();i != output_frames.end();) {
               if(i->first == next_output_frame) {
                 ++next_output_frame;
                 current_result = i->second;
+                TRACE_EVENT("thalamus", "OculomaticNode::ready");
                 outer->ready(outer.get());
                 i = output_frames.erase(i);
               } else {
@@ -197,11 +217,17 @@ namespace thalamus {
           });
           return;
         }
-        cv::findContours(in, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+        {
+          TRACE_EVENT("thalamus", "cv:findContours");
+          cv::findContours(in, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+        }
         std::vector<double> areas(contours.size(), 0);
-        std::transform(contours.begin(), contours.end(), areas.begin(), [&](const std::vector<cv::Point>& contour) {
-          return cv::contourArea(contour);
-        });
+        {
+          TRACE_EVENT("thalamus", "cv:contourArea");
+          std::transform(contours.begin(), contours.end(), areas.begin(), [&](const std::vector<cv::Point>& contour) {
+            return cv::contourArea(contour);
+          });
+        }
       
         auto frame_size = width*height;
         auto min_area_pixels = min_area*frame_size/100;
@@ -217,7 +243,11 @@ namespace thalamus {
         auto diameter = 0.0;
         std::pair<double, double> gaze;
         if (selected > -1) {
-          auto m = cv::moments(contours[selected]);
+          cv::Moments m;
+          {
+            TRACE_EVENT("thalamus", "cv::moments");
+            m = cv::moments(contours[selected]);
+          }
           auto center = std::make_pair(static_cast<int>(m.m10/(m.m00+1e-6)), static_cast<int>(m.m01/(m.m00+1e-6)));
           if(need_recenter) {
             auto new_centering_offset = std::pair<double, double>(0.0, 0.0);
@@ -228,6 +258,7 @@ namespace thalamus {
               new_centering_offset,
               x_gain, y_gain, invert_x, invert_y);
             boost::asio::post(io_context, [new_centering_pix, new_centering_offset, &ref_centering_pix, &ref_centering_offset] {
+              TRACE_EVENT("thalamus", "OculomaticNode apply recenter");
               ref_centering_pix = new_centering_pix;
               ref_centering_offset = new_centering_offset;
             });
@@ -237,23 +268,36 @@ namespace thalamus {
               centering_pix, 
               centering_offset,
               x_gain, y_gain, invert_x, invert_y);
-          auto bounds = cv::boundingRect(contours[selected]);
+          cv::Rect bounds;
+          {
+            TRACE_EVENT("thalamus", "cv::boundingRect");
+            bounds = cv::boundingRect(contours[selected]);
+          }
           diameter = bounds.width;
              
-          cv::drawContours(*out, contours, selected, cv::Scalar(255, 0, 0));
-          cv::circle(*out, cv::Point(static_cast<int>(center.first), static_cast<int>(center.second)), 10,
-                     cv::Scalar(0, 0, 255), -1);
+          {
+            TRACE_EVENT("thalamus", "cv::drawContours");
+            cv::drawContours(*out, contours, selected, cv::Scalar(255, 0, 0));
+          }
+          {
+            TRACE_EVENT("thalamus", "cv::circle");
+            cv::circle(*out, cv::Point(static_cast<int>(center.first), static_cast<int>(center.second)), 10,
+                       cv::Scalar(0, 0, 255), -1);
+          }
         } else {
           gaze = std::make_pair(1e6, 1e6);
         } 
 
-        boost::asio::post(io_context, [&current_result,&next_output_frame,&output_frames,&mat_pool,out,frame_id,diameter,gaze,outer,frame_interval] {
+        TRACE_EVENT_END("thalamus");
+        boost::asio::post(io_context, [&current_result,&next_output_frame,&output_frames,&mat_pool,out,frame_id,diameter,gaze,outer,frame_interval,event_id] {
+          TRACE_EVENT("thalamus", "OculomaticNode Post Main", perfetto::TerminatingFlow::ProcessScoped(event_id));
           output_frames[frame_id] = Result{ gaze.first, gaze.second, diameter, *out, true, true, frame_interval };
           mat_pool.insert(out);
           for(auto i = output_frames.begin();i != output_frames.end();) {
             if(i->first == next_output_frame) {
               ++next_output_frame;
               current_result = i->second;
+              TRACE_EVENT("thalamus", "OculomaticNode::ready");
               outer->ready(outer.get());
               i = output_frames.erase(i);
             } else {
@@ -265,6 +309,7 @@ namespace thalamus {
     }
 
     void on_change(ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
+      TRACE_EVENT("thalamus", "OculomaticNode::on_change");
       auto key_str = std::get<std::string>(k);
       if(key_str == "Computing") {
         computing = std::get<bool>(v);

@@ -4,6 +4,7 @@
 # pragma warning(disable: 4345)
 #endif
 
+#include <thalamus/tracing.hpp>
 #include <boost/spirit/include/qi.hpp>
 #include <boost/variant/recursive_variant.hpp>
 #include <boost/variant/apply_visitor.hpp>
@@ -294,12 +295,12 @@ namespace thalamus {
 
         number operator()(program const& x) const
         {
-            number state = boost::apply_visitor(*this, x.first);
-            BOOST_FOREACH(operation const& oper, x.rest)
-            {
-                state = (*this)(oper, state);
-            }
-            return state;
+          number state = boost::apply_visitor(*this, x.first);
+          BOOST_FOREACH(operation const& oper, x.rest)
+          {
+            state = (*this)(oper, state);
+          }
+          return state;
         }
     };
 
