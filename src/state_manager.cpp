@@ -24,7 +24,6 @@ struct StateManager::Impl {
   std::thread grpc_thread;
   boost::signals2::signal<void(ObservableCollection::Action action, const std::string& address, ObservableCollection::Value value)> signal;
   std::vector<boost::signals2::scoped_connection> state_connections;
-  std::atomic_ullong next_id;
 
 
   void grpc_target() {
@@ -41,12 +40,12 @@ struct StateManager::Impl {
     while(stream->Read(&in)) {
       TRACE_EVENT("thalamus", "observable_bridge");
       if (in.acknowledged()) {
+        TRACE_EVENT("thalamus", "StateManager::acknowledged", perfetto::TerminatingFlow::ProcessScoped(in.acknowledged()));
         THALAMUS_LOG(trace) << "Acknowledged " << in.acknowledged();
         std::function<void()> callback;
         {
           std::unique_lock<std::mutex> lock(mutex);
           callback = pending_changes.at(in.acknowledged());
-          TRACE_EVENT_END("thalamus", perfetto::Track(in.acknowledged()));
           pending_changes.erase(in.acknowledged());
         }
         boost::asio::post(io_context, callback);
@@ -91,7 +90,6 @@ struct StateManager::Impl {
   , state(state)
   , root(state)
   , io_context(io_context)
-  , next_id(1)
   , running(true) {
     grpc_thread = std::thread(std::bind(&Impl::grpc_target, this));
     if (std::holds_alternative<ObservableListPtr>(state)) {
@@ -111,8 +109,8 @@ struct StateManager::Impl {
   }
 
   bool send_change(ObservableCollection::Action action, const std::string& address, ObservableCollection::Value value, std::function<void()> callback) {
-    auto id = ++next_id; 
-    TRACE_EVENT_BEGIN("thalamus", "send_change", perfetto::Track(id));
+    auto id = get_unique_id(); 
+    TRACE_EVENT("thalamus", "StateManager::send_change", perfetto::Flow::ProcessScoped(id));
     if (io_context.stopped()) {
       return true;
     }

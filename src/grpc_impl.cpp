@@ -117,7 +117,6 @@ namespace thalamus {
     ObservableCollection::Value state;
     ObservableCollection* root;
     boost::asio::io_context& io_context;
-    std::atomic_ullong next_id;
     std::atomic<::grpc::ServerReaderWriter< ::thalamus_grpc::ObservableChange, ::thalamus_grpc::ObservableChange>*> observable_bridge_stream;
     std::atomic<::grpc::ServerReaderWriter< ::thalamus_grpc::EvalRequest, ::thalamus_grpc::EvalResponse>*> eval_stream;
     std::atomic<::grpc::ServerReaderWriter< ::thalamus_grpc::EvalRequest, ::thalamus_grpc::EvalResponse>*> graph_stream;
@@ -139,7 +138,6 @@ namespace thalamus {
       : state(state)
       , root(nullptr)
       , io_context(io_context)
-      , next_id(1)
       , observable_bridge_stream(nullptr)
       , notification_writer(nullptr)
       , node_graph(node_graph)
@@ -1884,11 +1882,12 @@ namespace thalamus {
   }
 
   std::future<ObservableCollection::Value> Service::evaluate(const std::string& code) {
-    TRACE_EVENT_BEGIN("thalamus", "evaluate", perfetto::Track(impl->next_id));
+    auto id = get_unique_id();
+    TRACE_EVENT_BEGIN("thalamus", "evaluate", perfetto::Track(id));
 
     thalamus_grpc::EvalRequest request;
     request.set_code(code);
-    request.set_id(++impl->next_id);
+    request.set_id(id);
 
     {
       std::lock_guard<std::mutex> lock(impl->mutex);

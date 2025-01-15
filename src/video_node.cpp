@@ -190,21 +190,24 @@ namespace thalamus {
         av_packet_unref(context.packet);
 
         while(true) {
-          TRACE_EVENT("thalamus", "read frame");
+          auto id = get_unique_id();
+          TRACE_EVENT_BEGIN("thalamus", "read frame", perfetto::Flow::ProcessScoped(id));
           {
             TRACE_EVENT("thalamus", "avcodec_receive_frame");
             err = avcodec_receive_frame(context.codec, context.frame.get());
           }
           if(err == AVERROR(EAGAIN)) {
-            TRACE_EVENT_INSTANT("thalamus", "need more data");
+            TRACE_EVENT_END("thalamus");
             break;
           } else if(err < 0) {
+            TRACE_EVENT_END("thalamus");
             THALAMUS_LOG(error) << "Failed to receive decode frame, stopping Video capture";
             boost::asio::post(io_context, stop);
             return;
           }
 
           if(frame_pending || context.frame->pict_type == AV_PICTURE_TYPE_NONE) {
+            TRACE_EVENT_END("thalamus");
             continue;
           }
 
@@ -245,6 +248,7 @@ namespace thalamus {
                                 context.frame->data[2] + context.frame->height/2 * context.frame->linesize[2]);
               break;
             default:
+              TRACE_EVENT_END("thalamus");
               THALAMUS_LOG(error) << "Unsupported pixel format: " << context.frame->format;
               boost::asio::post(io_context, stop);
               return;
@@ -267,10 +271,9 @@ namespace thalamus {
           auto frame_copy = context.frame;
           context.new_frame();
           frame_pending = true;
-          int current_frame_id = ++frame_id;
-          TRACE_EVENT_BEGIN("thalamus", "VideoNode_queue", perfetto::Track(current_frame_id));
-          boost::asio::post(io_context, [&,now,frame_copy,new_framerate=frame_times.size(),new_bps, current_frame_id] {
-            TRACE_EVENT_END("thalamus", perfetto::Track(current_frame_id));
+          TRACE_EVENT_END("thalamus");
+          boost::asio::post(io_context, [&,now,frame_copy,new_framerate=frame_times.size(),new_bps,id] {
+            TRACE_EVENT("thalamus", "VideoNode Post Main", perfetto::TerminatingFlow::ProcessScoped(id));
             this->time = now.time_since_epoch();
             this->has_image = true;
             this->has_analog = true;
