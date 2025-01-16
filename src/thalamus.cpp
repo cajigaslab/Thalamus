@@ -138,7 +138,7 @@ namespace thalamus {
     tracing_args.backends |= perfetto::kInProcessBackend;
 
     perfetto::TraceConfig cfg;
-    cfg.add_buffers()->set_size_kb(1024);  // Record up to 1 MiB.
+    cfg.add_buffers()->set_size_kb(1024*1024);  // Record up to 1 MiB.
     cfg.set_output_path("thalamus_" + start_time_str + ".perfetto-trace");
     cfg.set_write_into_file(true);
     auto* ds_cfg = cfg.add_data_sources()->mutable_config();
