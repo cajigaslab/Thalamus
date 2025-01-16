@@ -388,51 +388,51 @@ struct SpikeGlxNode::Impl {
 
   size_t spike_glx_version;
 
-  std::string scan_count_command(Device js) {
+  std::string scan_count_command(Device js, int ip) {
     if(js == Device::IMEC) {
       if(spike_glx_version < 20240000) {
-        return absl::StrFormat("GETSCANCOUNT %d", 0);
+        return absl::StrFormat("GETSCANCOUNT %d", ip);
       } else {
-        return absl::StrFormat("GETSTREAMSAMPLECOUNT %d 0", 2);
+        return absl::StrFormat("GETSTREAMSAMPLECOUNT 2 %d", ip);
       }
     } else {
       if(spike_glx_version < 20240000) {
-        return absl::StrFormat("GETSCANCOUNT %d", -1);
+        return "GETSCANCOUNT -1";
       } else {
-        return absl::StrFormat("GETSTREAMSAMPLECOUNT %d 0", 0);
+        return "GETSTREAMSAMPLECOUNT 0 0";
       }
     }
   }
 
-  std::string sample_rate_command(Device js) {
+  std::string sample_rate_command(Device js, int ip) {
     if (js == Device::IMEC) {
       if (spike_glx_version < 20240000) {
-        return absl::StrFormat("GETSAMPLERATE %d", 0);
+        return absl::StrFormat("GETSAMPLERATE %d", ip);
       } else {
-        return absl::StrFormat("GETSTREAMSAMPLERATE %d 0", 2);
+        return absl::StrFormat("GETSTREAMSAMPLERATE 2 %d", ip);
       }
     }
     else {
       if (spike_glx_version < 20240000) {
-        return absl::StrFormat("GETSAMPLERATE %d", -1);
+        return "GETSAMPLERATE -1";
       } else {
-        return absl::StrFormat("GETSTREAMSAMPLERATE %d 0", 0);
+        return "GETSTREAMSAMPLERATE 0 0";
       }
     }
   }
 
-  std::string fetch_command(Device js, size_t offset, const std::string& subset) {
+  std::string fetch_command(Device js, int ip, size_t offset, const std::string& subset) {
     if(js == Device::IMEC) {
       if(spike_glx_version < 20240000) {
-        return absl::StrFormat("FETCH %d %d 50000 %s", 0, offset, subset);
+        return absl::StrFormat("FETCH %d %d 50000 %s", ip, offset, subset);
       } else {
-        return absl::StrFormat("FETCH %d 0 %d 50000 %s", 2, offset, subset);
+        return absl::StrFormat("FETCH 2 %d %d 50000 %s", ip, offset, subset);
       }
     } else {
       if(spike_glx_version < 20240000) {
-        return absl::StrFormat("FETCH %d %d 50000 %s", -1, offset, subset);
+        return absl::StrFormat("FETCH -1 %d 50000 %s", offset, subset);
       } else {
-        return absl::StrFormat("FETCH %d 0 %d 50000 %s", 0, offset, subset);
+        return absl::StrFormat("FETCH 0 0 %d 50000 %s", offset, subset);
       }
     }
   }
@@ -462,7 +462,7 @@ struct SpikeGlxNode::Impl {
 
       for(auto& pair : inputs) {
         auto [js, ip] = pair;
-        auto text = co_await co_query(scan_count_command(js));
+        auto text = co_await co_query(scan_count_command(js, ip));
         THALAMUS_LOG(info) << "scan_count_command " << text;
 
         size_t count;
@@ -472,7 +472,7 @@ struct SpikeGlxNode::Impl {
           throw std::runtime_error(std::string("Failed to parse sample count: ") + text);
         }
 
-        text = co_await co_query(sample_rate_command(js));
+        text = co_await co_query(sample_rate_command(js, ip));
         THALAMUS_LOG(info) << "sample_rate_command " << text;
 
         double rate;
@@ -512,7 +512,7 @@ struct SpikeGlxNode::Impl {
           auto [js, ip] = pair;
           auto j = sample_counts.find(pair);
           auto subset = js == Device::IMEC ? imec_subsets[ip] : "";
-          auto command = fetch_command(js, j->second, subset);
+          auto command = fetch_command(js, ip, j->second, subset);
           fetch_starts[k++] = std::chrono::steady_clock::now();
           co_await co_command(command);
         }
