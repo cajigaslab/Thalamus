@@ -87,6 +87,7 @@ struct SpikeGlxNode::Impl {
   double latency = 0;
   Device current_js;
   int current_ip;
+  //static unsigned long long io_track;
 
   Impl(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph, SpikeGlxNode* outer)
     : state(state)
@@ -99,6 +100,10 @@ struct SpikeGlxNode::Impl {
     , connecting_condition(io_context)
     , turnstile(io_context)
   {
+    //perfetto::Track t(io_track);
+    //auto desc = t.Serialize();
+    //desc.set_name("SpikeGLX I/O");
+    //perfetto::TrackEvent::SetTrackDescriptor(t, desc);
     //queue.start();
     state_connection = state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
     (*state)["Running"].assign(false);
@@ -235,18 +240,18 @@ struct SpikeGlxNode::Impl {
   CoTurnstile turnstile;
 
   boost::asio::awaitable<std::string> co_query(std::string command) {
-    TRACE_EVENT("thalamus", "SpikeGlxNode::co_query");
+    //TRACE_EVENT("thalamus", "SpikeGlxNode::co_query", perfetto::Track(io_track));
     auto turn = turnstile.wait();
  
     auto command_nl = command + "\n";
     {
-      TRACE_EVENT("thalamus", "boost::asio::async_write");
+      //TRACE_EVENT("thalamus", "boost::asio::async_write", perfetto::Track(io_track));
       co_await boost::asio::async_write(socket, boost::asio::buffer(command_nl.data(), command_nl.size()), boost::asio::use_awaitable);
     }
 
     std::string data;
     {
-      TRACE_EVENT("thalamus", "boost::asio::async_read_until");
+      //TRACE_EVENT("thalamus", "boost::asio::async_read_until", perfetto::Track(io_track));
       co_await boost::asio::async_read_until(socket, boost::asio::dynamic_buffer(data), "OK\n", boost::asio::use_awaitable);
     }
 
@@ -256,17 +261,17 @@ struct SpikeGlxNode::Impl {
   }
 
   boost::asio::awaitable<void> co_command(std::string command) {
-    TRACE_EVENT("thalamus", "SpikeGlxNode::co_command");
+    //TRACE_EVENT("thalamus", "SpikeGlxNode::co_command", perfetto::Track(io_track));
     auto turn = turnstile.wait();
 
     auto command_nl = command + "\n";
 
-    TRACE_EVENT("thalamus", "boost::asio::async_write");
+    //TRACE_EVENT("thalamus", "boost::asio::async_write", perfetto::Track(io_track));
     co_await boost::asio::async_write(socket, boost::asio::buffer(command_nl.data(), command_nl.size()), boost::asio::use_awaitable);
   }
 
   void disconnect() {
-    TRACE_EVENT("thalamus", "SpikeGlxNode::disconnect");
+    //TRACE_EVENT("thalamus", "SpikeGlxNode::disconnect", perfetto::Track(io_track));
     if(!is_connected) {
       return;
     }
@@ -290,7 +295,7 @@ struct SpikeGlxNode::Impl {
   CoCondition connecting_condition;
 
   boost::asio::awaitable<void> connect() {
-    TRACE_EVENT("thalamus", "SpikeGlxNode::connect");
+    //TRACE_EVENT("thalamus", "SpikeGlxNode::connect", perfetto::Track(io_track));
     if (connected) {
       co_return;
     }
@@ -323,11 +328,11 @@ struct SpikeGlxNode::Impl {
       boost::asio::ip::tcp::resolver resolver(io_context);
       decltype(resolver.async_resolve(address_tokens.at(0), address_tokens.at(1), boost::asio::use_awaitable))::value_type endpoints;
       {
-        TRACE_EVENT("thalamus", "boost::asio::ip::tcp::resolver::async_resolve");
+        //TRACE_EVENT("thalamus", "boost::asio::ip::tcp::resolver::async_resolve", perfetto::Track(io_track));
         endpoints = co_await resolver.async_resolve(address_tokens.at(0), address_tokens.at(1), boost::asio::use_awaitable);
       }
       {
-        TRACE_EVENT("thalamus", "boost::asio::async_connect");
+        //TRACE_EVENT("thalamus", "boost::asio::async_connect", perfetto::Track(io_track));
         co_await boost::asio::async_connect(socket, endpoints, boost::asio::use_awaitable);
       }
 
@@ -506,7 +511,9 @@ struct SpikeGlxNode::Impl {
       co_await co_query("SETRECORDENAB 1");
 
       std::vector<std::chrono::steady_clock::time_point> fetch_starts(inputs.size());
+      boost::asio::steady_timer timer(io_context);
       while(streaming) {
+        auto start_time = std::chrono::steady_clock::now();
         auto k = 0;
         for(auto& pair : inputs) {
           auto [js, ip] = pair;
@@ -525,6 +532,7 @@ struct SpikeGlxNode::Impl {
           auto& data = js == Device::IMEC ? imec_data[ip] : ni_data;
           auto& names = js == Device::IMEC ? imec_names[ip] : ni_names;
           auto& sample_count = sample_counts[std::make_pair(js, ip)];
+          auto sample_interval = sample_intervals[std::make_pair(js, ip)];
           auto prefix = (js == Device::IMEC ? "IMEC:" : "NI:") + std::to_string(ip) + ":";
           while(true) {
             if(offset == fill) {
@@ -632,7 +640,7 @@ struct SpikeGlxNode::Impl {
 
             auto now = std::chrono::steady_clock::now();
             time = now.time_since_epoch();
-            latency = (now - fetch_start).count()/1e6;
+            latency = std::chrono::duration_cast<std::chrono::milliseconds>(nsamples*sample_interval).count();
             complete_samples = std::numeric_limits<size_t>::max();
             for (auto& d : data) {
               complete_samples = std::min(complete_samples, d.size());
@@ -676,6 +684,13 @@ struct SpikeGlxNode::Impl {
             break;
           }
         }
+
+        auto end_time = std::chrono::steady_clock::now();
+        auto elapsed = end_time - start_time;
+        if(elapsed < poll_interval) {
+          timer.expires_after(poll_interval - elapsed);
+          co_await timer.async_wait();
+        }
       }
     } catch(std::exception& e) {
       THALAMUS_LOG(error) << boost::diagnostic_information(e);
@@ -713,8 +728,12 @@ struct SpikeGlxNode::Impl {
       } else {
         boost::asio::co_spawn(io_context, stop_stream(), boost::asio::detached);
       }
+    } else if (key_str == "Poll Interval (ms)") {
+      poll_interval = std::chrono::milliseconds(std::get<long long>(v));
     }
   }
+
+  std::chrono::milliseconds poll_interval = 10ms;
 };
 
 SpikeGlxNode::SpikeGlxNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph)
@@ -834,3 +853,6 @@ boost::json::value SpikeGlxNode::process(const boost::json::value&) {
   //  });
   //});
 }
+
+
+//unsigned long long SpikeGlxNode::Impl::io_track = get_unique_id();

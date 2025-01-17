@@ -1011,8 +1011,8 @@ namespace thalamus {
       std::chrono::nanoseconds window_ns(static_cast<size_t>(request->window_s()*1e9));
       std::vector<int> window_samples(request->channels().size());
       std::chrono::nanoseconds hop_ns(static_cast<size_t>(request->hop_s()*1e9));
-      std::map<size_t, std::vector<double>> windows;
-      std::map<int, size_t> window_sizes;
+      thalamus::map<size_t, std::vector<double>> windows;
+      thalamus::map<int, size_t> window_sizes;
 
       std::mutex connection_mutex;
       std::vector<std::chrono::nanoseconds> countdowns;
@@ -1039,6 +1039,7 @@ namespace thalamus {
         if(!connection_mutex.try_lock()) {
           return;
         }
+        TRACE_EVENT("thalamus", "Service::spectrogram");
         std::lock_guard<std::mutex> lock(connection_mutex, std::adopt_lock_t());
         size_t num_channels = node->num_channels();
 
@@ -1059,11 +1060,15 @@ namespace thalamus {
         }
 
         countdowns.resize(num_channels);
+        accumulated_data.resize(num_channels);
 
         for (auto c = 0u; c < channel_ids.size(); ++c) {
           auto channel = channel_ids[c];
           auto data = node->data(channel);
           auto interval = node->sample_interval(channel);
+          if(interval.count() == 0) {
+            continue;
+          }
           auto& countdown = countdowns[channel];
           size_t skips = countdown/interval;
           if(skips > data.size()) {
@@ -1083,6 +1088,9 @@ namespace thalamus {
           for (auto c = 0u; c < channel_ids.size(); ++c) {
             auto channel = channel_ids[c];
             auto interval = node->sample_interval(channel);
+            if(interval.count() == 0) {
+              continue;
+            }
             auto name = node->name(channel);
             auto& countdown = countdowns[channel];
             if(countdown >= interval) {
@@ -1103,7 +1111,8 @@ namespace thalamus {
             if(accumulated_channel.size() >= window_size) {
               auto samples = window_size;
               if(!windows.contains(samples)) {
-                std::vector<double> window(256, 0);
+                auto& window = windows[samples];
+                window.assign(samples, 0);
                 for (auto n = 0ull; n < window.size(); ++n) {
                   window[n] = .54 * (1 - .54) * std::cos(2 * M_PI * n / (window.size() - 1));
                 }
@@ -1115,7 +1124,10 @@ namespace thalamus {
               for(auto j = 0ull;j < window.size();++j) {
                 accumulated_copy[1+j] *= window[j];
               }
-              realft(accumulated_copy.data(), accumulated_copy.size()-1, 1);
+              {
+                TRACE_EVENT("thalamus", "Service::realft");
+                realft(accumulated_copy.data(), accumulated_copy.size()-1, 1);
+              }
 
               auto spectrogram = response.add_spectrograms();
               spectrogram->mutable_channel()->set_index(channel);

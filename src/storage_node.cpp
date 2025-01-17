@@ -142,7 +142,6 @@ namespace thalamus {
 
     template <typename T>
     void update_metrics(int metrics_index, int sub_index, size_t count, T name, bool is_rate = true) {
-      TRACE_EVENT("thalamus", "StorageNode::update_metrics");
       auto key = std::make_pair(metrics_index, sub_index);
       auto offset = offsets.find(key);
       if(offset == offsets.end()) {
