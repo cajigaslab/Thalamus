@@ -497,7 +497,7 @@ struct SpikeGlxNode::Impl {
           fill -= offset;
           offset = 0;
         }
-        TRACE_EVENT("thalamus", "SpikeGlxNode::do_read");
+        //TRACE_EVENT("thalamus", "SpikeGlxNode::do_read");
         count = co_await socket.async_receive(boost::asio::buffer(buffer+fill, sizeof(buffer)-fill), boost::asio::use_awaitable);
         //std::cout << "do_read " << offset << " " << fill << " " << count << std::endl;
         fill += count;
@@ -575,6 +575,7 @@ struct SpikeGlxNode::Impl {
               }
             }
             if(!found_header) {
+              co_await do_read();
               continue;
             }
             if(no_data) {
@@ -588,12 +589,15 @@ struct SpikeGlxNode::Impl {
             std::mutex mutex;
             std::condition_variable cond;
 
-            while(fill - offset < 2*total_samples) {
-              TRACE_EVENT("thalamus", "SpikeGlxNode::stream read more");
-              co_await do_read();
-            }
-
             while(samples_read < total_samples) {
+              if(fill - offset < 2) {
+                co_await do_read();
+              }
+              while(fill - offset < 2*(total_samples - samples_read) && fill < sizeof(buffer)) {
+                //TRACE_EVENT("thalamus", "SpikeGlxNode::stream read more");
+                co_await do_read();
+              }
+
               auto data_end = std::min(offset + 2*(total_samples - samples_read), fill);
               {
                 TRACE_EVENT("thalamus", "SpikeGlxNode::stream read all bands");
@@ -623,11 +627,6 @@ struct SpikeGlxNode::Impl {
               samples_read += (data_end-offset) / 2;
               offset += 2*((data_end - offset) / 2);
               //std::cout << samples_read << " " << total_samples << " " << offset << " " << std::endl;
-
-              if(samples_read < total_samples) {
-                TRACE_EVENT("thalamus", "SpikeGlxNode::stream read more");
-                co_await do_read();
-              }
             }
             //std::cout << "Publish" << std::endl;
 
