@@ -6,7 +6,6 @@
 #include <vector>
 #include <functional>
 #include <string>
-#include <span>
 #include <chrono>
 #include <state.hpp>
 #include <util.hpp>
@@ -18,13 +17,6 @@ namespace thalamus {
   using namespace std::chrono_literals;
   class Service;
   class ThreadPool;
-
-  template<typename T>
-  double interval_to_frequency(T interval) {
-    using frequency = std::ratio_divide<std::ratio<1, 1>, typename T::period>;
-    auto result = 1.0 * frequency::num / frequency::den / interval.count();
-    return result;
-  }
 
   class Node : public std::enable_shared_from_this<Node> {
   public:
@@ -66,96 +58,6 @@ namespace thalamus {
     static std::string type_name() {
       return "NONE";
     }
-  };
-
-  class AnalogNode {
-  public:
-    boost::signals2::signal<void(AnalogNode*)> channels_changed;
-    static std::string EMPTY;
-    virtual std::span<const double> data(int channel) const = 0;
-    virtual int num_channels() const = 0;
-    virtual std::chrono::nanoseconds sample_interval(int channel) const = 0;
-    virtual std::chrono::nanoseconds time() const = 0;
-    virtual std::string_view name(int channel) const = 0;
-    virtual std::span<const std::string> get_recommended_channels() const { return std::span<const std::string>(); }
-    virtual void inject(const thalamus::vector<std::span<double const>>&, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&) = 0;
-    virtual bool has_analog_data() const {
-      return true;
-    }
-  };
-
-  class AnalogNodeImpl : public Node, public AnalogNode {
-    struct Impl;
-    std::unique_ptr<Impl> impl;
-  public:
-    AnalogNodeImpl(ObservableDictPtr state, boost::asio::io_context&, NodeGraph* graph);
-    AnalogNodeImpl();
-    ~AnalogNodeImpl();
-    virtual std::span<const double> data(int channel) const override;
-    virtual int num_channels() const override;
-    virtual std::chrono::nanoseconds sample_interval(int channel) const override;
-    virtual std::chrono::nanoseconds time() const override;
-    std::string_view name(int channel) const override;
-    std::span<const std::string> get_recommended_channels() const override;
-    virtual void inject(const thalamus::vector<std::span<double const>>&, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&) override;
-    virtual void inject(const thalamus::vector<std::span<double const>>&, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&, std::chrono::nanoseconds);
-    static std::string type_name();
-    size_t modalities() const override;
-  };
-
-  class StarterNode : public Node {
-    struct Impl;
-    std::unique_ptr<Impl> impl;
-  public:
-    StarterNode(ObservableDictPtr state, boost::asio::io_context&, NodeGraph* graph);
-    ~StarterNode();
-    static std::string type_name();
-    size_t modalities() const override;
-  };
-
-  class WaveGeneratorNode : public AnalogNode, public Node {
-    struct Impl;
-    std::unique_ptr<Impl> impl;
-  public:
-    WaveGeneratorNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph);
-
-    ~WaveGeneratorNode();
-
-    static std::string type_name();
-
-    std::span<const double> data(int index) const override;
-
-    int num_channels() const override;
-
-    void inject(const thalamus::vector<std::span<double const>>& data, const thalamus::vector<std::chrono::nanoseconds>& sample_intervals, const thalamus::vector<std::string_view>&) override;
-
-    std::chrono::nanoseconds sample_interval(int) const override;
-    std::chrono::nanoseconds time() const override;
-    std::string_view name(int channel) const override;
-    std::span<const std::string> get_recommended_channels() const override;
-    size_t modalities() const override;
-  };
-
-  class ToggleNode : public AnalogNode, public Node {
-    struct Impl;
-    std::unique_ptr<Impl> impl;
-
-  public:
-    ToggleNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph);
-    ~ToggleNode();
-
-    static std::string type_name();
-
-    std::span<const double> data(int i) const override;
-    int num_channels() const override;
-
-    void inject(const thalamus::vector<std::span<double const>>& data, const thalamus::vector<std::chrono::nanoseconds>& sample_intervals, const thalamus::vector<std::string_view>&) override;
-
-    std::chrono::nanoseconds sample_interval(int) const override;
-    std::chrono::nanoseconds time() const override;
-    std::string_view name(int channel) const override;
-    std::span<const std::string> get_recommended_channels() const override;
-    size_t modalities() const override;
   };
 
   std::vector<std::weak_ptr<ObservableDict>> get_nodes(ObservableList* nodes, const std::vector<std::string>& names);

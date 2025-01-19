@@ -1,4 +1,5 @@
 #include <base_node.hpp>
+#include <analog_node.hpp>
 
 namespace thalamus {
   class LoopTestNode : public Node, public AnalogNode {

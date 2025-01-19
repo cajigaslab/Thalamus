@@ -7,6 +7,7 @@
 #include <thread>
 #include <functional>
 #include <base_node.hpp>
+#include <analog_node.hpp>
 
 namespace thalamus {
   class ThreadPool : public std::enable_shared_from_this<ThreadPool> {

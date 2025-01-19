@@ -6,6 +6,7 @@
 #include <base_node.hpp>
 #include <state.hpp>
 #include <image_node.hpp>
+#include <analog_node.hpp>
 #include "opencv2/core.hpp"
 
 namespace thalamus {

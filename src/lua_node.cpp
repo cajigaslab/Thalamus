@@ -252,44 +252,46 @@ namespace thalamus {
             auto start = std::chrono::steady_clock::now();
             {
               TRACE_EVENT("thalamus", "compute lua");
-              for(auto i = 0;i < num_channels;++i) {
-                auto span = source->data(i);
-                auto& transformed = data.at(i);
-                auto& max = maxes.at(i);
-                auto& min = mins.at(i);
-                transformed.assign(span.begin(), span.end());
-                if(lua_isnil(L, i+1)) {
-                  continue;
-                }
-
-                sample_interval = source->sample_interval(i);
-                for(size_t j = 0;j < transformed.size();++j) {
-                  sample_index = j;
-                  auto& from = transformed.at(j);
-                  max = std::max(max, from);
-                  min = std::min(min, from);
-                  last_data[i] = from;
-                  lua_pushvalue(L, i+1);
-                  lua_pushnumber(L, from);
-
-                  int status;
-                  {
-                    TRACE_EVENT("thalamus", "lua_pcall");
-                    status = lua_pcall(L, 1, 1, 0);
+              visit_node(source, [&](auto source) {
+                for(auto i = 0;i < num_channels;++i) {
+                  auto span = source->data(i);
+                  auto& transformed = data.at(i);
+                  auto& max = maxes.at(i);
+                  auto& min = mins.at(i);
+                  transformed.assign(span.begin(), span.end());
+                  if(lua_isnil(L, i+1)) {
+                    continue;
                   }
-                  if (status == LUA_ERRRUN) {
-                    auto error = lua_tostring(L, -1);
-                    ObservableDictPtr dict = equation_list->at(i);
-                    (*dict)["Error"].assign(error);
-                    lua_pushnil(L);
-                    lua_replace(L, i+1);
+
+                  sample_interval = source->sample_interval(i);
+                  for(size_t j = 0;j < transformed.size();++j) {
+                    sample_index = j;
+                    auto& from = transformed.at(j);
+                    max = std::max(max, from);
+                    min = std::min(min, from);
+                    last_data[i] = from;
+                    lua_pushvalue(L, i+1);
+                    lua_pushnumber(L, from);
+
+                    int status;
+                    {
+                      TRACE_EVENT("thalamus", "lua_pcall");
+                      status = lua_pcall(L, 1, 1, 0);
+                    }
+                    if (status == LUA_ERRRUN) {
+                      auto error = lua_tostring(L, -1);
+                      ObservableDictPtr dict = equation_list->at(i);
+                      (*dict)["Error"].assign(error);
+                      lua_pushnil(L);
+                      lua_replace(L, i+1);
+                      lua_pop(L, 1);
+                      break;
+                    }
+                    from = lua_tonumber(L, -1);
                     lua_pop(L, 1);
-                    break;
                   }
-                  from = lua_tonumber(L, -1);
-                  lua_pop(L, 1);
                 }
-              }
+              });
             }
             std::chrono::nanoseconds compute_time = std::chrono::steady_clock::now() - start;
             data.back().assign(1, compute_time.count());

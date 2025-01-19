@@ -79,12 +79,12 @@ struct SpikeGlxNode::Impl {
     }
   }
 
-  std::vector<std::vector<double>> ni_data;
-  std::vector<std::vector<std::vector<double>>> imec_data;
+  std::vector<std::vector<short>> ni_data;
+  std::vector<std::vector<std::vector<short>>> imec_data;
   std::vector<std::string> ni_names;
   std::vector<std::vector<std::string>> imec_names;
   std::chrono::steady_clock::time_point fetch_start;
-  double latency = 0;
+  short latency = 0;
   Device current_js;
   int current_ip;
   //static unsigned long long io_track;
@@ -742,8 +742,13 @@ SpikeGlxNode::SpikeGlxNode(ObservableDictPtr state, boost::asio::io_context& io_
 SpikeGlxNode::~SpikeGlxNode() {}
   
 std::span<const double> SpikeGlxNode::data(int channel) const {
+  THALAMUS_ASSERT(false, "SpikeGlxNode publishes short data");
+  return std::span<const double>();
+}
+  
+std::span<const short> SpikeGlxNode::short_data(int channel) const {
   if(channel == 0) {
-    return std::span<const double>(&impl->latency, &impl->latency+1);
+    return std::span<const short>(&impl->latency, &impl->latency+1);
   }
   --channel;
 
@@ -751,19 +756,19 @@ std::span<const double> SpikeGlxNode::data(int channel) const {
     auto& channels = impl->imec_data[j];
     if(channel < channels.size()) {
       if(impl->current_js == Impl::Device::IMEC && impl->current_ip == j) {
-        return std::span<const double>(channels[channel].begin(), channels[channel].begin() + impl->complete_samples);
+        return std::span<const short>(channels[channel].begin(), channels[channel].begin() + impl->complete_samples);
       } else {
-        return std::span<const double>();
+        return std::span<const short>();
       }
     }
     channel -= channels.size();
   }
 
   if(channel < impl->ni_data.size() && impl->current_js == Impl::Device::NI) {
-    return std::span<const double>(impl->ni_data[channel].begin(), impl->ni_data[channel].begin() + impl->complete_samples);
+    return std::span<const short>(impl->ni_data[channel].begin(), impl->ni_data[channel].begin() + impl->complete_samples);
   }
 
-  return std::span<const double>();
+  return std::span<const short>();
 }
 
 std::string_view SpikeGlxNode::name(int channel) const {
@@ -823,6 +828,10 @@ void SpikeGlxNode::inject(const thalamus::vector<std::span<double const>>& data,
 
 size_t SpikeGlxNode::modalities() const {
   return THALAMUS_MODALITY_ANALOG;
+}
+
+bool SpikeGlxNode::is_short_data() const {
+  return true;
 }
 
 boost::json::value SpikeGlxNode::process(const boost::json::value&) {

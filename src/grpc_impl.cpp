@@ -305,8 +305,10 @@ namespace thalamus {
 
             response.add_sample_intervals(node->sample_interval(channel).count());
 
-            auto data = node->data(channel);
-            response.mutable_data()->Add(data.begin(), data.end());
+            visit_node(node, [&](auto node) {
+              auto data = node->data(channel);
+              response.mutable_data()->Add(data.begin(), data.end());
+            });
 
             span->set_end(response.data_size());
           }
@@ -829,22 +831,24 @@ namespace thalamus {
           if(interval == 0ns) {
             current_time = node->time() - *first_time;
           }
-          auto data = node->data(channel);
-          for (auto sample : data) {
-            auto wrote = current_time >= bin_end;
-            while (current_time >= bin_end) {
-              response.add_bins(min);
-              response.add_bins(max);
-              bin_end += bin_ns;
+          visit_node(node, [&](auto node) {
+            auto data = node->data(channel);
+            for (double sample : data) {
+              auto wrote = current_time >= bin_end;
+              while (current_time >= bin_end) {
+                response.add_bins(min);
+                response.add_bins(max);
+                bin_end += bin_ns;
+              }
+              if(wrote) {
+                min = std::numeric_limits<double>::max();
+                max = -std::numeric_limits<double>::max();
+              }
+              min = std::min(min, sample);
+              max = std::max(max, sample);
+              current_time += interval;
             }
-            if(wrote) {
-              min = std::numeric_limits<double>::max();
-              max = -std::numeric_limits<double>::max();
-            }
-            min = std::min(min, sample);
-            max = std::max(max, sample);
-            current_time += interval;
-          }
+          });
           span->set_end(response.bins_size());
           auto name = node->name(channel);
           span->set_name(name.data(), name.size());
@@ -1064,20 +1068,22 @@ namespace thalamus {
 
         for (auto c = 0u; c < channel_ids.size(); ++c) {
           auto channel = channel_ids[c];
-          auto data = node->data(channel);
-          auto interval = node->sample_interval(channel);
-          if(interval.count() == 0) {
-            continue;
-          }
-          auto& countdown = countdowns[channel];
-          size_t skips = countdown/interval;
-          if(skips > data.size()) {
-            skips = data.size();
-          }
+          visit_node(node, [&](auto node) {
+            auto data = node->data(channel);
+            auto interval = node->sample_interval(channel);
+            if(interval.count() == 0) {
+              return;
+            }
+            auto& countdown = countdowns[channel];
+            size_t skips = countdown/interval;
+            if(skips > data.size()) {
+              skips = data.size();
+            }
 
-          auto& accumulated_channel = accumulated_data.at(channel);
-          accumulated_channel.insert(accumulated_channel.end(), data.begin() + skips, data.end());
-          countdown -= skips * interval;
+            auto& accumulated_channel = accumulated_data.at(channel);
+            accumulated_channel.insert(accumulated_channel.end(), data.begin() + skips, data.end());
+            countdown -= skips * interval;
+          });
         }
 
         auto working = true;

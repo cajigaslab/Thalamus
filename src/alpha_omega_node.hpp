@@ -1,6 +1,7 @@
 #pragma once
 
 #include <base_node.hpp>
+#include <analog_node.hpp>
 #include <boost/asio.hpp>
 #include <string>
 //#include <plot.h>

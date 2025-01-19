@@ -242,6 +242,8 @@ message AnalogResponse {
   repeated Span spans = 2;
   repeated uint64 sample_intervals = 3;
   bool channels_changed = 4;
+  repeated sint32 int_data = 5;
+  bool is_int_data = 6;
 }
 
 message GraphRequest {

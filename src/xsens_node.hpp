@@ -4,6 +4,7 @@
 
 #include <string>
 #include <base_node.hpp>
+#include <analog_node.hpp>
 #include <state.hpp>
 #include <boost/qvm/vec.hpp>
 #include <boost/qvm/quat.hpp>

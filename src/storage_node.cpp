@@ -116,25 +116,34 @@ namespace thalamus {
 
       {
         TRACE_EVENT("thalamus", "StorageNode::on_analog_data(build record)");
-        auto body = record.mutable_analog();
-        for (auto i = 0; i < locked_analog->num_channels(); ++i) {
-          auto data = locked_analog->data(i);
-          auto channel_name_view = locked_analog->name(i);
-          std::string channel_name(channel_name_view.begin(), channel_name_view.end());
+        visit_node(locked_analog, [&]<typename T>(T* locked_analog) {
+          auto body = record.mutable_analog();
+          for (auto i = 0; i < locked_analog->num_channels(); ++i) {
+            auto data = locked_analog->data(i);
+            auto channel_name_view = locked_analog->name(i);
+            std::string channel_name(channel_name_view.begin(), channel_name_view.end());
 
-          update_metrics(metrics_index, i, data.size(), [&] { return name + "(" + channel_name + ")"; });
-          auto span = body->add_spans();
+            update_metrics(metrics_index, i, data.size(), [&] { return name + "(" + channel_name + ")"; });
+            auto span = body->add_spans();
 
-          span->set_begin(body->mutable_data()->size());
-          body->mutable_data()->Add(data.begin(), data.end());
-          span->set_end(body->mutable_data()->size());
-          span->set_name(channel_name);
+            if constexpr (std::is_same<typename decltype(data)::value_type, short>::value) {
+              span->set_begin(body->mutable_int_data()->size());
+              body->mutable_int_data()->Add(data.begin(), data.end());
+              span->set_end(body->mutable_int_data()->size());
+              body->set_is_int_data(true);
+            } else {
+              span->set_begin(body->mutable_data()->size());
+              body->mutable_data()->Add(data.begin(), data.end());
+              span->set_end(body->mutable_data()->size());
+            }
+            span->set_name(channel_name);
 
-          body->add_sample_intervals(locked_analog->sample_interval(i).count());
-        }
+            body->add_sample_intervals(locked_analog->sample_interval(i).count());
+          }
 
-        record.set_time(locked_analog->time().count());
-        record.set_node(name);
+          record.set_time(locked_analog->time().count());
+          record.set_node(name);
+        });
       }
 
       queue_record(std::move(record));

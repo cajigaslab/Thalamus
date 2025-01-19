@@ -1,16 +1,9 @@
 #pragma once
 
 #include <boost/asio.hpp>
-#include <vector>
-#include <map>
-#include <functional>
 #include <string>
-#include <iostream>
-#include <variant>
-#include <regex>
-#include <thread>
-//#include <plot.h>
 #include <base_node.hpp>
+#include <analog_node.hpp>
 #include <absl/strings/str_split.h>
 #include <state.hpp>
 
@@ -38,5 +31,7 @@ namespace thalamus {
     std::string_view name(int channel) const override;
     size_t modalities() const override;
     virtual boost::json::value process(const boost::json::value&) override;
+    bool is_short_data() const override;
+    std::span<const short> short_data(int index) const override;
   };
 }

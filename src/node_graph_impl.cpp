@@ -27,6 +27,7 @@
 #include <stim_printer_node.hpp>
 #include <hexascope_node.hpp>
 #include <loop_test_node.hpp>
+#include <analog_node.hpp>
 
 namespace thalamus {
   using namespace std::chrono_literals;
@@ -73,7 +74,6 @@ namespace thalamus {
     {"HAND_ENGINE", new NodeFactory<HandEngineNode>()},
     {"WAVE", new NodeFactory<WaveGeneratorNode>()},
     {"STORAGE", new NodeFactory<StorageNode>()},
-    {"STARTER", new NodeFactory<StarterNode>()},
     {"RUNNER", new NodeFactory<RunNode>()},
     {"OPHANIM", new NodeFactory<OphanimNode>()},
     {"TASK_CONTROLLER", new NodeFactory<TaskControllerNode>()},

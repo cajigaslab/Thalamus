@@ -219,6 +219,11 @@ namespace hydrate {
               }
               counts["analog/" + node_name + "/" + span_name + "/data"] += span_size;
               ++counts["analog/" + node_name + "/" + span_name + "/received"];
+              if(analog.is_int_data()) {
+                result.datatypes["analog/" + node_name + "/" + span_name + "/data"] = H5T_NATIVE_SHORT;
+              } else {
+                result.datatypes["analog/" + node_name + "/" + span_name + "/data"] = H5T_NATIVE_DOUBLE;
+              }
             }
           }
           break;
@@ -313,8 +318,8 @@ namespace hydrate {
     return result;
   }
 
-  template<typename T>
-  void write_data(size_t time, size_t length, hid_t data, hid_t received, size_t& data_written, size_t& received_written, hid_t h5_type, const T* data_buffer, std::vector<T>& data_cache, std::vector<size_t>& received_cache, size_t data_chunk, size_t received_chunk, std::vector<hsize_t> dims = {}, bool update_received = true) {
+  template<typename BUFFER_TYPE, typename CACHE_TYPE>
+  void write_data(size_t time, size_t length, hid_t data, hid_t received, size_t& data_written, size_t& received_written, hid_t h5_type, const BUFFER_TYPE* data_buffer, std::vector<CACHE_TYPE>& data_cache, std::vector<size_t>& received_cache, size_t data_chunk, size_t received_chunk, std::vector<hsize_t> dims = {}, bool update_received = true) {
     herr_t error;
     {
       auto& cache = data_cache;
@@ -345,7 +350,7 @@ namespace hydrate {
         THALAMUS_ASSERT(error >= 0);
         data_written += data_chunk;
 
-        if constexpr (std::is_pointer<T>::value) {
+        if constexpr (std::is_pointer<BUFFER_TYPE>::value) {
           std::for_each(cache.begin(), cache.begin() + data_chunk, [](auto arg) { delete[] arg; });
         }
         cache.erase(cache.begin(), cache.begin() + data_chunk);
@@ -658,8 +663,14 @@ namespace hydrate {
               ++line_count;
             }
 
-            for(auto i = span.begin();i < span.end();++i) {
-              column_outputs[span_name] << record->time() << "," << analog.data(i) << "," << std::endl;
+            if(analog.is_int_data()) {
+              for(auto i = span.begin();i < span.end();++i) {
+                column_outputs[span_name] << record->time() << "," << analog.int_data(i) << "," << std::endl;
+              }
+            } else {
+              for(auto i = span.begin();i < span.end();++i) {
+                column_outputs[span_name] << record->time() << "," << analog.data(i) << "," << std::endl;
+              }
             }
             line_count += span.end() - span.begin();
           }
@@ -873,7 +884,7 @@ namespace hydrate {
           int rank = 1;
 
           if(tokens.front() == "analog") {
-            type = H5T_NATIVE_DOUBLE;
+            type = data_count.datatypes[pair.first];
           } else if(tokens.front() == "xsens") {
             type = segment_type;
           } else if(tokens.front() == "events") {
@@ -910,7 +921,7 @@ namespace hydrate {
 
             std::vector<hsize_t> chunk_dims(std::begin(dims), std::end(dims));
             chunk_dims[0] = std::min(chunk_dims[0], hsize_t(chunk_size));
-            error = H5Pset_chunk(plist_id, chunk_dims.size(), chunk_dims.data());
+            error = H5Pset_chunk(plist_id, rank, chunk_dims.data());
             THALAMUS_ASSERT(error >= 0);
 
             error = H5Pset_deflate(plist_id, gzip);
@@ -930,6 +941,7 @@ namespace hydrate {
       double progress;
       auto last_time = std::chrono::steady_clock::now();
       std::map<hid_t, std::vector<double>> data_caches;
+      std::map<hid_t, std::vector<short>> int_data_caches;
       std::map<hid_t, std::vector<Segment>> segment_caches;
       std::map<hid_t, std::vector<char*>> text_caches;
       std::map<hid_t, std::vector<unsigned char>> image_caches;
@@ -969,8 +981,13 @@ namespace hydrate {
                 auto& received_written = written[received_path];
                 auto data_chunk = gzip ? std::min(dataset_counts[data_path] - data_written, chunk_size) : span_size;
                 auto received_chunk = gzip ? std::min(dataset_counts[received_path] - received_written, chunk_size) : 1;
-                write_data(record->time(), span_size, data, received, data_written, received_written, H5T_NATIVE_DOUBLE, analog.data().data() + span.begin(),
-                           data_caches[data], received_caches[received], data_chunk, received_chunk);
+                if(analog.is_int_data()) {
+                  write_data(record->time(), span_size, data, received, data_written, received_written, H5T_NATIVE_SHORT, analog.int_data().data() + span.begin(),
+                             int_data_caches[data], received_caches[received], data_chunk, received_chunk);
+                } else {
+                  write_data(record->time(), span_size, data, received, data_written, received_written, H5T_NATIVE_DOUBLE, analog.data().data() + span.begin(),
+                             data_caches[data], received_caches[received], data_chunk, received_chunk);
+                }
               }
             }
             break;
