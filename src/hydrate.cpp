@@ -19,6 +19,8 @@
 #include <boost/dll.hpp>
 #include <boost/process.hpp>
 #include <absl/strings/str_replace.h>
+#define ZLIB_CONST
+#include <zlib.h>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -32,6 +34,155 @@
 using namespace std::chrono_literals;
 
 namespace hydrate {
+  struct RecordReader {
+    std::istream& stream;
+    double progress = 0;
+    std::map<int, z_stream> zstreams;
+    std::map<int, std::pair<size_t, std::vector<unsigned char>>> zstream_buffers;
+    std::list<thalamus_grpc::StorageRecord> record_buffer;
+
+    RecordReader(std::istream& stream) : stream(stream) {}
+    ~RecordReader() {
+      for(auto& pair : zstreams) {
+        deflateEnd(&pair.second);
+      }
+    }
+
+    int z = 0;
+
+    std::optional<thalamus_grpc::StorageRecord> read_record_from_stream() {
+      while (true) {
+        auto initial_position = stream.tellg();
+        auto current_position = initial_position;
+
+        stream.seekg(0, std::ios::end);
+        auto file_size = stream.tellg();
+        stream.seekg(initial_position);
+
+        progress = 100.0 * current_position / file_size;
+
+        if (file_size == current_position) {
+          //std::cout << "End of file" << std::endl;
+          return std::nullopt;
+        }
+
+        if (file_size - current_position < 8) {
+          std::cout << "Not enough bytes to read message size, likely final message was corrupted." << std::endl;
+          return std::nullopt;
+        }
+
+        std::string buffer;
+        buffer.resize(8);
+        stream.read(buffer.data(), 8);
+        size_t size = *reinterpret_cast<size_t*>(buffer.data());
+        size = htonll(size);
+
+
+        current_position = stream.tellg();
+        if (file_size - current_position < size) {
+          std::cout << "Not enough bytes to read message, likely final message was corrupted." << std::endl;
+          return std::nullopt;
+        }
+
+        buffer.resize(size);
+        stream.read(buffer.data(), size);
+
+        thalamus_grpc::StorageRecord record;
+        auto parsed = record.ParseFromString(buffer);
+        if (!parsed) {
+          std::cout << "Failed to parse message" << std::endl;
+          return std::nullopt;
+        }
+        if (record.body_case() == thalamus_grpc::StorageRecord::kCompressed) {
+          inflate_record(record.compressed());
+          if (record.compressed().type() == thalamus_grpc::Compressed::Type::Compressed_Type_NONE) {
+            continue;
+          }
+        }
+        return record;
+      }
+    }
+
+    void inflate_record(const thalamus_grpc::Compressed& compressed) {
+      auto& compressed_data = compressed.data();
+      if(!zstreams.contains(compressed.stream())) {
+        zstreams[compressed.stream()] = z_stream();
+        auto& zstream = zstreams[compressed.stream()];
+        zstream.zalloc = Z_NULL;
+        zstream.zfree = Z_NULL;
+        zstream.opaque = Z_NULL;
+        zstream.avail_in = 0;
+        zstream.next_in = Z_NULL;
+        auto error = inflateInit(&zstream);
+        THALAMUS_ASSERT(error == Z_OK, "ZLIB Error: %d", error);
+        zstream_buffers[compressed.stream()] = std::make_pair(0ull, std::vector<unsigned char>(1024));
+      }
+      auto& zstream = zstreams[compressed.stream()];
+      auto& [offset, zbuffer] = zstream_buffers[compressed.stream()];
+      zstream.avail_in = compressed_data.size();
+      zstream.next_in = reinterpret_cast<const unsigned char*>(compressed_data.data());
+      auto compressing = true;
+      while(compressing) {
+        zstream.avail_out = zbuffer.size() - offset;
+        zstream.next_out = zbuffer.data() + offset;
+        auto error = inflate(&zstream, Z_NO_FLUSH);
+        THALAMUS_ASSERT(error == Z_OK || error == Z_BUF_ERROR || error == Z_STREAM_END, "ZLIB Error: %d", error);
+        compressing = zstream.avail_out == 0;
+        if(compressing) {
+          offset = zbuffer.size();
+          zbuffer.resize(2*zbuffer.size());
+        }
+      }
+      offset = zbuffer.size() - zstream.avail_out;
+    }
+
+    std::optional<thalamus_grpc::StorageRecord> process_record(const thalamus_grpc::StorageRecord& record) {
+      if(record.body_case() != thalamus_grpc::StorageRecord::kCompressed) {
+        return record;
+      }
+
+      auto compressed = record.compressed();
+      auto i = zstream_buffers.find(compressed.stream());
+      auto offset = i->second.first;
+
+      while(offset < compressed.size()) {
+        auto record = read_record_from_stream();
+        i = zstream_buffers.find(compressed.stream());
+        offset = i->second.first;
+        if (!record) {
+          break;
+        }
+        record_buffer.push_back(*record);
+      }
+      if (offset < compressed.size()) {
+        return std::nullopt;
+      }
+
+      thalamus_grpc::StorageRecord inflated_record;
+      auto parsed = inflated_record.ParseFromArray(i->second.second.data(), compressed.size());
+      if(!parsed) {
+        return std::nullopt;
+      }
+      i->second.second.erase(i->second.second.begin(), i->second.second.begin() + compressed.size());
+      i->second.first -= compressed.size();
+
+      return inflated_record;
+    }
+
+    std::optional<thalamus_grpc::StorageRecord> read_record() {
+      if(!record_buffer.empty()) {
+        thalamus_grpc::StorageRecord result = std::move(record_buffer.front());
+        record_buffer.pop_front();
+        return process_record(result);
+      }
+
+      auto record = read_record_from_stream();
+      if(!record) {
+        return std::nullopt;
+      }
+      return process_record(*record);
+    }
+  };
   using H5Handle = thalamus::H5Handle;
 
   using vecf3 = boost::qvm::vec<float, 3>;
@@ -94,53 +245,6 @@ namespace hydrate {
 
     return segment_type;
   }
-
-  std::optional<thalamus_grpc::StorageRecord> read_record(std::ifstream& stream, double* progress = nullptr) {
-    auto initial_position = stream.tellg();
-    auto current_position = initial_position;
-  
-    stream.seekg(0, std::ios::end);
-    auto file_size = stream.tellg();
-    stream.seekg(initial_position);
-
-    if(progress) {
-      *progress = 100.0*current_position/file_size;
-    }
-  
-    if (file_size == current_position) {
-      //std::cout << "End of file" << std::endl;
-      return std::nullopt;
-    }
-  
-    if(file_size - current_position < 8) {
-      std::cout << "Not enough bytes to read message size, likely final message was corrupted." << std::endl;
-      return std::nullopt;
-    }
-  
-    std::string buffer;
-    buffer.resize(8);
-    stream.read(buffer.data(), 8);
-    size_t size = *reinterpret_cast<size_t*>(buffer.data());
-    size = htonll(size);
-  
-    
-    current_position = stream.tellg();
-    if(file_size - current_position < size) {
-      std::cout << "Not enough bytes to read message, likely final message was corrupted." << std::endl;
-      return std::nullopt;
-    }
-  
-    buffer.resize(size);
-    stream.read(buffer.data(), size);
-  
-    thalamus_grpc::StorageRecord record;
-    if(record.ParseFromString(buffer)) {
-      return record;
-    } else {
-      std::cout << "Failed to parse message" << std::endl;
-      return std::nullopt;
-    }
-  }
   
   struct Channel {
     std::string node;
@@ -192,13 +296,13 @@ namespace hydrate {
     std::ifstream input_stream(filename, std::ios::binary);
     DataCount result;
     std::map<std::string, size_t>& counts = result.counts;
-    double progress;
     auto last_time = std::chrono::steady_clock::now();
+    RecordReader reader(input_stream);
 
-    while((record = read_record(input_stream, &progress))) {
+    while((record = reader.read_record())) {
       auto now = std::chrono::steady_clock::now();
       if(now - last_time >= 5s) {
-        std::cout << progress << "%" << std::endl;
+        std::cout << reader.progress << "%" << std::endl;
         last_time = now;
       }
       auto node_name = record->node();
@@ -401,9 +505,9 @@ namespace hydrate {
     std::set<size_t> times;
     {
       std::ifstream input_stream(input, std::ios::binary);
+      RecordReader reader(input_stream);
       std::optional<thalamus_grpc::StorageRecord> record;
-      double progress;
-      while((record = read_record(input_stream, &progress))) {
+      while((record = reader.read_record())) {
         if(record->body_case() == thalamus_grpc::StorageRecord::kImage && record->node() == video) {
           times.insert(record->time());
           if(width) {
@@ -492,8 +596,8 @@ namespace hydrate {
     {
       std::ifstream input_stream(input, std::ios::binary);
       std::optional<thalamus_grpc::StorageRecord> record;
-      double progress;
-      while((record = read_record(input_stream, &progress))) {
+      RecordReader reader(input_stream);
+      while((record = reader.read_record())) {
         if(record->body_case() == thalamus_grpc::StorageRecord::kImage && record->node() == video) {
           auto image = record->image();
           width = image.width();
@@ -629,16 +733,16 @@ namespace hydrate {
     std::map<std::string, std::string> tmpnames;
     std::map<std::string, std::ofstream> column_outputs;
     std::ifstream input_stream(input, std::ios::binary);
+    RecordReader reader(input_stream);
     std::optional<thalamus_grpc::StorageRecord> record;
-    double progress;
     auto last_time = std::chrono::steady_clock::now();
     auto line_count = 0l;
 
     std::cout << "Extracting Channel CSVs" << std::endl;
-    while((record = read_record(input_stream, &progress))) {
+    while((record = reader.read_record())) {
       auto now = std::chrono::steady_clock::now();
       if(now - last_time >= 5s) {
-        std::cout << progress << "%" << std::endl;
+        std::cout << reader.progress << "%" << std::endl;
         last_time = now;
       }
 
@@ -936,9 +1040,9 @@ namespace hydrate {
       }
 
       std::ifstream input_stream(input, std::ios::binary);
+      RecordReader reader(input_stream);
 
       std::optional<thalamus_grpc::StorageRecord> record;
-      double progress;
       auto last_time = std::chrono::steady_clock::now();
       std::map<hid_t, std::vector<double>> data_caches;
       std::map<hid_t, std::vector<short>> int_data_caches;
@@ -949,10 +1053,10 @@ namespace hydrate {
       std::vector<Event> event_cache;
       std::map<hid_t, std::vector<size_t>> received_caches;
 
-      while((record = read_record(input_stream, &progress))) {
+      while((record = reader.read_record())) {
         auto now = std::chrono::steady_clock::now();
         if(now - last_time >= 5s) {
-          std::cout << progress << "%" << std::endl;
+          std::cout << reader.progress << "%" << std::endl;
           last_time = now;
         }
         auto node_name = record->node();

@@ -4,7 +4,8 @@
 #ifdef _WIN32
 #pragma warning( push )
 #pragma warning( disable : 4005 )
-#define TRACE_EVENT(...)
+#define TRACE_EVENT(category, name, ...) \
+  PERFETTO_INTERNAL_SCOPED_TRACK_EVENT(category, name)
 #pragma warning( pop )
 #endif
 

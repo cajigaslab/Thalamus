@@ -32,6 +32,17 @@ service Thalamus {
   rpc stim(stream StimRequest) returns (stream StimResponse) {}
 }
 
+message Compressed {
+  enum Type {
+    NONE = 0;
+    ANALOG = 1;
+  }
+  bytes data = 1;
+  Type type = 2;
+  int32 stream = 3;
+  int32 size = 4;
+}
+
 message Error {
   int32 code = 1;
   string message = 2;
@@ -116,6 +127,7 @@ message StorageRecord {
     Event event = 3;
     Image image = 6;
     Text text = 7;
+    Compressed compressed = 8;
   }
   uint64 time = 4;
   string node = 5;

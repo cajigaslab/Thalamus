@@ -8,8 +8,12 @@
 #include <absl/time/time.h>
 #include <boost/qvm/vec_access.hpp>
 #include <boost/qvm/quat_access.hpp>
+#include <boost/pool/object_pool.hpp>
 #include <modalities_util.hpp>
 #include <thalamus/thread.hpp>
+#include <zlib.h>
+#include <thalamus/async.hpp>
+#include <thread_pool.hpp>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -49,12 +53,16 @@ namespace thalamus {
     StorageNode* outer;
     std::map<std::pair<int, int>, size_t> offsets;
     boost::asio::steady_timer stats_timer;
+    boost::asio::io_context& io_context;
+    ThreadPool& pool;
 
     Impl(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph, StorageNode* outer)
       : state(state)
       , graph(graph)
       , outer(outer)
-      , stats_timer(io_context) {
+      , stats_timer(io_context)
+      , io_context(io_context)
+      , pool(graph->get_thread_pool()) {
       using namespace std::placeholders;
       state_connection = state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
       this->state->recap(std::bind(&Impl::on_change, this, _1, _2, _3));
@@ -105,6 +113,8 @@ namespace thalamus {
       queue_record(std::move(record));
     }
 
+    std::map<std::pair<Node*, int>, int> stream_mappings;
+
     void on_data(Node* node, const std::string& name, AnalogNode* locked_analog, int metrics_index) {
       if (!is_running || !locked_analog->has_analog_data()) {
         return;
@@ -113,13 +123,22 @@ namespace thalamus {
       TRACE_EVENT("thalamus", "StorageNode::on_analog_data");
 
       thalamus_grpc::StorageRecord record;
+      if(compress_analog) {
+        records_mutex.lock();
+      }
 
       {
         TRACE_EVENT("thalamus", "StorageNode::on_analog_data(build record)");
         visit_node(locked_analog, [&]<typename T>(T* locked_analog) {
-          auto body = record.mutable_analog();
           for (auto i = 0; i < locked_analog->num_channels(); ++i) {
             auto data = locked_analog->data(i);
+            if(compress_analog) {
+              if(data.empty()) {
+                continue;
+              }
+              record = thalamus_grpc::StorageRecord();
+            }
+            auto body = record.mutable_analog();
             auto channel_name_view = locked_analog->name(i);
             std::string channel_name(channel_name_view.begin(), channel_name_view.end());
 
@@ -139,14 +158,29 @@ namespace thalamus {
             span->set_name(channel_name);
 
             body->add_sample_intervals(locked_analog->sample_interval(i).count());
-          }
 
-          record.set_time(locked_analog->time().count());
-          record.set_node(name);
+            record.set_time(locked_analog->time().count());
+            record.set_node(name);
+            if(compress_analog) {
+              auto j = stream_mappings.find(std::make_pair(node, i));
+              if(j == stream_mappings.end()) {
+                stream_mappings[std::make_pair(node, i)] = get_unique_id();
+                j = stream_mappings.find(std::make_pair(node, i));
+              }
+              ++queued_records;
+              queued_bytes += record.ByteSizeLong();
+              records.emplace_back(std::move(record), j->second);
+            }
+          }
         });
       }
+      if(!compress_analog) {
+        queue_record(std::move(record));
+      } else {
+        records_condition.notify_one();
+        records_mutex.unlock();
+      }
 
-      queue_record(std::move(record));
     }
 
     template <typename T>
@@ -273,52 +307,247 @@ namespace thalamus {
       output_stream.close();
     }
 
-    std::vector<thalamus_grpc::StorageRecord> records;
+    std::vector<std::pair<thalamus_grpc::StorageRecord, int>> records;
     std::condition_variable records_condition;
     std::mutex records_mutex;
     std::thread _thread;
     std::atomic_uint queued_records = 0;
     std::atomic_ullong queued_bytes = 0;
 
-    void thread_target(std::string output_file) {
+    const size_t zbuffer_size = 1024;
+
+    template <typename T>
+    struct SimplePool {
+      std::mutex mutex;
+      std::list<T*> pool;
+      ~SimplePool() {
+        for(auto t : pool) {
+          delete t;
+        }
+      }
+      std::shared_ptr<T> get() {
+        std::lock_guard<std::mutex> lock(mutex);
+        if(pool.empty()) {
+          pool.push_back(new T());
+        }
+        auto result = pool.front();
+        pool.pop_front();
+        return std::shared_ptr<T>(result, [&] (T* t) {
+          std::lock_guard<std::mutex> lock(mutex);
+          pool.push_back(t);
+        });
+      }
+    };
+
+    struct StreamState {
+      z_stream zstream;
+      std::mutex mutex;
+    };
+
+    void thread_target(std::string output_file, bool compress_analog) {
       set_current_thread_name("STORAGE");
       prepare_storage(output_file);
+      Finally f([&] {
+        close_file();
+      });
+
+      std::map<int, StreamState> streams;
+      SimplePool<thalamus_grpc::StorageRecord> record_pool;
+
       while(is_running) {
-        TRACE_EVENT("thalamus", "loop");
-        std::vector<thalamus_grpc::StorageRecord> local_records;
+        std::vector<std::pair<thalamus_grpc::StorageRecord, int>> local_records;
         {
-          TRACE_EVENT("thalamus", "waiting");
           std::unique_lock<std::mutex> lock(records_mutex);
           records_condition.wait_for(lock, 1s, [&] { return !records.empty() || !is_running; });
           local_records.swap(records);
         }
-        for(auto& record : local_records) {
-          std::string serialized;
-          {
-            TRACE_EVENT("thalamus", "serialize");
-            serialized = record.SerializePartialAsString();
+        if(compress_analog) {
+          for(auto& record_pair : local_records) {
+            auto& [record, stream] = record_pair;
+            auto body_type = record.body_case();
+            if(body_type == thalamus_grpc::StorageRecord::kAnalog) {
+              auto stream_i = streams.find(stream);
+              if(stream_i == streams.end()) {
+                auto& s = streams[stream];
+                stream_i = streams.find(stream);
+                auto& zstream = stream_i->second.zstream;
+                zstream.zalloc = Z_NULL;
+                zstream.zfree = Z_NULL;
+                zstream.opaque = Z_NULL;
+                auto error = deflateInit(&zstream, 1);
+                THALAMUS_ASSERT(error == Z_OK, "ZLIB Error: %d", error);
+              }
+            }
           }
+        }
+        std::atomic_int pending = 0;
+        std::mutex pending_mutex;
+        std::condition_variable condition;
+        std::vector<std::string> all_serialized(local_records.size());
+        std::vector<std::function<void()>> jobs;
+        auto record_index = 0;
+        {
+          TRACE_EVENT("thalamus", "serialize");
+          for(auto& record_pair : local_records) {
+            auto& [record, stream] = record_pair;
+            --queued_records;
+            queued_bytes -= record.ByteSizeLong();
+
+            std::string serialized;
+            {
+              serialized = record.SerializePartialAsString();
+            }
+            auto size = serialized.size();
+            auto body_type = record.body_case();
+            if(compress_analog && body_type == thalamus_grpc::StorageRecord::kAnalog) {
+              auto& stream_state = streams[stream];
+              ++pending;
+              jobs.push_back([zstream=&stream_state.zstream,mutex=&stream_state.mutex,&pending_mutex,&condition, &all_serialized, &record_pool, &pending, record_index=record_index++, stream, size, serialized = std::move(serialized)] () mutable {
+                std::lock_guard<std::mutex> lock(*mutex);
+                auto compressed_record = std::make_shared<thalamus_grpc::StorageRecord>();
+                auto compressed = compressed_record->mutable_compressed();
+                auto compressed_data = compressed->mutable_data();
+                if(compressed_data->empty()) {
+                  compressed_data->resize(1024);
+                }
+                zstream->avail_in = serialized.size();
+                zstream->next_in = reinterpret_cast<unsigned char*>(serialized.data());
+                auto compressing = true;
+                size_t offset = 0;
+                compressed->set_type(thalamus_grpc::Compressed::Type::Compressed_Type_ANALOG);
+                compressed->set_stream(stream);
+                compressed->set_size(size);
+                while(compressing) {
+                  zstream->avail_out = compressed_data->size() - offset;
+                  zstream->next_out = reinterpret_cast<unsigned char*>(compressed_data->data()) + offset;
+                  auto error = deflate(zstream, Z_NO_FLUSH);
+                  THALAMUS_ASSERT(error == Z_OK, "ZLIB Error: %d", error);
+                  compressing = zstream->avail_out == 0;
+                  if(compressing) {
+                    offset = compressed_data->size();
+                    compressed_data->resize(2*compressed_data->size());
+                  }
+                }
+                compressed_data->resize(compressed_data->size() - zstream->avail_out);
+                all_serialized[record_index] = compressed_record->SerializePartialAsString();
+                {
+                  std::unique_lock<std::mutex> lock(pending_mutex);
+                  --pending;
+                  condition.notify_all();
+                }
+              });
+            } else {
+              all_serialized[record_index++] = std::move(serialized);
+            }
+          }
+        }
+        {
+          TRACE_EVENT("thalamus", "deflate_all");
+          auto band_size = std::max(1ull, jobs.size()/pool.num_threads);
+          band_size += (jobs.size() % band_size) ? 1 : 0;
+          for(auto i = 0;i < jobs.size();i+=band_size) {
+            auto upper = std::min(i+band_size, jobs.size());
+            pool.push([&jobs,i,upper] {
+              TRACE_EVENT("thalamus", "deflate");
+              for(auto j = i;j < upper;++j) {
+                jobs[j]();
+              }
+            });
+          }
+
+          std::unique_lock<std::mutex> lock(pending_mutex);
+          condition.wait(lock, [&] { return pending == 0; });
+        }
+        TRACE_EVENT("thalamus", "write");
+        for (auto& serialized : all_serialized) {
           auto size = serialized.size();
           auto bigendian_size = htonll(size);
           auto size_bytes = reinterpret_cast<char*>(&bigendian_size);
-          {
-            TRACE_EVENT("thalamus", "write");
-            output_stream.write(size_bytes, sizeof(bigendian_size));
-            output_stream.write(serialized.data(), size);
-          }
-          --queued_records;
-          queued_bytes -= record.ByteSizeLong();
+          output_stream.write(size_bytes, sizeof(bigendian_size));
+          output_stream.write(serialized.data(), size);
         }
       }
-      close_file();
+      std::vector<std::function<void()>> jobs;
+      std::atomic_int pending = 0;
+      std::mutex pending_mutex;
+      std::condition_variable condition;
+      std::vector<std::string> all_serialized(streams.size());
+      auto record_index = 0;
+      for(auto& pair : streams) {
+        ++pending;
+        jobs.push_back([zstream=&pair.second.zstream,mutex=&pair.second.mutex,stream_id=pair.first,&record_pool,&pending,&pending_mutex,&condition,record_index=record_index++,&all_serialized]{
+          std::lock_guard<std::mutex> lock(*mutex);
+          std::string serialized;
+          char* size_bytes;
+          size_t size;
+          size_t bigendian_size;
+          auto compressing = true;
+          size_t offset = 0;
+                auto compressed_record = std::make_shared<thalamus_grpc::StorageRecord>();
+          auto compressed = compressed_record->mutable_compressed();
+          auto compressed_data = compressed->mutable_data();
+          if (compressed_data->empty()) {
+            compressed_data->resize(1024);
+          }
+          compressed->set_type(thalamus_grpc::Compressed::Type::Compressed_Type_NONE);
+          compressed->set_stream(stream_id);
+          while (compressing) {
+            zstream->avail_out = compressed_data->size() - offset;
+            zstream->next_out = reinterpret_cast<unsigned char*>(compressed_data->data()) + offset;
+            auto error = deflate(zstream, Z_FINISH);
+            THALAMUS_ASSERT(error == Z_OK || error == Z_STREAM_END);
+            compressing = zstream->avail_out == 0;
+            if (compressing) {
+              offset = compressed_data->size();
+              compressed_data->resize(2 * compressed_data->size());
+            }
+          }
+          compressed_data->resize(compressed_data->size() - zstream->avail_out);
+          all_serialized[record_index] = compressed_record->SerializePartialAsString();
+          size = serialized.size();
+          bigendian_size = htonll(size);
+          size_bytes = reinterpret_cast<char*>(&bigendian_size);
+          deflateEnd(zstream);
+          {
+            std::unique_lock<std::mutex> lock(pending_mutex);
+            --pending;
+            condition.notify_all();
+          }
+        });
+      }
+      {
+        TRACE_EVENT("thalamus", "deflate_finish_all");
+        auto band_size = std::max(1ull, jobs.size()/1);
+        band_size += (jobs.size() % band_size) ? 1 : 0;
+        for(auto i = 0;i < jobs.size();i+=band_size) {
+          auto upper = std::min(i+band_size, jobs.size());
+          pool.push([&jobs,i,upper] {
+            TRACE_EVENT("thalamus", "deflate_finish");
+            for(auto j = i;j < upper;++j) {
+              jobs[j]();
+            }
+          });
+        }
+
+        std::unique_lock<std::mutex> lock(pending_mutex);
+        condition.wait(lock, [&] { return pending == 0; });
+      }
+      TRACE_EVENT("thalamus", "write_finish");
+      for (auto& serialized : all_serialized) {
+        auto size = serialized.size();
+        auto bigendian_size = htonll(size);
+        auto size_bytes = reinterpret_cast<char*>(&bigendian_size);
+        output_stream.write(size_bytes, sizeof(bigendian_size));
+        output_stream.write(serialized.data(), size);
+      }
     }
 
-    void queue_record(thalamus_grpc::StorageRecord&& record) {
-      TRACE_EVENT("thalamus", "StorageNode::queue_record");
+    void queue_record(thalamus_grpc::StorageRecord&& record, int stream = 0) {
+      //TRACE_EVENT("thalamus", "StorageNode::queue_record");
       ++queued_records;
       queued_bytes += record.ByteSizeLong();
       std::lock_guard<std::mutex> lock(records_mutex);
-      records.push_back(std::move(record));
+      records.emplace_back(std::move(record), stream);
       records_condition.notify_one();
     }
 
@@ -353,12 +582,12 @@ namespace thalamus {
       stats_timer.async_wait(std::bind(&Impl::on_stats_timer, this, _1));
     }
 
-    void start_thread(std::string output_file) {
+    void start_thread(std::string output_file, bool compress_analog) {
       is_running = true;
       records.clear();
       queued_bytes = 0;
       queued_records = 0;
-      _thread = std::thread([&, output_file] { thread_target(output_file); });
+      _thread = std::thread([&, output_file, compress_analog] { thread_target(output_file, compress_analog); });
       stats_timer.expires_after(1s);
       stats_timer.async_wait(std::bind(&Impl::on_stats_timer, this, _1));
     }
@@ -369,6 +598,8 @@ namespace thalamus {
         _thread.join();
       }
     }
+
+    bool compress_analog = false;
 
     void on_change(ObservableCollection::Action, const ObservableCollection::Key&, const ObservableCollection::Value&) {
       if (!state->contains("Running")) {
@@ -386,9 +617,10 @@ namespace thalamus {
         return;
       }
       std::string output_file = state->at("Output File");
+      compress_analog = state->contains("Compress Analog") ? state->at("Compress Analog") : false;
 
       if (is_running) {
-        start_thread(output_file);
+        start_thread(output_file, compress_analog);
       } else {
         stop_thread();
       }

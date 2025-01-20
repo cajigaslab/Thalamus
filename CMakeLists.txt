@@ -154,7 +154,7 @@ if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
 endif()
 
 add_library(hydrate "src/hydrate.cpp")
-target_link_libraries(hydrate boost grpc++ hdf5-static)
+target_link_libraries(hydrate boost grpc++ hdf5-static zlib_processed)
 add_dependencies(hydrate protoc_generated)
 target_compile_definitions(hydrate PRIVATE _USE_MATH_DEFINES NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS _GNU_SOURCE)
 target_include_directories(hydrate PRIVATE "${CMAKE_SOURCE_DIR}/src")
