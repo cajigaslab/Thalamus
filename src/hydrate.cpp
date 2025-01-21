@@ -105,7 +105,9 @@ namespace hydrate {
 
     void inflate_record(const thalamus_grpc::Compressed& compressed) {
       auto& compressed_data = compressed.data();
+      //std::cout << compressed.stream() << std::endl;
       if(!zstreams.contains(compressed.stream())) {
+        //std::cout << "create " << compressed.stream() << std::endl;
         zstreams[compressed.stream()] = z_stream();
         auto& zstream = zstreams[compressed.stream()];
         zstream.zalloc = Z_NULL;

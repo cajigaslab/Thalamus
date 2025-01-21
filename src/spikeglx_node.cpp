@@ -623,8 +623,8 @@ struct SpikeGlxNode::Impl {
                     {
                       std::lock_guard<std::mutex> lock(mutex);
                       --pending_bands;
+                      cond.notify_all();
                     }
-                    cond.notify_all();
                   });
                 }
                 std::unique_lock<std::mutex> lock(mutex);
