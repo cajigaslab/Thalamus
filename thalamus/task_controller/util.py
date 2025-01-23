@@ -23,6 +23,7 @@ import stl.mesh
 
 import typing_extensions
 
+from .. import thalamus_pb2
 
 from ..config import ObservableCollection
 
@@ -397,28 +398,31 @@ async def stamp_msg(context, msg):
 async def do_stimulation(context, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
   try:
     await context.sleep(stim_start)
-    message = comedi_nodes.msg.DigWordChunk()
 
     await context.log('BehavState=pulse_start')
 
+    spans = []
+    for i in range(32):
+      if ((intan_cfg >> i) % 2):
+        spans.append(thalamus_pb2.Span(begin=2,end=4,name=str(i)))
+      else:
+        spans.append(thalamus_pb2.Span(begin=0,end=2,name=str(i)))
+
     if pulse_width.total_seconds() > 0:
       for _ in range(pulse_count):
-        message.word_chunk = [int(intan_cfg)]
-        context.publish(comedi_nodes.msg.DigWordChunk, '/stim_triggers', message)
-        await context.sleep(pulse_width)
-        message.word_chunk = [0]
-        context.publish(comedi_nodes.msg.DigWordChunk, '/stim_triggers', message)
-        await context.sleep(pulse_period-pulse_width)
+        signal = thalamus_pb2.AnalogResponse(
+            data=[0,0,5,0],
+            spans=spans,
+            sample_intervals=[1e9*pulse_width.total_seconds()])
+
+        await context.inject_analog('Stim', signal)
     else:
-      message.word_chunk = [0, int(intan_cfg), 0]
       for _ in range(pulse_count):
-        context.publish(comedi_nodes.msg.DigWordChunk, '/stim_triggers', message)
+        signal = thalamus_pb2.AnalogResponse(
+            data=[0,0,5,0],
+            spans=spans,
+            sample_intervals=[int(1e6)])
         await context.sleep(pulse_period)
-  except asyncio.CancelledError:
-    message = comedi_nodes.msg.DigWordChunk()
-    message.word_chunk = [0]
-    context.publish(comedi_nodes.msg.DigWordChunk, '/stim_triggers', message)
-    pass
   finally:
     await context.log('BehavState=pulse_end')
 

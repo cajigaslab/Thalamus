@@ -230,8 +230,8 @@ def toggle_brightness(brightness):
 async def null_task():
   return None
 
-def next_state(context, new_state, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
-  asyncio.get_event_loop().create_task(context.servicer.publish_state(task_controller_pb2.BehavState(state=new_state.name)))
+async def next_state(context, new_state, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
+  await context.log(f'BehavState={new_state.name}')
   return stimulator(context, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period) if new_state == stim_phase else nullcontext()
 
 @animate(30)
@@ -482,13 +482,16 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   with next_state(context, State.SUCCESS, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
     state_brightness = toggle_brightness(state_brightness)
     context.widget.update()
-    reward_message = RewardDeliveryCmd()
     
-    reward_message.header.stamp = context.ros_manager.node.node.get_clock().now().to_msg()
-    reward_message.on_time_ms = int(context.get_reward(all_reward_channels[final_i_selected_target]))
-    
-    print("delivering reward %d"%(reward_message.on_time_ms,) )
-    context.publish(RewardDeliveryCmd, 'deliver_reward', reward_message)
+    on_time_ms = int(context.get_reward(all_reward_channels[final_i_selected_target]))
+
+    print("delivering reward %d"%(on_time_ms,) )
+    signal = thalamus_pb2.AnalogResponse(
+        data=[5,0],
+        spans=[thalamus_pb2.Span(begin=0,end=2,name='Reward')],
+        sample_intervals=[1_000_000*on_time_ms])
+
+    await context.inject_analog('Reward', signal)
     
     success_sound.play()
 
