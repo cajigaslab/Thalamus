@@ -5,6 +5,7 @@
 #include <functional>
 #include <string>
 #include <base_node.hpp>
+#include <analog_node.hpp>
 #include <state.hpp>
 #include <stim_node.hpp>
 

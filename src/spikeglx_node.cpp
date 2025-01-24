@@ -1,3 +1,4 @@
+#include <thalamus/tracing.hpp>
 #include <spikeglx_node.hpp>
 #include <boost/asio.hpp>
 #include <vector>
@@ -78,14 +79,15 @@ struct SpikeGlxNode::Impl {
     }
   }
 
-  std::vector<std::vector<double>> ni_data;
-  std::vector<std::vector<std::vector<double>>> imec_data;
+  std::vector<std::vector<short>> ni_data;
+  std::vector<std::vector<std::vector<short>>> imec_data;
   std::vector<std::string> ni_names;
   std::vector<std::vector<std::string>> imec_names;
   std::chrono::steady_clock::time_point fetch_start;
-  double latency = 0;
+  short latency = 0;
   Device current_js;
   int current_ip;
+  //static unsigned long long io_track;
 
   Impl(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph, SpikeGlxNode* outer)
     : state(state)
@@ -98,6 +100,10 @@ struct SpikeGlxNode::Impl {
     , connecting_condition(io_context)
     , turnstile(io_context)
   {
+    //perfetto::Track t(io_track);
+    //auto desc = t.Serialize();
+    //desc.set_name("SpikeGLX I/O");
+    //perfetto::TrackEvent::SetTrackDescriptor(t, desc);
     //queue.start();
     state_connection = state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
     (*state)["Running"].assign(false);
@@ -234,13 +240,20 @@ struct SpikeGlxNode::Impl {
   CoTurnstile turnstile;
 
   boost::asio::awaitable<std::string> co_query(std::string command) {
+    //TRACE_EVENT("thalamus", "SpikeGlxNode::co_query", perfetto::Track(io_track));
     auto turn = turnstile.wait();
  
     auto command_nl = command + "\n";
-    co_await boost::asio::async_write(socket, boost::asio::buffer(command_nl.data(), command_nl.size()), boost::asio::use_awaitable);
+    {
+      //TRACE_EVENT("thalamus", "boost::asio::async_write", perfetto::Track(io_track));
+      co_await boost::asio::async_write(socket, boost::asio::buffer(command_nl.data(), command_nl.size()), boost::asio::use_awaitable);
+    }
 
     std::string data;
-    co_await boost::asio::async_read_until(socket, boost::asio::dynamic_buffer(data), "OK\n", boost::asio::use_awaitable);
+    {
+      //TRACE_EVENT("thalamus", "boost::asio::async_read_until", perfetto::Track(io_track));
+      co_await boost::asio::async_read_until(socket, boost::asio::dynamic_buffer(data), "OK\n", boost::asio::use_awaitable);
+    }
 
     auto end = data.find("\n");
     data.resize(end);
@@ -248,14 +261,17 @@ struct SpikeGlxNode::Impl {
   }
 
   boost::asio::awaitable<void> co_command(std::string command) {
+    //TRACE_EVENT("thalamus", "SpikeGlxNode::co_command", perfetto::Track(io_track));
     auto turn = turnstile.wait();
 
     auto command_nl = command + "\n";
 
+    //TRACE_EVENT("thalamus", "boost::asio::async_write", perfetto::Track(io_track));
     co_await boost::asio::async_write(socket, boost::asio::buffer(command_nl.data(), command_nl.size()), boost::asio::use_awaitable);
   }
 
   void disconnect() {
+    //TRACE_EVENT("thalamus", "SpikeGlxNode::disconnect", perfetto::Track(io_track));
     if(!is_connected) {
       return;
     }
@@ -279,6 +295,7 @@ struct SpikeGlxNode::Impl {
   CoCondition connecting_condition;
 
   boost::asio::awaitable<void> connect() {
+    //TRACE_EVENT("thalamus", "SpikeGlxNode::connect", perfetto::Track(io_track));
     if (connected) {
       co_return;
     }
@@ -309,8 +326,15 @@ struct SpikeGlxNode::Impl {
       }
 
       boost::asio::ip::tcp::resolver resolver(io_context);
-      auto endpoints = co_await resolver.async_resolve(address_tokens.at(0), address_tokens.at(1), boost::asio::use_awaitable);
-      co_await boost::asio::async_connect(socket, endpoints, boost::asio::use_awaitable);
+      decltype(resolver.async_resolve(address_tokens.at(0), address_tokens.at(1), boost::asio::use_awaitable))::value_type endpoints;
+      {
+        //TRACE_EVENT("thalamus", "boost::asio::ip::tcp::resolver::async_resolve", perfetto::Track(io_track));
+        endpoints = co_await resolver.async_resolve(address_tokens.at(0), address_tokens.at(1), boost::asio::use_awaitable);
+      }
+      {
+        //TRACE_EVENT("thalamus", "boost::asio::async_connect", perfetto::Track(io_track));
+        co_await boost::asio::async_connect(socket, endpoints, boost::asio::use_awaitable);
+      }
 
       auto text = co_await co_query("GETVERSION");
       std::vector<std::string_view> tokens = absl::StrSplit(text, absl::ByAnyChar(".,"));
@@ -326,29 +350,32 @@ struct SpikeGlxNode::Impl {
       auto command = spike_glx_version < 20240000 ? "GETIMPROBECOUNT" : "GETSTREAMNP 2";
       text = co_await co_query(command);
       imec_count = parse_number<long long>(text);
-      //imec_data.resize(imec_count);
-      //imec_names.resize(imec_count);
+      imec_data.resize(imec_count);
+      imec_names.resize(imec_count);
 
-      //int imec_pending = 1;
-      //CoCondition condition(io_context);
-      //auto tracker = [&] () {
-      //  --imec_pending;
-      //  condition.notify();
-      //};
-      //(*state)["imec_count"].assign(imec_count, tracker);
+      int imec_pending = 1;
+      CoCondition condition(io_context);
+      auto tracker = [&] () {
+        --imec_pending;
+        condition.notify();
+      };
+      (*state)["imec_count"].assign(imec_count, tracker);
 
-      //for(auto i = 0ll;i < imec_count;++i) {
-      //  auto text = absl::StrFormat("imec_subset_%d", i);
-      //  if(state->contains(text)) {
-      //    continue;
-      //  }
+      for(auto i = 0ll;i < imec_count;++i) {
+        auto text = absl::StrFormat("imec_subset_%d", i);
+        if(state->contains(text)) {
+          continue;
+        }
 
-      //  ++imec_pending;
-      //  (*state)[text].assign("*", tracker);
-      //}
+        ++imec_pending;
+        (*state)[text].assign("*", tracker);
+      }
 
-      //co_await condition.wait([&] { return imec_pending == 0; });
+      //std::cout << "imec wait" << std::endl;
+      co_await condition.wait([&] { return imec_pending == 0; });
+      //std::cout << "imec waited" << std::endl;
       connected = true;
+      (*state)["Connected"].assign(true);
     } catch(std::exception& e) {
       THALAMUS_LOG(error) << boost::diagnostic_information(e);
       (*state)["Error"].assign(e.what());
@@ -366,51 +393,51 @@ struct SpikeGlxNode::Impl {
 
   size_t spike_glx_version;
 
-  std::string scan_count_command(Device js) {
+  std::string scan_count_command(Device js, int ip) {
     if(js == Device::IMEC) {
       if(spike_glx_version < 20240000) {
-        return absl::StrFormat("GETSCANCOUNT %d", 0);
+        return absl::StrFormat("GETSCANCOUNT %d", ip);
       } else {
-        return absl::StrFormat("GETSTREAMSAMPLECOUNT %d 0", 2);
+        return absl::StrFormat("GETSTREAMSAMPLECOUNT 2 %d", ip);
       }
     } else {
       if(spike_glx_version < 20240000) {
-        return absl::StrFormat("GETSCANCOUNT %d", -1);
+        return "GETSCANCOUNT -1";
       } else {
-        return absl::StrFormat("GETSTREAMSAMPLECOUNT %d 0", 0);
+        return "GETSTREAMSAMPLECOUNT 0 0";
       }
     }
   }
 
-  std::string sample_rate_command(Device js) {
+  std::string sample_rate_command(Device js, int ip) {
     if (js == Device::IMEC) {
       if (spike_glx_version < 20240000) {
-        return absl::StrFormat("GETSAMPLERATE %d", 0);
+        return absl::StrFormat("GETSAMPLERATE %d", ip);
       } else {
-        return absl::StrFormat("GETSTREAMSAMPLERATE %d 0", 2);
+        return absl::StrFormat("GETSTREAMSAMPLERATE 2 %d", ip);
       }
     }
     else {
       if (spike_glx_version < 20240000) {
-        return absl::StrFormat("GETSAMPLERATE %d", -1);
+        return "GETSAMPLERATE -1";
       } else {
-        return absl::StrFormat("GETSTREAMSAMPLERATE %d 0", 0);
+        return "GETSTREAMSAMPLERATE 0 0";
       }
     }
   }
 
-  std::string fetch_command(Device js, size_t offset, const std::string& subset) {
+  std::string fetch_command(Device js, int ip, size_t offset, const std::string& subset) {
     if(js == Device::IMEC) {
       if(spike_glx_version < 20240000) {
-        return absl::StrFormat("FETCH %d %d 50000 %s", 0, offset, subset);
+        return absl::StrFormat("FETCH %d %d 50000 %s", ip, offset, subset);
       } else {
-        return absl::StrFormat("FETCH %d 0 %d 50000 %s", 2, offset, subset);
+        return absl::StrFormat("FETCH 2 %d %d 50000 %s", ip, offset, subset);
       }
     } else {
       if(spike_glx_version < 20240000) {
-        return absl::StrFormat("FETCH %d %d 50000 %s", -1, offset, subset);
+        return absl::StrFormat("FETCH -1 %d 50000 %s", offset, subset);
       } else {
-        return absl::StrFormat("FETCH %d 0 %d 50000 %s", 0, offset, subset);
+        return absl::StrFormat("FETCH 0 0 %d 50000 %s", offset, subset);
       }
     }
   }
@@ -440,7 +467,7 @@ struct SpikeGlxNode::Impl {
 
       for(auto& pair : inputs) {
         auto [js, ip] = pair;
-        auto text = co_await co_query(scan_count_command(js));
+        auto text = co_await co_query(scan_count_command(js, ip));
         THALAMUS_LOG(info) << "scan_count_command " << text;
 
         size_t count;
@@ -450,7 +477,7 @@ struct SpikeGlxNode::Impl {
           throw std::runtime_error(std::string("Failed to parse sample count: ") + text);
         }
 
-        text = co_await co_query(sample_rate_command(js));
+        text = co_await co_query(sample_rate_command(js, ip));
         THALAMUS_LOG(info) << "sample_rate_command " << text;
 
         double rate;
@@ -464,30 +491,35 @@ struct SpikeGlxNode::Impl {
       size_t offset = 0;
       size_t fill = 0;
       char* char_buffer = reinterpret_cast<char*>(buffer);
-      auto skip_read = false;
       size_t total_samples = 0;
       size_t count = 0;
+      unsigned long long flow_id;
 
       auto do_read = [&]() -> boost::asio::awaitable<void> {
+        //std::cout << "do_read " << offset << " " << fill << std::endl;
         if(fill == sizeof(buffer)) {
           std::copy(buffer + offset, buffer + fill, buffer);
           fill -= offset;
           offset = 0;
         }
+        //TRACE_EVENT("thalamus", "SpikeGlxNode::do_read");
         count = co_await socket.async_receive(boost::asio::buffer(buffer+fill, sizeof(buffer)-fill), boost::asio::use_awaitable);
+        //std::cout << "do_read " << offset << " " << fill << " " << count << std::endl;
         fill += count;
       };
 
       co_await co_query("SETRECORDENAB 1");
 
       std::vector<std::chrono::steady_clock::time_point> fetch_starts(inputs.size());
+      boost::asio::steady_timer timer(io_context);
       while(streaming) {
+        auto start_time = std::chrono::steady_clock::now();
         auto k = 0;
         for(auto& pair : inputs) {
           auto [js, ip] = pair;
           auto j = sample_counts.find(pair);
           auto subset = js == Device::IMEC ? imec_subsets[ip] : "";
-          auto command = fetch_command(js, j->second, subset);
+          auto command = fetch_command(js, ip, j->second, subset);
           fetch_starts[k++] = std::chrono::steady_clock::now();
           co_await co_command(command);
         }
@@ -500,16 +532,19 @@ struct SpikeGlxNode::Impl {
           auto& data = js == Device::IMEC ? imec_data[ip] : ni_data;
           auto& names = js == Device::IMEC ? imec_names[ip] : ni_names;
           auto& sample_count = sample_counts[std::make_pair(js, ip)];
+          auto sample_interval = sample_intervals[std::make_pair(js, ip)];
           auto prefix = (js == Device::IMEC ? "IMEC:" : "NI:") + std::to_string(ip) + ":";
           while(true) {
-            if(!skip_read) {
+            if(offset == fill) {
               co_await do_read();
             }
-            skip_read = false;
             auto no_data = false;
             auto found_header = false;
-            for(auto i = fill-count;i < fill;++i) {
+            for(auto i = offset;i < fill;++i) {
               if(char_buffer[i] == '\n') {
+                //std::cout << "HEADER" << std::endl;
+                flow_id = get_unique_id();
+                TRACE_EVENT("thalamus", "SpikeGlxNode::stream Read BINARY_DATA header");
                 char_buffer[i] = 0;
                 found_header = true;
                 if(std::string_view(char_buffer + offset, i).starts_with("ERROR FETCH: No data")) {
@@ -523,6 +558,7 @@ struct SpikeGlxNode::Impl {
                 }
 
                 auto count = sscanf(char_buffer + offset, "BINARY_DATA %d %d uint64(%llu)", &nchans, &nsamples, &from_count);
+                //std::cout << (char_buffer + offset) << " " << nchans << " " << nsamples << " " << from_count << std::endl;
                 if(count < 3) {
                   throw std::runtime_error(std::string("Failed to read BINARY_DATA header: ") + (char_buffer + offset));
                 }
@@ -547,10 +583,10 @@ struct SpikeGlxNode::Impl {
               }
             }
             if(!found_header) {
+              co_await do_read();
               continue;
             }
             if(no_data) {
-              skip_read = true;
               break;
             }
 
@@ -562,39 +598,49 @@ struct SpikeGlxNode::Impl {
             std::condition_variable cond;
 
             while(samples_read < total_samples) {
-              int pending_bands = total_bands;
-              auto data_end = std::min(offset + 2*(total_samples - samples_read), fill);
-              for(auto c = 0;c < nchans;c+=band_size) {
-                pool.push([&,c] {
-                  for(auto subc = 0;subc < band_size && c+subc < nchans;++subc) {
-                    auto channel = (samples_read+c+subc) % nchans;
-                    for(auto i = offset + 2*(c+subc);i+1 < data_end;i += 2*nchans) {
-                      short sample = buffer[i] + (buffer[i+1] << 8);
-                      data[channel].push_back(sample);
-                    }
-                  }
-                  {
-                    std::lock_guard<std::mutex> lock(mutex);
-                    --pending_bands;
-                  }
-                  cond.notify_all();
-                });
-              }
-
-              std::unique_lock<std::mutex> lock(mutex);
-              cond.wait(lock, [&] { return pending_bands == 0; });
-
-              samples_read += (fill-offset) / sizeof(short);
-              offset += (fill - offset) % 2;
-
-              if(samples_read < total_samples) {
+              if(fill - offset < 2) {
                 co_await do_read();
               }
+              while(fill - offset < 2*(total_samples - samples_read) && fill < sizeof(buffer)) {
+                //TRACE_EVENT("thalamus", "SpikeGlxNode::stream read more");
+                co_await do_read();
+              }
+
+              auto data_end = std::min(offset + 2*(total_samples - samples_read), fill);
+              {
+                TRACE_EVENT("thalamus", "SpikeGlxNode::stream read all bands");
+                int pending_bands = total_bands;
+                for(auto c = 0;c < nchans;c+=band_size) {
+                  pool.push([&,c] {
+                    TRACE_EVENT("thalamus", "SpikeGlxNode::stream read single band");
+                    for(auto subc = 0;subc < band_size && c+subc < nchans;++subc) {
+                      auto channel = (samples_read+c+subc) % nchans;
+                      for(auto i = offset + 2*(c+subc);i+1 < data_end;i += 2*nchans) {
+                        short sample = buffer[i] + (buffer[i+1] << 8);
+                        data[channel].push_back(sample);
+                      }
+                    }
+                    {
+                      std::lock_guard<std::mutex> lock(mutex);
+                      --pending_bands;
+                      cond.notify_all();
+                    }
+                  });
+                }
+                std::unique_lock<std::mutex> lock(mutex);
+                cond.wait(lock, [&] { return pending_bands == 0; });
+              }
+
+
+              samples_read += (data_end-offset) / 2;
+              offset += 2*((data_end - offset) / 2);
+              //std::cout << samples_read << " " << total_samples << " " << offset << " " << std::endl;
             }
+            //std::cout << "Publish" << std::endl;
 
             auto now = std::chrono::steady_clock::now();
             time = now.time_since_epoch();
-            latency = (now - fetch_start).count()/1e6;
+            latency = std::chrono::duration_cast<std::chrono::milliseconds>(nsamples*sample_interval).count();
             complete_samples = std::numeric_limits<size_t>::max();
             for (auto& d : data) {
               complete_samples = std::min(complete_samples, d.size());
@@ -605,13 +651,18 @@ struct SpikeGlxNode::Impl {
               num_channels += d.size();
             }
             if(num_channels != last_num_channels) {
+            //std::cout << "channels_changed" << std::endl;
+              TRACE_EVENT("thalamus", "SpikeGlxNode::channels_changed");
               outer->channels_changed(outer);
             }
             if (complete_samples > 0) {
               current_js = js;
               current_ip = ip;
+            //std::cout << "ready" << std::endl;
+              TRACE_EVENT("thalamus", "SpikeGlxNode::ready");
               outer->ready(outer);
             }
+            //std::cout << "fetch done" << std::endl;
             //THALAMUS_LOG(info) << "fetch done";
             sample_count += nsamples;
 
@@ -620,6 +671,7 @@ struct SpikeGlxNode::Impl {
               while(offset+3 <= fill) {
                 found_ok = std::string_view(char_buffer + offset, 3) == "OK\n";
                 if(found_ok) {
+            //std::cout << "OK" << std::endl;
                   offset += 3;
                   break;
                 }
@@ -632,6 +684,13 @@ struct SpikeGlxNode::Impl {
             break;
           }
         }
+
+        auto end_time = std::chrono::steady_clock::now();
+        auto elapsed = end_time - start_time;
+        if(elapsed < poll_interval) {
+          timer.expires_after(poll_interval - elapsed);
+          co_await timer.async_wait();
+        }
       }
     } catch(std::exception& e) {
       THALAMUS_LOG(error) << boost::diagnostic_information(e);
@@ -642,11 +701,13 @@ struct SpikeGlxNode::Impl {
   }
 
   boost::asio::awaitable<void> stop_stream() {
+    TRACE_EVENT("thalamus", "SpikeGlxNode::stop_stream");
     streaming = false;
     co_await co_query("SETRECORDENAB 0");
   }
 
   void on_change(ObservableCollection::Action a, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
+    TRACE_EVENT("thalamus", "SpikeGlxNode::on_change");
     auto key_str = std::get<std::string>(k);
     if(key_str.starts_with("imec_subset")) {
       std::vector<std::string> tokens = absl::StrSplit(key_str, '_');
@@ -667,8 +728,12 @@ struct SpikeGlxNode::Impl {
       } else {
         boost::asio::co_spawn(io_context, stop_stream(), boost::asio::detached);
       }
+    } else if (key_str == "Poll Interval (ms)") {
+      poll_interval = std::chrono::milliseconds(std::get<long long>(v));
     }
   }
+
+  std::chrono::milliseconds poll_interval = 10ms;
 };
 
 SpikeGlxNode::SpikeGlxNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph)
@@ -677,8 +742,13 @@ SpikeGlxNode::SpikeGlxNode(ObservableDictPtr state, boost::asio::io_context& io_
 SpikeGlxNode::~SpikeGlxNode() {}
   
 std::span<const double> SpikeGlxNode::data(int channel) const {
+  THALAMUS_ASSERT(false, "SpikeGlxNode publishes short data");
+  return std::span<const double>();
+}
+  
+std::span<const short> SpikeGlxNode::short_data(int channel) const {
   if(channel == 0) {
-    return std::span<const double>(&impl->latency, &impl->latency+1);
+    return std::span<const short>(&impl->latency, &impl->latency+1);
   }
   --channel;
 
@@ -686,19 +756,19 @@ std::span<const double> SpikeGlxNode::data(int channel) const {
     auto& channels = impl->imec_data[j];
     if(channel < channels.size()) {
       if(impl->current_js == Impl::Device::IMEC && impl->current_ip == j) {
-        return std::span<const double>(channels[channel].begin(), channels[channel].begin() + impl->complete_samples);
+        return std::span<const short>(channels[channel].begin(), channels[channel].begin() + impl->complete_samples);
       } else {
-        return std::span<const double>();
+        return std::span<const short>();
       }
     }
     channel -= channels.size();
   }
 
   if(channel < impl->ni_data.size() && impl->current_js == Impl::Device::NI) {
-    return std::span<const double>(impl->ni_data[channel].begin(), impl->ni_data[channel].begin() + impl->complete_samples);
+    return std::span<const short>(impl->ni_data[channel].begin(), impl->ni_data[channel].begin() + impl->complete_samples);
   }
 
-  return std::span<const double>();
+  return std::span<const short>();
 }
 
 std::string_view SpikeGlxNode::name(int channel) const {
@@ -760,6 +830,10 @@ size_t SpikeGlxNode::modalities() const {
   return THALAMUS_MODALITY_ANALOG;
 }
 
+bool SpikeGlxNode::is_short_data() const {
+  return true;
+}
+
 boost::json::value SpikeGlxNode::process(const boost::json::value&) {
   boost::asio::co_spawn(impl->io_context, impl->connect(), boost::asio::detached);
   return boost::json::value();
@@ -788,3 +862,6 @@ boost::json::value SpikeGlxNode::process(const boost::json::value&) {
   //  });
   //});
 }
+
+
+//unsigned long long SpikeGlxNode::Impl::io_track = get_unique_id();

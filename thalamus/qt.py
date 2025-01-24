@@ -114,6 +114,7 @@ else:
   qt_move_attr(Qt, Qt.ItemFlag, 'ItemIsUserCheckable')
   qt_move_attr(Qt, Qt.CheckState, 'Checked')
   qt_move_attr(Qt, Qt.CheckState, 'Unchecked')
+  qt_move_attr(Qt, Qt.AlignmentFlag, 'AlignTop')
   qt_move_attr(Qt, Qt.AlignmentFlag, 'AlignLeft')
   qt_move_attr(Qt, Qt.AlignmentFlag, 'AlignRight')
   qt_move_attr(Qt, Qt.AlignmentFlag, 'AlignHCenter')
@@ -122,6 +123,7 @@ else:
   qt_move_attr(Qt, Qt.CursorShape, 'SplitVCursor')
   qt_move_attr(QImage, QImage.Format, 'Format_Grayscale8')
   qt_move_attr(QImage, QImage.Format, 'Format_RGB888')
+  qt_move_attr(QImage, QImage.Format, 'Format_Indexed8')
   qt_move_attr(QMessageBox, QMessageBox.StandardButton, 'Yes')
   qt_move_attr(QMessageBox, QMessageBox.StandardButton, 'No')
 

@@ -226,7 +226,7 @@ class Form(QWidget):
       min_spin_box = QDoubleSpinBox()
       min_spin_box.setObjectName(f'{config.field}')
       min_spin_box.setKeyboardTracking(False)
-      min_spin_box.setRange(-1000, 1000)
+      min_spin_box.setRange(-1000000, 1000000)
       min_spin_box.setSuffix(config.suffix)
 
       try:

@@ -90,7 +90,11 @@ include(cmake/sdl.cmake)
 include(cmake/ffmpeg.cmake)
 include(cmake/glib.cmake)
 include(cmake/cairo.cmake)
-include(cmake/luajit.cmake)
+if(NOT "${SANITIZER}" STREQUAL "")
+  include(cmake/lua.cmake)
+else()
+  include(cmake/luajit.cmake)
+endif()
  
 if(NOT WIN32 AND NOT APPLE)
   include(cmake/llvm.cmake)
@@ -150,7 +154,7 @@ if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
 endif()
 
 add_library(hydrate "src/hydrate.cpp")
-target_link_libraries(hydrate boost grpc++ hdf5-static)
+target_link_libraries(hydrate boost grpc++ hdf5-static zlib_processed)
 add_dependencies(hydrate protoc_generated)
 target_compile_definitions(hydrate PRIVATE _USE_MATH_DEFINES NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS _GNU_SOURCE)
 target_include_directories(hydrate PRIVATE "${CMAKE_SOURCE_DIR}/src")
@@ -165,6 +169,8 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/state_manager.cpp"
                      "${CMAKE_SOURCE_DIR}/src/base_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/base_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/analog_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/analog_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/alpha_omega_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/alpha_omega_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/grpc_impl.hpp"

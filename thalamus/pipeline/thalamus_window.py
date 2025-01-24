@@ -229,6 +229,7 @@ FACTORIES = {
   'SPIKEGLX': Factory(SpikeGlxWidget, [
     UserData(UserDataType.CHECK_BOX, 'Connected', False, []),
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+    UserData(UserDataType.SPINBOX, 'Poll Interval (ms)', 10, []),
     UserData(UserDataType.DEFAULT, 'Address', "localhost:4142", []),
   ]),
   'PULSE': Factory(None, [
@@ -247,6 +248,7 @@ FACTORIES = {
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.DEFAULT, 'Sources', '', []),
     UserData(UserDataType.DEFAULT, 'Output File', 'test.tha', []),
+    UserData(UserDataType.CHECK_BOX, 'Compress Analog', False, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, [])
   ]),
   'STARTER': Factory(None, [

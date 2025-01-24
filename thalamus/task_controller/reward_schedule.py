@@ -29,10 +29,7 @@ class RewardSchedule(QWidget): # type: ignore
     self.paths = len(config['schedules'])*[None]
     self.ranges = len(config['schedules'])*[(float('inf'), float('-inf'))]
     self.range = float('inf'), float('-inf')
-
-    config['schedules'].add_observer(self.on_graph_change, lambda: isdeleted(self))
-    for i, g in enumerate(config['schedules']):
-      self.on_graph_change(ObservableCollection.Action.SET, i, g)
+    self.need_graph_regen = True
 
     config.add_observer(self.on_schedule_change, lambda: isdeleted(self))
     self.on_schedule_change(ObservableCollection.Action.SET, None, None)
@@ -40,25 +37,32 @@ class RewardSchedule(QWidget): # type: ignore
   def sizeHint(self) -> QSize:
     return QSize(200, 200)
 
-  def on_graph_change(self, _a: ObservableCollection.Action, k: typing.Any, graph: typing.Any) -> None:
-    path = QPainterPath()
-    enumeration = enumerate(graph)
-    i, y = next(enumeration)
-    path.moveTo(float(i), float(y))
-    for i, y in enumeration:
-      path.lineTo(float(i), float(y))
-    if len(self.paths) <= k:
-      self.paths.insert(k, path)
-      self.ranges.insert(k, (min(graph), max(graph)))
-    else:
-      self.paths[k] = path
-      self.ranges[k] = (min(graph), max(graph))
+  def regen_graphs(self):
+    print('regen_graphs')
+    for k, graph in enumerate(self.config['schedules']):
+      path = QPainterPath()
+      enumeration = enumerate(graph)
+      i, y = next(enumeration)
+      path.moveTo(float(i), float(y))
+      for i, y in enumeration:
+        path.lineTo(float(i), float(y))
+      if len(self.paths) <= k:
+        self.paths.insert(k, path)
+        self.ranges.insert(k, (min(graph), max(graph)))
+      else:
+        self.paths[k] = path
+        self.ranges[k] = (min(graph), max(graph))
 
-    self.range = functools.reduce(lambda a, b: (min(a[0], b[0]), max(a[1], b[1])), self.ranges, (float('inf'), float('-inf')))
-    self.length = max([p.elementCount() for p in self.paths if p is not None] + [0])
+      self.range = functools.reduce(lambda a, b: (min(a[0], b[0]), max(a[1], b[1])), self.ranges, (float('inf'), float('-inf')))
+      self.length = max([p.elementCount() for p in self.paths if p is not None] + [0])
 
   def paintEvent(self, event: QPaintEvent):
+    print('update')
     super().paintEvent(event)
+    if self.need_graph_regen:
+      self.regen_graphs()
+      self.need_graph_regen = False
+
     if self.range[0] > 1e200 or self.range[1] < -1e200 or self.range[0] == self.range[1] or self.length == 0:
       return
     painter = QPainter(self)
@@ -87,8 +91,10 @@ class RewardSchedule(QWidget): # type: ignore
     painter.drawText(0, metrics.height(), str(self.range[1]))
     painter.drawText(0, self.height(), str(self.range[0]))
 
-  def on_schedule_change(self, _a: ObservableCollection.Action, _k: typing.Any, _v: typing.Any) -> None:
+  def on_schedule_change(self, _a: ObservableCollection.Action, k: typing.Any, _v: typing.Any) -> None:
     '''
     Updates the UI as the reward schedule changes
     '''
+    if k != 'index':
+      self.need_graph_regen = True
     self.update()

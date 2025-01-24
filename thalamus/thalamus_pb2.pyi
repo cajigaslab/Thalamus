@@ -18,6 +18,24 @@ MocapModality: Modalities
 ImageModality: Modalities
 TextModality: Modalities
 
+class Compressed(_message.Message):
+    __slots__ = ("data", "type", "stream", "size")
+    class Type(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+        __slots__ = ()
+        NONE: _ClassVar[Compressed.Type]
+        ANALOG: _ClassVar[Compressed.Type]
+    NONE: Compressed.Type
+    ANALOG: Compressed.Type
+    DATA_FIELD_NUMBER: _ClassVar[int]
+    TYPE_FIELD_NUMBER: _ClassVar[int]
+    STREAM_FIELD_NUMBER: _ClassVar[int]
+    SIZE_FIELD_NUMBER: _ClassVar[int]
+    data: bytes
+    type: Compressed.Type
+    stream: int
+    size: int
+    def __init__(self, data: _Optional[bytes] = ..., type: _Optional[_Union[Compressed.Type, str]] = ..., stream: _Optional[int] = ..., size: _Optional[int] = ...) -> None: ...
+
 class Error(_message.Message):
     __slots__ = ("code", "message")
     CODE_FIELD_NUMBER: _ClassVar[int]
@@ -147,12 +165,13 @@ class Text(_message.Message):
     def __init__(self, text: _Optional[str] = ..., time: _Optional[int] = ...) -> None: ...
 
 class StorageRecord(_message.Message):
-    __slots__ = ("analog", "xsens", "event", "image", "text", "time", "node")
+    __slots__ = ("analog", "xsens", "event", "image", "text", "compressed", "time", "node")
     ANALOG_FIELD_NUMBER: _ClassVar[int]
     XSENS_FIELD_NUMBER: _ClassVar[int]
     EVENT_FIELD_NUMBER: _ClassVar[int]
     IMAGE_FIELD_NUMBER: _ClassVar[int]
     TEXT_FIELD_NUMBER: _ClassVar[int]
+    COMPRESSED_FIELD_NUMBER: _ClassVar[int]
     TIME_FIELD_NUMBER: _ClassVar[int]
     NODE_FIELD_NUMBER: _ClassVar[int]
     analog: AnalogResponse
@@ -160,9 +179,10 @@ class StorageRecord(_message.Message):
     event: Event
     image: Image
     text: Text
+    compressed: Compressed
     time: int
     node: str
-    def __init__(self, analog: _Optional[_Union[AnalogResponse, _Mapping]] = ..., xsens: _Optional[_Union[XsensResponse, _Mapping]] = ..., event: _Optional[_Union[Event, _Mapping]] = ..., image: _Optional[_Union[Image, _Mapping]] = ..., text: _Optional[_Union[Text, _Mapping]] = ..., time: _Optional[int] = ..., node: _Optional[str] = ...) -> None: ...
+    def __init__(self, analog: _Optional[_Union[AnalogResponse, _Mapping]] = ..., xsens: _Optional[_Union[XsensResponse, _Mapping]] = ..., event: _Optional[_Union[Event, _Mapping]] = ..., image: _Optional[_Union[Image, _Mapping]] = ..., text: _Optional[_Union[Text, _Mapping]] = ..., compressed: _Optional[_Union[Compressed, _Mapping]] = ..., time: _Optional[int] = ..., node: _Optional[str] = ...) -> None: ...
 
 class ImageRequest(_message.Message):
     __slots__ = ("node", "framerate")
@@ -337,16 +357,20 @@ class InjectTextRequest(_message.Message):
     def __init__(self, node: _Optional[str] = ..., text: _Optional[_Union[Text, _Mapping]] = ...) -> None: ...
 
 class AnalogResponse(_message.Message):
-    __slots__ = ("data", "spans", "sample_intervals", "channels_changed")
+    __slots__ = ("data", "spans", "sample_intervals", "channels_changed", "int_data", "is_int_data")
     DATA_FIELD_NUMBER: _ClassVar[int]
     SPANS_FIELD_NUMBER: _ClassVar[int]
     SAMPLE_INTERVALS_FIELD_NUMBER: _ClassVar[int]
     CHANNELS_CHANGED_FIELD_NUMBER: _ClassVar[int]
+    INT_DATA_FIELD_NUMBER: _ClassVar[int]
+    IS_INT_DATA_FIELD_NUMBER: _ClassVar[int]
     data: _containers.RepeatedScalarFieldContainer[float]
     spans: _containers.RepeatedCompositeFieldContainer[Span]
     sample_intervals: _containers.RepeatedScalarFieldContainer[int]
     channels_changed: bool
-    def __init__(self, data: _Optional[_Iterable[float]] = ..., spans: _Optional[_Iterable[_Union[Span, _Mapping]]] = ..., sample_intervals: _Optional[_Iterable[int]] = ..., channels_changed: bool = ...) -> None: ...
+    int_data: _containers.RepeatedScalarFieldContainer[int]
+    is_int_data: bool
+    def __init__(self, data: _Optional[_Iterable[float]] = ..., spans: _Optional[_Iterable[_Union[Span, _Mapping]]] = ..., sample_intervals: _Optional[_Iterable[int]] = ..., channels_changed: bool = ..., int_data: _Optional[_Iterable[int]] = ..., is_int_data: bool = ...) -> None: ...
 
 class GraphRequest(_message.Message):
     __slots__ = ("node", "channels", "bin_ns", "channel_names")

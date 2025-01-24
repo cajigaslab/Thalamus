@@ -4,6 +4,7 @@
 #include <thalamus.pb.h>
 #include <thalamus_asio.hpp>
 #include <base_node.hpp>
+#include <analog_node.hpp>
 #include <state.hpp>
 
 namespace thalamus {

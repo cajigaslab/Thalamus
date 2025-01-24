@@ -34,6 +34,8 @@ Config = typing.NamedTuple('Config', [
 RANDOM_DEFAULT = {'min': 1, 'max':1}
 COLOR_DEFAULT = [255, 255, 255]
 shapes = ['rectangle', 'gaussian'] # Define the possible shapes
+global testing_locations
+testing_locations = True # a toggle for testing the plotting of target locations
 
 #  Widget for managing the GUI fields that appear after pressing ADD TARGET
 class TargetWidget(QWidget):
@@ -74,6 +76,9 @@ class TargetWidget(QWidget):
       Form.Constant('Reward Channel', 'reward_channel', 0),
       Form.Constant('Audio Scale Left', 'audio_scale_left', 0),
       Form.Constant('Audio Scale Right', 'audio_scale_right', 0),
+      Form.Constant('Subject\'s distance to the screen', 'subj_dist_m', .57, 'm'),
+      Form.Constant('Monitor\'s width', 'monitor_width_pix', 1920, 'pix'),
+      Form.Constant('Monitor\'s height', 'monitor_height_pix', 1080, 'pix'),
       Form.Color('Color', 'color', QColor(255, 255,255)),
       Form.Bool('Is Fixation', 'is_fixation', False),
       Form.Choice('Shape', 'shape', shapes),  # Add the shape attribute
@@ -125,6 +130,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Constant('\U0001F526Luminence step size (0-100)', 'luminence_step', 10,'%'),
     Form.Constant('Gaze acceptance \u2300 (0.1-2.0)', 'accptolerance_deg', 2, '\u00B0'), # Define the diameter in degrees of the area where gaze is accepted as being correct
     Form.Constant('Subject\'s distance to the screen', 'subj_dist_m', .57, 'm'),
+    Form.Constant('Monitor\'s width', 'monitor_width_m', .5283, 'm'),
     Form.Constant('Monitor\'s width', 'monitor_width_pix', 1920, 'pix'),
     Form.Constant('Monitor\'s height', 'monitor_height_pix', 1080, 'pix'),
     Form.Uniform('Fixation Duration 1', 'fix1_duration', 1000, 2000, 'ms'),
@@ -138,6 +144,12 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   layout.addWidget(form)
 
   # spinbox allows to constraint value options for above constants
+  monitor_width_pix_spinbox = form.findChild(QDoubleSpinBox, "monitor_width_pix")
+  monitor_width_pix_spinbox.setRange(100, 4000)
+  monitor_width_pix_spinbox.setSingleStep(10)
+  monitor_height_pix_spinbox = form.findChild(QDoubleSpinBox, "monitor_height_pix")
+  monitor_height_pix_spinbox.setRange(100, 4000)
+  monitor_height_pix_spinbox.setSingleStep(10)
   widthtargdeg_step_spinbox = form.findChild(QDoubleSpinBox, "widthtargdeg_step")
   widthtargdeg_step_spinbox.setRange(.1, 1.0)
   widthtargdeg_step_spinbox.setSingleStep(.1)
@@ -260,38 +272,55 @@ class State(enum.Enum):
   SUCCESS = enum.auto()
   FAILURE = enum.auto()
 
-# converter = Converter(Size(monitor_width_pix, monitor_height_pix), .5283, subj_dist_m)
-converter = Converter(Size(1920, 1080), .5283, .57)
-center = QPoint(converter.screen_pixels.width, converter.screen_pixels.height)/2
-center_f = QPointF(float(converter.screen_pixels.width), float(converter.screen_pixels.height))/2
+converter = None
+center = None
+center_f = None
 num_circles = 7 # The last 2 circles usually end up being too large for the screen height, hence the actual # = num_circles - 2
-circle_radii = np.linspace(0, converter.screen_pixels.height, 10) # screen height-based step
-circle_radii += converter.screen_pixels.width/num_circles # a sum of screen width and height based steps
-circle_radii = circle_radii[circle_radii <= converter.screen_pixels.height] # getting rid of radii that are too large for the screen height
-circle_radii /= 2 # divide by 2 to get the average of the two steps to ensure Gaussians are less squished
+circle_radii = []
 rand_pos_i = 0
 trial_num = 0
-# Generate random positions around a circle
-rand_pos = [
-  (center.x() + radius*np.cos(angle), center.y() + radius*np.sin(angle))
-  for radius in circle_radii
-  for angle in np.arange(0, 2*np.pi, np.pi/6)
-]
-random.shuffle(rand_pos) # Shuffle the list of random positions to randomize their order
+drawn_objects = []
+rand_pos = []
 
 @animate(60)
 # Define an asynchronous function to run the task with a 60 FPS animation
 async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-many-statements
+  global converter, center, center_f, num_circles, circle_radii, rand_pos_i, trial_num, drawn_objects, rand_pos
   """
   Implementation of the state machine for the simple task
   """
+  # Get the task configuration
+  config = context.task_config
+  monitor_width_pix = config['monitor_width_pix']
+  monitor_height_pix = config['monitor_height_pix']
+  subj_dist_m = config['subj_dist_m']
+  monitor_width_m = config['monitor_width_m']
+
+  if converter is None:
+    # converter = Converter(Size(1920, 1080), .5283, .57)
+    converter = Converter(Size(monitor_width_pix, monitor_height_pix), monitor_width_m, subj_dist_m)
+    center = QPoint(int(converter.screen_pixels.width), int(converter.screen_pixels.height))/2
+    center_f = QPointF(float(converter.screen_pixels.width), float(converter.screen_pixels.height))/2
+    num_circles = 7 # The last 2 circles usually end up being too large for the screen height, hence the actual # = num_circles - 2
+    circle_radii = np.linspace(0, converter.screen_pixels.height, 10) # screen height-based step
+    circle_radii += converter.screen_pixels.width/num_circles # a sum of screen width and height based steps
+    circle_radii = circle_radii[circle_radii <= converter.screen_pixels.height] # getting rid of radii that are too large for the screen height
+    circle_radii /= 2 # divide by 2 to get the average of the two steps to ensure Gaussians are less squished
+    rand_pos_i = 0
+    trial_num = 0
+    # Generate random positions around a circle
+    rand_pos = [
+      (center.x() + radius*np.cos(angle), center.y() + radius*np.sin(angle))
+      for radius in circle_radii
+      for angle in np.arange(0, 2*np.pi, np.pi/6)
+    ]
+    random.shuffle(rand_pos) # Shuffle the list of random positions to randomize their order
 
   """
   Below is an object that contains a realization generated by sampling from the random
   distributions defined in the task_config. It itself has no logic, it simply holds
   the realization's values.
   """
-  global rand_pos_i, rand_pos, trial_num
 
   trial_num += 1 # Increment the trial counter
   print(f"Started trial # {trial_num}")
@@ -332,8 +361,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   square_size_deg = .5
   square_size = converter.deg_to_pixel_rel(square_size_deg)
 
-  # Get the task configuration
-  config = context.task_config
+  # Get variables from the config
   accptolerance_deg = config['accptolerance_deg']
   accptolerance_pix = converter.deg_to_pixel_rel(accptolerance_deg)
   is_height_locked = config['is_height_locked']
@@ -364,14 +392,41 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   
   gaussian = gaussian_gradient(QPointF(0, 0), width_targ_pix/2, 3, luminence_per*255/100)
   def draw_gaussian(painter: QPainter):
-    painter.save()
-    painter.translate(target_pos)
-    painter.rotate(orientation_ran) #Apply rotation to gaussian
-    painter.scale(1, height_targ_pix/width_targ_pix) # Apply X,Y scaling to gaussian; initial diameter is equal to width/2, hence need to scale only Y
-    painter.fillRect(int(-widget.width()/2), int(-widget.height()/2), int(widget.width()), int(widget.height()), gaussian)
-    # painter.fillRect draws the gaussian into a giant rectangle centered at the upper left corner of the screen 
-    # and the above lines will stretch, rotate (if uncommented), and translate the gaussian to the correct place.
-    painter.restore()
+    
+    if testing_locations:
+      # region -- TESTING-TARGET-LOCATIONS: Drawing version that preserves every plotted Gaussian
+      drawn_objects.append({
+        'position': target_pos,
+        'orientation': orientation_ran,
+        'width': width_targ_pix,
+        'height': height_targ_pix,
+        'gradient': gaussian
+      })
+      for gaussian_obj in drawn_objects:
+        painter.save()
+        painter.translate(gaussian_obj['position'])
+        painter.rotate(gaussian_obj['orientation'])
+        painter.scale(1, gaussian_obj['height'] / gaussian_obj['width'])
+        painter.fillRect(
+            int(-gaussian_obj['width'] / 2),
+            int(-gaussian_obj['height'] / 2),
+            int(gaussian_obj['width']),
+            int(gaussian_obj['height']),
+            gaussian_obj['gradient']
+        )
+        painter.restore()
+      # endregion
+    else:
+      # region -- Drawing version that plots only 1 current Gaussian
+      painter.save()
+      painter.translate(target_pos)
+      painter.rotate(orientation_ran) #Apply rotation to gaussian
+      painter.scale(1, height_targ_pix/width_targ_pix) # Apply X,Y scaling to gaussian; initial diameter is equal to width/2, hence need to scale only Y
+      painter.fillRect(int(-widget.width()/2), int(-widget.height()/2), int(widget.width()), int(widget.height()), gaussian)
+      # painter.fillRect draws the gaussian into a giant rectangle centered at the upper left corner of the screen 
+      # and the above lines will stretch, rotate (if uncommented), and translate the gaussian to the correct place.
+      painter.restore()
+      # endregion
 
   # Initialize the state to ACQUIRE_FIXATION
   state = State.ACQUIRE_FIXATION
@@ -421,6 +476,28 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       draw_gaussian(painter)
       painter.drawPath(cross)
       painter.fillRect(int(widget.width() - 100), int(widget.height()-100), 100, 100, Qt.GlobalColor.white)
+      
+      if testing_locations:
+        # region -- TESTING-TARGET-LOCATIONS: drawing of the concentric circles and XY axes
+        # Dynamically calculate the center of the window
+        pen.setWidth(1)
+        pen.setColor(QColor(0, 0, 255, 100))  # Set color to blue with 50% transparency (alpha = 100)
+        painter.setPen(pen)
+        center_x = int(converter.screen_pixels.width / 2)
+        center_y = int(converter.screen_pixels.height / 2)
+        # Draw the concentric circles
+        for radius in circle_radii:
+            painter.drawEllipse(QPointF(center_x, center_y), radius, radius)
+        # Draw the center cross (XY axes)
+        painter.drawLine(center_x, 0, center_x, converter.screen_pixels.height)  # Vertical line
+        painter.drawLine(0, center_y, int(converter.screen_pixels.width), center_y)  # Horizontal line
+        # Draw angled lines for 30° increments
+        for angle in np.arange(0, 360, 30):
+            x = int(center_x + circle_radii[-1] * np.cos(np.radians(angle)))
+            y = int(center_y + circle_radii[-1] * np.sin(np.radians(angle)))
+            painter.drawLine(center_x, center_y, x, y)
+        # endregion
+
     elif state == State.FIXATE2:
       # await context.log('BehavState=FIXATE2_start') # saving any variables / data from code
       pen = painter.pen()

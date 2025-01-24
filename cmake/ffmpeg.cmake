@@ -30,10 +30,20 @@ if(WIN32)
   else()
     set(MSYS2_ROOT "C:\\MSYS64")
   endif()
+
   set(FFMPEG_ALL_COMPILE_OPTIONS_SPACED "${ALL_C_COMPILE_OPTIONS_SPACED}")
   string(PREPEND FFMPEG_ALL_COMPILE_OPTIONS_SPACED " ")
   string(REPLACE " /" " -" FFMPEG_ALL_COMPILE_OPTIONS_SPACED "${FFMPEG_ALL_COMPILE_OPTIONS_SPACED}")
   string(REPLACE "-MP" "" FFMPEG_ALL_COMPILE_OPTIONS_SPACED "${FFMPEG_ALL_COMPILE_OPTIONS_SPACED}")
+
+  set(FFMPEG_ALL_LINK_OPTIONS_SPACED "${ALL_C_LINK_OPTIONS_SPACED}")
+  string(PREPEND FFMPEG_ALL_LINK_OPTIONS_SPACED " ")
+  string(REPLACE " /" " -" FFMPEG_ALL_LINK_OPTIONS_SPACED "${FFMPEG_ALL_LINK_OPTIONS_SPACED}")
+
+  message("ALL_LINK_OPTIONS ${ALL_LINK_OPTIONS}")
+  message("ALL_C_LINK_OPTIONS_SPACED ${ALL_C_LINK_OPTIONS_SPACED}")
+  message("FFMPEG_ALL_LINK_OPTIONS_SPACED ${FFMPEG_ALL_LINK_OPTIONS_SPACED}")
+
   string(REGEX REPLACE "^([A-Z]):" "/\\1" FFMPEG_SDL_PKG_CONFIG_DIR "${SDL_PKG_CONFIG_DIR}")
 
 
@@ -44,7 +54,7 @@ if(WIN32)
       OUTPUT "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
       DEPENDS sdl
       COMMAND
-      ${MSYS2_ROOT}\\msys2_shell.cmd -here -use-full-path -no-start -defterm -c "export 'PKG_CONFIG_PATH=${FFMPEG_SDL_PKG_CONFIG_DIR}' && '${CMAKE_SOURCE_DIR}/config_ffmpeg_msvc.bash' '${ffmpeg_SOURCE_DIR}/configure' '${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install' '-MT$<IF:$<CONFIG:Debug>,d,> ${FFMPEG_ALL_COMPILE_OPTIONS_SPACED}' $<IF:$<CONFIG:Debug>,--enable-debug,>"
+      ${MSYS2_ROOT}\\msys2_shell.cmd -here -use-full-path -no-start -defterm -c "export 'PKG_CONFIG_PATH=${FFMPEG_SDL_PKG_CONFIG_DIR}' && '${CMAKE_SOURCE_DIR}/config_ffmpeg_msvc.bash' '${ffmpeg_SOURCE_DIR}/configure' '${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install' '-MT$<IF:$<CONFIG:Debug>,d,> ${FFMPEG_ALL_COMPILE_OPTIONS_SPACED}' $<IF:$<CONFIG:Debug>,--enable-debug,> '-MT$<IF:$<CONFIG:Debug>,d,> ${FFMPEG_ALL_LINK_OPTIONS_SPACED}'"
       && cmake -E touch_nocreate "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
       WORKING_DIRECTORY "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>")
   else()
@@ -67,7 +77,7 @@ else()
     DEPENDS zlib_processed sdl
     COMMAND cmake -E env 
     "PKG_CONFIG_PATH=${ZLIB_PKG_CONFIG_DIR}:${SDL_PKG_CONFIG_DIR}"
-    "${ffmpeg_SOURCE_DIR}/configure" ${FFMPEG_APPLE_FLAGS} --cc=clang "--extra-cflags=${FFMPEG_COMPILE_OPTIONS_SPACED}" --enable-static --disable-shared --disable-sndio $<IF:$<CONFIG:Debug>,--enable-debug,> --prefix=${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install
+    "${ffmpeg_SOURCE_DIR}/configure" ${FFMPEG_APPLE_FLAGS} --cc=clang "--extra-cflags=${FFMPEG_COMPILE_OPTIONS_SPACED}" "--extra-ldflags=${ALL_C_COMPILE_OPTIONS_SPACED}" --enable-static --disable-shared --disable-sndio $<IF:$<CONFIG:Debug>,--enable-debug,> --prefix=${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install
     && cmake -E touch_nocreate "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
     WORKING_DIRECTORY "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>")
   set(FFMPEG_MAKE_COMMAND make -j ${CPU_COUNT} && make install)

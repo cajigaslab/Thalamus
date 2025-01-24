@@ -11,6 +11,7 @@
 #include <thread>
 //#include <plot.h>
 #include <base_node.hpp>
+#include <analog_node.hpp>
 #include <absl/strings/str_split.h>
 #include <state.hpp>
 
