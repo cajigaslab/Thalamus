@@ -24,6 +24,14 @@
 #define htonll(x) htobe64(x)
 #endif
 
+extern "C" {
+#include <libavformat/avformat.h>
+#include <libavcodec/avcodec.h>
+#include <libavdevice/avdevice.h>
+#include <libavutil/mem.h>
+#include <libavutil/opt.h>
+}
+
 namespace thalamus {
   struct StorageNode::Impl {
     struct AnalogStorage {
@@ -344,6 +352,32 @@ namespace thalamus {
       int index;
     };
 
+    struct ContextDeleter {
+      void operator()(AVCodecContext* c) {
+        avcodec_free_context(c);
+      }
+    };
+
+    struct PacketDeleter {
+      void operator()(AVPacket* c) {
+        av_packet_free(c);
+      }
+    };
+
+    struct FrameDeleter {
+      void operator()(AVFrame* c) {
+        av_frame_free(c);
+      }
+    };
+
+    struct VideoCodec {
+      AVCodec* codec;
+      std::unique_ptr<AVCodecContext, ContextDeleter> context;
+      std::unique_ptr<AVPacket, PacketDeleter> packet;
+      VideoCodec(AVCodec* codec) : codec(codec), context(avcodec_alloc_context3(codec)), packet(av_packet_alloc()) {
+      }
+    };
+
     void thread_target(std::string output_file, bool compress_analog) {
       set_current_thread_name("STORAGE");
       prepare_storage(output_file);
@@ -354,8 +388,27 @@ namespace thalamus {
       std::map<int, std::shared_ptr<StreamState>> streams;
       SimplePool<thalamus_grpc::StorageRecord> record_pool;
       std::map<int, std::vector<size_t>> compressed_map;
+      std::map<std::string, VideoCodec> av_codecs;
       std::vector<std::pair<int, std::vector<size_t>>> compressed;
       std::vector<std::string> all_serialized;
+
+      auto codec = avcodec_find_encoder(AV_CODEC_ID_MPEG1VIDEO);
+
+      std::vector<std::pair<double, AVRational>> intervals = {
+        {24000.0/1001, AVRational{24000, 1001}},
+        {24, AVRational{24, 1}},
+        {25, AVRational{25, 1}},
+        {30000.0/1001, AVRational{30000, 1001}},
+        {30, AVRational{30, 1}},
+        {50, AVRational{50, 1}},
+        {60000.0/1001, AVRational{60000, 1001}},
+        {60, AVRational{60, 1}},
+        {15, AVRational{15, 1}}, 
+        {5, AVRational{5, 1}}, 
+        {10, AVRational{10, 1}}, 
+        {12, AVRational{12, 1}}, 
+        {15, AVRational{15, 1}}
+      };
 
       while(is_running) {
         std::vector<std::pair<thalamus_grpc::StorageRecord, int>> local_records;
@@ -373,9 +426,57 @@ namespace thalamus {
             size_t i = 0;
             for(auto& record_pair : local_records) {
               auto& [record, stream] = record_pair;
-              all_serialized[i] = record.SerializePartialAsString();
               auto body_type = record.body_case();
-              if(body_type == thalamus_grpc::StorageRecord::kAnalog) {
+              if(body_type == thalamus_grpc::StorageRecord::kImage && compress_video) {
+                auto& image = record.image();
+                auto i = av_codecs.find(record.node());
+                if(i == av_codecs.end()) {
+                  av_codecs[record.node()] = VideoCodec(codec);
+                  i = av_codecs.find(record.node());
+                  i->second.context->bit_rate = std::numeric_limits<int>::max();
+                  i->second.context->width = record.image().width();
+                  i->second.context->height = record.image().height();
+
+                  auto interval = record.image().frame_interval()/1e9;
+                  auto interval_i = std::lower_bound(intervals.begin(), intervals.end(), std::make_pair(interval, std::string("")));
+
+                  AVRational timebase;
+                  if(interval_i == interval.begin()) {
+                    time_base = intervals.front().second;
+                  } else if (framerate_i == interval.end()) {
+                    time_base = intervals.back().second;
+                  } else {
+                    if(interval - (interval_i-1)->first < interval_i->first - interval) {
+                      time_base = (interval_i-1)->second;
+                    } else {
+                      time_base = interval_i->second;
+                    }
+                  }
+                  i->second.context->time_base = timebase;
+                  i->second.context->framerate = {timebase.den, timebase.num};
+
+                  auto ret = avcodec_open2(i->second.context, codec, NULL);
+                  THALAMUS_ASSERT(ret >= 0, "Could not open codec: %s\n", av_err2str(ret));
+
+                  switch(image.format()) {
+                    case thalamus_grpc::Image::Format::Image_Format_Gray: 
+                      frame->format = AV_PIX_FMT_GRAY8;
+                      break;
+                    case thalamus_grpc::Image::Format::Image_Format_Gray16: 
+                      frame->format = image.bigendian() ? AV_PIX_FMT_GRAY16BE : AV_PIX_FMT_GRAY16LE;
+                      break;
+                  }
+
+
+
+                  frame->format = i->second.context->pix_fmt;
+                  frame->width  = i->second.context->width;
+                  frame->height = i->second.context->height;
+                }
+
+
+              } else if(body_type == thalamus_grpc::StorageRecord::kAnalog && compress_analog) {
+                all_serialized[i] = record.SerializePartialAsString();
                 compressed_map[stream].push_back(i);
                 auto stream_i = streams.find(stream);
                 if(stream_i == streams.end()) {
@@ -389,6 +490,8 @@ namespace thalamus {
                   auto error = deflateInit(&zstream, 1);
                   THALAMUS_ASSERT(error == Z_OK, "ZLIB Error: %d", error);
                 }
+              } else {
+                all_serialized[i] = record.SerializePartialAsString();
               }
               ++i;
             }
@@ -601,6 +704,7 @@ namespace thalamus {
     }
 
     bool compress_analog = false;
+    bool compress_video = false;
 
     void on_change(ObservableCollection::Action, const ObservableCollection::Key&, const ObservableCollection::Value&) {
       if (!state->contains("Running")) {
@@ -619,6 +723,7 @@ namespace thalamus {
       }
       std::string output_file = state->at("Output File");
       compress_analog = state->contains("Compress Analog") ? state->at("Compress Analog") : false;
+      compress_video = state->contains("Compress Video") ? state->at("Compress Video") : false;
 
       if (is_running) {
         start_thread(output_file, compress_analog);
