@@ -73,6 +73,7 @@ class Form(QWidget):
     field: str
     default: float
     suffix: str = ''
+    precision: int = 2
 
   class String(typing.NamedTuple):
     '''
@@ -209,45 +210,22 @@ class Form(QWidget):
 
     self.grid_layout.addWidget(QLabel(config.label), self.row, 0)
 
-    if config.field == 'shape':
-        combo_box = QComboBox()
-        combo_box.addItems(['rectangle', 'gaussian'])  # Add predefined string values
-        combo_box.setCurrentText(self.config[config.field])
-        self.grid_layout.addWidget(combo_box, self.row, 1, 1, 2)
+    min_spin_box = QDoubleSpinBox()
+    min_spin_box.setDecimals(config.precision)
+    min_spin_box.setObjectName(f'{config.field}')
+    min_spin_box.setKeyboardTracking(False)
+    min_spin_box.setRange(0, 1000000)
+    min_spin_box.setSuffix(config.suffix)
+    min_spin_box.setValue(self.config[config.field])
+    self.grid_layout.addWidget(min_spin_box, self.row, 1, 1, 2)
 
-        combo_box.currentTextChanged.connect(lambda v: self.config.update({config.field: v}))
+    min_spin_box.valueChanged.connect(lambda v: self.config.update({config.field:v}))
 
-        def on_config_change(_: ObservableCollection.Action, key: typing.Any, value: typing.Any) -> None:
-            if key == config.field:
-                combo_box.setCurrentText(value)
+    def on_config_change(_: ObservableCollection.Action, key: typing.Any, value: typing.Any) -> None:
+      if key == config.field:
+        min_spin_box.setValue(value)
 
-        self.config.add_observer(on_config_change, functools.partial(isdeleted, self))
-    else:    
-      min_spin_box = QDoubleSpinBox()
-      min_spin_box.setObjectName(f'{config.field}')
-      min_spin_box.setKeyboardTracking(False)
-      min_spin_box.setRange(-1000000, 1000000)
-      min_spin_box.setSuffix(config.suffix)
-
-      try:
-        min_spin_box.setValue(self.config[config.field])
-      except ValueError:
-        min_spin_box.setValue(1.0)  # Set a default value or handle the error as needed
-        print(f"Warning: Could not convert {self.config[config.field]} to float. Setting default value 1.0.")
-      
-      self.grid_layout.addWidget(min_spin_box, self.row, 1, 1, 2)
-
-      min_spin_box.valueChanged.connect(lambda v: self.config.update({config.field:v}))
-
-      def on_config_change(_: ObservableCollection.Action, key: typing.Any, value: typing.Any) -> None:
-        if key == config.field:
-          try:
-            min_spin_box.setValue(value)
-          except ValueError:
-            min_spin_box.setValue(1.0)
-            print(f"Warning: Could not convert {value} to float. Setting default value 1.0.")
-
-      self.config.add_observer(on_config_change, functools.partial(isdeleted, self))
+    self.config.add_observer(on_config_change, functools.partial(isdeleted, self))
 
     self.row += 1
 

@@ -33,9 +33,9 @@ Config = typing.NamedTuple('Config', [
 
 RANDOM_DEFAULT = {'min': 1, 'max':1}
 COLOR_DEFAULT = [255, 255, 255]
-shapes = ['rectangle', 'gaussian'] # Define the possible shapes
+shapes = ['rectangle', 'gaussian', 'square'] # Define the possible shapes
 global testing_locations
-testing_locations = True # a toggle for testing the plotting of target locations
+testing_locations = False # a toggle for testing the plotting of target locations
 
 #  Widget for managing the GUI fields that appear after pressing ADD TARGET
 class TargetWidget(QWidget):
