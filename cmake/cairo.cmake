@@ -7,7 +7,11 @@ elseif("${SANITIZER}" STREQUAL memory)
 endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  set(CAIRO_COMPILER CC=clang CXX=clang++)
+  if(WIN32)
+    set(GLIB_COMPILER CC=clang-cl CXX=clang-cl)
+  else()
+    set(GLIB_COMPILER CC=clang CXX=clang++)
+  endif()
 endif()
 
 if(WIN32)

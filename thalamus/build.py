@@ -85,7 +85,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   target = config_settings.get('target', None)
 
   legacy_path = pathlib.Path.cwd() / 'build' / f'{platform.python_implementation()}-{platform.python_version()}-{"release" if is_release else "debug"}'
-  build_path = pathlib.Path.cwd() / 'build' / f'{"release" if is_release else "debug"}'
+  build_path = pathlib.Path.cwd() / 'build' / f'clang-{"release" if is_release else "debug"}'
   if sanitizer:
     legacy_path = legacy_path.with_name(legacy_path.name + '-' + sanitizer)
     build_path = build_path.with_name(build_path.name + '-' + sanitizer)
@@ -133,13 +133,12 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     '-B', build_path,
     f'-DCMAKE_BUILD_TYPE={"Release" if is_release else "Debug"}',
     '-DENABLE_SWIG=OFF',
-    '-DENABLE_SWIG=OFF',
     '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
     f'-DCMAKE_OSX_DEPLOYMENT_TARGET={osx_target}'
   ]
   cmake_command += ['-G', generator]
 
-  if sys.platform == 'win32':
+  if False:#sys.platform == 'win32':
     cmake_command += [
       '-DCMAKE_C_COMPILER=cl',
       '-DCMAKE_CXX_COMPILER=cl']

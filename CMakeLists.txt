@@ -93,7 +93,7 @@ include(cmake/cairo.cmake)
 if(NOT "${SANITIZER}" STREQUAL "")
   include(cmake/lua.cmake)
 else()
-  include(cmake/luajit.cmake)
+  include(cmake/lua.cmake)
 endif()
  
 if(NOT WIN32 AND NOT APPLE)
