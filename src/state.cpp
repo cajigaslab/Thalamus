@@ -1,11 +1,12 @@
 #include <state.hpp>
+#include <cstdint>
 
 namespace thalamus {
-  ObservableCollection::ValueWrapper::ValueWrapper(const Key& key, std::function<Value& ()> get_value, std::function<bool ()> has_value, ObservableCollection* collection)
-      : key(key)
-      , get_value(get_value)
-      , has_value(has_value)
-      , collection(collection) {}
+  ObservableCollection::ValueWrapper::ValueWrapper(const Key& _key, std::function<Value& ()> _get_value, std::function<bool ()> _has_value, ObservableCollection* _collection)
+      : key(_key)
+      , get_value(_get_value)
+      , has_value(_has_value)
+      , collection(_collection) {}
 
   ObservableCollection::ValueWrapper::operator ObservableDictPtr() {
     auto value = get_value();
@@ -31,7 +32,7 @@ namespace thalamus {
       return thalamus::get<long long int>(value);
     }
     else if (std::holds_alternative<double>(value)) {
-      return thalamus::get<double>(value);
+      return int64_t(thalamus::get<double>(value));
     }
     else {
       THALAMUS_ASSERT(false);
@@ -40,10 +41,10 @@ namespace thalamus {
   ObservableCollection::ValueWrapper::operator unsigned long long int() {
     auto value = get_value();
     if (std::holds_alternative<long long int>(value)) {
-      return thalamus::get<long long int>(value);
+      return uint64_t(thalamus::get<long long int>(value));
     }
     else if (std::holds_alternative<double>(value)) {
-      return thalamus::get<double>(value);
+      return uint64_t(thalamus::get<double>(value));
     }
     else {
       THALAMUS_ASSERT(false);
@@ -52,10 +53,10 @@ namespace thalamus {
   ObservableCollection::ValueWrapper::operator unsigned long() {
     auto value = get_value();
     if (std::holds_alternative<long long int>(value)) {
-      return thalamus::get<long long int>(value);
+      return uint32_t(thalamus::get<long long int>(value));
     }
     else if (std::holds_alternative<double>(value)) {
-      return thalamus::get<double>(value);
+      return uint32_t(thalamus::get<double>(value));
     }
     else {
       THALAMUS_ASSERT(false);
@@ -64,7 +65,7 @@ namespace thalamus {
   ObservableCollection::ValueWrapper::operator double() {
     auto value = get_value();
     if (std::holds_alternative<long long int>(value)) {
-      return thalamus::get<long long int>(value);
+      return double(thalamus::get<long long int>(value));
     }
     else if (std::holds_alternative<double>(value)) {
       return thalamus::get<double>(value);
@@ -78,7 +79,14 @@ namespace thalamus {
     if (std::holds_alternative<long long int>(value)) {
       return thalamus::get<long long int>(value) != 0;
     } else if (std::holds_alternative<double>(value)) {
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Wfloat-equal"
+#endif
       return thalamus::get<double>(value) != 0;
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
     } else if (std::holds_alternative<bool>(value)) {
       return thalamus::get<bool>(value);
     }
@@ -112,21 +120,21 @@ namespace thalamus {
     , end()
     , collection(nullptr)
   {}
-  ObservableCollection::VectorIteratorWrapper::VectorIteratorWrapper(size_t key, Vector::iterator iterator, Vector::iterator end, ObservableCollection* collection)
-    : key(key)
-    , iterator(iterator)
-    , end(end)
-    , collection(collection) {}
+  ObservableCollection::VectorIteratorWrapper::VectorIteratorWrapper(size_t _key, Vector::iterator _iterator, Vector::iterator _end, ObservableCollection* _collection)
+    : key(_key)
+    , iterator(_iterator)
+    , end(_end)
+    , collection(_collection) {}
 
   ObservableCollection::ValueWrapper ObservableCollection::VectorIteratorWrapper::operator*() {
-    auto iterator = this->iterator;
-    auto end = this->end;
-    return ValueWrapper(static_cast<long long int>(key), [iterator]() -> Value& { return *iterator; }, [iterator,end]() -> bool { return iterator != end; }, collection);
+    auto _iterator = this->iterator;
+    auto _end = this->end;
+    return ValueWrapper(static_cast<long long int>(key), [_iterator]() -> Value& { return *_iterator; }, [_iterator,_end]() -> bool { return _iterator != _end; }, collection);
   }
 
   ObservableCollection::VectorIteratorWrapper& ObservableCollection::VectorIteratorWrapper::operator+(size_t count) {
     key += count;
-    iterator += count;
+    iterator += int64_t(count);
     return *this;
   }
 
@@ -172,21 +180,21 @@ namespace thalamus {
     , end()
     , collection(nullptr) {}
 
-  ObservableCollection::MapIteratorWrapper::MapIteratorWrapper(Map::iterator iterator, Map::iterator end, ObservableCollection* collection)
-    : iterator(iterator)
-    , end(end)
-    , collection(collection) {}
+  ObservableCollection::MapIteratorWrapper::MapIteratorWrapper(Map::iterator _iterator, Map::iterator _end, ObservableCollection* _collection)
+    : iterator(_iterator)
+    , end(_end)
+    , collection(_collection) {}
 
   ObservableCollection::ValueWrapper ObservableCollection::MapIteratorWrapper::operator*() {
-    auto iterator = this->iterator;
-    auto end = this->end;
-    return ValueWrapper(iterator->first, [iterator]() -> Value& { return iterator->second; }, [iterator,end]() -> bool { return iterator != end; }, collection);
+    auto _iterator = this->iterator;
+    auto _end = this->end;
+    return ValueWrapper(_iterator->first, [_iterator]() -> Value& { return _iterator->second; }, [_iterator,_end]() -> bool { return _iterator != _end; }, collection);
   }
 
   std::pair<ObservableCollection::Key, ObservableCollection::ValueWrapper>* ObservableCollection::MapIteratorWrapper::operator->() {
-    auto iterator = this->iterator;
-    auto end = this->end;
-    pair = std::make_pair(iterator->first, ValueWrapper(iterator->first, [iterator]() -> Value& { return iterator->second; }, [iterator,end]() -> bool { return iterator != end; }, collection));
+    auto _iterator = this->iterator;
+    auto _end = this->end;
+    pair = std::make_pair(_iterator->first, ValueWrapper(_iterator->first, [_iterator]() -> Value& { return _iterator->second; }, [_iterator,_end]() -> bool { return _iterator != _end; }, collection));
     return &pair.value();
   }
 
@@ -217,8 +225,8 @@ namespace thalamus {
   }
 
 
-  ObservableCollection::ObservableCollection(ObservableCollection* parent)
-    : parent(parent) {}
+  ObservableCollection::ObservableCollection(ObservableCollection* _parent)
+    : parent(_parent) {}
 
   std::string ObservableCollection::address() const {
     if (!parent) {
@@ -257,8 +265,8 @@ namespace thalamus {
     }
   }
 
-  ObservableList::ObservableList(ObservableCollection* parent)
-    : ObservableCollection(parent)
+  ObservableList::ObservableList(ObservableCollection* _parent)
+    : ObservableCollection(_parent)
     , content(Vector()) {
   }
 
@@ -311,7 +319,7 @@ namespace thalamus {
     if (!from_remote && this->remote_storage) {
       auto callback_wrapper = [this, key, callback] {
         auto key_after = std::min(key, ptrdiff_t(content.size()));
-        callback(VectorIteratorWrapper(key_after, content.begin() + key_after, content.end(), this));
+        callback(VectorIteratorWrapper(size_t(key_after), content.begin() + key_after, content.end(), this));
       };
       if (this->remote_storage(Action::Delete, address() + "[" + std::to_string(key) + "]", *i, callback_wrapper)) {
         return VectorIteratorWrapper();
@@ -332,11 +340,11 @@ namespace thalamus {
     notify(this, Action::Delete, key, value);
 
     auto distance = std::distance(content.begin(), i2);
-    return VectorIteratorWrapper(distance, i2, content.end(), this);
+    return VectorIteratorWrapper(size_t(distance), i2, content.end(), this);
   }
 
   ObservableList::VectorIteratorWrapper ObservableList::erase(size_t i, std::function<void(VectorIteratorWrapper)> callback, bool from_remote) {
-    return erase(this->content.begin() + i, callback, from_remote);
+    return erase(this->content.begin() + int64_t(i), callback, from_remote);
   }
 
   void ObservableList::clear() {
@@ -481,7 +489,7 @@ namespace thalamus {
   }
 
   ObservableList& ObservableList::assign(const ObservableList& that, bool from_remote) {
-    for (auto i = 0; i < that.content.size(); ++i) {
+    for (auto i = 0ull; i < that.content.size(); ++i) {
       auto& source = that.content[i];
       if (i >= this->size()) {
         this->content.emplace_back();
@@ -548,6 +556,10 @@ namespace thalamus {
         content.push_back(v.as_bool());
         break;
       }
+      case boost::json::kind::null: {
+        content.push_back(std::monostate());
+        break;
+      }
       }
     }
   }
@@ -601,10 +613,9 @@ namespace thalamus {
     case boost::json::kind::bool_: {
       return value.as_bool();
     }
-    default:
-      std::string kind_str(boost::json::to_string(value.kind()));
-      THALAMUS_ASSERT(false, "JSON has unsupported type: %s", kind_str);
-      return "";
+    case boost::json::kind::null: {
+      return std::monostate();
+    }
     }
   }
   boost::json::value ObservableCollection::to_json(const ObservableCollection::Value& value) {
@@ -753,37 +764,37 @@ namespace thalamus {
 
     if (std::holds_alternative<ObservableDictPtr>(current)) {
       auto held = thalamus::get<ObservableDictPtr>(current);
-      held->erase(end, [](auto a) {}, from_remote);
+      held->erase(end, [](auto) {}, from_remote);
     }
     else if (std::holds_alternative<ObservableListPtr>(current)) {
       auto held = thalamus::get<ObservableListPtr>(current);
       size_t index;
       auto success = absl::SimpleAtoi(end, &index);
       BOOST_ASSERT_MSG(success, "Failed to convert index into number");
-      held->erase(index, [] (auto a) {}, from_remote);
+      held->erase(index, [] (auto) {}, from_remote);
     }
     else {
       BOOST_ASSERT_MSG(false, "Attempted to index something that isn't a collection");
     }
   }
 
-  void ObservableList::set_remote_storage(std::function<bool(Action, const std::string&, ObservableCollection::Value, std::function<void()>)> remote_storage) {
-    this->remote_storage = remote_storage;
+  void ObservableList::set_remote_storage(std::function<bool(Action, const std::string&, ObservableCollection::Value, std::function<void()>)> _remote_storage) {
+    this->remote_storage = _remote_storage;
     for (auto& c : content) {
       if (std::holds_alternative<ObservableListPtr>(c)) {
         auto temp = thalamus::get<ObservableListPtr>(c);
-        temp->set_remote_storage(remote_storage);
+        temp->set_remote_storage(_remote_storage);
       }
       else if (std::holds_alternative<ObservableDictPtr>(c)) {
         auto temp = thalamus::get<ObservableDictPtr>(c);
-        temp->set_remote_storage(remote_storage);
+        temp->set_remote_storage(_remote_storage);
       }
     }
   }
 
 
-  ObservableDict::ObservableDict(ObservableCollection* parent)
-    : ObservableCollection(parent)
+  ObservableDict::ObservableDict(ObservableCollection* _parent)
+    : ObservableCollection(_parent)
     , content(Map()) {
   }
 
@@ -982,8 +993,6 @@ namespace thalamus {
         content[v.key()] = std::monostate();
         break;
       }
-      default:
-        BOOST_ASSERT_MSG(false, "Unexpected JSON type");
       }
     }
   }
@@ -1045,16 +1054,16 @@ namespace thalamus {
     return std::nullopt;
   }
 
-  void ObservableDict::set_remote_storage(std::function<bool(Action, const std::string&, ObservableCollection::Value, std::function<void()>)> remote_storage) {
-    this->remote_storage = remote_storage;
+  void ObservableDict::set_remote_storage(std::function<bool(Action, const std::string&, ObservableCollection::Value, std::function<void()>)> _remote_storage) {
+    this->remote_storage = _remote_storage;
     for (auto& c : content) {
       if (std::holds_alternative<ObservableListPtr>(c.second)) {
         auto temp = thalamus::get<ObservableListPtr>(c.second);
-        temp->set_remote_storage(remote_storage);
+        temp->set_remote_storage(_remote_storage);
       }
       else if (std::holds_alternative<ObservableDictPtr>(c.second)) {
         auto temp = thalamus::get<ObservableDictPtr>(c.second);
-        temp->set_remote_storage(remote_storage);
+        temp->set_remote_storage(_remote_storage);
       }
     }
   }

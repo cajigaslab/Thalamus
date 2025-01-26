@@ -80,12 +80,13 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
 
   is_release = 'release' in config_settings
   do_config = 'config' in config_settings
+  clang = 'clang' in config_settings
   generator = config_settings.get('generator', 'Ninja')
   sanitizer = config_settings.get('sanitizer', None)
   target = config_settings.get('target', None)
 
   legacy_path = pathlib.Path.cwd() / 'build' / f'{platform.python_implementation()}-{platform.python_version()}-{"release" if is_release else "debug"}'
-  build_path = pathlib.Path.cwd() / 'build' / f'clang-{"release" if is_release else "debug"}'
+  build_path = pathlib.Path.cwd() / 'build' / f'{"clangcl-" if clang else ""}{"release" if is_release else "debug"}'
   if sanitizer:
     legacy_path = legacy_path.with_name(legacy_path.name + '-' + sanitizer)
     build_path = build_path.with_name(build_path.name + '-' + sanitizer)
@@ -138,10 +139,15 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   ]
   cmake_command += ['-G', generator]
 
-  if False:#sys.platform == 'win32':
-    cmake_command += [
-      '-DCMAKE_C_COMPILER=cl',
-      '-DCMAKE_CXX_COMPILER=cl']
+  if sys.platform == 'win32':
+    if clang:
+      cmake_command += [
+        '-DCMAKE_C_COMPILER=clang-cl',
+        '-DCMAKE_CXX_COMPILER=clang-cl']
+    else:
+      cmake_command += [
+        '-DCMAKE_C_COMPILER=cl',
+        '-DCMAKE_CXX_COMPILER=cl']
   else:
     cmake_command += [
       '-DCMAKE_C_COMPILER=clang',

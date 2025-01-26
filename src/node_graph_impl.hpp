@@ -11,7 +11,16 @@
 #include <xsens_node.hpp>
 #include <storage_node.hpp>
 
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Weverything"
+#endif
+ 
 #include <boost/asio.hpp>
+
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
 
 namespace thalamus {
   class NodeGraphImpl : public NodeGraph {
@@ -19,7 +28,7 @@ namespace thalamus {
     std::unique_ptr<Impl> impl;
   public:
     NodeGraphImpl(ObservableListPtr nodes, boost::asio::io_context& io_context, std::chrono::system_clock::time_point, std::chrono::steady_clock::time_point);
-    ~NodeGraphImpl();
+    ~NodeGraphImpl() override;
     std::optional<std::string> get_type_name(const std::string& type) override;
     void set_service(Service* service);
     Service& get_service() override;

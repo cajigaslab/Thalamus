@@ -2,6 +2,7 @@
 #include <analog_node.hpp>
 #include <random>
 #include <modalities_util.hpp>
+#include <cstdint>
 
 using namespace thalamus;
 
@@ -63,27 +64,27 @@ struct WaveGeneratorNode::Impl {
     Impl* impl;
 
     Wave() = delete;
-    Wave(Impl* impl) : impl(impl) {}
+    Wave(Impl* _impl) : impl(_impl) {}
 
     double operator()(std::chrono::nanoseconds time) {
       switch(shape) {
         case Shape::SINE: {
-          return amplitude * std::sin(2 * M_PI * (frequency * time.count() + phase) / 1e9) + offset;
+          return amplitude * std::sin(2 * M_PI * (frequency * double(time.count()) + double(phase)) / 1e9) + offset;
         }
         case Shape::SQUARE: {
           auto modulo = (time.count() - phase) % interval;
           return (modulo < duty_interval ? amplitude : -amplitude) + offset;
         }
         case Shape::TRIANGLE: {
-          size_t quarter_interval = interval / 4;
-          size_t three_quarter_interval = 3 * quarter_interval;
-          auto modulo = (time.count() - size_t(1e9 * phase)) % interval;
+          auto quarter_interval = interval / 4;
+          auto three_quarter_interval = 3 * quarter_interval;
+          auto modulo = (time.count() - int(1e9 * double(phase))) % interval;
           if (modulo < quarter_interval) {
-            return double(modulo) / quarter_interval * amplitude + offset;
+            return double(modulo) / double(quarter_interval) * amplitude + offset;
           } else if (modulo < three_quarter_interval) {
-            return (1 - (double(modulo) - quarter_interval) / quarter_interval) * amplitude + offset;
+            return (1 - (double(modulo) - double(quarter_interval)) / double(quarter_interval)) * amplitude + offset;
           } else {
-            return (double(modulo) - three_quarter_interval) / quarter_interval * amplitude - amplitude + offset;
+            return (double(modulo) - double(three_quarter_interval)) / double(quarter_interval) * amplitude - amplitude + offset;
           }
         }
         case Shape::RANDOM: {
@@ -93,8 +94,6 @@ struct WaveGeneratorNode::Impl {
           }
           return current;
         }
-        default:
-          return 0;
       }
     }
   };
@@ -103,22 +102,21 @@ struct WaveGeneratorNode::Impl {
   ObservableListPtr waves_state;
   size_t last_wave_count = 0;
 
-
-  Impl(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph, WaveGeneratorNode* outer)
-    : state(state)
+  Impl(ObservableDictPtr _state, boost::asio::io_context& _io_context, NodeGraph* _graph, WaveGeneratorNode* _outer)
+    : state(_state)
     , nodes(static_cast<ObservableList*>(state->parent))
-    , graph(graph)
-    , io_context(io_context)
+    , graph(_graph)
+    , io_context(_io_context)
     , timer(io_context)
-    , outer(outer)
+    , recommended_names(1, "0")
     , random_range(random_device())
     , random_distribution(0, 1)
-    , recommended_names(1, "0") {
+    , outer(_outer) {
     analog_impl.inject({ std::span<double const>() }, { 0ns }, {""});
     state_connection = state->recursive_changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3, _4));
 
-    analog_impl.ready.connect([outer](Node*) {
-      outer->ready(outer);
+    analog_impl.ready.connect([_outer](Node*) {
+      _outer->ready(_outer);
     });
 
     this->state->recap(std::bind(&Impl::on_change, this, state.get(), _1, _2, _3));
@@ -151,12 +149,12 @@ struct WaveGeneratorNode::Impl {
 
     auto i = 0ull;
     auto new_time = _time;
-    for(auto& wave : waves) {
+    for(auto& w : waves) {
       auto& buffer = buffers[i];
       buffer.clear();
       new_time = _time;
       while (new_time <= elapsed) {
-        buffer.push_back(wave(new_time));
+        buffer.push_back(w(new_time));
         new_time += _sample_interval;
       }
       ++i;
@@ -181,11 +179,11 @@ struct WaveGeneratorNode::Impl {
 
   const std::set<std::string> wave_properties = {"Frequency", "Amplitude", "Shape", "Offset", "Duty Cycle", "Phase"};
 
-  void on_change(ObservableCollection* source, ObservableCollection::Action action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
+  void on_change(ObservableCollection* source_collection, ObservableCollection::Action action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
     TRACE_EVENT("thalamus", "WaveGeneratorNode::on_change");
     std::string key_str;
-    Wave* wave = nullptr;
-    if(source == state.get()) {
+    Wave* selected_wave = nullptr;
+    if(source_collection == state.get()) {
       key_str = std::get<std::string>(k);
       if(key_str == "Waves") {
         waves_state = std::get<ObservableListPtr>(v);
@@ -195,8 +193,8 @@ struct WaveGeneratorNode::Impl {
       if(waves.empty()) {
         waves.emplace_back(this);
       }
-      wave = &waves[0];
-    } else if (source == waves_state.get()) {
+      selected_wave = &waves[0];
+    } else if (source_collection == waves_state.get()) {
       if(action == ObservableCollection::Action::Set) {
         auto wave_state = std::get<ObservableDictPtr>(v);
         wave_state->recap(std::bind(&Impl::on_change, this, wave_state.get(), _1, _2, _3));
@@ -205,56 +203,56 @@ struct WaveGeneratorNode::Impl {
         waves.erase(waves.begin() + i);
       }
       return;
-    } else if (source->parent == waves_state.get()) {
+    } else if (source_collection->parent == waves_state.get()) {
       key_str = std::get<std::string>(k);
-      auto temp = waves_state->key_of(*source);
+      auto temp = waves_state->key_of(*source_collection);
       THALAMUS_ASSERT(temp.has_value(), "Failed to find index of wave");
-      auto index = std::get<long long>(*temp);
+      auto index = size_t(std::get<long long>(*temp));
       if(waves.size() <= index) {
         waves.resize(index+1, Wave(this));
       }
-      wave = &waves[index];
+      selected_wave = &waves[index];
     } else {
       return;
     }
 
     if (key_str == "Frequency") {
-      wave->frequency = std::get<double>(v);
-      wave->interval = 1e9/wave->frequency;
-      wave->duty_interval = wave->interval*wave->duty_cycle;
+      selected_wave->frequency = std::get<double>(v);
+      selected_wave->interval = int64_t(1e9/selected_wave->frequency);
+      selected_wave->duty_interval = int64_t(double(selected_wave->interval)*selected_wave->duty_cycle);
     }
     else if (key_str == "Amplitude") {
-      wave->amplitude = std::get<double>(v);
+      selected_wave->amplitude = std::get<double>(v);
     }
     else if (key_str == "Shape") {
       shape = std::get<std::string>(v);
       if (shape == "Sine") {
-        wave->shape = Wave::Shape::SINE;
+        selected_wave->shape = Wave::Shape::SINE;
       }
       else if (shape == "Square") {
-        wave->shape = Wave::Shape::SQUARE;
+        selected_wave->shape = Wave::Shape::SQUARE;
       }
       else if (shape == "Triangle") {
-        wave->shape = Wave::Shape::TRIANGLE;
+        selected_wave->shape = Wave::Shape::TRIANGLE;
       }
       else if (shape == "Random") {
-        wave->shape = Wave::Shape::RANDOM;
+        selected_wave->shape = Wave::Shape::RANDOM;
       } else {
-        wave->shape = Wave::Shape::SINE;
+        selected_wave->shape = Wave::Shape::SINE;
       }
     }
     else if (key_str == "Offset") {
-      wave->offset = std::get<double>(v);
+      selected_wave->offset = std::get<double>(v);
     }
     else if (key_str == "Duty Cycle") {
-      wave->duty_cycle = std::get<double>(v);
-      wave->duty_interval = wave->interval*wave->duty_cycle;
+      selected_wave->duty_cycle = std::get<double>(v);
+      selected_wave->duty_interval = int64_t(double(selected_wave->interval)*selected_wave->duty_cycle);
     }
     else if (key_str == "Phase") {
-      wave->phase = 1e9*std::get<double>(v);
+      selected_wave->phase = int64_t(1e9*std::get<double>(v));
     }
     else if (key_str == "Poll Interval") {
-      poll_interval = std::get<long long int>(v);
+      poll_interval = size_t(std::get<long long int>(v));
     }
     else if (key_str == "Sample Rate") {
       auto sample_rate = std::get<double>(v);
@@ -263,8 +261,8 @@ struct WaveGeneratorNode::Impl {
     }
     else if (key_str == "Running") {
       is_running = std::get<bool>(v);
-      for(auto& wave : waves) {
-        wave.last_switch = 0ns;
+      for(auto& w : waves) {
+        w.last_switch = 0ns;
       }
       if (is_running) {
         last_time = std::chrono::steady_clock::now();
@@ -320,24 +318,24 @@ struct AnalogNodeImpl::Impl {
   std::chrono::nanoseconds time;
 };
 
-AnalogNodeImpl::AnalogNodeImpl(ObservableDictPtr state, boost::asio::io_context&, NodeGraph* graph) : impl(new Impl()) {}
+AnalogNodeImpl::AnalogNodeImpl(ObservableDictPtr, boost::asio::io_context&, NodeGraph*) : impl(new Impl()) {}
 AnalogNodeImpl::AnalogNodeImpl() : impl(new Impl()) {}
 AnalogNodeImpl::~AnalogNodeImpl() {}
 std::span<const double> AnalogNodeImpl::data(int channel) const {
-  return impl->spans.at(channel);
+  return impl->spans.at(size_t(channel));
 }
 int AnalogNodeImpl::num_channels() const {
-  return impl->spans.size();
+  return int(impl->spans.size());
 }
 std::chrono::nanoseconds AnalogNodeImpl::sample_interval(int channel) const {
-  return impl->sample_intervals.at(channel);
+  return impl->sample_intervals.at(size_t(channel));
 }
 std::chrono::nanoseconds AnalogNodeImpl::time() const {
   return impl->time;
 }
 
 std::string_view AnalogNodeImpl::name(int channel) const {
-  return impl->names.at(channel);
+  return impl->names.at(size_t(channel));
 }
 std::span<const std::string> AnalogNodeImpl::get_recommended_channels() const {
   return std::span<const std::string>();
@@ -378,18 +376,18 @@ struct ToggleNode::Impl {
   std::chrono::nanoseconds current_time;
   AnalogNodeImpl analog_impl;
   thalamus::vector<std::string> recommended_names;
-  Impl(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph, ToggleNode* outer)
-    : nodes(static_cast<ObservableList*>(state->parent))
-    , state(state)
-    , graph(graph)
-    , io_context(io_context)
-    , outer(outer)
+  Impl(ObservableDictPtr _state, boost::asio::io_context& _io_context, NodeGraph* _graph, ToggleNode* _outer)
+    : nodes(static_cast<ObservableList*>(_state->parent))
+    , state(_state)
+    , graph(_graph)
+    , io_context(_io_context)
+    , outer(_outer)
     , recommended_names(1, "0") {
     using namespace std::placeholders;
     analog_impl.inject({ {std::span<double const>()} }, { 0ns }, {""});
 
-    analog_impl.ready.connect([outer](Node*) {
-      outer->ready(outer);
+    analog_impl.ready.connect([_outer](Node*) {
+      _outer->ready(_outer);
     });
 
     state_connection = state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
@@ -399,24 +397,24 @@ struct ToggleNode::Impl {
   std::optional<double> previous_value(int current, int lag) {
     auto index = current - lag;
     if (index >= 0) {
-      return buffer.at(index);
+      return buffer.at(size_t(index));
     }
     for (auto i = previous_buffers.rbegin(); i != previous_buffers.rend(); ++i) {
-      long long prev_index = i->size() + index;
+      long long prev_index = int64_t(i->size()) + index;
       if (prev_index >= 0) {
-        return i->at(prev_index);
+        return i->at(size_t(prev_index));
       }
       index += i->size();
     }
     return std::nullopt;
   }
 
-  void on_data(Node* raw_node, AnalogNode* node) {
+  void on_data(Node*, AnalogNode* node) {
     TRACE_EVENT("thalamus", "ToggleNode::Impl::on_data");
-    auto source = node->data(channel);
+    auto source_data = node->data(int(channel));
 
-    buffer.assign(source.begin(), source.end());
-    auto sample_interval = node->sample_interval(channel);
+    buffer.assign(source_data.begin(), source_data.end());
+    auto sample_interval = node->sample_interval(int(channel));
     _time = node->time();
 
     auto lag_time = 100ms;
@@ -433,7 +431,7 @@ struct ToggleNode::Impl {
     auto i = 0;
     std::transform(buffer.begin(), buffer.end(), buffer.begin(), [&](double d) {
       current_time += sample_interval;
-      auto lagged = previous_value(i, lag);
+      auto lagged = previous_value(i, int(lag));
       if (lagged && current_time - last_toggle > 2*lag_time && lagged < threshold && d >= threshold) {
         high = !high;
         last_toggle = current_time;
@@ -442,7 +440,7 @@ struct ToggleNode::Impl {
       ++i;
       return high ? 3.3 : 0;
     });
-    previous_buffers.emplace_back(source.begin(), source.end());
+    previous_buffers.emplace_back(source_data.begin(), source_data.end());
 
     analog_impl.inject({ {std::span<double const>(buffer.begin(), buffer.end())} }, { sample_interval }, {""});
   }
@@ -494,7 +492,7 @@ int ToggleNode::num_channels() const {
   return impl->analog_impl.num_channels();
 }
 std::string_view ToggleNode::name(int channel) const {
-  return impl->recommended_names.at(channel);
+  return impl->recommended_names.at(size_t(channel));
 }
 std::span<const std::string> ToggleNode::get_recommended_channels() const {
   return std::span<const std::string>(impl->recommended_names.begin(), impl->recommended_names.end());

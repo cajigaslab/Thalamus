@@ -53,14 +53,14 @@ static const char* base64_chars[2] = {
              "0123456789"
              "-_"};
 
-static unsigned int pos_of_char(const unsigned char chr) {
+static unsigned int pos_of_char(const char chr) {
  //
  // Return the position of chr within base64_encode()
  //
 
-    if      (chr >= 'A' && chr <= 'Z') return chr - 'A';
-    else if (chr >= 'a' && chr <= 'z') return chr - 'a' + ('Z' - 'A')               + 1;
-    else if (chr >= '0' && chr <= '9') return chr - '0' + ('Z' - 'A') + ('z' - 'a') + 2;
+    if      (chr >= 'A' && chr <= 'Z') return static_cast<unsigned int>(chr - 'A');
+    else if (chr >= 'a' && chr <= 'z') return static_cast<unsigned int>(chr - 'a' + ('Z' - 'A')               + 1);
+    else if (chr >= '0' && chr <= '9') return static_cast<unsigned int>(chr - '0' + ('Z' - 'A') + ('z' - 'a') + 2);
     else if (chr == '+' || chr == '-') return 62; // Be liberal with input and accept both url ('-') and non-url ('+') base 64 characters (
     else if (chr == '/' || chr == '_') return 63; // Ditto for '/' and '_'
     else
@@ -143,14 +143,14 @@ std::string base64_encode(unsigned char const* bytes_to_encode, size_t in_len, b
            }
            else {
               ret.push_back(base64_chars_[(bytes_to_encode[pos + 1] & 0x0f) << 2]);
-              ret.push_back(trailing_char);
+              ret.push_back(static_cast<char>(trailing_char));
            }
         }
         else {
 
             ret.push_back(base64_chars_[(bytes_to_encode[pos + 0] & 0x03) << 4]);
-            ret.push_back(trailing_char);
-            ret.push_back(trailing_char);
+            ret.push_back(static_cast<char>(trailing_char));
+            ret.push_back(static_cast<char>(trailing_char));
         }
 
         pos += 3;

@@ -1,6 +1,16 @@
 #include <stim_printer_node.hpp>
 #include <modalities_util.hpp>
+
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Weverything"
+#endif
+
 #include <google/protobuf/util/json_util.h>
+
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
 
 using namespace thalamus;
 

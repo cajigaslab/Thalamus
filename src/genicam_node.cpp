@@ -2,11 +2,7 @@
 #include <genicam_node.hpp>
 #include <gentl.h>
 #include <fstream>
-#include <boost/endian/conversion.hpp> 
 #include <zlib.h>
-#include <boost/property_tree/xml_parser.hpp>
-#include <boost/property_tree/json_parser.hpp>
-#include <boost/spirit/include/qi.hpp>
 #include <numeric>
 #include <calculator.hpp>
 #include <filesystem>
@@ -17,6 +13,20 @@
 #include <dlfcn.h>
 #endif
 #include <thalamus/thread.hpp>
+
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Weverything"
+#endif
+
+#include <boost/endian/conversion.hpp> 
+#include <boost/property_tree/xml_parser.hpp>
+#include <boost/property_tree/json_parser.hpp>
+#include <boost/spirit/include/qi.hpp>
+ 
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
 
 namespace thalamus {
   using namespace std::chrono_literals;
@@ -90,6 +100,7 @@ namespace thalamus {
     AnalogNodeImpl analog_impl;
     bool has_analog = false;
     bool has_image = false;
+
     struct Cti {
       GenTL::PGCGetInfo GCGetInfo;
       GenTL::PGCGetLastError GCGetLastError;
@@ -163,20 +174,28 @@ namespace thalamus {
 #ifdef _WIN32
       HMODULE library_handle;
       template<typename T>
-      T load_function(const std::string& name) {
-        auto result = reinterpret_cast<T>(::GetProcAddress(library_handle, name.c_str()));
+      T load_function(const std::string& func_name) {
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Wcast-function-type"
+  #pragma clang diagnostic ignored "-Wcast-function-type-strict"
+#endif
+        auto result = reinterpret_cast<T>(::GetProcAddress(library_handle, func_name.c_str()));
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
         if(!result) {
-          THALAMUS_LOG(info) << "Failed to load " << name << ".  " << this->name << " disabled";
+          THALAMUS_LOG(info) << "Failed to load " << func_name << ".  " << this->name << " disabled";
         }
         return result;
       }
 #else
       void* library_handle;
       template<typename T>
-      T load_function(const std::string& name) {
-        auto result = reinterpret_cast<T>(dlsym(library_handle, name.c_str()));
+      T load_function(const std::string& func_name) {
+        auto result = reinterpret_cast<T>(dlsym(library_handle, func_name.c_str()));
         if(!result) {
-          THALAMUS_LOG(info) << "Failed to load " << name << ".  " << this->name << " disabled";
+          THALAMUS_LOG(info) << "Failed to load " << func_name << ".  " << this->name << " disabled";
         }
         return result;
       }
@@ -201,13 +220,12 @@ namespace thalamus {
         THALAMUS_ASSERT(false, "Invalid number type");
       }
       struct Device {
-        virtual ~Device() {};
+        virtual ~Device() {}
         virtual RegValue get(const std::string& reg) = 0;
         virtual void set(const std::string& reg, const std::variant<long long int, std::string, double>& value) = 0;
         virtual bool is_writable(const std::string&) = 0;
       };
 
-      static calculator::parser<std::string::const_iterator> parser;        // Our grammar
 
       enum class AccessMode {
         RW,
@@ -252,7 +270,7 @@ namespace thalamus {
             auto iter = from_code.cbegin();
             boost::spirit::ascii::space_type space;
             TRACE_EVENT("thalamus", "boost::spirit::qi::phrase_parse");
-            auto success = phrase_parse(iter, from_code.cend(), parser, space, from_program);
+            auto success = phrase_parse(iter, from_code.cend(), *parser, space, from_program);
             THALAMUS_ASSERT(success, "Failed to parse expression: %s", from_code);
           }
 
@@ -276,7 +294,7 @@ namespace thalamus {
             auto iter = to_code.cbegin();
             boost::spirit::ascii::space_type space;
             TRACE_EVENT("thalamus", "boost::spirit::qi::phrase_parse");
-            auto success = phrase_parse(iter, to_code.cend(), parser, space, to_program);
+            auto success = phrase_parse(iter, to_code.cend(), *parser, space, to_program);
             THALAMUS_ASSERT(success, "Failed to parse expression: %s", to_code);
           }
 
@@ -322,7 +340,7 @@ namespace thalamus {
             auto iter = from_code.cbegin();
             boost::spirit::ascii::space_type space;
             TRACE_EVENT("thalamus", "boost::spirit::qi::phrase_parse");
-            auto success = phrase_parse(iter, from_code.cend(), parser, space, from_program);
+            auto success = phrase_parse(iter, from_code.cend(), *parser, space, from_program);
             THALAMUS_ASSERT(success, "Failed to parse expression: %s", from_code);
           }
 
@@ -346,7 +364,7 @@ namespace thalamus {
             auto iter = to_code.cbegin();
             boost::spirit::ascii::space_type space;
             TRACE_EVENT("thalamus", "boost::spirit::qi::phrase_parse");
-            auto success = phrase_parse(iter, to_code.cend(), parser, space, to_program);
+            auto success = phrase_parse(iter, to_code.cend(), *parser, space, to_program);
             THALAMUS_ASSERT(success, "Failed to parse expression: %s", to_code);
           }
 
@@ -389,7 +407,7 @@ namespace thalamus {
             auto iter = code.cbegin();
             boost::spirit::ascii::space_type space;
             TRACE_EVENT("thalamus", "boost::spirit::qi::phrase_parse");
-            auto success = phrase_parse(iter, code.cend(), parser, space, program);
+            auto success = phrase_parse(iter, code.cend(), *parser, space, program);
             THALAMUS_ASSERT(success, "Failed to parse expression: %s", code);
           }
 
@@ -427,7 +445,7 @@ namespace thalamus {
             auto iter = code.cbegin();
             boost::spirit::ascii::space_type space;
             TRACE_EVENT("thalamus", "boost::spirit::qi::phrase_parse");
-            auto success = phrase_parse(iter, code.cend(), parser, space, program);
+            auto success = phrase_parse(iter, code.cend(), *parser, space, program);
             THALAMUS_ASSERT(success, "Failed to parse expression: %s", code);
           }
 
@@ -458,7 +476,7 @@ namespace thalamus {
           TRACE_EVENT("thalamus", "StringRed::read");
           buffer.resize(length);
 
-          auto total_address = address;
+          auto total_address = int64_t(address);
           if(!p_address.empty()) {
             total_address += std::get<long long int>(device->get(p_address));
           }
@@ -466,7 +484,7 @@ namespace thalamus {
             total_address += std::get<long long int>(device->get(int_swiss_knife));
           }
 
-          auto error = cti->GCReadPort(handle, total_address, buffer.data(), &length);
+          auto error = cti->GCReadPort(handle, size_t(total_address), buffer.data(), &length);
           THALAMUS_ASSERT(error == GenTL::GC_ERR_SUCCESS, "GCReadPort failed: %d", error);
           buffer = buffer.data();
           return buffer;
@@ -488,14 +506,14 @@ namespace thalamus {
         bool little_endian;
         bool _unsigned;
         AccessMode access_mode;
-        std::optional<long long int> lsb;
-        std::optional<long long int> msb;
+        std::optional<size_t> lsb;
+        std::optional<size_t> msb;
         std::vector<unsigned char> buffer;
         long long int read() {
           TRACE_EVENT("thalamus", "IntReg::read");
           buffer.resize(length);
 
-          auto total_address = address;
+          auto total_address = int64_t(address);
           if(!p_address.empty()) {
             total_address += std::get<long long int>(device->get(p_address));
           }
@@ -503,7 +521,7 @@ namespace thalamus {
             total_address += std::get<long long int>(device->get(int_swiss_knife));
           }
 
-          auto error = cti->GCReadPort(handle, total_address, buffer.data(), &length);
+          auto error = cti->GCReadPort(handle, size_t(total_address), buffer.data(), &length);
           if(error == GenTL::GC_ERR_NO_DATA) {
             return 0;
           }
@@ -521,7 +539,7 @@ namespace thalamus {
             : std::accumulate(buffer.begin(), buffer.end(), _unsigned || !(first_byte & 0x80) ? 0ll : -1ll, visitor);
 
           if(msb) {
-            long long int mask = (1ull << (*msb + 1)) - 1;
+            long long int mask = (1 << (*msb + 1)) - 1;
             result &= mask;
           }
           if(lsb) {
@@ -537,12 +555,12 @@ namespace thalamus {
           for(auto i = 0ull;i < length;++i) {
             unsigned char mask_byte = 255;
             if(lsb) {
-              if(*lsb > static_cast<long long>(i*8)) {
+              if(*lsb > i*8) {
                 mask_byte <<= *lsb - i*8;
               }
             }
             if(msb) {
-              if(*msb < static_cast<long long>((i+1)*8)) {
+              if(*msb < (i+1)*8) {
                 unsigned char temp = 255;
                 temp >>= (i+1)*8 - (*msb+1);
                 mask_byte &= temp;
@@ -562,7 +580,7 @@ namespace thalamus {
             value >>= 8;
           }
 
-          auto total_address = address;
+          auto total_address = int64_t(address);
           if(!p_address.empty()) {
             total_address += std::get<long long int>(device->get(p_address));
           }
@@ -572,7 +590,7 @@ namespace thalamus {
             buffer.assign(length, 0);
           }
           else {
-            auto error = cti->GCReadPort(handle, total_address, buffer.data(), &length);
+            auto error = cti->GCReadPort(handle, size_t(total_address), buffer.data(), &length);
             if (error == GenTL::GC_ERR_NO_DATA) {
               buffer.assign(length, 0);
               return;
@@ -595,7 +613,7 @@ namespace thalamus {
             std::reverse(buffer.begin(), buffer.end());
           }
 
-          auto error = cti->GCWritePort(handle, total_address, buffer.data(), &length);
+          auto error = cti->GCWritePort(handle, size_t(total_address), buffer.data(), &length);
           THALAMUS_ASSERT(error == GenTL::GC_ERR_SUCCESS, "GCWritePort failed: %d", error);
         }
 
@@ -620,7 +638,7 @@ namespace thalamus {
           TRACE_EVENT("thalamus", "FloatReg::read");
           buffer.resize(length);
 
-          auto total_address = address;
+          auto total_address = int64_t(address);
           if(!p_address.empty()) {
             total_address += std::get<long long int>(device->get(p_address));
           }
@@ -628,7 +646,7 @@ namespace thalamus {
             total_address += std::get<long long int>(device->get(int_swiss_knife));
           }
 
-          auto error = cti->GCReadPort(handle, total_address, buffer.data(), &length);
+          auto error = cti->GCReadPort(handle, size_t(total_address), buffer.data(), &length);
           if(error == GenTL::GC_ERR_NO_DATA) {
             return 0;
           }
@@ -642,7 +660,7 @@ namespace thalamus {
               boost::endian::big_to_native_inplace(*reinterpret_cast<int*>(buffer.data()));
             }
 
-            result = *reinterpret_cast<float*>(buffer.data());
+            result = double(*reinterpret_cast<float*>(buffer.data()));
           } else if (length == 8) {
             if(little_endian) {
               boost::endian::little_to_native_inplace(*reinterpret_cast<long long int*>(buffer.data()));
@@ -659,7 +677,7 @@ namespace thalamus {
 
         void write(double new_value) {
           TRACE_EVENT("thalamus", "FloatReg::write");
-          auto total_address = address;
+          auto total_address = int64_t(address);
           if(!p_address.empty()) {
             total_address += std::get<long long int>(device->get(p_address));
           }
@@ -668,8 +686,9 @@ namespace thalamus {
           size_t length2 = length;
           buffer.resize(length);
           if(length == 4) {
-            float temp_float = new_value;
-            int temp_int = *reinterpret_cast<int*>(&temp_float);
+            auto temp_float = float(new_value);
+            auto temp_char = reinterpret_cast<unsigned char*>(&temp_float);
+            auto temp_int = *reinterpret_cast<long long*>(temp_char);
 
             if(little_endian) {
               boost::endian::native_to_little_inplace(temp_int);
@@ -677,9 +696,10 @@ namespace thalamus {
               boost::endian::native_to_big_inplace(temp_int);
             }
 
-            error = cti->GCWritePort(handle, total_address, reinterpret_cast<unsigned char*>(&temp_int), &length2);
+            error = cti->GCWritePort(handle, size_t(total_address), reinterpret_cast<unsigned char*>(&temp_int), &length2);
           } else if (length == 8) {
-            long long int temp_int = *reinterpret_cast<long long int*>(&new_value);
+            auto temp_char = reinterpret_cast<unsigned char*>(&new_value);
+            auto temp_int = *reinterpret_cast<long long*>(temp_char);
 
             if(little_endian) {
               boost::endian::native_to_little_inplace(temp_int);
@@ -687,7 +707,7 @@ namespace thalamus {
               boost::endian::native_to_big_inplace(temp_int);
             }
 
-            error = cti->GCWritePort(handle, total_address, reinterpret_cast<unsigned char*>(&temp_int), &length2);
+            error = cti->GCWritePort(handle, size_t(total_address), reinterpret_cast<unsigned char*>(&temp_int), &length2);
           } else {
             THALAMUS_ASSERT(false, "Unsupported FloatReg length: %d", length);
           }
@@ -704,7 +724,7 @@ namespace thalamus {
       };
 
       template <typename T = long long int>
-      static T get_int(const boost::property_tree::ptree& tree, const std::string& path, long long int default_value) {
+      static T get_int(const boost::property_tree::ptree& tree, const std::string& path, T default_value) {
         auto text = tree.get_optional<std::string>(path);
         if(!text) {
           return default_value;
@@ -753,36 +773,36 @@ namespace thalamus {
 
         double read() {
           TRACE_EVENT("thalamus", "Float::read");
-          auto value = variant_cast<double>(device->get(this->value));
-          return value;
+          auto result = variant_cast<double>(device->get(this->value));
+          return result;
         }
 
-        void write(double value) {
+        void write(double new_value) {
           TRACE_EVENT("thalamus", "Float::write");
-          std::optional<double> min = this->min ? std::optional<double>(variant_cast<double>(device->get(*this->min))) : std::nullopt;
-          std::optional<double> max = this->max ? std::optional<double>(variant_cast<double>(device->get(*this->max))) : std::nullopt;
-          std::optional<double> inc = this->inc ? std::optional<double>(variant_cast<double>(device->get(*this->inc))) : std::nullopt;
+          std::optional<double> min_val = this->min ? std::optional<double>(variant_cast<double>(device->get(*this->min))) : std::nullopt;
+          std::optional<double> max_val = this->max ? std::optional<double>(variant_cast<double>(device->get(*this->max))) : std::nullopt;
+          std::optional<double> inc_val = this->inc ? std::optional<double>(variant_cast<double>(device->get(*this->inc))) : std::nullopt;
 
-          if(min) {
-            value = std::max(*min, value);
+          if(min_val) {
+            new_value = std::max(*min_val, new_value);
           }
-          if(max) {
-            value = std::min(*max, value);
+          if(max_val) {
+            new_value = std::min(*max_val, new_value);
           }
 
-          if(inc) {
-            auto clamped = value;
-            if(min) {
-              clamped -= *min;
+          if(inc_val) {
+            auto clamped = new_value;
+            if(min_val) {
+              clamped -= *min_val;
             }
-            clamped = (clamped/(*inc))*(*inc);
-            if(min) {
-              clamped += *min;
+            clamped = (clamped/(*inc_val))*(*inc_val);
+            if(min_val) {
+              clamped += *min_val;
             }
-            value = clamped;
+            new_value = clamped;
           }
 
-          device->set(this->value, value);
+          device->set(this->value, new_value);
         }
 
         bool is_writable() {
@@ -822,14 +842,14 @@ namespace thalamus {
               reverse_enums[i.second] = i.first;
             }
           }
-          auto value = variant_cast<long long int>(device->get(this->value));
-          auto result = reverse_enums.at(value);
+          auto key = variant_cast<long long int>(device->get(this->value));
+          auto result = reverse_enums.at(key);
           return result;
         }
 
-        void write(std::string value) {
+        void write(std::string key) {
           TRACE_EVENT("thalamus", "Enumeration::write");
-          auto translated = enums.at(value);
+          auto translated = enums.at(key);
           device->set(this->value, translated);
         }
 
@@ -847,36 +867,36 @@ namespace thalamus {
 
         long long int read() {
           TRACE_EVENT("thalamus", "Integer::read");
-          auto value = variant_cast<long long int>(device->get(this->value));
-          return value;
+          auto result = variant_cast<long long int>(device->get(this->value));
+          return result;
         }
 
-        void write(long long int value) {
+        void write(long long int new_value) {
           TRACE_EVENT("thalamus", "Integer::write");
-          std::optional<long long int> min = this->min ? std::optional<long long int>(variant_cast<long long int>(device->get(*this->min))) : std::nullopt;
-          std::optional<long long int> max = this->max ? std::optional<long long int>(variant_cast<long long int>(device->get(*this->max))) : std::nullopt;
-          std::optional<long long int> inc = this->inc ? std::optional<long long int>(variant_cast<long long int>(device->get(*this->inc))) : std::nullopt;
+          std::optional<long long int> min_val = this->min ? std::optional<long long int>(variant_cast<long long int>(device->get(*this->min))) : std::nullopt;
+          std::optional<long long int> max_val = this->max ? std::optional<long long int>(variant_cast<long long int>(device->get(*this->max))) : std::nullopt;
+          std::optional<long long int> inc_val = this->inc ? std::optional<long long int>(variant_cast<long long int>(device->get(*this->inc))) : std::nullopt;
 
-          if(min) {
-            value = std::max(*min, value);
+          if(min_val) {
+            new_value = std::max(*min_val, new_value);
           }
-          if(max) {
-            value = std::min(*max, value);
+          if(max_val) {
+            new_value = std::min(*max_val, new_value);
           }
 
-          if(inc) {
-            auto clamped = value;
-            if(min) {
-              clamped -= *min;
+          if(inc_val) {
+            auto clamped = new_value;
+            if(min_val) {
+              clamped -= *min_val;
             }
-            clamped = (clamped/(*inc))*(*inc);
-            if(min) {
-              clamped += *min;
+            clamped = (clamped/(*inc_val))*(*inc_val);
+            if(min_val) {
+              clamped += *min_val;
             }
-            value = clamped;
+            new_value = clamped;
           }
 
-          device->set(this->value, value);
+          device->set(this->value, new_value);
         }
 
         bool is_writable() {
@@ -898,7 +918,7 @@ namespace thalamus {
         using Value = std::variant<long long int, double, std::string, Link, StringReg, IntConverter, IntReg, IntSwissKnife, FloatReg, SwissKnife, Converter, Float, Integer, Enumeration, Command>;
         std::map<std::string, Value> nodes;
 
-        ~DeviceImpl() {
+        ~DeviceImpl() override {
           stop_stream();
           if(dev_handle) {
             cti->DevClose(dev_handle);
@@ -955,8 +975,8 @@ namespace thalamus {
               return false;
             }
 
-            std::vector<unsigned char> data(length, 0);
-            error = cti->GCReadPort(port_handle, address, data.data(), &length);
+            std::vector<unsigned char> zip_data(length, 0);
+            error = cti->GCReadPort(port_handle, address, zip_data.data(), &length);
             if(error != GenTL::GC_ERR_SUCCESS) {
               THALAMUS_LOG(info) << "GCReadPort failed.";
               return false;
@@ -964,7 +984,7 @@ namespace thalamus {
 
             std::string xml;
             size_t offset = 0;
-            auto buffer = data.data();
+            auto buffer = zip_data.data();
             auto central_header_found = false;
             while(offset < length) {
               auto signature = boost::endian::little_to_native(*reinterpret_cast<unsigned int*>(buffer + offset));
@@ -1008,12 +1028,19 @@ namespace thalamus {
 
                 xml.assign(uncompressed_size, ' ');
                 z_stream strm;
-                strm.zalloc = Z_NULL;
-                strm.zfree = Z_NULL;
-                strm.opaque = Z_NULL;
+                strm.zalloc = nullptr;
+                strm.zfree = nullptr;
+                strm.opaque = nullptr;
                 strm.avail_in = 0;
-                strm.next_in = Z_NULL;
+                strm.next_in = nullptr;
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Wold-style-cast"
+#endif
                 auto ret = inflateInit2(&strm, -MAX_WBITS);
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
                 if(ret != Z_OK) {
                   THALAMUS_LOG(info) << "Failed to initialize inflate.";
                   return false;
@@ -1039,7 +1066,7 @@ namespace thalamus {
                 offset += compressed_size;
                 {
                   std::ofstream output(cti->name + id + "-stream.xml");
-                  output.write(xml.data(), xml.size());
+                  output.write(xml.data(), int64_t(xml.size()));
                 }
                 try {
                   std::stringstream xml_stream(xml);
@@ -1107,7 +1134,7 @@ namespace thalamus {
             auto [current_name, current] = open.back();
             open.pop_back();
             try {
-              auto name = current->get<std::string>("<xmlattr>.Name", "");
+              auto node_name = current->get<std::string>("<xmlattr>.Name", "");
 
               if(current_name == "Integer") {
                 auto p_value = current->get_optional<std::string>("pValue");
@@ -1117,9 +1144,9 @@ namespace thalamus {
                 auto inc = current->get_optional<std::string>("pInc");
 
                 if(value) {
-                  nodes[name] = *value;
+                  nodes[node_name] = *value;
                 } else if (p_value) {
-                  nodes[name] = Integer{this, *p_value, 
+                  nodes[node_name] = Integer{this, *p_value, 
                     min ? std::optional<std::string>(*min) : std::nullopt,
                     max ? std::optional<std::string>(*max) : std::nullopt,
                     inc ? std::optional<std::string>(*inc) : std::nullopt};
@@ -1130,12 +1157,12 @@ namespace thalamus {
                 auto p_command_value = current->get_optional<std::string>("pCommandValue");
 
                 if(p_command_value) {
-                  nodes[name] = Command {this, *p_value, *p_command_value};
+                  nodes[node_name] = Command {this, *p_value, *p_command_value};
                 } else {
-                  nodes[name] = Command {this, *p_value, command_value};
+                  nodes[node_name] = Command {this, *p_value, command_value};
                 }
               } else if(current_name == "StringReg") {
-                size_t address = get_int(*current, "Address", 0);
+                size_t address = get_int<size_t>(*current, "Address", 0);
                 auto p_address = current->get<std::string>("pAddress", "");
                 auto access_mode = parse_access_mode(current->get<std::string>("AccessMode", "RW"));
 
@@ -1147,9 +1174,9 @@ namespace thalamus {
                 }
 
                 auto length = get_int<size_t>(*current, "Length", 0);
-                nodes[name] = StringReg {this, port_handle, cti, address, p_address, int_swiss_knife, length, access_mode, ""};
+                nodes[node_name] = StringReg {this, port_handle, cti, address, p_address, int_swiss_knife, length, access_mode, ""};
               } else if(current_name == "IntReg") {
-                size_t address = get_int(*current, "Address", 0);
+                size_t address = get_int<size_t>(*current, "Address", 0);
                 auto p_address = current->get<std::string>("pAddress", "");
                 auto access_mode = parse_access_mode(current->get<std::string>("AccessMode", "RW"));
 
@@ -1163,9 +1190,9 @@ namespace thalamus {
                 auto length = get_int<size_t>(*current, "Length", 0);
                 auto little_endian = current->get<std::string>("Endianess", "LittleEndian") == "LittleEndian";
                 auto _unsigned = current->get<std::string>("Sign", "Unsigned") == "Unsigned";
-                nodes[name] = IntReg {this, port_handle, cti, address, p_address, int_swiss_knife, length, little_endian, _unsigned, access_mode, std::nullopt, std::nullopt, {} };
+                nodes[node_name] = IntReg {this, port_handle, cti, address, p_address, int_swiss_knife, length, little_endian, _unsigned, access_mode, std::nullopt, std::nullopt, {} };
               } else if(current_name == "FloatReg") {
-                size_t address = get_int(*current, "Address", 0);
+                size_t address = get_int<size_t>(*current, "Address", 0);
                 auto p_address = current->get<std::string>("pAddress", "");
                 auto access_mode = parse_access_mode(current->get<std::string>("AccessMode", "RW"));
 
@@ -1179,7 +1206,7 @@ namespace thalamus {
                 auto length = get_int<size_t>(*current, "Length", 0);
                 auto little_endian = current->get<std::string>("Endianess", "LittleEndian") == "LittleEndian";
                 auto _unsigned = current->get<std::string>("Sign", "Unsigned") == "Unsigned";
-                nodes[name] = FloatReg {this, port_handle, cti, address, p_address, int_swiss_knife, length, little_endian, _unsigned, access_mode, {} };
+                nodes[node_name] = FloatReg {this, port_handle, cti, address, p_address, int_swiss_knife, length, little_endian, _unsigned, access_mode, {} };
               } else if(current_name == "Float") {
                 auto p_value = current->get_optional<std::string>("pValue");
                 auto value = get_optional<double>(*current, "Value");
@@ -1188,9 +1215,9 @@ namespace thalamus {
                 auto inc = current->get_optional<std::string>("pInc");
 
                 if(value) {
-                  nodes[name] = *value;
+                  nodes[node_name] = *value;
                 } else if (p_value) {
-                  nodes[name] = Float{this, *p_value,
+                  nodes[node_name] = Float{this, *p_value,
                     min ? std::optional<std::string>(*min) : std::nullopt,
                     max ? std::optional<std::string>(*max) : std::nullopt,
                     inc ? std::optional<std::string>(*inc) : std::nullopt};
@@ -1203,19 +1230,19 @@ namespace thalamus {
                 std::map<std::string, std::string> values;
                 for(auto& pair : *current) {
                   if(pair.first == "pVariable") {
-                    auto name = pair.second.get_optional<std::string>("<xmlattr>.Name");
-                    THALAMUS_ASSERT(name, "Name missing");
-                    values[*name] = pair.second.data();
+                    auto var_name = pair.second.get_optional<std::string>("<xmlattr>.Name");
+                    THALAMUS_ASSERT(var_name, "Name missing");
+                    values[*var_name] = pair.second.data();
                   }
                   else if (pair.first == "Expression") {
-                    auto name = pair.second.get_optional<std::string>("<xmlattr>.Name");
-                    std::regex label("\\b" + *name + "\\b", std::regex_constants::icase);
+                    auto var_name = pair.second.get_optional<std::string>("<xmlattr>.Name");
+                    std::regex label("\\b" + *var_name + "\\b", std::regex_constants::icase);
                     formula_from = std::regex_replace(formula_from, label, "(" + pair.second.data() + ")");
                     formula_to = std::regex_replace(formula_to, label, "(" + pair.second.data() + ")");
                   }
                 }
 
-                nodes[name] = IntConverter {this, port_handle, cti, 0, "", 0, p_value, formula_to, formula_from, values, {}, std::nullopt, std::nullopt };
+                nodes[node_name] = IntConverter {this, port_handle, cti, 0, "", 0, p_value, formula_to, formula_from, values, {}, std::nullopt, std::nullopt };
               } else if(current_name == "Converter") {
                 auto formula_from = current->get<std::string>("FormulaFrom");
                 auto formula_to = current->get<std::string>("FormulaTo");
@@ -1224,57 +1251,57 @@ namespace thalamus {
                 std::map<std::string, std::string> values;
                 for(auto& pair : *current) {
                   if(pair.first == "pVariable") {
-                    auto name = pair.second.get_optional<std::string>("<xmlattr>.Name");
-                    THALAMUS_ASSERT(name, "Name missing");
-                    values[*name] = pair.second.data();
+                    auto var_name = pair.second.get_optional<std::string>("<xmlattr>.Name");
+                    THALAMUS_ASSERT(var_name, "Name missing");
+                    values[*var_name] = pair.second.data();
                   }
                   else if (pair.first == "Expression") {
-                    auto name = pair.second.get_optional<std::string>("<xmlattr>.Name");
-                    std::regex label("\\b" + *name + "\\b", std::regex_constants::icase);
+                    auto var_name = pair.second.get_optional<std::string>("<xmlattr>.Name");
+                    std::regex label("\\b" + *var_name + "\\b", std::regex_constants::icase);
                     formula_from = std::regex_replace(formula_from, label, "(" + pair.second.data() + ")");
                     formula_to = std::regex_replace(formula_to, label, "(" + pair.second.data() + ")");
                   }
                 }
 
-                nodes[name] = Converter {this, port_handle, cti, 0, "", 0, p_value, formula_to, formula_from, values, {}, std::nullopt, std::nullopt };
+                nodes[node_name] = Converter {this, port_handle, cti, 0, "", 0, p_value, formula_to, formula_from, values, {}, std::nullopt, std::nullopt };
               } else if(current_name == "IntSwissKnife") {
                 auto formula= current->get<std::string>("Formula");
 
                 std::map<std::string, std::string> values;
                 for(auto& pair : *current) {
                   if(pair.first == "pVariable") {
-                    auto name = pair.second.get_optional<std::string>("<xmlattr>.Name");
-                    THALAMUS_ASSERT(name, "Name missing");
-                    values[*name] = pair.second.data();
+                    auto var_name = pair.second.get_optional<std::string>("<xmlattr>.Name");
+                    THALAMUS_ASSERT(var_name, "Name missing");
+                    values[*var_name] = pair.second.data();
                   }
                   else if (pair.first == "Expression") {
-                    auto name = pair.second.get_optional<std::string>("<xmlattr>.Name");
-                    std::regex label("\\b" + *name + "\\b", std::regex_constants::icase);
+                    auto var_name = pair.second.get_optional<std::string>("<xmlattr>.Name");
+                    std::regex label("\\b" + *var_name + "\\b", std::regex_constants::icase);
                     formula = std::regex_replace(formula, label, "(" + pair.second.data() + ")");
                   }
                 }
 
-                nodes[name] = IntSwissKnife {this, port_handle, cti, 0, "", 0, formula, values, {}, std::nullopt };
+                nodes[node_name] = IntSwissKnife {this, port_handle, cti, 0, "", 0, formula, values, {}, std::nullopt };
               } else if(current_name == "SwissKnife") {
                 auto formula= current->get<std::string>("Formula");
 
                 std::map<std::string, std::string> values;
                 for(auto& pair : *current) {
                   if(pair.first == "pVariable") {
-                    auto name = pair.second.get_optional<std::string>("<xmlattr>.Name");
-                    THALAMUS_ASSERT(name, "Name missing");
-                    values[*name] = pair.second.data();
+                    auto var_name = pair.second.get_optional<std::string>("<xmlattr>.Name");
+                    THALAMUS_ASSERT(var_name, "Name missing");
+                    values[*var_name] = pair.second.data();
                   }
                   else if (pair.first == "Expression") {
-                    auto name = pair.second.get_optional<std::string>("<xmlattr>.Name");
-                    std::regex label("\\b" + *name + "\\b", std::regex_constants::icase);
+                    auto var_name = pair.second.get_optional<std::string>("<xmlattr>.Name");
+                    std::regex label("\\b" + *var_name + "\\b", std::regex_constants::icase);
                     formula = std::regex_replace(formula, label, "(" + pair.second.data() + ")");
                   }
                 }
 
-                nodes[name] = SwissKnife {this, port_handle, cti, 0, "", 0, formula, values, {}, std::nullopt };
+                nodes[node_name] = SwissKnife {this, port_handle, cti, 0, "", 0, formula, values, {}, std::nullopt };
               } else if(current_name == "MaskedIntReg") {
-                size_t address = get_int(*current, "Address", 0);
+                size_t address = get_int<size_t>(*current, "Address", 0);
                 auto p_address = current->get<std::string>("pAddress", "");
                 auto access_mode = parse_access_mode(current->get<std::string>("AccessMode", "RW"));
 
@@ -1295,12 +1322,12 @@ namespace thalamus {
                 auto length = get_int<size_t>(*current, "Length", 0);
                 auto little_endian = current->get<std::string>("Endianess", "LittleEndian") == "LittleEndian";
                 auto _unsigned = current->get<std::string>("Sign", "Unsigned") == "Unsigned";
-                nodes[name] = IntReg {this, port_handle, cti, address, p_address, int_swiss_knife, length, little_endian, _unsigned, access_mode,
+                nodes[node_name] = IntReg {this, port_handle, cti, address, p_address, int_swiss_knife, length, little_endian, _unsigned, access_mode,
                   lsb ? std::optional<long long int>(lsb.value()) : std::nullopt,
                   msb ? std::optional<long long int>(msb.value()) : std::nullopt,
                   {} };
               } else if (current_name == "StructReg") {
-                size_t default_address = get_int(*current, "Address", 0);
+                size_t default_address = get_int<size_t>(*current, "Address", 0);
                 auto default_p_address = current->get<std::string>("pAddress", "");
                 auto access_mode = parse_access_mode(current->get<std::string>("AccessMode", "RW"));
 
@@ -1320,13 +1347,13 @@ namespace thalamus {
 
                 auto default_length = get_int<size_t>(*current, "Length", 0);
                 auto default_little_endian = current->get<std::string>("Endianess", "LittleEndian");
-                auto default__unsigned = current->get<std::string>("Sign", "Unsigned");
+                auto default_unsigned = current->get<std::string>("Sign", "Unsigned");
 
                 for(auto& pair : *current) {
                   if(pair.first != "StructEntry") {
                     continue;
                   }
-                  auto name = pair.second.get_optional<std::string>("<xmlattr>.Name");
+                  auto struct_name = pair.second.get_optional<std::string>("<xmlattr>.Name");
 
                   size_t address = get_int(pair.second, "Address", default_address);
                   auto p_address = pair.second.get<std::string>("pAddress", default_p_address);
@@ -1343,9 +1370,9 @@ namespace thalamus {
 
                   auto length = get_int<size_t>(pair.second, "Length", default_length);
                   auto little_endian = pair.second.get<std::string>("Endianess", default_little_endian) == "LittleEndian";
-                  auto _unsigned = pair.second.get<std::string>("Sign", default__unsigned) == "Unsigned";
+                  auto _unsigned = pair.second.get<std::string>("Sign", default_unsigned) == "Unsigned";
 
-                  nodes[*name] = IntReg {this, port_handle, cti, address, p_address, default_int_swiss_knife, length, little_endian, _unsigned, access_mode,
+                  nodes[*struct_name] = IntReg {this, port_handle, cti, address, p_address, default_int_swiss_knife, length, little_endian, _unsigned, access_mode,
                     lsb ? std::optional<long long int>(lsb.value()) : std::nullopt,
                     msb ? std::optional<long long int>(msb.value()) : std::nullopt,
                     {} };
@@ -1366,10 +1393,10 @@ namespace thalamus {
                   reverse_enums[*enum_value] = *enum_name;
                 }
                 if(p_value) {
-                  nodes[name] = Enumeration {this, *p_value, enums, {} };
+                  nodes[node_name] = Enumeration {this, *p_value, enums, {} };
                 } else {
                   auto text = reverse_enums.at(*value);
-                  nodes[name] = text;
+                  nodes[node_name] = text;
                 }
               }
 
@@ -1384,9 +1411,9 @@ namespace thalamus {
           return true;
         }
 
-        DeviceImpl(GenTL::DEV_HANDLE dev_handle, Cti* cti)
-          : cti(cti)
-          , dev_handle(dev_handle) {
+        DeviceImpl(GenTL::DEV_HANDLE _dev_handle, Cti* _cti)
+          : cti(_cti)
+          , dev_handle(_dev_handle) {
           TRACE_EVENT("thalamus", "DeviceImpl::DeviceImpl");
 
           auto error = cti->DevGetPort(dev_handle, &port_handle);
@@ -1420,23 +1447,23 @@ namespace thalamus {
           }
           THALAMUS_LOG(info) << "Found " << num_streams << " data streams.";
 
-          for(auto i = 0u;i < num_streams;++i) {
+          if(num_streams) {
             size_t id_size;
-            error = cti->DevGetDataStreamID(dev_handle, i, nullptr, &id_size);
+            error = cti->DevGetDataStreamID(dev_handle, 0, nullptr, &id_size);
             if(error != GenTL::GC_ERR_SUCCESS) {
               THALAMUS_LOG(info) << "DevGetDataStreamID failed.";
               return;
             }
 
-            std::string id(id_size, ' ');
-            error = cti->DevGetDataStreamID(dev_handle, i, id.data(), &id_size);
+            std::string stream_id(id_size, ' ');
+            error = cti->DevGetDataStreamID(dev_handle, 0, stream_id.data(), &id_size);
             if(error != GenTL::GC_ERR_SUCCESS) {
               THALAMUS_LOG(info) << "DevGetDataStreamID failed.";
               return;
             }
-            id.resize(id.size()-1);
+            stream_id.resize(stream_id.size()-1);
 
-            error = cti->DevOpenDataStream(dev_handle, id.c_str(), &ds_handle);
+            error = cti->DevOpenDataStream(dev_handle, stream_id.c_str(), &ds_handle);
             if(error != GenTL::GC_ERR_SUCCESS) {
               THALAMUS_LOG(info) << "DevOpenDataStream failed.";
               return;
@@ -1455,7 +1482,6 @@ namespace thalamus {
               THALAMUS_LOG(info) << "EventGetInfo failed.";
               return;
             }
-            break;
           }
 
           ready = true;
@@ -1469,12 +1495,12 @@ namespace thalamus {
         boost::signals2::signal<void(const unsigned char*, int, int, std::chrono::steady_clock::time_point)> frame_ready;
         boost::asio::io_context* io_context;
 
-        void start_stream(boost::asio::io_context& io_context) {
+        void start_stream(boost::asio::io_context& _io_context) {
           TRACE_EVENT("thalamus", "DeviceImpl::start_stream");
           if (streaming) {
             return;
           }
-          this->io_context = &io_context;
+          this->io_context = &_io_context;
 
           GenTL::INFO_DATATYPE defines_type;
           bool8_t does_define;
@@ -1506,34 +1532,34 @@ namespace thalamus {
 
           buffer_handles.resize(announce_min);
           buffer_data.resize(announce_min);
-          auto width = variant_cast<long long int>(get("Width"));
-          auto height = variant_cast<long long int>(get("Height"));
+          auto frame_width = variant_cast<long long int>(get("Width"));
+          auto frame_height = variant_cast<long long int>(get("Height"));
           for(auto i = 0ull;i < buffer_data.size();++i) {
             buffer_data.at(i) = std::vector<unsigned char>(payload_size, 0);
             auto& buffer = buffer_data.at(i);
             error = cti->DSAnnounceBuffer(ds_handle, buffer_data.at(i).data(), buffer.size(), reinterpret_cast<void*>(i), &buffer_handles.at(i));
-            THALAMUS_ASSERT(error == GenTL::GC_ERR_SUCCESS, "DSAnnounceBuffer failed: %d", error)
+            THALAMUS_ASSERT(error == GenTL::GC_ERR_SUCCESS, "DSAnnounceBuffer failed: %d", error);
 
             cti->DSQueueBuffer(ds_handle, buffer_handles.at(i));
-            THALAMUS_ASSERT(error == GenTL::GC_ERR_SUCCESS, "DSQueueBuffer failed: %d", error)
+            THALAMUS_ASSERT(error == GenTL::GC_ERR_SUCCESS, "DSQueueBuffer failed: %d", error);
           }
 
           error = cti->DSStartAcquisition(ds_handle, GenTL::ACQ_START_FLAGS_DEFAULT, GENTL_INFINITE);
-          THALAMUS_ASSERT(error == GenTL::GC_ERR_SUCCESS, "DSStartAcquisition failed: %d", error)
+          THALAMUS_ASSERT(error == GenTL::GC_ERR_SUCCESS, "DSStartAcquisition failed: %d", error);
           execute("AcquisitionStart");
 
           streaming = true;
-          stream_thread = std::thread(std::bind(&DeviceImpl::stream_target, this, width, height));
+          stream_thread = std::thread(std::bind(&DeviceImpl::stream_target, this, frame_width, frame_height));
         }
 
         static std::atomic_uint global_frame;
 
-        void stream_target(long long int width, long long int height) {
+        void stream_target(long long int frame_width, long long int frame_height) {
           set_current_thread_name("GENTL");
           while(streaming) {
-            GenTL::EVENT_NEW_BUFFER_DATA data;
+            GenTL::EVENT_NEW_BUFFER_DATA frame_data;
             size_t size = sizeof(GenTL::EVENT_NEW_BUFFER_DATA);
-            auto error = cti->EventGetData(event_handle, &data, &size, GENTL_INFINITE);
+            auto error = cti->EventGetData(event_handle, &frame_data, &size, GENTL_INFINITE);
             if(error == GenTL::GC_ERR_ABORT) {
               break;
             }
@@ -1542,17 +1568,17 @@ namespace thalamus {
             TRACE_EVENT_BEGIN("thalamus", "Cti::GotFrame", perfetto::Flow::ProcessScoped(frame_id));
 
             auto now = std::chrono::steady_clock::now();
-            auto index = reinterpret_cast<size_t>(data.pUserPointer);
+            auto index = reinterpret_cast<size_t>(frame_data.pUserPointer);
             TRACE_EVENT_END("thalamus");
-            io_context->post([this, &buffer=buffer_data.at(index),frame_id, handle=data.BufferHandle, width, height, now] {
+            io_context->post([this, &buffer=buffer_data.at(index),frame_id, handle=frame_data.BufferHandle, frame_width, frame_height, now] {
               TRACE_EVENT("thalamus", "GenicamNode Post Main", perfetto::TerminatingFlow::ProcessScoped(frame_id));
               if(!streaming) {
                 return;
               }
-              frame_ready(buffer.data(), width, height, now);
+              frame_ready(buffer.data(), int(frame_width), int(frame_height), now);
               TRACE_EVENT("thalamus", "Cti::DSQueueBuffer");
-              auto error = cti->DSQueueBuffer(ds_handle, handle);
-              THALAMUS_ASSERT(error == GenTL::GC_ERR_SUCCESS, "DSQueueBuffer failed: %d", error)
+              auto queue_error = cti->DSQueueBuffer(ds_handle, handle);
+              THALAMUS_ASSERT(queue_error == GenTL::GC_ERR_SUCCESS, "DSQueueBuffer failed: %d", queue_error);
             });
           }
         }
@@ -1572,11 +1598,11 @@ namespace thalamus {
           error = cti->DSStopAcquisition(ds_handle, GenTL::ACQ_STOP_FLAGS_DEFAULT);
           THALAMUS_ASSERT(error == GenTL::GC_ERR_SUCCESS, "DSStopAcquisition failed: %d", error);
           error = cti->DSFlushQueue(ds_handle, GenTL::ACQ_QUEUE_ALL_DISCARD);
-          THALAMUS_ASSERT(error == GenTL::GC_ERR_SUCCESS, "DSFlushQueue failed: %d", error)
+          THALAMUS_ASSERT(error == GenTL::GC_ERR_SUCCESS, "DSFlushQueue failed: %d", error);
 
           for(auto h : buffer_handles) {
             error = cti->DSRevokeBuffer(ds_handle, h, nullptr, nullptr);
-            THALAMUS_ASSERT(error == GenTL::GC_ERR_SUCCESS, "DSRevokeBuffer failed: %d", error)
+            THALAMUS_ASSERT(error == GenTL::GC_ERR_SUCCESS, "DSRevokeBuffer failed: %d", error);
           }
           buffer_data.clear();
           buffer_handles.clear();
@@ -1592,7 +1618,7 @@ namespace thalamus {
           THALAMUS_ASSERT(false, "Register is not a command");
         }
 
-        std::variant<long long int, std::string, double> get(const std::string& reg) {
+        std::variant<long long int, std::string, double> get(const std::string& reg) override {
           TRACE_EVENT("thalamus", "DeviceImpl::get");
           auto i = nodes.find(reg);
           THALAMUS_ASSERT(i != nodes.end(), "Register not found: %s", reg);
@@ -1628,7 +1654,7 @@ namespace thalamus {
           THALAMUS_ASSERT(false, "Unexpected register type");
         }
 
-        void set(const std::string& reg, const std::variant<long long int, std::string, double>& value) {
+        void set(const std::string& reg, const std::variant<long long int, std::string, double>& value) override {
           TRACE_EVENT("thalamus", "DeviceImpl::set");
           if (std::holds_alternative<long long int>(value)) {
             THALAMUS_LOG(debug) << reg << " int=" << std::get<long long int>(value);
@@ -1662,7 +1688,7 @@ namespace thalamus {
           return nodes.find(reg) != nodes.end();
         }
 
-        bool is_writable(const std::string& reg) {
+        bool is_writable(const std::string& reg) override {
           auto i = nodes.find(reg);
           if (i == nodes.end()) {
             return false;
@@ -1717,7 +1743,7 @@ namespace thalamus {
       GenTL::TL_HANDLE tl_handle = nullptr;
       GenTL::IF_HANDLE if_handle = nullptr;
 
-      Cti(const std::string& name, const std::string& path) : name(name) {
+      Cti(const std::string& _name, const std::string& path) : name(_name) {
         TRACE_EVENT("thalamus", "Cti::Cti");
 #ifdef _WIN32
         library_handle = LoadLibrary(path.c_str());
@@ -1729,7 +1755,7 @@ namespace thalamus {
           return;
         }
 
-#define LOAD_FUNC(name) name = load_function<GenTL::P##name>(#name);if(!name) { return; }
+#define LOAD_FUNC(name) do { name = load_function<GenTL::P##name>(#name);if(!name) { return; } } while(0)
         LOAD_FUNC(GCGetInfo);
         LOAD_FUNC(GCGetLastError);
         LOAD_FUNC(GCInitLib);
@@ -1868,9 +1894,7 @@ namespace thalamus {
             }
             THALAMUS_LOG(info) << "Num devices = " << num_devices;
 
-            std::string device_id;
             for(auto j = 0u;j < num_devices;++j) {
-              size_t id_size;
               error = IFGetDeviceID(if_handle, j, nullptr, &id_size);
               if(error != GenTL::GC_ERR_SUCCESS) {
                 THALAMUS_LOG(info) << "IFGetDeviceID failed.  " << name << " disabled";
@@ -1913,8 +1937,8 @@ namespace thalamus {
                 return;
               }
 
-              auto device = std::make_shared<DeviceImpl>(dev_handle, this);
-              devices[device_id] = std::move(device);
+              auto new_device = std::make_shared<DeviceImpl>(dev_handle, this);
+              devices[device_id] = std::move(new_device);
             }
           }
         }
@@ -1939,44 +1963,42 @@ namespace thalamus {
         }
       }
     };
-    static std::vector<std::unique_ptr<Cti>> ctis;
-    static bool ctis_loaded;
-    static std::mutex ctis_mutex;
 
-    static bool load_ctis() {
-      TRACE_EVENT("thalamus", "Cti::load_ctis");
-      std::lock_guard<std::mutex> lock(ctis_mutex);
-      if(ctis_loaded) {
-        return true;
-      }
-      ctis_loaded = true;
+    static std::vector<std::unique_ptr<Cti>>* ctis;
+    static calculator::parser<std::string::const_iterator>* parser;
 
-      auto envval = std::getenv("GENICAM_GENTL64_PATH");
-      if(envval == nullptr) {
-        return true;
-      }
-#ifdef _WIN32
-      auto paths = absl::StrSplit(envval, ';');
-#else
-      auto paths = absl::StrSplit(envval, ':');
-#endif
-      for(auto& path : paths) {
-        if(!std::filesystem::exists(std::filesystem::path(path))) {
-          continue;
+    static void load_ctis() {
+      if(!ctis) {
+        TRACE_EVENT("thalamus", "Cti::load_ctis");
+        ctis = new std::vector<std::unique_ptr<Cti>>();
+        parser = new calculator::parser<std::string::const_iterator>();
+
+        auto envval = std::getenv("GENICAM_GENTL64_PATH");
+        if(envval == nullptr) {
+          return;
         }
-        for(auto& file : std::filesystem::directory_iterator(path)) {
-          THALAMUS_LOG(info) << "Loading " << file;
-          if(file.path().extension() == ".cti") {
-            ctis.emplace_back(new Cti(file.path().stem().string(), file.path().string()));
+#ifdef   _WIN32
+        auto paths = absl::StrSplit(envval, ';');
+#else
+        auto paths = absl::StrSplit(envval, ':');
+#endif  
+        for(auto& path : paths) {
+          if(!std::filesystem::exists(std::filesystem::path(path))) {
+            continue;
+          }
+          for(auto& file : std::filesystem::directory_iterator(path)) {
+            THALAMUS_LOG(info) << "Loading " << file;
+            if(file.path().extension() == ".cti") {
+              ctis->emplace_back(new Cti(file.path().stem().string(), file.path().string()));
+            }
           }
         }
+        auto end = std::remove_if(ctis->begin(), ctis->end(), [](auto& cti) { return !cti->loaded; });
+        ctis->erase(end, ctis->end());
+        for(auto& i : *ctis) {
+          THALAMUS_LOG(info) << i->name;
+        }
       }
-      auto end = std::remove_if(ctis.begin(), ctis.end(), [](auto& cti) { return !cti->loaded; });
-      ctis.erase(end, ctis.end());
-      for(auto& i : ctis) {
-        THALAMUS_LOG(info) << i->name;
-      }
-      return true;
     }
 
     std::shared_ptr<Cti::DeviceImpl> device;
@@ -1984,10 +2006,10 @@ namespace thalamus {
     boost::signals2::scoped_connection frame_connection;
     std::once_flag load_ctis_flag;
 
-    Impl(ObservableDictPtr state, boost::asio::io_context& io_context, GenicamNode* outer)
-      : io_context(io_context)
-      , state(state)
-      , outer(outer) {
+    Impl(ObservableDictPtr _state, boost::asio::io_context& _io_context, GenicamNode* _outer)
+      : io_context(_io_context)
+      , state(_state)
+      , outer(_outer) {
       TRACE_EVENT("thalamus", "GenicamNode::Impl::Impl");
       using namespace std::placeholders;
 
@@ -1995,14 +2017,13 @@ namespace thalamus {
 
       analog_impl.inject({ {std::span<double const>()} }, { 0ns }, {""});
 
-      analog_impl.ready.connect([outer](Node*) {
-        outer->ready(outer);
+      analog_impl.ready.connect([_outer](Node*) {
+        _outer->ready(_outer);
       });
 
-      for(auto& cti : ctis) {
-        for(auto& device : cti->devices) {
-          default_camera = cti->name + ":" + device.first;
-          break;
+      for(auto& cti : *ctis) {
+        if(!cti->devices.empty()) {
+          default_camera = cti->name + ":" + cti->devices.begin()->first;
         }
       }
       if (default_camera.empty()) {
@@ -2025,7 +2046,7 @@ namespace thalamus {
     double framerate = 0;
     double target_framerate = 0;
 
-    void on_frame_ready(const unsigned char* data, int width, int height, std::chrono::steady_clock::time_point now) {
+    void on_frame_ready(const unsigned char* frame_data, int frame_width, int frame_height, std::chrono::steady_clock::time_point now) {
       TRACE_EVENT("thalamus", "GenicamNode::on_frame_ready");
       while (!frame_times.empty() && now - frame_times.front() >= 1s) {
         std::pop_heap(frame_times.begin(), frame_times.end(), [](auto& l, auto& r) { return l > r; });
@@ -2034,7 +2055,7 @@ namespace thalamus {
       if (!frame_times.empty()) {
         auto duration = now - frame_times.front();
         auto duration_seconds = double(duration.count())/decltype(duration)::period::den;
-        framerate = frame_times.size()/duration_seconds;
+        framerate = double(frame_times.size())/duration_seconds;
       } else {
         framerate = 0;
       }
@@ -2044,9 +2065,9 @@ namespace thalamus {
 
       this->time = now.time_since_epoch();
       this->data.clear();
-      this->data.emplace_back(data, data + width*height);
-      this->width = width;
-      this->height = height;
+      this->data.emplace_back(frame_data, frame_data + width*height);
+      this->width = size_t(frame_width);
+      this->height = size_t(frame_height);
       this->has_image = true;
       this->has_analog = true;
       TRACE_EVENT("thalamus", "GenicamNode::on_frame_ready");
@@ -2062,7 +2083,7 @@ namespace thalamus {
         return;
       }
 
-      for(auto& cti : ctis) {
+      for(auto& cti : *ctis) {
         if(tokens[0] != cti->name) {
           continue;
         }
@@ -2099,14 +2120,16 @@ namespace thalamus {
         device->set("AcquisitionMode", "Continuous");
       }
 
-      auto value = variant_cast<long long int>(this->device->get("WidthMax"));
-      (*state)["WidthMax"].assign(value);
-      value = variant_cast<long long int>(this->device->get("HeightMax"));
-      (*state)["HeightMax"].assign(value);
+      {
+        auto value = variant_cast<long long int>(this->device->get("WidthMax"));
+        (*state)["WidthMax"].assign(value);
+        value = variant_cast<long long int>(this->device->get("HeightMax"));
+        (*state)["HeightMax"].assign(value);
+      }
 
       if(apply_state && state->contains("Width")) {
-        long long int width = state->at("Width");
-        this->device->set("Width", width);
+        long long int state_width = state->at("Width");
+        this->device->set("Width", state_width);
       } else {
         long long int value = variant_cast<long long int>(this->device->get("Width"));
         (*state)["Width"].assign(value);
@@ -2232,11 +2255,6 @@ namespace thalamus {
       }
     }
   };
-  calculator::parser<std::string::const_iterator> GenicamNode::Impl::Cti::parser;        // Our grammar
-
-  std::vector<std::unique_ptr<GenicamNode::Impl::Cti>> GenicamNode::Impl::ctis;
-  std::mutex GenicamNode::Impl::ctis_mutex;
-  bool GenicamNode::Impl::ctis_loaded = false;
 
   GenicamNode::GenicamNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph*)
     : impl(new Impl(state, io_context, this)) {}
@@ -2248,7 +2266,7 @@ namespace thalamus {
   }
 
   ImageNode::Plane GenicamNode::plane(int i) const {
-    return impl->data.at(i);
+    return impl->data.at(size_t(i));
   }
 
   size_t GenicamNode::num_planes() const {
@@ -2284,9 +2302,12 @@ namespace thalamus {
   }
 
   void GenicamNode::cleanup() {
-    std::lock_guard<std::mutex> lock(GenicamNode::Impl::ctis_mutex);
-    GenicamNode::Impl::ctis_loaded = false;
-    GenicamNode::Impl::ctis.clear();
+    if(Impl::ctis) {
+      delete Impl::ctis;
+      delete Impl::parser;
+      Impl::ctis = nullptr;
+      Impl::parser = nullptr;
+    }
   }
 
   std::span<const double> GenicamNode::data(int index) const {
@@ -2301,18 +2322,18 @@ namespace thalamus {
     return impl->analog_impl.sample_interval(channel);
   }
 
-  static const std::string EMPTY = "";
-  static const std::string ACTUAL_FRAMERATE = "Framerate";
-  static std::vector<std::string> names = {ACTUAL_FRAMERATE};
-
   std::string_view GenicamNode::name(int channel) const {
-    return names.at(channel);
+    if(channel == 0) {
+      return "Framerate";
+    } else {
+      return "";
+    }
   }
 
-  void GenicamNode::inject(const thalamus::vector<std::span<double const>>& data, const thalamus::vector<std::chrono::nanoseconds>& interval, const thalamus::vector<std::string_view>& names) {
+  void GenicamNode::inject(const thalamus::vector<std::span<double const>>& data, const thalamus::vector<std::chrono::nanoseconds>& interval, const thalamus::vector<std::string_view>& _names) {
     impl->has_analog = true;
     impl->has_image = false;
-    impl->analog_impl.inject(data, interval, names);
+    impl->analog_impl.inject(data, interval, _names);
   }
 
   bool GenicamNode::has_analog_data() const {
@@ -2321,10 +2342,6 @@ namespace thalamus {
 
   bool GenicamNode::has_image_data() const {
     return impl->has_image;
-  }
-
-  std::span<const std::string> GenicamNode::get_recommended_channels() const {
-    return std::span<const std::string>(names.begin(), names.end());
   }
 
   boost::json::value GenicamNode::process(const boost::json::value& request) {
@@ -2336,7 +2353,7 @@ namespace thalamus {
     auto request_str = request.as_string();
     if(request_str == "get_cameras") {
       boost::json::array result;
-      for(auto& cti : Impl::ctis) {
+      for(auto& cti : *Impl::ctis) {
         for(auto& pair : cti->devices) {
           result.push_back(boost::json::string(cti->name + ":" + pair.first));
         }
@@ -2348,4 +2365,6 @@ namespace thalamus {
   size_t GenicamNode::modalities() const { return infer_modalities<GenicamNode>(); }
 
   std::atomic_uint GenicamNode::Impl::Cti::DeviceImpl::global_frame = 0;
+  std::vector<std::unique_ptr<GenicamNode::Impl::Cti>>* GenicamNode::Impl::ctis = nullptr;
+  calculator::parser<std::string::const_iterator>* GenicamNode::Impl::parser = nullptr;
 }

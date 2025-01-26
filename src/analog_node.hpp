@@ -16,12 +16,13 @@ namespace thalamus {
 
   class AnalogNode {
   public:
+    virtual ~AnalogNode() {}
     boost::signals2::signal<void(AnalogNode*)> channels_changed;
     virtual std::span<const double> data(int channel) const = 0;
-    virtual std::span<const short> short_data(int channel) const {
+    virtual std::span<const short> short_data(int) const {
       THALAMUS_ASSERT(false, "AnalogNode::short_data unimplemented");
       return std::span<const short>();
-    };
+    }
     virtual int num_channels() const = 0;
     virtual std::chrono::nanoseconds sample_interval(int channel) const = 0;
     virtual std::chrono::nanoseconds time() const = 0;
@@ -42,7 +43,7 @@ namespace thalamus {
     AnalogNode* underlying;
   public:
     using value_type = T;
-    AnalogNodeWrapper(AnalogNode* underlying) : underlying(underlying) {}
+    AnalogNodeWrapper(AnalogNode* _underlying) : underlying(_underlying) {}
     std::span<const T> data(int channel) const {
       if constexpr (std::is_same<T, short>::value) {
         return underlying->short_data(channel);
@@ -81,7 +82,7 @@ namespace thalamus {
   public:
     AnalogNodeImpl(ObservableDictPtr state, boost::asio::io_context&, NodeGraph* graph);
     AnalogNodeImpl();
-    ~AnalogNodeImpl();
+    ~AnalogNodeImpl() override;
     virtual std::span<const double> data(int channel) const override;
     virtual int num_channels() const override;
     virtual std::chrono::nanoseconds sample_interval(int channel) const override;
@@ -100,7 +101,7 @@ namespace thalamus {
   public:
     WaveGeneratorNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph);
 
-    ~WaveGeneratorNode();
+    ~WaveGeneratorNode() override;
 
     static std::string type_name();
 
@@ -123,7 +124,7 @@ namespace thalamus {
 
   public:
     ToggleNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph);
-    ~ToggleNode();
+    ~ToggleNode() override;
 
     static std::string type_name();
 

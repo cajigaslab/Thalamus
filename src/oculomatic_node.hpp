@@ -14,7 +14,7 @@ namespace thalamus {
     std::unique_ptr<Impl> impl;
   public:
     OculomaticNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph*);
-    ~OculomaticNode();
+    ~OculomaticNode() override;
     static std::string type_name();
     static bool prepare();
     Plane plane(int) const override;

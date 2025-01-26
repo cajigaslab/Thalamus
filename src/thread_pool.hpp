@@ -21,10 +21,10 @@ namespace thalamus {
     const unsigned int num_threads;
     unsigned int num_busy_threads;
     void thread_target(std::string);
-    ThreadPool(const std::string& name, unsigned int num_threads = 0)
+    ThreadPool(const std::string& _name, unsigned int _num_threads = 0)
       : running(false)
-      , name(name.empty() ? "ThreadPool" : name)
-      , num_threads(num_threads ? num_threads : std::thread::hardware_concurrency())
+      , name(_name.empty() ? "ThreadPool" : _name)
+      , num_threads(_num_threads ? _num_threads : std::thread::hardware_concurrency())
       , num_busy_threads(this->num_threads) {}
     ~ThreadPool() {
       stop();
@@ -37,7 +37,7 @@ namespace thalamus {
 
     int idle() const {
       std::lock_guard<std::mutex> lock(mutex);
-      return num_threads - num_busy_threads;
+      return int(num_threads - num_busy_threads);
     }
   
     void push(std::function<void()>&& job) {
@@ -79,7 +79,7 @@ namespace thalamus {
     std::unique_ptr<Impl> impl;
   public:
     ThreadPoolNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph*);
-    ~ThreadPoolNode();
+    ~ThreadPoolNode() override;
     static std::string type_name();
     boost::json::value process(const boost::json::value&) override;
 

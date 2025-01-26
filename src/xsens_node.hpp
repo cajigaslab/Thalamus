@@ -1,7 +1,5 @@
 #pragma once
 
-#include <thalamus_asio.hpp>
-
 #include <string>
 #include <base_node.hpp>
 #include <analog_node.hpp>
@@ -39,7 +37,7 @@ namespace thalamus {
     std::unique_ptr<Impl> impl;
   public:
     XsensNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph*);
-    ~XsensNode();
+    ~XsensNode() override;
     static std::string type_name();
     std::span<Segment const> segments() const override;
     const std::string_view pose_name() const override;
@@ -64,7 +62,7 @@ namespace thalamus {
     std::unique_ptr<Impl> impl;
   public:
     HandEngineNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph*);
-    ~HandEngineNode();
+    ~HandEngineNode() override;
     static std::string type_name();
     std::span<Segment const> segments() const override;
     const std::string_view pose_name() const override;

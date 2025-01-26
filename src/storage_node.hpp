@@ -1,22 +1,24 @@
 #pragma once
 
-#include <thalamus_asio.hpp>
-#include <vector>
-#include <map>
-#include <functional>
 #include <string>
-#include <iostream>
 #include <filesystem>
-#include <variant>
-#include <regex>
-#include <thread>
-//#include <plot.h>
 #include <base_node.hpp>
 #include <state.hpp>
 #include <xsens_node.hpp>
 
-#include <thalamus.pb.h>
 #include <grpc_impl.hpp>
+
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Weverything"
+#endif
+
+#include <thalamus.pb.h>
+#include <boost/asio.hpp>
+
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
 
 namespace thalamus {
   class StorageNode : public Node, public AnalogNode {
@@ -24,7 +26,7 @@ namespace thalamus {
     std::unique_ptr<Impl> impl;
   public:
     StorageNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph);
-    ~StorageNode();
+    ~StorageNode() override;
     static std::string type_name();
     static std::filesystem::path get_next_file(const std::filesystem::path& name, std::chrono::system_clock::time_point time = std::chrono::system_clock::now());
     static void record(std::ofstream&, const thalamus_grpc::StorageRecord&);

@@ -1,55 +1,43 @@
 //#include <QApplication>
 //#include <QScreen>
+#include <thalamus.hpp>
 #include <thalamus/tracing.hpp>
 #include "node_graph_impl.hpp"
-#include <boost/asio.hpp>
-#include <boost/program_options.hpp>
 #include <state.hpp>
 #ifdef _WIN32
 #include <timeapi.h>
 #endif
 #include <thalamus_config.h>
-#include <fstream>
 #include <chrono>
-#include <absl/strings/str_format.h>
-#include <absl/time/time.h>
-#include <grpcpp/ext/proto_server_reflection_plugin.h>
-#include <grpcpp/grpcpp.h>
-#include <grpcpp/health_check_service_interface.h>
  
 #include "grpc_impl.hpp"
 #include <thalamus/thread.hpp>
-#include <format>
-#include <boost/log/trivial.hpp>
 #include <thalamus/file.hpp>
 #include <state_manager.hpp>
 
 #ifdef __clang__
   #pragma clang diagnostic push
-  #pragma clang diagnostic ignored "-Wnested-anon-types"
-  #pragma clang diagnostic ignored "-Wgnu-anonymous-struct"
-  #pragma clang diagnostic ignored "-Wlanguage-extension-token"
-    #include <boost/log/utility/setup/console.hpp>
-  #pragma clang diagnostic pop
-#else
-  #include <boost/log/utility/setup/console.hpp>
+  #pragma clang diagnostic ignored "-Weverything"
 #endif
 
-
+#include <boost/asio.hpp>
+#include <boost/program_options.hpp>
+#include <absl/strings/str_format.h>
+#include <absl/time/time.h>
+#include <grpcpp/ext/proto_server_reflection_plugin.h>
+#include <grpcpp/grpcpp.h>
+#include <grpcpp/health_check_service_interface.h>
+#include <boost/log/trivial.hpp>
+#include <boost/log/utility/setup/console.hpp>
 #include <boost/log/utility/setup/file.hpp>
 #include <boost/log/utility/setup/common_attributes.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/log/expressions.hpp>
+#include <boost/log/support/date_time.hpp>
 
 #ifdef __clang__
-  #pragma clang diagnostic push
-  #pragma clang diagnostic ignored "-Wmicrosoft-cpp-macro"
-    #include <boost/log/expressions.hpp>
   #pragma clang diagnostic pop
-#else
-  #include <boost/log/expressions.hpp>
 #endif
-
-#include <boost/log/support/date_time.hpp>
 
 PERFETTO_TRACK_EVENT_STATIC_STORAGE();
 
@@ -60,7 +48,7 @@ namespace thalamus {
 #ifdef _WIN32
     timeBeginPeriod(1);
 #endif
-    std::srand(std::time(nullptr));
+    std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
     auto steady_start = std::chrono::steady_clock::now();
     auto system_start = std::chrono::system_clock::now();

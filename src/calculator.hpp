@@ -5,13 +5,20 @@
 #endif
 
 #include <thalamus/tracing.hpp>
+
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Weverything"
+#endif
 #include <boost/spirit/include/qi.hpp>
 #include <boost/variant/recursive_variant.hpp>
 #include <boost/variant/apply_visitor.hpp>
 #include <boost/fusion/include/adapt_struct.hpp>
 #include <boost/foreach.hpp>
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
 
-#include <iostream>
 #include <variant>
 #include <string>
 #include <map>
@@ -67,6 +74,10 @@ namespace thalamus {
   }
 }
 
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Wdisabled-macro-expansion"
+#endif
 BOOST_FUSION_ADAPT_STRUCT(
     thalamus::calculator::signed_,
     (std::string, sign)
@@ -92,6 +103,9 @@ BOOST_FUSION_ADAPT_STRUCT(
     (thalamus::calculator::operand, first)
     (std::list<thalamus::calculator::operation>, rest)
 )
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
 
 namespace thalamus { 
   namespace calculator {
@@ -100,7 +114,14 @@ namespace thalamus {
         return rhs;
       }
       bool operator()(double rhs) {
-        return rhs;
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Wfloat-equal"
+#endif
+        return rhs == 0;
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
       }
 
       bool operator()(const std::variant<long long int, double>& rhs) {
@@ -112,6 +133,10 @@ namespace thalamus {
       return std::visit(bool_visitor{}, rhs);
     }
 
+    inline bool to_common_type(const std::variant<long long int, double>& rhs) {
+      return std::visit(bool_visitor{}, rhs);
+    }
+
     struct eval
     {
         typedef number result_type;
@@ -119,36 +144,44 @@ namespace thalamus {
 
         number operator()(nil) const { THALAMUS_ASSERT(false, "nil not converable to number"); return 0; }
         number operator()(double n) const { return n; }
-        number operator()(unsigned long long int n) const { return (long long int)n; }
+        number operator()(unsigned long long int n) const { return int64_t(n); }
         number operator()(std::string n) const { return symbols.at(n); }
 
         template<typename LHS, typename RHS>
         number eval_binary(operation const& x, LHS lhs, RHS rhs) const {
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Wfloat-equal"
+#endif
+            using t = typename std::conditional<std::is_integral<LHS>::value && std::is_integral<RHS>::value, long long, double>::type;
             if(x.operator_ == "+") {
-              return lhs + rhs;
+              return t(lhs) + t(rhs);
             } else if(x.operator_ == "-") {
-              return lhs - rhs;
+              return t(lhs) - t(rhs);
             } else if(x.operator_ == "*") {
-              return lhs * rhs;
+              return t(lhs) * t(rhs);
             } else if(x.operator_ == "/") {
-              return 1.0 * lhs / rhs;
+              return t(lhs) / t(rhs);
             } else if(x.operator_ == "=") {
-              return lhs == rhs ? 1ll : 0ll;
+              return t(lhs) == t(rhs) ? 1ll : 0ll;
             } else if(x.operator_ == "<>") {
-              return lhs != rhs ? 1ll : 0ll;
+              return t(lhs) != t(rhs) ? 1ll : 0ll;
             } else if(x.operator_ == ">=") {
-              return lhs >= rhs ? 1ll : 0ll;
+              return t(lhs) >= t(rhs) ? 1ll : 0ll;
             } else if(x.operator_ == "<=") {
-              return lhs <= rhs ? 1ll : 0ll;
+              return t(lhs) <= t(rhs) ? 1ll : 0ll;
             } else if(x.operator_ == ">") {
-              return lhs > rhs ? 1ll : 0ll;
+              return t(lhs) > t(rhs) ? 1ll : 0ll;
             } else if(x.operator_ == "<") {
-              return lhs < rhs ? 1ll : 0ll;
+              return t(lhs) < t(rhs) ? 1ll : 0ll;
             } else if(x.operator_ == "&&") {
-              return lhs && rhs ? 1ll : 0ll;
+              return ((lhs != 0) && (rhs != 0)) ? 1ll : 0ll;
             } else if(x.operator_ == "||") {
-              return lhs || rhs ? 1ll : 0ll;
+              return ((lhs != 0) || (rhs != 0)) ? 1ll : 0ll;
             }
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
             if constexpr(std::is_integral<LHS>() && std::is_integral<RHS>()) {
               if(x.operator_ == "|") {
                 return lhs | rhs;
@@ -233,7 +266,7 @@ namespace thalamus {
           return -arg;
         }
 
-#define APPLY_FUNCTION(func, rhs) std::holds_alternative<long long int>(rhs) ? func(std::get<long long int>(rhs)) : func(std::get<double>(rhs));
+#define APPLY_FUNCTION(func, rhs) std::holds_alternative<long long int>(rhs) ? number(func(std::get<long long int>(rhs))) : number(func(std::get<double>(rhs)))
 
         number operator()(function_ const& x) const
         {

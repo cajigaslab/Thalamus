@@ -10,7 +10,7 @@ namespace thalamus {
     std::unique_ptr<Impl> impl;
   public:
     GenicamNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph*);
-    ~GenicamNode();
+    ~GenicamNode() override;
     static std::string type_name();
     static bool prepare();
     Plane plane(int) const override;
@@ -27,7 +27,6 @@ namespace thalamus {
     int num_channels() const override;
     std::chrono::nanoseconds sample_interval(int channel) const override;
     std::string_view name(int channel) const override;
-    std::span<const std::string> get_recommended_channels() const override;
     void inject(const thalamus::vector<std::span<double const>>&, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&) override;
     bool has_analog_data() const override;
     boost::json::value process(const boost::json::value&) override;

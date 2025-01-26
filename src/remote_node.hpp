@@ -9,7 +9,7 @@ namespace thalamus {
     std::unique_ptr<Impl> impl;
   public:
     RemoteNode(ObservableDictPtr, boost::asio::io_context&, NodeGraph*);
-    ~RemoteNode();
+    ~RemoteNode() override;
     std::span<const double> data(int channel) const override;
     int num_channels() const override;
     std::chrono::nanoseconds sample_interval(int channel) const override;

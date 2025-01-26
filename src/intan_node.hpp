@@ -1,18 +1,8 @@
 #pragma once
 
-#include <boost/asio.hpp>
-#include <vector>
-#include <map>
-#include <functional>
 #include <string>
-#include <iostream>
-#include <variant>
-#include <regex>
-#include <thread>
-//#include <plot.h>
 #include <base_node.hpp>
 #include <analog_node.hpp>
-#include <absl/strings/str_split.h>
 #include <state.hpp>
 
 namespace thalamus {
@@ -24,7 +14,7 @@ namespace thalamus {
     std::unique_ptr<Impl> impl;
   public:
     IntanNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph);
-    ~IntanNode();
+    ~IntanNode() override;
 
     static std::string type_name();
 

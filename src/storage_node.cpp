@@ -4,24 +4,34 @@
 #include <text_node.hpp>
 #include <fstream>
 #include <util.hpp>
-#include <absl/strings/str_format.h>
-#include <absl/time/time.h>
-#include <boost/qvm/vec_access.hpp>
-#include <boost/qvm/quat_access.hpp>
-#include <boost/pool/object_pool.hpp>
 #include <modalities_util.hpp>
 #include <thalamus/thread.hpp>
-#include <zlib.h>
 #include <thalamus/async.hpp>
 #include <thread_pool.hpp>
-
+ 
 #ifdef _WIN32
-#include <winsock2.h>
+#include <WinSock2.h>
 #elif __APPLE__
 #include <arpa/inet.h>
 #else
 #include <endian.h>
 #define htonll(x) htobe64(x)
+#endif
+
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Weverything"
+#endif
+
+#include <absl/strings/str_format.h>
+#include <absl/time/time.h>
+#include <boost/qvm/vec_access.hpp>
+#include <boost/qvm/quat_access.hpp>
+#include <boost/pool/object_pool.hpp>
+#include <zlib.h>
+ 
+#ifdef __clang__
+  #pragma clang diagnostic pop
 #endif
 
 namespace thalamus {
@@ -56,12 +66,12 @@ namespace thalamus {
     boost::asio::io_context& io_context;
     ThreadPool& pool;
 
-    Impl(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph, StorageNode* outer)
-      : state(state)
-      , graph(graph)
-      , outer(outer)
-      , stats_timer(io_context)
-      , io_context(io_context)
+    Impl(ObservableDictPtr _state, boost::asio::io_context& _io_context, NodeGraph* _graph, StorageNode* _outer)
+      : state(_state)
+      , graph(_graph)
+      , outer(_outer)
+      , stats_timer(_io_context)
+      , io_context(_io_context)
       , pool(graph->get_thread_pool()) {
       using namespace std::placeholders;
       state_connection = state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
@@ -129,9 +139,9 @@ namespace thalamus {
 
       {
         TRACE_EVENT("thalamus", "StorageNode::on_analog_data(build record)");
-        visit_node(locked_analog, [&]<typename T>(T* locked_analog) {
-          for (auto i = 0; i < locked_analog->num_channels(); ++i) {
-            auto data = locked_analog->data(i);
+        visit_node(locked_analog, [&]<typename T>(T* wrapper) {
+          for (auto i = 0; i < wrapper->num_channels(); ++i) {
+            auto data = wrapper->data(i);
             if(compress_analog) {
               if(data.empty()) {
                 continue;
@@ -139,32 +149,32 @@ namespace thalamus {
               record = thalamus_grpc::StorageRecord();
             }
             auto body = record.mutable_analog();
-            auto channel_name_view = locked_analog->name(i);
+            auto channel_name_view = wrapper->name(i);
             std::string channel_name(channel_name_view.begin(), channel_name_view.end());
 
             update_metrics(metrics_index, i, data.size(), [&] { return name + "(" + channel_name + ")"; });
             auto span = body->add_spans();
 
             if constexpr (std::is_same<typename decltype(data)::value_type, short>::value) {
-              span->set_begin(body->mutable_int_data()->size());
+              span->set_begin(uint32_t(body->mutable_int_data()->size()));
               body->mutable_int_data()->Add(data.begin(), data.end());
-              span->set_end(body->mutable_int_data()->size());
+              span->set_end(uint32_t(body->mutable_int_data()->size()));
               body->set_is_int_data(true);
             } else {
-              span->set_begin(body->mutable_data()->size());
+              span->set_begin(uint32_t(body->mutable_data()->size()));
               body->mutable_data()->Add(data.begin(), data.end());
-              span->set_end(body->mutable_data()->size());
+              span->set_end(uint32_t(body->mutable_data()->size()));
             }
             span->set_name(channel_name);
 
-            body->add_sample_intervals(locked_analog->sample_interval(i).count());
+            body->add_sample_intervals(uint64_t(wrapper->sample_interval(i).count()));
 
-            record.set_time(locked_analog->time().count());
+            record.set_time(uint64_t(wrapper->time().count()));
             record.set_node(name);
             if(compress_analog) {
               auto j = stream_mappings.find(std::make_pair(node, i));
               if(j == stream_mappings.end()) {
-                stream_mappings[std::make_pair(node, i)] = get_unique_id();
+                stream_mappings[std::make_pair(node, i)] = int(get_unique_id());
                 j = stream_mappings.find(std::make_pair(node, i));
               }
               ++queued_records;
@@ -194,23 +204,23 @@ namespace thalamus {
         outer->channels_changed(outer);
       }
 
-      metrics.at(offset->second).first += count;
+      metrics.at(offset->second).first += double(count);
     }
 
-    void on_image_data(Node* node, const std::string& name, ImageNode* locked_analog, size_t metrics_index) {
+    void on_image_data(Node*, const std::string& name, ImageNode* locked_analog, size_t metrics_index) {
       if (!is_running || !locked_analog->has_image_data()) {
         return;
       }
 
       TRACE_EVENT("thalamus", "StorageNode::on_image_data");
-      update_metrics(metrics_index, 0, 1, [&] { return name; });
+      update_metrics(int(metrics_index), 0, 1, [&] { return name; });
 
       thalamus_grpc::StorageRecord record;
       {
         TRACE_EVENT("thalamus", "StorageNode::on_image_data(build record)");
         auto body = record.mutable_image();
-        body->set_width(locked_analog->width());
-        body->set_height(locked_analog->height());
+        body->set_width(uint32_t(locked_analog->width()));
+        body->set_height(uint32_t(locked_analog->height()));
         switch(locked_analog->format()) {
         case ImageNode::Format::Gray:
           body->set_format(thalamus_grpc::Image::Format::Image_Format_Gray);
@@ -229,26 +239,26 @@ namespace thalamus {
           break;
         }
 
-        for (auto i = 0; i < locked_analog->num_planes(); ++i) {
+        for (auto i = 0; i < int(locked_analog->num_planes()); ++i) {
           auto data = locked_analog->plane(i);
           body->add_data(data.data(), data.size());
         }
 
-        record.set_time(locked_analog->time().count());
+        record.set_time(size_t(locked_analog->time().count()));
         record.set_node(name);
       }
 
       queue_record(std::move(record));
     }
 
-    void on_text_data(Node* node, const std::string& name, TextNode* locked_text, size_t metrics_index) {
+    void on_text_data(Node*, const std::string& name, TextNode* locked_text, size_t metrics_index) {
       if (!is_running || !locked_text->has_text_data()) {
         return;
       }
 
       TRACE_EVENT("thalamus", "StorageNode::on_text_data");
 
-      update_metrics(metrics_index, 0, 1, [&] { return name; });
+      update_metrics(int(metrics_index), 0, 1, [&] { return name; });
       thalamus_grpc::StorageRecord record;
       {
         TRACE_EVENT("thalamus", "StorageNode::on_text_data(build record)");
@@ -257,20 +267,20 @@ namespace thalamus {
 
         body->set_text(text.data(), text.size());
 
-        record.set_time(locked_text->time().count());
+        record.set_time(size_t(locked_text->time().count()));
         record.set_node(name);
       }
 
       queue_record(std::move(record));
     }
 
-    void on_xsens_data(Node* node, const std::string& name, MotionCaptureNode* locked_xsens, size_t metrics_index) {
+    void on_xsens_data(Node*, const std::string& name, MotionCaptureNode* locked_xsens, size_t metrics_index) {
       if (!is_running || !locked_xsens->has_motion_data()) {
         return;
       }
 
       TRACE_EVENT("thalamus", "StorageNode::on_motion_data");
-      update_metrics(metrics_index, 0, 1, [&] { return name; });
+      update_metrics(int(metrics_index), 0, 1, [&] { return name; });
 
       thalamus_grpc::StorageRecord record;
       {
@@ -292,7 +302,7 @@ namespace thalamus {
           protobuf_segment->set_q2(boost::qvm::Y(segment.rotation));
           protobuf_segment->set_q3(boost::qvm::Z(segment.rotation));
         }
-        record.set_time(locked_xsens->time().count());
+        record.set_time(uint64_t(locked_xsens->time().count()));
         record.set_node(name);
       }
 
@@ -333,7 +343,7 @@ namespace thalamus {
         auto result = pool.front();
         pool.pop_front();
         return std::shared_ptr<T>(result, [&] (T* t) {
-          std::lock_guard<std::mutex> lock(mutex);
+          std::lock_guard<std::mutex> lock2(mutex);
           pool.push_back(t);
         });
       }
@@ -344,7 +354,7 @@ namespace thalamus {
       int index;
     };
 
-    void thread_target(std::string output_file, bool compress_analog) {
+    void thread_target(std::string output_file) {
       set_current_thread_name("STORAGE");
       prepare_storage(output_file);
       Finally f([&] {
@@ -383,10 +393,17 @@ namespace thalamus {
                   stream_i = streams.find(stream);
                   stream_i->second->index = stream;
                   auto& zstream = stream_i->second->zstream;
-                  zstream.zalloc = Z_NULL;
-                  zstream.zfree = Z_NULL;
-                  zstream.opaque = Z_NULL;
+                  zstream.zalloc = nullptr;
+                  zstream.zfree = nullptr;
+                  zstream.opaque = nullptr;
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Wold-style-cast"
+#endif
                   auto error = deflateInit(&zstream, 1);
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
                   THALAMUS_ASSERT(error == Z_OK, "ZLIB Error: %d", error);
                 }
               }
@@ -412,7 +429,7 @@ namespace thalamus {
         std::condition_variable condition;
         {
           TRACE_EVENT("thalamus", "deflate_all");
-          for(auto i = 0;i < compressed.size();i+=band_size) {
+          for(auto i = 0ull;i < compressed.size();i+=band_size) {
             auto upper = std::min(i+band_size, compressed.size());
             pool.push([&,i,upper] {
               TRACE_EVENT("thalamus", "deflate");
@@ -422,23 +439,22 @@ namespace thalamus {
                 auto& zstream = stream_state->zstream;
                 for(auto index : indexes) {
                   auto& serialized = all_serialized[index];
-                  auto& record = local_records[index].first;
 
                   auto compressed_record = std::make_shared<thalamus_grpc::StorageRecord>();
-                  auto compressed = compressed_record->mutable_compressed();
-                  auto compressed_data = compressed->mutable_data();
+                  auto record_compressed = compressed_record->mutable_compressed();
+                  auto compressed_data = record_compressed->mutable_data();
                   if(compressed_data->empty()) {
                     compressed_data->resize(1024);
                   }
-                  zstream.avail_in = serialized.size();
+                  zstream.avail_in = uint32_t(serialized.size());
                   zstream.next_in = reinterpret_cast<unsigned char*>(serialized.data());
                   auto compressing = true;
                   size_t offset = 0;
-                  compressed->set_type(thalamus_grpc::Compressed::Type::Compressed_Type_ANALOG);
-                  compressed->set_stream(stream);
-                  compressed->set_size(serialized.size());
+                  record_compressed->set_type(thalamus_grpc::Compressed::Type::Compressed_Type_ANALOG);
+                  record_compressed->set_stream(stream);
+                  record_compressed->set_size(int(serialized.size()));
                   while(compressing) {
-                    zstream.avail_out = compressed_data->size() - offset;
+                    zstream.avail_out = uint32_t(compressed_data->size() - offset);
                     zstream.next_out = reinterpret_cast<unsigned char*>(compressed_data->data()) + offset;
                     auto error = deflate(&zstream, Z_NO_FLUSH);
                     THALAMUS_ASSERT(error == Z_OK, "ZLIB Error: %d", error);
@@ -470,7 +486,7 @@ namespace thalamus {
             auto bigendian_size = htonll(size);
             auto size_bytes = reinterpret_cast<char*>(&bigendian_size);
             output_stream.write(size_bytes, sizeof(bigendian_size));
-            output_stream.write(serialized.data(), size);
+            output_stream.write(serialized.data(), int64_t(size));
           }
         }
       }
@@ -488,7 +504,7 @@ namespace thalamus {
       std::vector<std::string> flushes(streams.size());
       {
         TRACE_EVENT("thalamus", "deflate_flush_all");
-        for(auto i = 0;i < stream_vector.size();i+=band_size) {
+        for(auto i = 0ull;i < stream_vector.size();i+=band_size) {
           auto upper = std::min(i+band_size, stream_vector.size());
           pool.push([&,i,upper] {
             TRACE_EVENT("thalamus", "deflate_flush");
@@ -497,17 +513,17 @@ namespace thalamus {
 
               auto& zstream = stream_state->zstream;
               auto compressed_record = std::make_shared<thalamus_grpc::StorageRecord>();
-              auto compressed = compressed_record->mutable_compressed();
-              auto compressed_data = compressed->mutable_data();
+              auto record_compressed = compressed_record->mutable_compressed();
+              auto compressed_data = record_compressed->mutable_data();
               if(compressed_data->empty()) {
                 compressed_data->resize(1024);
               }
               auto compressing = true;
               size_t offset = 0;
-              compressed->set_type(thalamus_grpc::Compressed::Type::Compressed_Type_NONE);
-              compressed->set_stream(stream_state->index);
+              record_compressed->set_type(thalamus_grpc::Compressed::Type::Compressed_Type_NONE);
+              record_compressed->set_stream(stream_state->index);
               while(compressing) {
-                zstream.avail_out = compressed_data->size() - offset;
+                zstream.avail_out = uint32_t(compressed_data->size() - offset);
                 zstream.next_out = reinterpret_cast<unsigned char*>(compressed_data->data()) + offset;
                 auto error = deflate(&zstream, Z_FINISH);
                 THALAMUS_ASSERT(error == Z_OK || error == Z_STREAM_END);
@@ -538,7 +554,7 @@ namespace thalamus {
           auto bigendian_size = htonll(size);
           auto size_bytes = reinterpret_cast<char*>(&bigendian_size);
           output_stream.write(size_bytes, sizeof(bigendian_size));
-          output_stream.write(serialized.data(), size);
+          output_stream.write(serialized.data(), int64_t(size));
         }
       }
     }
@@ -583,12 +599,12 @@ namespace thalamus {
       stats_timer.async_wait(std::bind(&Impl::on_stats_timer, this, _1));
     }
 
-    void start_thread(std::string output_file, bool compress_analog) {
+    void start_thread(std::string output_file) {
       is_running = true;
       records.clear();
       queued_bytes = 0;
       queued_records = 0;
-      _thread = std::thread([&, output_file, compress_analog] { thread_target(output_file, compress_analog); });
+      _thread = std::thread([&, output_file] { thread_target(output_file); });
       stats_timer.expires_after(1s);
       stats_timer.async_wait(std::bind(&Impl::on_stats_timer, this, _1));
     }
@@ -621,7 +637,7 @@ namespace thalamus {
       compress_analog = state->contains("Compress Analog") ? state->at("Compress Analog") : false;
 
       if (is_running) {
-        start_thread(output_file, compress_analog);
+        start_thread(output_file);
       } else {
         stop_thread();
       }
@@ -696,7 +712,7 @@ namespace thalamus {
     size = htonll(size);
     auto size_bytes = reinterpret_cast<char*>(&size);
     output.write(size_bytes, sizeof(size));
-    output.write(serialized.data(), serialized.size());
+    output.write(serialized.data(), int64_t(serialized.size()));
   }
 
   void StorageNode::record(std::ofstream& output, const std::string& serialized) {
@@ -704,7 +720,7 @@ namespace thalamus {
     size = htonll(size);
     auto size_bytes = reinterpret_cast<char*>(&size);
     output.write(size_bytes, sizeof(size));
-    output.write(serialized.data(), serialized.size());
+    output.write(serialized.data(), int64_t(serialized.size()));
   }
 
   std::span<const double> StorageNode::data(int channel) const {
@@ -712,10 +728,10 @@ namespace thalamus {
   }
 
   int StorageNode::num_channels() const {
-    return impl->metrics.size();
+    return int(impl->metrics.size());
   }
 
-  std::chrono::nanoseconds StorageNode::sample_interval(int channel) const {
+  std::chrono::nanoseconds StorageNode::sample_interval(int) const {
     return 1s;
   }
 
@@ -724,7 +740,7 @@ namespace thalamus {
   }
 
   std::string_view StorageNode::name(int channel) const {
-    return impl->names.at(channel);
+    return impl->names.at(size_t(channel));
   }
   std::span<const std::string> StorageNode::get_recommended_channels() const {
     return std::span<const std::string>(impl->names.begin(), impl->names.end());
@@ -732,4 +748,4 @@ namespace thalamus {
 
   void StorageNode::inject(const thalamus::vector<std::span<double const>>&, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&) {
   }
-}
+} 

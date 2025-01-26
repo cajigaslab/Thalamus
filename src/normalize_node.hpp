@@ -13,7 +13,7 @@ namespace thalamus {
     std::unique_ptr<Impl> impl;
   public:
     NormalizeNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph*);
-    ~NormalizeNode();
+    ~NormalizeNode() override;
     static std::string type_name();
     std::chrono::nanoseconds time() const override;
     std::span<const double> data(int channel) const override;

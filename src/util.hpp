@@ -5,32 +5,22 @@
 #include <map>
 #include <variant>
 #include <exception>
-#include <thalamus_str_format.h>
 
 #ifdef __clang__
   #pragma clang diagnostic push
-  #pragma clang diagnostic ignored "-Wlanguage-extension-token"
-  #pragma clang diagnostic ignored "-Wgnu-anonymous-struct"
-  #pragma clang diagnostic ignored "-Wnested-anon-types"
-    #include <boost/stacktrace.hpp>
-  #pragma clang diagnostic pop
-#else
-  #include <boost/stacktrace.hpp>
+  #pragma clang diagnostic ignored "-Weverything"
 #endif
 
+#include <absl/strings/str_format.h>
+#include <boost/stacktrace.hpp>
 #include <boost/exception/info.hpp>
 #include <boost/exception/get_error_info.hpp>
+#include <boost/log/trivial.hpp>
+#include <boost/log/utility/manipulators.hpp>
 
 #ifdef __clang__
-  #pragma clang diagnostic push
-  #pragma clang diagnostic ignored "-Wmicrosoft-cpp-macro"
-    #include <boost/log/trivial.hpp>
   #pragma clang diagnostic pop
-#else
-  #include <boost/log/trivial.hpp>
 #endif
-
-#include <boost/log/utility/manipulators.hpp>
 
 #define THALAMUS_LOG(LEVEL) BOOST_LOG_TRIVIAL(LEVEL) \
   << boost::log::add_value("Line", __LINE__) \
@@ -40,9 +30,9 @@
 //#ifdef NDEBUG
 //#define THALAMUS_ASSERT(condition, ...) if(!(condition)) {throw boost::enable_error_info(std::runtime_error(absl::StrFormat(__VA_ARGS__))) << traced(boost::stacktrace::stacktrace(2, std::numeric_limits<size_t>::max()));}
 //#else
-#define THALAMUS_ASSERT(condition, ...) if(!(condition)) {THALAMUS_LOG(fatal) << absl::StrFormat("" __VA_ARGS__) << "\n" << boost::stacktrace::stacktrace(2, std::numeric_limits<size_t>::max()); std::abort(); }
-#define THALAMUS_ABORT(...) THALAMUS_LOG(fatal) << absl::StrFormat("" __VA_ARGS__) << "\n" << boost::stacktrace::stacktrace(2, std::numeric_limits<size_t>::max()); std::abort();
-#define THALAMUS_ABORT_WITH_SKIP(skip, ...) THALAMUS_LOG(fatal) << absl::StrFormat("" __VA_ARGS__) << "\n" << boost::stacktrace::stacktrace(2+skip, std::numeric_limits<size_t>::max()); std::abort();
+#define THALAMUS_ASSERT(condition, ...) do { if(!(condition)) {THALAMUS_LOG(fatal) << absl::StrFormat("" __VA_ARGS__) << "\n" << boost::stacktrace::stacktrace(2, std::numeric_limits<size_t>::max()); std::abort(); } } while(0)
+#define THALAMUS_ABORT(...) THALAMUS_LOG(fatal) << absl::StrFormat("" __VA_ARGS__) << "\n" << boost::stacktrace::stacktrace(2, std::numeric_limits<size_t>::max()); std::abort()
+#define THALAMUS_ABORT_WITH_SKIP(skip, ...) THALAMUS_LOG(fatal) << absl::StrFormat("" __VA_ARGS__) << "\n" << boost::stacktrace::stacktrace(2+skip, std::numeric_limits<size_t>::max()); std::abort()
 
 //#endif
 

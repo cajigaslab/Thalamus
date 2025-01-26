@@ -1,17 +1,26 @@
 #pragma once
 
-#include <thalamus_asio.hpp>
-#include <thalamus_signals2.hpp>
-
 #include <vector>
 #include <functional>
 #include <string>
 #include <chrono>
 #include <state.hpp>
 #include <util.hpp>
+
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Weverything"
+#endif
+
+#include <boost/asio.hpp>
+#include <boost/signals2.hpp>
 #include <grpcpp/channel.h>
 #include <boost/json.hpp>
 #include <thalamus.pb.h>
+
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
 
 namespace thalamus {
   using namespace std::chrono_literals;
@@ -20,7 +29,7 @@ namespace thalamus {
 
   class Node : public std::enable_shared_from_this<Node> {
   public:
-    virtual ~Node() {};
+    virtual ~Node() {}
     boost::signals2::signal<void(Node*)> ready;
     std::map<size_t, boost::signals2::scoped_connection> connections;
     virtual size_t modalities() const = 0;
@@ -32,7 +41,7 @@ namespace thalamus {
 
   class NodeGraph {
   public:
-    virtual ~NodeGraph() {};
+    virtual ~NodeGraph() {}
     virtual std::weak_ptr<Node> get_node(const std::string&) = 0;
     virtual std::weak_ptr<Node> get_node(const thalamus_grpc::NodeSelector&) = 0;
     virtual void get_node(const std::string&, std::function<void(std::weak_ptr<Node>)>) = 0;

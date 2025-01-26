@@ -8,7 +8,7 @@ namespace thalamus {
     std::unique_ptr<Impl> impl;
   public:
     VideoNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph*);
-    ~VideoNode();
+    ~VideoNode() override;
     static std::string type_name();
     static bool prepare();
     Plane plane(int) const override;

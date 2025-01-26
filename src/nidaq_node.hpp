@@ -1,13 +1,21 @@
 #pragma once
 
-#include <thalamus_asio.hpp>
-
-#include <functional>
 #include <string>
 #include <base_node.hpp>
 #include <analog_node.hpp>
 #include <state.hpp>
 #include <stim_node.hpp>
+
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Weverything"
+#endif
+
+#include <boost/asio.hpp>
+
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
 
 namespace thalamus {
   class NidaqNode : public Node, public AnalogNode {
@@ -15,7 +23,7 @@ namespace thalamus {
     std::unique_ptr<Impl> impl;
   public:
     NidaqNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph);
-    ~NidaqNode();
+    ~NidaqNode() override;
     static std::string type_name();
     std::span<const double> data(int channel) const override;
     int num_channels() const override;
@@ -34,7 +42,7 @@ namespace thalamus {
     std::unique_ptr<Impl> impl;
   public:
     NidaqOutputNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph);
-    ~NidaqOutputNode();
+    ~NidaqOutputNode() override;
     static std::string type_name();
 
     std::future<thalamus_grpc::StimResponse> stim(thalamus_grpc::StimRequest&&) override;

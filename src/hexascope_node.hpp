@@ -12,7 +12,7 @@ namespace thalamus {
     std::unique_ptr<Impl> impl;
   public:
     HexascopeNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph*);
-    ~HexascopeNode();
+    ~HexascopeNode() override;
     static std::string type_name();
     static bool prepare();
     boost::json::value process(const boost::json::value&) override;

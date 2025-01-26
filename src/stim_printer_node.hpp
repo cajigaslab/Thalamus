@@ -8,7 +8,7 @@ namespace thalamus {
     std::unique_ptr<Impl> impl;
   public:
     StimPrinterNode(ObservableDictPtr, boost::asio::io_context&, NodeGraph*);
-    ~StimPrinterNode();
+    ~StimPrinterNode() override;
 
     std::future<thalamus_grpc::StimResponse> stim(thalamus_grpc::StimRequest&&) override;
 

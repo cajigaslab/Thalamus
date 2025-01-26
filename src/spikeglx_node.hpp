@@ -1,10 +1,8 @@
 #pragma once
 
-#include <boost/asio.hpp>
 #include <string>
 #include <base_node.hpp>
 #include <analog_node.hpp>
-#include <absl/strings/str_split.h>
 #include <state.hpp>
 
 namespace thalamus {
@@ -16,7 +14,7 @@ namespace thalamus {
     std::unique_ptr<Impl> impl;
   public:
     SpikeGlxNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph);
-    ~SpikeGlxNode();
+    ~SpikeGlxNode() override;
 
     static std::string type_name();
 

@@ -1,13 +1,21 @@
 #pragma once
 
 #include <string>
-#include <thalamus.pb.h>
-#include <thalamus_asio.hpp>
 #include <base_node.hpp>
 #include <state.hpp>
 #include <image_node.hpp>
 #include <analog_node.hpp>
+
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Weverything"
+#endif
+
 #include "opencv2/core.hpp"
+
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
 
 namespace thalamus {
   class DistortionNode : public Node, public ImageNode, public AnalogNode {
@@ -15,7 +23,7 @@ namespace thalamus {
     std::unique_ptr<Impl> impl;
   public:
     DistortionNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph*);
-    ~DistortionNode();
+    ~DistortionNode() override;
     static std::string type_name();
     static bool prepare();
     Plane plane(int) const override;

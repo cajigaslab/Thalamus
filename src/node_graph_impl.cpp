@@ -28,11 +28,12 @@
 #include <hexascope_node.hpp>
 #include <loop_test_node.hpp>
 #include <analog_node.hpp>
-
+ 
 namespace thalamus {
   using namespace std::chrono_literals;
 
   struct INodeFactory {
+    virtual ~INodeFactory() {}
     virtual Node* create(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph) = 0;
     virtual bool prepare() = 0;
     virtual void cleanup() = 0;
@@ -64,47 +65,6 @@ namespace thalamus {
     }
   };
 
-  static std::map<std::string, INodeFactory*> node_factories = {
-    {"NONE", new NodeFactory<NoneNode>()},
-    {"NIDAQ", new NodeFactory<NidaqNode>()},
-    {"NIDAQ_OUT", new NodeFactory<NidaqOutputNode>()},
-    {"ALPHA_OMEGA", new NodeFactory<AlphaOmegaNode>()},
-    {"TOGGLE", new NodeFactory<ToggleNode>()},
-    {"XSENS", new NodeFactory<XsensNode>()},
-    {"HAND_ENGINE", new NodeFactory<HandEngineNode>()},
-    {"WAVE", new NodeFactory<WaveGeneratorNode>()},
-    {"STORAGE", new NodeFactory<StorageNode>()},
-    {"RUNNER", new NodeFactory<RunNode>()},
-    {"OPHANIM", new NodeFactory<OphanimNode>()},
-    {"TASK_CONTROLLER", new NodeFactory<TaskControllerNode>()},
-    {"ANALOG", new NodeFactory<AnalogNodeImpl>()},
-    {"FFMPEG", new NodeFactory<FfmpegNode>()},
-    {"VIDEO", new NodeFactory<VideoNode>()},
-    {"OCULOMATIC", new NodeFactory<OculomaticNode>()},
-    {"DISTORTION", new NodeFactory<DistortionNode>()},
-    {"GENICAM", new NodeFactory<GenicamNode>()},
-    {"THREAD_POOL", new NodeFactory<ThreadPoolNode>()},
-    {"CHANNEL_PICKER", new NodeFactory<ChannelPickerNode>()},
-    {"NORMALIZE", new NodeFactory<NormalizeNode>()},
-    {"ALGEBRA", new NodeFactory<AlgebraNode>()},
-    {"LUA", new NodeFactory<LuaNode>()},
-#if !defined(_WIN32) && !defined(__APPLE__)
-    {"ROS2", new NodeFactory<Ros2Node>()},
-#endif
-    {"REMOTE", new NodeFactory<RemoteNode>()},
-    {"CHESSBOARD", new NodeFactory<ChessBoardNode>()},
-    {"PUPIL", new NodeFactory<PupilNode>()},
-    {"LOG", new NodeFactory<LogNode>()},
-    {"INTAN", new NodeFactory<IntanNode>()},
-    {"SPIKEGLX", new NodeFactory<SpikeGlxNode>()},
-    {"SYNC", new NodeFactory<SyncNode>()},
-    {"TOUCH_SCREEN", new NodeFactory<TouchScreenNode>()},
-    {"STIM_PRINTER", new NodeFactory<StimPrinterNode>()},
-    //{"HEXASCOPE", new NodeFactory<HexascopeNode>()},
-    {"LOOP_TEST", new NodeFactory<LoopTestNode>()},
-    {"ARUCO", new NodeFactory<ArucoNode>()}
-  };
-
   struct NodeGraphImpl::Impl {
     ObservableListPtr nodes;
     std::vector<std::shared_ptr<Node>> node_impls;
@@ -119,15 +79,59 @@ namespace thalamus {
     std::chrono::system_clock::time_point system_time;
     std::chrono::steady_clock::time_point steady_time;
     ThreadPool thread_pool;
+
+    std::map<std::string, INodeFactory*> node_factories;
   public:
-    Impl(ObservableListPtr nodes, boost::asio::io_context& io_context, NodeGraphImpl* outer, std::chrono::system_clock::time_point system_time, std::chrono::steady_clock::time_point steady_time)
-      : nodes(nodes)
+    Impl(ObservableListPtr _nodes, boost::asio::io_context& _io_context, NodeGraphImpl* _outer, std::chrono::system_clock::time_point _system_time, std::chrono::steady_clock::time_point _steady_time)
+      : nodes(_nodes)
       , num_nodes(nodes->size())
-      , io_context(io_context)
-      , outer(outer)
-      , system_time(system_time)
-      , steady_time(steady_time)
+      , io_context(_io_context)
+      , outer(_outer)
+      , system_time(_system_time)
+      , steady_time(_steady_time)
       , thread_pool("ThreadPool") {
+
+      node_factories = {
+        {"NONE", new NodeFactory<NoneNode>()},
+        {"NIDAQ", new NodeFactory<NidaqNode>()},
+        {"NIDAQ_OUT", new NodeFactory<NidaqOutputNode>()},
+        {"ALPHA_OMEGA", new NodeFactory<AlphaOmegaNode>()},
+        {"TOGGLE", new NodeFactory<ToggleNode>()},
+        {"XSENS", new NodeFactory<XsensNode>()},
+        {"HAND_ENGINE", new NodeFactory<HandEngineNode>()},
+        {"WAVE", new NodeFactory<WaveGeneratorNode>()},
+        {"STORAGE", new NodeFactory<StorageNode>()},
+        {"RUNNER", new NodeFactory<RunNode>()},
+        {"OPHANIM", new NodeFactory<OphanimNode>()},
+        {"TASK_CONTROLLER", new NodeFactory<TaskControllerNode>()},
+        {"ANALOG", new NodeFactory<AnalogNodeImpl>()},
+        {"FFMPEG", new NodeFactory<FfmpegNode>()},
+        {"VIDEO", new NodeFactory<VideoNode>()},
+        {"OCULOMATIC", new NodeFactory<OculomaticNode>()},
+        {"DISTORTION", new NodeFactory<DistortionNode>()},
+        {"GENICAM", new NodeFactory<GenicamNode>()},
+        {"THREAD_POOL", new NodeFactory<ThreadPoolNode>()},
+        {"CHANNEL_PICKER", new NodeFactory<ChannelPickerNode>()},
+        {"NORMALIZE", new NodeFactory<NormalizeNode>()},
+        {"ALGEBRA", new NodeFactory<AlgebraNode>()},
+        {"LUA", new NodeFactory<LuaNode>()},
+#if !defined(_WIN32) && !defined(__APPLE__)
+        {"ROS2", new NodeFactory<Ros2Node>()},
+#endif
+        {"REMOTE", new NodeFactory<RemoteNode>()},
+        {"CHESSBOARD", new NodeFactory<ChessBoardNode>()},
+        {"PUPIL", new NodeFactory<PupilNode>()},
+        {"LOG", new NodeFactory<LogNode>()},
+        {"INTAN", new NodeFactory<IntanNode>()},
+        {"SPIKEGLX", new NodeFactory<SpikeGlxNode>()},
+        {"SYNC", new NodeFactory<SyncNode>()},
+        {"TOUCH_SCREEN", new NodeFactory<TouchScreenNode>()},
+        {"STIM_PRINTER", new NodeFactory<StimPrinterNode>()},
+        //{"HEXASCOPE", new NodeFactory<HexascopeNode>()},
+        {"LOOP_TEST", new NodeFactory<LoopTestNode>()},
+        {"ARUCO", new NodeFactory<ArucoNode>()}
+      };
+
       using namespace std::placeholders;
       auto i = node_factories.begin();
       while (i != node_factories.end()) {
@@ -146,6 +150,7 @@ namespace thalamus {
       auto i = node_factories.begin();
       while (i != node_factories.end()) {
         i->second->cleanup();
+        delete i->second;
         ++i;
       }
     }
@@ -163,7 +168,7 @@ namespace thalamus {
     void on_nodes(ObservableCollection::Action a, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
       using namespace std::placeholders;
       if (a == ObservableCollection::Action::Set) {
-        size_t index = std::get<long long>(k);
+        auto index = std::get<long long>(k);
         ObservableDictPtr node = std::get<ObservableDictPtr>(v);
         node->changed.connect(std::bind(&Impl::on_node, this, node.get(), _1, _2, _3));
 
@@ -204,7 +209,7 @@ namespace thalamus {
         for (auto i = 0u; i < nodes->size(); ++i) {
           shared_node = nodes->at(i);
           if (node == shared_node.get()) {
-            node_index = i;
+            node_index = int(i);
             break;
           }
         }
@@ -212,17 +217,17 @@ namespace thalamus {
         auto key_str = std::get<std::string>(k);
         if (key_str == "type") {
           auto value_str = std::get<std::string>(v);
-          if (value_str != node_types.at(node_index)) {
+          if (value_str != node_types.at(size_t(node_index))) {
             auto factory = node_factories.at(value_str);
 
-            node_impls.at(node_index).reset(factory->create(shared_node, io_context, outer));
-            node_types.at(node_index) = value_str;
+            node_impls.at(size_t(node_index)).reset(factory->create(shared_node, io_context, outer));
+            node_types.at(size_t(node_index)) = value_str;
           }
 
-          auto node_impl = node_impls.at(node_index);
+          auto node_impl = node_impls.at(size_t(node_index));
           notify([&value_str] (auto& selector) { return selector.type() == value_str; }, node_impl);
         } else if (key_str == "name") {
-          auto node_impl = node_impls.at(node_index);
+          auto node_impl = node_impls.at(size_t(node_index));
           auto value_str = std::get<std::string>(v);
           notify([&value_str] (auto& selector) { return selector.name() == value_str; }, node_impl);
         }
@@ -236,10 +241,10 @@ namespace thalamus {
   }
 
   NodeGraphImpl::~NodeGraphImpl() {}
-
+ 
   std::optional<std::string> NodeGraphImpl::get_type_name(const std::string& type) {
-    auto i = node_factories.find(type);
-    if (i != node_factories.end()) {
+    auto i = impl->node_factories.find(type);
+    if (i != impl->node_factories.end()) {
       return i->second->type_name();
     }
     else {

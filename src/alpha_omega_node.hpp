@@ -2,10 +2,19 @@
 
 #include <base_node.hpp>
 #include <analog_node.hpp>
-#include <boost/asio.hpp>
 #include <string>
-//#include <plot.h>
 #include <state.hpp>
+
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Weverything"
+#endif
+
+#include <boost/asio.hpp>
+
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
 
 namespace thalamus {
   using namespace std::chrono_literals;
@@ -16,7 +25,7 @@ namespace thalamus {
   public:
     AlphaOmegaNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph);
 
-    ~AlphaOmegaNode();
+    ~AlphaOmegaNode() override;
 
 #ifdef _WIN32
     static std::string type_name() {

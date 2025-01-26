@@ -2,12 +2,23 @@
 #include <distortion_node.hpp>
 #include <thread_pool.hpp>
 #include <shared_mutex>
-#include <boost/pool/object_pool.hpp>
 
-#include "opencv2/imgproc.hpp"
-#include "opencv2/calib3d.hpp"
 #include <modalities_util.hpp>
 
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Weverything"
+#endif
+
+#include <boost/pool/object_pool.hpp>
+#include "opencv2/imgproc.hpp"
+#include "opencv2/calib3d.hpp"
+#include "opencv2/core.hpp"
+
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
+ 
 namespace thalamus {
   using namespace std::chrono_literals;
 

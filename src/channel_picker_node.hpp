@@ -13,7 +13,7 @@ namespace thalamus {
     std::unique_ptr<Impl> impl;
   public:
     ChannelPickerNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph*);
-    ~ChannelPickerNode();
+    ~ChannelPickerNode() override;
     static std::string type_name();
     std::chrono::nanoseconds time() const override;
     std::span<const double> data(int channel) const override;

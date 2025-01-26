@@ -2,15 +2,25 @@
 
 #include <base_node.hpp>
 #include <xsens_node.hpp>
-#include <boost/asio.hpp>
-#include <boost/json.hpp>
-#include <boost/signals2.hpp>
 #include <future>
 #include <state.hpp>
 #include <chrono>
-#include <thalamus.grpc.pb.h>
 #include <condition_variable>
 #include <util.hpp>
+
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Weverything"
+#endif
+
+#include <thalamus.grpc.pb.h>
+#include <boost/asio.hpp>
+#include <boost/json.hpp>
+#include <boost/signals2.hpp>
+
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
 
 namespace thalamus {
   class Service : public thalamus_grpc::Thalamus::Service {
@@ -22,7 +32,7 @@ namespace thalamus {
     //boost::signals2::signal<void(::thalamus_grpc::ObservableChange&)> change_signal;
 
     Service(ObservableCollection::Value state, boost::asio::io_context& io_context, NodeGraph& node_graph, std::string observable_bridge_redirect);
-    ~Service();
+    ~Service() override;
     
     ::grpc::Status get_type_name(::grpc::ServerContext* context, const ::thalamus_grpc::StringMessage* request, ::thalamus_grpc::StringMessage* response) override;
     ::grpc::Status node_request(::grpc::ServerContext* context, const ::thalamus_grpc::NodeRequest* request, ::thalamus_grpc::NodeResponse* response) override;

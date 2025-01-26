@@ -38,7 +38,7 @@ namespace thalamus {
     std::unique_ptr<Impl> impl;
   public:
     FfmpegNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph*);
-    ~FfmpegNode();
+    ~FfmpegNode() override;
     static std::string type_name();
     static bool prepare();
     Plane plane(int) const override;

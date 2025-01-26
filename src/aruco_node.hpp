@@ -8,7 +8,7 @@ namespace thalamus {
     std::unique_ptr<Impl> impl;
   public:
     ArucoNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph*);
-    ~ArucoNode();
+    ~ArucoNode() override;
     static std::string type_name();
     std::span<Segment const> segments() const override;
     const std::string_view pose_name() const override;

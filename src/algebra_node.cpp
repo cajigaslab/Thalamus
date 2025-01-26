@@ -35,10 +35,10 @@ namespace thalamus {
     std::vector<std::weak_ptr<AnalogNode>> sources;
     calculator::parser<std::string::const_iterator> parser;        // Our grammar
   public:
-    Impl(ObservableDictPtr state, boost::asio::io_context&, NodeGraph* graph, AlgebraNode* outer)
-      : state(state)
-      , outer(outer)
-      , graph(graph) {
+    Impl(ObservableDictPtr _state, boost::asio::io_context&, NodeGraph* _graph, AlgebraNode* _outer)
+      : state(_state)
+      , outer(_outer)
+      , graph(_graph) {
 
       state_connection = state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
       state->recap(std::bind(&Impl::on_change, this, _1, _2, _3));
@@ -70,11 +70,11 @@ namespace thalamus {
               return;
             }
             if(data.size() < static_cast<size_t>(source->num_channels())) {
-              data.resize(source->num_channels());
+              data.resize(size_t(source->num_channels()));
             }
             for(auto i = 0;i < source->num_channels();++i) {
               auto span = source->data(i);
-              auto& transformed = data.at(i);
+              auto& transformed = data.at(size_t(i));
               transformed.assign(span.begin(), span.end());
               if(!program) {
                 continue;
@@ -86,7 +86,7 @@ namespace thalamus {
                 if(std::holds_alternative<double>(result)) {
                   transformed.at(j) = std::get<double>(result);
                 } else {
-                  transformed.at(j) = std::get<long long>(result);
+                  transformed.at(j) = double(std::get<long long>(result));
                 }
               }
             }
@@ -117,15 +117,13 @@ namespace thalamus {
   }
 
   std::span<const double> AlgebraNode::data(int channel) const {
-    auto& data = impl->data.at(channel);
+    auto& data = impl->data.at(size_t(channel));
     return std::span<const double>(data.begin(), data.end());
   }
 
   int AlgebraNode::num_channels() const {
-    return impl->data.size();
+    return int(impl->data.size());
   }
-
-  static const std::string EMPTY = "";
 
   std::string_view AlgebraNode::name(int channel) const {
     return impl->source->name(channel);

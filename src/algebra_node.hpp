@@ -1,11 +1,19 @@
 #pragma once
 
-#include <thalamus_asio.hpp>
 
 #include <string>
 #include <base_node.hpp>
 #include <analog_node.hpp>
 #include <state.hpp>
+
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Weverything"
+#endif
+#include <boost/asio.hpp>
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
 
 namespace thalamus {
   class AlgebraNode : public Node, public AnalogNode {
@@ -13,7 +21,7 @@ namespace thalamus {
     std::unique_ptr<Impl> impl;
   public:
     AlgebraNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph*);
-    ~AlgebraNode();
+    ~AlgebraNode() override;
     static std::string type_name();
     std::chrono::nanoseconds time() const override;
     std::span<const double> data(int channel) const override;

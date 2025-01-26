@@ -9,7 +9,7 @@ namespace thalamus {
     std::unique_ptr<Impl> impl;
   public:
     LogNode(ObservableDictPtr state, boost::asio::io_context&, NodeGraph* graph);
-    ~LogNode();
+    ~LogNode() override;
     std::string_view text() const override;
     bool has_text_data() const override;
     boost::json::value process(const boost::json::value&) override;

@@ -15,7 +15,7 @@ namespace thalamus {
     std::unique_ptr<Impl> impl;
   public:
     Ros2Node(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph);
-    ~Ros2Node();
+    ~Ros2Node() override;
     static std::string type_name();
 
     std::span<const double> data(int channel) const override;

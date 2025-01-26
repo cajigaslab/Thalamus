@@ -1,6 +1,5 @@
 #pragma once
 
-#include <set>
 #include <map>
 #include <util.hpp>
 #include <string>
@@ -10,20 +9,23 @@
 #include <optional>
 #include <functional>
 
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Weverything"
+#endif
+
 #include <boost/json.hpp>
 #include <boost/signals2.hpp>
 
-#ifdef __clang__
-  #pragma clang diagnostic push
-    #include <absl/strings/str_split.h>
-  #pragma clang diagnostic pop
-#else
-  #include <absl/strings/str_split.h>
-#endif
+#include <absl/strings/str_split.h>
 
 #include <absl/strings/str_format.h>
 #include <absl/strings/str_join.h>
 #include <absl/strings/numbers.h>
+
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
 
 namespace thalamus {
   using namespace std::placeholders;
@@ -195,9 +197,9 @@ namespace thalamus {
     operator boost::json::object() const;
     std::optional<ObservableCollection::Key> key_of(const ObservableCollection& v) const override;
     void set_remote_storage(std::function<bool(Action, const std::string&, ObservableCollection::Value, std::function<void()>)> remote_storage) override;
-    ObservableCollection::Value get_jsonpath(ObservableCollection::Value store, const std::list<std::string>& tokens);
-    ObservableCollection::Value get_jsonpath(ObservableCollection::Value store, const std::string& query);
   };
+  ObservableCollection::Value get_jsonpath(ObservableCollection::Value store, const std::list<std::string>& tokens);
+  ObservableCollection::Value get_jsonpath(ObservableCollection::Value store, const std::string& query);
   void set_jsonpath(ObservableCollection::Value store, const std::string& query, ObservableCollection::Value value, bool from_remote = false);
   void delete_jsonpath(ObservableCollection::Value store, const std::string& query, bool from_remote = false);
 }

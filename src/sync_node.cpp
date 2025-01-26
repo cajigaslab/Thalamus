@@ -1,6 +1,7 @@
 #include <sync_node.hpp>
 #include <vector>
 #include <modalities_util.hpp>
+#include <cstdint>
 
 namespace thalamus {
   struct SyncNode::Impl {
@@ -27,7 +28,7 @@ namespace thalamus {
     double amplitude;
     double value;
     std::chrono::milliseconds duration;
-    std::chrono::nanoseconds time;
+    std::chrono::nanoseconds current_time;
     ObservableListPtr channels;
     NodeGraph* graph;
     std::vector<std::weak_ptr<AnalogNode>> sources;
@@ -66,10 +67,10 @@ namespace thalamus {
     std::map<std::string, boost::signals2::scoped_connection> node_connections;
     ObservableCollection* pairs_state;
   public:
-    Impl(ObservableDictPtr state, boost::asio::io_context&, NodeGraph* graph, SyncNode* outer)
-      : state(state)
-      , outer(outer)
-      , graph(graph) {
+    Impl(ObservableDictPtr _state, boost::asio::io_context&, NodeGraph* _graph, SyncNode* _outer)
+      : state(_state)
+      , outer(_outer)
+      , graph(_graph) {
 
       state_connection = state->recursive_changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3, _4));
       state->recap(std::bind(&Impl::on_change, this, state.get(), _1, _2, _3));
@@ -139,14 +140,14 @@ namespace thalamus {
         if(p.algo == Pair::Algo::THRESHOLD) {
           auto diff = p.cross2 - p.cross1;
           if(p.cross1 > 0ns && p.cross2 > 0ns && abs(diff.count()) < p.window.count()) {
-            p.lag = diff.count()/1e9;
+            p.lag = double(diff.count())/1e9;
             p.cross1 = 0ns;
             p.cross2 = 0ns;
             publish = true;
           }
         } else {
-          long long data1_size = p.data1.size();
-          long long data2_size = p.data2.size();
+          long long data1_size = int64_t(p.data1.size());
+          long long data2_size = int64_t(p.data2.size());
           auto window1_size = p.sample_interval1 > 0ns ? p.sample_interval1*data1_size : (analog->time() - p.start_time1);
           auto window2_size = p.sample_interval2 > 0ns ? p.sample_interval2*data2_size : (analog->time() - p.start_time2);
           auto sample_interval1 = p.sample_interval1 > 0ns ? p.sample_interval1 : (window1_size/data1_size);
@@ -191,11 +192,11 @@ namespace thalamus {
             auto max = 0.0;
             auto max_index = 0;
             for(auto lag = -(int(data2->size())-1);lag < int(data1->size());++lag) {
-              i = std::max(0, -lag);
-              j = std::max(0, lag);
+              i = size_t(std::max(0, -lag));
+              j = size_t(std::max(0, lag));
               auto count = std::min(data2->size() - i, data1->size() - j);
-              auto sum = 0;
-              for(auto k = 0;k < count;++k) {
+              auto sum = 0.0;
+              for(auto k = 0ull;k < count;++k) {
                 sum += (*data2)[i+k]*(*data1)[j+k];
               }
               if(sum > max) {
@@ -203,7 +204,7 @@ namespace thalamus {
                 max_index = lag;
               }
             }
-            p.lag = (max_index*sample_interval1).count()/1e9;
+            p.lag = double((max_index*sample_interval1).count())/1e9;
             publish = true;
             p.data1.clear();
             p.data2.clear();
@@ -211,12 +212,12 @@ namespace thalamus {
         }
       }
       if(publish) {
-        time = analog->time();
+        current_time = analog->time();
         outer->ready(outer);
       }
     }
 
-    void on_channels_changed(AnalogNode* node) {
+    void on_channels_changed(AnalogNode*) {
       for(auto& p : pairs) {
         p.channel1_index = -1;
         p.channel2_index = -1;
@@ -230,7 +231,7 @@ namespace thalamus {
           return p;
         }
       }
-      THALAMUS_ASSERT(false, "Failed to find pair")
+      THALAMUS_ASSERT(false, "Failed to find pair");
     }
 
     void on_change(ObservableCollection* source, ObservableCollection::Action action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
@@ -242,16 +243,16 @@ namespace thalamus {
           list->recap(std::bind(&Impl::on_change, this, pairs_state, _1, _2, _3));
         }
       } else if (source == pairs_state) {
-        size_t key_int = std::get<long long>(k);
+        auto key_int = std::get<long long>(k);
         if(action == ObservableCollection::Action::Delete) {
           pairs.erase(pairs.begin() + key_int);
           return;
         }
-        if(pairs.size() <= key_int) {
-          pairs.resize(key_int + 1);
+        if(pairs.size() <= size_t(key_int)) {
+          pairs.resize(size_t(key_int) + 1);
         }
         auto dict = std::get<ObservableDictPtr>(v);
-        pairs[key_int].state = dict.get();
+        pairs[size_t(key_int)].state = dict.get();
         dict->recap(std::bind(&Impl::on_change, this, dict.get(), _1, _2, _3));
       } else {
         auto key_str = std::get<std::string>(k);
@@ -291,7 +292,7 @@ namespace thalamus {
           pair.threshold = std::get<double>(v);
         } else if (key_str == "Window (s)") {
           auto& pair = get_pair(source);
-          long long milliseconds = 1e3*std::get<double>(v);
+          auto milliseconds = int64_t(1e3*std::get<double>(v));
           pair.window = std::chrono::milliseconds(milliseconds);
         }
         
@@ -309,24 +310,24 @@ namespace thalamus {
   }
 
   std::chrono::nanoseconds SyncNode::time() const {
-    return impl->time;
+    return impl->current_time;
   }
 
   std::span<const double> SyncNode::data(int channel) const {
-    auto& pair = impl->pairs[channel];
+    auto& pair = impl->pairs[size_t(channel)];
     return std::span<const double>(&pair.lag, &pair.lag+1);
   }
 
   int SyncNode::num_channels() const {
-    return impl->pairs.size();
+    return int(impl->pairs.size());
   }
 
 
   std::string_view SyncNode::name(int channel) const {
-    return impl->pairs[channel].out_channel_name;
+    return impl->pairs[size_t(channel)].out_channel_name;
   }
 
-  std::chrono::nanoseconds SyncNode::sample_interval(int channel) const {
+  std::chrono::nanoseconds SyncNode::sample_interval(int) const {
     return 0ns;
   }
 

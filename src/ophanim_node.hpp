@@ -6,7 +6,7 @@ namespace thalamus {
     std::unique_ptr<Impl> impl;
   public:
     OphanimNode(ObservableDictPtr, boost::asio::io_context&, NodeGraph*);
-    ~OphanimNode();
+    ~OphanimNode() override;
     static std::string type_name();
     size_t modalities() const override;
   };

@@ -8,7 +8,7 @@ namespace thalamus {
 
   struct Finally {
     std::function<void()> end;
-    Finally(std::function<void()> end) : end(end) { }
+    Finally(std::function<void()> _end) : end(_end) { }
     ~Finally() {
       end();
     }
@@ -22,7 +22,7 @@ namespace thalamus {
     };
     boost::asio::io_context& io_context;
     std::list<Waiter*> waiters;
-    CoCondition(boost::asio::io_context& io_context) : io_context(io_context) {}
+    CoCondition(boost::asio::io_context& _io_context) : io_context(_io_context) {}
 
     void notify() {
       for(auto waiter : waiters) {
