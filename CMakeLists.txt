@@ -93,6 +93,7 @@ include(cmake/sdl.cmake)
 include(cmake/ffmpeg.cmake)
 include(cmake/glib.cmake)
 include(cmake/cairo.cmake)
+include(cmake/inja.cmake)
 if(NOT "${SANITIZER}" STREQUAL "")
   include(cmake/lua.cmake)
 else()
@@ -272,7 +273,7 @@ target_compile_options(thalamus PRIVATE ${WARNING_FLAGS})
 target_compile_definitions(thalamus PRIVATE _USE_MATH_DEFINES)
 target_include_directories(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(thalamus opencv hdf5-static lua
-  boost grpc++ grpc++_reflection 
+  boost grpc++ grpc++_reflection inja
   absl::str_format_internal absl::strings absl::str_format ffmpeg cairo perfetto)
 if(NOT APPLE)
   target_link_libraries(thalamus zlib_processed)

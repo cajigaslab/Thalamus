@@ -344,6 +344,7 @@ class ControlWindow(QMainWindow):
     add_action(file_menu, 'Save Config As', self.on_save_as_config)
     add_action(file_menu, 'Load Config', self.on_load_config)
     add_action(file_menu, 'Load Reward Schedule', self.on_load_reward_schedule)
+    add_action(file_menu, 'Import Tasks', self.on_import_tasks)
     add_action(file_menu, 'Reset Trial History', self.on_reset_trial_history)
 
     view_menu = self.menuBar().addMenu("&View")
@@ -587,6 +588,18 @@ class ControlWindow(QMainWindow):
         self.init()
         self.config_data = ConfigData(self.config_data.user_config, file_name[0])
         self.setWindowTitle(f'Task Controller: {self.config_data.file_name}')
+      create_task_with_exc_handling(task())
+      
+  def on_import_tasks(self) -> None:
+    """
+    Load a config
+    """
+    file_name = QFileDialog.getOpenFileName(self, "Import Tasks", "", "*.json")
+    if file_name and file_name[0]:
+      async def task() -> None:
+        new_config = load(file_name[0])
+        self.config_data.user_config['task_clusters'] = new_config
+        self.init()
       create_task_with_exc_handling(task())
 
   def on_queue_changed(self, action: ObservableCollection.Action,

@@ -23,6 +23,7 @@
   #pragma clang diagnostic ignored "-Weverything"
 #endif
 
+#include <inja/inja.hpp>
 #include <absl/strings/str_format.h>
 #include <absl/time/time.h>
 #include <boost/qvm/vec_access.hpp>
@@ -45,6 +46,28 @@ extern "C" {
 #endif
 
 namespace thalamus {
+  static std::string render_filename(const std::string& filename, const inja::json& tdata, std::chrono::system_clock::time_point time) {
+    auto rendered = inja::render(filename, tdata);
+    const auto start_time = absl::FromChrono(time);
+    rendered = absl::FormatTime(rendered, start_time, absl::LocalTimeZone());
+    return rendered;
+  }
+
+  static int get_rec_number(const std::filesystem::path& name, const inja::json& _tdata, std::chrono::system_clock::time_point time) {
+    inja::json tdata = _tdata;
+    const auto start_time = absl::FromChrono(time);
+    auto start_time_str = absl::FormatTime("%Y%m%d%H%M%S", start_time, absl::LocalTimeZone());
+    auto i = 0;
+    std::filesystem::path filename;
+    do {
+      ++i;
+      tdata["rec"] = absl::StrFormat("%03d", i);
+      filename = render_filename(name.string(), tdata, time);
+      filename = absl::StrFormat("%s.%s.%d", filename.string(), start_time_str, i);
+    } while (std::filesystem::exists(filename));
+    return i;
+  }
+
   struct StorageNode::Impl {
     struct AnalogStorage {
       std::string name;
@@ -321,7 +344,24 @@ namespace thalamus {
     }
 
     void prepare_storage(const std::string& filename) {
-      output_stream = std::ofstream(get_next_file(filename, graph->get_system_clock_at_start()), std::ios::trunc | std::ios::binary);
+      inja::json tdata;
+      auto time = graph->get_system_clock_at_start();
+      int rec_number = get_rec_number(filename, tdata, time);
+
+      boost::asio::post(io_context, [_state=this->state,rec_number] {
+        (*_state)["rec"].assign(rec_number, [] {});
+      });
+
+      tdata["rec"] = absl::StrFormat("%03d", rec_number);
+      auto rendered = render_filename(filename, tdata, time);
+
+      const auto absl_time = absl::FromChrono(time);
+      auto start_time_str = absl::FormatTime("%Y%m%d%H%M%S", absl_time, absl::LocalTimeZone());
+      rendered = absl::StrFormat("%s.%s.%d", rendered, start_time_str, rec_number);
+      std::filesystem::path rendered_path(rendered);
+      std::filesystem::create_directories(rendered_path.parent_path());
+
+      output_stream = std::ofstream(rendered, std::ios::trunc | std::ios::binary);
     }
 
     void close_file() {
@@ -921,7 +961,12 @@ namespace thalamus {
     bool compress_analog = false;
     bool compress_video = false;
 
-    void on_change(ObservableCollection::Action, const ObservableCollection::Key&, const ObservableCollection::Value&) {
+    void on_change(ObservableCollection::Action, const ObservableCollection::Key& key, const ObservableCollection::Value&) {
+      auto key_str = std::get<std::string>(key);
+      if (key_str == "rec") {
+        return;
+      }
+
       if (!state->contains("Running")) {
         return;
       }
@@ -1000,13 +1045,12 @@ namespace thalamus {
   }
 
   std::filesystem::path StorageNode::get_next_file(const std::filesystem::path& name, std::chrono::system_clock::time_point time) {
+    inja::json tdata;
+    auto rec = get_rec_number(name, tdata, time);
+
     const auto start_time = absl::FromChrono(time);
     auto start_time_str = absl::FormatTime("%Y%m%d%H%M%S", start_time, absl::LocalTimeZone());
-    auto i = 0;
-    std::filesystem::path filename;
-    do {
-      filename = absl::StrFormat("%s.%s.%d", name.string(), start_time_str, ++i);
-    } while (std::filesystem::exists(filename));
+    auto filename = absl::StrFormat("%s.%s.%d", name.string(), start_time_str, rec);
     return filename;
   }
 

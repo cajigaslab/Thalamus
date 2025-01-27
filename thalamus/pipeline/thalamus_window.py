@@ -40,6 +40,7 @@ from .hexascope_widget import HexascopeWidget
 from .sync_widget import SyncWidget
 from .stim_widget import StimWidget
 from .analog_widget import AnalogWidget
+from .storage_widget import StorageWidget
 from ..util import NodeSelector
 from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
@@ -89,9 +90,6 @@ def create_test_widget(node):
 
 def create_run_widget(node: ObservableDict, stub: thalamus_pb2_grpc.ThalamusStub):
   return NodeSelector(node, 'Targets')
-
-def create_storage_widget(node: ObservableDict, stub: thalamus_pb2_grpc.ThalamusStub):
-  return NodeSelector(node, 'Sources')
 
 class AlphaOmegaTableModel(QAbstractTableModel):
   def __init__(self, channels: typing.List[ObservableDict]):
@@ -244,7 +242,7 @@ FACTORIES = {
     UserData(UserDataType.SPINBOX, 'Poll Interval', 16, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, [])
   ]),
-  'STORAGE': Factory(create_storage_widget, [
+  'STORAGE': Factory(StorageWidget, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.DEFAULT, 'Sources', '', []),
     UserData(UserDataType.DEFAULT, 'Output File', 'test.tha', []),
