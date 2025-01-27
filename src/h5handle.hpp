@@ -1,5 +1,13 @@
 #include <memory>
+
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Weverything"
+#endif
 #include <hdf5.h>
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
 
 namespace thalamus {
   struct H5Handle : private std::shared_ptr<hid_t> {
@@ -22,3 +30,4 @@ namespace thalamus {
   H5Handle createH5ReceivedEvent();
   H5Handle createH5Segment();
 }
+

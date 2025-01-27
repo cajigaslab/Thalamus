@@ -1,34 +1,54 @@
-#include <boost/program_options.hpp>
+#include <hydrate.hpp>
 #include <iostream>
 #include <fstream>
 #include <string>
 #include <chrono>
 #include <thalamus_config.h>
-#include <thalamus.pb.h>
 #include <optional>
 #ifdef _WIN32
 #include <WinSock2.h>
 #endif
-#include <hdf5.h>
 #include <base_node.hpp>
 #include <xsens_node.hpp>
 #include <h5handle.hpp>
+
+#ifdef _WIN32
+#include <WinSock2.h>
+#elif __APPLE__
+#include <arpa/inet.h>
+#else
+#include <endian.h>
+#define htonll(x) htobe64(x)
+#endif
+
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Weverything"
+#endif
+
+#include <thalamus.pb.h>
+#include <boost/program_options.hpp>
+#include <hdf5.h>
 #include <boost/qvm/vec.hpp>
 #include <boost/qvm/quat.hpp>
 #include <boost/endian.hpp>
 #include <boost/dll.hpp>
 #include <boost/process.hpp>
 #include <absl/strings/str_replace.h>
+
 #define ZLIB_CONST
 #include <zlib.h>
 
-#ifdef _WIN32
-#include <winsock2.h>
-#elif __APPLE__
-#include <arpa/inet.h>
-#else
-#include <endian.h>
-#define htonll(x) htobe64(x)
+extern "C" {
+#include <libavformat/avformat.h>
+#include <libavcodec/avcodec.h>
+#include <libavdevice/avdevice.h>
+#include <libavutil/mem.h>
+#include <libavutil/opt.h>
+}
+ 
+#ifdef __clang__
+  #pragma clang diagnostic pop
 #endif
 
 using namespace std::chrono_literals;
@@ -41,7 +61,25 @@ namespace hydrate {
     std::map<int, std::pair<size_t, std::vector<unsigned char>>> zstream_buffers;
     std::list<thalamus_grpc::StorageRecord> record_buffer;
 
-    RecordReader(std::istream& stream) : stream(stream) {}
+    std::vector<std::pair<double, AVRational>> framerates = {
+      {24000.0/1001, {24000, 1001}},
+      {24, {24, 1}},
+      {25, {25, 1}},
+      {30000.0/1001, {30000, 1001}},
+      {30, {30, 1}},
+      {50, {50, 1}},
+      {60000.0/1001, {60000, 1001}},
+      {60, {60, 1}},
+      {15, {15, 1}}, 
+      {5, {5, 1}}, 
+      {10, {10, 1}}, 
+      {12, {12, 1}}, 
+      {15, {15, 1}}
+    };
+
+    RecordReader(std::istream& _stream) : stream(_stream) {
+      std::sort(framerates.begin(), framerates.end(), [](auto& lhs, auto& rhs) { return lhs.first < rhs.first; });
+    }
     ~RecordReader() {
       for(auto& pair : zstreams) {
         deflateEnd(&pair.second);
@@ -49,6 +87,116 @@ namespace hydrate {
     }
 
     int z = 0;
+
+    struct VideoDecoder {
+      const AVCodec* codec;
+      AVCodecContext* context;
+      AVPacket* packet;
+      AVFrame* frame;
+      AVCodecParserContext *parser;
+      std::list<thalamus_grpc::StorageRecord> buffer;
+      std::list<thalamus_grpc::StorageRecord> pending;
+
+      ~VideoDecoder() {
+        avcodec_free_context(&context);
+        av_packet_free(&packet);
+        av_frame_free(&frame);
+        av_parser_close(parser);
+      }
+
+      VideoDecoder(int width, int height, AVRational framerate, AVPixelFormat format) {
+        codec = avcodec_find_decoder(AV_CODEC_ID_MPEG1VIDEO);
+        THALAMUS_ASSERT(codec, "avcodec_find_decoder failed");
+        parser = av_parser_init(codec->id);
+        THALAMUS_ASSERT(parser, "av_parser_init failed");
+
+        context = avcodec_alloc_context3(codec);
+        THALAMUS_ASSERT(context, "avcodec_alloc_context3 failed");
+        packet = av_packet_alloc();
+        frame = av_frame_alloc();
+
+        context->bit_rate = std::numeric_limits<int>::max();
+        context->width = width;
+        context->height = height;
+        context->framerate = framerate;
+        context->time_base = {framerate.den, framerate.num};
+
+        context->pix_fmt = format;
+
+        frame->format = format;
+        frame->width = width;
+        frame->height = height;
+
+        auto ret = avcodec_open2(context, codec, nullptr);
+        THALAMUS_ASSERT(ret >= 0, "Could not open codec: %s", av_err2str(ret));
+
+        ret = av_frame_get_buffer(frame, 0);
+        THALAMUS_ASSERT(ret >= 0, "Could not allocate the video frame data");
+      }
+
+      void decode(const thalamus_grpc::StorageRecord* record) {
+        int ret = 0;
+        if(record) {
+          pending.emplace_back();
+          pending.back().set_time(record->time());
+          pending.back().set_node(record->node());
+          auto pending_image = pending.back().mutable_image();
+          pending_image->set_width(record->image().width());
+          pending_image->set_height(record->image().height());
+          pending_image->set_format(thalamus_grpc::Image::Format::Image_Format_Gray);
+          pending_image->set_frame_interval(record->image().frame_interval());
+          pending_image->set_last(record->image().last());
+          pending_image->set_bigendian(record->image().bigendian());
+
+          auto data = record->image().data(0);
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Wold-style-cast"
+#endif
+          auto offset = 0;
+          while (size_t(offset) < data.size()) {
+            ret = av_parser_parse2(parser, context, &packet->data, &packet->size,
+              reinterpret_cast<unsigned char*>(data.data()) + offset, int(data.size()) - offset, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
+            THALAMUS_ASSERT(ret >= 0, "av_parser_parse2 failed");
+
+            offset += ret;
+
+            if (packet->size) {
+              ret = avcodec_send_packet(context, packet);
+              THALAMUS_ASSERT(ret >= 0, "avcodec_send_packet failed");
+            }
+          }
+        } else {
+          ret = avcodec_send_packet(context, nullptr);
+          THALAMUS_ASSERT(ret >= 0, "avcodec_send_packet failed");
+        }
+        while (ret >= 0) {
+          ret = avcodec_receive_frame(context, frame);
+          if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
+            break;
+          }
+          THALAMUS_ASSERT(ret >= 0, "Error during decoding");
+
+          buffer.push_back(std::move(pending.front()));
+          pending.pop_front();
+          auto& buffer_record = buffer.back();
+          for(auto i = 0;i < 1;++i) {
+            buffer_record.mutable_image()->add_data()->assign(frame->data[0], frame->data[0] + frame->linesize[0]*frame->height);
+          }
+        }
+      }
+      std::optional<thalamus_grpc::StorageRecord> pull() {
+        if(!buffer.empty()) {
+          auto result = std::move(buffer.front());
+          buffer.pop_front();
+          return result;
+        }
+        return std::nullopt;
+      }
+    };
 
     std::optional<thalamus_grpc::StorageRecord> read_record_from_stream() {
       while (true) {
@@ -59,7 +207,7 @@ namespace hydrate {
         auto file_size = stream.tellg();
         stream.seekg(initial_position);
 
-        progress = 100.0 * current_position / file_size;
+        progress = 100.0 * double(current_position) / double(file_size);
 
         if (file_size == current_position) {
           //std::cout << "End of file" << std::endl;
@@ -79,13 +227,13 @@ namespace hydrate {
 
 
         current_position = stream.tellg();
-        if (file_size - current_position < size) {
+        if (size_t(file_size - current_position) < size) {
           std::cout << "Not enough bytes to read message, likely final message was corrupted." << std::endl;
           return std::nullopt;
         }
 
         buffer.resize(size);
-        stream.read(buffer.data(), size);
+        stream.read(buffer.data(), int64_t(size));
 
         thalamus_grpc::StorageRecord record;
         auto parsed = record.ParseFromString(buffer);
@@ -98,8 +246,63 @@ namespace hydrate {
           if (record.compressed().type() == thalamus_grpc::Compressed::Type::Compressed_Type_NONE) {
             continue;
           }
+        } else if (record.body_case() == thalamus_grpc::StorageRecord::kImage && record.image().format() == thalamus_grpc::Image::Format::Image_Format_MPEG1) {
+          decode_video(record);
+          if(record.image().width() == 0) {
+            continue;
+          }
         }
         return record;
+      }
+    }
+
+    std::map<std::string, std::unique_ptr<VideoDecoder>> video_decoders;
+    void decode_video(const thalamus_grpc::StorageRecord& record) {
+      auto& image = record.image();
+      if(!video_decoders.contains(record.node())) {
+        auto framerate_original = 1e9/double(image.frame_interval());
+        auto framerate_i = std::lower_bound(framerates.begin(), framerates.end(), std::make_pair(framerate_original, AVRational{1,1}),
+                                            [](auto& lhs, auto& rhs) { return lhs.first < rhs.first; });
+
+        AVRational framerate;
+        if(framerate_i == framerates.begin()) {
+          framerate = framerates.front().second;
+        } else if (framerate_i == framerates.end()) {
+          framerate = framerates.back().second;
+        } else {
+          if(framerate_original - (framerate_i-1)->first < framerate_i->first - framerate_original) {
+            framerate = (framerate_i-1)->second;
+          } else {
+            framerate = framerate_i->second;
+          }
+        }
+
+        AVPixelFormat format;
+        switch(image.format()) {
+          case thalamus_grpc::Image::Format::Image_Format_Gray:
+            format = AV_PIX_FMT_GRAY8;
+            break;
+          case thalamus_grpc::Image::Format::Image_Format_Gray16:
+            format = image.bigendian() ? AV_PIX_FMT_GRAY16BE : AV_PIX_FMT_GRAY16LE;
+            break;
+          case thalamus_grpc::Image::Format::Image_Format_MPEG1:
+            format = AV_PIX_FMT_YUV420P;
+            break;
+          case thalamus_grpc::Image::Format::Image_Format_RGB:
+          case thalamus_grpc::Image::Format::Image_Format_YUYV422:
+          case thalamus_grpc::Image::Format::Image_Format_YUV420P:
+          case thalamus_grpc::Image::Format::Image_Format_YUVJ420P:
+          case thalamus_grpc::Image::Format::Image_Format_RGB16:
+          case thalamus_grpc::Image::Format::Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
+          case thalamus_grpc::Image::Format::Image_Format_Image_Format_INT_MAX_SENTINEL_DO_NOT_USE_:
+            THALAMUS_ASSERT(false, "Usupported image format");
+        }
+
+        video_decoders[record.node()] = std::make_unique<VideoDecoder>(image.width(), image.height(), framerate, format);
+      }
+      video_decoders[record.node()]->decode(&record);
+      if(image.width() == 0) {
+        video_decoders[record.node()]->decode(nullptr);
       }
     }
 
@@ -110,22 +313,29 @@ namespace hydrate {
         //std::cout << "create " << compressed.stream() << std::endl;
         zstreams[compressed.stream()] = z_stream();
         auto& zstream = zstreams[compressed.stream()];
-        zstream.zalloc = Z_NULL;
-        zstream.zfree = Z_NULL;
-        zstream.opaque = Z_NULL;
+        zstream.zalloc = nullptr;
+        zstream.zfree = nullptr;
+        zstream.opaque = nullptr;
         zstream.avail_in = 0;
-        zstream.next_in = Z_NULL;
+        zstream.next_in = nullptr;
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Wold-style-cast"
+#endif
         auto error = inflateInit(&zstream);
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
         THALAMUS_ASSERT(error == Z_OK, "ZLIB Error: %d", error);
         zstream_buffers[compressed.stream()] = std::make_pair(0ull, std::vector<unsigned char>(1024));
       }
       auto& zstream = zstreams[compressed.stream()];
       auto& [offset, zbuffer] = zstream_buffers[compressed.stream()];
-      zstream.avail_in = compressed_data.size();
+      zstream.avail_in = uint32_t(compressed_data.size());
       zstream.next_in = reinterpret_cast<const unsigned char*>(compressed_data.data());
       auto compressing = true;
       while(compressing) {
-        zstream.avail_out = zbuffer.size() - offset;
+        zstream.avail_out = uint32_t(zbuffer.size() - offset);
         zstream.next_out = zbuffer.data() + offset;
         auto error = inflate(&zstream, Z_NO_FLUSH);
         THALAMUS_ASSERT(error == Z_OK || error == Z_BUF_ERROR || error == Z_STREAM_END, "ZLIB Error: %d", error);
@@ -139,36 +349,51 @@ namespace hydrate {
     }
 
     std::optional<thalamus_grpc::StorageRecord> process_record(const thalamus_grpc::StorageRecord& record) {
-      if(record.body_case() != thalamus_grpc::StorageRecord::kCompressed) {
+      if(record.body_case() == thalamus_grpc::StorageRecord::kCompressed) {
+        auto compressed = record.compressed();
+        auto i = zstream_buffers.find(compressed.stream());
+        auto offset = i->second.first;
+
+        while(offset < size_t(compressed.size())) {
+          auto new_record = read_record_from_stream();
+          i = zstream_buffers.find(compressed.stream());
+          offset = i->second.first;
+          if (!new_record) {
+            break;
+          }
+          record_buffer.push_back(*new_record);
+        }
+        if (offset < size_t(compressed.size())) {
+          return std::nullopt;
+        }
+
+        thalamus_grpc::StorageRecord inflated_record;
+        auto parsed = inflated_record.ParseFromArray(i->second.second.data(), compressed.size());
+        if(!parsed) {
+          return std::nullopt;
+        }
+        i->second.second.erase(i->second.second.begin(), i->second.second.begin() + compressed.size());
+        i->second.first -= size_t(compressed.size());
+
+        return inflated_record;
+      } else if (record.body_case() == thalamus_grpc::StorageRecord::kImage && record.image().format() == thalamus_grpc::Image::Format::Image_Format_MPEG1) {
+        auto& decoder = video_decoders[record.node()];
+        auto pulled = decoder->pull();
+        while(!pulled) {
+          auto new_record = read_record_from_stream();
+          pulled = decoder->pull();
+          if(!new_record) {
+            break;
+          }
+          record_buffer.push_back(*new_record);
+        }
+        if(!pulled) {
+          return std::nullopt;
+        }
+        return pulled;
+      } else {
         return record;
       }
-
-      auto compressed = record.compressed();
-      auto i = zstream_buffers.find(compressed.stream());
-      auto offset = i->second.first;
-
-      while(offset < compressed.size()) {
-        auto record = read_record_from_stream();
-        i = zstream_buffers.find(compressed.stream());
-        offset = i->second.first;
-        if (!record) {
-          break;
-        }
-        record_buffer.push_back(*record);
-      }
-      if (offset < compressed.size()) {
-        return std::nullopt;
-      }
-
-      thalamus_grpc::StorageRecord inflated_record;
-      auto parsed = inflated_record.ParseFromArray(i->second.second.data(), compressed.size());
-      if(!parsed) {
-        return std::nullopt;
-      }
-      i->second.second.erase(i->second.second.begin(), i->second.second.begin() + compressed.size());
-      i->second.first -= compressed.size();
-
-      return inflated_record;
     }
 
     std::optional<thalamus_grpc::StorageRecord> read_record() {
@@ -199,7 +424,8 @@ namespace hydrate {
     unsigned char actor;
   };
 
-  H5Handle createH5Segment(size_t pose_length = 0) {
+  H5Handle createH5Segment(size_t pose_length = 0);
+  H5Handle createH5Segment(size_t pose_length) {
     H5Handle position_type = H5Tcreate(H5T_COMPOUND, sizeof(boost::qvm::vec<float, 3>));
     THALAMUS_ASSERT(position_type);
     auto h5_status = H5Tinsert(position_type, "x", HOFFSET(vecf3, a[0]), H5T_NATIVE_FLOAT);
@@ -258,6 +484,7 @@ namespace hydrate {
     thalamus_grpc::StorageRecord::BodyCase type;
   };
 
+  void create_parent_groups(H5Handle root, const std::string& leaf);
   void create_parent_groups(H5Handle root, const std::string& leaf) {
     std::vector<std::string> path = absl::StrSplit(leaf, "/");
     path.erase(path.end()-1);
@@ -293,6 +520,7 @@ namespace hydrate {
     size_t max_pose_length = 0;
   };
 
+  DataCount count_data(const std::string& filename, const std::optional<std::string> slash_replace);
   DataCount count_data(const std::string& filename, const std::optional<std::string> slash_replace) {
     std::optional<thalamus_grpc::StorageRecord> record;
     std::ifstream input_stream(filename, std::ios::binary);
@@ -316,7 +544,6 @@ namespace hydrate {
           {
             auto analog = record->analog();
             auto spans = analog.spans();
-            hsize_t num_channels = spans.size();
             for(auto& span : spans) {
               hsize_t span_size = span.end() - span.begin();
               auto span_name = span.name().empty() ? "" : span.name();
@@ -338,7 +565,7 @@ namespace hydrate {
             auto xsens = record->xsens();
             result.max_pose_length = std::max(result.max_pose_length, xsens.pose_name().size());
             auto key = std::pair<std::string, std::string>(node_name, "");
-            counts["xsens/" + key.first + "/data"] += xsens.segments().size();
+            counts["xsens/" + key.first + "/data"] += uint64_t(xsens.segments().size());
             ++counts["xsens/" + key.first + "/received"];
           }
           break;
@@ -403,7 +630,9 @@ namespace hydrate {
                 result.dimensions["image/" + key.first + "/data"] = std::make_tuple(image.width(), image.height(), 3);
                 result.datatypes["image/" + key.first + "/data"] = H5T_NATIVE_USHORT;
                 break;
-              default:
+              case thalamus_grpc::Image::Format::Image_Format_MPEG1: 
+              case thalamus_grpc::Image::Format::Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
+              case thalamus_grpc::Image::Format::Image_Format_Image_Format_INT_MAX_SENTINEL_DO_NOT_USE_:
                 THALAMUS_ASSERT(false, "Unexpected image format %d", image.format());
             }
           }
@@ -416,7 +645,8 @@ namespace hydrate {
             ++counts[key.first + "/received"];
           }
           break;
-        default:
+        case thalamus_grpc::StorageRecord::BODY_NOT_SET:
+        case thalamus_grpc::StorageRecord::kCompressed:
           break;
           //std::cout << "Unhandled record type " << record->body_case() << std::endl;
       }
@@ -437,7 +667,7 @@ namespace hydrate {
           hlength[0] /= i;
         }
 
-        H5Handle mem_space = H5Screate_simple(hlength.size(), hlength.data(), NULL);
+        H5Handle mem_space = H5Screate_simple(int(hlength.size()), hlength.data(), nullptr);
         THALAMUS_ASSERT(mem_space);
 
         H5Handle file_space = H5Dget_space(data);
@@ -449,7 +679,7 @@ namespace hydrate {
           start[0] /= i;
         }
 
-        error = H5Sselect_hyperslab(file_space, H5S_SELECT_SET, start.data(), nullptr, hlength.data(), NULL);
+        error = H5Sselect_hyperslab(file_space, H5S_SELECT_SET, start.data(), nullptr, hlength.data(), nullptr);
         THALAMUS_ASSERT(error >= 0);
     
         error = H5Dwrite(data, h5_type, mem_space, file_space, H5P_DEFAULT, cache.data());
@@ -457,9 +687,9 @@ namespace hydrate {
         data_written += data_chunk;
 
         if constexpr (std::is_pointer<BUFFER_TYPE>::value) {
-          std::for_each(cache.begin(), cache.begin() + data_chunk, [](auto arg) { delete[] arg; });
+          std::for_each(cache.begin(), cache.begin() + int64_t(data_chunk), [](auto arg) { delete[] arg; });
         }
-        cache.erase(cache.begin(), cache.begin() + data_chunk);
+        cache.erase(cache.begin(), cache.begin() + int64_t(data_chunk));
       }
     }
     if (update_received) {
@@ -471,24 +701,25 @@ namespace hydrate {
       }
       if(cache.size() >= 2*received_chunk) {
         hsize_t one_row[] = {received_chunk, 2};
-        H5Handle mem_space = H5Screate_simple(2, one_row, NULL);
+        H5Handle mem_space = H5Screate_simple(2, one_row, nullptr);
         THALAMUS_ASSERT(mem_space);
 
         H5Handle file_space = H5Dget_space(received);
         THALAMUS_ASSERT(file_space);
         hsize_t start[] = { received_written, 0 };
-        error = H5Sselect_hyperslab(file_space, H5S_SELECT_SET, start, nullptr, one_row, NULL);
+        error = H5Sselect_hyperslab(file_space, H5S_SELECT_SET, start, nullptr, one_row, nullptr);
         THALAMUS_ASSERT(error >= 0);
 
         error = H5Dwrite(received, H5T_NATIVE_UINT64, mem_space, file_space, H5P_DEFAULT, cache.data());
         THALAMUS_ASSERT(error >= 0);
         received_written += received_chunk;
 
-        cache.erase(cache.begin(), cache.begin() + 2*received_chunk);
+        cache.erase(cache.begin(), cache.begin() + int64_t(2*received_chunk));
       }
     }
   }
 
+  int generate_video(boost::program_options::variables_map& vm);
   int generate_video(boost::program_options::variables_map& vm) {
     auto video = vm.contains("video") ? vm["video"].as<std::string>() : std::string();
     std::string input = vm["input"].as<std::string>();
@@ -501,9 +732,10 @@ namespace hydrate {
       output = input + "_" + video + ".mpg";
     }
 
-    int width = 0;
-    int height = 0;
+    unsigned int width = 0;
+    unsigned int height = 0;
     std::string pixel_format;
+    std::string video_format;
     std::set<size_t> times;
     {
       std::ifstream input_stream(input, std::ios::binary);
@@ -540,7 +772,11 @@ namespace hydrate {
             case thalamus_grpc::Image::Format::Image_Format_RGB16:
               pixel_format = image.bigendian() ? "rgb48be" : "rgb48le";
               break;
-            default:
+            case thalamus_grpc::Image::Format::Image_Format_MPEG1: 
+              video_format = "mpeg1video";
+              break;
+            case thalamus_grpc::Image::Format::Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
+            case thalamus_grpc::Image::Format::Image_Format_Image_Format_INT_MAX_SENTINEL_DO_NOT_USE_:
               THALAMUS_ASSERT(false, "Unexpected image format %d", image.format());
           }
         }
@@ -573,7 +809,7 @@ namespace hydrate {
       {15, "15"}
     };
     std::sort(framerates.begin(), framerates.end());
-    auto framerate = 1e9/average_interval;
+    auto framerate = 1e9/double(average_interval);
     auto framerate_i = std::lower_bound(framerates.begin(), framerates.end(), std::make_pair(framerate, std::string("")));
     std::string ffmpeg_framerate;
     if(framerate_i == framerates.begin()) {
@@ -589,9 +825,16 @@ namespace hydrate {
     }
 
     auto location = boost::dll::program_location();
-    auto command = absl::StrFormat("%s ffmpeg -y -f rawvideo -pixel_format %s -video_size %dx%d -i pipe: "
-                                   "-codec mpeg1video -f matroska -qscale:v 2 -b:v 100M -r %s \"%s\"",
-                                   location.string(), pixel_format, width, height, ffmpeg_framerate, output);
+    std::string command;
+    if(!video_format.empty()) {
+      command = absl::StrFormat("%s ffmpeg -y -f mpeg1video -i pipe: "
+                                "-codec mpeg1video -f matroska -qscale:v 2 -b:v 100M \"%s\"",
+                                location.string(), output);
+    } else {
+      command = absl::StrFormat("%s ffmpeg -y -f rawvideo -pixel_format %s -video_size %dx%d -i pipe: "
+                                "-codec mpeg1video -f matroska -qscale:v 2 -b:v 100M -r %s \"%s\"",
+                                location.string(), pixel_format, width, height, ffmpeg_framerate, output);
+    }
     std::cout << "command " << command;
     boost::process::opstream in;
     boost::process::child ffmpeg(command, boost::process::std_in < in, boost::process::std_out > stdout,  boost::process::std_err > stderr);
@@ -608,36 +851,36 @@ namespace hydrate {
             case thalamus_grpc::Image::Format::Image_Format_Gray:
               {
                 auto data = image.data(0);
-                auto width = image.width();
-                auto height = image.height();
-                auto linesize = data.size()/height;
+                auto image_width = image.width();
+                auto image_height = image.height();
+                auto linesize = data.size()/image_height;
                 auto char_ptr = reinterpret_cast<const char*>(data.data());
-                for(auto i = 0;i < height;++i) {
-                  in.write(char_ptr + i*linesize, width);
+                for(auto i = 0u;i < image_height;++i) {
+                  in.write(char_ptr + i*linesize, image_width);
                 }
                 break;
               }
             case thalamus_grpc::Image::Format::Image_Format_RGB:
               {
                 auto data = image.data(0);
-                auto width = image.width();
-                auto height = image.height();
-                auto linesize = data.size()/height;
+                auto image_width = image.width();
+                auto image_height = image.height();
+                auto linesize = data.size()/image_height;
                 auto char_ptr = reinterpret_cast<const char*>(data.data());
-                for(auto i = 0;i < height;++i) {
-                  in.write(char_ptr + i*linesize, 3*width);
+                for(auto i = 0u;i < image_height;++i) {
+                  in.write(char_ptr + i*linesize, 3*image_width);
                 }
                 break;
               }
             case thalamus_grpc::Image::Format::Image_Format_YUYV422:
               {
                 auto data = image.data(0);
-                auto width = image.width();
-                auto height = image.height();
-                auto linesize = data.size()/height;
+                auto image_width = image.width();
+                auto image_height = image.height();
+                auto linesize = data.size()/image_height;
                 auto char_ptr = reinterpret_cast<const char*>(data.data());
-                for(auto i = 0;i < height;++i) {
-                  in.write(char_ptr + i*linesize, 2*width);
+                for(auto i = 0u;i < image_height;++i) {
+                  in.write(char_ptr + i*linesize, 2*image_width);
                 }
                 break;
               }
@@ -645,16 +888,16 @@ namespace hydrate {
               {
                 for (auto i = 0; i < 3; ++i) {
                   auto data = image.data(i);
-                  auto width = image.width();
-                  auto height = image.height();
+                  auto image_width = image.width();
+                  auto image_height = image.height();
                   if (i) {
-                    width /= 2;
-                    height /= 2;
+                    image_width /= 2;
+                    image_height /= 2;
                   }
-                  auto linesize = data.size() / height;
+                  auto linesize = data.size() / image_height;
                   auto char_ptr = reinterpret_cast<const char*>(data.data());
-                  for (auto i = 0; i < height; ++i) {
-                    in.write(char_ptr + i * linesize, width);
+                  for (auto j = 0u; j < image_height; ++j) {
+                    in.write(char_ptr + j * linesize, image_width);
                   }
                 }
                 break;
@@ -663,16 +906,16 @@ namespace hydrate {
               {
                 for (auto i = 0; i < 3; ++i) {
                   auto data = image.data(i);
-                  auto width = image.width();
-                  auto height = image.height();
+                  auto image_width = image.width();
+                  auto image_height = image.height();
                   if (i) {
-                    width /= 2;
-                    height /= 2;
+                    image_width /= 2;
+                    image_height /= 2;
                   }
-                  auto linesize = data.size() / height;
+                  auto linesize = data.size() / image_height;
                   auto char_ptr = reinterpret_cast<const char*>(data.data());
-                  for (auto i = 0; i < height; ++i) {
-                    in.write(char_ptr + i * linesize, width);
+                  for (auto j = 0u; j < image_height; ++j) {
+                    in.write(char_ptr + j * linesize, image_width);
                   }
                 }
                 break;
@@ -680,28 +923,32 @@ namespace hydrate {
             case thalamus_grpc::Image::Format::Image_Format_Gray16:
               {
                 auto data = image.data(0);
-                auto width = image.width();
-                auto height = image.height();
-                auto linesize = data.size()/height;
+                auto image_width = image.width();
+                auto image_height = image.height();
+                auto linesize = data.size()/image_height;
                 auto char_ptr = reinterpret_cast<const char*>(data.data());
-                for(auto i = 0;i < height;++i) {
-                  in.write(char_ptr + i*linesize, 2*width);
+                for(auto i = 0u;i < image_height;++i) {
+                  in.write(char_ptr + i*linesize, 2*image_width);
                 }
                 break;
               }
             case thalamus_grpc::Image::Format::Image_Format_RGB16:
               {
                 auto data = image.data(0);
-                auto width = image.width();
-                auto height = image.height();
-                auto linesize = data.size()/height;
+                auto image_width = image.width();
+                auto image_height = image.height();
+                auto linesize = data.size()/image_height;
                 auto char_ptr = reinterpret_cast<const char*>(data.data());
-                for(auto i = 0;i < height;++i) {
-                  in.write(char_ptr + i*linesize, 6*width);
+                for(auto i = 0u;i < image_height;++i) {
+                  in.write(char_ptr + i*linesize, 6*image_width);
                 }
                 break;
               }
-            default:
+            case thalamus_grpc::Image::Format::Image_Format_MPEG1: 
+              in.write(image.data(0).data(), int64_t(image.data(0).size()));
+              break;
+            case thalamus_grpc::Image::Format::Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
+            case thalamus_grpc::Image::Format::Image_Format_Image_Format_INT_MAX_SENTINEL_DO_NOT_USE_:
               THALAMUS_ASSERT(false, "Unexpected image format %d", image.format());
           }
         }
@@ -714,6 +961,7 @@ namespace hydrate {
     return 0;
   }
 
+  int generate_csv(boost::program_options::variables_map& vm);
   int generate_csv(boost::program_options::variables_map& vm) {
     auto csv = vm.contains("csv") ? vm["csv"].as<std::string>() : std::string();
     std::string input = vm["input"].as<std::string>();
@@ -771,18 +1019,23 @@ namespace hydrate {
 
             if(analog.is_int_data()) {
               for(auto i = span.begin();i < span.end();++i) {
-                column_outputs[span_name] << record->time() << "," << analog.int_data(i) << "," << std::endl;
+                column_outputs[span_name] << record->time() << "," << analog.int_data(int(i)) << "," << std::endl;
               }
             } else {
               for(auto i = span.begin();i < span.end();++i) {
-                column_outputs[span_name] << record->time() << "," << analog.data(i) << "," << std::endl;
+                column_outputs[span_name] << record->time() << "," << analog.data(int(i)) << "," << std::endl;
               }
             }
             line_count += span.end() - span.begin();
           }
           break;
         }
-      default:
+        case thalamus_grpc::StorageRecord::kXsens:
+        case thalamus_grpc::StorageRecord::kEvent:
+        case thalamus_grpc::StorageRecord::kImage:
+        case thalamus_grpc::StorageRecord::kText:
+        case thalamus_grpc::StorageRecord::kCompressed:
+        case thalamus_grpc::StorageRecord::BODY_NOT_SET:
         break;
       }
     }
@@ -975,7 +1228,7 @@ namespace hydrate {
             error = H5Pset_chunk(plist_id, 2, chunk);
             THALAMUS_ASSERT(error >= 0);
 
-            error = H5Pset_deflate(plist_id, gzip);
+            error = H5Pset_deflate(plist_id, uint32_t(gzip));
             THALAMUS_ASSERT(error >= 0);
           }
 
@@ -984,7 +1237,7 @@ namespace hydrate {
                         file_space, link_plist, plist_id, H5P_DEFAULT));
           THALAMUS_ASSERT(datasets[pair.first]);
         } else {
-          hid_t type;
+          hid_t type = H5T_NATIVE_OPAQUE;
           hsize_t dims[] = { pair.second, 0, 0, 0 };
           hsize_t max_dims[] = { pair.second, 0, 0, 0 };
           int rank = 1;
@@ -1030,7 +1283,7 @@ namespace hydrate {
             error = H5Pset_chunk(plist_id, rank, chunk_dims.data());
             THALAMUS_ASSERT(error >= 0);
 
-            error = H5Pset_deflate(plist_id, gzip);
+            error = H5Pset_deflate(plist_id, uint32_t(gzip));
             THALAMUS_ASSERT(error >= 0);
           }
 
@@ -1071,7 +1324,6 @@ namespace hydrate {
             {
               auto analog = record->analog();
               auto spans = analog.spans();
-              hsize_t num_channels = spans.size();
 
               for(auto& span : spans) {
                 hsize_t span_size = span.end() - span.begin();
@@ -1107,7 +1359,7 @@ namespace hydrate {
               auto received = datasets[received_path];
               auto& data_written = written[data_path];
               auto& received_written = written[received_path];
-              auto data_count = gzip ? std::min(dataset_counts[data_path] - data_written, chunk_size) : xsens.segments().size();
+              auto segment_count = gzip ? std::min(dataset_counts[data_path] - data_written, chunk_size) : size_t(xsens.segments().size());
               auto received_count = gzip ? std::min(dataset_counts[received_path] - received_written, chunk_size) : 1;
               std::string pose = xsens.pose_name();
               auto pose_cstr = pose.c_str();
@@ -1119,14 +1371,14 @@ namespace hydrate {
                 segment.frame = s.frame();
                 segment.segment_id = s.id();
                 segment.time = s.time();
-                segment.actor = s.actor();
+                segment.actor = uint8_t(s.actor());
                 segment.position = boost::qvm::vec<float, 3>{s.x(), s.y(), s.z()};
                 segment.rotation = boost::qvm::quat<float>{s.q0(), s.q1(), s.q2(), s.q3()};
                 segment.pose = pose_cstr;
               }
-              hsize_t num_segments = xsens.segments().size();
+              auto num_segments = hsize_t(xsens.segments().size());
               write_data(record->time(), num_segments, data, received, data_written, received_written, segment_type, segments.data(),
-                         segment_caches[data], received_caches[received], data_count, received_count);
+                         segment_caches[data], received_caches[received], segment_count, received_count);
             }
             break;
           case thalamus_grpc::StorageRecord::kText:
@@ -1141,11 +1393,11 @@ namespace hydrate {
               auto received = datasets[received_path];
               auto& data_written = written[data_path];
               auto& received_written = written[received_path];
-              auto data_count = gzip ? std::min(dataset_counts[data_path] - data_written, chunk_size) : 1;
+              auto text_data_count = gzip ? std::min(dataset_counts[data_path] - data_written, chunk_size) : 1;
               auto received_count = gzip ? std::min(dataset_counts[received_path] - received_written, chunk_size) : 1;
 
               write_data(record->time(), 1, data, received, data_written, received_written, str_type, &text_data,
-                         text_caches[data], received_caches[received], data_count, received_count);
+                         text_caches[data], received_caches[received], text_data_count, received_count);
             }
             break;
           case thalamus_grpc::StorageRecord::kImage:
@@ -1165,23 +1417,23 @@ namespace hydrate {
                     auto received = datasets[received_path];
                     auto& data_written = written[data_path];
                     auto& received_written = written[received_path];
-                    auto data_count = gzip ? std::min(dataset_counts[data_path] - data_written, chunk_size) : 1;
+                    auto image_data_count = gzip ? std::min(dataset_counts[data_path] - data_written, chunk_size) : 1;
                     auto received_count = gzip ? std::min(dataset_counts[received_path] - received_written, chunk_size) : 1;
                     auto length = image.width()*image.height();
                     auto linesize = image.data(0).size() / image.height();
-                    data_count *= length;
+                    image_data_count *= length;
 
                     bytes_pointer = reinterpret_cast<const unsigned char*>(image.data(0).data());
                     if (image.width() != linesize) {
                       bytes_vector.clear();
-                      for (auto i = 0; i < image.height(); ++i) {
+                      for (auto i = 0u; i < image.height(); ++i) {
                         bytes_vector.insert(bytes_vector.end(), bytes_pointer, bytes_pointer + linesize * i + image.width());
                       }
                       bytes_pointer = bytes_vector.data();
                     }
 
                     write_data(record->time(), length, data, received, data_written, received_written, H5T_NATIVE_UCHAR, bytes_pointer,
-                        image_caches[data], received_caches[received], data_count, received_count, {image.width(), image.height()});
+                        image_caches[data], received_caches[received], image_data_count, received_count, {image.width(), image.height()});
                     break;
                   }
                 case thalamus_grpc::Image::Format::Image_Format_RGB:
@@ -1192,23 +1444,23 @@ namespace hydrate {
                     auto received = datasets[received_path];
                     auto& data_written = written[data_path];
                     auto& received_written = written[received_path];
-                    auto data_count = gzip ? std::min(dataset_counts[data_path] - data_written, chunk_size) : 1;
+                    auto image_data_count = gzip ? std::min(dataset_counts[data_path] - data_written, chunk_size) : 1;
                     auto received_count = gzip ? std::min(dataset_counts[received_path] - received_written, chunk_size) : 1;
                     auto length = image.width()*image.height()*3;
                     auto linesize = image.data(0).size() / image.height();
-                    data_count *= length;
+                    image_data_count *= length;
 
                     bytes_pointer = reinterpret_cast<const unsigned char*>(image.data(0).data());
                     if (3*image.width() != linesize) {
                       bytes_vector.clear();
-                      for (auto i = 0; i < image.height(); ++i) {
+                      for (auto i = 0u; i < image.height(); ++i) {
                         bytes_vector.insert(bytes_vector.end(), bytes_pointer, bytes_pointer + linesize * i + 3*image.width());
                       }
                       bytes_pointer = bytes_vector.data();
                     }
 
                     write_data(record->time(), length, data, received, data_written, received_written, H5T_NATIVE_UCHAR, bytes_pointer,
-                        image_caches[data], received_caches[received], data_count, received_count, {image.width(), image.height(), 3});
+                        image_caches[data], received_caches[received], image_data_count, received_count, {image.width(), image.height(), 3});
                     break;
                   }
                 case thalamus_grpc::Image::Format::Image_Format_YUYV422:
@@ -1219,23 +1471,23 @@ namespace hydrate {
                     auto received = datasets[received_path];
                     auto& data_written = written[data_path];
                     auto& received_written = written[received_path];
-                    auto data_count = gzip ? std::min(dataset_counts[data_path] - data_written, chunk_size) : 1;
+                    auto image_data_count = gzip ? std::min(dataset_counts[data_path] - data_written, chunk_size) : 1;
                     auto received_count = gzip ? std::min(dataset_counts[received_path] - received_written, chunk_size) : 1;
                     auto length = 2*image.width()*image.height();
                     auto linesize = image.data(0).size() / image.height();
-                    data_count *= length;
+                    image_data_count *= length;
 
                     bytes_pointer = reinterpret_cast<const unsigned char*>(image.data(0).data());
                     if (2*image.width() != linesize) {
                       bytes_vector.clear();
-                      for (auto i = 0; i < image.height(); ++i) {
+                      for (auto i = 0u; i < image.height(); ++i) {
                         bytes_vector.insert(bytes_vector.end(), bytes_pointer, bytes_pointer + linesize * i + 2*image.width());
                       }
                       bytes_pointer = bytes_vector.data();
                     }
 
                     write_data(record->time(), length, data, received, data_written, received_written, H5T_NATIVE_UCHAR, bytes_pointer,
-                        image_caches[data], received_caches[received], data_count, received_count, {2*image.width(), image.height()});
+                        image_caches[data], received_caches[received], image_data_count, received_count, {2*image.width(), image.height()});
                     break;
                   }
                 case thalamus_grpc::Image::Format::Image_Format_YUV420P:
@@ -1254,29 +1506,29 @@ namespace hydrate {
                       auto received = datasets[received_path];
                       auto& data_written = written[data_path];
                       auto& received_written = written[received_path];
-                      auto data_count = gzip ? std::min(dataset_counts[data_path] - data_written, chunk_size) : 1;
+                      auto image_data_count = gzip ? std::min(dataset_counts[data_path] - data_written, chunk_size) : 1;
                       auto received_count = gzip ? std::min(dataset_counts[received_path] - received_written, chunk_size) : 1;
-                      auto width = image.width();
-                      auto height = image.height();
+                      auto width = size_t(image.width());
+                      auto height = size_t(image.height());
                       if(i > 0) {
                         width /= 2;
                         height /= 2;
                       }
                       auto length = width*height;
-                      data_count *= length;
+                      image_data_count *= length;
                       auto linesize = image.data(i).size() / height;
 
                       bytes_pointer = reinterpret_cast<const unsigned char*>(image.data(i).data());
                       if (width != linesize) {
                         bytes_vector.clear();
-                        for (auto j = 0; j < height; ++j) {
+                        for (auto j = 0ull; j < height; ++j) {
                           bytes_vector.insert(bytes_vector.end(), bytes_pointer + linesize * j, bytes_pointer + linesize * j + width);
                         }
                         bytes_pointer = bytes_vector.data();
                       }
 
                       write_data(record->time(), length, data, received, data_written, received_written, H5T_NATIVE_UCHAR, bytes_pointer,
-                          image_caches[data], received_caches[received], data_count, received_count, {width, height}, update_received);
+                          image_caches[data], received_caches[received], image_data_count, received_count, {width, height}, update_received);
                       update_received = false;
                       ++i;
                     }
@@ -1290,15 +1542,15 @@ namespace hydrate {
                     auto received = datasets[received_path];
                     auto& data_written = written[data_path];
                     auto& received_written = written[received_path];
-                    auto data_count = gzip ? std::min(dataset_counts[data_path] - data_written, chunk_size) : 1;
+                    auto image_data_count = gzip ? std::min(dataset_counts[data_path] - data_written, chunk_size) : 1;
                     auto received_count = gzip ? std::min(dataset_counts[received_path] - received_written, chunk_size) : 1;
                     auto length = image.width()*image.height();
-                    data_count *= length;
+                    image_data_count *= length;
 
                     bytes_pointer = reinterpret_cast<const unsigned char*>(image.data(0).data());
                     shorts_vector.clear();
-                    for(auto j = 0;j < length;++j) {
-                      shorts_vector.push_back((bytes_pointer[2*j] << 8) | bytes_pointer[2*j+1]);
+                    for(auto j = 0u;j < length;++j) {
+                      shorts_vector.push_back(uint16_t((bytes_pointer[2*j] << 8) | bytes_pointer[2*j+1]));
                       if(image.bigendian()) {
                         boost::endian::big_to_native_inplace(shorts_vector.back());
                       } else {
@@ -1307,7 +1559,7 @@ namespace hydrate {
                     }
 
                     write_data(record->time(), length, data, received, data_written, received_written, H5T_NATIVE_USHORT, shorts_vector.data(),
-                        short_image_caches[data], received_caches[received], data_count, received_count, {image.width(), image.height()});
+                        short_image_caches[data], received_caches[received], image_data_count, received_count, {image.width(), image.height()});
                     break;
                   }
                 case thalamus_grpc::Image::Format::Image_Format_RGB16:
@@ -1318,15 +1570,15 @@ namespace hydrate {
                     auto received = datasets[received_path];
                     auto& data_written = written[data_path];
                     auto& received_written = written[received_path];
-                    auto data_count = gzip ? std::min(dataset_counts[data_path] - data_written, chunk_size) : 1;
+                    auto image_data_count = gzip ? std::min(dataset_counts[data_path] - data_written, chunk_size) : 1;
                     auto received_count = gzip ? std::min(dataset_counts[received_path] - received_written, chunk_size) : 1;
                     auto length = 3*image.width()*image.height();
-                    data_count *= length;
+                    image_data_count *= length;
 
                     bytes_pointer = reinterpret_cast<const unsigned char*>(image.data(0).data());
                     shorts_vector.clear();
-                    for(auto j = 0;j < length;++j) {
-                      shorts_vector.push_back((bytes_pointer[2*j] << 8) | bytes_pointer[2*j+1]);
+                    for(auto j = 0u;j < length;++j) {
+                      shorts_vector.push_back(uint16_t((bytes_pointer[2*j] << 8) | bytes_pointer[2*j+1]));
                       if(image.bigendian()) {
                         boost::endian::big_to_native_inplace(shorts_vector.back());
                       } else {
@@ -1335,10 +1587,12 @@ namespace hydrate {
                     }
 
                     write_data(record->time(), length, data, received, data_written, received_written, H5T_NATIVE_USHORT, shorts_vector.data(),
-                        short_image_caches[data], received_caches[received], data_count, received_count, {image.width(), image.height(), 3});
+                        short_image_caches[data], received_caches[received], image_data_count, received_count, {image.width(), image.height(), 3});
                     break;
                   }
-                default:
+                case thalamus_grpc::Image::Format::Image_Format_MPEG1: 
+                case thalamus_grpc::Image::Format::Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
+                case thalamus_grpc::Image::Format::Image_Format_Image_Format_INT_MAX_SENTINEL_DO_NOT_USE_:
                   THALAMUS_ASSERT(false, "Unexpected image format %d", image.format());
               }
             }
@@ -1350,7 +1604,7 @@ namespace hydrate {
               auto received = datasets["events/received"];
               auto& data_written = written["events/data"];
               auto& received_written = written["events/received"];
-              auto data_count = gzip ? std::min(dataset_counts["events/data"] - data_written, chunk_size) : 1;
+              auto event_data_count = gzip ? std::min(dataset_counts["events/data"] - data_written, chunk_size) : 1;
               auto received_count = gzip ? std::min(dataset_counts["events/received"] - received_written, chunk_size) : 1;
               
               Event h5_event;
@@ -1358,10 +1612,11 @@ namespace hydrate {
               h5_event.payload.len = event.payload().size();
               h5_event.payload.p = const_cast<void*>(static_cast<const void*>(event.payload().data()));
               write_data(record->time(), 1, data, received, data_written, received_written, event_type, &h5_event,
-                         event_cache, received_caches[received], data_count, received_count);
+                         event_cache, received_caches[received], event_data_count, received_count);
             }
             break;
-          default:
+          case thalamus_grpc::StorageRecord::BODY_NOT_SET:
+          case thalamus_grpc::StorageRecord::kCompressed:
             break;
             //std::cout << "Unhandled record type " << record->body_case() << std::endl;
         }

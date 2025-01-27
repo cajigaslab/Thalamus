@@ -141,7 +141,9 @@ message("PROTO_SOURCES ${PROTO_SOURCES}")
 message("PROTO_GENERATED_SOURCES ${PROTO_GENERATED_SOURCES}")
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  set(WARNING_FLAGS -Weverything -Wno-deprecated-declarations -Wno-c11-extensions -Wno-gcc-compat -Wno-c++98-compat-pedantic -Wno-c++20-compat -Wno-unsafe-buffer-usage -Wno-switch-default)
+  set(WARNING_FLAGS 
+    -Weverything -Wno-deprecated-declarations -Wno-c11-extensions -Wno-gcc-compat -Wno-c++98-compat-pedantic
+    -Wno-c++20-compat -Wno-unsafe-buffer-usage -Wno-switch-default -Wno-c99-extensions)
 else()
   #set(WARNING_FLAGS /Wall)
   set(WARNING_FLAGS)
@@ -157,7 +159,7 @@ if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
 endif()
 
 add_library(hydrate "src/hydrate.cpp")
-target_link_libraries(hydrate boost grpc++ hdf5-static zlib_processed)
+target_link_libraries(hydrate boost grpc++ hdf5-static ffmpeg zlib_processed)
 add_dependencies(hydrate protoc_generated)
 target_compile_definitions(hydrate PRIVATE _USE_MATH_DEFINES NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS _GNU_SOURCE)
 target_include_directories(hydrate PRIVATE "${CMAKE_SOURCE_DIR}/src")

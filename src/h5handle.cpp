@@ -2,7 +2,6 @@
 #include <map>
 #include <memory>
 #include <functional>
-#include <hdf5.h>
 #include <util.hpp>
 #include <xsens_node.hpp>
 

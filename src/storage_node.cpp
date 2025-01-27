@@ -31,11 +31,13 @@
 #include <zlib.h>
 
 extern "C" {
+#include <libavutil/imgutils.h>
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libavdevice/avdevice.h>
 #include <libavutil/mem.h>
 #include <libavutil/opt.h>
+#include <libswscale/swscale.h>
 }
  
 #ifdef __clang__
@@ -229,6 +231,7 @@ namespace thalamus {
         auto body = record.mutable_image();
         body->set_width(uint32_t(locked_analog->width()));
         body->set_height(uint32_t(locked_analog->height()));
+        body->set_frame_interval(uint32_t(locked_analog->frame_interval().count()));
         switch(locked_analog->format()) {
         case ImageNode::Format::Gray:
           body->set_format(thalamus_grpc::Image::Format::Image_Format_Gray);
@@ -364,27 +367,330 @@ namespace thalamus {
 
     struct ContextDeleter {
       void operator()(AVCodecContext* c) {
-        avcodec_free_context(c);
+        avcodec_free_context(&c);
       }
     };
 
     struct PacketDeleter {
       void operator()(AVPacket* c) {
-        av_packet_free(c);
+        av_packet_free(&c);
       }
     };
 
     struct FrameDeleter {
       void operator()(AVFrame* c) {
-        av_frame_free(c);
+        av_frame_free(&c);
       }
     };
 
     struct VideoCodec {
-      AVCodec* codec;
+      const AVCodec* codec;
       std::unique_ptr<AVCodecContext, ContextDeleter> context;
       std::unique_ptr<AVPacket, PacketDeleter> packet;
-      VideoCodec(AVCodec* codec) : codec(codec), context(avcodec_alloc_context3(codec)), packet(av_packet_alloc()) {
+      std::unique_ptr<AVFrame, FrameDeleter> frame;
+      VideoCodec(const AVCodec* _codec) 
+        : codec(_codec)
+        , context(avcodec_alloc_context3(codec)), packet(av_packet_alloc()), frame(av_frame_alloc()) {
+      }
+    };
+
+    struct Encoder {
+      virtual ~Encoder() {}
+      virtual void work() = 0;
+      virtual void finish() = 0;
+      virtual void push(thalamus_grpc::StorageRecord&& record) = 0;
+      virtual std::optional<thalamus_grpc::StorageRecord> pull() = 0;
+    };
+
+    struct IdentityEncoder : public Encoder {
+      std::list<thalamus_grpc::StorageRecord> queue;
+
+      void work() override {}
+      void finish() override {}
+      void push(thalamus_grpc::StorageRecord&& record) override {
+        queue.push_back(std::move(record));
+      }
+      std::optional<thalamus_grpc::StorageRecord> pull() override {
+        if(!queue.empty()) {
+          std::optional<thalamus_grpc::StorageRecord> result = std::move(queue.front());
+          queue.pop_front();
+          return result;
+        }
+        return std::nullopt;
+      }
+    };
+
+    struct VideoEncoder : public Encoder {
+      const AVCodec* codec;
+      AVCodecContext* context;
+      AVPacket* packet;
+      AVFrame* frame;
+      std::vector<thalamus_grpc::StorageRecord> in_queue;
+      std::list<thalamus_grpc::StorageRecord> out_queue;
+      int pts = 0;
+      struct SwsContext* sws_context;
+      uint8_t *src_data[4], *dst_data[4];
+      int src_linesize[4], dst_linesize[4];
+      std::string node;
+
+      VideoEncoder(int width, int height, AVPixelFormat format, AVRational framerate, const std::string& _node) : node(_node) {
+        codec = avcodec_find_encoder(AV_CODEC_ID_MPEG1VIDEO);
+        THALAMUS_ASSERT(codec, "avcodec_find_encoder failed");
+        context = avcodec_alloc_context3(codec);
+        THALAMUS_ASSERT(context, "avcodec_alloc_context3 failed");
+        packet = av_packet_alloc();
+        frame = av_frame_alloc();
+
+        context->bit_rate = std::numeric_limits<int>::max();
+        context->width = width;
+        context->height = height;
+        context->framerate = framerate;
+        context->time_base = {framerate.den, framerate.num};
+
+        context->pix_fmt = AV_PIX_FMT_YUV420P;
+
+        frame->format = context->pix_fmt;
+        frame->width = width;
+        frame->height = height;
+
+        auto ret = avcodec_open2(context, codec, nullptr);
+        THALAMUS_ASSERT(ret >= 0, "Could not open codec: %s", av_err2str(ret));
+
+        ret = av_frame_get_buffer(frame, 0);
+        THALAMUS_ASSERT(ret >= 0, "Could not allocate the video frame data");
+
+        sws_context = sws_getContext(width, height, format,
+                                     width, height, context->pix_fmt,
+                                     SWS_BILINEAR, nullptr, nullptr, nullptr);
+        ret = av_image_alloc(src_data, src_linesize, width, height, format, 16);
+        THALAMUS_ASSERT(ret >= 0, "Could not allocate source image");
+        ret = av_image_alloc(dst_data, dst_linesize, width, height, context->pix_fmt, 16);
+        THALAMUS_ASSERT(ret >= 0, "Could not allocate destination image");
+      }
+      ~VideoEncoder() override {
+        avcodec_free_context(&context);
+        av_packet_free(&packet);
+        av_frame_free(&frame);
+        av_freep(&src_data[0]);
+        av_freep(&dst_data[0]);
+      }
+      void work() override {
+        for(auto& record : in_queue) {
+          auto image = record.image();
+
+          thalamus_grpc::StorageRecord compressed_record;
+          compressed_record.set_node(node);
+          compressed_record.set_time(record.time());
+          auto compressed_image = compressed_record.mutable_image();
+          compressed_image->set_width(image.width());
+          compressed_image->set_height(image.height());
+          compressed_image->set_format(thalamus_grpc::Image::Format::Image_Format_MPEG1);
+          compressed_image->set_frame_interval(image.frame_interval());
+          compressed_image->set_last(image.last());
+          compressed_image->set_bigendian(image.bigendian());
+
+          auto ret = av_frame_make_writable(frame);
+          THALAMUS_ASSERT(ret >= 0, "av_frame_make_writable failed");
+
+          std::array<unsigned int, 3> bps;
+          switch(image.format()) {
+            case thalamus_grpc::Image::Format::Image_Format_Gray:
+              bps = {1, 1, 1};
+              break;
+            case thalamus_grpc::Image::Format::Image_Format_RGB:
+              bps = {3, 3, 3};
+              break;
+            case thalamus_grpc::Image::Format::Image_Format_YUYV422:
+              bps = {1, 2, 1};
+              break;
+            case thalamus_grpc::Image::Format::Image_Format_YUV420P:
+              bps = {1, 1, 1};
+              break;
+            case thalamus_grpc::Image::Format::Image_Format_YUVJ420P:
+              bps = {1, 1, 1};
+              break;
+            case thalamus_grpc::Image::Format::Image_Format_Gray16:
+              bps = {2, 2, 2};
+              break;
+            case thalamus_grpc::Image::Format::Image_Format_RGB16:
+              bps = {6, 6, 6};
+              break;
+            case thalamus_grpc::Image::Format::Image_Format_MPEG1: 
+            case thalamus_grpc::Image::Format::Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
+            case thalamus_grpc::Image::Format::Image_Format_Image_Format_INT_MAX_SENTINEL_DO_NOT_USE_:
+              THALAMUS_ASSERT(false, "Unsupported format");
+          }
+
+          for(auto p = 0ull;p < size_t(image.data().size());++p) {
+            auto linesize = image.data(int(p)).size()/image.height()*bps[p];
+            auto width = image.width()*bps[p];
+            for(auto y = 0u;y < image.height();++y) {
+              std::copy_n(image.data(int(p)).data() + y*linesize, width, src_data[p] + y*uint32_t(src_linesize[p]));
+            }
+          }
+          frame->pts = pts++;
+
+          sws_scale(sws_context, src_data, src_linesize, 0, int(image.height()), dst_data, dst_linesize);
+          std::copy(std::begin(dst_data), std::end(dst_data), frame->data);
+          std::copy(std::begin(dst_linesize), std::end(dst_linesize), frame->linesize);
+
+          ret = avcodec_send_frame(context, frame);
+          THALAMUS_ASSERT(ret >= 0, "Error sending a frame for encoding");
+
+          auto data = compressed_image->add_data();
+          while (ret >= 0) {
+            ret = avcodec_receive_packet(context, packet);
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Wold-style-cast"
+#endif
+            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+              break;
+            }
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
+            THALAMUS_ASSERT(ret >= 0, "Error during encoding");
+            data->append(reinterpret_cast<char*>(packet->data), size_t(packet->size));
+            av_packet_unref(packet);
+          }
+          out_queue.push_back(compressed_record);
+        }
+        in_queue.clear();
+      }
+      void finish() override {
+        thalamus_grpc::StorageRecord compressed_record;
+        auto compressed_image = compressed_record.mutable_image();
+        compressed_record.set_node(node);
+        compressed_image->set_format(thalamus_grpc::Image::Format::Image_Format_MPEG1);
+
+        auto ret = avcodec_send_frame(context, nullptr);
+        THALAMUS_ASSERT(ret >= 0, "Error sending a frame for encoding");
+
+        auto data = compressed_image->add_data();
+        while (ret >= 0) {
+          ret = avcodec_receive_packet(context, packet);
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Wold-style-cast"
+#endif
+          if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
+            break;
+          }
+          THALAMUS_ASSERT(ret >= 0, "Error during encoding");
+          data->append(reinterpret_cast<char*>(packet->data), size_t(packet->size));
+          av_packet_unref(packet);
+        }
+        out_queue.push_back(compressed_record);
+      }
+      void push(thalamus_grpc::StorageRecord&& record) override {
+        in_queue.push_back(std::move(record));
+      }
+      std::optional<thalamus_grpc::StorageRecord> pull() override {
+        if(!out_queue.empty()) {
+          std::optional<thalamus_grpc::StorageRecord> result = std::move(out_queue.front());
+          out_queue.pop_front();
+          return result;
+        }
+        return std::nullopt;
+      }
+    };
+
+    struct ZlibEncoder : public Encoder {
+      int stream_id;
+      z_stream zstream;
+      std::vector<thalamus_grpc::StorageRecord> in_queue;
+      std::list<thalamus_grpc::StorageRecord> out_queue;
+      thalamus_grpc::StorageRecord current;
+
+      ZlibEncoder(int _stream_id) : stream_id(_stream_id) {
+        zstream.zalloc = nullptr;
+        zstream.zfree = nullptr;
+        zstream.opaque = nullptr;
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Wold-style-cast"
+#endif
+        auto error = deflateInit(&zstream, 1);
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
+        THALAMUS_ASSERT(error == Z_OK, "ZLIB Error: %d", error);
+      }
+
+      void work() override {
+        for(auto& record : in_queue) {
+          auto serialized = record.SerializePartialAsString();
+          thalamus_grpc::StorageRecord compressed_record;
+          compressed_record.set_time(record.time());
+          auto record_compressed = compressed_record.mutable_compressed();
+          record_compressed->set_type(thalamus_grpc::Compressed::Type::Compressed_Type_ANALOG);
+          record_compressed->set_stream(stream_id);
+          record_compressed->set_size(int(serialized.size()));
+          auto compressed_data = record_compressed->mutable_data();
+          if(compressed_data->empty()) {
+            compressed_data->resize(1024);
+          }
+
+          zstream.avail_in = uint32_t(serialized.size());
+          zstream.next_in = reinterpret_cast<unsigned char*>(serialized.data());
+          auto compressing = true;
+          size_t offset = 0;
+          while(compressing) {
+            zstream.avail_out = uint32_t(compressed_data->size() - offset);
+            zstream.next_out = reinterpret_cast<unsigned char*>(compressed_data->data()) + offset;
+            auto error = deflate(&zstream, Z_NO_FLUSH);
+            THALAMUS_ASSERT(error == Z_OK, "ZLIB Error: %d", error);
+            compressing = zstream.avail_out == 0;
+            if(compressing) {
+              offset = compressed_data->size();
+              compressed_data->resize(2*compressed_data->size());
+            }
+          }
+          compressed_data->resize(compressed_data->size() - zstream.avail_out);
+          out_queue.push_back(std::move(compressed_record));
+        }
+        in_queue.clear();
+      }
+      void finish() override {
+        thalamus_grpc::StorageRecord compressed_record;
+        auto record_compressed = compressed_record.mutable_compressed();
+        record_compressed->set_type(thalamus_grpc::Compressed::Type::Compressed_Type_NONE);
+        record_compressed->set_stream(stream_id);
+        auto compressed_data = record_compressed->mutable_data();
+        if(compressed_data->empty()) {
+          compressed_data->resize(1024);
+        }
+
+        auto compressing = true;
+        size_t offset = 0;
+        while(compressing) {
+          zstream.avail_out = uint32_t(compressed_data->size() - offset);
+          zstream.next_out = reinterpret_cast<unsigned char*>(compressed_data->data()) + offset;
+          auto error = deflate(&zstream, Z_FINISH);
+          THALAMUS_ASSERT(error == Z_OK || error == Z_STREAM_END, "ZLIB Error: %d", error);
+          compressing = zstream.avail_out == 0;
+          if(compressing) {
+            offset = compressed_data->size();
+            compressed_data->resize(2*compressed_data->size());
+          }
+        }
+        compressed_data->resize(compressed_data->size() - zstream.avail_out);
+        out_queue.push_back(std::move(compressed_record));
+      }
+      void push(thalamus_grpc::StorageRecord&& record) override {
+        in_queue.push_back(std::move(record));
+      }
+      std::optional<thalamus_grpc::StorageRecord> pull() override {
+        if(!out_queue.empty()) {
+          std::optional<thalamus_grpc::StorageRecord> result = std::move(out_queue.front());
+          out_queue.pop_front();
+          return result;
+        }
+        return std::nullopt;
       }
     };
 
@@ -395,29 +701,92 @@ namespace thalamus {
         close_file();
       });
 
-      std::map<int, std::shared_ptr<StreamState>> streams;
       SimplePool<thalamus_grpc::StorageRecord> record_pool;
-      std::map<int, std::vector<size_t>> compressed_map;
-      std::map<std::string, VideoCodec> av_codecs;
-      std::vector<std::pair<int, std::vector<size_t>>> compressed;
-      std::vector<std::string> all_serialized;
 
-      auto codec = avcodec_find_encoder(AV_CODEC_ID_MPEG1VIDEO);
+      IdentityEncoder identity_encoder;
+      std::map<int, std::unique_ptr<ZlibEncoder>> zlib_encoders;
+      std::map<std::string, std::unique_ptr<VideoEncoder>> video_encoders;
+      std::vector<Encoder*> encoders;
+      encoders.push_back(&identity_encoder);
+      std::string buffer;
 
-      std::vector<std::pair<double, AVRational>> intervals = {
-        {24000.0/1001, AVRational{24000, 1001}},
-        {24, AVRational{24, 1}},
-        {25, AVRational{25, 1}},
-        {30000.0/1001, AVRational{30000, 1001}},
-        {30, AVRational{30, 1}},
-        {50, AVRational{50, 1}},
-        {60000.0/1001, AVRational{60000, 1001}},
-        {60, AVRational{60, 1}},
-        {15, AVRational{15, 1}}, 
-        {5, AVRational{5, 1}}, 
-        {10, AVRational{10, 1}}, 
-        {12, AVRational{12, 1}}, 
-        {15, AVRational{15, 1}}
+      std::vector<std::pair<double, AVRational>> framerates = {
+        {24000.0/1001, {24000, 1001}},
+        {24, {24, 1}},
+        {25, {25, 1}},
+        {30000.0/1001, {30000, 1001}},
+        {30, {30, 1}},
+        {50, {50, 1}},
+        {60000.0/1001, {60000, 1001}},
+        {60, {60, 1}},
+        {15, {15, 1}}, 
+        {5, {5, 1}}, 
+        {10, {10, 1}}, 
+        {12, {12, 1}}, 
+        {15, {15, 1}}
+      };
+      std::sort(framerates.begin(), framerates.end(), [](auto& lhs, auto& rhs) { return lhs.first < rhs.first; });
+
+      auto service_encoders = [&] (bool finish) {
+        std::mutex mutex;
+        std::condition_variable condition;
+        auto band_size = std::max(1ull, encoders.size()/pool.num_threads);
+        band_size += (band_size*pool.num_threads < encoders.size()) ? 1 : 0;
+        size_t pending_bands = encoders.size()/band_size;
+        pending_bands += (pending_bands * band_size < encoders.size()) ? 1 : 0;
+        {
+          TRACE_EVENT("thalamus", "encode_all");
+          for(auto i = 0ull;i < encoders.size();i+=band_size) {
+            auto upper = std::min(i+band_size, encoders.size());
+            pool.push([&,i,upper] {
+              TRACE_EVENT("thalamus", "encode");
+              for(auto j = i;j < upper;++j) {
+                finish ? encoders[j]->finish() : encoders[j]->work();
+              }
+              std::lock_guard<std::mutex> lock(mutex);
+              --pending_bands;
+              condition.notify_all();
+            });
+          }
+          std::unique_lock<std::mutex> lock(mutex);
+          condition.wait(lock, [&] { return pending_bands == 0; });
+        }
+
+        std::vector<std::pair<uint64_t, thalamus_grpc::StorageRecord>> heap;
+        auto comparator = [] (decltype(heap)::value_type lhs, decltype(heap)::value_type rhs) {
+          return lhs.first > rhs.first;
+        };
+
+        {
+          TRACE_EVENT("thalamus", "sort");
+          for(auto encoder : encoders) {
+            auto record = encoder->pull();
+            while (record) {
+              heap.emplace_back(record->time(), std::move(*record));
+              std::push_heap(heap.begin(), heap.end(), comparator);
+              record = encoder->pull();
+            }
+          }
+        }
+
+        {
+          TRACE_EVENT("thalamus", "serialize");
+          buffer.clear();
+          while(!heap.empty()) {
+            std::pop_heap(heap.begin(), heap.end(), comparator); 
+            auto serialized = heap.back().second.SerializePartialAsString();
+            heap.pop_back();
+
+            auto size = serialized.size();
+            auto bigendian_size = htonll(size);
+            auto size_bytes = reinterpret_cast<char*>(&bigendian_size);
+            buffer.append(size_bytes, sizeof(bigendian_size));
+            buffer.append(serialized);
+          }
+        }
+
+        TRACE_EVENT("thalamus", "write");
+        output_stream.write(buffer.data(), int64_t(buffer.size()));
       };
 
       while(is_running) {
@@ -427,239 +796,69 @@ namespace thalamus {
           records_condition.wait_for(lock, 1s, [&] { return !records.empty() || !is_running; });
           local_records.swap(records);
         }
+        for(auto& record_pair : local_records) {
+          auto& [record, stream] = record_pair;
+          auto body_type = record.body_case();
+          if(body_type == thalamus_grpc::StorageRecord::kAnalog && compress_analog) {
+            if(!zlib_encoders.contains(stream)) {
+              auto encoder = std::make_unique<ZlibEncoder>(stream);
+              encoders.push_back(encoder.get());
+              zlib_encoders[stream] = std::move(encoder);
+            }
+            zlib_encoders[stream]->push(std::move(record));
+          } else if(body_type == thalamus_grpc::StorageRecord::kImage && compress_video) {
+            if(!video_encoders.contains(record.node())) {
+              auto& image = record.image();
+              auto framerate_original = image.frame_interval() ? 1e9/double(image.frame_interval()) : 1.0/60;
+              auto framerate_i = std::lower_bound(framerates.begin(), framerates.end(), std::make_pair(framerate_original, AVRational{1,1}),
+                                                  [](auto& lhs, auto& rhs) { return lhs.first < rhs.first; });
 
-        all_serialized.resize(local_records.size());
-        compressed_map.clear();
-        {
-          TRACE_EVENT("thalamus", "serialize");
-          if(compress_analog) {
-            size_t i = 0;
-            for(auto& record_pair : local_records) {
-              auto& [record, stream] = record_pair;
-              auto body_type = record.body_case();
-              if(body_type == thalamus_grpc::StorageRecord::kImage && compress_video) {
-                auto& image = record.image();
-                auto i = av_codecs.find(record.node());
-                if(i == av_codecs.end()) {
-                  av_codecs[record.node()] = VideoCodec(codec);
-                  i = av_codecs.find(record.node());
-                  i->second.context->bit_rate = std::numeric_limits<int>::max();
-                  i->second.context->width = record.image().width();
-                  i->second.context->height = record.image().height();
-
-                  auto interval = record.image().frame_interval()/1e9;
-                  auto interval_i = std::lower_bound(intervals.begin(), intervals.end(), std::make_pair(interval, std::string("")));
-
-                  AVRational timebase;
-                  if(interval_i == interval.begin()) {
-                    time_base = intervals.front().second;
-                  } else if (framerate_i == interval.end()) {
-                    time_base = intervals.back().second;
-                  } else {
-                    if(interval - (interval_i-1)->first < interval_i->first - interval) {
-                      time_base = (interval_i-1)->second;
-                    } else {
-                      time_base = interval_i->second;
-                    }
-                  }
-                  i->second.context->time_base = timebase;
-                  i->second.context->framerate = {timebase.den, timebase.num};
-
-                  auto ret = avcodec_open2(i->second.context, codec, NULL);
-                  THALAMUS_ASSERT(ret >= 0, "Could not open codec: %s\n", av_err2str(ret));
-
-                  switch(image.format()) {
-                    case thalamus_grpc::Image::Format::Image_Format_Gray: 
-                      frame->format = AV_PIX_FMT_GRAY8;
-                      break;
-                    case thalamus_grpc::Image::Format::Image_Format_Gray16: 
-                      frame->format = image.bigendian() ? AV_PIX_FMT_GRAY16BE : AV_PIX_FMT_GRAY16LE;
-                      break;
-                  }
-
-
-
-                  frame->format = i->second.context->pix_fmt;
-                  frame->width  = i->second.context->width;
-                  frame->height = i->second.context->height;
-                }
-
-
-              } else if(body_type == thalamus_grpc::StorageRecord::kAnalog && compress_analog) {
-                all_serialized[i] = record.SerializePartialAsString();
-                compressed_map[stream].push_back(i);
-                auto stream_i = streams.find(stream);
-                if(stream_i == streams.end()) {
-                  streams[stream] = std::make_shared<StreamState>();
-                  stream_i = streams.find(stream);
-                  stream_i->second->index = stream;
-                  auto& zstream = stream_i->second->zstream;
-                  zstream.zalloc = nullptr;
-                  zstream.zfree = nullptr;
-                  zstream.opaque = nullptr;
-#ifdef __clang__
-  #pragma clang diagnostic push
-  #pragma clang diagnostic ignored "-Wold-style-cast"
-#endif
-                  auto error = deflateInit(&zstream, 1);
-#ifdef __clang__
-  #pragma clang diagnostic pop
-#endif
-                  THALAMUS_ASSERT(error == Z_OK, "ZLIB Error: %d", error);
-                }
+              AVRational framerate;
+              if(framerate_i == framerates.begin()) {
+                framerate = framerates.front().second;
+              } else if (framerate_i == framerates.end()) {
+                framerate = framerates.back().second;
               } else {
-                all_serialized[i] = record.SerializePartialAsString();
+                if(framerate_original - (framerate_i-1)->first < framerate_i->first - framerate_original) {
+                  framerate = (framerate_i-1)->second;
+                } else {
+                  framerate = framerate_i->second;
+                }
               }
-              ++i;
+
+              AVPixelFormat format;
+              switch(image.format()) {
+                case thalamus_grpc::Image::Format::Image_Format_Gray:
+                  format = AV_PIX_FMT_GRAY8;
+                  break;
+                case thalamus_grpc::Image::Format::Image_Format_Gray16:
+                  format = image.bigendian() ? AV_PIX_FMT_GRAY16BE : AV_PIX_FMT_GRAY16LE;
+                  break;
+                case thalamus_grpc::Image::Format::Image_Format_RGB:
+                case thalamus_grpc::Image::Format::Image_Format_YUYV422:
+                case thalamus_grpc::Image::Format::Image_Format_YUV420P:
+                case thalamus_grpc::Image::Format::Image_Format_YUVJ420P:
+                case thalamus_grpc::Image::Format::Image_Format_RGB16:
+                case thalamus_grpc::Image::Format::Image_Format_MPEG1:
+                case thalamus_grpc::Image::Format::Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
+                case thalamus_grpc::Image::Format::Image_Format_Image_Format_INT_MAX_SENTINEL_DO_NOT_USE_:
+                  THALAMUS_ASSERT(false, "Usupported image format");
+              }
+
+              auto encoder = std::make_unique<VideoEncoder>(image.width(), image.height(), format, framerate, record.node());
+              encoders.push_back(encoder.get());
+              video_encoders[record.node()] = std::move(encoder);
             }
+            video_encoders[record.node()]->push(std::move(record));
           } else {
-            size_t i = 0;
-            for(auto& record_pair : local_records) {
-              auto& [record, stream] = record_pair;
-              all_serialized[i] = record.SerializePartialAsString();
-              ++i;
-            }
+            identity_encoder.push(std::move(record));
           }
         }
 
-        compressed.assign(compressed_map.begin(), compressed_map.end());
-
-        auto band_size = std::max(1ull, compressed.size()/pool.num_threads);
-        band_size += (band_size*pool.num_threads < compressed.size()) ? 1 : 0;
-        size_t pending_bands = compressed.size()/band_size;
-        pending_bands += (pending_bands * band_size < compressed.size()) ? 1 : 0;
-        std::mutex mutex;
-        std::condition_variable condition;
-        {
-          TRACE_EVENT("thalamus", "deflate_all");
-          for(auto i = 0ull;i < compressed.size();i+=band_size) {
-            auto upper = std::min(i+band_size, compressed.size());
-            pool.push([&,i,upper] {
-              TRACE_EVENT("thalamus", "deflate");
-              for(auto j = i;j < upper;++j) {
-                auto& [stream, indexes] = compressed[j];
-                auto stream_state = streams[stream];
-                auto& zstream = stream_state->zstream;
-                for(auto index : indexes) {
-                  auto& serialized = all_serialized[index];
-
-                  auto compressed_record = std::make_shared<thalamus_grpc::StorageRecord>();
-                  auto record_compressed = compressed_record->mutable_compressed();
-                  auto compressed_data = record_compressed->mutable_data();
-                  if(compressed_data->empty()) {
-                    compressed_data->resize(1024);
-                  }
-                  zstream.avail_in = uint32_t(serialized.size());
-                  zstream.next_in = reinterpret_cast<unsigned char*>(serialized.data());
-                  auto compressing = true;
-                  size_t offset = 0;
-                  record_compressed->set_type(thalamus_grpc::Compressed::Type::Compressed_Type_ANALOG);
-                  record_compressed->set_stream(stream);
-                  record_compressed->set_size(int(serialized.size()));
-                  while(compressing) {
-                    zstream.avail_out = uint32_t(compressed_data->size() - offset);
-                    zstream.next_out = reinterpret_cast<unsigned char*>(compressed_data->data()) + offset;
-                    auto error = deflate(&zstream, Z_NO_FLUSH);
-                    THALAMUS_ASSERT(error == Z_OK, "ZLIB Error: %d", error);
-                    compressing = zstream.avail_out == 0;
-                    if(compressing) {
-                      offset = compressed_data->size();
-                      compressed_data->resize(2*compressed_data->size());
-                    }
-                  }
-                  compressed_data->resize(compressed_data->size() - zstream.avail_out);
-                  all_serialized[index] = compressed_record->SerializePartialAsString();
-                }
-              }
-              {
-                std::lock_guard<std::mutex> lock(mutex);
-                --pending_bands;
-                condition.notify_all();
-              }
-            });
-          }
-          std::unique_lock<std::mutex> lock(mutex);
-          condition.wait(lock, [&] { return pending_bands == 0; });
-        }
-
-        {
-          TRACE_EVENT("thalamus", "write");
-          for (auto& serialized : all_serialized) {
-            auto size = serialized.size();
-            auto bigendian_size = htonll(size);
-            auto size_bytes = reinterpret_cast<char*>(&bigendian_size);
-            output_stream.write(size_bytes, sizeof(bigendian_size));
-            output_stream.write(serialized.data(), int64_t(size));
-          }
-        }
+        service_encoders(false);
       }
+      service_encoders(true);
 
-      std::vector<std::shared_ptr<StreamState>> stream_vector;
-      for(auto& stream : streams) {
-        stream_vector.push_back(stream.second);
-      }
-      auto band_size = std::max(1ull, stream_vector.size()/pool.num_threads);
-      band_size += (band_size*pool.num_threads < stream_vector.size()) ? 1 : 0;
-      size_t pending_bands = stream_vector.size() / band_size;
-      pending_bands += (pending_bands * band_size < stream_vector.size()) ? 1 : 0;
-      std::mutex mutex;
-      std::condition_variable condition;
-      std::vector<std::string> flushes(streams.size());
-      {
-        TRACE_EVENT("thalamus", "deflate_flush_all");
-        for(auto i = 0ull;i < stream_vector.size();i+=band_size) {
-          auto upper = std::min(i+band_size, stream_vector.size());
-          pool.push([&,i,upper] {
-            TRACE_EVENT("thalamus", "deflate_flush");
-            for(auto j = i;j < upper;++j) {
-              auto stream_state = stream_vector[j];
-
-              auto& zstream = stream_state->zstream;
-              auto compressed_record = std::make_shared<thalamus_grpc::StorageRecord>();
-              auto record_compressed = compressed_record->mutable_compressed();
-              auto compressed_data = record_compressed->mutable_data();
-              if(compressed_data->empty()) {
-                compressed_data->resize(1024);
-              }
-              auto compressing = true;
-              size_t offset = 0;
-              record_compressed->set_type(thalamus_grpc::Compressed::Type::Compressed_Type_NONE);
-              record_compressed->set_stream(stream_state->index);
-              while(compressing) {
-                zstream.avail_out = uint32_t(compressed_data->size() - offset);
-                zstream.next_out = reinterpret_cast<unsigned char*>(compressed_data->data()) + offset;
-                auto error = deflate(&zstream, Z_FINISH);
-                THALAMUS_ASSERT(error == Z_OK || error == Z_STREAM_END);
-                compressing = zstream.avail_out == 0;
-                if(compressing) {
-                  offset = compressed_data->size();
-                  compressed_data->resize(2*compressed_data->size());
-                }
-              }
-              compressed_data->resize(compressed_data->size() - zstream.avail_out);
-              flushes[j] = compressed_record->SerializePartialAsString();
-            }
-            {
-              std::lock_guard<std::mutex> lock(mutex);
-              --pending_bands;
-              condition.notify_all();
-            }
-          });
-        }
-        std::unique_lock<std::mutex> lock(mutex);
-        condition.wait(lock, [&] { return pending_bands == 0; });
-      }
-
-      {
-        TRACE_EVENT("thalamus", "write_flush");
-        for (auto& serialized : flushes) {
-          auto size = serialized.size();
-          auto bigendian_size = htonll(size);
-          auto size_bytes = reinterpret_cast<char*>(&bigendian_size);
-          output_stream.write(size_bytes, sizeof(bigendian_size));
-          output_stream.write(serialized.data(), int64_t(size));
-        }
-      }
     }
 
     void queue_record(thalamus_grpc::StorageRecord&& record, int stream = 0) {

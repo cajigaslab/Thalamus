@@ -147,6 +147,7 @@ message Image {
     YUVJ420P = 4;
     Gray16 = 5;
     RGB16 = 6;
+    MPEG1 = 7;
   }
   repeated bytes data = 1;
   uint32 width = 2;

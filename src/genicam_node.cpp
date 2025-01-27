@@ -2303,8 +2303,8 @@ namespace thalamus {
 
   void GenicamNode::cleanup() {
     if(Impl::ctis) {
-      delete Impl::ctis;
-      delete Impl::parser;
+      //delete Impl::ctis;
+      //delete Impl::parser;
       Impl::ctis = nullptr;
       Impl::parser = nullptr;
     }
