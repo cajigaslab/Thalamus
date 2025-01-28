@@ -655,7 +655,7 @@ namespace hydrate {
   }
 
   template<typename BUFFER_TYPE, typename CACHE_TYPE>
-  void write_data(size_t time, size_t length, hid_t data, hid_t received, size_t& data_written, size_t& received_written, hid_t h5_type, const BUFFER_TYPE* data_buffer, std::vector<CACHE_TYPE>& data_cache, std::vector<size_t>& received_cache, size_t data_chunk, size_t received_chunk, std::vector<hsize_t> dims = {}, bool update_received = true) {
+  void write_data(size_t time, size_t remote_time, size_t length, hid_t data, hid_t received, size_t& data_written, size_t& received_written, hid_t h5_type, const BUFFER_TYPE* data_buffer, std::vector<CACHE_TYPE>& data_cache, std::vector<size_t>& received_cache, size_t data_chunk, size_t received_chunk, std::vector<hsize_t> dims = {}, bool update_received = true) {
     herr_t error;
     {
       auto& cache = data_cache;
@@ -699,8 +699,9 @@ namespace hydrate {
       for (auto i : dims) {
         cache.back() /= i;
       }
-      if(cache.size() >= 2*received_chunk) {
-        hsize_t one_row[] = {received_chunk, 2};
+      cache.push_back(remote_time);
+      if(cache.size() >= 3*received_chunk) {
+        hsize_t one_row[] = {received_chunk, 3};
         H5Handle mem_space = H5Screate_simple(2, one_row, nullptr);
         THALAMUS_ASSERT(mem_space);
 
@@ -714,7 +715,7 @@ namespace hydrate {
         THALAMUS_ASSERT(error >= 0);
         received_written += received_chunk;
 
-        cache.erase(cache.begin(), cache.begin() + int64_t(2*received_chunk));
+        cache.erase(cache.begin(), cache.begin() + int64_t(3*received_chunk));
       }
     }
   }
@@ -1215,8 +1216,8 @@ namespace hydrate {
         std::vector<std::string> tokens = absl::StrSplit(pair.first, '/');
         THALAMUS_ASSERT(tokens.size() > 0);
         if(tokens.back() == "received") {
-          hsize_t dims[] = { pair.second, 2 };
-          hsize_t max_dims[] = { pair.second, 2 };
+          hsize_t dims[] = { pair.second, 3 };
+          hsize_t max_dims[] = { pair.second, 3 };
           H5Handle file_space = H5Screate_simple(2, dims, max_dims);
           THALAMUS_ASSERT(file_space);
 
@@ -1224,7 +1225,7 @@ namespace hydrate {
           if(gzip) {
             plist_id = H5Pcreate(H5P_DATASET_CREATE);
 
-            hsize_t chunk[] = {dims[0], 2};
+            hsize_t chunk[] = {dims[0], 3};
             error = H5Pset_chunk(plist_id, 2, chunk);
             THALAMUS_ASSERT(error >= 0);
 
@@ -1340,10 +1341,10 @@ namespace hydrate {
                 auto data_chunk = gzip ? std::min(dataset_counts[data_path] - data_written, chunk_size) : span_size;
                 auto received_chunk = gzip ? std::min(dataset_counts[received_path] - received_written, chunk_size) : 1;
                 if(analog.is_int_data()) {
-                  write_data(record->time(), span_size, data, received, data_written, received_written, H5T_NATIVE_SHORT, analog.int_data().data() + span.begin(),
+                  write_data(record->time(), analog.remote_time(), span_size, data, received, data_written, received_written, H5T_NATIVE_SHORT, analog.int_data().data() + span.begin(),
                              int_data_caches[data], received_caches[received], data_chunk, received_chunk);
                 } else {
-                  write_data(record->time(), span_size, data, received, data_written, received_written, H5T_NATIVE_DOUBLE, analog.data().data() + span.begin(),
+                  write_data(record->time(), analog.remote_time(), span_size, data, received, data_written, received_written, H5T_NATIVE_DOUBLE, analog.data().data() + span.begin(),
                              data_caches[data], received_caches[received], data_chunk, received_chunk);
                 }
               }
@@ -1377,7 +1378,7 @@ namespace hydrate {
                 segment.pose = pose_cstr;
               }
               auto num_segments = hsize_t(xsens.segments().size());
-              write_data(record->time(), num_segments, data, received, data_written, received_written, segment_type, segments.data(),
+              write_data(record->time(), 0, num_segments, data, received, data_written, received_written, segment_type, segments.data(),
                          segment_caches[data], received_caches[received], segment_count, received_count);
             }
             break;
@@ -1396,7 +1397,7 @@ namespace hydrate {
               auto text_data_count = gzip ? std::min(dataset_counts[data_path] - data_written, chunk_size) : 1;
               auto received_count = gzip ? std::min(dataset_counts[received_path] - received_written, chunk_size) : 1;
 
-              write_data(record->time(), 1, data, received, data_written, received_written, str_type, &text_data,
+              write_data(record->time(), 0, 1, data, received, data_written, received_written, str_type, &text_data,
                          text_caches[data], received_caches[received], text_data_count, received_count);
             }
             break;
@@ -1432,7 +1433,7 @@ namespace hydrate {
                       bytes_pointer = bytes_vector.data();
                     }
 
-                    write_data(record->time(), length, data, received, data_written, received_written, H5T_NATIVE_UCHAR, bytes_pointer,
+                    write_data(record->time(), 0, length, data, received, data_written, received_written, H5T_NATIVE_UCHAR, bytes_pointer,
                         image_caches[data], received_caches[received], image_data_count, received_count, {image.width(), image.height()});
                     break;
                   }
@@ -1459,7 +1460,7 @@ namespace hydrate {
                       bytes_pointer = bytes_vector.data();
                     }
 
-                    write_data(record->time(), length, data, received, data_written, received_written, H5T_NATIVE_UCHAR, bytes_pointer,
+                    write_data(record->time(), 0, length, data, received, data_written, received_written, H5T_NATIVE_UCHAR, bytes_pointer,
                         image_caches[data], received_caches[received], image_data_count, received_count, {image.width(), image.height(), 3});
                     break;
                   }
@@ -1486,7 +1487,7 @@ namespace hydrate {
                       bytes_pointer = bytes_vector.data();
                     }
 
-                    write_data(record->time(), length, data, received, data_written, received_written, H5T_NATIVE_UCHAR, bytes_pointer,
+                    write_data(record->time(), 0, length, data, received, data_written, received_written, H5T_NATIVE_UCHAR, bytes_pointer,
                         image_caches[data], received_caches[received], image_data_count, received_count, {2*image.width(), image.height()});
                     break;
                   }
@@ -1527,7 +1528,7 @@ namespace hydrate {
                         bytes_pointer = bytes_vector.data();
                       }
 
-                      write_data(record->time(), length, data, received, data_written, received_written, H5T_NATIVE_UCHAR, bytes_pointer,
+                      write_data(record->time(), 0, length, data, received, data_written, received_written, H5T_NATIVE_UCHAR, bytes_pointer,
                           image_caches[data], received_caches[received], image_data_count, received_count, {width, height}, update_received);
                       update_received = false;
                       ++i;
@@ -1558,7 +1559,7 @@ namespace hydrate {
                       }
                     }
 
-                    write_data(record->time(), length, data, received, data_written, received_written, H5T_NATIVE_USHORT, shorts_vector.data(),
+                    write_data(record->time(), 0, length, data, received, data_written, received_written, H5T_NATIVE_USHORT, shorts_vector.data(),
                         short_image_caches[data], received_caches[received], image_data_count, received_count, {image.width(), image.height()});
                     break;
                   }
@@ -1586,7 +1587,7 @@ namespace hydrate {
                       }
                     }
 
-                    write_data(record->time(), length, data, received, data_written, received_written, H5T_NATIVE_USHORT, shorts_vector.data(),
+                    write_data(record->time(), 0, length, data, received, data_written, received_written, H5T_NATIVE_USHORT, shorts_vector.data(),
                         short_image_caches[data], received_caches[received], image_data_count, received_count, {image.width(), image.height(), 3});
                     break;
                   }
@@ -1611,7 +1612,7 @@ namespace hydrate {
               h5_event.time = event.time();
               h5_event.payload.len = event.payload().size();
               h5_event.payload.p = const_cast<void*>(static_cast<const void*>(event.payload().data()));
-              write_data(record->time(), 1, data, received, data_written, received_written, event_type, &h5_event,
+              write_data(record->time(), 0, 1, data, received, data_written, received_written, event_type, &h5_event,
                          event_cache, received_caches[received], event_data_count, received_count);
             }
             break;

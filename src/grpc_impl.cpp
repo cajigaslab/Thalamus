@@ -292,6 +292,8 @@ namespace thalamus {
           }
 
           response.set_channels_changed(channels_changed);
+          response.set_time(size_t(node->time().count()));
+          response.set_remote_time(size_t(node->remote_time().count()));
           channels_changed = false;
           for (auto c = 0u; c < channels.size(); ++c) {
             auto channel = channels[c];

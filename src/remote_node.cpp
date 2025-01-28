@@ -39,6 +39,7 @@ struct RemoteNode::Impl {
   bool has_xsens_data = false;
   std::vector<Segment> segments;
   std::chrono::nanoseconds time;
+  std::chrono::nanoseconds remote_time;
   std::chrono::milliseconds ping_interval = 200ms;
   double ping_ms = 0;
   long long probe_size;
@@ -338,6 +339,7 @@ struct RemoteNode::Impl {
               }
 
               time = std::chrono::steady_clock::now().time_since_epoch();
+              remote_time = std::chrono::nanoseconds(analog_response.time());
               data.assign(analog_response.data().begin(), analog_response.data().end());
               spans.clear();
               spans.emplace_back();
@@ -534,6 +536,9 @@ std::string_view RemoteNode::name(int channel) const {
 }
 std::chrono::nanoseconds RemoteNode::time() const {
   return impl->time;
+}
+std::chrono::nanoseconds RemoteNode::remote_time() const {
+  return impl->remote_time;
 }
 void RemoteNode::inject(const thalamus::vector<std::span<double const>>&, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&) {
   THALAMUS_ASSERT(false, "RemoteNode::inject unimplemented.");

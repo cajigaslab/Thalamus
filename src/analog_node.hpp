@@ -26,6 +26,9 @@ namespace thalamus {
     virtual int num_channels() const = 0;
     virtual std::chrono::nanoseconds sample_interval(int channel) const = 0;
     virtual std::chrono::nanoseconds time() const = 0;
+    virtual std::chrono::nanoseconds remote_time() const {
+      return 0ns;
+    }
     virtual std::string_view name(int channel) const = 0;
     virtual std::span<const std::string> get_recommended_channels() const { return std::span<const std::string>(); }
     virtual void inject(const thalamus::vector<std::span<double const>>&, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&) = 0;

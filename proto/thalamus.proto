@@ -257,6 +257,8 @@ message AnalogResponse {
   bool channels_changed = 4;
   repeated sint32 int_data = 5;
   bool is_int_data = 6;
+  uint64 time = 7;
+  uint64 remote_time = 8;
 }
 
 message GraphRequest {

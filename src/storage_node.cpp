@@ -166,12 +166,17 @@ namespace thalamus {
       TRACE_EVENT("thalamus", "StorageNode::on_analog_data");
 
       thalamus_grpc::StorageRecord record;
+      auto body = record.mutable_analog();
       if(compress_analog) {
         records_mutex.lock();
       }
 
       {
         TRACE_EVENT("thalamus", "StorageNode::on_analog_data(build record)");
+        record.set_time(uint64_t(locked_analog->time().count()));
+        record.set_node(name);
+        body->set_time(uint64_t(locked_analog->time().count()));
+        body->set_remote_time(uint64_t(locked_analog->remote_time().count()));
         visit_node(locked_analog, [&]<typename T>(T* wrapper) {
           for (auto i = 0; i < wrapper->num_channels(); ++i) {
             auto data = wrapper->data(i);
@@ -180,8 +185,12 @@ namespace thalamus {
                 continue;
               }
               record = thalamus_grpc::StorageRecord();
+              body = record.mutable_analog();
+              record.set_time(uint64_t(locked_analog->time().count()));
+              record.set_node(name);
+              body->set_time(uint64_t(locked_analog->time().count()));
+              body->set_remote_time(uint64_t(locked_analog->remote_time().count()));
             }
-            auto body = record.mutable_analog();
             auto channel_name_view = wrapper->name(i);
             std::string channel_name(channel_name_view.begin(), channel_name_view.end());
 
@@ -202,8 +211,6 @@ namespace thalamus {
 
             body->add_sample_intervals(uint64_t(wrapper->sample_interval(i).count()));
 
-            record.set_time(uint64_t(wrapper->time().count()));
-            record.set_node(name);
             if(compress_analog) {
               auto j = stream_mappings.find(std::make_pair(node, i));
               if(j == stream_mappings.end()) {
@@ -359,7 +366,10 @@ namespace thalamus {
       auto start_time_str = absl::FormatTime("%Y%m%d%H%M%S", absl_time, absl::LocalTimeZone());
       rendered = absl::StrFormat("%s.%s.%d", rendered, start_time_str, rec_number);
       std::filesystem::path rendered_path(rendered);
-      std::filesystem::create_directories(rendered_path.parent_path());
+      auto parent_path = rendered_path.parent_path();
+      if(!parent_path.empty()) {
+        std::filesystem::create_directories(parent_path);
+      }
 
       output_stream = std::ofstream(rendered, std::ios::trunc | std::ios::binary);
     }
