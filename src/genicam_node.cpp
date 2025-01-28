@@ -539,7 +539,7 @@ namespace thalamus {
             : std::accumulate(buffer.begin(), buffer.end(), _unsigned || !(first_byte & 0x80) ? 0ll : -1ll, visitor);
 
           if(msb) {
-            long long int mask = (1 << (*msb + 1)) - 1;
+            long long int mask = (1ll << (*msb + 1)) - 1;
             result &= mask;
           }
           if(lsb) {
@@ -1153,7 +1153,7 @@ namespace thalamus {
                 }
               } else if(current_name == "Command") {
                 auto p_value = current->get_optional<std::string>("pValue");
-                auto command_value = get_int(*current, "CommandValue", 0);
+                auto command_value = get_int(*current, "CommandValue", 0ll);
                 auto p_command_value = current->get_optional<std::string>("pCommandValue");
 
                 if(p_command_value) {
