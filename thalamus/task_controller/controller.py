@@ -598,7 +598,8 @@ class ControlWindow(QMainWindow):
     if file_name and file_name[0]:
       async def task() -> None:
         new_config = load(file_name[0])
-        self.config_data.user_config['task_clusters'] = new_config
+        del self.task_context.config['task_clusters']
+        self.task_context.config['task_clusters'] = new_config['task_clusters']
         self.init()
       create_task_with_exc_handling(task())
 

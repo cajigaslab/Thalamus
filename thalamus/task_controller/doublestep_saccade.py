@@ -19,6 +19,7 @@ from ..qt import *
 from . import task_context
 from .widgets import Form, ListAsTabsWidget
 from .util import wait_for, wait_for_hold, RenderOutput, animate
+from .. import thalamus_pb2
 from .. import task_controller_pb2
 from ..config import ObservableCollection
 
@@ -237,7 +238,7 @@ def get_target_rectangle(context, itarg, dpi, cache):
 
   p_win = Rvec*pos_vis + t
 
-  result = QRect(p_win[0] - targ_width_px/2, p_win[1] - targ_height_px/2, targ_width_px, targ_height_px)
+  result = QRect(int(p_win[0] - targ_width_px/2), int(p_win[1] - targ_height_px/2), int(targ_width_px), int(targ_height_px))
   cache[itarg] = result
   return result
 
@@ -269,7 +270,7 @@ def make_relative_targ2_rect(context, i_targ2, origin_target_rect, dpi):
 
   p_win = Rvec*pos_vis + t
 
-  return QRect(p_win[0] - targ_width_px/2, p_win[1] - targ_height_px/2, targ_width_px, targ_height_px)
+  return QRect(int(p_win[0] - targ_width_px/2), int(p_win[1] - targ_height_px/2), int(targ_width_px), int(targ_height_px))
 
 
 def get_start_target_index(context):
@@ -285,11 +286,6 @@ def get_start_target_index(context):
 
 def distance(lhs, rhs):
   return ((lhs.x() - rhs.x())**2 + (lhs.y() - rhs.y())**2)**.5
-
-async def stamp_msg(context, msg):
-  msg.header.stamp = context.ros_manager.node.node.get_clock().now().to_msg()
-  context.pulse_digital_channel()
-  return msg
 
 def toggle_brightness(brightness):
   return 0 if brightness == 255 else 255
@@ -420,7 +416,8 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
     targ2_distances = [i for i in shown_targ2s if distance(all_target_rects[i].center(), cursor) < all_target_windows[i]]
     targ2_acquired = bool(targ2_distances)
-    selected_targ2 = targ2_distances[0] if targ2_acquired else None 
+    if targ2_acquired:
+      selected_targ2 = targ2_distances[0]
    
       
     if presented_targ_acquired:
@@ -431,7 +428,14 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     
     gaze_pos = cursor
 
+  touched = False
+  def touch_handler(cursor: QPoint):
+    nonlocal touched
+    if cursor.x() < 0:
+      return
+    touched = True
 
+  context.widget.touch_listener = touch_handler
   context.widget.gaze_listener = gaze_handler
 
   dim_start_target = False
@@ -444,7 +448,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     color_base = all_target_colors[i_start_targ]
     scale = (all_target_on_luminance[i_start_targ] if not dim_start_target
              else all_target_off_luminance[i_start_targ])
-    color_base = QColor(scale*color_base.red(), scale*color_base.green(), scale*color_base.blue())
+    color_base = QColor(int(scale*color_base.red()), int(scale*color_base.green()), int(scale*color_base.blue()))
     window = all_target_windows[i_start_targ]
 
     stl_mesh = all_target_stls[i_start_targ]
@@ -480,7 +484,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       path = QPainterPath()
 
       for rect in (r for r in all_target_rects if r is not None):
-        path.addEllipse(rect.center(), window, window)
+        path.addEllipse(QPointF(rect.center()), window, window)
 
 
       painter.fillPath(path, QColor(255, 255, 255, 128))
@@ -509,23 +513,31 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     show_presented_target = False
     show_targ2_target = False
     context.behav_result = behav_result  
-    await context.servicer.publish_state(task_controller_pb2.BehavState(state='fail'))  
+    await context.log(f'BehavState=fail')
     state_brightness = toggle_brightness(state_brightness)
     fail_sound.play()
     context.widget.update()
 
   while True:  
-    await context.servicer.publish_state(task_controller_pb2.BehavState(state='intertrial'))  
+    await context.log(f'BehavState=intertrial')
     state_brightness = 0
     show_start_target = False
     context.widget.update()
-    await context.sleep(config.intertrial_timeout)
+    await wait_for(context, lambda: touched, config.intertrial_timeout)
+    if touched:
+      await fail_trial()
+      await context.sleep(config.fail_timeout)
+      return task_context.TaskResult(False)
 
-    await context.servicer.publish_state(task_controller_pb2.BehavState(state='start_on'))  
+    await context.log(f'BehavState=start_on')
     state_brightness = toggle_brightness(state_brightness)
     show_start_target = True
     context.widget.update()
-    acquired = await wait_for(context, lambda: start_target_acquired, config.start_timeout)
+    acquired = await wait_for(context, lambda: start_target_acquired or touched, config.start_timeout)
+    if touched:
+      await fail_trial()
+      await context.sleep(config.fail_timeout)
+      return task_context.TaskResult(False)
 
     if acquired:
       break
@@ -534,50 +546,50 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       context.widget.update
 
   # state: startacq
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='start_acq'))  
-  success = await wait_for_hold(context, lambda: start_target_acquired, config.baseline_timeout, config.blink_timeout)
-  if not success:
+  await context.log(f'BehavState=start_acq')
+  success = await context.any(wait_for_hold(context, lambda: start_target_acquired, config.baseline_timeout, config.blink_timeout), context.until(lambda: touched))
+  if not success or touched:
     await fail_trial()
     await context.sleep(config.fail_timeout)
     return task_context.TaskResult(False)
 
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='targs_on'))  
+  await context.log(f'BehavState=targs_on')
   show_presented_target = True
   state_brightness = toggle_brightness(state_brightness)
   context.widget.update()
-  success = await wait_for_hold(context, lambda: start_target_acquired, config.cue_timeout, config.blink_timeout)
-  if not success:
+  success = await context.any(wait_for_hold(context, lambda: start_target_acquired, config.cue_timeout, config.blink_timeout), context.until(lambda: touched))
+  if not success or touched:
     await fail_trial()
     await context.sleep(config.fail_timeout)
     return task_context.TaskResult(False)
 
   dim_start_target = True
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='go'))  
+  await context.log(f'BehavState=go')
   state_brightness = toggle_brightness(state_brightness)
   context.widget.update()
 
-  start_targ_released = await wait_for(context, lambda: not start_target_acquired, config.saccade_timeout)
+  start_targ_released = await wait_for(context, lambda: not start_target_acquired or touched, config.saccade_timeout)
   #acquired = await wait_for(context, lambda: presented_targ_acquired, config.saccade_timeout)
   
-  if not start_targ_released:
+  if not start_targ_released or touched:
     await fail_trial()
     await context.sleep(config.fail_timeout)
     return task_context.TaskResult(False)
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='saccde_start'))  
+  await context.log(f'BehavState=saccde_start')
 
-  acquired = await wait_for(context, lambda: presented_targ_acquired, config.saccade_timeout)    
-  if not acquired:
+  acquired = await wait_for(context, lambda: presented_targ_acquired or touched, config.saccade_timeout)
+  if not acquired or touched:
     await fail_trial()
     await context.sleep(config.fail_timeout)
     return task_context.TaskResult(False)
   state_brightness = toggle_brightness(state_brightness)
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='targs_acq'))  
+  await context.log(f'BehavState=targs_acq')
 
-  success = await wait_for_hold(context,
+  success = await context.any(wait_for_hold(context,
     lambda: presented_targ_acquired, 
     config.targ2_delay, 
-    config.blink_timeout)
-  if not success:
+    config.blink_timeout), context.until(lambda: touched))
+  if not success or touched:
     await fail_trial()
     await context.sleep(config.fail_timeout)
     return task_context.TaskResult(False)
@@ -585,20 +597,20 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   behav_result['presented_targ2_id'] = int(i_presented_targ2)
   show_targ2_target = True
   state_brightness = toggle_brightness(state_brightness)
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='targs2_on'))  
+  await context.log(f'BehavState=targs2_on')
   context.widget.update()
 
-  acquired = await wait_for(context, lambda: targ2_acquired, config.saccade2_timeout)
-  if not acquired:
+  acquired = await wait_for(context, lambda: targ2_acquired or touched, config.saccade2_timeout)
+  if not acquired or touched:
     await fail_trial()
     await context.sleep(config.fail_timeout)
     return task_context.TaskResult(False)
 
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='targ2_acq'))  
-  success = await wait_for_hold(context, lambda: targ2_acquired, 
-    config.hold_timeout, config.blink_timeout)
+  await context.log(f'BehavState=targ2_acq')
+  success = await context.any(wait_for_hold(context, lambda: targ2_acquired,
+    config.hold_timeout, config.blink_timeout), context.until(lambda: touched))
     
-  if not success:
+  if not success or touched:
     await fail_trial()
     await context.sleep(config.fail_timeout)
     return task_context.TaskResult(False)
@@ -615,16 +627,18 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   show_presented_target = False
   show_targ2_target = False
   
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='success'))  
+  await context.log(f'BehavState=success')
   state_brightness = toggle_brightness(state_brightness)
   context.widget.update()
-  reward_message = RewardDeliveryCmd()
   
-  reward_message.header.stamp = context.ros_manager.node.node.get_clock().now().to_msg()
-  reward_message.on_time_ms = int(context.get_reward(all_reward_channels[selected_targ2]))
+  on_time_ms = int(context.get_reward(all_reward_channels[selected_targ2]))
   
-  print("delivering reward %d"%(reward_message.on_time_ms,) )
-  context.publish(RewardDeliveryCmd, 'deliver_reward', reward_message)
+  print("delivering reward %d"%(on_time_ms,) )
+  signal = thalamus_pb2.AnalogResponse(
+      data=[5,0],
+      spans=[thalamus_pb2.Span(begin=0,end=2,name='Reward')],
+      sample_intervals=[1_000_000*on_time_ms])
+  await context.inject_analog('Reward', signal)
   
   success_sound.play()
 

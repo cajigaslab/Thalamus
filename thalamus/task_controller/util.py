@@ -401,6 +401,8 @@ async def do_stimulation(context, stim_start, intan_cfg, pulse_width, pulse_coun
 
     await context.log('BehavState=pulse_start')
 
+    intan_cfg = int(intan_cfg)
+
     spans = []
     for i in range(32):
       if ((intan_cfg >> i) % 2):
@@ -413,7 +415,7 @@ async def do_stimulation(context, stim_start, intan_cfg, pulse_width, pulse_coun
         signal = thalamus_pb2.AnalogResponse(
             data=[0,0,5,0],
             spans=spans,
-            sample_intervals=[1e9*pulse_width.total_seconds()])
+            sample_intervals=[int(1e9*pulse_width.total_seconds())])
 
         await context.inject_analog('Stim', signal)
     else:

@@ -19,6 +19,7 @@ from ..qt import *
 from . import task_context
 from .widgets import Form, ListAsTabsWidget
 from .util import wait_for, wait_for_hold, RenderOutput, animate
+from .. import thalamus_pb2
 from .. import task_controller_pb2
 from .. import config
 from . import task_context
@@ -177,7 +178,7 @@ def get_target_rectangles(context, dpi):
 
     p_win = Rvec*pos_vis + t
 
-    all_target_rects.append(QRect(p_win[0] - targ_width_px/2, p_win[1] - targ_height_px/2, targ_width_px, targ_height_px))
+    all_target_rects.append(QRect(int(p_win[0] - targ_width_px/2), int(p_win[1] - targ_height_px/2), int(targ_width_px), int(targ_height_px)))
 
   return all_target_rects
 
@@ -313,7 +314,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       path = QPainterPath()
 
       for rect in all_target_rects:
-        path.addEllipse(rect.center(), window, window)
+        path.addEllipse(QPointF(rect.center()), window, window)
 
       painter.fillPath(path, QColor(255, 255, 255, 128))
 
@@ -397,7 +398,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   await context.log('BehavState=success')
   state_brightness = 0 
 
-  on_time_ms = int(context.get_reward(all_reward_channels[final_i_touched_target]))
+  on_time_ms = int(context.get_reward(all_reward_channels[final_i_selected_target]))
 
   signal = thalamus_pb2.AnalogResponse(
       data=[5,0],
@@ -413,3 +414,4 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   context.behav_result = behav_result
   return task_context.TaskResult(True)
     
+

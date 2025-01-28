@@ -21,6 +21,7 @@ from . import task_context
 from .widgets import Form, ListAsTabsWidget
 from .util import wait_for, wait_for_hold, RenderOutput, animate, do_stimulation, create_task_with_exc_handling, stimulator, nullcontext
 from .. import task_controller_pb2
+from .. import thalamus_pb2
 from ..config import ObservableCollection
 
 LOGGER = logging.getLogger(__name__)
@@ -201,7 +202,7 @@ def get_target_rectangles(context):
 
     p_win = Rvec*pos_vis + t
 
-    all_target_rects.append(QRect(p_win[0] - targ_width_px/2, p_win[1] - targ_height_px/2, targ_width_px, targ_height_px))
+    all_target_rects.append(QRect(int(p_win[0] - targ_width_px/2), int(p_win[1] - targ_height_px/2), int(targ_width_px), int(targ_height_px)))
 
   return all_target_rects
 
@@ -344,7 +345,15 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
         last_selected_target = i_selected_target
       else:
         i_selected_target = None
-  #context.widget.touch_listener = touch_handler
+
+  touched = False
+  def touch_handler(cursor: QPoint):
+    nonlocal touched
+    if cursor.x() < 0:
+      return
+    touched = True
+
+  context.widget.touch_listener = touch_handler
   context.widget.gaze_listener = gaze_handler
 
   dim_start_target = False
@@ -355,7 +364,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     color_base = all_target_colors[i_start_targ]
     scale = (all_target_on_luminance[i_start_targ] if not dim_start_target
              else all_target_off_luminance[i_start_targ])
-    color_base = QColor(scale*color_base.red(), scale*color_base.green(), scale*color_base.blue())
+    color_base = QColor(int(scale*color_base.red()), int(scale*color_base.green()), int(scale*color_base.blue()))
     window = all_target_windows[i_start_targ]
 
     stl_mesh = all_target_stls[i_start_targ]
@@ -393,7 +402,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       path = QPainterPath()
 
       for rect in all_target_rects:
-        path.addEllipse(rect.center(), window, window)
+        path.addEllipse(QPointF(rect.center()), window, window)
 
       painter.fillPath(path, QColor(255, 255, 255, 128))
 
@@ -417,59 +426,65 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     show_start_target = False
     show_presented_target = False
     context.behav_result = behav_result
-    with next_state(context, State.FAIL, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
+    with await next_state(context, State.FAIL, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
       state_brightness = toggle_brightness(state_brightness)
       fail_sound.play()
       context.widget.update()
       await context.sleep(config.fail_timeout)
 
   while True:  
-    with next_state(context, State.INTERTRIAL, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
+    with await next_state(context, State.INTERTRIAL, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
       state_brightness = 0
       show_start_target = False
       context.widget.update()
-      await context.sleep(config.intertrial_timeout)
+      await wait_for(context, lambda: touched, config.intertrial_timeout)
+      if touched:
+        await fail_trial()
+        return task_context.TaskResult(False)
 
-    with next_state(context, State.START_ON, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
+    with await next_state(context, State.START_ON, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
       state_brightness = toggle_brightness(state_brightness)
       show_start_target = True
       context.widget.update()
-      acquired = await wait_for(context, lambda: start_target_acquired, config.start_timeout)
+      acquired = await wait_for(context, lambda: start_target_acquired or touched, config.start_timeout)
+      if touched:
+        await fail_trial()
+        return task_context.TaskResult(False)
 
     if acquired:
       break
 
   # state: startacq
-  with next_state(context, State.START_ACQ, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
-    success = await wait_for_hold(context, lambda: start_target_acquired, config.baseline_timeout, config.blink_timeout)
-  if not success:
+  with await next_state(context, State.START_ACQ, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
+    success = await context.any(wait_for_hold(context, lambda: start_target_acquired, config.baseline_timeout, config.blink_timeout), context.until(lambda: touched))
+  if not success or touched:
     await fail_trial()
     return task_context.TaskResult(False)
 
-  with next_state(context, State.TARGS_ON, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
+  with await next_state(context, State.TARGS_ON, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
     show_presented_target = True
     state_brightness = toggle_brightness(state_brightness)
     context.widget.update()
-    success = await wait_for_hold(context, lambda: start_target_acquired, config.cue_timeout, config.blink_timeout)
-  if not success:
+    success = await context.any(wait_for_hold(context, lambda: start_target_acquired, config.cue_timeout, config.blink_timeout), context.until(lambda: touched))
+  if not success or touched:
     await fail_trial()
     return task_context.TaskResult(False)
 
   dim_start_target = True
-  with next_state(context, State.GO, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
+  with await next_state(context, State.GO, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
     state_brightness = toggle_brightness(state_brightness)
     context.widget.update()
-    acquired = await wait_for(context, lambda: presented_targ_acquired, config.saccade_timeout)
+    acquired = await wait_for(context, lambda: presented_targ_acquired or touched, config.saccade_timeout)
 
-  if not acquired:
+  if not acquired or touched:
     await fail_trial()
     return task_context.TaskResult(False)
   final_i_selected_target = last_selected_target
   behav_result['selected_target_id'] = final_i_selected_target
 
-  with next_state(context, State.TARGS_ACQ, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
-    success = await wait_for_hold(context, lambda: presented_targ_acquired, config.hold_timeout, config.blink_timeout)
-  if not success:
+  with await next_state(context, State.TARGS_ACQ, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
+    success = await context.any(wait_for_hold(context, lambda: presented_targ_acquired, config.hold_timeout, config.blink_timeout), context.until(lambda: touched))
+  if not success or touched:
     await fail_trial()
     return task_context.TaskResult(False)
   
@@ -479,7 +494,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   """
   show_presented_target = False
 
-  with next_state(context, State.SUCCESS, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
+  with await next_state(context, State.SUCCESS, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
     state_brightness = toggle_brightness(state_brightness)
     context.widget.update()
     
