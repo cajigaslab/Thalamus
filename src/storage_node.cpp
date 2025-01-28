@@ -770,14 +770,14 @@ namespace thalamus {
       auto service_encoders = [&] (bool finish) {
         std::mutex mutex;
         std::condition_variable condition;
-        auto band_size = std::max(1ull, encoders.size()/pool.num_threads);
+        auto band_size = std::max(size_t(1), encoders.size()/pool.num_threads);
         band_size += (band_size*pool.num_threads < encoders.size()) ? 1 : 0;
         size_t pending_bands = encoders.size()/band_size;
         pending_bands += (pending_bands * band_size < encoders.size()) ? 1 : 0;
         {
           TRACE_EVENT("thalamus", "encode_all");
           for(auto i = 0ull;i < encoders.size();i+=band_size) {
-            auto upper = std::min(i+band_size, encoders.size());
+            auto upper = std::min(size_t(i+band_size), encoders.size());
             pool.push([&,i,upper] {
               TRACE_EVENT("thalamus", "encode");
               for(auto j = i;j < upper;++j) {

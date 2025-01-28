@@ -554,7 +554,7 @@ namespace thalamus {
   }
 
   std::future<thalamus_grpc::StimResponse> NidaqOutputNode::stim(thalamus_grpc::StimRequest&&) {
-    THALAMUS_ASSERT(false, "Unimplemented")
+    THALAMUS_ASSERT(false, "Unimplemented");
     thalamus_grpc::StimResponse response;
     std::promise<thalamus_grpc::StimResponse> promise;
     promise.set_value(response);

@@ -92,8 +92,8 @@ else()
                             "${boost_content_SOURCE_DIR}/stage-debug/lib/libboost_chrono.a"
                             "${boost_content_SOURCE_DIR}/stage-debug/lib/libboost_json.a"
                             "${boost_content_SOURCE_DIR}/stage-debug/lib/libboost_atomic.a"
-                    COMMAND ${BOOTSTRAP} ${BOOST_TOOLSET} 
-                    && sh ${CMAKE_SOURCE_DIR}/build_boost.sh "${ALL_COMPILE_OPTIONS_SPACED} -DBOOST_ASIO_HAS_STD_INVOKE_RESULT" " ${ALL_LINK_OPTIONS_SPACED}" debug
+                    COMMAND
+		    sh ${CMAKE_SOURCE_DIR}/build_boost.sh "${ALL_COMPILE_OPTIONS_SPACED} -DBOOST_ASIO_HAS_STD_INVOKE_RESULT" " ${ALL_LINK_OPTIONS_SPACED}" debug
                     WORKING_DIRECTORY ${boost_content_SOURCE_DIR})
   add_custom_command(
     DEPENDS "${boost_content_SOURCE_DIR}/b2"
@@ -108,8 +108,8 @@ else()
                             "${boost_content_SOURCE_DIR}/stage-release/lib/libboost_chrono.a"
                             "${boost_content_SOURCE_DIR}/stage-release/lib/libboost_json.a"
                             "${boost_content_SOURCE_DIR}/stage-release/lib/libboost_atomic.a"
-                    COMMAND ${BOOTSTRAP} ${BOOST_TOOLSET} 
-                    && sh ${CMAKE_SOURCE_DIR}/build_boost.sh "${ALL_COMPILE_OPTIONS_SPACED} -DBOOST_ASIO_HAS_STD_INVOKE_RESULT" " ${ALL_LINK_OPTIONS_SPACED}" release
+                    COMMAND
+		    sh ${CMAKE_SOURCE_DIR}/build_boost.sh "${ALL_COMPILE_OPTIONS_SPACED} -DBOOST_ASIO_HAS_STD_INVOKE_RESULT" " ${ALL_LINK_OPTIONS_SPACED}" release
                     WORKING_DIRECTORY ${boost_content_SOURCE_DIR})
   add_library(boost INTERFACE
     "$<IF:$<CONFIG:Debug>,${boost_content_SOURCE_DIR}/stage-debug/lib/libboost_date_time.a,${boost_content_SOURCE_DIR}/stage-release/lib/libboost_date_time.a>"
