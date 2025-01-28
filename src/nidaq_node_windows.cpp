@@ -30,8 +30,9 @@ namespace thalamus {
     decltype(&::DAQmxWriteAnalogF64) DAQmxWriteAnalogF64;
     decltype(&::DAQmxCreateDOChan) DAQmxCreateDOChan;
     decltype(&::DAQmxCreateAOVoltageChan) DAQmxCreateAOVoltageChan;
-    decltype(&::DAQmxRegisterDoneEvent) DAQmxRegisterDoneEvent; 
+    decltype(&::DAQmxRegisterDoneEvent) DAQmxRegisterDoneEvent;
     decltype(&::DAQmxCfgDigEdgeStartTrig) DAQmxCfgDigEdgeStartTrig;
+    decltype(&::DAQmxSetBufInputBufSize) DAQmxSetBufInputBufSize;
   };
   static DAQmxAPI daqmxapi;
 
@@ -136,6 +137,11 @@ namespace thalamus {
     daqmxapi.DAQmxCfgDigEdgeStartTrig = reinterpret_cast<decltype(&DAQmxCfgDigEdgeStartTrig)>(::GetProcAddress(nidaq_dll_handle, "DAQmxCfgDigEdgeStartTrig"));
     if (!daqmxapi.DAQmxCfgDigEdgeStartTrig) {
       THALAMUS_LOG(info) << "Failed to load DAQmxCfgDigEdgeStartTrig.  NI features disabled";
+      return false;
+    }
+    daqmxapi.DAQmxSetBufInputBufSize = reinterpret_cast<decltype(&DAQmxSetBufInputBufSize)>(::GetProcAddress(nidaq_dll_handle, "DAQmxSetBufInputBufSize"));
+    if (!daqmxapi.DAQmxSetBufInputBufSize) {
+      THALAMUS_LOG(info) << "Failed to load DAQmxSetBufInputBufSize.  NI features disabled";
       return false;
     }
     daqmxapi.loaded = true;
@@ -320,7 +326,7 @@ namespace thalamus {
           _every_n_samples = polling_interval / _sample_interval;
 
           std::string channel_name = name + " channel";
-          buffer_size = _every_n_samples * _num_channels;
+          buffer_size = 2*_every_n_samples * _num_channels;
           std::function<void()> reader;
 
           auto daq_error = daqmxapi.DAQmxCreateTask(name.c_str(), &task_handle);
@@ -336,19 +342,20 @@ namespace thalamus {
           daq_error = daqmxapi.DAQmxRegisterEveryNSamplesEvent(task_handle, DAQmx_Val_Acquired_Into_Buffer, _every_n_samples, 0, NidaqCallback, new std::weak_ptr<Node>(outer->weak_from_this()));
           BOOST_ASSERT_MSG(daq_error >= 0, "DAQmxCfgSampClkTiming failed");
 
+          daq_error = daqmxapi.DAQmxSetBufInputBufSize(task_handle, buffer_size);
+          BOOST_ASSERT_MSG(daq_error >= 0, "DAQmxSetBufInputBufSize failed");
+
           daq_error = daqmxapi.DAQmxStartTask(task_handle);
           if (daq_error == DAQmxErrorPALResourceReserved) {
+            THALAMUS_LOG(error) << "Channel in use: " << channel;
             state->at("Running").assign(false);
-            auto code = absl::StrFormat("QMessageBox.critical(None, 'Channel in use', f'%s is  already in use')", channel);
-            graph->get_service().evaluate(code);
             daqmxapi.DAQmxClearTask(task_handle);
             task_handle = nullptr;
             return;
           }
           else if (daq_error < 0) {
+            THALAMUS_LOG(error) << "DAQmxStartTask failed " << daq_error;
             state->at("Running").assign(false);
-            auto code = absl::StrFormat("QMessageBox.critical(None, 'NIDAQmx Error', f'NIDAQmx Error %d')", daq_error);
-            graph->get_service().evaluate(code);
             daqmxapi.DAQmxClearTask(task_handle);
             task_handle = nullptr;
             return;
@@ -674,9 +681,8 @@ namespace thalamus {
 
           auto daq_error = daqmxapi.DAQmxCreateTask(name.c_str(), &task_handle);
           if(daq_error < 0) {
+            THALAMUS_LOG(error) << "DAQmxCreateTask failed " << daq_error;
             state->at("Running").assign(false);
-            auto code = absl::StrFormat("DAQmxCreateTask failed %d", daq_error);
-            graph->get_service().evaluate(code);
             task_handle = nullptr;
             return;
           }
@@ -684,14 +690,8 @@ namespace thalamus {
           if (digital) {
             daq_error = daqmxapi.DAQmxCreateDOChan(task_handle, channel.c_str(), "", DAQmx_Val_ChanForAllLines);
             if(daq_error < 0) {
+              THALAMUS_LOG(error) << "DAQmxCreateDOChan failed " << daq_error;
               state->at("Running").assign(false);
-              std::string code;
-              if (daq_error == DAQmxErrorPhysicalChanDoesNotExist) {
-                code = absl::StrFormat("QMessageBox.critical(None, 'Does not exist', f'%s doesn't exist')", channel);
-              } else {
-                code = absl::StrFormat("DAQmxCreateDOChan failed: %d", daq_error);
-              }
-              graph->get_service().evaluate(code);
               daqmxapi.DAQmxClearTask(task_handle);
               task_handle = nullptr;
               return;
@@ -699,14 +699,8 @@ namespace thalamus {
           } else {
             daq_error = daqmxapi.DAQmxCreateAOVoltageChan(task_handle, channel.c_str(), "", -10.0, 10.0, DAQmx_Val_Volts, nullptr);
             if(daq_error < 0) {
+              THALAMUS_LOG(error) << "DAQmxCreateAOVoltageChan failed " << daq_error;
               state->at("Running").assign(false);
-              std::string code;
-              if (daq_error == DAQmxErrorPhysicalChanDoesNotExist) {
-                code = absl::StrFormat("QMessageBox.critical(None, 'Does not exist', f'%s doesn't exist')", channel);
-              } else {
-                code = absl::StrFormat("DAQmxCreateAOVoltageChan failed: %d", daq_error);
-              }
-              graph->get_service().evaluate(code);
               daqmxapi.DAQmxClearTask(task_handle);
               task_handle = nullptr;
               return;
