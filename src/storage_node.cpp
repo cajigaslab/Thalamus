@@ -504,7 +504,7 @@ namespace thalamus {
         frame->height = height;
 
         auto ret = avcodec_open2(context, codec, nullptr);
-        THALAMUS_ASSERT(ret >= 0, "Could not open codec: %s", av_err2str(ret));
+        THALAMUS_ASSERT(ret >= 0, "Could not open codec: %d", ret);
 
         ret = av_frame_get_buffer(frame, 0);
         THALAMUS_ASSERT(ret >= 0, "Could not allocate the video frame data");
