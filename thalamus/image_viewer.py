@@ -15,10 +15,12 @@ import traceback
 import functools
 
 from .thread import ThalamusThread
-from .util import MeteredUpdater
+from .util import MeteredUpdater, IterableQueue
+from .task_controller.util import create_task_with_exc_handling
 from .config import ObservableDict
 
 from . import  thalamus_pb2
+from . import thalamus_pb2_grpc
 
 from .qt import *
 
@@ -62,12 +64,13 @@ QTKEY_TO_CODE = {
 }
 
 class ImageWidget(QWidget):
-  def __init__(self, node: ObservableDict, stream: typing.AsyncIterable[thalamus_pb2.Image], stub, done_future):
+  def __init__(self, node: ObservableDict, stream: typing.AsyncIterable[thalamus_pb2.Image], control_queue: IterableQueue, stub: thalamus_pb2_grpc.ThalamusStub, done_future):
     self.node = node
     self.stream = stream
     self.stub = stub
     self.image: typing.Optional[QImage] = None
     self.done_future = done_future
+    self.control_queue = control_queue
 
     x, y, w, h = [100, 100, 400, 400]
 
@@ -94,7 +97,7 @@ class ImageWidget(QWidget):
     
     self.show()
 
-  def key_event(self, e, event_type):
+  def key_event(self, e: QKeyEvent, event_type):
     if e.key() not in QTKEY_TO_CODE:
       return
     event = {
@@ -107,16 +110,44 @@ class ImageWidget(QWidget):
       node = self.node['name'],
       json = json.dumps(event)
     )
-    async def request_func():
-      response = await self.stub.node_request(request)
-      print(response)
-    asyncio.get_event_loop().create_task(request_func())
+    create_task_with_exc_handling(self.control_queue.put(request))
 
-  def keyReleaseEvent(self, a0):
+  def mouse_event(self, e: QMouseEvent, event_type):
+    if self.image is None:
+      return
+
+    scale = min(self.width()/self.image.width(), self.height()/self.image.height())
+    offset = -(self.image.width()*scale - self.width())/2, -(self.image.height()*scale - self.height())/2
+    event = {
+      event_type :{
+        'type': event_type,
+        'offsetX': int(float(qt_get_x(e) + offset[0])/self.width()*self.image.width()),
+        'offsetY': int(float(qt_get_y(e) + offset[1])/self.height()*self.image.height()),
+        'button': e.button().value,
+        'buttons': e.buttons().value
+      }
+    }
+    request = thalamus_pb2.NodeRequest(
+      node = self.node['name'],
+      json = json.dumps(event)
+    )
+    print(request)
+    create_task_with_exc_handling(self.control_queue.put(request))
+
+  def keyReleaseEvent(self, a0: QKeyEvent):
     self.key_event(a0, 'keyup')
 
-  def keyPressEvent(self, a0):
+  def keyPressEvent(self, a0: QKeyEvent):
     self.key_event(a0, 'keydown')
+
+  def mousePressEvent(self, a0: QMouseEvent):
+    self.mouse_event(a0, 'mousedown')
+
+  def mouseReleaseEvent(self, a0: QMouseEvent):
+    self.mouse_event(a0, 'mouseup')
+
+  def mouseMoveEvent(self, a0: QMouseEvent):
+    self.mouse_event(a0, 'mousemove')
 
   def paintEvent(self, a0):
     super().paintEvent(a0)
@@ -251,24 +282,39 @@ async def main():
       def on_change(source, action, key, value):
         print(source, action, key, value)
 
-      node = None
+      node: typing.Optional[ObservableDict] = None
       for n in thread.config['nodes']:
         if n['name'] == args.node:
           n.add_recursive_observer(on_change)
           node = n
           break
+      assert node is not None
 
+      assert thread.stub is not None
       request = thalamus_pb2.ImageRequest(node=thalamus_pb2.NodeSelector(name=args.node), framerate=args.framerate)
       stream = thread.stub.image(request)
 
+      control_queue = IterableQueue()
+      control_stream = thread.stub.node_request_stream(control_queue)
+      async def control_consumer():
+        try:
+          async for v in control_stream:
+            print(v)
+        except asyncio.CancelledError:
+          pass
+      consumer_task = create_task_with_exc_handling(control_consumer())
+
       done_future = asyncio.get_event_loop().create_future()
-      widget = ImageWidget(node, stream, thread.stub, done_future)
+      widget = ImageWidget(node, stream, control_queue, thread.stub, done_future)
 
       while not done_future.done():
         QApplication.processEvents()
         await asyncio.sleep(.016)
       if not done_future.done():
         done_future.set_result(None)
+
+      consumer_task.cancel()
+      await consumer_task
     except KeyboardInterrupt:
       pass
     finally:

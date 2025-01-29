@@ -1082,7 +1082,10 @@ class ItemModel(QAbstractItemModel):
 
   def close(self):
     for k, v in self.procs.items():
-      v.kill()
+      try:
+        v.kill()
+      except ProcessLookupError:
+        pass
 
   def get_node_type(self, node: ObservableDict):
     for t, n in zip(self.node_types, self.nodes):
