@@ -81,6 +81,8 @@ class FlatObservableCollectionModel(QAbstractItemModel):
     return QModelIndex()
 
   def rowCount(self, parent: QModelIndex) -> int:
+    if parent.isValid():
+      return 0
     return len(self.values)
 
   def columnCount(self, _: QModelIndex) -> int:

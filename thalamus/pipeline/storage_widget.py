@@ -1,11 +1,12 @@
 from ..qt import *
-from ..util import NodeSelector
 from .. import thalamus_pb2_grpc
+from ..observable_item_models import FlatObservableCollectionModel
 from ..config import ObservableDict
 from ..task_controller.util import create_task_with_exc_handling
 import datetime
 import asyncio
 import time
+import bisect
 
 class StorageWidget(QWidget):
   def __init__(self, config: ObservableDict, stub: thalamus_pb2_grpc.ThalamusStub):
@@ -14,14 +15,47 @@ class StorageWidget(QWidget):
     status = QLabel()
     status.setText('WAITING')
     status.setStyleSheet('color: red')
-    node_select = NodeSelector(config, 'Sources')
+
+    if "Sources List" not in config:
+      config["Sources List"] = []
+    sources_list = config["Sources List"]
+
+    combo_model = FlatObservableCollectionModel(config.parent, lambda n: n['name'])
+    selected_model = FlatObservableCollectionModel(sources_list, lambda n: n)
+    combo = QComboBox()
+    combo.setModel(combo_model)
+    qlist = QTreeView()
+    qlist.setHeaderHidden(True)
+    qlist.setRootIsDecorated(False)
+    qlist.setModel(selected_model)
+    add_button = QPushButton("Add")
+    remove_button = QPushButton("Remove")
+
+    def on_add():
+      data = combo.currentText()
+      print('on_add', data)
+      if data and data not in sources_list:
+        i = bisect.bisect_left(sources_list, data)
+        sources_list.insert(i, data)
+
+    def on_remove():
+      for item in list(qlist.selectedIndexes())[::-1]:
+        del sources_list[item.row()]
+
+    add_button.clicked.connect(on_add)
+    remove_button.clicked.connect(on_remove)
 
     if 'rec' not in config:
       config['rec'] = 0
 
     layout = QVBoxLayout()
     layout.addWidget(status)
-    layout.addWidget(node_select)
+    layout.addWidget(combo)
+    layout.addWidget(qlist)
+    button_layout = QHBoxLayout()
+    button_layout.addWidget(add_button)
+    button_layout.addWidget(remove_button)
+    layout.addLayout(button_layout)
     self.setLayout(layout)
     self.task = None
     condition = asyncio.Condition()
@@ -46,6 +80,11 @@ class StorageWidget(QWidget):
         pass
 
     def on_change(source, action, key, value):
+      print(source, action, key, value)
+      if source is sources_list:
+        config['Sources'] = ','.join(sources_list)
+        return
+
       if key == 'Running':
         if self.task:
           self.task.cancel()

@@ -65,10 +65,10 @@ class CalibrationWidget(QWidget):
           self.update()
         elif self.transform is not None:
           screenf = self.transform.map(touch)
-          screen = QPoint(screenf.x(), screenf.y())
+          screen = QPoint(int(screenf.x()), int(screenf.y()))
           widget = self.mapFromGlobal(screen)
           self.path.moveTo(widget.x(), widget.y())
-          self.path.addEllipse(widget, 4, 4)
+          self.path.addEllipse(QPointF(widget), 4, 4)
           self.update()
 
     except asyncio.CancelledError:
