@@ -1,12 +1,20 @@
 #pragma once
 
 #include <string>
-#include <thalamus.pb.h>
-#include <thalamus_asio.hpp>
 #include <base_node.hpp>
 #include <state.hpp>
 #include <image_node.hpp>
 #include <analog_node.hpp>
+
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Weverything"
+#endif
+#include <thalamus.pb.h>
+#include <boost/asio.hpp>
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
 
 namespace thalamus {
   class OculomaticNode : public Node, public ImageNode, public AnalogNode {
@@ -32,7 +40,6 @@ namespace thalamus {
     int num_channels() const override;
     std::chrono::nanoseconds sample_interval(int channel) const override;
     std::string_view name(int channel) const override;
-    std::span<const std::string> get_recommended_channels() const override;
     void inject(const thalamus::vector<std::span<double const>>&, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&) override;
     bool has_analog_data() const override;
     size_t modalities() const override;

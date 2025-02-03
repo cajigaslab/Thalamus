@@ -1,5 +1,4 @@
 #include <node_graph_impl.hpp>
-#include <grpcpp/create_channel.h>
 #include <run_node.hpp>
 #include <ophanim_node.hpp>
 #include <image_node.hpp>
@@ -28,7 +27,16 @@
 #include <hexascope_node.hpp>
 #include <loop_test_node.hpp>
 #include <analog_node.hpp>
- 
+
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Weverything"
+#endif
+#include <grpcpp/create_channel.h>
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
+   
 namespace thalamus {
   using namespace std::chrono_literals;
 

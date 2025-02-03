@@ -78,6 +78,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   if 'generate' in config_settings:
     return
 
+  is_android = 'android' in config_settings
   is_release = 'release' in config_settings
   do_config = 'config' in config_settings
   clang = 'clang' in config_settings
@@ -86,7 +87,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   target = config_settings.get('target', None)
 
   legacy_path = pathlib.Path.cwd() / 'build' / f'{platform.python_implementation()}-{platform.python_version()}-{"release" if is_release else "debug"}'
-  build_path = pathlib.Path.cwd() / 'build' / f'{"clangcl-" if clang else ""}{"release" if is_release else "debug"}'
+  build_path = pathlib.Path.cwd() / 'build' / f'{"android-" if is_android else ""}{"clang-" if clang else ""}{"release" if is_release else "debug"}'
   if sanitizer:
     legacy_path = legacy_path.with_name(legacy_path.name + '-' + sanitizer)
     build_path = build_path.with_name(build_path.name + '-' + sanitizer)
@@ -133,7 +134,6 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     '-S', pathlib.Path.cwd(),
     '-B', build_path,
     f'-DCMAKE_BUILD_TYPE={"Release" if is_release else "Debug"}',
-    '-DENABLE_SWIG=OFF',
     '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
     f'-DCMAKE_OSX_DEPLOYMENT_TARGET={osx_target}'
   ]
@@ -142,8 +142,8 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   if sys.platform == 'win32':
     if clang:
       cmake_command += [
-        '-DCMAKE_C_COMPILER=clang-cl',
-        '-DCMAKE_CXX_COMPILER=clang-cl']
+        '-DCMAKE_C_COMPILER=clang',
+        '-DCMAKE_CXX_COMPILER=clang']
     else:
       cmake_command += [
         '-DCMAKE_C_COMPILER=cl',
@@ -160,6 +160,15 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
 
   if sanitizer:
     cmake_command += [f'-DSANITIZER={sanitizer}']
+
+  if is_android:
+    sdk = pathlib.Path.home() / 'AppData' / 'Local' / 'Android' / 'Sdk'
+    ndk =  sdk / 'ndk' / '28.0.12433566'
+    toolchain = ndk / 'build' / 'cmake' / 'android.toolchain.cmake'
+    cmake_command += ['-DANDROID_ABI=arm64-v8a']
+    cmake_command += ['-DANDROID_PLATFORM=21']
+    cmake_command += [f'-DANDROID_NDK={ndk}']
+    cmake_command += [f'-DCMAKE_TOOLCHAIN_FILE={toolchain}']
 
   cmake_command = [str(c) for c in cmake_command]
   print(cmake_command)

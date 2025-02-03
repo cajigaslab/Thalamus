@@ -40,6 +40,7 @@ from .util import create_task_with_exc_handling
 LOGGER = logging.getLogger(__name__)
 
 VOLTAGE_RANGE = -10, 10
+POINT_SIZE = 20
 
 def load_transform(config: ObservableDict) -> QTransform:
   '''
@@ -376,7 +377,7 @@ class InputConfig():
     path.setFillRule(Qt.FillRule.WindingFill)
     for point in points:
       scaled_point = transform.map(point)
-      path.addEllipse(scaled_point, 2, 2)
+      path.addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
 
   def __str__(self) -> str:
     return f'InputConfig(touch_channels={self.touch_channels})'
@@ -808,7 +809,7 @@ class Canvas(QOpenGLWidget):
     """
     offset = point - self.input_config.last_touch
     if QPoint.dotProduct(offset, offset) > 2:
-      self.input_config.touch_path.addEllipse(QPointF(point), 2, 2)
+      self.input_config.touch_path.addEllipse(QPointF(point), POINT_SIZE, POINT_SIZE)
       self.input_config.last_touch = offset
 
     self.listeners.touch_listener(point)
@@ -842,20 +843,20 @@ class Canvas(QOpenGLWidget):
         if x >= 0:
           self.input_config.points[0].append(voltage_point)
           scaled_point = self.input_config.gaze_transforms[0].map(voltage_point)
-          self.input_config.gaze_paths[0].addEllipse(scaled_point, 2, 2)
+          self.input_config.gaze_paths[0].addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
         else:
           self.input_config.points[1].append(voltage_point)
           scaled_point = self.input_config.gaze_transforms[1].map(voltage_point)
-          self.input_config.gaze_paths[1].addEllipse(scaled_point, 2, 2)
+          self.input_config.gaze_paths[1].addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
       else:
         if x < 0:
           self.input_config.points[2].append(voltage_point)
           scaled_point = self.input_config.gaze_transforms[2].map(voltage_point)
-          self.input_config.gaze_paths[2].addEllipse(scaled_point, 2, 2)
+          self.input_config.gaze_paths[2].addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
         else:
           self.input_config.points[3].append(voltage_point)
           scaled_point = self.input_config.gaze_transforms[3].map(voltage_point)
-          self.input_config.gaze_paths[3].addEllipse(scaled_point, 2, 2)
+          self.input_config.gaze_paths[3].addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
 
       #geometry = qt_screen_geometry()
       #global_point = QPoint(scaled_point.x() + geometry.width()/2, scaled_point.y() + geometry.height()/2)

@@ -106,8 +106,13 @@ namespace hydrate {
         av_parser_close(parser);
       }
 
-      VideoDecoder(int width, int height, AVRational framerate, AVPixelFormat format) {
-        codec = avcodec_find_decoder(AV_CODEC_ID_MPEG1VIDEO);
+      VideoDecoder(int width, int height, AVRational framerate, AVPixelFormat pixel_format, thalamus_grpc::Image::Format image_format) {
+        if(image_format == thalamus_grpc::Image::Format::Image_Format_MPEG4) {
+          codec = avcodec_find_decoder(AV_CODEC_ID_MPEG4);
+        } else {
+          codec = avcodec_find_decoder(AV_CODEC_ID_MPEG1VIDEO);
+        }
+
         THALAMUS_ASSERT(codec, "avcodec_find_decoder failed");
         parser = av_parser_init(codec->id);
         THALAMUS_ASSERT(parser, "av_parser_init failed");
@@ -123,9 +128,9 @@ namespace hydrate {
         context->framerate = framerate;
         context->time_base = {framerate.den, framerate.num};
 
-        context->pix_fmt = format;
+        context->pix_fmt = pixel_format;
 
-        frame->format = format;
+        frame->format = pixel_format;
         frame->width = width;
         frame->height = height;
 
@@ -136,21 +141,25 @@ namespace hydrate {
         THALAMUS_ASSERT(ret >= 0, "Could not allocate the video frame data");
       }
 
+      std::string empty_string;
+
       void decode(const thalamus_grpc::StorageRecord* record) {
         int ret = 0;
         if(record) {
-          pending.emplace_back();
-          pending.back().set_time(record->time());
-          pending.back().set_node(record->node());
-          auto pending_image = pending.back().mutable_image();
-          pending_image->set_width(record->image().width());
-          pending_image->set_height(record->image().height());
-          pending_image->set_format(thalamus_grpc::Image::Format::Image_Format_Gray);
-          pending_image->set_frame_interval(record->image().frame_interval());
-          pending_image->set_last(record->image().last());
-          pending_image->set_bigendian(record->image().bigendian());
+          if (record->image().width() > 0) {
+            pending.emplace_back();
+            pending.back().set_time(record->time());
+            pending.back().set_node(record->node());
+            auto pending_image = pending.back().mutable_image();
+            pending_image->set_width(record->image().width());
+            pending_image->set_height(record->image().height());
+            pending_image->set_format(thalamus_grpc::Image::Format::Image_Format_Gray);
+            pending_image->set_frame_interval(record->image().frame_interval());
+            pending_image->set_last(record->image().last());
+            pending_image->set_bigendian(record->image().bigendian());
+          }
 
-          auto data = record->image().data(0);
+          auto& data = record->image().data_size() ? record->image().data(0) : empty_string;
 #ifdef __clang__
   #pragma clang diagnostic push
   #pragma clang diagnostic ignored "-Wold-style-cast"
@@ -158,7 +167,7 @@ namespace hydrate {
           auto offset = 0;
           while (size_t(offset) < data.size()) {
             ret = av_parser_parse2(parser, context, &packet->data, &packet->size,
-              reinterpret_cast<unsigned char*>(data.data()) + offset, int(data.size()) - offset, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
+              reinterpret_cast<const unsigned char*>(data.data()) + offset, int(data.size()) - offset, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
             THALAMUS_ASSERT(ret >= 0, "av_parser_parse2 failed");
 
             offset += ret;
@@ -170,7 +179,7 @@ namespace hydrate {
           }
         } else {
           ret = avcodec_send_packet(context, nullptr);
-          THALAMUS_ASSERT(ret >= 0, "avcodec_send_packet failed");
+          THALAMUS_ASSERT(ret >= 0, "avcodec_send_packet failed %s", av_err2str(ret));
         }
         while (ret >= 0) {
           ret = avcodec_receive_frame(context, frame);
@@ -213,11 +222,13 @@ namespace hydrate {
 
         if (file_size == current_position) {
           //std::cout << "End of file" << std::endl;
+          flush_video_decoders();
           return std::nullopt;
         }
 
         if (file_size - current_position < 8) {
           std::cout << "Not enough bytes to read message size, likely final message was corrupted." << std::endl;
+          flush_video_decoders();
           return std::nullopt;
         }
 
@@ -231,6 +242,7 @@ namespace hydrate {
         current_position = stream.tellg();
         if (size_t(file_size - current_position) < size) {
           std::cout << "Not enough bytes to read message, likely final message was corrupted." << std::endl;
+          flush_video_decoders();
           return std::nullopt;
         }
 
@@ -241,6 +253,7 @@ namespace hydrate {
         auto parsed = record.ParseFromString(buffer);
         if (!parsed) {
           std::cout << "Failed to parse message" << std::endl;
+          flush_video_decoders();
           return std::nullopt;
         }
         if (record.body_case() == thalamus_grpc::StorageRecord::kCompressed) {
@@ -248,13 +261,28 @@ namespace hydrate {
           if (record.compressed().type() == thalamus_grpc::Compressed::Type::Compressed_Type_NONE) {
             continue;
           }
-        } else if (do_decode_video && record.body_case() == thalamus_grpc::StorageRecord::kImage && record.image().format() == thalamus_grpc::Image::Format::Image_Format_MPEG1) {
+        } else if (do_decode_video && record.body_case() == thalamus_grpc::StorageRecord::kImage && (
+              record.image().format() == thalamus_grpc::Image::Format::Image_Format_MPEG1 ||
+              record.image().format() == thalamus_grpc::Image::Format::Image_Format_MPEG4)
+            ) {
           decode_video(record);
           if(record.image().width() == 0) {
             continue;
           }
         }
         return record;
+      }
+    }
+
+    bool video_flushed = false;
+
+    void flush_video_decoders() {
+      if (video_flushed) {
+        return;
+      }
+      video_flushed = true;
+      for(auto& pair : video_decoders) {
+        pair.second->decode(nullptr);
       }
     }
 
@@ -288,6 +316,7 @@ namespace hydrate {
             format = image.bigendian() ? AV_PIX_FMT_GRAY16BE : AV_PIX_FMT_GRAY16LE;
             break;
           case thalamus_grpc::Image::Format::Image_Format_MPEG1:
+          case thalamus_grpc::Image::Format::Image_Format_MPEG4:
             format = AV_PIX_FMT_YUV420P;
             break;
           case thalamus_grpc::Image::Format::Image_Format_RGB:
@@ -300,12 +329,12 @@ namespace hydrate {
             THALAMUS_ASSERT(false, "Usupported image format");
         }
 
-        video_decoders[record.node()] = std::make_unique<VideoDecoder>(image.width(), image.height(), framerate, format);
+        video_decoders[record.node()] = std::make_unique<VideoDecoder>(image.width(), image.height(), framerate, format, image.format());
       }
       video_decoders[record.node()]->decode(&record);
-      if(image.width() == 0) {
-        video_decoders[record.node()]->decode(nullptr);
-      }
+      //if(image.width() == 0) {
+      //  video_decoders[record.node()]->decode(nullptr);
+      //}
     }
 
     void inflate_record(const thalamus_grpc::Compressed& compressed) {
@@ -378,7 +407,9 @@ namespace hydrate {
         i->second.first -= size_t(compressed.size());
 
         return inflated_record;
-      } else if (do_decode_video && record.body_case() == thalamus_grpc::StorageRecord::kImage && record.image().format() == thalamus_grpc::Image::Format::Image_Format_MPEG1) {
+      } else if (do_decode_video && record.body_case() == thalamus_grpc::StorageRecord::kImage && (
+            record.image().format() == thalamus_grpc::Image::Format::Image_Format_MPEG1 ||
+            record.image().format() == thalamus_grpc::Image::Format::Image_Format_MPEG4)) {
         auto& decoder = video_decoders[record.node()];
         auto pulled = decoder->pull();
         while(!pulled) {
@@ -633,6 +664,7 @@ namespace hydrate {
                 result.datatypes["image/" + key.first + "/data"] = H5T_NATIVE_USHORT;
                 break;
               case thalamus_grpc::Image::Format::Image_Format_MPEG1: 
+              case thalamus_grpc::Image::Format::Image_Format_MPEG4: 
               case thalamus_grpc::Image::Format::Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
               case thalamus_grpc::Image::Format::Image_Format_Image_Format_INT_MAX_SENTINEL_DO_NOT_USE_:
                 THALAMUS_ASSERT(false, "Unexpected image format %d", image.format());
@@ -778,6 +810,9 @@ namespace hydrate {
             case thalamus_grpc::Image::Format::Image_Format_MPEG1: 
               video_format = "mpeg1video";
               break;
+            case thalamus_grpc::Image::Format::Image_Format_MPEG4: 
+              video_format = "mpeg4video";
+              break;
             case thalamus_grpc::Image::Format::Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
             case thalamus_grpc::Image::Format::Image_Format_Image_Format_INT_MAX_SENTINEL_DO_NOT_USE_:
               THALAMUS_ASSERT(false, "Unexpected image format %d", image.format());
@@ -844,7 +879,12 @@ namespace hydrate {
 
       context->start_time = 0;
 
-      auto codec = avcodec_find_encoder(AV_CODEC_ID_MPEG1VIDEO);
+      const AVCodec* codec;
+      if(video_format == "mpeg4video") {
+        codec = avcodec_find_decoder(AV_CODEC_ID_MPEG4);
+      } else {
+        codec = avcodec_find_decoder(AV_CODEC_ID_MPEG1VIDEO);
+      }
       THALAMUS_ASSERT(codec, "avcodec_find_encoder failed");
       auto codec_context = avcodec_alloc_context3(codec);
       THALAMUS_ASSERT(context, "avcodec_alloc_context3 failed");
@@ -852,6 +892,7 @@ namespace hydrate {
       codec_context->height = int(height);
       codec_context->framerate = { time_base.den, time_base.num };
       codec_context->time_base = time_base;
+      codec_context->pix_fmt = AV_PIX_FMT_YUV420P;
 
       auto stream = avformat_new_stream(context, nullptr);
       THALAMUS_ASSERT(stream, "avformat_new_stream failed %d", ret);
@@ -902,10 +943,13 @@ namespace hydrate {
       RecordReader reader(input_stream, false);
       while((record = reader.read_record())) {
         if(record->body_case() == thalamus_grpc::StorageRecord::kImage && record->node() == video) {
+          auto& image = record->image();
+          if (image.data_size() == 0) {
+            continue;
+          }
           packet->pts = int(scale * pts);
           packet->dts = int(scale * dts);
 
-          auto image = record->image();
           width = image.width();
           height = image.height();
           packet->data = const_cast<unsigned char*>(reinterpret_cast<const unsigned char*>(image.data(0).data()));
@@ -1046,6 +1090,7 @@ namespace hydrate {
                 break;
               }
             case thalamus_grpc::Image::Format::Image_Format_MPEG1: 
+            case thalamus_grpc::Image::Format::Image_Format_MPEG4: 
               in.write(image.data(0).data(), int64_t(image.data(0).size()));
               break;
             case thalamus_grpc::Image::Format::Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
@@ -1692,6 +1737,7 @@ namespace hydrate {
                     break;
                   }
                 case thalamus_grpc::Image::Format::Image_Format_MPEG1: 
+                case thalamus_grpc::Image::Format::Image_Format_MPEG4: 
                 case thalamus_grpc::Image::Format::Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
                 case thalamus_grpc::Image::Format::Image_Format_Image_Format_INT_MAX_SENTINEL_DO_NOT_USE_:
                   THALAMUS_ASSERT(false, "Unexpected image format %d", image.format());

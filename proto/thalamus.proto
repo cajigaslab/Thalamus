@@ -1,16 +1,19 @@
 syntax = "proto3";
 
-import "util.proto";
+option java_package = "org.pesaran.thalamus";
 
 package thalamus_grpc;
 
+message Empty {
+}
+
 service Thalamus {
-  rpc events(stream Event) returns (util_grpc.Empty) {}
-  rpc log(stream Text) returns (util_grpc.Empty) {}
+  rpc events(stream Event) returns (Empty) {}
+  rpc log(stream Text) returns (Empty) {}
   rpc observable_bridge(stream ObservableChange) returns (stream ObservableChange) {}
   rpc observable_bridge_v2(stream ObservableTransaction) returns (stream ObservableTransaction) {}
   rpc observable_bridge_read(ObservableReadRequest) returns (stream ObservableTransaction) {}
-  rpc observable_bridge_write(ObservableTransaction) returns (util_grpc.Empty) {}
+  rpc observable_bridge_write(ObservableTransaction) returns (Empty) {}
   rpc graph(GraphRequest) returns (stream GraphResponse) {}
   rpc analog(AnalogRequest) returns (stream AnalogResponse) {}
   rpc spectrogram(SpectrogramRequest) returns (stream SpectrogramResponse) {}
@@ -20,12 +23,12 @@ service Thalamus {
   rpc eval(stream EvalResponse) returns (stream EvalRequest) {}
   rpc get_type_name(StringMessage) returns (StringMessage) {}
   rpc get_recommended_channels(NodeSelector) returns (StringListMessage) {}
-  rpc replay(ReplayRequest) returns (util_grpc.Empty) {}
+  rpc replay(ReplayRequest) returns (Empty) {}
   rpc remote_node(stream RemoteNodeMessage) returns (stream RemoteNodeMessage) {}
-  rpc notification (util_grpc.Empty) returns (stream Notification) {}
+  rpc notification (Empty) returns (stream Notification) {}
   rpc node_request (NodeRequest) returns (NodeResponse) {}
   rpc node_request_stream (stream NodeRequest) returns (stream NodeResponse) {}
-  rpc inject_analog(stream InjectAnalogRequest) returns (util_grpc.Empty) {}
+  rpc inject_analog(stream InjectAnalogRequest) returns (Empty) {}
   rpc get_modalities(NodeSelector) returns (ModalitiesMessage) {}
   rpc ping(stream Ping) returns (stream Pong) {}
   rpc inject_text(stream InjectTextRequest) returns (stream Pong) {}
@@ -57,9 +60,9 @@ message StimDeclaration {
 message StimRequest {
   NodeSelector node = 1;
   StimDeclaration declaration = 2;
-  optional uint32 arm = 3;
-  optional uint32 trigger = 4;
-  optional uint32 retrieve = 5;
+  uint32 arm = 3;
+  uint32 trigger = 4;
+  uint32 retrieve = 5;
   uint32 id = 6;
 }
 
@@ -148,6 +151,7 @@ message Image {
     Gray16 = 5;
     RGB16 = 6;
     MPEG1 = 7;
+    MPEG4 = 8;
   }
   repeated bytes data = 1;
   uint32 width = 2;

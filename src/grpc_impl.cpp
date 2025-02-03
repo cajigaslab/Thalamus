@@ -448,7 +448,7 @@ namespace thalamus {
     return ::grpc::Status::OK;
   }
 
-  ::grpc::Status Service::events(::grpc::ServerContext* context, ::grpc::ServerReader< ::thalamus_grpc::Event>* reader, ::util_grpc::Empty*) {
+  ::grpc::Status Service::events(::grpc::ServerContext* context, ::grpc::ServerReader< ::thalamus_grpc::Event>* reader, ::thalamus_grpc::Empty*) {
     set_current_thread_name("events");
     Impl::ContextGuard guard(this, context);
     ::thalamus_grpc::Event the_event;
@@ -466,7 +466,7 @@ namespace thalamus {
     return ::grpc::Status::OK;
   }
 
-  ::grpc::Status Service::log(::grpc::ServerContext* context, ::grpc::ServerReader< ::thalamus_grpc::Text>* reader, ::util_grpc::Empty*) {
+  ::grpc::Status Service::log(::grpc::ServerContext* context, ::grpc::ServerReader< ::thalamus_grpc::Text>* reader, ::thalamus_grpc::Empty*) {
     set_current_thread_name("log");
     Impl::ContextGuard guard(this, context);
     ::thalamus_grpc::Text the_text;
@@ -581,7 +581,7 @@ namespace thalamus {
     return ::grpc::Status::OK;
   }
 
-  ::grpc::Status Service::observable_bridge_write(::grpc::ServerContext* context, const ::thalamus_grpc::ObservableTransaction* request, ::util_grpc::Empty*) {
+  ::grpc::Status Service::observable_bridge_write(::grpc::ServerContext* context, const ::thalamus_grpc::ObservableTransaction* request, ::thalamus_grpc::Empty*) {
     std::vector<std::promise<void>> promises;
     std::vector<std::future<void>> futures;
     for(auto& change : request->changes()) {
@@ -620,7 +620,7 @@ namespace thalamus {
     return ::grpc::Status::OK;
   }
 
-  ::grpc::Status Service::inject_analog(::grpc::ServerContext* context, ::grpc::ServerReader< ::thalamus_grpc::InjectAnalogRequest>* reader, ::util_grpc::Empty*) {
+  ::grpc::Status Service::inject_analog(::grpc::ServerContext* context, ::grpc::ServerReader< ::thalamus_grpc::InjectAnalogRequest>* reader, ::thalamus_grpc::Empty*) {
     set_current_thread_name("inject_analog");
     Impl::ContextGuard guard(this, context);
     ::thalamus_grpc::InjectAnalogRequest request;
@@ -1422,7 +1422,7 @@ namespace thalamus {
     return ::grpc::Status::OK;
   }
 
-  ::grpc::Status Service::notification(::grpc::ServerContext* context, const ::util_grpc::Empty*, ::grpc::ServerWriter< ::thalamus_grpc::Notification>* writer) {
+  ::grpc::Status Service::notification(::grpc::ServerContext* context, const ::thalamus_grpc::Empty*, ::grpc::ServerWriter< ::thalamus_grpc::Notification>* writer) {
     impl->notification_writer = writer;
     THALAMUS_LOG(info) << "Notification stream received";
     while(!context->IsCancelled()) {
@@ -1704,7 +1704,7 @@ namespace thalamus {
     return err;
   }
 
-  ::grpc::Status Service::replay(::grpc::ServerContext*, const ::thalamus_grpc::ReplayRequest* request, ::util_grpc::Empty*) {
+  ::grpc::Status Service::replay(::grpc::ServerContext*, const ::thalamus_grpc::ReplayRequest* request, ::thalamus_grpc::Empty*) {
     return StacktraceAndAbortOnException<::grpc::Status>([&] {
       H5Handle file_handle = H5Fopen(request->filename().c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
       if (!file_handle) {

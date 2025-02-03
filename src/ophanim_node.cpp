@@ -1,8 +1,16 @@
 #include <ophanim_node.hpp>
 #include <util.hpp>
+#include <modalities_util.hpp>
+
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Weverything"
+#endif
 #include <grpcpp/create_channel.h>
 #include <ophanim.grpc.pb.h>
-#include <modalities_util.hpp>
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
 
 using namespace thalamus;
 
@@ -38,12 +46,12 @@ struct OphanimNode::Impl {
 
       running = std::get<bool>(v);
       grpc::ClientContext context;
-      util_grpc::Empty response;
+      ophanim_grpc::Empty response;
       if (running) {
-        stub->play_all(&context, util_grpc::Empty(), &response);
+        stub->play_all(&context, ophanim_grpc::Empty(), &response);
         return;
       } else {
-        stub->stop_all(&context, util_grpc::Empty(), &response);
+        stub->stop_all(&context, ophanim_grpc::Empty(), &response);
         return;
       }
     }

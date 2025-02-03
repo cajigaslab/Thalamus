@@ -36,13 +36,13 @@ std::future<thalamus_grpc::StimResponse> StimPrinterNode::stim(thalamus_grpc::St
   options.add_whitespace = true;
   auto status = google::protobuf::util::MessageToJsonString(request, &text, options);
   THALAMUS_LOG(info) << text;
-  if(request.has_declaration()) {
-    impl->stims.resize(std::max(impl->stims.size(), size_t(request.declaration().id())+1));
-    impl->stims[request.declaration().id()] = request.declaration();
-  } else if (request.has_retrieve()) {
-    impl->stims.resize(std::max(impl->stims.size(), size_t(request.retrieve())+1));
-    *response.mutable_declaration() = impl->stims[request.retrieve()];
-  }
+  //if(request.has_declaration()) {
+  //  impl->stims.resize(std::max(impl->stims.size(), size_t(request.declaration().id())+1));
+  //  impl->stims[request.declaration().id()] = request.declaration();
+  //} else if (request.has_retrieve()) {
+  //  impl->stims.resize(std::max(impl->stims.size(), size_t(request.retrieve())+1));
+  //  *response.mutable_declaration() = impl->stims[request.retrieve()];
+  //}
   promise.set_value(response);
   return promise.get_future();
 }

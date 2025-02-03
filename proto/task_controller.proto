@@ -4,14 +4,17 @@ import "util.proto";
 
 package task_controller_grpc;
 
+message Empty {
+}
+
 // The greeting service definition.
 service TaskController {
   // Sends multiple greetings
   rpc execution (stream TaskResult) returns (stream TaskConfig) {}
-  rpc trial_summary (util_grpc.Empty) returns (stream TrialSummary) {}
-  rpc state (util_grpc.Empty) returns (stream BehavState) {}
-  rpc start_execution (util_grpc.Empty) returns (util_grpc.Empty) {}
-  rpc stop_execution (util_grpc.Empty) returns (util_grpc.Empty) {}
+  rpc trial_summary (Empty) returns (stream TrialSummary) {}
+  rpc state (Empty) returns (stream BehavState) {}
+  rpc start_execution (Empty) returns (Empty) {}
+  rpc stop_execution (Empty) returns (Empty) {}
 }
 
 message TaskConfig {

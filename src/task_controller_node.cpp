@@ -1,7 +1,16 @@
 #include <task_controller_node.hpp>
 #include <util.hpp>
+
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Weverything"
+#endif
 #include <grpcpp/create_channel.h>
 #include <task_controller.grpc.pb.h>
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
+
 #include <modalities_util.hpp>
 
 using namespace thalamus;
@@ -37,12 +46,12 @@ struct TaskControllerNode::Impl {
 
       running = std::get<bool>(v);
       grpc::ClientContext context;
-      util_grpc::Empty response;
+      task_controller_grpc::Empty response;
       if (running) {
-        stub->start_execution(&context, util_grpc::Empty(), &response);
+        stub->start_execution(&context, task_controller_grpc::Empty(), &response);
         return;
       } else {
-        stub->stop_execution(&context, util_grpc::Empty(), &response);
+        stub->stop_execution(&context, task_controller_grpc::Empty(), &response);
         return;
       }
     }

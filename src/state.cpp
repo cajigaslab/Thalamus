@@ -16,7 +16,7 @@ namespace thalamus {
       THALAMUS_ASSERT(false);
     }
   }
-
+ 
   ObservableCollection::ValueWrapper::operator ObservableListPtr() {
     auto value = get_value();
     if (std::holds_alternative<ObservableListPtr>(value)) {
