@@ -425,6 +425,8 @@ async def do_stimulation(context, stim_start, intan_cfg, pulse_width, pulse_coun
             spans=spans,
             sample_intervals=[int(1e6)])
         await context.sleep(pulse_period)
+  except asyncio.CancelledError:
+    pass
   finally:
     await context.log('BehavState=pulse_end')
 

@@ -41,5 +41,5 @@ if(NOT EXISTS "${llvm_BINARY_DIR}/lib/combined/libc++.a")
                     WORKING_DIRECTORY ${llvm_BINARY_DIR}/lib)
 endif()
 
-set(LIBCXX_COMPILE_OPTIONS -nostdinc++ "-I${llvm_BINARY_DIR}/include" "-I${llvm_BINARY_DIR}/include/c++/v1")
+set(LIBCXX_COMPILE_OPTIONS -nostdinc++ "-isystem${llvm_BINARY_DIR}/include" "-isystem${llvm_BINARY_DIR}/include/c++/v1")
 set(LIBCXX_LINK_OPTIONS -stdlib=libc++ "-L${llvm_BINARY_DIR}/lib/combined" -lpthread)

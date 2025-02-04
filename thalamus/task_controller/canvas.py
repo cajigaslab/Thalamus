@@ -34,6 +34,7 @@ from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
 from ..qt import *
 from .util import create_task_with_exc_handling
+import grpc
 #from .. import recorder2_pb2
 #from .. import recorder2_pb2_grpc
 
@@ -802,6 +803,9 @@ class Canvas(QOpenGLWidget):
         self.on_touch(local_point)
     except asyncio.CancelledError:
       pass
+    except grpc.aio.AioRpcError as e:
+      if e.code() != grpc.StatusCode.CANCELLED:
+        raise
 
   def on_touch(self, point: QPoint) -> None:
     """
@@ -828,43 +832,49 @@ class Canvas(QOpenGLWidget):
     """
     Processes eye input
     """
-    async for message in messages:
-      x, y = None, None
-      for span in message.spans:
-        if span.name == 'X' and span.begin < span.end:
-          x = message.data[span.end-1]
-        elif span.name == 'Y' and span.begin < span.end:
-          y = message.data[span.end-1]
-      assert x is not None and y is not None
+    try:
+      async for message in messages:
+        x, y = None, None
+        for span in message.spans:
+          if span.name == 'X' and span.begin < span.end:
+            x = message.data[span.end-1]
+          elif span.name == 'Y' and span.begin < span.end:
+            y = message.data[span.end-1]
+        assert x is not None and y is not None
 
-      voltage_point = QPointF(x, -y)
+        voltage_point = QPointF(x, -y)
 
-      if y >= 0:
-        if x >= 0:
-          self.input_config.points[0].append(voltage_point)
-          scaled_point = self.input_config.gaze_transforms[0].map(voltage_point)
-          self.input_config.gaze_paths[0].addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
+        if y >= 0:
+          if x >= 0:
+            self.input_config.points[0].append(voltage_point)
+            scaled_point = self.input_config.gaze_transforms[0].map(voltage_point)
+            self.input_config.gaze_paths[0].addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
+          else:
+            self.input_config.points[1].append(voltage_point)
+            scaled_point = self.input_config.gaze_transforms[1].map(voltage_point)
+            self.input_config.gaze_paths[1].addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
         else:
-          self.input_config.points[1].append(voltage_point)
-          scaled_point = self.input_config.gaze_transforms[1].map(voltage_point)
-          self.input_config.gaze_paths[1].addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
-      else:
-        if x < 0:
-          self.input_config.points[2].append(voltage_point)
-          scaled_point = self.input_config.gaze_transforms[2].map(voltage_point)
-          self.input_config.gaze_paths[2].addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
-        else:
-          self.input_config.points[3].append(voltage_point)
-          scaled_point = self.input_config.gaze_transforms[3].map(voltage_point)
-          self.input_config.gaze_paths[3].addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
+          if x < 0:
+            self.input_config.points[2].append(voltage_point)
+            scaled_point = self.input_config.gaze_transforms[2].map(voltage_point)
+            self.input_config.gaze_paths[2].addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
+          else:
+            self.input_config.points[3].append(voltage_point)
+            scaled_point = self.input_config.gaze_transforms[3].map(voltage_point)
+            self.input_config.gaze_paths[3].addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
 
-      #geometry = qt_screen_geometry()
-      #global_point = QPoint(scaled_point.x() + geometry.width()/2, scaled_point.y() + geometry.height()/2)
-      #local_point = self.mapFromGlobal(global_point)
+        #geometry = qt_screen_geometry()
+        #global_point = QPoint(scaled_point.x() + geometry.width()/2, scaled_point.y() + geometry.height()/2)
+        #local_point = self.mapFromGlobal(global_point)
 
-      local_point = QPoint(int(scaled_point.x()) + self.width()//2, int(scaled_point.y()) + self.height()//2)
+        local_point = QPoint(int(scaled_point.x()) + self.width()//2, int(scaled_point.y()) + self.height()//2)
 
-      self.on_gaze(local_point)
+        self.on_gaze(local_point)
+    except asyncio.CancelledError:
+      pass
+    except grpc.aio.AioRpcError as e:
+      if e.code() != grpc.StatusCode.CANCELLED:
+        raise
 
   def keyReleaseEvent(self, e: QKeyEvent) -> None: # pylint: disable=invalid-name
     '''
