@@ -1,5 +1,4 @@
 #include <touchscreen_node.hpp>
-#include <vector>
 #include <modalities_util.hpp>
 
 namespace thalamus {
@@ -11,10 +10,10 @@ namespace thalamus {
     NodeGraph* graph;
     AnalogNode* source;
   public:
-    Impl(ObservableDictPtr state, boost::asio::io_context&, NodeGraph* graph, TouchScreenNode* outer)
-      : state(state)
-      , outer(outer)
-      , graph(graph) {
+    Impl(ObservableDictPtr _state, boost::asio::io_context&, NodeGraph* _graph, TouchScreenNode* _outer)
+      : state(_state)
+      , outer(_outer)
+      , graph(_graph) {
 
       mat[0] = {1.0, 0.0, 0.0};
       mat[1] = {0.0, 1.0, 0.0};
@@ -53,16 +52,16 @@ namespace thalamus {
       outer->ready(outer);
     }
 
-    void on_change(ObservableCollection* source, ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
-      if(source == transform.get()) {
+    void on_change(ObservableCollection* _source, ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
+      if(_source == transform.get()) {
         auto row = std::get<ObservableListPtr>(v);
         row->recap(std::bind(&Impl::on_change, this, row.get(), _1, _2, _3));
         return;
-      } else if(source->parent == transform.get()) {
-        auto row_v = transform->key_of(*source);
+      } else if(_source->parent == transform.get()) {
+        auto row_v = transform->key_of(*_source);
         THALAMUS_ASSERT(row_v, "Row not found in transform");
-        auto row = std::get<long long>(*row_v);
-        auto column = std::get<long long>(k);
+        auto row = size_t(std::get<long long>(*row_v));
+        auto column = size_t(std::get<long long>(k));
         auto value = std::get<double>(v);
         mat[row][column] = value;
         return;
@@ -124,7 +123,7 @@ namespace thalamus {
     }
   }
 
-  std::chrono::nanoseconds TouchScreenNode::sample_interval(int channel) const {
+  std::chrono::nanoseconds TouchScreenNode::sample_interval(int) const {
     return 0ns;
   }
 

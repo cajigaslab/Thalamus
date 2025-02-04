@@ -1,7 +1,6 @@
 #pragma once
 
 #include <string>
-#include <thalamus.pb.h>
 #include <base_node.hpp>
 #include <state.hpp>
 #include <image_node.hpp>

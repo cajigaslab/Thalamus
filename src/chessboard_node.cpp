@@ -1,11 +1,19 @@
 #include <chessboard_node.hpp>
 #include <thread_pool.hpp>
-#include <boost/pool/object_pool.hpp>
 #include <modalities_util.hpp>
+
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Weverything"
+#endif
+#include <boost/pool/object_pool.hpp>
 extern "C" {
 #include <cairo.h>
 }
-
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
+ 
 namespace thalamus {
   using namespace std::chrono_literals;
 
@@ -69,13 +77,13 @@ namespace thalamus {
 
     std::chrono::steady_clock::time_point last_saccade = std::chrono::steady_clock::now();
 
-    Impl(ObservableDictPtr state, boost::asio::io_context& io_context, ChessBoardNode* outer, NodeGraph* graph)
-      : io_context(io_context)
-      , state(state)
-      , outer(outer)
-      , graph(graph)
-      , pool(graph->get_thread_pool())
-      , timer(io_context) {
+    Impl(ObservableDictPtr _state, boost::asio::io_context& _io_context, ChessBoardNode* _outer, NodeGraph* _graph)
+      : io_context(_io_context)
+      , state(_state)
+      , outer(_outer)
+      , graph(_graph)
+      , pool(_graph->get_thread_pool())
+      , timer(_io_context) {
       using namespace std::placeholders;
       state_connection = state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
       this->state->recap(std::bind(&Impl::on_change, this, _1, _2, _3));
@@ -101,7 +109,7 @@ namespace thalamus {
       int new_width = square_size*columns;
       if(new_width != width) {
         stride = cairo_format_stride_for_width(CAIRO_FORMAT_A8, new_width);
-        cairo_data.assign(stride*height, 0);
+        cairo_data.assign(size_t(stride*height), 0);
         surface.reset(cairo_image_surface_create_for_data(cairo_data.data(), CAIRO_FORMAT_A8, new_width, height, stride));
         cairo.reset(cairo_create(surface.get()));
       }
@@ -153,11 +161,11 @@ namespace thalamus {
         timer.expires_after(16ms);
         timer.async_wait(std::bind(&Impl::on_timer, this, _1));
       } else if(key_str == "Height") {
-        height = std::get<long long>(v);
+        height = int(std::get<long long>(v));
       } else if(key_str == "Rows") {
-        rows = std::get<long long>(v);
+        rows = int(std::get<long long>(v));
       } else if(key_str == "Columns") {
-        columns = std::get<long long>(v);
+        columns = int(std::get<long long>(v));
       }
     }
   };
@@ -185,11 +193,11 @@ namespace thalamus {
   }
 
   size_t ChessBoardNode::width() const {
-    return impl->stride;
+    return size_t(impl->stride);
   }
 
   size_t ChessBoardNode::height() const {
-    return impl->height;
+    return size_t(impl->height);
   }
 
   void ChessBoardNode::inject(const thalamus_grpc::Image&) {

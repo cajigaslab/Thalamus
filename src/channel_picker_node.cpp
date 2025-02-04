@@ -32,10 +32,10 @@ namespace thalamus {
     std::vector<std::weak_ptr<AnalogNode>> sources;
     size_t _max_channels = std::numeric_limits<size_t>::max();
   public:
-    Impl(ObservableDictPtr state, boost::asio::io_context&, NodeGraph* graph, ChannelPickerNode* outer)
-      : state(state)
-      , outer(outer)
-      , graph(graph) {
+    Impl(ObservableDictPtr _state, boost::asio::io_context&, NodeGraph* _graph, ChannelPickerNode* _outer)
+      : state(_state)
+      , outer(_outer)
+      , graph(_graph) {
 
       state_connection = state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
       state->recap(std::bind(&Impl::on_change, this, _1, _2, _3));
@@ -49,7 +49,7 @@ namespace thalamus {
     void on_source_mapping_change(std::weak_ptr<AnalogNode> node, long long in_channel, ObservableDictPtr mapping_dict, ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
       auto k_str = std::get<std::string>(k);
       if(k_str == "Out Channel") {
-        size_t v_int = std::get<long long>(v);
+        auto v_int = size_t(std::get<long long>(v));
         if(mappings.size() < v_int+1) {
           mappings.resize(v_int+1);
         }
@@ -121,13 +121,13 @@ namespace thalamus {
                     (*new_row)["Name"].assign(channel_name);
                     (*new_row)["Out Channel"].assign(static_cast<long long>(mappings.size()));
                     (*new_row)["Out Name"].assign(node_name + ": " + channel_name);
-                    v_list->at(i).assign(new_row);
+                    v_list->at(size_t(i)).assign(new_row);
                     mappings.emplace_back(weak_analog, i, node_name + ": " + channel_name, sample_interval);
                   } else {
-                    ObservableDictPtr current_row = v_list->at(i);
+                    ObservableDictPtr current_row = v_list->at(size_t(i));
                     (*current_row)["Name"].assign(channel_name);
                     long long out_channel = current_row->at("Out Channel");
-                    auto& mapping = mappings.at(out_channel);
+                    auto& mapping = mappings.at(size_t(out_channel));
                     std::get<std::chrono::nanoseconds>(mapping) = sample_interval;
                   }
                 }
@@ -156,7 +156,7 @@ namespace thalamus {
         sources_state_connection = sources_dict->changed.connect(std::bind(&Impl::on_sources_change, this, _1, _2, _3));
         sources_dict->recap(std::bind(&Impl::on_sources_change, this, _1, _2, _3));
       } else if (key_str == "Max Channels") {
-        _max_channels = std::get<long long>(v);
+        _max_channels = size_t(std::get<long long>(v));
       }
     }
   };
@@ -178,23 +178,21 @@ namespace thalamus {
     if(num_channels() <= channel) {
       return std::span<const double>();
     }
-    auto& pair = impl->mappings.at(channel);
+    auto& pair = impl->mappings.at(size_t(channel));
     auto locked = std::get<0>(pair).lock();
     auto in_channel = std::get<1>(pair);
     return locked.get() == impl->current_node && in_channel < impl->current_node->num_channels() ? locked->data(std::get<1>(pair)) : std::span<const double>();
   }
 
   int ChannelPickerNode::num_channels() const {
-    return std::min(impl->mappings.size(), impl->_max_channels);
+    return int(std::min(impl->mappings.size(), impl->_max_channels));
   }
-
-  static const std::string EMPTY = "";
 
   std::string_view ChannelPickerNode::name(int channel) const {
     if(num_channels() <= channel) {
-      return EMPTY;
+      return "";
     }
-    auto& pair = impl->mappings.at(channel);
+    auto& pair = impl->mappings.at(size_t(channel));
     return std::get<2>(pair);
   }
 
@@ -202,7 +200,7 @@ namespace thalamus {
     if(num_channels() <= channel) {
       return 0ns;
     }
-    auto& pair = impl->mappings.at(channel);
+    auto& pair = impl->mappings.at(size_t(channel));
     return std::get<std::chrono::nanoseconds>(pair);
   }
 

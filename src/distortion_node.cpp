@@ -4,7 +4,7 @@
 #include <shared_mutex>
 
 #include <modalities_util.hpp>
-
+ 
 #ifdef __clang__
   #pragma clang diagnostic push
   #pragma clang diagnostic ignored "-Weverything"

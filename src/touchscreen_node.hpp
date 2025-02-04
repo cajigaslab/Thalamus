@@ -1,7 +1,5 @@
 #pragma once
 
-#include <thalamus_asio.hpp>
-
 #include <string>
 #include <base_node.hpp>
 #include <analog_node.hpp>
