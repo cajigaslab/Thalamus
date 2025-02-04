@@ -27,7 +27,7 @@
 #include <hexascope_node.hpp>
 #include <loop_test_node.hpp>
 #include <analog_node.hpp>
-
+ 
 #ifdef __clang__
   #pragma clang diagnostic push
   #pragma clang diagnostic ignored "-Weverything"
@@ -36,7 +36,7 @@
 #ifdef __clang__
   #pragma clang diagnostic pop
 #endif
-   
+    
 namespace thalamus {
   using namespace std::chrono_literals;
 

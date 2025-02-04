@@ -3,15 +3,17 @@
 #include <regex>
 #include <modalities_util.hpp>
 
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Weverything"
+#endif
+
+#include <absl/strings/numbers.h>
+
 #ifdef _WIN32
-  #ifdef __clang__
-    #pragma clang diagnostic push
-    #pragma clang diagnostic ignored "-Wlanguage-extension-token"
-      #include <AOSystemAPI.h>
-    #pragma clang diagnostic pop
-  #else
-    #include <AOSystemAPI.h>
-  #endif
+
+#include <AOSystemAPI.h>
+
 #else
 enum {
   eAO_OK,
@@ -23,7 +25,7 @@ enum {
   eAO_DISCONNECTED,
   eAO_FAIL
 };
-
+ 
 struct SInformation {
   int channelID;
   char channelName[256];
@@ -55,8 +57,10 @@ int ErrorHandlingfunc(int* pErrorCount, cChar* sError, int nError) {
 }
 
 #endif
-#include <absl/strings/numbers.h>
-//#include <QMessageBox>
+
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
 
 namespace thalamus {
   using namespace std::placeholders;
@@ -75,7 +79,7 @@ namespace thalamus {
     decltype(&::ErrorHandlingfunc) ErrorHandlingfunc;
     decltype(&::CloseConnection) CloseConnection;
   };
-  static AlphaOmegaAPI aoapi;
+  static AlphaOmegaAPI* aoapi;
 #endif
 
   static std::chrono::nanoseconds channel_sample_interval(int channel_id) {
@@ -110,7 +114,7 @@ namespace thalamus {
     virtual int GetChannelsCount(uint32* pChannelsCount) = 0;
     virtual int GetAllChannels(SInformation* pChannelsInfo, int32 nChannelsInfo) = 0;
     virtual int AddBufferChannel(int nChannelID, int nBufferingTime_mSec) = 0;
-    virtual int GetAlignedData(int16* pData, int nData, int* pDataCapture, int* pChannels, int nChannels, ULONG* pBeginTS = 0) = 0;
+    virtual int GetAlignedData(int16* pData, int nData, int* pDataCapture, int* pChannels, int nChannels, ULONG* pBeginTS = nullptr) = 0;
   };
 
 #ifdef _WIN32
@@ -119,7 +123,7 @@ namespace thalamus {
   public:
     RealAlphaOmega() { }
     int isConnected() override {
-      return aoapi.isConnected();
+      return aoapi->isConnected();
     }
     int DefaultStartConnection(MAC_ADDR* pSystemMAC) override {
       if (count) {
@@ -127,7 +131,7 @@ namespace thalamus {
         return eAO_OK;
       }
       else {
-        auto result = aoapi.DefaultStartConnection(pSystemMAC, nullptr);
+        auto result = aoapi->DefaultStartConnection(pSystemMAC, nullptr);
         count += result == eAO_OK ? 1 : 0;
         return result;
       }
@@ -138,20 +142,20 @@ namespace thalamus {
         return eAO_OK;
       }
       else {
-        return aoapi.CloseConnection();
+        return aoapi->CloseConnection();
       }
     }
     int GetChannelsCount(uint32* pChannelsCount) override {
-      return aoapi.GetChannelsCount(pChannelsCount);
+      return aoapi->GetChannelsCount(pChannelsCount);
     }
     int GetAllChannels(SInformation* pChannelsInfo, int32 nChannelsInfo) override {
-      return aoapi.GetAllChannels(pChannelsInfo, nChannelsInfo);
+      return aoapi->GetAllChannels(pChannelsInfo, nChannelsInfo);
     }
     int AddBufferChannel(int nChannelID, int nBufferingTime_mSec) override {
-      return aoapi.AddBufferChannel(nChannelID, nBufferingTime_mSec);
+      return aoapi->AddBufferChannel(nChannelID, nBufferingTime_mSec);
     }
-    int GetAlignedData(int16* pData, int nData, int* pDataCapture, int* pChannels, int nChannels, ULONG* pBeginTS = 0) override {
-      return aoapi.GetAlignedData(pData, nData, pDataCapture, pChannels, nChannels, pBeginTS);
+    int GetAlignedData(int16* pData, int nData, int* pDataCapture, int* pChannels, int nChannels, ULONG* pBeginTS = nullptr) override {
+      return aoapi->GetAlignedData(pData, nData, pDataCapture, pChannels, nChannels, pBeginTS);
     }
   };
 #endif
@@ -179,7 +183,23 @@ namespace thalamus {
     std::vector<int> channels;
     std::vector<std::chrono::steady_clock::time_point> last_time;
     std::chrono::steady_clock::time_point start_time;
-    MockAlphaOmega() { }
+
+    std::map<int, std::function<double(const std::chrono::steady_clock::duration&)>> waves;
+
+    MockAlphaOmega() { 
+      waves = {
+        {10'000, [](const std::chrono::steady_clock::duration& t) {
+            //auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(t);
+            //auto seconds = nanoseconds.count() / 1e9;
+            //auto result = std::sin(seconds);
+            //return result;
+            auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(t);
+            return (nanoseconds.count() % 3'140'000'000) / 2e9;
+        }},{10'272, [](const std::chrono::steady_clock::duration& t) {
+            auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(t);
+            return std::sin(double(nanoseconds.count()) / 1e9 + M_PI_4);
+      }}};
+    }
     int isConnected() override {
       return rand() % 10 == 0 ? eAO_CONNECTING : eAO_CONNECTED;
     }
@@ -220,7 +240,7 @@ namespace thalamus {
       }
       return eAO_NOT_CONNECTED;
     }
-    int GetAlignedData(int16* pData, int nData, int* pDataCapture, int* pChannels, int nChannels, ULONG* pBeginTS = 0) override {
+    int GetAlignedData(int16* pData, int nData, int* pDataCapture, int* pChannels, int nChannels, ULONG* pBeginTS = nullptr) override {
       if (isConnected() == eAO_CONNECTING) {
         return eAO_NOT_CONNECTED;
       }
@@ -229,27 +249,14 @@ namespace thalamus {
       if (last_time.empty()) {
         last_time.resize(2, now);
       }
-      std::chrono::steady_clock::time_point& last_time = *pChannels == 10'000 ? this->last_time[0] : this->last_time[1];
-      *pBeginTS = std::chrono::duration_cast<std::chrono::nanoseconds>(last_time - start_time).count();
-
-      static std::map<int, std::function<double(const std::chrono::steady_clock::duration&)>> waves = {
-        {10'000, [](const std::chrono::steady_clock::duration& t) {
-            //auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(t);
-            //auto seconds = nanoseconds.count() / 1e9;
-            //auto result = std::sin(seconds);
-            //return result;
-            auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(t);
-            return (nanoseconds.count() % 3'140'000'000) / 2e9;
-        }},{10'272, [](const std::chrono::steady_clock::duration& t) {
-            auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(t);
-            return std::sin(nanoseconds.count() / 1e9 + M_PI_4);
-        }}};
+      std::chrono::steady_clock::time_point& selected_last_time = *pChannels == 10'000 ? this->last_time[0] : this->last_time[1];
+      *pBeginTS = uint32_t(std::chrono::duration_cast<std::chrono::nanoseconds>(selected_last_time - start_time).count());
 
       *pDataCapture = 0;
-      auto time_reached = last_time;
+      auto time_reached = selected_last_time;
       for (auto c = 0; c < nChannels; ++c) {
         auto i = 0;
-        auto current_time = last_time;
+        auto current_time = selected_last_time;
         auto offset = c * (*pDataCapture);
         auto channel_id = pChannels[c];
         auto time_per_sample = channel_sample_interval(channel_id);
@@ -258,7 +265,7 @@ namespace thalamus {
             break;
           }
           auto sample = waves[channel_id](current_time - start_time);
-          auto digitized = std::numeric_limits<short>::max() * sample;
+          auto digitized = int16(std::numeric_limits<short>::max() * sample);
           pData[offset + i++] = digitized;
           current_time += time_per_sample;
         }
@@ -267,7 +274,7 @@ namespace thalamus {
           time_reached = current_time;
         }
       }
-      last_time = time_reached;
+      selected_last_time = time_reached;
       return eAO_OK;
     }
   };
@@ -298,24 +305,24 @@ namespace thalamus {
     int _num_channels = 0;
     size_t next_async_id = 1;
     boost::signals2::scoped_connection state_connection;
-    static std::unique_ptr<AlphaOmega> alpha_omega;
+    static AlphaOmega* alpha_omega;
     static std::chrono::nanoseconds duration;
     static std::chrono::nanoseconds next_duration;
     thalamus::vector<std::chrono::nanoseconds> sample_interval_overrides;
     std::chrono::nanoseconds time;
 
-    Impl(boost::asio::io_context& io_context, ObservableDictPtr state, AlphaOmegaNode* outer)
-      : io_context(io_context)
-      , ao_timer(io_context)
-      , timer(io_context)
+    Impl(boost::asio::io_context& _io_context, ObservableDictPtr _state, AlphaOmegaNode* _outer)
+      : io_context(_io_context)
+      , ao_timer(_io_context)
+      , timer(_io_context)
       , channel_count(0)
-      , state(state)
-      , outer(outer) {
+      , state(_state)
+      , outer(_outer) {
     }
 
     void load_channels() {
       THALAMUS_LOG(info) << "loading channels";
-      auto impl = [this] {
+      auto loader = [this] {
         auto current = std::make_shared<ObservableDict>();
         THALAMUS_LOG(info) << name_to_id.size();
         for(const auto& i : name_to_id) {
@@ -336,19 +343,19 @@ namespace thalamus {
       };
       if(name_to_id.empty()) {
         if(is_running) {
-          impl();
+          loader();
         } else {
-          StartConnection([this, impl] {
-            GetChannelsCount([this, impl] {
-              GetAllChannels([impl] {
+          StartConnection([this, loader] {
+            GetChannelsCount([this, loader] {
+              GetAllChannels([loader] {
                 Impl::alpha_omega->CloseConnection();
-                impl();
+                loader();
               });
             });
           });
         }
       } else {
-        impl();
+        loader();
       }
     }
 
@@ -434,7 +441,7 @@ namespace thalamus {
       if (initial) {
         ao_channels.resize(channel_count);
       }
-      auto ao_error = alpha_omega->GetAllChannels(ao_channels.data(), ao_channels.size());
+      auto ao_error = alpha_omega->GetAllChannels(ao_channels.data(), int(ao_channels.size()));
       BOOST_ASSERT(ao_error == eAO_OK || ao_error == eAO_NOT_CONNECTED);
       if (ao_error == eAO_NOT_CONNECTED) {
         BOOST_ASSERT_MSG(eAO_DISCONNECTED != alpha_omega->isConnected(), "AlphaOmega disconnected");
@@ -473,7 +480,7 @@ namespace thalamus {
         if (remaining_channels.empty()) {
           //TRACE_EVENT_ASYNC_END0("thalamus", "AddBufferChannels", async_id);
           timer.expires_after(ao_interval);
-          timer.async_wait([callback](const boost::system::error_code& error) {
+          timer.async_wait([callback](const boost::system::error_code&) {
             callback();
           });
           //callback();
@@ -504,7 +511,7 @@ namespace thalamus {
           channels.emplace_back(int(id), name);
         }
       }
-      _num_channels = channels.size();
+      _num_channels = int(channels.size());
 
       bands.assign(3, std::vector<int>());
       std::vector<decltype(channel_ids)> new_channels(bands.size());
@@ -563,7 +570,7 @@ namespace thalamus {
         }
         auto time_per_sample = channel_sample_interval(band[0]);
 
-        int ao_error = alpha_omega->GetAlignedData(short_buffer.data(), short_buffer.size(), &captured, band.data(), band.size(), &timestamp);
+        int ao_error = alpha_omega->GetAlignedData(short_buffer.data(), int(short_buffer.size()), &captured, band.data(), int(band.size()), &timestamp);
         BOOST_ASSERT(ao_error == eAO_OK || ao_error == eAO_NOT_CONNECTED || ao_error == eAO_FAIL);
         if (ao_error == eAO_NOT_CONNECTED) {
           BOOST_ASSERT_MSG(eAO_DISCONNECTED != alpha_omega->isConnected(), "AlphaOmega disconnected");
@@ -578,14 +585,11 @@ namespace thalamus {
         next_duration = std::max(duration + captured * time_per_sample, next_duration);
         if (captured) {
           auto initial_length = double_buffer.size();
-          double_buffer.resize(double_buffer.size() + captured * band.size());
-          int channel_id = 0;
-          double scale;
-          auto j = 0;
-          for (auto i = 0u; i < captured * band.size(); ++i) {
+          double_buffer.resize(double_buffer.size() + size_t(captured) * band.size());
+          for (auto i = 0u; i < size_t(captured) * band.size(); ++i) {
             double_buffer.at(initial_length+i) = short_buffer.at(i);
           }
-          counts.insert(counts.end(), band.size(), captured);
+          counts.insert(counts.end(), band.size(), size_t(captured));
         }
       }
       current_band = 0;
@@ -594,9 +598,9 @@ namespace thalamus {
       frequencies.resize(counts.size(), 0);
       size_t position = 0;
       for (auto count : counts) {
-        auto position_i = double_buffer.begin() + position;
-        frequencies.at(spans.size()) += count;
-        spans.emplace_back(position_i, position_i + count);
+        auto position_i = double_buffer.begin() + int64_t(position);
+        frequencies.at(spans.size()) += double(count);
+        spans.emplace_back(position_i, position_i + int64_t(count));
         position += count;
       }
 
@@ -635,7 +639,7 @@ namespace thalamus {
     char error_message[2048];
     void show_error() {
 #ifdef _WIN32
-      aoapi.ErrorHandlingfunc(&error_count, error_message, sizeof(error_message));
+      aoapi->ErrorHandlingfunc(&error_count, error_message, sizeof(error_message));
       THALAMUS_LOG(error) << error_message;
 #else
       THALAMUS_LOG(error) << "ERROR";
@@ -645,7 +649,7 @@ namespace thalamus {
 
   std::chrono::nanoseconds AlphaOmegaNode::Impl::duration;
   std::chrono::nanoseconds AlphaOmegaNode::Impl::next_duration;
-  std::unique_ptr<AlphaOmega> AlphaOmegaNode::Impl::alpha_omega;
+  AlphaOmega* AlphaOmegaNode::Impl::alpha_omega;
 
   AlphaOmegaNode::AlphaOmegaNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph*)
     : impl(new Impl(io_context, state, this)) {
@@ -663,19 +667,19 @@ namespace thalamus {
   //  return new Plot(impl->state, this, impl->io_context);
   //}
   std::span<const double> AlphaOmegaNode::data(int channel) const {
-    size_t uchannel = channel;
+    auto uchannel = size_t(channel);
     if (uchannel >= impl->spans.size()) {
       return std::span<const double>();
     }
     return impl->spans.at(uchannel);
   }
   std::chrono::nanoseconds AlphaOmegaNode::sample_interval(int i) const {
-    size_t ui = i;
+    auto ui = size_t(i);
     if (!impl->sample_interval_overrides.empty()) {
       if (ui >= impl->sample_interval_overrides.size()) {
         return 0ns;
       }
-      return impl->sample_interval_overrides.at(i);
+      return impl->sample_interval_overrides.at(size_t(i));
     }
     if (ui >= 2*impl->channel_ids.size()) {
       return 0ns;
@@ -683,18 +687,16 @@ namespace thalamus {
     if(ui >= impl->channel_ids.size()) {
       return 1s;
     }
-    auto channel_id = impl->channel_ids[i];
+    auto channel_id = impl->channel_ids[size_t(i)];
     return channel_sample_interval(channel_id.first);
   }
 
-  std::string EMPTY_STRING = "";
-
   std::string_view AlphaOmegaNode::name(int channel) const {
-    size_t uchannel = channel;
+    auto uchannel = size_t(channel);
     if(uchannel < impl->channel_names.size()) {
       return impl->channel_names.at(uchannel);
     }
-    return EMPTY_STRING;
+    return "";
   }
 
   std::span<const std::string> AlphaOmegaNode::get_recommended_channels() const {
@@ -711,28 +713,7 @@ namespace thalamus {
     impl->time = std::chrono::steady_clock::now().time_since_epoch();
     ready(this);
     impl->sample_interval_overrides.clear();
-    impl->_num_channels = data.size();
-  }
-
-  template<typename T>
-  static void wait_for(boost::asio::steady_timer* timer, std::function<std::optional<T>()> func, std::function<void(T&)> callback, bool do_sleep = false) {
-    auto impl = [timer, func, callback](boost::system::error_code& error) {
-      BOOST_ASSERT(!error);
-      auto result = func();
-      if (result) {
-        callback(*result);
-      }
-      else {
-        wait_for(timer, func, callback, true);
-      }
-    };
-    if (do_sleep) {
-      impl(boost::system::error_code());
-    }
-    else {
-      timer->expires_after(10ms);
-      timer->async_wait(impl);
-    }
+    impl->_num_channels = int(data.size());
   }
 
   void AlphaOmegaNode::on_change(ObservableCollection::Action, const ObservableCollection::Key& k, const ObservableCollection::Value& v) {
@@ -745,12 +726,12 @@ namespace thalamus {
         //QMessageBox::warning(nullptr, "Parse Failed", "Failed to parse MAC address");
         return;
       }
-      impl->address[0] = std::stoul(match_result[1].str(), nullptr, 16);
-      impl->address[1] = std::stoul(match_result[2].str(), nullptr, 16);
-      impl->address[2] = std::stoul(match_result[3].str(), nullptr, 16);
-      impl->address[3] = std::stoul(match_result[4].str(), nullptr, 16);
-      impl->address[4] = std::stoul(match_result[5].str(), nullptr, 16);
-      impl->address[5] = std::stoul(match_result[6].str(), nullptr, 16);
+      impl->address[0] = int(std::stoul(match_result[1].str(), nullptr, 16));
+      impl->address[1] = int(std::stoul(match_result[2].str(), nullptr, 16));
+      impl->address[2] = int(std::stoul(match_result[3].str(), nullptr, 16));
+      impl->address[3] = int(std::stoul(match_result[4].str(), nullptr, 16));
+      impl->address[4] = int(std::stoul(match_result[5].str(), nullptr, 16));
+      impl->address[5] = int(std::stoul(match_result[6].str(), nullptr, 16));
     } else if (key_str == "Running") {
       impl->is_running = std::get<bool>(v);
       if (impl->is_running) {
@@ -779,10 +760,10 @@ namespace thalamus {
 
   bool AlphaOmegaNode::prepare() {
 #ifdef _WIN32
-    AlphaOmegaNode::Impl::alpha_omega.reset(new RealAlphaOmega());
+    AlphaOmegaNode::Impl::alpha_omega = new RealAlphaOmega();
     static bool has_run = false;
     if(has_run) {
-      return aoapi.loaded;
+      return aoapi->loaded;
     }
     has_run = true;
 
@@ -794,55 +775,63 @@ namespace thalamus {
     }
     THALAMUS_LOG(info) << "NeuroOmega_x64.dll found.  Loading Alpha Omega API";
 
-    aoapi.DefaultStartConnection = reinterpret_cast<decltype(&DefaultStartConnection)>(::GetProcAddress(alphaomega_handle, "DefaultStartConnection"));
-    if(!aoapi.DefaultStartConnection) {
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Wcast-function-type"
+  #pragma clang diagnostic ignored "-Wcast-function-type-strict"
+#endif
+    aoapi->DefaultStartConnection = reinterpret_cast<decltype(&DefaultStartConnection)>(::GetProcAddress(alphaomega_handle, "DefaultStartConnection"));
+    if(!aoapi->DefaultStartConnection) {
       THALAMUS_LOG(info) << "Failed to load DefaultStartConnection.  Alpha Omega features disabled";
       return false;
     }
 
-    aoapi.isConnected = reinterpret_cast<decltype(&isConnected)>(::GetProcAddress(alphaomega_handle, "isConnected"));
-    if(!aoapi.isConnected) {
+    aoapi->isConnected = reinterpret_cast<decltype(&isConnected)>(::GetProcAddress(alphaomega_handle, "isConnected"));
+    if(!aoapi->isConnected) {
       THALAMUS_LOG(info) << "Failed to load isConnected.  Alpha Omega features disabled";
       return false;
     }
 
-    aoapi.AddBufferChannel = reinterpret_cast<decltype(&AddBufferChannel)>(::GetProcAddress(alphaomega_handle, "AddBufferChannel"));
-    if(!aoapi.AddBufferChannel) {
+    aoapi->AddBufferChannel = reinterpret_cast<decltype(&AddBufferChannel)>(::GetProcAddress(alphaomega_handle, "AddBufferChannel"));
+    if(!aoapi->AddBufferChannel) {
       THALAMUS_LOG(info) << "Failed to load AddBufferChannel.  Alpha Omega features disabled";
       return false;
     }
 
-    aoapi.GetAlignedData = reinterpret_cast<decltype(&GetAlignedData)>(::GetProcAddress(alphaomega_handle, "GetAlignedData"));
-    if(!aoapi.GetAlignedData) {
+    aoapi->GetAlignedData = reinterpret_cast<decltype(&GetAlignedData)>(::GetProcAddress(alphaomega_handle, "GetAlignedData"));
+    if(!aoapi->GetAlignedData) {
       THALAMUS_LOG(info) << "Failed to load GetAlignedData.  Alpha Omega features disabled";
       return false;
     }
 
-    aoapi.GetAllChannels = reinterpret_cast<decltype(&GetAllChannels)>(::GetProcAddress(alphaomega_handle, "GetAllChannels"));
-    if(!aoapi.GetAllChannels) {
+    aoapi->GetAllChannels = reinterpret_cast<decltype(&GetAllChannels)>(::GetProcAddress(alphaomega_handle, "GetAllChannels"));
+    if(!aoapi->GetAllChannels) {
       THALAMUS_LOG(info) << "Failed to load GetAllChannels.  Alpha Omega features disabled";
       return false;
     }
 
-    aoapi.GetChannelsCount = reinterpret_cast<decltype(&GetChannelsCount)>(::GetProcAddress(alphaomega_handle, "GetChannelsCount"));
-    if(!aoapi.GetChannelsCount) {
+    aoapi->GetChannelsCount = reinterpret_cast<decltype(&GetChannelsCount)>(::GetProcAddress(alphaomega_handle, "GetChannelsCount"));
+    if(!aoapi->GetChannelsCount) {
       THALAMUS_LOG(info) << "Failed to load GetChannelsCount.  Alpha Omega features disabled";
       return false;
     }
 
-    aoapi.ErrorHandlingfunc = reinterpret_cast<decltype(&ErrorHandlingfunc )>(::GetProcAddress(alphaomega_handle, "ErrorHandlingfunc"));
-    if(!aoapi.ErrorHandlingfunc ) {
+    aoapi->ErrorHandlingfunc = reinterpret_cast<decltype(&ErrorHandlingfunc )>(::GetProcAddress(alphaomega_handle, "ErrorHandlingfunc"));
+    if(!aoapi->ErrorHandlingfunc ) {
       THALAMUS_LOG(info) << "Failed to load ErrorHandlingfunc.  Alpha Omega features disabled";
       return false;
     }
 
-    aoapi.CloseConnection = reinterpret_cast<decltype(&CloseConnection)>(::GetProcAddress(alphaomega_handle, "CloseConnection"));
-    if(!aoapi.CloseConnection) {
+    aoapi->CloseConnection = reinterpret_cast<decltype(&CloseConnection)>(::GetProcAddress(alphaomega_handle, "CloseConnection"));
+    if(!aoapi->CloseConnection) {
       THALAMUS_LOG(info) << "Failed to load CloseConnection.  Alpha Omega features disabled";
       return false;
     }
-
-    aoapi.loaded = true;
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
+ 
+    aoapi->loaded = true;
     THALAMUS_LOG(info) << "Alpha Omega API loaded";
     return true;
 #else

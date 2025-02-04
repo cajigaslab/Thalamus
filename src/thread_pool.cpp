@@ -1,9 +1,17 @@
 #include <thalamus/tracing.hpp>
 #include <thread_pool.hpp>
-#include <boost/pool/object_pool.hpp>
 #include <thalamus/thread.hpp>
 #include <modalities_util.hpp>
 
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Weverything"
+#endif
+#include <boost/pool/object_pool.hpp>
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
+ 
 namespace thalamus {
   using namespace std::chrono_literals;
 
@@ -60,18 +68,18 @@ namespace thalamus {
     boost::asio::steady_timer timer;
     AnalogNodeImpl analog_impl;
 
-    Impl(ObservableDictPtr state, boost::asio::io_context& io_context, ThreadPoolNode* outer, NodeGraph* graph)
-      : io_context(io_context)
-      , state(state)
-      , outer(outer)
-      , graph(graph)
-      , pool(graph->get_thread_pool())
-      , timer(io_context) {
+    Impl(ObservableDictPtr _state, boost::asio::io_context& _io_context, ThreadPoolNode* _outer, NodeGraph* _graph)
+      : io_context(_io_context)
+      , state(_state)
+      , outer(_outer)
+      , graph(_graph)
+      , pool(_graph->get_thread_pool())
+      , timer(_io_context) {
       using namespace std::placeholders;
       analog_impl.inject({ {std::span<double const>()} }, { 0ns }, {});
 
-      analog_impl.ready.connect([outer](Node*) {
-        outer->ready(outer);
+      analog_impl.ready.connect([_outer](Node*) {
+        _outer->ready(_outer);
       });
 
       state_connection = state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
@@ -144,14 +152,10 @@ namespace thalamus {
     return impl->analog_impl.sample_interval(channel);
   }
 
-  static const std::string EMPTY = "";
-  static const std::string IDLE_THREADS = "Idle Threads";
-  static std::vector<std::string> names = {IDLE_THREADS};
-
   std::string_view ThreadPoolNode::name(int channel) const {
     switch(channel) {
-      case 0: return IDLE_THREADS;
-      default: return thalamus::EMPTY;
+      case 0: return "Idle Threads";
+      default: return "";
     }
   }
 
@@ -161,10 +165,6 @@ namespace thalamus {
 
   bool ThreadPoolNode::has_analog_data() const {
     return true;
-  }
-
-  std::span<const std::string> ThreadPoolNode::get_recommended_channels() const {
-    return std::span<const std::string>(names.begin(), names.end());
   }
 
   boost::json::value ThreadPoolNode::process(const boost::json::value&) {

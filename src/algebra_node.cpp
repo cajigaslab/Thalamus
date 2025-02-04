@@ -4,7 +4,7 @@
 #include <calculator.hpp>
 #include <boost/spirit/include/qi.hpp>
 #include <modalities_util.hpp>
-
+ 
 namespace thalamus {
   struct AlgebraNode::Impl {
     ObservableDictPtr state;

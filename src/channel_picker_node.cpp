@@ -1,7 +1,7 @@
 #include <channel_picker_node.hpp>
 #include <vector>
 #include <modalities_util.hpp>
-
+ 
 namespace thalamus {
   struct ChannelPickerNode::Impl {
     ObservableDictPtr state;

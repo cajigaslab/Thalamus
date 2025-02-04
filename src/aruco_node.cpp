@@ -2,18 +2,26 @@
 #include <aruco_node.hpp>
 #include <image_node.hpp>
 #include <modalities_util.hpp>
+#include <thread_pool.hpp>
+#include <distortion_node.hpp>
+
+#ifdef __clang__
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Weverything"
+#endif
 #include <opencv2/objdetect/aruco_detector.hpp>
 #include <opencv2/core/quaternion.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/calib3d.hpp>
-#include <thread_pool.hpp>
-#include <distortion_node.hpp>
 #include <boost/qvm/vec_access.hpp>
 #include <boost/qvm/vec_operations.hpp>
 #include <boost/qvm/quat_access.hpp>
 #include <boost/qvm/quat_operations.hpp>
 #include <boost/qvm/quat_vec_operations.hpp>
-
+#ifdef __clang__
+  #pragma clang diagnostic pop
+#endif
+ 
 using namespace thalamus;
 
 struct ArucoNode::Impl {
@@ -45,7 +53,6 @@ struct ArucoNode::Impl {
     std::chrono::nanoseconds time;
   };
   std::map<size_t, Frame> output_frames;
-  std::chrono::nanoseconds frame_interval;
 
   struct Board {
     double translation_x = 0, translation_y = 0, translation_z = 0;
@@ -59,11 +66,11 @@ struct ArucoNode::Impl {
 
   std::map<ObservableDictPtr, Board> boards;
 
-  Impl(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph, ArucoNode* outer)
-    : state(state)
-    , io_context(io_context)
-    , graph(graph)
-    , outer(outer)
+  Impl(ObservableDictPtr _state, boost::asio::io_context& _io_context, NodeGraph* _graph, ArucoNode* _outer)
+    : state(_state)
+    , io_context(_io_context)
+    , graph(_graph)
+    , outer(_outer)
     , pool(graph->get_thread_pool()) {
 
     dict = cv::aruco::getPredefinedDictionary(dict_type);
@@ -76,7 +83,7 @@ struct ArucoNode::Impl {
 
   void on_ids_change(ObservableDictPtr self, ObservableCollection::Action action, const ObservableCollection::Key& key, const ObservableCollection::Value& value) {
     TRACE_EVENT("thalamus", "ArucoNode::on_ids_change");
-    size_t key_int = std::get<long long>(key);
+    auto key_int = size_t(std::get<long long>(key));
     auto value_int = std::get<long long>(value);
 
     auto& board = boards[self];
@@ -84,9 +91,9 @@ struct ArucoNode::Impl {
       while(board.ids.size() <= key_int) {
         board.ids.emplace_back();
       }
-      board.ids[key_int] = value_int;
+      board.ids[key_int] = int(value_int);
     } else {
-      board.ids.erase(board.ids.begin()+key_int);
+      board.ids.erase(board.ids.begin()+int64_t(key_int));
     }
   }
 
@@ -148,8 +155,8 @@ struct ArucoNode::Impl {
       std::string source_str = std::get<std::string>(value);
       auto token = std::string(absl::StripAsciiWhitespace(source_str));
 
-      get_source_connection = graph->get_node_scoped(token, [this,token](auto source) {
-        auto locked_source = source.lock();
+      get_source_connection = graph->get_node_scoped(token, [this,token](auto _source) {
+        auto locked_source = _source.lock();
         if (!locked_source) {
           return;
         }
@@ -239,8 +246,8 @@ struct ArucoNode::Impl {
     }
 
     unsigned char* data = const_cast<unsigned char*>(source->plane(0).data());
-    int width = source->width();
-    int height = source->height();
+    auto width = int(source->width());
+    auto height = int(source->height());
     auto frame_interval = source->frame_interval();
     cv::Mat in = cv::Mat(height, width, CV_8UC1, data).clone();
     cv::Mat camera_matrix = distortion_source ? distortion_source->camera_matrix() : cv::Mat();
@@ -249,33 +256,32 @@ struct ArucoNode::Impl {
     TRACE_EVENT_END("thalamus");
     pool.push([frame_id=next_input_frame++,
                in, id,
-               boards=this->boards, 
-               dict=this->dict, 
-               global_frame=global_frame,
-               running=this->running,
-               detector=this->detector, 
-               &io_context=this->io_context,
-               &output_frames=this->output_frames,
-               &next_output_frame=this->next_output_frame,
-               &current_frame=this->current_frame,
+               _boards=this->boards, 
+               _dict=this->dict, 
+               _running=this->running,
+               _detector=this->detector, 
+               &_io_context=this->io_context,
+               &_output_frames=this->output_frames,
+               &_next_output_frame=this->next_output_frame,
+               &_current_frame=this->current_frame,
                frame_interval,
                camera_matrix,
-               frame=this->frame,
+               _frame=this->frame,
                time=source->time(),
-               distortion_parameters=std::vector<double>(distortion_parameters.begin(), distortion_parameters.end()),
-               outer=outer->shared_from_this()
+               _distortion_parameters=std::vector<double>(distortion_parameters.begin(), distortion_parameters.end()),
+               _outer=outer->shared_from_this()
     ] {
       TRACE_EVENT_BEGIN("thalamus", "ArucoNode::compute", perfetto::Flow::ProcessScoped(id));
       cv::Mat color;
       cv::cvtColor(in, color, cv::COLOR_GRAY2RGB);
       std::vector<MotionCaptureNode::Segment> _segments;
 
-      if(running) {
+      if(_running) {
         std::vector<int> ids;
         std::vector<std::vector<cv::Point2f>> corners, rejected;
         {
           TRACE_EVENT("thalamus", "cv::aruco::ArucoDetector::detectMarkers");
-          detector->detectMarkers(in, corners, ids, rejected);
+          _detector->detectMarkers(in, corners, ids, rejected);
         }
         {
           TRACE_EVENT("thalamus", "cv::aruco::drawDetectedMarkers");
@@ -284,9 +290,9 @@ struct ArucoNode::Impl {
 
         if(!camera_matrix.empty() && !ids.empty()) {
           auto board_index = 0;
-          for(auto& pair : boards) {
+          for(auto& pair : _boards) {
             auto& board = pair.second;
-            cv::aruco::GridBoard grid_board(cv::Size(board.columns, board.rows), board.markerSize, board.markerSeparation, dict, board.ids);
+            cv::aruco::GridBoard grid_board(cv::Size(int(board.columns), int(board.rows)), float(board.markerSize), float(board.markerSeparation), _dict, board.ids);
 
             cv::Mat obj_points, img_points;
             grid_board.matchImagePoints(corners, ids, obj_points, img_points);
@@ -297,14 +303,14 @@ struct ArucoNode::Impl {
             try {
               {
                 TRACE_EVENT("thalamus", "cv::solvePnP");
-                cv::solvePnP(obj_points, img_points, camera_matrix, distortion_parameters, rvec, tvec);
+                cv::solvePnP(obj_points, img_points, camera_matrix, _distortion_parameters, rvec, tvec);
               }
 
-              float axis_length = .5*std::min(board.columns, board.rows)*(board.markerSize + board.markerSeparation) + board.markerSeparation;
+              float axis_length = .5f*float(std::min(board.columns, board.rows))*float(board.markerSize + board.markerSeparation) + float(board.markerSeparation);
 
               {
                 TRACE_EVENT("thalamus", "cv::drawFrameAxes");
-                cv::drawFrameAxes(color, camera_matrix, distortion_parameters, rvec, tvec, axis_length);
+                cv::drawFrameAxes(color, camera_matrix, _distortion_parameters, rvec, tvec, axis_length);
               }
 
               std::vector<cv::Point3f> axesPoints;
@@ -317,13 +323,13 @@ struct ArucoNode::Impl {
               cv::Rodrigues(board.rotation, rotmat);
               for(auto& point : axesPoints) {
                 auto old = point;
-                point.x = old.x*rotmat.at<double>(0, 0) + old.y*rotmat.at<double>(0, 1) + old.z*rotmat.at<double>(0, 2) + board.translation_x;
-                point.y = old.x*rotmat.at<double>(1, 0) + old.y*rotmat.at<double>(1, 1) + old.z*rotmat.at<double>(1, 2) + board.translation_y;
-                point.z = old.x*rotmat.at<double>(2, 0) + old.y*rotmat.at<double>(2, 1) + old.z*rotmat.at<double>(2, 2) + board.translation_z;
+                point.x = old.x*rotmat.at<float>(0, 0) + old.y*rotmat.at<float>(0, 1) + old.z*rotmat.at<float>(0, 2) + float(board.translation_x);
+                point.y = old.x*rotmat.at<float>(1, 0) + old.y*rotmat.at<float>(1, 1) + old.z*rotmat.at<float>(1, 2) + float(board.translation_y);
+                point.z = old.x*rotmat.at<float>(2, 0) + old.y*rotmat.at<float>(2, 1) + old.z*rotmat.at<float>(2, 2) + float(board.translation_z);
               }
 
               std::vector<cv::Point2f> imagePoints;
-              projectPoints(axesPoints, rvec, tvec, camera_matrix, distortion_parameters, imagePoints);
+              projectPoints(axesPoints, rvec, tvec, camera_matrix, _distortion_parameters, imagePoints);
 
               // draw axes lines
               {
@@ -334,9 +340,9 @@ struct ArucoNode::Impl {
               }
 
               _segments.emplace_back();
-              _segments.back().frame = frame;
-              _segments.back().segment_id = board_index;
-              _segments.back().time = std::chrono::duration_cast<std::chrono::milliseconds>(time).count();
+              _segments.back().frame = _frame;
+              _segments.back().segment_id = uint32_t(board_index);
+              _segments.back().time = uint32_t(std::chrono::duration_cast<std::chrono::milliseconds>(time).count());
 
               cv::Mat rvecMat(3, 3, CV_64F);
               cv::Rodrigues(rvec, rvecMat);
@@ -360,9 +366,9 @@ struct ArucoNode::Impl {
               auto boardTvecZ = board.translation_x*rvecMat.at<double>(2, 0) + board.translation_y*rvecMat.at<double>(2, 1) + board.translation_z*rvecMat.at<double>(2, 2);
               cv::Vec3d boardTvec(boardTvecX, boardTvecY, boardTvecZ);
 
-              boost::qvm::X(_segments.back().position) = tvec[0] + boardTvecX;
-              boost::qvm::Y(_segments.back().position) = tvec[1] + boardTvecY;
-              boost::qvm::Z(_segments.back().position) = tvec[2] + boardTvecZ;
+              boost::qvm::X(_segments.back().position) = float(tvec[0] + boardTvecX);
+              boost::qvm::Y(_segments.back().position) = float(tvec[1] + boardTvecY);
+              boost::qvm::Z(_segments.back().position) = float(tvec[2] + boardTvecZ);
             } catch(cv::Exception& e) {
               THALAMUS_LOG(error) << e.what();
             }
@@ -371,16 +377,16 @@ struct ArucoNode::Impl {
         }
       }
       TRACE_EVENT_END("thalamus");
-      boost::asio::post(io_context, [frame_id,id,color,&output_frames,&next_output_frame,&current_frame,outer,frame_interval,_segments=std::move(_segments),time] {
+      boost::asio::post(_io_context, [frame_id,id,color,&_output_frames,&_next_output_frame,&_current_frame,_outer,frame_interval,returned_segments=std::move(_segments),time] {
         TRACE_EVENT("thalamus", "ArucoNode Post Main", perfetto::TerminatingFlow::ProcessScoped(id));
-        output_frames[frame_id] = Frame{color, frame_interval, std::move(_segments), time};
-        for(auto i = output_frames.begin();i != output_frames.end();) {
-          if(i->first == next_output_frame) {
-            ++next_output_frame;
-            current_frame = i->second;
+        _output_frames[frame_id] = Frame{color, frame_interval, std::move(returned_segments), time};
+        for(auto i = _output_frames.begin();i != _output_frames.end();) {
+          if(i->first == _next_output_frame) {
+            ++_next_output_frame;
+            _current_frame = i->second;
             TRACE_EVENT("thalamus", "ArucoNode::ready");
-            outer->ready(outer.get());
-            i = output_frames.erase(i);
+            _outer->ready(_outer.get());
+            i = _output_frames.erase(i);
           } else {
             ++i;
           }
@@ -460,10 +466,10 @@ ImageNode::Format ArucoNode::format() const {
   return Format::RGB;
 }
 size_t ArucoNode::width() const {
-  return impl->current_frame.mat.cols;
+  return size_t(impl->current_frame.mat.cols);
 }
 size_t ArucoNode::height() const {
-  return impl->current_frame.mat.rows;
+  return size_t(impl->current_frame.mat.rows);
 }
 std::chrono::nanoseconds ArucoNode::frame_interval() const {
   return impl->current_frame.interval;
@@ -478,3 +484,4 @@ size_t ArucoNode::modalities() const {
 }
 
 unsigned int ArucoNode::Impl::global_frame = 0;
+
