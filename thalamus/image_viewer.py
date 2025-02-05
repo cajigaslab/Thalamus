@@ -118,13 +118,14 @@ class ImageWidget(QWidget):
 
     scale = min(self.width()/self.image.width(), self.height()/self.image.height())
     offset = -(self.image.width()*scale - self.width())/2, -(self.image.height()*scale - self.height())/2
+
     event = {
       event_type :{
         'type': event_type,
         'offsetX': int(float(qt_get_x(e) + offset[0])/self.width()*self.image.width()),
         'offsetY': int(float(qt_get_y(e) + offset[1])/self.height()*self.image.height()),
-        'button': e.button().value,
-        'buttons': e.buttons().value
+        'button': int(e.button()),
+        'buttons': int(e.buttons())
       }
     }
     request = thalamus_pb2.NodeRequest(
@@ -302,6 +303,9 @@ async def main():
             print(v)
         except asyncio.CancelledError:
           pass
+        except grpc.aio.AioRpcError as e:
+          if e.code() not in (grpc.StatusCode.CANCELLED, grpc.StatusCode.UNAVAILABLE):
+            raise
       consumer_task = create_task_with_exc_handling(control_consumer())
 
       done_future = asyncio.get_event_loop().create_future()

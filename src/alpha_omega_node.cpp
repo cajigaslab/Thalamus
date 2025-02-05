@@ -835,7 +835,7 @@ namespace thalamus {
     THALAMUS_LOG(info) << "Alpha Omega API loaded";
     return true;
 #else
-    AlphaOmegaNode::Impl::alpha_omega.reset(new MockAlphaOmega());
+    AlphaOmegaNode::Impl::alpha_omega = new MockAlphaOmega();
     return true;
 #endif
   }
