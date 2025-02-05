@@ -492,11 +492,13 @@ struct StorageNode::Impl {
     struct SwsContext *sws_context;
     uint8_t *src_data[4], *dst_data[4];
     int src_linesize[4], dst_linesize[4];
+    uint8_t *dst_data_0;
     std::string node;
+    AVPixelFormat src_format;
 
     VideoEncoder(int width, int height, AVPixelFormat format,
                  AVRational framerate, const std::string &_node)
-        : node(_node) {
+        : node(_node), src_format(format) {
       codec = avcodec_find_encoder(AV_CODEC_ID_MPEG1VIDEO);
       THALAMUS_ASSERT(codec, "avcodec_find_encoder failed");
       context = avcodec_alloc_context3(codec);
@@ -529,6 +531,7 @@ struct StorageNode::Impl {
       THALAMUS_ASSERT(ret >= 0, "Could not allocate source image");
       ret = av_image_alloc(dst_data, dst_linesize, width, height,
                            context->pix_fmt, 16);
+      dst_data_0 = dst_data[0];
       THALAMUS_ASSERT(ret >= 0, "Could not allocate destination image");
     }
     ~VideoEncoder() override {
@@ -536,6 +539,7 @@ struct StorageNode::Impl {
       av_packet_free(&packet);
       av_frame_free(&frame);
       av_freep(&src_data[0]);
+      dst_data[0] = dst_data_0;
       av_freep(&dst_data[0]);
     }
     void work() override {
@@ -590,7 +594,7 @@ struct StorageNode::Impl {
         }
 
         for (auto p = 0ull; p < size_t(image.data().size()); ++p) {
-          auto linesize = image.data(int(p)).size() / image.height() * bps[p];
+          auto linesize = image.data(int(p)).size() / image.height();
           auto width = image.width() * bps[p];
           for (auto y = 0u; y < image.height(); ++y) {
             std::copy_n(image.data(int(p)).data() + y * linesize, width,
@@ -599,8 +603,12 @@ struct StorageNode::Impl {
         }
         frame->pts = pts++;
 
-        sws_scale(sws_context, src_data, src_linesize, 0, int(image.height()),
-                  dst_data, dst_linesize);
+        if (pts > 0 && src_format == AV_PIX_FMT_GRAY8) {
+          dst_data[0] = src_data[0];
+        } else {
+          sws_scale(sws_context, src_data, src_linesize, 0, int(image.height()),
+                    dst_data, dst_linesize);
+        }
         std::copy(std::begin(dst_data), std::end(dst_data), frame->data);
         std::copy(std::begin(dst_linesize), std::end(dst_linesize),
                   frame->linesize);
@@ -925,6 +933,8 @@ struct StorageNode::Impl {
                   image.bigendian() ? AV_PIX_FMT_GRAY16BE : AV_PIX_FMT_GRAY16LE;
               break;
             case thalamus_grpc::Image::Format::Image_Format_RGB:
+              format = AV_PIX_FMT_RGB24;
+              break;
             case thalamus_grpc::Image::Format::Image_Format_YUYV422:
             case thalamus_grpc::Image::Format::Image_Format_YUV420P:
             case thalamus_grpc::Image::Format::Image_Format_YUVJ420P:

@@ -804,8 +804,7 @@ class Canvas(QOpenGLWidget):
     except asyncio.CancelledError:
       pass
     except grpc.aio.AioRpcError as e:
-      if e.code() != grpc.StatusCode.CANCELLED:
-        raise
+      pass
 
   def on_touch(self, point: QPoint) -> None:
     """
@@ -873,8 +872,7 @@ class Canvas(QOpenGLWidget):
     except asyncio.CancelledError:
       pass
     except grpc.aio.AioRpcError as e:
-      if e.code() != grpc.StatusCode.CANCELLED:
-        raise
+      pass
 
   def keyReleaseEvent(self, e: QKeyEvent) -> None: # pylint: disable=invalid-name
     '''

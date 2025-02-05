@@ -62,6 +62,7 @@ namespace thalamus {
       bool has_image;
       bool has_analog;
       std::chrono::nanoseconds interval;
+      std::chrono::nanoseconds time;
     };
     std::map<size_t, Result> output_frames;
     Result current_result;
@@ -157,6 +158,7 @@ namespace thalamus {
       }
       auto out = *mat_pool.begin();
       mat_pool.erase(out);
+      auto sample_time = image_source->time();
 
       cv::Mat in;
       if(image_source->format() != ImageNode::Format::Gray 
@@ -178,6 +180,7 @@ namespace thalamus {
                  frame_id=next_input_frame++,
                  current_need_recenter,
                  out,
+                 sample_time,
                  frame_interval,
                  &this_current_result=current_result,
                  &this_mat_pool=this->mat_pool,
@@ -212,9 +215,9 @@ namespace thalamus {
         }
         if(!this_computing) {
           TRACE_EVENT_END("thalamus");
-          boost::asio::post(this_io_context, [&this_current_result,&this_next_output_frame,&this_output_frames,&this_mat_pool,event_id,out,frame_id,this_outer,frame_interval] {
+          boost::asio::post(this_io_context, [&this_current_result,&this_next_output_frame,&this_output_frames,&this_mat_pool,event_id,out,frame_id,this_outer,frame_interval,sample_time] {
             TRACE_EVENT("thalamus", "OculomaticNode Post Main", perfetto::TerminatingFlow::ProcessScoped(event_id));
-            this_output_frames[frame_id] = Result{ 0, 0, 0, *out, true, false, frame_interval };
+            this_output_frames[frame_id] = Result{ 0, 0, 0, *out, true, false, frame_interval, sample_time };
             this_mat_pool.insert(out);
             for(auto i = this_output_frames.begin();i != this_output_frames.end();) {
               if(i->first == this_next_output_frame) {
@@ -302,9 +305,9 @@ namespace thalamus {
         } 
 
         TRACE_EVENT_END("thalamus");
-        boost::asio::post(this_io_context, [&this_current_result,&this_next_output_frame,&this_output_frames,&this_mat_pool,out,frame_id,diameter,gaze,this_outer,frame_interval,event_id] {
+        boost::asio::post(this_io_context, [&this_current_result,&this_next_output_frame,&this_output_frames,&this_mat_pool,out,frame_id,diameter,gaze,this_outer,frame_interval,event_id,sample_time] {
           TRACE_EVENT("thalamus", "OculomaticNode Post Main", perfetto::TerminatingFlow::ProcessScoped(event_id));
-          this_output_frames[frame_id] = Result{ gaze.first, gaze.second, diameter, *out, true, true, frame_interval };
+          this_output_frames[frame_id] = Result{ gaze.first, gaze.second, diameter, *out, true, true, frame_interval, sample_time };
           this_mat_pool.insert(out);
           for(auto i = this_output_frames.begin();i != this_output_frames.end();) {
             if(i->first == this_next_output_frame) {
@@ -400,7 +403,7 @@ namespace thalamus {
   }
 
   std::chrono::nanoseconds OculomaticNode::time() const {
-    return impl->time;
+    return impl->current_result.time;
   }
 
   std::span<const double> OculomaticNode::data(int channel) const {

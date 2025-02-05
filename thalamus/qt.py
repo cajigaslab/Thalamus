@@ -35,6 +35,11 @@ if HAS_QT6:
   def qt_get_y(e):
     return e.position().y()
 
+  def qt_get_button_int(e) -> int:
+    return e.button().value
+  def qt_get_buttons_int(e) -> int:
+    return e.buttons().value
+
   try:
     import PyQt6.sip
     isdeleted = PyQt6.sip.isdeleted
@@ -83,6 +88,11 @@ else:
     return e.x()
   def qt_get_y(e):
     return e.y()
+
+  def qt_get_button_int(e) -> int:
+    return int(e.button())
+  def qt_get_buttons_int(e) -> int:
+    return int(e.buttons())
 
   try:
     import PyQt5.sip

@@ -41,6 +41,7 @@ from ..pipeline.thalamus_window import ThalamusWindow
 from ..servicer import ThalamusServicer
 from ..qt import *
 from ..orchestration import Orchestrator
+from .util import create_task_with_exc_handling
 
 UNHANDLED_EXCEPTION: typing.List[Exception] = []
 
@@ -193,6 +194,15 @@ async def async_main() -> None:
   thalamus.move(100, 100)
   thalamus.show()
 
+  async def native_watch():
+    await bmbi_native_proc.wait()
+    if not done_future.done:
+      done_future.set_result(None)
+
+  native_watch_task = None
+  if bmbi_native_proc:
+    native_watch_task = create_task_with_exc_handling(native_watch())
+
   try:
     while not done_future.done() and not UNHANDLED_EXCEPTION:
       QApplication.processEvents()
@@ -216,7 +226,7 @@ async def async_main() -> None:
 
   await channel.close()
   if bmbi_native_proc:
-    await bmbi_native_proc.wait()
+    await native_watch_task
   print('DONE')
 
 def main() -> None:

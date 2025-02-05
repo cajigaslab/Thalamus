@@ -124,8 +124,8 @@ class ImageWidget(QWidget):
         'type': event_type,
         'offsetX': int(float(qt_get_x(e) + offset[0])/self.width()*self.image.width()),
         'offsetY': int(float(qt_get_y(e) + offset[1])/self.height()*self.image.height()),
-        'button': int(e.button()),
-        'buttons': int(e.buttons())
+        'button': qt_get_button_int(e),
+        'buttons': qt_get_buttons_int(e)
       }
     }
     request = thalamus_pb2.NodeRequest(
@@ -237,8 +237,7 @@ class ImageWidget(QWidget):
         self.update()
         response = thalamus_pb2.Image()
     except grpc.aio.AioRpcError as e:
-      if e.code() != grpc.StatusCode.CANCELLED:
-        raise
+      pass
     except asyncio.CancelledError:
       pass
 
@@ -320,6 +319,8 @@ async def main():
       consumer_task.cancel()
       await consumer_task
     except KeyboardInterrupt:
+      pass
+    except grpc.aio.AioRpcError as e:
       pass
     finally:
       task.cancel()

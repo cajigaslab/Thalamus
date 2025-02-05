@@ -766,6 +766,7 @@ namespace thalamus {
       return aoapi->loaded;
     }
     has_run = true;
+    aoapi = new AlphaOmegaAPI();
 
     alphaomega_handle = LoadLibrary("C:\\Program Files (x86)\\AlphaOmega\\Neuro Omega System SDK\\CPP_SDK\\win64\\NeuroOmega_x64.dll");
     THALAMUS_LOG(info) << "LoadLibrary " << alphaomega_handle;
