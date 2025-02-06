@@ -9,7 +9,6 @@
 #include <image_node.hpp>
 #include <intan_node.hpp>
 #include <log_node.hpp>
-#include <loop_test_node.hpp>
 #include <lua_node.hpp>
 #include <node_graph_impl.hpp>
 #include <normalize_node.hpp>
@@ -139,7 +138,6 @@ public:
         {"TOUCH_SCREEN", new NodeFactory<TouchScreenNode>()},
         {"STIM_PRINTER", new NodeFactory<StimPrinterNode>()},
         //{"HEXASCOPE", new NodeFactory<HexascopeNode>()},
-        {"LOOP_TEST", new NodeFactory<LoopTestNode>()},
         {"ARUCO", new NodeFactory<ArucoNode>()}};
 
     using namespace std::placeholders;

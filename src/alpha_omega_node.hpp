@@ -1,55 +1,57 @@
 #pragma once
 
-#include <base_node.hpp>
 #include <analog_node.hpp>
-#include <string>
+#include <base_node.hpp>
 #include <state.hpp>
+#include <string>
 
 #ifdef __clang__
-  #pragma clang diagnostic push
-  #pragma clang diagnostic ignored "-Weverything"
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Weverything"
 #endif
 
 #include <boost/asio.hpp>
 
 #ifdef __clang__
-  #pragma clang diagnostic pop
+#pragma clang diagnostic pop
 #endif
 
 namespace thalamus {
-  using namespace std::chrono_literals;
+using namespace std::chrono_literals;
 
-  class AlphaOmegaNode : public AnalogNode, public Node {
-    struct Impl;
-    std::unique_ptr<Impl> impl;
-  public:
-    AlphaOmegaNode(ObservableDictPtr state, boost::asio::io_context& io_context, NodeGraph* graph);
+class AlphaOmegaNode : public AnalogNode, public Node {
+  struct Impl;
+  std::unique_ptr<Impl> impl;
 
-    ~AlphaOmegaNode() override;
+public:
+  AlphaOmegaNode(ObservableDictPtr state, boost::asio::io_context &io_context,
+                 NodeGraph *graph);
+
+  ~AlphaOmegaNode() override;
 
 #ifdef _WIN32
-    static std::string type_name() {
-      return "ALPHA_OMEGA (NEURO_OMEGA)";
-    }
+  static std::string type_name() { return "ALPHA_OMEGA (NEURO_OMEGA)"; }
 #else
-    static std::string type_name() {
-      return "ALPHA_OMEGA (MOCK)";
-    }
+  static std::string type_name() { return "ALPHA_OMEGA (MOCK)"; }
 #endif
 
-    //QWidget* create_widget() override;
-    std::span<const double> data(int channel) const override;
-    int num_channels() const override;
-    std::chrono::nanoseconds sample_interval(int i) const override;
-    std::chrono::nanoseconds time() const override;
-    std::string_view name(int channel) const override;
-    std::span<const std::string> get_recommended_channels() const override;
-    virtual boost::json::value process(const boost::json::value&) override;
-    void inject(const thalamus::vector<std::span<double const>>&, const thalamus::vector<std::chrono::nanoseconds>&, const thalamus::vector<std::string_view>&) override;
+  // QWidget* create_widget() override;
+  std::span<const double> data(int channel) const override;
+  int num_channels() const override;
+  std::chrono::nanoseconds sample_interval(int i) const override;
+  std::chrono::nanoseconds time() const override;
+  std::string_view name(int channel) const override;
+  std::span<const std::string> get_recommended_channels() const override;
+  virtual boost::json::value process(const boost::json::value &) override;
+  void inject(const thalamus::vector<std::span<double const>> &,
+              const thalamus::vector<std::chrono::nanoseconds> &,
+              const thalamus::vector<std::string_view> &) override;
 
-    void on_change(ObservableCollection::Action a, const ObservableCollection::Key& k, const ObservableCollection::Value& v);
+  void on_change(ObservableCollection::Action a,
+                 const ObservableCollection::Key &k,
+                 const ObservableCollection::Value &v);
 
-    static bool prepare();
-    size_t modalities() const override;
-  };
-}
+  static bool prepare();
+  size_t modalities() const override;
+};
+} // namespace thalamus

@@ -47,7 +47,6 @@ public:
   std::span<const double> data(int channel) const override;
   int num_channels() const override;
   std::string_view name(int channel) const override;
-  std::span<const std::string> get_recommended_channels() const override;
   std::chrono::nanoseconds sample_interval(int i) const override;
   void
   inject(const thalamus::vector<std::span<double const>> &spans,
@@ -79,7 +78,6 @@ public:
   std::span<const double> data(int channel) const override;
   int num_channels() const override;
   std::string_view name(int channel) const override;
-  std::span<const std::string> get_recommended_channels() const override;
   std::chrono::nanoseconds sample_interval(int i) const override;
   void
   inject(const thalamus::vector<std::span<double const>> &spans,

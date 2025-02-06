@@ -1,4 +1,3 @@
-#include <chrono>
 #include <state_manager.hpp>
 #include <thalamus/thread.hpp>
 #include <thalamus/tracing.hpp>
@@ -45,12 +44,10 @@ struct StateManager::Impl {
     thalamus_grpc::ObservableTransaction in;
     thalamus_grpc::ObservableTransaction out;
 
-    auto timeout = std::chrono::system_clock::now() + 1s;
+    auto stream_ptr = stub->observable_bridge_v2(&context);
+    this->stream = stream_ptr.get();
 
-    auto stream = stub->observable_bridge_v2(&context);
-    this->stream = stream.get();
-
-    while (stream->Read(&in)) {
+    while (stream_ptr->Read(&in)) {
       TRACE_EVENT("thalamus", "observable_bridge");
       if (in.acknowledged()) {
         TRACE_EVENT(
@@ -80,18 +77,18 @@ struct StateManager::Impl {
 
         promises.emplace_back();
         futures.push_back(promises.back().get_future());
-        boost::asio::post(io_context, [&promise = promises.back(),
-                                       state = state, action = change.action(),
-                                       address = change.address(),
-                                       value = std::move(value)] {
-          TRACE_EVENT("thalamus", "observable_bridge(post)");
-          if (action == thalamus_grpc::ObservableChange_Action_Set) {
-            set_jsonpath(state, address, value, true);
-          } else {
-            delete_jsonpath(state, address, true);
-          }
-          promise.set_value();
-        });
+        boost::asio::post(
+            io_context, [&promise = promises.back(), c_state = state,
+                         action = change.action(), address = change.address(),
+                         new_value = std::move(value)] {
+              TRACE_EVENT("thalamus", "observable_bridge(post)");
+              if (action == thalamus_grpc::ObservableChange_Action_Set) {
+                set_jsonpath(c_state, address, new_value, true);
+              } else {
+                delete_jsonpath(c_state, address, true);
+              }
+              promise.set_value();
+            });
       }
       for (auto &future : futures) {
         while (future.wait_for(1s) == std::future_status::timeout && running) {
@@ -105,9 +102,9 @@ struct StateManager::Impl {
     io_context.stop();
   }
 
-  Impl(thalamus_grpc::Thalamus::Stub *stub, ObservableCollection::Value state,
-       boost::asio::io_context &io_context)
-      : stub(stub), state(state), root(state), io_context(io_context),
+  Impl(thalamus_grpc::Thalamus::Stub *_stub, ObservableCollection::Value _state,
+       boost::asio::io_context &_io_context)
+      : stub(_stub), state(_state), root(state), io_context(_io_context),
         running(true) {
     grpc_thread = std::thread(std::bind(&Impl::grpc_target, this));
     if (std::holds_alternative<ObservableListPtr>(state)) {

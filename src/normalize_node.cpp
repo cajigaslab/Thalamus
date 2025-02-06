@@ -14,7 +14,7 @@
 #include <modalities_util.hpp>
 
 using Range = std::pair<double, double>;
-  
+
 namespace thalamus {
 struct NormalizeNode::Impl {
   ObservableDictPtr state;
@@ -45,8 +45,8 @@ struct NormalizeNode::Impl {
   std::vector<std::weak_ptr<AnalogNode>> sources;
 
 public:
-  Impl(ObservableDictPtr _state, boost::asio::io_context &,
-       NodeGraph *_graph, NormalizeNode *_outer)
+  Impl(ObservableDictPtr _state, boost::asio::io_context &, NodeGraph *_graph,
+       NormalizeNode *_outer)
       : state(_state), outer(_outer), graph(_graph) {
 
     if (std::filesystem::exists(std::filesystem::path(".normalize_cache"))) {
@@ -161,10 +161,9 @@ std::chrono::nanoseconds NormalizeNode::sample_interval(int channel) const {
   return impl->source->sample_interval(channel);
 }
 
-void NormalizeNode::inject(
-    const thalamus::vector<std::span<double const>> &,
-    const thalamus::vector<std::chrono::nanoseconds> &,
-    const thalamus::vector<std::string_view> &) {
+void NormalizeNode::inject(const thalamus::vector<std::span<double const>> &,
+                           const thalamus::vector<std::chrono::nanoseconds> &,
+                           const thalamus::vector<std::string_view> &) {
   THALAMUS_ASSERT(false);
 }
 

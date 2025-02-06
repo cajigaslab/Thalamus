@@ -35,9 +35,9 @@ class RateTracker {
       order = [](auto a, auto b) { return a > b; };
 
 public:
-  RateTracker(std::chrono::nanoseconds window,
-              double rate_limit = std::numeric_limits<double>::max())
-      : rate_limit(rate_limit), window(window) {}
+  RateTracker(std::chrono::nanoseconds _window,
+              double _rate_limit = std::numeric_limits<double>::max())
+      : rate_limit(_rate_limit), window(_window) {}
 
   bool update(std::chrono::nanoseconds now) {
     while (!heap.empty() && now - heap.front() > window) {
@@ -58,17 +58,17 @@ public:
     if (heap.size() < 2) {
       return 0;
     }
-    double ticks = (last_now - heap.front()).count();
+    auto ticks = double((last_now - heap.front()).count());
     auto seconds = ticks / std::chrono::nanoseconds::period::den;
-    return (heap.size() - 1) / seconds;
+    return double(heap.size() - 1) / seconds;
   }
   double new_rate(std::chrono::nanoseconds now) const {
     if (heap.size() < 1) {
       return 0;
     }
-    double ticks = (now - heap.front()).count();
+    auto ticks = double((now - heap.front()).count());
     auto seconds = ticks / std::chrono::nanoseconds::period::den;
-    return heap.size() / seconds;
+    return double(heap.size()) / seconds;
   }
 
   std::chrono::nanoseconds duration() const {
@@ -78,24 +78,6 @@ public:
     return last_now - heap.front();
   }
 };
-
-static std::string POSE_CHANGE("Pose Change");
-static std::string LEFT_THUMB_DISTANCE("Left Thumb Distance (m)");
-static std::string LEFT_INDEX_DISTANCE("Left Index Distance (m)");
-static std::string LEFT_MIDDLE_DISTANCE("Left Middle Distance (m)");
-static std::string LEFT_RING_DISTANCE("Left Ring Distance (m)");
-static std::string LEFT_PINKY_DISTANCE("Left Pinky Distance (m)");
-static std::string RIGHT_THUMB_DISTANCE("Right Thumb Distance (m)");
-static std::string RIGHT_INDEX_DISTANCE("Right Index Distance (m)");
-static std::string RIGHT_MIDDLE_DISTANCE("Right Middle Distance (m)");
-static std::string RIGHT_RING_DISTANCE("Right Ring Distance (m)");
-static std::string RIGHT_PINKY_DISTANCE("Right Pinky Distance (m)");
-
-static thalamus::vector<std::string> BASE_XSENS_CHANNEL_NAMES{
-    POSE_CHANGE,          LEFT_THUMB_DISTANCE,  LEFT_INDEX_DISTANCE,
-    LEFT_MIDDLE_DISTANCE, LEFT_RING_DISTANCE,   LEFT_PINKY_DISTANCE,
-    RIGHT_THUMB_DISTANCE, RIGHT_INDEX_DISTANCE, RIGHT_MIDDLE_DISTANCE,
-    RIGHT_RING_DISTANCE,  RIGHT_PINKY_DISTANCE};
 
 struct XsensNode::Impl {
   ObservableDictPtr state;
@@ -118,10 +100,10 @@ struct XsensNode::Impl {
     double max = -std::numeric_limits<double>::max();
     double value;
     double up() { return (value - min) / (max - min); }
-    void update(double value) {
+    void update(double new_value) {
       min = std::min(min, value);
       max = std::max(max, value);
-      this->value = value;
+      this->value = new_value;
     }
     void reset() {
       min = std::numeric_limits<double>::max();
@@ -135,22 +117,40 @@ struct XsensNode::Impl {
   bool has_analog_data = false;
   std::chrono::nanoseconds start_time = 0ns;
   std::vector<std::string> channel_names;
+  size_t num_base_channel_names = 0;
   long long actor = 0;
 
   enum class SendType { Current, Min, Max };
   SendType send_type = SendType::Current;
 
-  Impl(ObservableDictPtr state, boost::asio::io_context &io_context,
-       XsensNode *outer)
-      : state(state), timer(io_context), socket(io_context),
-        remote_control_socket(io_context), outer(outer), rate_tracker(1s),
-        channel_names(BASE_XSENS_CHANNEL_NAMES.begin(),
-                      BASE_XSENS_CHANNEL_NAMES.end()) {
+  Impl(ObservableDictPtr _state, boost::asio::io_context &io_context,
+       XsensNode *_outer)
+      : state(_state), timer(io_context), socket(io_context),
+        remote_control_socket(io_context), outer(_outer), rate_tracker(1s) {
+
+    std::string pose_change_name("Pose Change");
+    std::string left_thumb_distance("Left Thumb Distance (m)");
+    std::string left_index_distance("Left Index Distance (m)");
+    std::string left_middle_distance("Left Middle Distance (m)");
+    std::string left_ring_distance("Left Ring Distance (m)");
+    std::string left_pinky_distance("Left Pinky Distance (m)");
+    std::string right_thumb_distance("Right Thumb Distance (m)");
+    std::string right_index_distance("Right Index Distance (m)");
+    std::string right_middle_distance("Right Middle Distance (m)");
+    std::string right_ring_distance("Right Ring Distance (m)");
+    std::string right_pinky_distance("Right Pinky Distance (m)");
+
+    channel_names = {
+        pose_change_name,     left_thumb_distance,  left_index_distance,
+        left_middle_distance, left_ring_distance,   left_pinky_distance,
+        right_thumb_distance, right_index_distance, right_middle_distance,
+        right_ring_distance,  right_pinky_distance};
+    num_base_channel_names = channel_names.size();
 
     if (std::filesystem::exists(std::filesystem::path(".xsens_cache"))) {
       std::ifstream input(".xsens_cache", std::ios::in | std::ios::binary);
       input.read(reinterpret_cast<char *>(fingers.data()),
-                 sizeof(Finger) * fingers.size());
+                 int64_t(sizeof(Finger) * fingers.size()));
       print_fingers();
     }
     using namespace std::placeholders;
@@ -230,39 +230,49 @@ struct XsensNode::Impl {
 
     if (character_id == actor) {
       auto hand_offset = 23;
-      fingers[0].update(boost::qvm::mag(_segments[hand_offset + 3].position -
-                                        _segments[hand_offset + 2].position));
-      fingers[1].update(boost::qvm::mag(_segments[hand_offset + 7].position -
-                                        _segments[hand_offset + 5].position));
-      fingers[2].update(boost::qvm::mag(_segments[hand_offset + 11].position -
-                                        _segments[hand_offset + 9].position));
-      fingers[3].update(boost::qvm::mag(_segments[hand_offset + 15].position -
-                                        _segments[hand_offset + 13].position));
-      fingers[4].update(boost::qvm::mag(_segments[hand_offset + 19].position -
-                                        _segments[hand_offset + 17].position));
+      fingers[0].update(
+          double(boost::qvm::mag(_segments[size_t(hand_offset + 3)].position -
+                                 _segments[size_t(hand_offset + 2)].position)));
+      fingers[1].update(
+          double(boost::qvm::mag(_segments[size_t(hand_offset + 7)].position -
+                                 _segments[size_t(hand_offset + 5)].position)));
+      fingers[2].update(
+          double(boost::qvm::mag(_segments[size_t(hand_offset + 11)].position -
+                                 _segments[size_t(hand_offset + 9)].position)));
+      fingers[3].update(double(
+          boost::qvm::mag(_segments[size_t(hand_offset + 15)].position -
+                          _segments[size_t(hand_offset + 13)].position)));
+      fingers[4].update(double(
+          boost::qvm::mag(_segments[size_t(hand_offset + 19)].position -
+                          _segments[size_t(hand_offset + 17)].position)));
       hand_offset = 43;
-      fingers[5].update(boost::qvm::mag(_segments[hand_offset + 3].position -
-                                        _segments[hand_offset + 2].position));
-      fingers[6].update(boost::qvm::mag(_segments[hand_offset + 7].position -
-                                        _segments[hand_offset + 5].position));
-      fingers[7].update(boost::qvm::mag(_segments[hand_offset + 11].position -
-                                        _segments[hand_offset + 9].position));
-      fingers[8].update(boost::qvm::mag(_segments[hand_offset + 15].position -
-                                        _segments[hand_offset + 13].position));
-      fingers[9].update(boost::qvm::mag(_segments[hand_offset + 19].position -
-                                        _segments[hand_offset + 17].position));
+      fingers[5].update(
+          double(boost::qvm::mag(_segments[size_t(hand_offset + 3)].position -
+                                 _segments[size_t(hand_offset + 2)].position)));
+      fingers[6].update(
+          double(boost::qvm::mag(_segments[size_t(hand_offset + 7)].position -
+                                 _segments[size_t(hand_offset + 5)].position)));
+      fingers[7].update(
+          double(boost::qvm::mag(_segments[size_t(hand_offset + 11)].position -
+                                 _segments[size_t(hand_offset + 9)].position)));
+      fingers[8].update(double(
+          boost::qvm::mag(_segments[size_t(hand_offset + 15)].position -
+                          _segments[size_t(hand_offset + 13)].position)));
+      fingers[9].update(double(
+          boost::qvm::mag(_segments[size_t(hand_offset + 19)].position -
+                          _segments[size_t(hand_offset + 17)].position)));
       has_analog_data = true;
 
       std::vector<double> mask(5, 0);
-      auto offset = pose_with_left_hand ? 0 : 5;
+      size_t offset = pose_with_left_hand ? 0 : 5;
       // i = 0 so we can skip thumb which never moves according to the current
       // metric.
-      for (auto i = 1; i < 5; ++i) {
+      for (size_t i = 1; i < 5; ++i) {
         mask[mask.size() - i - 1] = fingers[offset + i].up();
       }
 
       pose_distances.resize(poses->size());
-      channel_names.resize(BASE_XSENS_CHANNEL_NAMES.size() + poses->size());
+      channel_names.resize(num_base_channel_names + poses->size());
       auto last_pose = pose_name;
       pose_name = "";
       auto min_distance = std::numeric_limits<double>::max();
@@ -274,13 +284,13 @@ struct XsensNode::Impl {
           distance += std::abs(d - (pose_mask & 0x01));
           pose_mask >>= 1;
         }
-        distance /= mask.size();
+        distance /= double(mask.size());
         pose_distances[i] = 1 - distance;
-        channel_names[BASE_XSENS_CHANNEL_NAMES.size() + i] =
+        channel_names[num_base_channel_names + i] =
             static_cast<std::string>(pose->at(1));
 
         if (distance < .5 && distance < min_distance) {
-          pose_name = channel_names[BASE_XSENS_CHANNEL_NAMES.size() + i];
+          pose_name = channel_names[num_base_channel_names + i];
           min_distance = distance;
         }
       }
@@ -316,12 +326,12 @@ struct XsensNode::Impl {
       actor = std::get<long long>(value);
       return;
     } else if (key_str == "Send Type") {
-      auto key_str = std::get<std::string>(value);
-      if (key_str == "Current") {
+      auto value_str = std::get<std::string>(value);
+      if (value_str == "Current") {
         send_type = SendType::Current;
-      } else if (key_str == "Max") {
+      } else if (value_str == "Max") {
         send_type = SendType::Max;
-      } else if (key_str == "Min") {
+      } else if (value_str == "Min") {
         send_type = SendType::Min;
       }
       return;
@@ -349,7 +359,7 @@ struct XsensNode::Impl {
       }
       (*state)["Xsens Address Good"].assign(true);
       xsens_endpoint =
-          boost::asio::ip::udp::endpoint(xsens_address, xsens_port);
+          boost::asio::ip::udp::endpoint(xsens_address, uint16_t(xsens_port));
       return;
     }
 
@@ -385,7 +395,7 @@ struct XsensNode::Impl {
     socket.open(boost::asio::ip::udp::v4());
     boost::system::error_code error;
     socket.bind(boost::asio::ip::udp::endpoint(
-                    boost::asio::ip::make_address("0.0.0.0"), port),
+                    boost::asio::ip::make_address("0.0.0.0"), uint16_t(port)),
                 error);
     THALAMUS_ASSERT(!error, "%s", error.message());
     start_time = 0ns;
@@ -393,9 +403,10 @@ struct XsensNode::Impl {
     socket.async_receive(boost::asio::buffer(buffer, sizeof(buffer)),
                          std::bind(&Impl::on_receive, this, _1, _2));
 
-    const auto start_time = absl::FromChrono(std::chrono::system_clock::now());
-    auto start_time_str =
-        absl::FormatTime("%Y%m%d%H%M%S", start_time, absl::LocalTimeZone());
+    const auto recording_start_time =
+        absl::FromChrono(std::chrono::system_clock::now());
+    auto start_time_str = absl::FormatTime("%Y%m%d%H%M%S", recording_start_time,
+                                           absl::LocalTimeZone());
     xsens_command =
         "<StartRecordingReq SessionName=\"Thalamus_" + start_time_str + "\"/>";
     // socket.send_to(boost::asio::const_buffer(xsens_command.data(),
@@ -434,22 +445,23 @@ XsensNode::Segment XsensNode::Segment::parse(unsigned char *data) {
   segment.segment_id = ntohl(*reinterpret_cast<unsigned int *>(data));
 
   unsigned int temp;
+  unsigned char *temp_chars = reinterpret_cast<unsigned char *>(&temp);
 
   temp = ntohl(*reinterpret_cast<unsigned int *>(data + 4));
-  boost::qvm::X(segment.position) = *reinterpret_cast<float *>(&temp);
+  boost::qvm::X(segment.position) = *reinterpret_cast<float *>(temp_chars);
   temp = ntohl(*reinterpret_cast<unsigned int *>(data + 8));
-  boost::qvm::Y(segment.position) = *reinterpret_cast<float *>(&temp);
+  boost::qvm::Y(segment.position) = *reinterpret_cast<float *>(temp_chars);
   temp = ntohl(*reinterpret_cast<unsigned int *>(data + 12));
-  boost::qvm::Z(segment.position) = *reinterpret_cast<float *>(&temp);
+  boost::qvm::Z(segment.position) = *reinterpret_cast<float *>(temp_chars);
 
   temp = ntohl(*reinterpret_cast<unsigned int *>(data + 16));
-  boost::qvm::S(segment.rotation) = *reinterpret_cast<float *>(&temp);
+  boost::qvm::S(segment.rotation) = *reinterpret_cast<float *>(temp_chars);
   temp = ntohl(*reinterpret_cast<unsigned int *>(data + 20));
-  boost::qvm::X(segment.rotation) = *reinterpret_cast<float *>(&temp);
+  boost::qvm::X(segment.rotation) = *reinterpret_cast<float *>(temp_chars);
   temp = ntohl(*reinterpret_cast<unsigned int *>(data + 24));
-  boost::qvm::Y(segment.rotation) = *reinterpret_cast<float *>(&temp);
+  boost::qvm::Y(segment.rotation) = *reinterpret_cast<float *>(temp_chars);
   temp = ntohl(*reinterpret_cast<unsigned int *>(data + 28));
-  boost::qvm::Z(segment.rotation) = *reinterpret_cast<float *>(&temp);
+  boost::qvm::Z(segment.rotation) = *reinterpret_cast<float *>(temp_chars);
 
   return segment;
 }
@@ -462,30 +474,30 @@ std::span<const double> XsensNode::data(int channel) const {
   } else if (channel < 11) {
     switch (impl->send_type) {
     case Impl::SendType::Current:
-      return std::span<const double>(&impl->fingers[channel - 1].value,
-                                     &impl->fingers[channel - 1].value + 1);
+      return std::span<const double>(&impl->fingers[size_t(channel - 1)].value,
+                                     &impl->fingers[size_t(channel - 1)].value +
+                                         1);
     case Impl::SendType::Max:
-      return std::span<const double>(&impl->fingers[channel - 1].max,
-                                     &impl->fingers[channel - 1].max + 1);
+      return std::span<const double>(&impl->fingers[size_t(channel - 1)].max,
+                                     &impl->fingers[size_t(channel - 1)].max +
+                                         1);
     case Impl::SendType::Min:
-      return std::span<const double>(&impl->fingers[channel - 1].min,
-                                     &impl->fingers[channel - 1].min + 1);
+      return std::span<const double>(&impl->fingers[size_t(channel - 1)].min,
+                                     &impl->fingers[size_t(channel - 1)].min +
+                                         1);
     }
   } else {
-    return std::span<const double>(&impl->pose_distances[channel - 11],
-                                   &impl->pose_distances[channel - 11] + 1);
+    return std::span<const double>(&impl->pose_distances[size_t(channel - 11)],
+                                   &impl->pose_distances[size_t(channel - 11)] +
+                                       1);
   }
   THALAMUS_ASSERT(false, "Unexpected channel: %d", channel);
 }
 
-int XsensNode::num_channels() const { return impl->channel_names.size(); }
+int XsensNode::num_channels() const { return int(impl->channel_names.size()); }
 
 std::string_view XsensNode::name(int channel) const {
-  return impl->channel_names.at(channel);
-}
-std::span<const std::string> XsensNode::get_recommended_channels() const {
-  return std::span<const std::string>(impl->channel_names.begin(),
-                                      impl->channel_names.end());
+  return impl->channel_names.at(size_t(channel));
 }
 
 std::chrono::nanoseconds XsensNode::sample_interval(int) const {
@@ -510,7 +522,7 @@ boost::json::value XsensNode::process(const boost::json::value &value) {
     std::ofstream output(".xsens_cache",
                          std::ios::out | std::ios::binary | std::ios::ate);
     output.write(reinterpret_cast<char *>(impl->fingers.data()),
-                 sizeof(Impl::Finger) * impl->fingers.size());
+                 int64_t(sizeof(Impl::Finger) * impl->fingers.size()));
     impl->print_fingers();
   } else if (text == "Reset") {
     for (auto &finger : impl->fingers) {
@@ -519,11 +531,6 @@ boost::json::value XsensNode::process(const boost::json::value &value) {
   }
   return boost::json::value();
 }
-
-static std::map<std::string, unsigned int, std::less<>>
-    HAND_ENGINE_TO_XSENS_SEGMENT_IDS;
-
-static std::once_flag hand_engine_setup_flag;
 
 struct HandEngineNode::Impl {
   ObservableDictPtr state;
@@ -557,54 +564,54 @@ struct HandEngineNode::Impl {
   double amplitude;
   double value;
   std::chrono::milliseconds duration;
+  std::map<std::string, unsigned int, std::less<>>
+      HAND_ENGINE_TO_XSENS_SEGMENT_IDS;
 
 public:
-  Impl(ObservableDictPtr state, boost::asio::io_context &io_context,
-       NodeGraph *, HandEngineNode *outer)
-      : state(state), io_context(io_context), timer(io_context),
-        socket(io_context), outer(outer), amplitude(5), duration(16) {
-    std::call_once(hand_engine_setup_flag, [&] {
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"hand_l", 23});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"thumb_01_l", 24});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"thumb_02_l", 25});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"thumb_03_l", 26});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"index_00_l", 27});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"index_01_l", 28});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"index_02_l", 29});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"index_03_l", 30});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"middle_00_l", 31});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"middle_01_l", 32});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"middle_02_l", 33});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"middle_03_l", 34});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"ring_00_l", 35});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"ring_01_l", 36});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"ring_02_l", 37});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"ring_03_l", 38});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"pinky_00_l", 39});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"pinky_01_l", 40});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"pinky_02_l", 41});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"pinky_03_l", 42});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"hand_r", 43});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"thumb_01_r", 44});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"thumb_02_r", 45});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"thumb_03_r", 46});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"index_00_r", 47});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"index_01_r", 48});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"index_02_r", 49});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"index_03_r", 50});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"middle_00_r", 51});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"middle_01_r", 52});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"middle_02_r", 53});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"middle_03_r", 54});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"ring_00_r", 55});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"ring_01_r", 56});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"ring_02_r", 57});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"ring_03_r", 58});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"pinky_00_r", 59});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"pinky_01_r", 60});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"pinky_02_r", 61});
-      HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"pinky_03_r", 62});
-    });
+  Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
+       NodeGraph *, HandEngineNode *_outer)
+      : state(_state), io_context(_io_context), timer(_io_context),
+        socket(_io_context), outer(_outer), amplitude(5), duration(16) {
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"hand_l", 23});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"thumb_01_l", 24});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"thumb_02_l", 25});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"thumb_03_l", 26});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"index_00_l", 27});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"index_01_l", 28});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"index_02_l", 29});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"index_03_l", 30});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"middle_00_l", 31});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"middle_01_l", 32});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"middle_02_l", 33});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"middle_03_l", 34});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"ring_00_l", 35});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"ring_01_l", 36});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"ring_02_l", 37});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"ring_03_l", 38});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"pinky_00_l", 39});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"pinky_01_l", 40});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"pinky_02_l", 41});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"pinky_03_l", 42});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"hand_r", 43});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"thumb_01_r", 44});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"thumb_02_r", 45});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"thumb_03_r", 46});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"index_00_r", 47});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"index_01_r", 48});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"index_02_r", 49});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"index_03_r", 50});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"middle_00_r", 51});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"middle_01_r", 52});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"middle_02_r", 53});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"middle_03_r", 54});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"ring_00_r", 55});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"ring_01_r", 56});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"ring_02_r", 57});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"ring_03_r", 58});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"pinky_00_r", 59});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"pinky_01_r", 60});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"pinky_02_r", 61});
+    HAND_ENGINE_TO_XSENS_SEGMENT_IDS.insert({"pinky_03_r", 62});
 
     state_connection =
         state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
@@ -633,8 +640,8 @@ public:
       auto old_is_running = is_running;
       is_running = std::get<bool>(v);
       if (!old_is_running && is_running) {
-        std::string address_str = state->at("Address");
-        this->address_str = address_str;
+        std::string new_address_str = state->at("Address");
+        this->address_str = new_address_str;
         std::vector<std::string> address_tokens =
             absl::StrSplit(address_str, ':');
         if (address_tokens.size() < 2) {
@@ -737,7 +744,7 @@ public:
             absl::StrSplit(timecode, ':');
         THALAMUS_ASSERT(timecode_tokens.size() == 4, "Invalid time code = %s",
                         timecode);
-        int hour, minute, second, frame;
+        unsigned int hour, minute, second, frame;
         auto success = absl::SimpleAtoi(timecode_tokens.at(0), &hour);
         THALAMUS_ASSERT(success, "Failed to parse hour");
         success = absl::SimpleAtoi(timecode_tokens.at(1), &minute);
@@ -803,32 +810,32 @@ public:
         _segments[3].position = _segments[2].position +
                                 _segments[2].rotation * _segments[3].position;
         for (auto i = 0; i < 4; ++i) {
-          _segments[4 + i * 4].rotation =
-              _segments[0].rotation * _segments[4 + i * 4].rotation;
-          _segments[4 + i * 4].position =
+          _segments[size_t(4 + i * 4)].rotation =
+              _segments[0].rotation * _segments[size_t(4 + i * 4)].rotation;
+          _segments[size_t(4 + i * 4)].position =
               _segments[0].position +
-              _segments[0].rotation * _segments[4 + i * 4].position;
+              _segments[0].rotation * _segments[size_t(4 + i * 4)].position;
           for (auto j = 1; j < 4; j++) {
-            _segments[4 + i * 4 + j].rotation =
-                _segments[4 + i * 4 + j - 1].rotation *
-                _segments[4 + i * 4 + j].rotation;
-            _segments[4 + i * 4 + j].position =
-                _segments[4 + i * 4 + j - 1].position +
-                _segments[4 + i * 4 + j - 1].rotation *
-                    _segments[4 + i * 4 + j].position;
+            _segments[size_t(4 + i * 4 + j)].rotation =
+                _segments[size_t(4 + i * 4 + j - 1)].rotation *
+                _segments[size_t(4 + i * 4 + j)].rotation;
+            _segments[size_t(4 + i * 4 + j)].position =
+                _segments[size_t(4 + i * 4 + j - 1)].position +
+                _segments[size_t(4 + i * 4 + j - 1)].rotation *
+                    _segments[size_t(4 + i * 4 + j)].position;
           }
         }
 
-        thumb_distance =
-            boost::qvm::mag(_segments[3].position - _segments[2].position);
-        index_distance =
-            boost::qvm::mag(_segments[7].position - _segments[5].position);
-        middle_distance =
-            boost::qvm::mag(_segments[11].position - _segments[9].position);
-        ring_distance =
-            boost::qvm::mag(_segments[15].position - _segments[13].position);
-        pinky_distance =
-            boost::qvm::mag(_segments[19].position - _segments[17].position);
+        thumb_distance = double(
+            boost::qvm::mag(_segments[3].position - _segments[2].position));
+        index_distance = double(
+            boost::qvm::mag(_segments[7].position - _segments[5].position));
+        middle_distance = double(
+            boost::qvm::mag(_segments[11].position - _segments[9].position));
+        ring_distance = double(
+            boost::qvm::mag(_segments[15].position - _segments[13].position));
+        pinky_distance = double(
+            boost::qvm::mag(_segments[19].position - _segments[17].position));
         //_segments.resize(4);
         _segment_span =
             std::span<Segment const>(_segments.begin(), _segments.end());
@@ -897,23 +904,25 @@ std::span<const double> HandEngineNode::data(int channel) const {
   }
 }
 
-static std::string THUMB_DISTANCE("Thumb Distance (m)");
-static std::string INDEX_DISTANCE("Index Distance (m)");
-static std::string MIDDLE_DISTANCE("Middle Distance (m)");
-static std::string RING_DISTANCE("Ring Distance (m)");
-static std::string PINKY_DISTANCE("Pinky Distance (m)");
-static thalamus::vector<std::string> CHANNEL_NAMES{
-    POSE_CHANGE,     THUMB_DISTANCE, INDEX_DISTANCE,
-    MIDDLE_DISTANCE, RING_DISTANCE,  PINKY_DISTANCE};
-
-int HandEngineNode::num_channels() const { return CHANNEL_NAMES.size(); }
+int HandEngineNode::num_channels() const { return 6; }
 
 std::string_view HandEngineNode::name(int channel) const {
-  return CHANNEL_NAMES.at(channel);
-}
-std::span<const std::string> HandEngineNode::get_recommended_channels() const {
-  return std::span<const std::string>(CHANNEL_NAMES.begin(),
-                                      CHANNEL_NAMES.end());
+  switch (channel) {
+  case 0:
+    return "Pose Change";
+  case 1:
+    return "Thumb Distance (m)";
+  case 2:
+    return "Index Distance (m)";
+  case 3:
+    return "Middle Distance (m)";
+  case 4:
+    return "Ring Distance (m)";
+  case 5:
+    return "Pinky Distance (m)";
+  default:
+    return "";
+  }
 }
 
 std::chrono::nanoseconds HandEngineNode::sample_interval(int) const {
