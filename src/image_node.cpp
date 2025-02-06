@@ -286,7 +286,8 @@ struct FfmpegNode::Impl {
         frame_pending = true;
         boost::asio::post(io_context, [&, now, frame_copy,
                                        framerate = double(frame_times.size()),
-                                       sleep_time_sec = 1e-9 * double(sleep_time.count()),
+                                       sleep_time_sec =
+                                           1e-9 * double(sleep_time.count()),
                                        new_frame_interval] {
           this->time = now.time_since_epoch();
           this->has_image = true;
@@ -299,7 +300,8 @@ struct FfmpegNode::Impl {
                   std::span<double const>(&framerate, &framerate + 1),
                   std::span<double const>(&sleep_time_sec, &sleep_time_sec + 1),
               },
-              {new_frame_interval, new_frame_interval, new_frame_interval}, {""});
+              {new_frame_interval, new_frame_interval, new_frame_interval},
+              {""});
 
           frame_pending = false;
         });
@@ -369,7 +371,7 @@ struct FfmpegNode::Impl {
               if (_data.empty()) {
                 return;
               }
- 
+
               stream_time = int(1000 * _data.front());
             });
           });
@@ -385,7 +387,9 @@ FfmpegNode::~FfmpegNode() {}
 
 std::string FfmpegNode::type_name() { return "FFMPEG"; }
 
-ImageNode::Plane FfmpegNode::plane(int i) const { return impl->data.at(size_t(i)); }
+ImageNode::Plane FfmpegNode::plane(int i) const {
+  return impl->data.at(size_t(i));
+}
 
 size_t FfmpegNode::num_planes() const { return impl->data.size(); }
 

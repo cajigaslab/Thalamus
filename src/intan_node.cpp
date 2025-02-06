@@ -1,9 +1,4 @@
-#include <absl/strings/str_split.h>
 #include <base_node.hpp>
-#include <boost/asio.hpp>
-#include <boost/endian/conversion.hpp>
-#include <boost/exception/diagnostic_information.hpp>
-#include <boost/signals2.hpp>
 #include <functional>
 #include <intan_node.hpp>
 #include <map>
@@ -14,6 +9,21 @@
 #include <thalamus/async.hpp>
 #include <vector>
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Weverything"
+#endif
+
+#include <absl/strings/str_split.h>
+#include <boost/asio.hpp>
+#include <boost/endian/conversion.hpp>
+#include <boost/exception/diagnostic_information.hpp>
+#include <boost/signals2.hpp>
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+
 using namespace thalamus;
 using namespace std::chrono_literals;
 using namespace std::placeholders;
@@ -22,7 +32,9 @@ struct IntanNode::Impl {
   template <typename T> struct VarGuard {
     T &var;
     T end;
-    VarGuard(T &var, T initial, T end) : var(var), end(end) { var = initial; }
+    VarGuard(T &_var, T initial, T _end) : var(_var), end(_end) {
+      var = initial;
+    }
     ~VarGuard() { var = end; }
   };
 
@@ -34,10 +46,10 @@ struct IntanNode::Impl {
     std::string name;
     bool reading = false;
     ObservableDictPtr state;
-    Socket(boost::asio::io_context &io_context, const std::string &name,
-           ObservableDictPtr state)
-        : io_context(io_context), socket(io_context), condition(io_context),
-          name(name), state(state) {}
+    Socket(boost::asio::io_context &_io_context, const std::string &_name,
+           ObservableDictPtr _state)
+        : io_context(_io_context), socket(_io_context), condition(_io_context),
+          name(_name), state(_state) {}
 
     std::string take() {
       auto result = stream.str();
@@ -88,9 +100,7 @@ struct IntanNode::Impl {
   size_t num_channels;
   size_t buffer_size;
   int frame = 0;
-  int channel = 0;
   size_t num_samples = 0;
-  unsigned int timestamp;
   std::chrono::nanoseconds time;
   std::chrono::nanoseconds sample_interval;
   std::vector<short> short_buffer;
@@ -105,7 +115,6 @@ struct IntanNode::Impl {
   long long command_port = 5000;
   long long waveform_port = 5001;
   unsigned char command_buffer[1024];
-  std::string sample_rate_response;
   unsigned char waveform_buffer[16384];
   IntanNode *outer;
   bool is_running = false;
@@ -113,11 +122,11 @@ struct IntanNode::Impl {
   bool getting_sample_rate = false;
 
 public:
-  Impl(ObservableDictPtr state, boost::asio::io_context &io_context,
-       NodeGraph *graph, IntanNode *outer)
-      : state(state), io_context(io_context), timer(io_context),
+  Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
+       NodeGraph *, IntanNode *_outer)
+      : state(_state), io_context(_io_context), timer(io_context),
         command_socket(io_context, "command", state),
-        waveform_socket(io_context), outer(outer),
+        waveform_socket(io_context), outer(_outer),
         connecting_condition(io_context) {
     state_connection =
         state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
@@ -156,8 +165,9 @@ public:
         if (!got_magic_number) {
           while (!got_magic_number && filled - offset >= 4) {
             auto pos = buffer + offset;
-            unsigned int magic =
-                pos[0] | pos[1] << 8 | pos[2] << 16 | pos[3] << 24;
+            unsigned int magic = uint32_t(pos[0]) | uint32_t(pos[1]) << 8 |
+                                 uint32_t(pos[2]) << 16 |
+                                 uint32_t(pos[3]) << 24;
             got_magic_number = magic == 0x2ef07a08;
             offset += got_magic_number ? 4 : 1;
             frame = 0;
@@ -168,7 +178,8 @@ public:
             if (filled - offset >= 4) {
               auto pos = buffer + offset;
               unsigned int timestamp =
-                  pos[0] | pos[1] << 8 | pos[2] << 16 | pos[3] << 24;
+                  uint32_t(pos[0]) | uint32_t(pos[1]) << 8 |
+                  uint32_t(pos[2]) << 16 | uint32_t(pos[3]) << 24;
               data[0].push_back(timestamp);
               offset += 4;
               ++channel;
@@ -177,11 +188,11 @@ public:
             }
           } else if (filled - offset >= 2) {
             auto pos = buffer + offset;
-            unsigned short sample = pos[0] | pos[1] << 8;
-            data[channel + 1].push_back(sample);
+            auto sample = uint16_t(pos[0] | pos[1] << 8);
+            data[size_t(channel + 1)].push_back(sample);
             offset += 2;
             ++channel;
-            if (channel == num_channels) {
+            if (size_t(channel) == num_channels) {
               channel = -1;
               ++frame;
               if (frame == 128) {
@@ -198,7 +209,7 @@ public:
         if (num_samples > 0) {
           outer->ready(outer);
           for (auto &d : data) {
-            d.erase(d.begin(), d.begin() + num_samples);
+            d.erase(d.begin(), d.begin() + int64_t(num_samples));
           }
         }
       }
@@ -371,7 +382,7 @@ public:
         boost::asio::const_buffer(command.data(), command.size()));
   }
 
-  void on_change(ObservableCollection::Action a,
+  void on_change(ObservableCollection::Action,
                  const ObservableCollection::Key &k,
                  const ObservableCollection::Value &v) {
     auto key_str = std::get<std::string>(k);
@@ -382,15 +393,15 @@ public:
     } else if (key_str == "Waveform Port") {
       waveform_port = std::get<long long>(v);
     } else if (key_str == "Connected") {
-      auto is_connected = std::get<bool>(v);
-      if (is_connected) {
+      auto new_is_connected = std::get<bool>(v);
+      if (new_is_connected) {
         boost::asio::co_spawn(io_context, do_connect(), boost::asio::detached);
       } else {
         disconnect();
       }
     } else if (key_str == "Running") {
-      auto is_running = std::get<bool>(v);
-      if (is_running) {
+      auto new_is_running = std::get<bool>(v);
+      if (new_is_running) {
         boost::asio::co_spawn(io_context, start_stream(),
                               boost::asio::detached);
       } else {
@@ -409,18 +420,18 @@ IntanNode::IntanNode(ObservableDictPtr state,
 IntanNode::~IntanNode() {}
 
 std::span<const double> IntanNode::data(int channel) const {
-  auto &data = impl->data[channel];
+  auto &data = impl->data[size_t(channel)];
   return std::span<const double>(data.begin(),
-                                 data.begin() + impl->num_samples);
+                                 data.begin() + int64_t(impl->num_samples));
 }
 
 std::string_view IntanNode::name(int channel) const {
-  return impl->names[channel];
+  return impl->names[size_t(channel)];
 }
 
-int IntanNode::num_channels() const { return impl->data.size(); }
+int IntanNode::num_channels() const { return int(impl->data.size()); }
 
-std::chrono::nanoseconds IntanNode::sample_interval(int i) const {
+std::chrono::nanoseconds IntanNode::sample_interval(int) const {
   return impl->sample_interval;
 }
 
@@ -428,9 +439,8 @@ std::chrono::nanoseconds IntanNode::time() const { return impl->time; }
 
 std::string IntanNode::type_name() { return "INTAN"; }
 
-void IntanNode::inject(
-    const thalamus::vector<std::span<double const>> &data,
-    const thalamus::vector<std::chrono::nanoseconds> &sample_intervals,
-    const thalamus::vector<std::string_view> &) {}
+void IntanNode::inject(const thalamus::vector<std::span<double const>> &,
+                       const thalamus::vector<std::chrono::nanoseconds> &,
+                       const thalamus::vector<std::string_view> &) {}
 
 size_t IntanNode::modalities() const { return THALAMUS_MODALITY_ANALOG; }

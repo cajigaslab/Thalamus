@@ -73,7 +73,7 @@ namespace thalamus {
       , state(_state)
       , outer(_outer)
       , graph(_graph)
-      , current_result(Result{0, 0, 0, cv::Mat(), false, false, 0ns})
+      , current_result(Result{0, 0, 0, cv::Mat(), false, false, 0ns, 0ns})
       , pool(graph->get_thread_pool()) {
       using namespace std::placeholders;
       state_connection = state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
