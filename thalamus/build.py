@@ -82,9 +82,13 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   is_release = 'release' in config_settings
   do_config = 'config' in config_settings
   clang = 'clang' in config_settings
+  force_cl = 'cl' in config_settings
   generator = config_settings.get('generator', 'Ninja')
   sanitizer = config_settings.get('sanitizer', None)
   target = config_settings.get('target', None)
+
+  if not clang and not force_cl and shutil.which('clang'):
+    clang = True
 
   legacy_path = pathlib.Path.cwd() / 'build' / f'{platform.python_implementation()}-{platform.python_version()}-{"release" if is_release else "debug"}'
   build_path = pathlib.Path.cwd() / 'build' / f'{"android-" if is_android else ""}{"clang-" if clang else ""}{"release" if is_release else "debug"}'

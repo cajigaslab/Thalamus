@@ -41,32 +41,31 @@ struct CoCondition {
     Finally f([&]() { waiters.erase(i); });
     waiter.timer.expires_after(timeout);
     do {
-      try {
-        co_await waiter.timer.async_wait();
-        co_return std::cv_status::timeout;
-      } catch (boost::system::system_error &e) {
-        if (e.code() != boost::asio::error::operation_aborted) {
-          throw e;
-        }
+      auto [e] = co_await waiter.timer.async_wait(boost::asio::as_tuple(boost::asio::use_awaitable));
+      if (e) {
+        THALAMUS_ASSERT(e == boost::asio::error::operation_aborted,
+                        "Wait error: %s", e.message());
+        continue;
       }
+      co_return std::cv_status::timeout;
     } while (condition && !condition());
 
     co_return std::cv_status::no_timeout;
   }
 
   boost::asio::awaitable<std::cv_status> wait() {
-    auto result = co_await wait({}, 24h);
+    std::cv_status result = co_await wait({}, 24h);
     co_return result;
   }
 
   template <std::invocable T>
   boost::asio::awaitable<std::cv_status> wait(T condition) {
-    auto result = co_await wait(condition, 24h);
+    std::cv_status result = co_await wait(condition, 24h);
     co_return result;
   }
 
   template <typename T> boost::asio::awaitable<std::cv_status> wait(T timeout) {
-    auto result = co_await wait({}, timeout);
+    std::cv_status result = co_await wait({}, timeout);
     co_return result;
   }
 };

@@ -185,7 +185,7 @@ int main(int argc, char **argv) {
   boost::asio::high_resolution_timer timer(io_context);
   std::function<void(const boost::system::error_code &)> poll_function =
       [&](const boost::system::error_code &error) {
-        BOOST_ASSERT_MSG(!error, "async_wait failed");
+        THALAMUS_ASSERT(!error, "async_wait failed");
         // QApplication::processEvents();
         timer.expires_after(32ms);
         timer.async_wait(poll_function);

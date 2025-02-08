@@ -296,5 +296,9 @@ if(APPLE)
   target_link_options(native PRIVATE -pagezero_size 10000 -image_base 7fff04c4a000)
 endif()
 
+if(NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
+  target_link_options(native PRIVATE -g)
+endif()
+
 add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "$<TARGET_FILE:native>" "${CMAKE_SOURCE_DIR}/thalamus")
 

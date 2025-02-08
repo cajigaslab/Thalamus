@@ -28,3 +28,4 @@ build
 meson
 ninja
 oslex
+psutil

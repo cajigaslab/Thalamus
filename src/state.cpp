@@ -683,7 +683,7 @@ ObservableCollection::to_string(const ObservableCollection::Value &value) {
         *thalamus::get<std::shared_ptr<ObservableList>>(value);
     return boost::json::serialize(result);
   }
-  BOOST_ASSERT_MSG(false, "Failed to convert value to string");
+  THALAMUS_ASSERT(false, "Failed to convert value to string");
   return "";
 }
 std::string
@@ -695,7 +695,7 @@ ObservableCollection::to_string(const ObservableCollection::Key &value) {
   } else if (std::holds_alternative<std::string>(value)) {
     return thalamus::get<std::string>(value);
   }
-  BOOST_ASSERT_MSG(false, "Failed to convert key to string");
+  THALAMUS_ASSERT(false, "Failed to convert key to string");
   return "";
 }
 
@@ -710,10 +710,10 @@ ObservableCollection::Value get_jsonpath(ObservableCollection::Value store,
       const auto &held = thalamus::get<ObservableListPtr>(current);
       size_t index;
       auto success = absl::SimpleAtoi(token, &index);
-      BOOST_ASSERT_MSG(success, "Failed to convert index into number");
+      THALAMUS_ASSERT(success, "Failed to convert index into number");
       current = held->at(index);
     } else {
-      BOOST_ASSERT_MSG(false,
+      THALAMUS_ASSERT(false,
                        "Attempted to index something that isn't a collection");
     }
   }
@@ -757,11 +757,11 @@ void set_jsonpath(ObservableCollection::Value store, const std::string &query,
     } else {
       size_t index;
       auto success = absl::SimpleAtoi(end, &index);
-      BOOST_ASSERT_MSG(success, "Failed to convert index into number");
+      THALAMUS_ASSERT(success, "Failed to convert index into number");
       while (held->size() < index) {
         held->push_back(ObservableCollection::Value(), nullptr, from_remote);
       }
-      BOOST_ASSERT_MSG(index <= held->size(),
+      THALAMUS_ASSERT(index <= held->size(),
                        "index must be less than or equal to array size");
       if (held->size() == index) {
         held->push_back(value, nullptr, from_remote);
@@ -770,7 +770,7 @@ void set_jsonpath(ObservableCollection::Value store, const std::string &query,
       }
     }
   } else {
-    BOOST_ASSERT_MSG(false,
+    THALAMUS_ASSERT(false,
                      "Attempted to index something that isn't a collection");
   }
 }
@@ -779,7 +779,7 @@ void delete_jsonpath(ObservableCollection::Value store,
                      const std::string &query, bool from_remote) {
   std::list<std::string> tokens =
       absl::StrSplit(query, absl::ByAnyChar("[].'\""), absl::SkipEmpty());
-  BOOST_ASSERT_MSG(!tokens.empty(), "Cant delete root");
+  THALAMUS_ASSERT(!tokens.empty(), "Cant delete root");
   ObservableCollection::Value current = store;
   std::string end = tokens.back();
   tokens.pop_back();
@@ -792,10 +792,10 @@ void delete_jsonpath(ObservableCollection::Value store,
     auto held = thalamus::get<ObservableListPtr>(current);
     size_t index;
     auto success = absl::SimpleAtoi(end, &index);
-    BOOST_ASSERT_MSG(success, "Failed to convert index into number");
+    THALAMUS_ASSERT(success, "Failed to convert index into number");
     held->erase(index, [](auto) {}, from_remote);
   } else {
-    BOOST_ASSERT_MSG(false,
+    THALAMUS_ASSERT(false,
                      "Attempted to index something that isn't a collection");
   }
 }

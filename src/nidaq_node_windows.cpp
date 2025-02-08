@@ -392,7 +392,7 @@ struct NidaqNode::Impl {
         std::function<void()> reader;
 
         auto daq_error = daqmxapi->DAQmxCreateTask(name.c_str(), &task_handle);
-        BOOST_ASSERT_MSG(daq_error >= 0, "DAQmxCreateTask failed");
+        THALAMUS_ASSERT(daq_error >= 0, "DAQmxCreateTask failed");
 
         daq_error = daqmxapi->DAQmxCreateAIVoltageChan(
             task_handle, channel.c_str(), channel_name.c_str(),
@@ -404,17 +404,17 @@ struct NidaqNode::Impl {
         daq_error = daqmxapi->DAQmxCfgSampClkTiming(
             task_handle, nullptr, sample_rate, DAQmx_Val_Rising,
             DAQmx_Val_ContSamps, buffer_size);
-        BOOST_ASSERT_MSG(daq_error >= 0, "DAQmxCfgSampClkTiming failed");
+        THALAMUS_ASSERT(daq_error >= 0, "DAQmxCfgSampClkTiming failed");
 
         daq_error = daqmxapi->DAQmxRegisterEveryNSamplesEvent(
             task_handle, DAQmx_Val_Acquired_Into_Buffer,
             uint32_t(_every_n_samples), 0, NidaqCallback,
             new std::weak_ptr<Node>(outer->weak_from_this()));
-        BOOST_ASSERT_MSG(daq_error >= 0, "DAQmxCfgSampClkTiming failed");
+        THALAMUS_ASSERT(daq_error >= 0, "DAQmxCfgSampClkTiming failed");
 
         daq_error = daqmxapi->DAQmxSetBufInputBufSize(task_handle,
                                                       uint32_t(buffer_size));
-        BOOST_ASSERT_MSG(daq_error >= 0, "DAQmxSetBufInputBufSize failed");
+        THALAMUS_ASSERT(daq_error >= 0, "DAQmxSetBufInputBufSize failed");
 
         daq_error = daqmxapi->DAQmxStartTask(task_handle);
         if (daq_error == DAQmxErrorPALResourceReserved) {
@@ -430,7 +430,7 @@ struct NidaqNode::Impl {
           task_handle = nullptr;
           return;
         }
-        BOOST_ASSERT_MSG(daq_error >= 0, "DAQmxStartTask failed");
+        THALAMUS_ASSERT(daq_error >= 0, "DAQmxStartTask failed");
         _time = 0ns;
         outer->channels_changed(outer);
 
@@ -794,11 +794,11 @@ struct NidaqOutputNode::Impl {
 
         // daq_error = DAQmxCfgSampClkTiming(task_handle, "", 1000,
         // DAQmx_Val_Rising, DAQmx_Val_ContSamps, max_level);
-        // BOOST_ASSERT_MSG(daq_error >= 0, "DAQmxCfgSampClkTiming failed");
+        // THALAMUS_ASSERT(daq_error >= 0, "DAQmxCfgSampClkTiming failed");
         //
         // daq_error = DAQmxRegisterEveryNSamplesEvent(task_handle,
         // DAQmx_Val_Transferred_From_Buffer, buffer_size, 0,
-        // Impl::DoneCallbackWrapper, this); BOOST_ASSERT_MSG(daq_error >= 0,
+        // Impl::DoneCallbackWrapper, this); THALAMUS_ASSERT(daq_error >= 0,
         // "DAQmxRegisterEveryNSamplesEvent failed");
 
         // if (reader) {

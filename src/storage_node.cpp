@@ -601,7 +601,6 @@ struct StorageNode::Impl {
                         src_data[p] + y * uint32_t(src_linesize[p]));
           }
         }
-        frame->pts = pts++;
 
         if (pts > 0 && src_format == AV_PIX_FMT_GRAY8) {
           dst_data[0] = src_data[0];
@@ -612,6 +611,8 @@ struct StorageNode::Impl {
         std::copy(std::begin(dst_data), std::end(dst_data), frame->data);
         std::copy(std::begin(dst_linesize), std::end(dst_linesize),
                   frame->linesize);
+
+        frame->pts = pts++;
 
         ret = avcodec_send_frame(context, frame);
         THALAMUS_ASSERT(ret >= 0, "Error sending a frame for encoding");

@@ -77,10 +77,10 @@ H5Handle createH5ReceivedEvent() {
   BOOST_ASSERT(received_type);
   auto h5_status = H5Tinsert(received_type, "time",
                              HOFFSET(ReceivedEvent, time), H5T_NATIVE_UINT64);
-  BOOST_ASSERT_MSG(h5_status >= 0, "Failed to create ReceivedEvent.time");
+  THALAMUS_ASSERT(h5_status >= 0, "Failed to create ReceivedEvent.time");
   h5_status = H5Tinsert(received_type, "index", HOFFSET(ReceivedEvent, index),
                         H5T_NATIVE_UINT64);
-  BOOST_ASSERT_MSG(h5_status >= 0, "Failed to create ReceivedEvent.index");
+  THALAMUS_ASSERT(h5_status >= 0, "Failed to create ReceivedEvent.index");
 
   return received_type;
 }
@@ -93,15 +93,15 @@ H5Handle createH5Segment() {
   BOOST_ASSERT(position_type);
   auto h5_status =
       H5Tinsert(position_type, "x", HOFFSET(vecf3, a[0]), H5T_NATIVE_FLOAT);
-  BOOST_ASSERT_MSG(h5_status >= 0,
+  THALAMUS_ASSERT(h5_status >= 0,
                    "Failed to create boost::qvm::vec<float, 3>.x");
   h5_status =
       H5Tinsert(position_type, "y", HOFFSET(vecf3, a[1]), H5T_NATIVE_FLOAT);
-  BOOST_ASSERT_MSG(h5_status >= 0,
+  THALAMUS_ASSERT(h5_status >= 0,
                    "Failed to create boost::qvm::vec<float, 3>.y");
   h5_status =
       H5Tinsert(position_type, "z", HOFFSET(vecf3, a[2]), H5T_NATIVE_FLOAT);
-  BOOST_ASSERT_MSG(h5_status >= 0,
+  THALAMUS_ASSERT(h5_status >= 0,
                    "Failed to create boost::qvm::vec<float, 3>.z");
 
   H5Handle rotation_type =
@@ -110,22 +110,22 @@ H5Handle createH5Segment() {
   h5_status =
       H5Tinsert(rotation_type, "q0", HOFFSET(boost::qvm::quat<float>, a[0]),
                 H5T_NATIVE_FLOAT);
-  BOOST_ASSERT_MSG(h5_status >= 0,
+  THALAMUS_ASSERT(h5_status >= 0,
                    "Failed to create boost::qvm::quat<float>.s");
   h5_status =
       H5Tinsert(rotation_type, "q1", HOFFSET(boost::qvm::quat<float>, a[1]),
                 H5T_NATIVE_FLOAT);
-  BOOST_ASSERT_MSG(h5_status >= 0,
+  THALAMUS_ASSERT(h5_status >= 0,
                    "Failed to create boost::qvm::quat<float>.x");
   h5_status =
       H5Tinsert(rotation_type, "q2", HOFFSET(boost::qvm::quat<float>, a[2]),
                 H5T_NATIVE_FLOAT);
-  BOOST_ASSERT_MSG(h5_status >= 0,
+  THALAMUS_ASSERT(h5_status >= 0,
                    "Failed to create boost::qvm::quat<float>.y");
   h5_status =
       H5Tinsert(rotation_type, "q3", HOFFSET(boost::qvm::quat<float>, a[3]),
                 H5T_NATIVE_FLOAT);
-  BOOST_ASSERT_MSG(h5_status >= 0,
+  THALAMUS_ASSERT(h5_status >= 0,
                    "Failed to create boost::qvm::quat<float>.z");
 
   H5Handle segment_type =
@@ -134,22 +134,22 @@ H5Handle createH5Segment() {
   h5_status =
       H5Tinsert(segment_type, "frame",
                 HOFFSET(MotionCaptureNode::Segment, frame), H5T_NATIVE_UINT32);
-  BOOST_ASSERT_MSG(h5_status >= 0,
+  THALAMUS_ASSERT(h5_status >= 0,
                    "Failed to create MotionCapture::Segment.frame");
   h5_status = H5Tinsert(segment_type, "segment_id",
                         HOFFSET(MotionCaptureNode::Segment, segment_id),
                         H5T_NATIVE_UINT32);
-  BOOST_ASSERT_MSG(h5_status >= 0,
+  THALAMUS_ASSERT(h5_status >= 0,
                    "Failed to create MotionCapture::Segment.segment_id");
   h5_status =
       H5Tinsert(segment_type, "position",
                 HOFFSET(MotionCaptureNode::Segment, position), position_type);
-  BOOST_ASSERT_MSG(h5_status >= 0,
+  THALAMUS_ASSERT(h5_status >= 0,
                    "Failed to create MotionCapture::Segment.position");
   h5_status =
       H5Tinsert(segment_type, "rotation",
                 HOFFSET(MotionCaptureNode::Segment, rotation), rotation_type);
-  BOOST_ASSERT_MSG(h5_status >= 0,
+  THALAMUS_ASSERT(h5_status >= 0,
                    "Failed to create MotionCapture::Segment.rotation");
 
   return segment_type;

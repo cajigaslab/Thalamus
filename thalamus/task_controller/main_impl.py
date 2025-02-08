@@ -195,7 +195,9 @@ async def async_main() -> None:
   thalamus.show()
 
   async def native_watch():
+    print('native.exe waiting')
     await bmbi_native_proc.wait()
+    print('native.exe closed')
     if not done_future.done:
       done_future.set_result(None)
 

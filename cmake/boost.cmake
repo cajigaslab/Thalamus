@@ -41,6 +41,7 @@ if(WIN32)
     set(BOOST_VC_TOOLSET clangw${BOOST_MAJOR_COMPILER_VERSION})
     set(BOOST_TOOLSET toolset=clang-win)
   else()
+    execute_process(COMMAND cmd /c call bootstrap.bat WORKING_DIRECTORY "${boost_content_SOURCE_DIR}" OUTPUT_VARIABLE BOOTSTRAP_STDOUT)
     string(REGEX MATCH "### Using 'vc[0-9]+' toolset" VC_TOOLSET_LINE "${BOOTSTRAP_STDOUT}")
     string(REGEX MATCH "vc[0-9]+" VC_TOOLSET_MATCH "${VC_TOOLSET_LINE}")
     set(BOOST_VC_TOOLSET ${VC_TOOLSET_MATCH})
@@ -66,7 +67,7 @@ if(WIN32)
     COMMAND b2 
     ${BOOST_TOOLSET}
     "${BOOST_CFLAGS}" 
-    "cxxflags=${BOOST_ALL_COMPILE_OPTIONS_SPACED} -DBOOST_ASIO_HAS_STD_INVOKE_RESULT -D_WIN32_WINNT=0x0A00 -D_DEBUG"
+    "cxxflags=${BOOST_ALL_COMPILE_OPTIONS_SPACED} -DBOOST_ASIO_HAS_STD_INVOKE_RESULT -D_WIN32_WINNT=0x0A00"
     "linkflags=${ALL_LINK_OPTIONS_SPACED}"
     "--build-dir=${boost_content_BINARY_DIR}"
     --abbreviate-paths 

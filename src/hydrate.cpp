@@ -54,6 +54,7 @@ extern "C" {
 using namespace std::chrono_literals;
 
 namespace hydrate {
+char hydrate_av_error[AV_ERROR_MAX_STRING_SIZE];
 struct RecordReader {
   std::istream &stream;
   double progress = 0;
@@ -186,8 +187,8 @@ struct RecordReader {
         }
       } else {
         ret = avcodec_send_packet(context, nullptr);
-        THALAMUS_ASSERT(ret >= 0, "avcodec_send_packet failed %s",
-                        av_err2str(ret));
+        av_strerror(ret, hydrate_av_error, sizeof(hydrate_av_error));
+        THALAMUS_ASSERT(ret >= 0, "avcodec_send_packet failed %s", hydrate_av_error);
       }
       while (ret >= 0) {
         ret = avcodec_receive_frame(context, frame);
