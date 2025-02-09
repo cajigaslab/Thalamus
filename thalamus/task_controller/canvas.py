@@ -41,7 +41,7 @@ import grpc
 LOGGER = logging.getLogger(__name__)
 
 VOLTAGE_RANGE = -10, 10
-POINT_SIZE = 20
+POINT_SIZE = 10
 
 def load_transform(config: ObservableDict) -> QTransform:
   '''

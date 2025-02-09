@@ -290,7 +290,7 @@ target_compile_definitions(native PRIVATE _GNU_SOURCE)
 
 target_compile_options(native PRIVATE ${WARNING_FLAGS})
 target_include_directories(native PRIVATE "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(native PRIVATE thalamus hydrate thalamus_ffmpeg ffmpeg sdl protoc_generated lua cairo)
+target_link_libraries(native PRIVATE hydrate thalamus opencv thalamus_ffmpeg ffmpeg sdl protoc_generated lua cairo)
 
 if(APPLE)
   target_link_options(native PRIVATE -pagezero_size 10000 -image_base 7fff04c4a000)

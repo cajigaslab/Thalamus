@@ -54,9 +54,9 @@ else()
                   opencv_features2d
                   opencv_highgui
                   opencv_videoio
+                  opencv_objdetect
                   opencv_imgcodecs
                   opencv_imgproc
-                  opencv_objdetect
                   opencv_core)
   set(OPENCV_THIRDPARTY_LIBS libjpeg-turbo libpng libtiff libopenjp2 IlmImf ittnotify quirc)
   if(APPLE)
@@ -127,18 +127,13 @@ if(WIN32)
 elseif(APPLE)
   set(OPENCV_INCLUDE "${opencv_BINARY_DIR}/$<CONFIG>/install/include/opencv4")
 
-  foreach(LIB ${OPENCV_LIB_FILES})
-    target_link_options(opencv INTERFACE -Wl,-force_load ${LIB})
-  endforeach()
-
-  target_link_libraries(opencv INTERFACE lzma iconv
+  target_link_libraries(opencv INTERFACE ${OPENCV_LIB_FILES} lzma iconv
     "-framework VideoToolbox" "-framework AudioToolbox" "-framework CoreVideo"
     "-framework CoreFoundation" "-framework CoreMedia" "-framework OpenCL"
     "-framework Accelerate" "-framework AVFoundation"
     dl)
 else()
   set(OPENCV_INCLUDE "${opencv_BINARY_DIR}/$<CONFIG>/install/include/opencv4")
-  target_link_options(opencv INTERFACE -Wl,--whole-archive ${OPENCV_LIB_FILES} -Wl,--no-whole-archive)
-  target_link_libraries(opencv INTERFACE dl)
+  target_link_libraries(opencv INTERFACE ${OPENCV_LIB_FILES} dl)
 endif()
 target_include_directories(opencv INTERFACE "${OPENCV_INCLUDE}")
