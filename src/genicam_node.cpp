@@ -2328,9 +2328,9 @@ struct GenicamNode::Impl {
 
     this->time = now.time_since_epoch();
     this->data.clear();
-    this->data.emplace_back(frame_data, frame_data + width * height);
     this->width = size_t(frame_width);
     this->height = size_t(frame_height);
+    this->data.emplace_back(frame_data, frame_data + width * height);
     this->has_image = true;
     this->has_analog = true;
     TRACE_EVENT("thalamus", "GenicamNode::on_frame_ready");

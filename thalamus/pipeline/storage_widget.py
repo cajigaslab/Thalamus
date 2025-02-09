@@ -71,11 +71,12 @@ class StorageWidget(QWidget):
           minutes = elapsed // 60
           hours = elapsed // 3600
           status.setText(f'RUNNING rec={rec:0>3} {hours:0>2}:{minutes:0>2}:{seconds:0>2}')
-          async with condition:
-            try:
-              await asyncio.wait_for(condition.wait(), timeout=1)
-            except TimeoutError:
-              pass
+          await asyncio.sleep(1)
+          #async with condition:
+          #  try:
+          #    await asyncio.wait_for(condition.wait(), timeout=1)
+          #  except TimeoutError:
+          #    pass
       except asyncio.CancelledError:
         pass
 

@@ -61,7 +61,7 @@ static int get_rec_number(const std::filesystem::path &name,
   inja::json tdata = _tdata;
   const auto start_time = absl::FromChrono(time);
   auto start_time_str =
-      absl::FormatTime("%Y%m%d%H%M%S", start_time, absl::LocalTimeZone());
+      absl::FormatTime("%Y%m%d", start_time, absl::LocalTimeZone());
   auto i = 0;
   std::filesystem::path filename;
   do {
@@ -382,7 +382,7 @@ struct StorageNode::Impl {
 
     const auto absl_time = absl::FromChrono(time);
     auto start_time_str =
-        absl::FormatTime("%Y%m%d%H%M%S", absl_time, absl::LocalTimeZone());
+        absl::FormatTime("%Y%m%d", absl_time, absl::LocalTimeZone());
     rendered =
         absl::StrFormat("%s.%s.%d", rendered, start_time_str, rec_number);
     std::filesystem::path rendered_path(rendered);
@@ -1130,7 +1130,7 @@ StorageNode::get_next_file(const std::filesystem::path &name,
 
   const auto start_time = absl::FromChrono(time);
   auto start_time_str =
-      absl::FormatTime("%Y%m%d%H%M%S", start_time, absl::LocalTimeZone());
+      absl::FormatTime("%Y%m%d", start_time, absl::LocalTimeZone());
   auto filename =
       absl::StrFormat("%s.%s.%d", name.string(), start_time_str, rec);
   return filename;
