@@ -147,7 +147,7 @@ message("PROTO_GENERATED_SOURCES ${PROTO_GENERATED_SOURCES}")
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   set(WARNING_FLAGS 
     -Weverything -Wno-deprecated-declarations -Wno-c11-extensions -Wno-gcc-compat -Wno-c++98-compat-pedantic
-    -Wno-c++20-compat -Wno-unsafe-buffer-usage -Wno-switch-default -Wno-c99-extensions)
+    -Wno-c++20-compat -Wno-unsafe-buffer-usage -Wno-switch-default -Wno-c99-extensions -Wno-missing-template-arg-list-after-template-kw)
 else()
   #set(WARNING_FLAGS /Wall)
   set(WARNING_FLAGS)

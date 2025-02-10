@@ -359,6 +359,13 @@ struct RemoteNode::Impl {
             channels_changed = true;
           }
 
+          for (auto z = 0; z < analog_response.sample_intervals_size() && z + 2 < sample_intervals.size(); ++z) {
+            if (analog_response.sample_intervals(z) != sample_intervals[z + 2].count()) {
+              channels_changed = true;
+              break;
+            }
+          }
+
           time = std::chrono::steady_clock::now().time_since_epoch();
           remote_time = std::chrono::nanoseconds(analog_response.time());
           data.assign(analog_response.data().begin(),

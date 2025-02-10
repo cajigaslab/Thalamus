@@ -153,7 +153,8 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     if clang:
       cmake_command += [
         '-DCMAKE_C_COMPILER=clang',
-        '-DCMAKE_CXX_COMPILER=clang']
+        '-DCMAKE_CXX_COMPILER=clang++',
+        '-DCMAKE_LINKER=clang']
     else:
       cmake_command += [
         '-DCMAKE_C_COMPILER=cl',
