@@ -281,6 +281,10 @@ struct Service::Impl {
       using signal_type = decltype(raw_node->ready);
       auto connection =
           raw_node->ready.connect(signal_type::slot_type([&](const Node *) {
+            if (!node->has_analog_data()) {
+              return;
+            }
+            
             TRACE_EVENT("thalamus", "Service::analog(on ready)");
             std::lock_guard<std::mutex> lock(connection_mutex);
             ::thalamus_grpc::AnalogResponse response;
