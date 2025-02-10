@@ -25,6 +25,10 @@
 #endif
 
 namespace thalamus {
+
+MotionCaptureNode::~MotionCaptureNode() {}
+bool MotionCaptureNode::has_motion_data() const { return true; }
+
 class RateTracker {
   std::vector<std::chrono::nanoseconds> heap;
   std::chrono::nanoseconds last_now;

@@ -22,12 +22,12 @@ public:
     static const size_t serialized_size;
     static Segment parse(unsigned char *data);
   };
-  virtual ~MotionCaptureNode() {}
+  virtual ~MotionCaptureNode();
   virtual std::span<Segment const> segments() const = 0;
   virtual const std::string_view pose_name() const = 0;
   virtual std::chrono::nanoseconds time() const = 0;
   virtual void inject(const std::span<Segment const> &segments) = 0;
-  virtual bool has_motion_data() const { return true; }
+  virtual bool has_motion_data() const;
 };
 
 class XsensNode : public Node, public MotionCaptureNode, public AnalogNode {

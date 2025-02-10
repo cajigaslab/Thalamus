@@ -4,7 +4,6 @@ import io
 import ssl
 import sys
 import time
-import psutil
 import shutil
 import tarfile
 import zipfile

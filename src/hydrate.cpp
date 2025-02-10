@@ -839,7 +839,7 @@ int generate_video(boost::program_options::variables_map &vm) {
   if (vm.count("output")) {
     output = vm["output"].as<std::string>();
   } else {
-    output = input + "_" + video + ".mpg";
+    output = input + "_" + video + ".mkv";
   }
 
   unsigned int width = 0;
@@ -951,112 +951,10 @@ int generate_video(boost::program_options::variables_map &vm) {
   success = absl::SimpleAtoi(tokens[1], &time_base.num);
   THALAMUS_ASSERT(success, "SimpleAtoi failed %s", tokens[1]);
 
-  if (!video_format.empty()) {
-    AVFormatContext *context;
-    auto ret = avformat_alloc_output_context2(&context, nullptr, nullptr,
-                                              output.c_str());
-    THALAMUS_ASSERT(ret >= 0, "avformat_alloc_output_context2 failed %d", ret);
-
-    context->start_time = 0;
-
-    const AVCodec *codec;
-    if (video_format == "mpeg4video") {
-      codec = avcodec_find_decoder(AV_CODEC_ID_MPEG4);
-    } else {
-      codec = avcodec_find_decoder(AV_CODEC_ID_MPEG1VIDEO);
-    }
-    THALAMUS_ASSERT(codec, "avcodec_find_encoder failed");
-    auto codec_context = avcodec_alloc_context3(codec);
-    THALAMUS_ASSERT(context, "avcodec_alloc_context3 failed");
-    codec_context->width = int(width);
-    codec_context->height = int(height);
-    codec_context->framerate = {time_base.den, time_base.num};
-    codec_context->time_base = time_base;
-    codec_context->pix_fmt = AV_PIX_FMT_YUV420P;
-
-    auto stream = avformat_new_stream(context, nullptr);
-    THALAMUS_ASSERT(stream, "avformat_new_stream failed %d", ret);
-    stream->id = 0;
-    stream->time_base = time_base;
-    stream->r_frame_rate = codec_context->framerate;
-    stream->avg_frame_rate = codec_context->framerate;
-    stream->start_time = 0;
-    stream->duration = int(times.size());
-    stream->nb_frames = int(times.size());
-
-    ret = avcodec_parameters_from_context(stream->codecpar, codec_context);
-    THALAMUS_ASSERT(ret >= 0, "avcodec_parameters_from_context failed");
-
-    auto side_data =
-        static_cast<AVCPBProperties *>(av_malloc(sizeof(AVCPBProperties)));
-    side_data->buffer_size = 8 * 1024 * 1024;
-    auto sd_result = av_packet_side_data_add(
-        &stream->codecpar->coded_side_data,
-        &stream->codecpar->nb_coded_side_data, AV_PKT_DATA_CPB_PROPERTIES,
-        side_data, sizeof(AVCPBProperties *), 0);
-    THALAMUS_ASSERT(sd_result, "av_packet_side_data_add");
-
-    avcodec_free_context(&codec_context);
-
-    ret = avio_open(&context->pb, output.c_str(), AVIO_FLAG_WRITE);
-    THALAMUS_ASSERT(ret >= 0, "avio_open failed %d", ret);
-
-    AVDictionary *opt = nullptr;
-    ret = avformat_write_header(context, &opt);
-    THALAMUS_ASSERT(ret >= 0, "avformat_write_header failed %d", ret);
-
-    auto pts = 0;
-    auto dts = 0;
-    auto timebase_double = double(time_base.num) / double(time_base.den);
-    auto new_timebase_double =
-        double(stream->time_base.num) / double(stream->time_base.den);
-    auto scale = timebase_double / new_timebase_double;
-    stream->duration = int(double(stream->duration) * scale);
-
-    auto packet = av_packet_alloc();
-    THALAMUS_ASSERT(packet, "av_packet_alloc failed %d", ret);
-    packet->duration = int(scale);
-    packet->stream_index = 0;
-    packet->time_base = stream->time_base;
-
-    std::ifstream input_stream(input, std::ios::binary);
-    std::optional<thalamus_grpc::StorageRecord> record;
-    RecordReader reader(input_stream, false);
-    while ((record = reader.read_record())) {
-      if (record->body_case() == thalamus_grpc::StorageRecord::kImage &&
-          record->node() == video) {
-        auto &image = record->image();
-        if (image.data_size() == 0) {
-          continue;
-        }
-        packet->pts = int(scale * pts);
-        packet->dts = int(scale * dts);
-
-        width = image.width();
-        height = image.height();
-        packet->data = const_cast<unsigned char *>(
-            reinterpret_cast<const unsigned char *>(image.data(0).data()));
-        packet->size = int(image.data(0).size());
-        ret = av_write_frame(context, packet);
-        THALAMUS_ASSERT(ret >= 0, "av_write_frame failed %d", ret);
-        ++pts;
-        ++dts;
-      }
-    }
-
-    av_write_trailer(context);
-    avio_closep(&context->pb);
-    av_packet_free(&packet);
-    avformat_free_context(context);
-
-    return 0;
-  }
-
   auto location = boost::dll::program_location();
   std::string command;
   if (!video_format.empty()) {
-    command = absl::StrFormat("%s ffmpeg -y -f mpeg1video -i pipe: "
-                              "-codec mpeg1video -f matroska \"%s\"",
+    command = absl::StrFormat("%s ffmpeg -y -i pipe: -c:v copy \"%s\"",
                               location.string(), output);
   } else {
     command = absl::StrFormat(

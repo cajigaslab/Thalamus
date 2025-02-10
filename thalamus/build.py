@@ -87,17 +87,23 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   sanitizer = config_settings.get('sanitizer', None)
   target = config_settings.get('target', None)
 
-  if not clang and not force_cl and shutil.which('clang'):
+  def get_build_path():
+    legacy_path = pathlib.Path.cwd() / 'build' / f'{platform.python_implementation()}-{platform.python_version()}-{"release" if is_release else "debug"}'
+    build_path = pathlib.Path.cwd() / 'build' / f'{"android-" if is_android else ""}{"clang-" if clang else ""}{"release" if is_release else "debug"}'
+    if sanitizer:
+      legacy_path = legacy_path.with_name(legacy_path.name + '-' + sanitizer)
+      build_path = build_path.with_name(build_path.name + '-' + sanitizer)
+
+    if legacy_path.exists():
+      build_path = legacy_path
+
+    return build_path
+
+  build_path = get_build_path()
+
+  if not clang and not force_cl and shutil.which('clang') and not build_path.exists():
     clang = True
-
-  legacy_path = pathlib.Path.cwd() / 'build' / f'{platform.python_implementation()}-{platform.python_version()}-{"release" if is_release else "debug"}'
-  build_path = pathlib.Path.cwd() / 'build' / f'{"android-" if is_android else ""}{"clang-" if clang else ""}{"release" if is_release else "debug"}'
-  if sanitizer:
-    legacy_path = legacy_path.with_name(legacy_path.name + '-' + sanitizer)
-    build_path = build_path.with_name(build_path.name + '-' + sanitizer)
-
-  if legacy_path.exists():
-    build_path = legacy_path
+    build_path = get_build_path()
 
   config = toml.load('pyproject.toml')
   metadata = config['metadata']

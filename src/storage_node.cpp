@@ -499,7 +499,7 @@ struct StorageNode::Impl {
     VideoEncoder(int width, int height, AVPixelFormat format,
                  AVRational framerate, const std::string &_node)
         : node(_node), src_format(format) {
-      codec = avcodec_find_encoder(AV_CODEC_ID_MPEG1VIDEO);
+      codec = avcodec_find_encoder(AV_CODEC_ID_MPEG4);
       THALAMUS_ASSERT(codec, "avcodec_find_encoder failed");
       context = avcodec_alloc_context3(codec);
       THALAMUS_ASSERT(context, "avcodec_alloc_context3 failed");
@@ -553,7 +553,7 @@ struct StorageNode::Impl {
         compressed_image->set_width(image.width());
         compressed_image->set_height(image.height());
         compressed_image->set_format(
-            thalamus_grpc::Image::Format::Image_Format_MPEG1);
+            thalamus_grpc::Image::Format::Image_Format_MPEG4);
         compressed_image->set_frame_interval(image.frame_interval());
         compressed_image->set_last(image.last());
         compressed_image->set_bigendian(image.bigendian());
@@ -644,7 +644,7 @@ struct StorageNode::Impl {
       auto compressed_image = compressed_record.mutable_image();
       compressed_record.set_node(node);
       compressed_image->set_format(
-          thalamus_grpc::Image::Format::Image_Format_MPEG1);
+          thalamus_grpc::Image::Format::Image_Format_MPEG4);
 
       auto ret = avcodec_send_frame(context, nullptr);
       THALAMUS_ASSERT(ret >= 0, "Error sending a frame for encoding");
