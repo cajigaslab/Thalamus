@@ -26,6 +26,7 @@
 #include <thread_pool.hpp>
 #include <touchscreen_node.hpp>
 #include <video_node.hpp>
+#include <test_pulse_node.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -137,6 +138,7 @@ public:
         {"SYNC", new NodeFactory<SyncNode>()},
         {"TOUCH_SCREEN", new NodeFactory<TouchScreenNode>()},
         {"STIM_PRINTER", new NodeFactory<StimPrinterNode>()},
+        {"TEST_PULSE_NODE", new NodeFactory<TestPulseNode>()},
         //{"HEXASCOPE", new NodeFactory<HexascopeNode>()},
         {"ARUCO", new NodeFactory<ArucoNode>()}};
 
