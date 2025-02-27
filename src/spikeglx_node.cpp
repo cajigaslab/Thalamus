@@ -414,6 +414,7 @@ struct SpikeGlxNode::Impl {
 
   std::vector<std::string> imec_subsets;
   bool streaming = false;
+  bool do_stream = false;
 
   size_t spike_glx_version;
 
@@ -538,6 +539,14 @@ struct SpikeGlxNode::Impl {
       co_await co_query("SETRECORDENAB 1");
 
       boost::asio::steady_timer poll_timer(io_context);
+
+      if(!do_stream) {
+        while(streaming) {
+          poll_timer.expires_after(1s);
+          co_await poll_timer.async_wait();
+        }
+        co_return;
+      }
       while (streaming) {
         auto start_time = std::chrono::steady_clock::now();
         for (auto &pair : inputs) {
@@ -761,6 +770,8 @@ struct SpikeGlxNode::Impl {
       } else {
         disconnect();
       }
+    } else if (key_str == "Stream") {
+      do_stream = std::get<bool>(v);
     } else if (key_str == "Running") {
       auto is_running = std::get<bool>(v);
       if (is_running) {

@@ -318,6 +318,8 @@ struct OculomaticNode::Impl {
                      cv::Point(static_cast<int>(center.first),
                                static_cast<int>(center.second)),
                      10, cv::Scalar(0, 0, 255), -1);
+          cv::drawMarker(*out, cv::Point(static_cast<int>(this_centering_pix.first), static_cast<int>(this_centering_pix.second)),
+                     cv::Scalar(0, 255, 0), cv::MARKER_CROSS, 20, 3);
         }
       } else {
         gaze = std::make_pair(1e6, 1e6);

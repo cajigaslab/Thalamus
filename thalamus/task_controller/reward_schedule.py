@@ -10,10 +10,15 @@ from ..qt import *
 import matplotlib
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg # type: ignore
 from matplotlib.figure import Figure # type: ignore
+from matplotlib import pyplot
 
 from ..config import ObservableCollection
 
 matplotlib.use('Qt5Agg')
+
+COLORS = [
+  QColor(int(c[0]*255), int(c[1]*255), int(c[2]*255)) for c in pyplot.get_cmap('tab10').colors
+]
 
 class RewardSchedule(QWidget): # type: ignore
   '''
@@ -74,7 +79,7 @@ class RewardSchedule(QWidget): # type: ignore
     vertical_scale = (self.height() - 2*metrics.height())/(self.range[1] - self.range[0])
     painter.translate(metrics.height(), self.height() + self.range[0]*vertical_scale - metrics.height())
     painter.scale((self.width() - 2*metrics.height())/self.length, -vertical_scale)
-    for path, color in zip(self.paths, [Qt.GlobalColor.blue, Qt.GlobalColor.red, Qt.GlobalColor.green]):
+    for path, color in zip(self.paths, COLORS):
       pen.setColor(color)
       painter.setPen(pen)
       painter.drawPath(path)
