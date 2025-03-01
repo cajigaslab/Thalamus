@@ -298,6 +298,20 @@ struct NidaqNode::Impl {
 
   char error_message[1024];
 
+  static void assert_nidaq(int daq_error, const char* func) {
+    if(daq_error >= 0) {
+      return;
+    }
+
+    char error_message[1024];
+
+    daqmxapi->DAQmxGetExtendedErrorInfo(error_message, sizeof(error_message));
+    THALAMUS_LOG(error) << error_message;
+    daqmxapi->DAQmxGetErrorString(daq_error, error_message, sizeof(error_message));
+    THALAMUS_LOG(error) << error_message;
+    THALAMUS_ASSERT(false, "%s failed", func);
+  }
+
   static int32 CVICALLBACK NidaqCallback(TaskHandle task_handle, int32, uInt32,
                                          void *callbackData) {
     auto event_id = get_unique_id();
@@ -366,13 +380,14 @@ struct NidaqNode::Impl {
         std::string name = state->at("name");
         std::string channel = state->at("Channel");
         double sample_rate = state->at("Sample Rate");
+        bool zero_latency = state->at("Zero Latency");
 
         _sample_interval = std::chrono::nanoseconds(size_t(1e9 / sample_rate));
 
         size_t polling_interval_raw = state->at("Poll Interval");
         std::chrono::microseconds polling_interval(polling_interval_raw);
 
-        _every_n_samples = int(polling_interval / _sample_interval);
+        _every_n_samples = zero_latency ? 1 : int(polling_interval / _sample_interval);
 
         std::string channel_name = name + " channel";
         buffer_size = 2 * size_t(_every_n_samples) * _num_channels;
@@ -391,13 +406,13 @@ struct NidaqNode::Impl {
         daq_error = daqmxapi->DAQmxCfgSampClkTiming(
             task_handle, nullptr, sample_rate, DAQmx_Val_Rising,
             DAQmx_Val_ContSamps, buffer_size);
-        THALAMUS_ASSERT(daq_error >= 0, "DAQmxCfgSampClkTiming failed");
+        assert_nidaq(daq_error, "DAQmxCfgSampClkTiming");
 
         daq_error = daqmxapi->DAQmxRegisterEveryNSamplesEvent(
             task_handle, DAQmx_Val_Acquired_Into_Buffer,
             uint32_t(_every_n_samples), 0, NidaqCallback,
             new std::weak_ptr<Node>(outer->weak_from_this()));
-        THALAMUS_ASSERT(daq_error >= 0, "DAQmxCfgSampClkTiming failed");
+        assert_nidaq(daq_error, "DAQmxRegisterEveryNSamplesEvent");
 
         daq_error = daqmxapi->DAQmxSetBufInputBufSize(task_handle,
                                                       uint32_t(buffer_size));
