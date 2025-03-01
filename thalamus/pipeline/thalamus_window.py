@@ -183,12 +183,14 @@ FACTORIES = {
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.DOUBLE_SPINBOX, 'Sample Rate', 1000.0, []),
     UserData(UserDataType.SPINBOX, 'Poll Interval', 16, []),
+    UserData(UserDataType.CHECK_BOX, 'Zero Latency', False, []),
     UserData(UserDataType.DEFAULT, 'Channel', 'Dev1/ai0', []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
   ]),
   'NIDAQ_OUT': Factory(StimWidget, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.DEFAULT, 'Source', '', []),
+    UserData(UserDataType.CHECK_BOX, 'Fast Foward', False, []),
     UserData(UserDataType.DEFAULT, 'Channel', 'Dev1/ao0', []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
   ]),
@@ -349,6 +351,10 @@ FACTORIES = {
   'LOOP_TEST': Factory(None, [
     UserData(UserDataType.DEFAULT, 'Source', '', []),
     UserData(UserDataType.DEFAULT, 'Channel', '', []),
+  ]),
+  'TEST_PULSE_NODE': Factory(None, [
+    UserData(UserDataType.DEFAULT, 'Input', '', []),
+    UserData(UserDataType.DEFAULT, 'Output', '', []),
   ]),
   'LOG': Factory(lambda c, s: LogWidget(c, s), []),
   'ARUCO': Factory(lambda c, s: ArucoWidget(c, s), [

@@ -58,11 +58,13 @@ message StimDeclaration {
 }
 
 message StimRequest {
-  NodeSelector node = 1;
-  StimDeclaration declaration = 2;
-  uint32 arm = 3;
-  uint32 trigger = 4;
-  uint32 retrieve = 5;
+  oneof body {
+    NodeSelector node = 1;
+    StimDeclaration declaration = 2;
+    uint32 arm = 3;
+    uint32 trigger = 4;
+    uint32 retrieve = 5;
+  }
   uint32 id = 6;
 }
 

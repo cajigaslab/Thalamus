@@ -40,6 +40,8 @@ struct DAQmxAPI {
   decltype(&::DAQmxRegisterDoneEvent) DAQmxRegisterDoneEvent;
   decltype(&::DAQmxCfgDigEdgeStartTrig) DAQmxCfgDigEdgeStartTrig;
   decltype(&::DAQmxSetBufInputBufSize) DAQmxSetBufInputBufSize;
+  decltype(&::DAQmxGetErrorString) DAQmxGetErrorString;
+  decltype(&::DAQmxGetExtendedErrorInfo) DAQmxGetExtendedErrorInfo;
 };
 static DAQmxAPI *daqmxapi;
 
@@ -201,6 +203,22 @@ static bool prepare_nidaq() {
         << "Failed to load DAQmxSetBufInputBufSize.  NI features disabled";
     return false;
   }
+  daqmxapi->DAQmxGetErrorString =
+      reinterpret_cast<decltype(&DAQmxGetErrorString)>(
+          ::GetProcAddress(nidaq_dll_handle, "DAQmxGetErrorString"));
+  if (!daqmxapi->DAQmxGetErrorString) {
+    THALAMUS_LOG(info)
+        << "Failed to load DAQmxGetErrorString.  NI features disabled";
+    return false;
+  }
+  daqmxapi->DAQmxGetExtendedErrorInfo =
+      reinterpret_cast<decltype(&DAQmxGetExtendedErrorInfo)>(
+          ::GetProcAddress(nidaq_dll_handle, "DAQmxGetExtendedErrorInfo"));
+  if (!daqmxapi->DAQmxGetExtendedErrorInfo) {
+    THALAMUS_LOG(info)
+        << "Failed to load DAQmxGetExtendedErrorInfo.  NI features disabled";
+    return false;
+  }
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
@@ -271,19 +289,33 @@ struct NidaqNode::Impl {
 
   ~Impl() {
     (*state)["Running"].assign(false, [] {});
-#ifdef _WIN32
     if (task_handle != nullptr) {
       daqmxapi->DAQmxStopTask(task_handle);
       daqmxapi->DAQmxClearTask(task_handle);
       task_handle = nullptr;
     }
-#endif
+  }
+
+  char error_message[1024];
+
+  static void assert_nidaq(int daq_error, const char* func) {
+    if(daq_error >= 0) {
+      return;
+    }
+
+    char error_message[1024];
+
+    daqmxapi->DAQmxGetExtendedErrorInfo(error_message, sizeof(error_message));
+    THALAMUS_LOG(error) << error_message;
+    daqmxapi->DAQmxGetErrorString(daq_error, error_message, sizeof(error_message));
+    THALAMUS_LOG(error) << error_message;
+    THALAMUS_ASSERT(false, "%s failed", func);
   }
 
   static int32 CVICALLBACK NidaqCallback(TaskHandle task_handle, int32, uInt32,
                                          void *callbackData) {
-#ifdef _WIN32
-    TRACE_EVENT("thalamus", "NidaqCallback");
+    auto event_id = get_unique_id();
+    TRACE_EVENT("thalamus", "NidaqCallback", perfetto::Flow::ProcessScoped(event_id));
     auto now = std::chrono::steady_clock::now();
     auto weak_ptr = static_cast<std::weak_ptr<Node> *>(callbackData);
     auto locked_ptr = weak_ptr->lock();
@@ -300,12 +332,19 @@ struct NidaqNode::Impl {
         task_handle, impl->_every_n_samples, 10, DAQmx_Val_GroupByChannel,
         buffer.data(), uint32_t(buffer.size()), &num_samples, nullptr);
 
-    BOOST_ASSERT(daq_error >= 0);
+    if(daq_error < 0) {
+      daqmxapi->DAQmxGetExtendedErrorInfo(impl->error_message, sizeof(impl->error_message));
+      THALAMUS_LOG(error) << impl->error_message;
+      daqmxapi->DAQmxGetErrorString(daq_error, impl->error_message, sizeof(impl->error_message));
+      THALAMUS_LOG(error) << impl->error_message;
+    }
+
+    THALAMUS_ASSERT(daq_error >= 0);
     impl->counter += size_t(num_samples);
 
-    boost::asio::post(impl->io_context, [node, moved_buffer = std::move(buffer),
+    boost::asio::post(impl->io_context, [node, moved_buffer = std::move(buffer), event_id,
                                          now]() {
-      TRACE_EVENT("thalamus", "NidaqCallback(post)");
+      TRACE_EVENT("thalamus", "NidaqCallback(post)", perfetto::TerminatingFlow::ProcessScoped(event_id));
       auto &node_impl = node->impl;
       node_impl->output_buffer = std::move(moved_buffer);
       node_impl->spans.clear();
@@ -323,50 +362,12 @@ struct NidaqNode::Impl {
     });
 
     return 0;
-#else
-
-    if (error.value() == boost::asio::error::operation_aborted) {
-      return;
-    }
-    BOOST_ASSERT(!error);
-    if (!is_running) {
-      return;
-    }
-
-    output_buffer.resize(this->_num_channels * this->_every_n_samples);
-
-    for (auto i = 0; i < this->_every_n_samples; ++i) {
-      for (auto c = 0u; c < this->_num_channels; ++c) {
-        if (c == 0) {
-          output_buffer[c * this->_every_n_samples + i] =
-              std::sin(this->_time.count() / 1e9);
-        } else {
-          output_buffer[c * this->_every_n_samples + i] =
-              std::sin(this->_time.count() / 1e9 + M_PI / 4);
-        }
-      }
-      this->_time += this->_sample_interval;
-    }
-    spans.clear();
-    for (auto channel = 0; channel < _num_channels; ++channel) {
-      spans.emplace_back(output_buffer.begin() + channel * _every_n_samples,
-                         output_buffer.begin() +
-                             (channel + 1) * _every_n_samples);
-    }
-
-    this->ready(this);
-
-    this->timer.expires_after(_polling_interval);
-    this->timer.async_wait(std::bind(&NidaqNode::NidaqCallback, this, _1));
-    return 0;
-#endif
   }
 
   void on_change(ObservableCollection::Action,
                  const ObservableCollection::Key &k,
                  const ObservableCollection::Value &v) {
     TRACE_EVENT("thalamus", "NidaqNode::on_change");
-#ifdef _WIN32
     auto key_str = std::get<std::string>(k);
     if (key_str == "Channel") {
       std::string channel = state->at("Channel");
@@ -379,13 +380,14 @@ struct NidaqNode::Impl {
         std::string name = state->at("name");
         std::string channel = state->at("Channel");
         double sample_rate = state->at("Sample Rate");
+        bool zero_latency = state->at("Zero Latency");
 
         _sample_interval = std::chrono::nanoseconds(size_t(1e9 / sample_rate));
 
         size_t polling_interval_raw = state->at("Poll Interval");
-        std::chrono::milliseconds polling_interval(polling_interval_raw);
+        std::chrono::microseconds polling_interval(polling_interval_raw);
 
-        _every_n_samples = int(polling_interval / _sample_interval);
+        _every_n_samples = zero_latency ? 1 : int(polling_interval / _sample_interval);
 
         std::string channel_name = name + " channel";
         buffer_size = 2 * size_t(_every_n_samples) * _num_channels;
@@ -404,13 +406,13 @@ struct NidaqNode::Impl {
         daq_error = daqmxapi->DAQmxCfgSampClkTiming(
             task_handle, nullptr, sample_rate, DAQmx_Val_Rising,
             DAQmx_Val_ContSamps, buffer_size);
-        THALAMUS_ASSERT(daq_error >= 0, "DAQmxCfgSampClkTiming failed");
+        assert_nidaq(daq_error, "DAQmxCfgSampClkTiming");
 
         daq_error = daqmxapi->DAQmxRegisterEveryNSamplesEvent(
             task_handle, DAQmx_Val_Acquired_Into_Buffer,
             uint32_t(_every_n_samples), 0, NidaqCallback,
             new std::weak_ptr<Node>(outer->weak_from_this()));
-        THALAMUS_ASSERT(daq_error >= 0, "DAQmxCfgSampClkTiming failed");
+        assert_nidaq(daq_error, "DAQmxRegisterEveryNSamplesEvent");
 
         daq_error = daqmxapi->DAQmxSetBufInputBufSize(task_handle,
                                                       uint32_t(buffer_size));
@@ -444,29 +446,6 @@ struct NidaqNode::Impl {
         // timer.cancel();
       }
     }
-#else
-    auto key_str = std::get<std::string>(k);
-    if (key_str == "Running") {
-      is_running = std::get<bool>(v);
-      if (is_running) {
-        counter = 0;
-        std::string channel = state->at("Channel");
-        _sample_rate = state->at("Sample Rate");
-        _sample_interval =
-            std::chrono::nanoseconds(size_t(1 / _sample_rate * 1e9));
-        _polling_interval =
-            std::chrono::nanoseconds(state->at("Poll Interval"));
-        _every_n_samples = int(_sample_rate * _polling_interval / 1000);
-        _num_channels = get_num_channels(channel);
-        buffer_size = static_cast<size_t>(_sample_rate * _num_channels);
-        std::function<void()> reader;
-
-        _time = 0ns;
-
-        NidaqCallback(boost::system::error_code());
-      }
-    }
-#endif
   }
 };
 
@@ -481,11 +460,7 @@ int NidaqNode::get_num_channels(const std::string &channel) {
 }
 
 std::string NidaqNode::type_name() {
-#ifdef _WIN32
   return "NIDAQ (NIDAQMX)";
-#else
-  return "NIDAQ (MOCK)";
-#endif
 }
 
 std::span<const double> NidaqNode::data(int channel) const {
@@ -552,6 +527,9 @@ struct NidaqOutputNode::Impl {
   std::atomic_bool new_buffers = false;
   std::optional<std::string> current_source;
   std::vector<double> analog_values;
+  bool fast_forward = false;
+  std::vector<double> last_analog;
+  std::vector<unsigned char> last_digital;
 
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
        NodeGraph *_graph, NidaqOutputNode *_outer)
@@ -568,7 +546,7 @@ struct NidaqOutputNode::Impl {
   ~Impl() {
     (*state)["Running"].assign(false, [&] {});
   }
-#ifdef _WIN32
+
   void nidaq_target() {
     std::vector<double> values;
     std::vector<unsigned char> digital_values;
@@ -680,8 +658,6 @@ struct NidaqOutputNode::Impl {
       }
     }
   }
-#else
-#endif
 
   ObservableListPtr stims_state;
   void on_change(ObservableCollection *_source, ObservableCollection::Action,
@@ -749,16 +725,21 @@ struct NidaqOutputNode::Impl {
         buffers.clear();
         counter = 0;
         // started = false;
+        fast_forward = state->at("Fast Foward");
         std::string name = state->at("name");
         std::string channel = state->at("Channel");
         std::string channel_name = name + " channel";
         _num_channels = size_t(NidaqNode::get_num_channels(channel));
+        last_digital.resize(_num_channels, false);
+        last_analog.resize(_num_channels, 0.0);
         digital = is_digital(channel);
         _sample_rate = -1;
         buffer_size = static_cast<size_t>(16 * _num_channels);
         std::function<void()> reader;
         running = true;
-        nidaq_thread = std::thread(std::bind(&Impl::nidaq_target, this));
+        if(!fast_forward) {
+          nidaq_thread = std::thread(std::bind(&Impl::nidaq_target, this));
+        }
 
         auto daq_error = daqmxapi->DAQmxCreateTask(name.c_str(), &task_handle);
         if (daq_error < 0) {
@@ -1031,12 +1012,16 @@ struct NidaqOutputNode::Impl {
     thalamus_grpc::StimResponse response;
     auto &error = *response.mutable_error();
 
-    auto daq_error = daqmxapi->DAQmxStartTask(stim_task);
-    if (daq_error < 0) {
-      error.set_code(daq_error);
-      error.set_message(absl::StrFormat("DAQmxStartTask failed %d", daq_error));
-      THALAMUS_LOG(error) << error.message();
-      return response;
+    {
+      TRACE_EVENT("thalamus", "DAQmxStartTask");
+      auto daq_error = daqmxapi->DAQmxStartTask(stim_task);
+      if (daq_error < 0) {
+        error.set_code(daq_error);
+        error.set_message(
+            absl::StrFormat("DAQmxStartTask failed %d", daq_error));
+        THALAMUS_LOG(error) << error.message();
+        return response;
+      }
     }
     return response;
   }
@@ -1048,14 +1033,41 @@ struct NidaqOutputNode::Impl {
     }
 
     _time = node->time();
-    {
+    auto num_channels = std::min(int(_num_channels), node->num_channels());
+    if(fast_forward) {
+      for (auto i = 0; i < num_channels; ++i) {
+        auto data = node->data(i);
+        if(!data.empty()) {
+          if(digital) {
+            last_digital[size_t(i)] = data.back() > 2.5;
+          } else {
+            last_analog[size_t(i)] = data.back();
+          }
+        }
+      }
+      if (digital) {
+        TRACE_EVENT("thalamus", "NidaqOutputNode::on_data(write digital)");
+        auto status = daqmxapi->DAQmxWriteDigitalLines(
+            task_handle, 1, true, -1, DAQmx_Val_GroupByChannel,
+            last_digital.data(), nullptr, nullptr);
+        THALAMUS_ASSERT(status >= 0, "DAQmxWriteDigitalLines failed: %d",
+                        status);
+      } else {
+        TRACE_EVENT("thalamus", "NidaqOutputNode::on_data(write analog)");
+        auto status = daqmxapi->DAQmxWriteAnalogF64(
+            task_handle, 1, true, -1, DAQmx_Val_GroupByChannel,
+            last_analog.data(), nullptr, nullptr);
+        THALAMUS_ASSERT(status >= 0, "DAQmxWriteAnalogF64 failed: %d",
+                        status);
+      }
+      return;
+    } else {
       std::lock_guard<std::mutex> lock(mutex);
       // buffers.assign(node->num_channels(), std::vector<double>());
       _data.clear();
       buffers.clear();
       _sample_intervals.clear();
       int data_count = 0;
-      auto num_channels = std::min(int(_num_channels), node->num_channels());
       for (auto i = 0; i < num_channels; ++i) {
         auto data = node->data(i);
         data_count += data.size();
@@ -1086,14 +1098,23 @@ bool NidaqOutputNode::prepare() { return prepare_nidaq(); }
 std::future<thalamus_grpc::StimResponse>
 NidaqOutputNode::stim(thalamus_grpc::StimRequest &&request) {
   std::promise<thalamus_grpc::StimResponse> response;
-  if (request.has_declaration()) {
-    response.set_value(impl->declare_stim(request.declaration()));
-    //} else if (request.has_arm()) {
-    //  response.set_value(impl->arm_stim(request.arm()));
-    //} else if (request.has_trigger()) {
-    //  response.set_value(impl->trigger_stim(request.trigger()));
-    //} else if (request.has_retrieve()) {
-    //  response.set_value(impl->retrieve_stim(request.retrieve()));
+  switch(request.body_case()) {
+    case thalamus_grpc::StimRequest::kDeclaration:
+      response.set_value(impl->declare_stim(request.declaration()));
+      break;
+    case thalamus_grpc::StimRequest::kArm:
+      response.set_value(impl->arm_stim(int(request.arm())));
+      break;
+    case thalamus_grpc::StimRequest::kTrigger:
+      response.set_value(impl->trigger_stim(request.trigger()));
+      break;
+    case thalamus_grpc::StimRequest::kRetrieve:
+      response.set_value(impl->retrieve_stim(int(request.retrieve())));
+      break;
+    case thalamus_grpc::StimRequest::kNode:
+    case thalamus_grpc::StimRequest::BODY_NOT_SET:
+      THALAMUS_ASSERT(false, "Unexpected Stim request");
+      break;
   }
   return response.get_future();
 }

@@ -28,7 +28,7 @@ add_custom_command(
   COMMAND cmake -E env 
   "CFLAGS=${OSX_TARGET_PARAMETER}"
   ${GLIB_COMPILER}
-  meson setup "${glib_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>"
+  meson setup "${glib_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>" --reconfigure
     -Dtests=false ${GLIB_SANITIZER} -Dselinux=disabled -Dlibmount=disabled -Db_lundef=false -Ddefault_library=static -Db_vscrt=static_from_buildtype
     --prefix "${glib_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install"
     --buildtype=$<IF:$<CONFIG:Debug>,debug,release>
