@@ -41,7 +41,7 @@ namespace thalamus {
 using namespace std::chrono_literals;
 
 struct INodeFactory {
-  virtual ~INodeFactory() {}
+  virtual ~INodeFactory();
   virtual Node *create(ObservableDictPtr state,
                        boost::asio::io_context &io_context,
                        NodeGraph *graph) = 0;
@@ -49,6 +49,7 @@ struct INodeFactory {
   virtual void cleanup() = 0;
   virtual std::string type_name() = 0;
 };
+INodeFactory::~INodeFactory() {}
 
 template <typename T> struct NodeFactory : public INodeFactory {
   Node *create(ObservableDictPtr state, boost::asio::io_context &io_context,

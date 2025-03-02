@@ -38,7 +38,7 @@ static void four1(double data[], unsigned long nn, int isign) {
   mmax = 2;
   while (n > mmax) {
     istep = mmax << 1;
-    theta = isign * (6.28318530717959 / mmax);
+    theta = isign * (6.28318530717959 / double(mmax));
     wtemp = sin(0.5 * theta);
     wpr = -2.0 * wtemp * wtemp;
     wpi = sin(theta);

@@ -1,11 +1,5 @@
 #include <absl/strings/str_format.h>
 #include <absl/time/time.h>
-#include <boost/qvm/quat_access.hpp>
-#include <boost/qvm/quat_operations.hpp>
-#include <boost/qvm/quat_vec_operations.hpp>
-#include <boost/qvm/swizzle.hpp>
-#include <boost/qvm/vec_access.hpp>
-#include <boost/qvm/vec_operations.hpp>
 #include <distortion_node.hpp>
 #include <image_node.hpp>
 #include <modalities_util.hpp>
@@ -14,13 +8,26 @@
 #include <text_node.hpp>
 #include <util.hpp>
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Weverything"
+#endif
+#include <boost/qvm/quat_access.hpp>
+#include <boost/qvm/quat_operations.hpp>
+#include <boost/qvm/quat_vec_operations.hpp>
+#include <boost/qvm/swizzle.hpp>
+#include <boost/qvm/vec_access.hpp>
+#include <boost/qvm/vec_operations.hpp>
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+
 #ifdef _WIN32
 #include <winsock2.h>
-#elif __APPLE__
+#elif defined(__APPLE__)
 #include <arpa/inet.h>
 #else
 #include <endian.h>
-#define htonll(x) htobe64(x)
 #endif
 
 extern "C" {
@@ -45,19 +52,19 @@ typedef int (*thalamus_ros2_bridge_broadcast_transform_t)(
     const char *child_frame, const double *translation, const double *rotation);
 }
 
-thalamus_ros2_bridge_start_t thalamus_ros2_bridge_start;
-thalamus_ros2_bridge_stop_t thalamus_ros2_bridge_stop;
-thalamus_ros2_bridge_create_image_publisher_t
+static thalamus_ros2_bridge_start_t thalamus_ros2_bridge_start;
+static thalamus_ros2_bridge_stop_t thalamus_ros2_bridge_stop;
+static thalamus_ros2_bridge_create_image_publisher_t
     thalamus_ros2_bridge_create_image_publisher;
-thalamus_ros2_bridge_create_camera_info_publisher_t
+static thalamus_ros2_bridge_create_camera_info_publisher_t
     thalamus_ros2_bridge_create_camera_info_publisher;
-thalamus_ros2_bridge_create_gaze_publisher_t
+static thalamus_ros2_bridge_create_gaze_publisher_t
     thalamus_ros2_bridge_create_gaze_publisher;
-thalamus_ros2_bridge_publish_image_t thalamus_ros2_bridge_publish_image;
-thalamus_ros2_bridge_publish_camera_info_t
+static thalamus_ros2_bridge_publish_image_t thalamus_ros2_bridge_publish_image;
+static thalamus_ros2_bridge_publish_camera_info_t
     thalamus_ros2_bridge_publish_camera_info;
-thalamus_ros2_bridge_publish_gaze_t thalamus_ros2_bridge_publish_gaze;
-thalamus_ros2_bridge_broadcast_transform_t
+static thalamus_ros2_bridge_publish_gaze_t thalamus_ros2_bridge_publish_gaze;
+static thalamus_ros2_bridge_broadcast_transform_t
     thalamus_ros2_bridge_broadcast_transform;
 
 namespace thalamus {
@@ -69,9 +76,9 @@ struct Ros2Node::Impl {
   NodeGraph *graph;
   Ros2Node *outer;
 
-  Impl(ObservableDictPtr state, boost::asio::io_context &, NodeGraph *graph,
-       Ros2Node *outer)
-      : state(state), graph(graph), outer(outer) {
+  Impl(ObservableDictPtr _state, boost::asio::io_context &, NodeGraph *_graph,
+       Ros2Node *_outer)
+      : state(_state), graph(_graph), outer(_outer) {
     using namespace std::placeholders;
     state_connection =
         state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
@@ -110,9 +117,9 @@ struct Ros2Node::Impl {
       auto model = "plumb_bob";
       const double *k = mat.ptr<double>(0);
       const double *d = span.data();
-      int num_d = span.size();
+      int num_d = int(span.size());
       thalamus_ros2_bridge_publish_camera_info(info->camera_info_publisher,
-                                               time.count(), width, height,
+                                               size_t(time.count()), int(width), int(height),
                                                model, d, num_d, k);
     }
     if (info->image_publisher != -1) {
@@ -120,8 +127,8 @@ struct Ros2Node::Impl {
       auto width = info->distortion->width();
       auto height = info->distortion->height();
       auto data = info->distortion->plane(0);
-      thalamus_ros2_bridge_publish_image(info->image_publisher, time.count(),
-                                         width, height, "mono8", true, width,
+      thalamus_ros2_bridge_publish_image(info->image_publisher, size_t(time.count()),
+                                         int(width), int(height), "mono8", true, int(width),
                                          data.data());
     }
   }
@@ -136,17 +143,17 @@ struct Ros2Node::Impl {
       auto width = info->oculomatic->width();
       auto height = info->oculomatic->height();
 
-      thalamus_ros2_bridge_publish_gaze(info->gaze_publisher, time.count(),
-                                        x.front(), y.front(), width, height,
-                                        diameter.front(), info->eye);
+      thalamus_ros2_bridge_publish_gaze(info->gaze_publisher, size_t(time.count()),
+                                        float(x.front()), float(y.front()), int(width), int(height),
+                                        int(diameter.front()), info->eye);
     }
     if (info->image_publisher != -1 && info->image->has_image_data()) {
       auto time = std::chrono::system_clock::now().time_since_epoch();
       auto width = info->oculomatic->width();
       auto height = info->oculomatic->height();
       auto data = info->oculomatic->plane(0);
-      thalamus_ros2_bridge_publish_image(info->image_publisher, time.count(),
-                                         width, height, "mono8", true, width,
+      thalamus_ros2_bridge_publish_image(info->image_publisher, size_t(time.count()),
+                                         int(width), int(height), "mono8", true, int(width),
                                          data.data());
     }
   }
@@ -157,8 +164,8 @@ struct Ros2Node::Impl {
       auto width = info->image->width();
       auto height = info->image->height();
       auto data = info->image->plane(0);
-      thalamus_ros2_bridge_publish_image(info->image_publisher, time.count(),
-                                         width, height, "mono8", true, width,
+      thalamus_ros2_bridge_publish_image(info->image_publisher, size_t(time.count()),
+                                         int(width), int(height), "mono8", true, int(width),
                                          data.data());
     }
   }
@@ -182,24 +189,24 @@ struct Ros2Node::Impl {
         if (i->starts_with("microscope")) {
           auto inverse_rotation = boost::qvm::conjugate(segment.rotation);
           auto inverse_position = -(inverse_rotation * segment.position);
-          double translation[] = {boost::qvm::X(inverse_position),
-                                  boost::qvm::Y(inverse_position),
-                                  boost::qvm::Z(inverse_position)};
+          double translation[] = {double(boost::qvm::X(inverse_position)),
+                                  double(boost::qvm::Y(inverse_position)),
+                                  double(boost::qvm::Z(inverse_position))};
           double rotation[] = {
-              boost::qvm::X(inverse_rotation), boost::qvm::Y(inverse_rotation),
-              boost::qvm::Z(inverse_rotation), boost::qvm::S(segment.rotation)};
+              double(boost::qvm::X(inverse_rotation)), double(boost::qvm::Y(inverse_rotation)),
+              double(boost::qvm::Z(inverse_rotation)), double(boost::qvm::S(segment.rotation))};
           thalamus_ros2_bridge_broadcast_transform(
-              nanosecs.count(), child_frame.c_str(), info->parent_frame.c_str(),
+              size_t(nanosecs.count()), child_frame.c_str(), info->parent_frame.c_str(),
               translation, rotation);
         } else {
-          double translation[] = {boost::qvm::X(segment.position),
-                                  boost::qvm::Y(segment.position),
-                                  boost::qvm::Z(segment.position)};
+          double translation[] = {double(boost::qvm::X(segment.position)),
+                                  double(boost::qvm::Y(segment.position)),
+                                  double(boost::qvm::Z(segment.position))};
           double rotation[] = {
-              boost::qvm::X(segment.rotation), boost::qvm::Y(segment.rotation),
-              boost::qvm::Z(segment.rotation), boost::qvm::S(segment.rotation)};
+              double(boost::qvm::X(segment.rotation)), double(boost::qvm::Y(segment.rotation)),
+              double(boost::qvm::Z(segment.rotation)), double(boost::qvm::S(segment.rotation))};
           thalamus_ros2_bridge_broadcast_transform(
-              nanosecs.count(), info->parent_frame.c_str(), child_frame.c_str(),
+              size_t(nanosecs.count()), info->parent_frame.c_str(), child_frame.c_str(),
               translation, rotation);
         }
         ++i;
@@ -247,7 +254,7 @@ struct Ros2Node::Impl {
       info->camera_info_publisher =
           thalamus_ros2_bridge_create_camera_info_publisher(v_str.c_str());
     } else if (k_str == "Eye") {
-      info->eye = std::get<long long>(v);
+      info->eye = int(std::get<long long>(v));
     } else if (k_str == "Parent Frame") {
       info->parent_frame = std::get<std::string>(v);
     } else if (k_str == "Child Frame") {
@@ -380,10 +387,10 @@ T load_function(void *library_handle, const std::string &name) {
 }
 
 #define LOAD_FUNC(name)                                                        \
-  name = load_function<name##_t>(library_handle, #name);                       \
+  do { name = load_function<name##_t>(library_handle, #name);                  \
   if (!name) {                                                                 \
     return false;                                                              \
-  }
+  } } while (0)
 
 bool Ros2Node::prepare() {
   auto library_handle = dlopen("libthalamus_ros2_bridge.so", RTLD_NOW);

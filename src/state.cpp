@@ -2,6 +2,9 @@
 #include <state.hpp>
 
 namespace thalamus {
+
+ObservableCollection::~ObservableCollection() {}
+
 ObservableCollection::ValueWrapper::ValueWrapper(
     const Key &_key, std::function<Value &()> _get_value,
     std::function<bool()> _has_value, ObservableCollection *_collection)
@@ -13,7 +16,7 @@ ObservableCollection::ValueWrapper::operator ObservableDictPtr() {
   if (std::holds_alternative<ObservableDictPtr>(value)) {
     return thalamus::get<ObservableDictPtr>(value);
   } else {
-    THALAMUS_ASSERT(false);
+    THALAMUS_ASSERT(false, "Value is not a dict");
   }
 }
 
@@ -22,7 +25,7 @@ ObservableCollection::ValueWrapper::operator ObservableListPtr() {
   if (std::holds_alternative<ObservableListPtr>(value)) {
     return thalamus::get<ObservableListPtr>(value);
   } else {
-    THALAMUS_ASSERT(false);
+    THALAMUS_ASSERT(false, "Value is not a list");
   }
 }
 
@@ -33,7 +36,7 @@ ObservableCollection::ValueWrapper::operator long long int() {
   } else if (std::holds_alternative<double>(value)) {
     return int64_t(thalamus::get<double>(value));
   } else {
-    THALAMUS_ASSERT(false);
+    THALAMUS_ASSERT(false, "Value is not a number");
   }
 }
 ObservableCollection::ValueWrapper::operator unsigned long long int() {
@@ -43,7 +46,7 @@ ObservableCollection::ValueWrapper::operator unsigned long long int() {
   } else if (std::holds_alternative<double>(value)) {
     return uint64_t(thalamus::get<double>(value));
   } else {
-    THALAMUS_ASSERT(false);
+    THALAMUS_ASSERT(false, "Value is not a number");
   }
 }
 ObservableCollection::ValueWrapper::operator unsigned long() {
@@ -53,7 +56,7 @@ ObservableCollection::ValueWrapper::operator unsigned long() {
   } else if (std::holds_alternative<double>(value)) {
     return uint32_t(thalamus::get<double>(value));
   } else {
-    THALAMUS_ASSERT(false);
+    THALAMUS_ASSERT(false, "Value is not a number");
   }
 }
 ObservableCollection::ValueWrapper::operator double() {
@@ -63,7 +66,7 @@ ObservableCollection::ValueWrapper::operator double() {
   } else if (std::holds_alternative<double>(value)) {
     return thalamus::get<double>(value);
   } else {
-    THALAMUS_ASSERT(false);
+    THALAMUS_ASSERT(false, "Value is not a number");
   }
 }
 ObservableCollection::ValueWrapper::operator bool() {
@@ -82,7 +85,7 @@ ObservableCollection::ValueWrapper::operator bool() {
   } else if (std::holds_alternative<bool>(value)) {
     return thalamus::get<bool>(value);
   } else {
-    THALAMUS_ASSERT(false);
+    THALAMUS_ASSERT(false, "Value is not a bool or number");
   }
 }
 ObservableCollection::ValueWrapper::operator std::string() {
@@ -90,7 +93,7 @@ ObservableCollection::ValueWrapper::operator std::string() {
   if (std::holds_alternative<std::string>(value)) {
     return thalamus::get<std::string>(value);
   } else {
-    THALAMUS_ASSERT(false);
+    THALAMUS_ASSERT(false, "Value is not a string");
   }
 }
 ObservableCollection::ValueWrapper::operator ObservableCollection::Value() {

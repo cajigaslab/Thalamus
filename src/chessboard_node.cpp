@@ -181,7 +181,7 @@ ChessBoardNode::~ChessBoardNode() {}
 std::string ChessBoardNode::type_name() { return "CHESSBOARD"; }
 
 ImageNode::Plane ChessBoardNode::plane(int i) const {
-  THALAMUS_ASSERT(i == 0);
+  THALAMUS_ASSERT(i == 0, "Plane index out of bounds");
   return ImageNode::Plane(impl->cairo_data.begin(), impl->cairo_data.end());
 }
 
@@ -196,7 +196,7 @@ size_t ChessBoardNode::width() const { return size_t(impl->stride); }
 size_t ChessBoardNode::height() const { return size_t(impl->height); }
 
 void ChessBoardNode::inject(const thalamus_grpc::Image &) {
-  THALAMUS_ASSERT(false);
+  THALAMUS_ASSERT(false, "Unimplemented");
 }
 
 std::chrono::nanoseconds ChessBoardNode::time() const { return impl->time; }

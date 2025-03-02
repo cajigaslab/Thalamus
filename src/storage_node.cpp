@@ -11,7 +11,7 @@
 
 #ifdef _WIN32
 #include <WinSock2.h>
-#elif __APPLE__
+#elif defined(__APPLE__)
 #include <arpa/inet.h>
 #else
 #include <endian.h>
@@ -455,7 +455,7 @@ struct StorageNode::Impl {
   };
 
   struct Encoder {
-    virtual ~Encoder() {}
+    virtual ~Encoder();
     virtual void work() = 0;
     virtual void finish() = 0;
     virtual void push(thalamus_grpc::StorageRecord &&record) = 0;
@@ -465,7 +465,7 @@ struct StorageNode::Impl {
   struct IdentityEncoder : public Encoder {
     std::list<thalamus_grpc::StorageRecord> queue;
 
-    void work() override {}
+    void work() override;
     void finish() override {}
     void push(thalamus_grpc::StorageRecord &&record) override {
       queue.push_back(std::move(record));
@@ -669,9 +669,7 @@ struct StorageNode::Impl {
       }
       out_queue.push_back(compressed_record);
     }
-    void push(thalamus_grpc::StorageRecord &&record) override {
-      in_queue.push_back(std::move(record));
-    }
+    void push(thalamus_grpc::StorageRecord &&record) override;
     std::optional<thalamus_grpc::StorageRecord> pull() override {
       if (!out_queue.empty()) {
         std::optional<thalamus_grpc::StorageRecord> result =
@@ -771,9 +769,7 @@ struct StorageNode::Impl {
       compressed_data->resize(compressed_data->size() - zstream.avail_out);
       out_queue.push_back(std::move(compressed_record));
     }
-    void push(thalamus_grpc::StorageRecord &&record) override {
-      in_queue.push_back(std::move(record));
-    }
+    void push(thalamus_grpc::StorageRecord &&record) override;
     std::optional<thalamus_grpc::StorageRecord> pull() override {
       if (!out_queue.empty()) {
         std::optional<thalamus_grpc::StorageRecord> result =
@@ -1114,6 +1110,15 @@ struct StorageNode::Impl {
   }
 };
 
+StorageNode::Impl::Encoder::~Encoder() {}
+void StorageNode::Impl::ZlibEncoder::push(thalamus_grpc::StorageRecord &&record) {
+  in_queue.push_back(std::move(record));
+}
+void StorageNode::Impl::VideoEncoder::push(thalamus_grpc::StorageRecord &&record) {
+  in_queue.push_back(std::move(record));
+}
+void StorageNode::Impl::IdentityEncoder::work() {}
+
 StorageNode::StorageNode(ObservableDictPtr state,
                          boost::asio::io_context &io_context, NodeGraph *graph)
     : impl(new Impl(state, io_context, graph, this)) {}
@@ -1133,7 +1138,7 @@ StorageNode::get_next_file(const std::filesystem::path &name,
       absl::FormatTime("%Y%m%d", start_time, absl::LocalTimeZone());
   auto filename =
       absl::StrFormat("%s.%s.%d", name.string(), start_time_str, rec);
-  return filename;
+  return std::move(filename);
 }
 
 void StorageNode::record(std::ofstream &output,

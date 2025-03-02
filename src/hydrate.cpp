@@ -14,7 +14,7 @@
 
 #ifdef _WIN32
 #include <WinSock2.h>
-#elif __APPLE__
+#elif defined(__APPLE__)
 #include <arpa/inet.h>
 #else
 #include <endian.h>
@@ -54,7 +54,7 @@ extern "C" {
 using namespace std::chrono_literals;
 
 namespace hydrate {
-char hydrate_av_error[AV_ERROR_MAX_STRING_SIZE];
+static char hydrate_av_error[AV_ERROR_MAX_STRING_SIZE];
 struct RecordReader {
   std::istream &stream;
   double progress = 0;
@@ -214,7 +214,7 @@ struct RecordReader {
       if (!buffer.empty()) {
         auto result = std::move(buffer.front());
         buffer.pop_front();
-        return result;
+        return std::move(result);
       }
       return std::nullopt;
     }
@@ -287,7 +287,7 @@ struct RecordReader {
           continue;
         }
       }
-      return record;
+      return std::move(record);
     }
   }
 
@@ -436,7 +436,7 @@ struct RecordReader {
                              i->second.second.begin() + compressed.size());
       i->second.first -= size_t(compressed.size());
 
-      return inflated_record;
+      return std::move(inflated_record);
     } else if (do_decode_video &&
                record.body_case() == thalamus_grpc::StorageRecord::kImage &&
                (record.image().format() ==
@@ -494,7 +494,7 @@ H5Handle createH5Segment(size_t pose_length = 0);
 H5Handle createH5Segment(size_t pose_length) {
   H5Handle position_type =
       H5Tcreate(H5T_COMPOUND, sizeof(boost::qvm::vec<float, 3>));
-  THALAMUS_ASSERT(position_type);
+  THALAMUS_ASSERT(position_type, "H5Tcreate failed");
   auto h5_status =
       H5Tinsert(position_type, "x", HOFFSET(vecf3, a[0]), H5T_NATIVE_FLOAT);
   THALAMUS_ASSERT(h5_status >= 0,
@@ -510,7 +510,7 @@ H5Handle createH5Segment(size_t pose_length) {
 
   H5Handle rotation_type =
       H5Tcreate(H5T_COMPOUND, sizeof(boost::qvm::quat<float>));
-  THALAMUS_ASSERT(rotation_type);
+  THALAMUS_ASSERT(rotation_type, "H5Tcreate failed");
   h5_status =
       H5Tinsert(rotation_type, "q0", HOFFSET(boost::qvm::quat<float>, a[0]),
                 H5T_NATIVE_FLOAT);
@@ -530,14 +530,14 @@ H5Handle createH5Segment(size_t pose_length) {
 
   H5Handle str_type = H5Tcopy(H5T_C_S1);
   h5_status = H5Tset_size(str_type, pose_length ? pose_length : H5T_VARIABLE);
-  THALAMUS_ASSERT(h5_status >= 0);
+  THALAMUS_ASSERT(h5_status >= 0, "H5Tset_size failed");
   h5_status = H5Tset_strpad(str_type, H5T_STR_NULLTERM);
-  THALAMUS_ASSERT(h5_status >= 0);
+  THALAMUS_ASSERT(h5_status >= 0, "H5Tset_strpad failed");
   h5_status = H5Tset_cset(str_type, H5T_CSET_UTF8);
-  THALAMUS_ASSERT(h5_status >= 0);
+  THALAMUS_ASSERT(h5_status >= 0, "H5Tset_cset failed");
 
   H5Handle segment_type = H5Tcreate(H5T_COMPOUND, sizeof(Segment));
-  THALAMUS_ASSERT(segment_type);
+  THALAMUS_ASSERT(segment_type, "H5Tcreate failed");
   h5_status = H5Tinsert(segment_type, "time", HOFFSET(Segment, time),
                         H5T_NATIVE_UINT32);
   THALAMUS_ASSERT(h5_status >= 0, "Failed to create Segment.time");
@@ -772,10 +772,10 @@ void write_data(size_t time, size_t remote_time, size_t length, hid_t data,
 
       H5Handle mem_space =
           H5Screate_simple(int(hlength.size()), hlength.data(), nullptr);
-      THALAMUS_ASSERT(mem_space);
+      THALAMUS_ASSERT(mem_space, "H5Screate_simple failed");
 
       H5Handle file_space = H5Dget_space(data);
-      THALAMUS_ASSERT(file_space);
+      THALAMUS_ASSERT(file_space, "H5Dget_space failed");
 
       std::vector<hsize_t> start(hlength.size(), 0);
       start[0] = data_written;
@@ -785,11 +785,11 @@ void write_data(size_t time, size_t remote_time, size_t length, hid_t data,
 
       error = H5Sselect_hyperslab(file_space, H5S_SELECT_SET, start.data(),
                                   nullptr, hlength.data(), nullptr);
-      THALAMUS_ASSERT(error >= 0);
+      THALAMUS_ASSERT(error >= 0, "H5Sselect_hyperslab failed");
 
       error = H5Dwrite(data, h5_type, mem_space, file_space, H5P_DEFAULT,
                        cache.data());
-      THALAMUS_ASSERT(error >= 0);
+      THALAMUS_ASSERT(error >= 0, "H5Dwrite failed");
       data_written += data_chunk;
 
       if constexpr (std::is_pointer<BUFFER_TYPE>::value) {
@@ -810,18 +810,18 @@ void write_data(size_t time, size_t remote_time, size_t length, hid_t data,
     if (cache.size() >= 3 * received_chunk) {
       hsize_t one_row[] = {received_chunk, 3};
       H5Handle mem_space = H5Screate_simple(2, one_row, nullptr);
-      THALAMUS_ASSERT(mem_space);
+      THALAMUS_ASSERT(mem_space, "H5Screate_simple failed");
 
       H5Handle file_space = H5Dget_space(received);
-      THALAMUS_ASSERT(file_space);
+      THALAMUS_ASSERT(file_space, "H5Dget_space failed");
       hsize_t start[] = {received_written, 0};
       error = H5Sselect_hyperslab(file_space, H5S_SELECT_SET, start, nullptr,
                                   one_row, nullptr);
-      THALAMUS_ASSERT(error >= 0);
+      THALAMUS_ASSERT(error >= 0, "H5Sselect_hyperslab failed");
 
       error = H5Dwrite(received, H5T_NATIVE_UINT64, mem_space, file_space,
                        H5P_DEFAULT, cache.data());
-      THALAMUS_ASSERT(error >= 0);
+      THALAMUS_ASSERT(error >= 0, "H5Dwrite failed");
       received_written += received_chunk;
 
       cache.erase(cache.begin(), cache.begin() + int64_t(3 * received_chunk));
@@ -1107,8 +1107,7 @@ int generate_csv(boost::program_options::variables_map &vm) {
     output = input + "_" + csv + ".csv";
   }
 
-  std::map<std::string, std::string> tmpnames;
-  std::map<std::string, std::ofstream> column_outputs;
+  std::map<std::string, FILE*> column_files;
   std::ifstream input_stream(input, std::ios::binary);
   RecordReader reader(input_stream);
   std::optional<thalamus_grpc::StorageRecord> record;
@@ -1137,25 +1136,19 @@ int generate_csv(boost::program_options::variables_map &vm) {
         if (!channels.empty() && !channels.contains(span_name)) {
           continue;
         }
-        if (!tmpnames.contains(span_name)) {
-          tmpnames[span_name] = std::tmpnam(nullptr);
-          column_outputs[span_name] = std::ofstream(tmpnames[span_name]);
-          column_outputs[span_name] << "Time (ns)," << span_name << ","
-                                    << std::endl;
+        if (!column_files.contains(span_name)) {
+          column_files[span_name] = std::tmpfile();
+          fprintf(column_files[span_name], "Time (ns),%s,\n", span_name.c_str());
           ++line_count;
         }
 
         if (analog.is_int_data()) {
           for (auto i = span.begin(); i < span.end(); ++i) {
-            column_outputs[span_name] << record->time() << ","
-                                      << analog.int_data(int(i)) << ","
-                                      << std::endl;
+            fprintf(column_files[span_name], "%lu,%d,\n", record->time(), analog.int_data(int(i)));
           }
         } else {
           for (auto i = span.begin(); i < span.end(); ++i) {
-            column_outputs[span_name] << record->time() << ","
-                                      << analog.data(int(i)) << ","
-                                      << std::endl;
+            fprintf(column_files[span_name], "%lu,%f,\n", record->time(), analog.data(int(i)));
           }
         }
         line_count += span.end() - span.begin();
@@ -1171,43 +1164,45 @@ int generate_csv(boost::program_options::variables_map &vm) {
       break;
     }
   }
-  column_outputs.clear();
+
+  for (auto &pair : column_files) {
+    fseek(pair.second, 0, SEEK_SET);
+  }
 
   std::cout << "Merging Channel CSVs" << std::endl;
   std::ofstream total_output = std::ofstream(output);
-  std::map<std::string, std::ifstream> column_inputs;
-  for (auto &pair : tmpnames) {
-    column_inputs[pair.first] = std::ifstream(pair.second);
-  }
   auto working = true;
-  std::string line;
   auto merged_lines = 0;
+
+  char *line = nullptr;
+  size_t size = 0;
   last_time = std::chrono::steady_clock::now();
   while (working) {
     auto now = std::chrono::steady_clock::now();
     if (now - last_time >= 5s) {
-      std::cout << (100.0 * merged_lines / line_count) << "%" << std::endl;
+      std::cout << (100.0 * double(merged_lines) / double(line_count)) << "%" << std::endl;
       last_time = now;
     }
 
     working = false;
-    for (auto &pair : column_inputs) {
-      if (pair.second.eof()) {
+    for (auto &pair : column_files) {
+      if (feof(pair.second)) {
         total_output << ",,";
       } else {
-        std::getline(pair.second, line);
-        line = absl::StripAsciiWhitespace(line);
-        if (line.empty()) {
+        getline(&line, &size, pair.second);
+        auto std_line = absl::StripAsciiWhitespace(line);
+        if (std_line.empty()) {
           total_output << ",,";
           continue;
         }
-        total_output << line;
+        total_output << std_line;
         working = true;
         ++merged_lines;
       }
     }
     total_output << std::endl;
   }
+  free(line);
   return 0;
 }
 
@@ -1303,7 +1298,7 @@ int main(int argc, char **argv) {
     std::map<std::string, size_t> written;
     for (const auto &pair : dataset_counts) {
       std::vector<std::string> tokens = absl::StrSplit(pair.first, '/');
-      THALAMUS_ASSERT(tokens.size() > 0);
+      THALAMUS_ASSERT(tokens.size() > 0, "StrSplit failed");
       if (tokens.back() == "received") {
         continue;
       }
@@ -1352,24 +1347,24 @@ int main(int argc, char **argv) {
 
     H5Handle str_type = H5Tcopy(H5T_C_S1);
     error = H5Tset_size(str_type, H5T_VARIABLE);
-    THALAMUS_ASSERT(error >= 0);
+    THALAMUS_ASSERT(error >= 0, "H5Tset_size failed");
     error = H5Tset_strpad(str_type, H5T_STR_NULLTERM);
-    THALAMUS_ASSERT(error >= 0);
+    THALAMUS_ASSERT(error >= 0, "H5Tset_strpad failed");
     error = H5Tset_cset(str_type, H5T_CSET_UTF8);
-    THALAMUS_ASSERT(error >= 0);
+    THALAMUS_ASSERT(error >= 0, "H5Tset_cset failed");
 
     H5Handle link_plist = H5Pcreate(H5P_LINK_CREATE);
     error = H5Pset_create_intermediate_group(link_plist, 1);
-    THALAMUS_ASSERT(error >= 0);
+    THALAMUS_ASSERT(error >= 0, "H5Pset_create_intermediate_group failed");
 
     for (const auto &pair : dataset_counts) {
       std::vector<std::string> tokens = absl::StrSplit(pair.first, '/');
-      THALAMUS_ASSERT(tokens.size() > 0);
+      THALAMUS_ASSERT(tokens.size() > 0, "StrSplit failed");
       if (tokens.back() == "received") {
         hsize_t dims[] = {pair.second, 3};
         hsize_t max_dims[] = {pair.second, 3};
         H5Handle file_space = H5Screate_simple(2, dims, max_dims);
-        THALAMUS_ASSERT(file_space);
+        THALAMUS_ASSERT(file_space, "H5Screate_simple failed");
 
         H5Handle plist_id = H5P_DEFAULT;
         if (gzip) {
@@ -1377,16 +1372,16 @@ int main(int argc, char **argv) {
 
           hsize_t chunk[] = {dims[0], 3};
           error = H5Pset_chunk(plist_id, 2, chunk);
-          THALAMUS_ASSERT(error >= 0);
+          THALAMUS_ASSERT(error >= 0, "H5Pset_chunk failed");
 
           error = H5Pset_deflate(plist_id, uint32_t(gzip));
-          THALAMUS_ASSERT(error >= 0);
+          THALAMUS_ASSERT(error >= 0, "H5Pset_deflate failed");
         }
 
         datasets[pair.first] =
             H5Handle(H5Dcreate(fid, pair.first.c_str(), H5T_NATIVE_UINT64,
                                file_space, link_plist, plist_id, H5P_DEFAULT));
-        THALAMUS_ASSERT(datasets[pair.first]);
+        THALAMUS_ASSERT(datasets[pair.first], "H5Dcreate failed");
       } else {
         hid_t type = H5T_NATIVE_OPAQUE;
         hsize_t dims[] = {pair.second, 0, 0, 0};
@@ -1423,7 +1418,7 @@ int main(int argc, char **argv) {
           }
         }
         H5Handle file_space = H5Screate_simple(rank, dims, max_dims);
-        THALAMUS_ASSERT(file_space);
+        THALAMUS_ASSERT(file_space, "H5Screate_simple failed");
 
         H5Handle plist_id = H5P_DEFAULT;
         if (gzip && dims[0] > 0) {
@@ -1432,16 +1427,16 @@ int main(int argc, char **argv) {
           std::vector<hsize_t> chunk_dims(std::begin(dims), std::end(dims));
           chunk_dims[0] = std::min(chunk_dims[0], hsize_t(chunk_size));
           error = H5Pset_chunk(plist_id, rank, chunk_dims.data());
-          THALAMUS_ASSERT(error >= 0);
+          THALAMUS_ASSERT(error >= 0, "H5Pset_chunk failed");
 
           error = H5Pset_deflate(plist_id, uint32_t(gzip));
-          THALAMUS_ASSERT(error >= 0);
+          THALAMUS_ASSERT(error >= 0, "H5Pset_deflate failed");
         }
 
         datasets[pair.first] =
             H5Handle(H5Dcreate(fid, pair.first.c_str(), type, file_space,
                                link_plist, plist_id, H5P_DEFAULT));
-        THALAMUS_ASSERT(datasets[pair.first]);
+        THALAMUS_ASSERT(datasets[pair.first], "H5Dcreate failed");
       }
     }
 

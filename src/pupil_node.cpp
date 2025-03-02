@@ -169,7 +169,7 @@ PupilNode::~PupilNode() {}
 std::string PupilNode::type_name() { return "PUPIL"; }
 
 ImageNode::Plane PupilNode::plane(int i) const {
-  THALAMUS_ASSERT(i == 0);
+  THALAMUS_ASSERT(i == 0, "Plane index out of bounds");
   return ImageNode::Plane(impl->cairo_data.begin(), impl->cairo_data.end());
 }
 
@@ -181,7 +181,7 @@ size_t PupilNode::width() const { return size_t(impl->width); }
 
 size_t PupilNode::height() const { return size_t(impl->height); }
 
-void PupilNode::inject(const thalamus_grpc::Image &) { THALAMUS_ASSERT(false); }
+void PupilNode::inject(const thalamus_grpc::Image &) { THALAMUS_ASSERT(false, "Unimplemented"); }
 
 std::chrono::nanoseconds PupilNode::time() const { return impl->time; }
 

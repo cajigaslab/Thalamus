@@ -18,8 +18,8 @@ struct TestPulseNode::Impl {
   double last_value = 0;
   std::chrono::nanoseconds last_time = 0ns;
 
-  Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
-       NodeGraph *_graph, TestPulseNode *_outer) : state(_state), graph(_graph) {
+  Impl(ObservableDictPtr _state, boost::asio::io_context &,
+       NodeGraph *_graph, TestPulseNode *) : state(_state), graph(_graph) {
     state_connection =
         state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
     this->state->recap(std::bind(&Impl::on_change, this, _1, _2, _3));

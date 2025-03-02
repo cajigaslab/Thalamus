@@ -353,7 +353,7 @@ std::chrono::nanoseconds SyncNode::sample_interval(int) const { return 0ns; }
 void SyncNode::inject(const thalamus::vector<std::span<double const>> &,
                       const thalamus::vector<std::chrono::nanoseconds> &,
                       const thalamus::vector<std::string_view> &) {
-  THALAMUS_ASSERT(false);
+  THALAMUS_ASSERT(false, "Unimplemented");
 }
 
 bool SyncNode::has_analog_data() const { return true; }

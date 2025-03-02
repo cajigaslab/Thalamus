@@ -29,7 +29,7 @@ class ThreadPool;
 
 class Node : public std::enable_shared_from_this<Node> {
 public:
-  virtual ~Node() {}
+  virtual ~Node();
   boost::signals2::signal<void(Node *)> ready;
   std::map<size_t, boost::signals2::scoped_connection> connections;
   virtual size_t modalities() const = 0;
@@ -40,7 +40,7 @@ public:
 
 class NodeGraph {
 public:
-  virtual ~NodeGraph() {}
+  virtual ~NodeGraph();
   virtual std::weak_ptr<Node> get_node(const std::string &) = 0;
   virtual std::weak_ptr<Node> get_node(const thalamus_grpc::NodeSelector &) = 0;
   virtual void get_node(const std::string &,
@@ -64,8 +64,8 @@ public:
 
 class NoneNode : public Node {
 public:
-  NoneNode(ObservableDictPtr, boost::asio::io_context &, NodeGraph *) {}
-  size_t modalities() const override { return 0; }
+  NoneNode(ObservableDictPtr, boost::asio::io_context &, NodeGraph *);
+  size_t modalities() const override;
 
   static std::string type_name() { return "NONE"; }
 };

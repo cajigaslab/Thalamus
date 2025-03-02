@@ -4,6 +4,12 @@
 #include <util.hpp>
 
 namespace thalamus {
+
+Node::~Node() {}
+NodeGraph::~NodeGraph() {}
+NoneNode::NoneNode(ObservableDictPtr, boost::asio::io_context &, NodeGraph *) {}
+size_t NoneNode::modalities() const { return 0; }
+
 std::vector<std::weak_ptr<ObservableDict>>
 get_nodes(ObservableList *nodes, const std::vector<std::string> &names) {
   std::vector<std::weak_ptr<ObservableDict>> targets;

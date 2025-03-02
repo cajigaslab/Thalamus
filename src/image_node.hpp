@@ -17,7 +17,7 @@ public:
     YUV420P,
     YUVJ420P,
   };
-  virtual ~ImageNode() {}
+  virtual ~ImageNode();
   virtual Plane plane(int) const = 0;
   virtual size_t num_planes() const = 0;
   virtual Format format() const = 0;

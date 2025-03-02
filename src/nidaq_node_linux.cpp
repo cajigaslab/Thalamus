@@ -1,12 +1,20 @@
-#include "thalamus_asio.hpp"
 #include <absl/strings/numbers.h>
-#include <comedilib.h>
 #include <grpc_impl.hpp>
 #include <modalities_util.hpp>
 #include <nidaq_node.hpp>
 #include <numeric>
 #include <regex>
 #include <thalamus/tracing.hpp>
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Weverything"
+#endif
+#include <boost/asio.hpp>
+#include <comedilib.h>
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 namespace thalamus {
 static void close_device(comedi_t **device) {
@@ -22,13 +30,12 @@ struct DeviceParams {
   thalamus::vector<unsigned int> channels;
 };
 
-bool is_digital(const std::string &channel) {
+static bool is_digital(const std::string &channel) {
   return channel.find("port") != std::string::npos;
 }
 
-static std::regex nidaq_regex("^([a-zA-Z0-9/]+)(\\d+)(:(\\d+))?$");
-
 static thalamus::vector<std::string> get_channels(const std::string &channel) {
+  std::regex nidaq_regex("^([a-zA-Z0-9/]+)(\\d+)(:(\\d+))?$");
   std::smatch match_result;
   if (!std::regex_search(channel, match_result, nidaq_regex)) {
     // QMessageBox::warning(nullptr, "Parse Failed", "Failed to parse NIDAQ
@@ -79,7 +86,7 @@ parse_device_string(const std::string &device) {
     success = absl::SimpleAtoi(right_str, &right);
     THALAMUS_ASSERT(success, "absl::SimpleAtoi failed");
     for (auto i = left; i < right + 1; ++i) {
-      result.channels.push_back(i);
+      result.channels.push_back(uint32_t(i));
     }
   } else {
     auto left_str = match_result[3].str();
@@ -90,11 +97,11 @@ parse_device_string(const std::string &device) {
     success = absl::SimpleAtoi(right_str, &right);
     THALAMUS_ASSERT(success, "absl::SimpleAtoi failed");
     for (auto i = left; i < right + 1; ++i) {
-      result.channels.push_back(i);
+      result.channels.push_back(uint32_t(i));
     }
   }
 
-  return result;
+  return std::move(result);
 }
 
 struct NidaqNode::Impl {
@@ -126,11 +133,11 @@ struct NidaqNode::Impl {
   std::vector<std::vector<double>> output_data;
   size_t complete_samples = 0;
 
-  Impl(ObservableDictPtr state, boost::asio::io_context &io_context,
-       NodeGraph *graph, NidaqNode *outer)
-      : state(state), device(nullptr), io_context(io_context),
-        timer(io_context), analog_buffer_position(0), busy(false), graph(graph),
-        outer(outer), is_running(false) {
+  Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
+       NodeGraph *_graph, NidaqNode *_outer)
+      : state(_state), device(nullptr), io_context(_io_context),
+        timer(_io_context), analog_buffer_position(0), busy(false), graph(_graph),
+        outer(_outer), is_running(false) {
     state_connection =
         state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
     this->state->recap(std::bind(&Impl::on_change, this, _1, _2, _3));
@@ -163,7 +170,7 @@ struct NidaqNode::Impl {
     next_channel = (next_channel + 1) % output_data.size();
   }
 
-  void on_timer_digital(std::chrono::milliseconds polling_interval,
+  void on_timer_digital(std::chrono::milliseconds interval,
                         std::chrono::nanoseconds sample_interval,
                         std::chrono::steady_clock::time_point last_sample,
                         const boost::system::error_code &e) {
@@ -193,7 +200,7 @@ struct NidaqNode::Impl {
     }
 
     complete_samples = output_data.front().size();
-    if (complete_samples * sample_interval >= polling_interval) {
+    if (complete_samples * sample_interval >= interval) {
       _time = now.time_since_epoch();
       outer->ready(outer);
       for (auto &d : output_data) {
@@ -202,11 +209,11 @@ struct NidaqNode::Impl {
     }
 
     timer.expires_after(sample_interval);
-    timer.async_wait(std::bind(&Impl::on_timer_digital, this, polling_interval,
+    timer.async_wait(std::bind(&Impl::on_timer_digital, this, interval,
                                sample_interval, last_sample, _1));
   }
 
-  void on_timer_analog(std::chrono::milliseconds polling_interval,
+  void on_timer_analog(std::chrono::milliseconds interval,
                        const boost::system::error_code &e) {
     if (e) {
       THALAMUS_LOG(info) << e.what();
@@ -218,9 +225,9 @@ struct NidaqNode::Impl {
                     buffer_size - offset);
     if (ret < 0) {
       if (errno == EAGAIN) {
-        timer.expires_after(polling_interval);
+        timer.expires_after(interval);
         timer.async_wait(
-            std::bind(&Impl::on_timer_analog, this, polling_interval, _1));
+            std::bind(&Impl::on_timer_analog, this, interval, _1));
       } else {
         THALAMUS_LOG(error) << strerror(errno);
         (*state)["Running"].assign(false, [] {});
@@ -235,10 +242,10 @@ struct NidaqNode::Impl {
     _time = std::chrono::steady_clock::now().time_since_epoch();
 
     for (auto &d : output_data) {
-      d.erase(d.begin(), d.begin() + complete_samples);
+      d.erase(d.begin(), d.begin() + long(complete_samples));
     }
 
-    auto end = (offset + ret) / bytes_per_sample;
+    auto end = (offset + uint32_t(ret)) / bytes_per_sample;
     if (bytes_per_sample == sizeof(lsampl_t)) {
       for (auto i = 0u; i < end; ++i) {
         store_sample(lsampl_buffer[i]);
@@ -260,11 +267,11 @@ struct NidaqNode::Impl {
 
     std::copy(bytes_buffer + end * bytes_per_sample,
               bytes_buffer + offset + ret, bytes_buffer);
-    offset = (offset + ret) % bytes_per_sample;
+    offset = (offset + uint32_t(ret)) % bytes_per_sample;
 
-    timer.expires_after(polling_interval);
+    timer.expires_after(interval);
     timer.async_wait(
-        std::bind(&Impl::on_timer_analog, this, polling_interval, _1));
+        std::bind(&Impl::on_timer_analog, this, interval, _1));
   }
 
   void on_change(ObservableCollection::Action,
@@ -290,7 +297,7 @@ struct NidaqNode::Impl {
           (*state)["Running"].assign(false, [&] {});
           return;
         }
-        subdevice = device_params->subdevice;
+        subdevice = uint32_t(device_params->subdevice);
         channels = device_params->channels;
 
         _sample_interval = std::chrono::nanoseconds(size_t(1e9 / sample_rate));
@@ -306,7 +313,7 @@ struct NidaqNode::Impl {
 
         digital = is_digital(channel);
         if (!digital) {
-          subdevice = comedi_get_read_subdevice(device);
+          subdevice = uint32_t(comedi_get_read_subdevice(device));
           THALAMUS_ASSERT(subdevice >= 0, "comedi_get_read_subdevice failed");
         }
 
@@ -319,9 +326,9 @@ struct NidaqNode::Impl {
         _time = 0ns;
         outer->channels_changed(outer);
         if (digital) {
-          for (auto channel : channels) {
+          for (auto c : channels) {
             auto daq_error =
-                comedi_dio_config(device, subdevice, channel, COMEDI_INPUT);
+                comedi_dio_config(device, subdevice, c, COMEDI_INPUT);
             THALAMUS_ASSERT(daq_error >= 0, "DIO config failed");
           }
 
@@ -332,21 +339,21 @@ struct NidaqNode::Impl {
           range_info.clear();
           maxdata.clear();
           chanlist.clear();
-          for (auto channel : channels) {
-            chanlist.push_back(CR_PACK(channel, 0, AREF_GROUND));
+          for (auto c : channels) {
+            chanlist.push_back(CR_PACK(c, 0, AREF_GROUND));
             range_info.push_back(
-                comedi_get_range(device, subdevice, channel, 0));
+                comedi_get_range(device, subdevice, c, 0));
             THALAMUS_ASSERT(range_info.back(), "comedi_get_range failed");
-            maxdata.push_back(comedi_get_maxdata(device, subdevice, channel));
+            maxdata.push_back(comedi_get_maxdata(device, subdevice, c));
             THALAMUS_ASSERT(maxdata.back(), "comedi_get_maxdata failed");
           }
           memset(&command, 0, sizeof(command));
           auto ret = comedi_get_cmd_generic_timed(device, subdevice, &command,
-                                                  channels.size(),
-                                                  _sample_interval.count());
+                                                  uint32_t(channels.size()),
+                                                  uint32_t(_sample_interval.count()));
           THALAMUS_ASSERT(ret == 0, "comedi_get_cmd_generic_timed failed");
           command.chanlist = chanlist.data();
-          command.chanlist_len = chanlist.size();
+          command.chanlist_len = uint32_t(chanlist.size());
           command.stop_src = TRIG_NONE;
           command.flags = TRIG_WAKE_EOS;
           ret = comedi_command_test(device, &command);
@@ -358,7 +365,7 @@ struct NidaqNode::Impl {
           ret = comedi_command(device, &command);
           THALAMUS_ASSERT(ret == 0, "comedi_command failed");
 
-          flags = comedi_get_subdevice_flags(device, subdevice);
+          flags = uint32_t(comedi_get_subdevice_flags(device, subdevice));
           bytes_per_sample =
               flags & SDF_LSAMPL ? sizeof(lsampl_t) : sizeof(sampl_t);
           next_channel = 0;
@@ -402,12 +409,12 @@ int NidaqNode::get_num_channels(const std::string &channel) {
 std::string NidaqNode::type_name() { return "NIDAQ (COMEDI)"; }
 
 std::span<const double> NidaqNode::data(int channel) const {
-  return std::span<const double>(impl->output_data[channel].begin(),
-                                 impl->output_data[channel].begin() +
-                                     impl->complete_samples);
+  return std::span<const double>(impl->output_data[size_t(channel)].begin(),
+                                 impl->output_data[size_t(channel)].begin() +
+                                      int64_t(impl->complete_samples));
 }
 
-int NidaqNode::num_channels() const { return impl->output_data.size(); }
+int NidaqNode::num_channels() const { return int(impl->output_data.size()); }
 
 std::chrono::nanoseconds NidaqNode::sample_interval(int) const {
   return impl->_sample_interval;
@@ -416,7 +423,7 @@ std::chrono::nanoseconds NidaqNode::sample_interval(int) const {
 std::chrono::nanoseconds NidaqNode::time() const { return impl->_time; }
 
 std::string_view NidaqNode::name(int channel) const {
-  return impl->recommended_names.at(channel);
+  return impl->recommended_names.at(size_t(channel));
 }
 
 void NidaqNode::inject(const thalamus::vector<std::span<double const>> &,
@@ -437,9 +444,9 @@ struct NidaqOutputNode::Impl {
   bool digital = false;
   size_t bytes_per_sample;
 
-  Impl(ObservableDictPtr state, boost::asio::io_context &, NodeGraph *graph,
-       NidaqOutputNode *outer)
-      : state(state), device(nullptr), graph(graph), outer(outer),
+  Impl(ObservableDictPtr _state, boost::asio::io_context &, NodeGraph *_graph,
+       NidaqOutputNode *_outer)
+      : state(_state), device(nullptr), graph(_graph), outer(_outer),
         running(false) {
     using namespace std::placeholders;
     state_connection =
@@ -486,7 +493,7 @@ struct NidaqOutputNode::Impl {
           (*state)["Running"].assign(false, [&] {});
           return;
         }
-        subdevice = device_params->subdevice;
+        subdevice = uint32_t(device_params->subdevice);
         channels = device_params->channels;
 
         auto filename =
@@ -496,25 +503,25 @@ struct NidaqOutputNode::Impl {
 
         digital = is_digital(channel);
         if (!digital) {
-          subdevice = comedi_get_write_subdevice(device);
+          subdevice = uint32_t(comedi_get_write_subdevice(device));
           THALAMUS_ASSERT(subdevice >= 0, "comedi_get_read_subdevice failed");
         }
 
         if (digital) {
-          for (auto channel : channels) {
+          for (auto c : channels) {
             auto daq_error =
-                comedi_dio_config(device, subdevice, channel, COMEDI_OUTPUT);
+                comedi_dio_config(device, subdevice, c, COMEDI_OUTPUT);
             THALAMUS_ASSERT(daq_error >= 0, "DIO config failed");
           }
         } else {
           range_info.clear();
           maxdata.clear();
-          for (auto channel : channels) {
+          for (auto c : channels) {
             range_info.push_back(
-                comedi_get_range(device, subdevice, channel, 0));
+                comedi_get_range(device, subdevice, c, 0));
             THALAMUS_ASSERT(range_info.back(), "comedi_get_range failed: %d %d",
-                            subdevice, channel);
-            maxdata.push_back(comedi_get_maxdata(device, subdevice, channel));
+                            subdevice, c);
+            maxdata.push_back(comedi_get_maxdata(device, subdevice, c));
             THALAMUS_ASSERT(maxdata.back(), "comedi_get_maxdata failed");
           }
         }
@@ -537,7 +544,7 @@ struct NidaqOutputNode::Impl {
       unsigned int bits = 0;
       for (auto i = 0; i < source->num_channels(); ++i) {
         auto data = source->data(i);
-        auto channel = channels[i];
+        auto channel = channels[size_t(i)];
         if (!data.empty()) {
           bits |= data.back() > 1 ? (0x1 << channel) : 0;
         }
@@ -554,7 +561,7 @@ struct NidaqOutputNode::Impl {
     } else {
       auto count = std::min(size_t(source->num_channels()), channels.size());
       for (auto i = 0ull; i < count; ++i) {
-        auto data = source->data(i);
+        auto data = source->data(int(i));
         auto channel = channels[i];
         if (!data.empty()) {
           auto sample =

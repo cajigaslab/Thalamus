@@ -57,7 +57,7 @@ struct SpikeGlxNode::Impl {
   int nsamples;
   int next_channel = 0;
   size_t samples_read;
-  size_t from_count;
+  unsigned long long from_count;
   size_t position = 0;
   size_t complete_samples;
   std::chrono::nanoseconds time;

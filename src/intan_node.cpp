@@ -1,3 +1,4 @@
+#include <thalamus/tracing.hpp>
 #include <base_node.hpp>
 #include <functional>
 #include <intan_node.hpp>
@@ -6,8 +7,8 @@
 #include <numeric>
 #include <state.hpp>
 #include <string>
-#include <thalamus/async.hpp>
 #include <vector>
+#include <thalamus/async.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -94,7 +95,6 @@ struct IntanNode::Impl {
   size_t observer_id;
   boost::signals2::scoped_connection state_connection;
   boost::asio::io_context &io_context;
-  boost::asio::high_resolution_timer timer;
   Socket command_socket;
   boost::asio::ip::tcp::socket waveform_socket;
   size_t num_channels;
@@ -123,7 +123,7 @@ struct IntanNode::Impl {
 public:
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
        NodeGraph *, IntanNode *_outer)
-      : state(_state), io_context(_io_context), timer(io_context),
+      : state(_state), io_context(_io_context),
         command_socket(io_context, "command", state),
         waveform_socket(io_context), outer(_outer),
         connecting_condition(io_context) {
@@ -138,9 +138,6 @@ public:
   bool connected = false;
   bool streaming = false;
   CoCondition connecting_condition;
-  bool got_magic_number = false;
-
-  void reset_waveform_loop() { got_magic_number = false; }
 
   boost::asio::awaitable<void> waveform_loop() {
     try {
@@ -167,9 +164,12 @@ public:
         }
 
         auto got_magic_number = false;
+        TRACE_EVENT_BEGIN("intan", "Parse Magic Number");
         while (!got_magic_number) {
           while (filled - offset < 4) {
+            TRACE_EVENT_END("intan");
             co_await receive();
+            TRACE_EVENT_BEGIN("intan", "Parse Magic Number");
           }
           auto pos = buffer + offset;
           unsigned int magic = uint32_t(pos[0]) | uint32_t(pos[1]) << 8 |
@@ -178,11 +178,15 @@ public:
           got_magic_number = magic == 0x2ef07a08;
           offset += got_magic_number ? 4 : 1;
         }
+        TRACE_EVENT_END("intan");
 
         int frame = 0;
+        TRACE_EVENT_BEGIN("intan", "Parse Frames");
         while (frame < 128) {
           while (filled - offset < 4) {
+            TRACE_EVENT_END("intan");
             co_await receive();
+            TRACE_EVENT_BEGIN("intan", "Parse Frames");
           }
           auto pos = buffer + offset;
           unsigned int timestamp =
@@ -194,9 +198,11 @@ public:
           size_t channel = 0;
           while (channel < num_channels) {
             while (filled - offset < 2) {
+              TRACE_EVENT_END("intan");
               co_await receive();
+              TRACE_EVENT_BEGIN("intan", "Parse Frames");
             }
-            auto pos = buffer + offset;
+            pos = buffer + offset;
             auto sample = uint16_t(pos[0] | pos[1] << 8);
             data[size_t(channel + 1)].push_back(sample);
             offset += 2;
@@ -204,7 +210,9 @@ public:
           }
           ++frame;
         }
+        TRACE_EVENT_END("intan");
 
+        TRACE_EVENT("intan", "ready");
         num_samples = 128;
         outer->ready(outer);
         for (auto &d : data) {
@@ -288,7 +296,6 @@ public:
         co_return;
       }
       streaming = true;
-      reset_waveform_loop();
 
       std::string command = "execute clearalldataoutputs;\n";
       co_await boost::asio::async_write(
