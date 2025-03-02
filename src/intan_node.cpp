@@ -214,6 +214,7 @@ public:
 
         TRACE_EVENT("intan", "ready");
         num_samples = 128;
+        time = std::chrono::steady_clock::now().time_since_epoch();
         outer->ready(outer);
         for (auto &d : data) {
           d.clear();

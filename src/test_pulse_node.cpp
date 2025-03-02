@@ -30,22 +30,24 @@ struct TestPulseNode::Impl {
     if(!lock) {
       return;
     }
-    if(source->num_channels() < 1) {
+    if(source->num_channels() < 2) {
       return;
     }
-    auto data = source->data(0);
+    auto data = source->data(1);
     if(data.empty()) {
       return;
     }
     auto current_value = data.back();
     auto now = source->time();
-    if(current_value - last_value > 2 && now - last_time > 500ms) {
-      thalamus_grpc::StimRequest request;
-      request.set_trigger(0);
-      stim_node->stim(std::move(request));
-      last_time = now;
+    for(auto current_value : data) {
+      if(current_value > 40000 && current_value - last_value > 1000 && now - last_time > 500ms) {
+        thalamus_grpc::StimRequest request;
+        request.set_trigger(0);
+        stim_node->stim(std::move(request));
+        last_time = now;
+      }
+      last_value = current_value;
     }
-    last_value = current_value;
   }
 
   void on_change(ObservableCollection::Action,
@@ -84,7 +86,7 @@ struct TestPulseNode::Impl {
         auto span = data->add_spans();
         span->set_begin(0);
         span->set_end(2);
-        span->set_name("Dev2/ao0");
+        span->set_name("Dev1/ao0");
         data->add_sample_intervals(300000000);
         maybe_stim_node->stim(std::move(request));
 
