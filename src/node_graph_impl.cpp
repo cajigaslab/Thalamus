@@ -16,7 +16,9 @@
 #include <ophanim_node.hpp>
 #include <pupil_node.hpp>
 #include <remote_node.hpp>
+#ifndef _WIN32
 #include <ros_node2.hpp>
+#endif
 #include <run_node.hpp>
 #include <run2_node.hpp>
 #include <spikeglx_node.hpp>
@@ -117,7 +119,7 @@ public:
         {"WAVE", new NodeFactory<WaveGeneratorNode>()},
         {"STORAGE", new NodeFactory<StorageNode>()},
         {"RUNNER", new NodeFactory<RunNode>()},
-        {"RUNNER2", new NodeFactory<RunNode2>()},
+        {"RUNNER2", new NodeFactory<Run2Node>()},
         {"OPHANIM", new NodeFactory<OphanimNode>()},
         {"TASK_CONTROLLER", new NodeFactory<TaskControllerNode>()},
         {"ANALOG", new NodeFactory<AnalogNodeImpl>()},
