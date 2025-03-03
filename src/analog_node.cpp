@@ -170,6 +170,7 @@ struct WaveGeneratorNode::Impl {
     }
     name_views.assign(names.begin(), names.end());
 
+    std::cout << "WAVE " << now.time_since_epoch().count() << std::endl;
     analog_impl.inject(spans, sample_intervals, name_views,
                        now.time_since_epoch());
     _time = new_time;

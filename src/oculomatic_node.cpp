@@ -114,8 +114,7 @@ struct OculomaticNode::Impl {
     y_denominator =
         y_denominator == 0 ? dimensions.second - 2 * y_gain : y_denominator;
 #ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Weverything"
+#pragma clang diagnostic pop
 #endif
 
     if (invert_x && invert_y) {

@@ -700,7 +700,7 @@ Service::events(::grpc::ServerContext *context,
     }
   }
 
-  {
+  if(!request->peer_name().empty()) {
     std::unique_lock<std::mutex> lock(impl->mutex);
     impl->condition.wait_for(lock, 5s, [&] {
       return impl->peer_name_to_observable_bridge_client.contains(
