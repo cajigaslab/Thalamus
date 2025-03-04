@@ -3,7 +3,7 @@
 #include <hydrate.hpp>
 #include <iostream>
 #include <optional>
-#include <string>
+#include <cstdio>
 #include <thalamus_config.h>
 #ifdef _WIN32
 #include <WinSock2.h>
@@ -1142,13 +1142,14 @@ int generate_csv(boost::program_options::variables_map &vm) {
           ++line_count;
         }
 
+        uint64_t record_time = record->time();
         if (analog.is_int_data()) {
           for (auto i = span.begin(); i < span.end(); ++i) {
-            fprintf(column_files[span_name], "%lu,%d,\n", record->time(), analog.int_data(int(i)));
+            fprintf(column_files[span_name], "%llu,%d,\n", record_time, analog.int_data(int(i)));
           }
         } else {
           for (auto i = span.begin(); i < span.end(); ++i) {
-            fprintf(column_files[span_name], "%lu,%f,\n", record->time(), analog.data(int(i)));
+            fprintf(column_files[span_name], "%llu,%f,\n", record_time, analog.data(int(i)));
           }
         }
         line_count += span.end() - span.begin();
@@ -1171,11 +1172,10 @@ int generate_csv(boost::program_options::variables_map &vm) {
 
   std::cout << "Merging Channel CSVs" << std::endl;
   std::ofstream total_output = std::ofstream(output);
+  char buffer[1024];
   auto working = true;
   auto merged_lines = 0;
 
-  char *line = nullptr;
-  size_t size = 0;
   last_time = std::chrono::steady_clock::now();
   while (working) {
     auto now = std::chrono::steady_clock::now();
@@ -1189,8 +1189,8 @@ int generate_csv(boost::program_options::variables_map &vm) {
       if (feof(pair.second)) {
         total_output << ",,";
       } else {
-        getline(&line, &size, pair.second);
-        auto std_line = absl::StripAsciiWhitespace(line);
+        fgets(buffer, sizeof(buffer), pair.second);
+        auto std_line = absl::StripAsciiWhitespace(buffer);
         if (std_line.empty()) {
           total_output << ",,";
           continue;
@@ -1202,7 +1202,6 @@ int generate_csv(boost::program_options::variables_map &vm) {
     }
     total_output << std::endl;
   }
-  free(line);
   return 0;
 }
 

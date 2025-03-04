@@ -368,6 +368,7 @@ struct RemoteNode::Impl {
 
           time = std::chrono::steady_clock::now().time_since_epoch();
           remote_time = std::chrono::nanoseconds(analog_response.time());
+          std::cout << "REMOTE " << analog_response.time() << " " << remote_time.count() << std::endl;
           data.assign(analog_response.data().begin(),
                       analog_response.data().end());
           spans.clear();

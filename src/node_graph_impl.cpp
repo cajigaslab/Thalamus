@@ -16,8 +16,11 @@
 #include <ophanim_node.hpp>
 #include <pupil_node.hpp>
 #include <remote_node.hpp>
-#include <ros2_node.hpp>
+#ifndef _WIN32
+#include <ros_node2.hpp>
+#endif
 #include <run_node.hpp>
+#include <run2_node.hpp>
 #include <spikeglx_node.hpp>
 #include <stim_printer_node.hpp>
 #include <sync_node.hpp>
@@ -33,6 +36,7 @@
 #pragma clang diagnostic ignored "-Weverything"
 #endif
 #include <grpcpp/create_channel.h>
+#include <thalamus.grpc.pb.h>
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
@@ -88,6 +92,7 @@ struct NodeGraphImpl::Impl {
       signals;
   NodeGraphImpl *outer;
   thalamus::map<std::string, std::weak_ptr<grpc::Channel>> channels;
+  thalamus::map<std::string, std::unique_ptr<thalamus_grpc::Thalamus::Stub>> stubs;
   std::chrono::system_clock::time_point system_time;
   std::chrono::steady_clock::time_point steady_time;
   ThreadPool thread_pool;
@@ -114,6 +119,7 @@ public:
         {"WAVE", new NodeFactory<WaveGeneratorNode>()},
         {"STORAGE", new NodeFactory<StorageNode>()},
         {"RUNNER", new NodeFactory<RunNode>()},
+        {"RUNNER2", new NodeFactory<Run2Node>()},
         {"OPHANIM", new NodeFactory<OphanimNode>()},
         {"TASK_CONTROLLER", new NodeFactory<TaskControllerNode>()},
         {"ANALOG", new NodeFactory<AnalogNodeImpl>()},
@@ -360,6 +366,16 @@ NodeGraphImpl::get_channel(const std::string &url) {
     return channel;
   }
   return impl->channels[url].lock();
+}
+
+thalamus_grpc::Thalamus::Stub*
+NodeGraphImpl::get_thalamus_stub(const std::string &url) {
+  if (!impl->stubs.contains(url)) {
+    auto channel = get_channel(url);
+    auto stub = thalamus_grpc::Thalamus::NewStub(channel);
+    impl->stubs[url] = std::move(stub);
+  }
+  return impl->stubs[url].get();
 }
 
 std::chrono::system_clock::time_point

@@ -164,7 +164,9 @@ struct VideoNode::Impl {
         return;
       }
       if (context.packet->stream_index != stream_index) {
+#ifdef __clang__
         TRACE_EVENT_INSTANT("thalamus", "wrong stream");
+#endif
         av_packet_unref(context.packet);
         continue;
       }

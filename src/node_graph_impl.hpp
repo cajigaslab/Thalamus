@@ -48,6 +48,7 @@ public:
   get_node_scoped(const thalamus_grpc::NodeSelector &,
                   std::function<void(std::weak_ptr<Node>)>) override;
   std::shared_ptr<grpc::Channel> get_channel(const std::string &) override;
+  thalamus_grpc::Thalamus::Stub* get_thalamus_stub(const std::string &) override;
   std::chrono::system_clock::time_point get_system_clock_at_start() override;
   std::chrono::steady_clock::time_point get_steady_clock_at_start() override;
   ThreadPool &get_thread_pool() override;

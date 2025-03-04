@@ -262,6 +262,9 @@ FACTORIES = {
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.DEFAULT, 'Targets', '', []),
   ]),
+  'RUNNER2': Factory(create_run_widget, [
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+  ]),
   'OPHANIM': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.DEFAULT, 'Address', '', []),
