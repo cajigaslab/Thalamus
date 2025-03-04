@@ -396,7 +396,9 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
         if stl_mesh:
           painter.render_stl(stl_mesh)
         else:
-          painter.fillRect(all_target_rects[i_presented_targ], all_target_colors[i_presented_targ])
+          color, scale = all_target_colors[i_presented_targ], all_target_on_luminance[i_presented_targ]
+          color = QColor(scale*color.red(), scale*color.green(), scale*color.blue())
+          painter.fillRect(all_target_rects[i_presented_targ], color)
 
     with painter.masked(RenderOutput.OPERATOR):
       path = QPainterPath()
@@ -405,6 +407,12 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
         path.addEllipse(QPointF(rect.center()), window, window)
 
       painter.fillPath(path, QColor(255, 255, 255, 128))
+
+      painter.setPen(QColor(255, 255, 255))
+      font = painter.font()
+      font.setPointSize(5*font.pointSize())
+      painter.setFont(font)
+      painter.drawText(0, 100, str(reward_message.on_time_ms))
 
     state_color = QColor(state_brightness, state_brightness, state_brightness)
     state_width = 70

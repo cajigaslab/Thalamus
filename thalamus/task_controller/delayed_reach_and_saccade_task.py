@@ -474,7 +474,11 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     show_start_target = False
     context.widget.update()
     with next_state(context, State.INTERTRIAL, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
-      await context.sleep(config.intertrial_timeout)
+      await wait_for(context, lambda: touch_pos.x() > 0, config.intertrial_timeout)
+      if touch_pos.x() > 0: # touching the screen during ITI = failure
+        with fail_trial():
+          await context.sleep(config.fail_timeout)
+          return task_context.TaskResult(False)
 
     blank_space_touched = False
     state_brightness = toggle_brightness(state_brightness)
@@ -537,6 +541,13 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     success = await wait_for_dual_hold(context, config.hold_timeout, 
       lambda: presented_targ_touched, lambda: presented_targ_gazed, 
       config.hand_blink, config.eye_blink)
+
+  if not presented_targ_touched: #end trial if initial touch incorrect
+    context.behav_result = behav_result
+    with fail_trial():
+      await context.sleep(config.fail_timeout)
+      return task_context.TaskResult(False)
+
   if not success:
     with fail_trial():
       await context.sleep(config.fail_timeout)
@@ -566,6 +577,13 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
     await context.sleep(config.success_timeout)
 
-    context.behav_result = behav_result
-    return task_context.TaskResult(True)
+    # context.behav_result = behav_result
+    # return task_context.TaskResult(True)
+  if touch_pos.x() > 0: # not removing hand from screen before end of trial = failure, but do not alter behav_result (?)
+    with fail_trial():
+      await context.sleep(config.fail_timeout)
+      return touch_task.task_context.TaskResult(False)
+
+  context.behav_result = behav_result
+  return touch_task.task_context.TaskResult(True)
     
