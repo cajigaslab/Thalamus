@@ -10,6 +10,7 @@ import random
 import numpy as np # import Numpy to draw Gaussian
 
 from ..qt import *
+from PyQt5.QtCore import Qt
 
 from . import task_context
 from .widgets import Form, ListAsTabsWidget
@@ -27,14 +28,12 @@ Config = typing.NamedTuple('Config', [
   ('targethold_duration', timedelta),
   ('target_present_dur', timedelta),
   ('penalty_delay', timedelta),
-  ('cum_blinking_ms', timedelta)
+  ('blink_dur_ms', timedelta)
 ])
 
 RANDOM_DEFAULT = {'min': 1, 'max':1}
 COLOR_DEFAULT = [255, 255, 255]
 shapes = ['rectangle', 'gaussian', 'square'] # Define the possible shapes
-global testing_locations
-testing_locations = True # a toggle for testing the plotting of target locations
 
 #  Widget for managing the GUI fields that appear after pressing ADD TARGET
 class TargetWidget(QWidget):
@@ -123,11 +122,12 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Uniform('\u2195Target height (0.1-1.0)', 'height_targ_deg', 0.1, 1, '\u00B0'),
     Form.Constant('\u2195Target height step (0.1-1.0)', 'heighttargdeg_step', 0.1, '\u00B0'),
     Form.Bool('Lock Height to Width?', 'is_height_locked', False),
+    Form.Bool('Paint all targets simultaneously?', 'paint_all_targets', False),
     Form.Uniform('\U0001F9EDOrientation (0-150)', 'orientation_ran', 0, 150, '\u00B0'),
     Form.Constant('\U0001F9EDOrientation step size (0-150)', 'orientation_step', 30, '\u00B0'),
-    Form.Uniform('\U0001F526Luminence (0-100)', 'luminence_per', 10, 100,'%'),
-    Form.Constant('\U0001F526Luminence step size (0-100)', 'luminence_step', 10,'%'),
-    Form.Constant('Gaze acceptance \u2300 (0.1-2.0)', 'accptolerance_deg', 2, '\u00B0'), # Define the diameter in degrees of the area where gaze is accepted as being correct
+    Form.Uniform('\U0001F526Luminence (0-100)', 'luminance_per', 10, 100,'%'),
+    Form.Constant('\U0001F526Luminence step size (0-100)', 'luminance_step', 10,'%'),
+    Form.Constant('Gaze acceptance diameter \u2300 (0.1-4.0)', 'accptolerance_deg', 2, '\u00B0'), # Define the diameter in degrees of the area where gaze is accepted as being correct
     Form.Constant('Subject\'s distance to the screen', 'subj_dist_m', .57, 'm'),
     Form.Constant('Monitor\'s width', 'monitor_width_m', .5283, 'm'),
     Form.Constant('Monitor\'s width', 'monitor_width_pix', 1920, 'pix'),
@@ -138,7 +138,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Uniform('Target Hold Duration', 'targethold_duration', 1000, 2000, 'ms'),
     Form.Uniform('Decision Temeout', 'decision_timeout', 1000, 2000, 'ms'),
     Form.Uniform('Penalty Delay', 'penalty_delay', 3000, 3000, 'ms'),
-    Form.Constant('Allowed cumulative blinking', 'cum_blinking_ms', 500, 'ms'),
+    Form.Constant('Max allowed single blink duration', 'blink_dur_ms', 500, 'ms'),
     Form.Color('Target Color', 'target_color', QColor(255, 255, 255)),
     Form.Color('Background Color', 'background_color', QColor(128, 128, 128, 255)),
     Form.Choice('Shape', 'shape', list(zip(shapes, shapes))),  # Add the shape attribute
@@ -168,15 +168,15 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   orientation_ran_max_spinbox.setRange(0, 150)
   orientation_ran_max_spinbox.setSingleStep(15)
   accptolerance_deg_spinbox = form.findChild(QDoubleSpinBox, "accptolerance_deg")
-  accptolerance_deg_spinbox.setRange(.1, 2.0)
+  accptolerance_deg_spinbox.setRange(.1, 4.0)
   accptolerance_deg_spinbox.setSingleStep(0.1)
-  luminence_step_spinbox = form.findChild(QDoubleSpinBox, "luminence_step")
-  luminence_step_spinbox.setRange(1, 100)
-  luminence_step_spinbox.setSingleStep(1)
-  luminence_per_min_spinbox = form.findChild(QDoubleSpinBox, "luminence_per_min")
-  luminence_per_min_spinbox.setRange(0, 100)
-  luminence_per_min_spinbox.setSingleStep(5)  
-  orientation_ran_max_spinbox = form.findChild(QDoubleSpinBox, "luminence_per_max")
+  luminance_step_spinbox = form.findChild(QDoubleSpinBox, "luminance_step")
+  luminance_step_spinbox.setRange(1, 100)
+  luminance_step_spinbox.setSingleStep(1)
+  luminance_per_min_spinbox = form.findChild(QDoubleSpinBox, "luminance_per_min")
+  luminance_per_min_spinbox.setRange(0, 100)
+  luminance_per_min_spinbox.setSingleStep(5)  
+  orientation_ran_max_spinbox = form.findChild(QDoubleSpinBox, "luminance_per_max")
   orientation_ran_max_spinbox.setRange(0, 100)
   orientation_ran_max_spinbox.setSingleStep(5)  
   width_targ_deg_min_spinbox = form.findChild(QDoubleSpinBox, "width_targ_deg_min")
@@ -262,18 +262,21 @@ class Converter:
       x, y = args[0] + self.screen_pixels.width/2, args[1] + self.screen_pixels.height/2
     return x*self.deg_per_pixel, y*self.deg_per_pixel
 
-def gaussian_gradient(center: QPointF, gradient_background: QColor, radius: float, deviations: float = 1, brightness: int = 255):
+def gaussian_gradient(center: QPointF, gradient_background: QColor, radius: float, deviations: float = 1, \
+                      brightness_in: int = 255, luminance_percent: float = 1.0):
   gradient = QRadialGradient(center, radius)
   resolution = 1000
   for i in range(resolution):
-    # level = int(brightness*np.exp(-(deviations*i/resolution)**2/(2)))
-    level = int(gradient_background[0] + (brightness - gradient_background[0])*np.exp(-(deviations*i/resolution)**2/(2))) # version that makes Gaussian colors bound by background
+    # brightness is calculated using input luminance as a percentage of the background to maintain Gaussians between the values of 255...gradient_background
+    brightness = int((brightness_in - gradient_background.red()) * luminance_percent/100 + gradient_background.red()) 
+    # level = int(brightness * np.exp(-((deviations * i / resolution) ** 2) / 2)) # formula without adjustment for background color
+    level = int(gradient_background.red() + (brightness - gradient_background.red())*np.exp(-(deviations*i/resolution)**2/(2))) # version that makes Gaussian colors bound by background and draws 2 colors: Black and White
     # gradient_background[0] is used here to blend well with background color
     gradient.setColorAt(i/resolution, QColor(level, level, level))
     # !!The background of the square I draw the gaussian into is a little grey and it's pretty noticeable if it doesn't 
     # cover the whole screen.  I added this clipping to prevent that but it's also pretty noticeable. We may have to 
     # work on that!!!
-  gradient.setColorAt(1, QColor(gradient_background[0], gradient_background[1], gradient_background[2], 255)) #Qt.GlobalColor.black
+  gradient.setColorAt(1, QColor(gradient_background.red(), gradient_background.green(), gradient_background.blue(), 0)) #Qt.GlobalColor.black
   return gradient
 
 # Define an enumeration for the different states of a task
@@ -294,7 +297,10 @@ num_circles = 7 # The last 2 circles usually end up being too large for the scre
 circle_radii = []
 rand_pos_i = 0
 trial_num = 0
-trial_success_count = 0
+trial_photic_count = 0
+trial_photic_success_count = 0
+trial_catch_count = 0
+trial_catch_success_count = 0
 drawn_objects = []
 rand_pos = []
 gaze_success_store = []
@@ -309,7 +315,10 @@ gaze_failure_store = []
 # Define an asynchronous function to run the task with a 60 FPS animation
 async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-many-statements
   global converter, center, center_f, num_circles, circle_radii, rand_pos_i, \
-    trial_num, trial_success_count, drawn_objects, rand_pos, gaze_success_store, gaze_failure_store
+    trial_num, trial_photic_count, trial_photic_success_count, trial_catch_count, \
+    trial_catch_success_count, drawn_objects, rand_pos, \
+    gaze_success_store, gaze_failure_store, \
+    photodiode_blinking_square, photodiode_static_square
   """
   Implementation of the state machine for the simple task
   """
@@ -339,6 +348,14 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       for angle in np.arange(0, 2*np.pi, np.pi/6)
     ]
     random.shuffle(rand_pos) # Shuffle the list of random positions to randomize their order
+    await context.log("Gaussian_delayed_saccade_task_code_v1.0") # saving any variables / data from code
+
+    photodiode_blinking_square = QColor(255, 255, 255, 255) # Create a QColor object with white color and transparency control (i.e. alpha)
+    context.trial_summary_data.used_values['photodiode_blinking_square_color_rgba'] = [photodiode_blinking_square.red(), \
+                        photodiode_blinking_square.green(), photodiode_blinking_square.blue(), photodiode_blinking_square.alpha()]
+    photodiode_static_square = QColor(0, 0, 0, 255)
+    context.trial_summary_data.used_values['photodiode_static_square_color_rgba'] = [photodiode_static_square.red(), \
+                        photodiode_static_square.green(), photodiode_static_square.blue(), photodiode_static_square.alpha()]    
 
   """
   Below is an object that contains a realization generated by sampling from the random
@@ -347,8 +364,13 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   """
 
   trial_num += 1 # Increment the trial counter
-  print(f"Started trial # {trial_num}")
+  if config['name'] == "photic":
+    trial_photic_count += 1 # Increment the photic trial counter
+  else:
+    trial_catch_count += 1 # Increment the catch trial counter
+  print(f"Started trial # {trial_num}, trial type = {config['name']}")
   await context.log(f"StartedTRIAL_NUM={trial_num}") # saving any variables / data from code
+
 
   current_directory = os.getcwd() # Get the current working directory
   # Define a relative path (e.g., accessing a file in a subdirectory)
@@ -371,8 +393,8 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
 
   # Define the vertices for the fixation cross in degrees
   vertices_deg = [ 
-      (-0.25, 0), (0.25, 0),  # Horizontal line
-      (0, -0.25), (0, 0.25)  # Vertical line
+      (-1, 0), (1, 0),  # Horizontal line
+      (0, -1), (0, 1)  # Vertical line
   ]
   # Convert the vertices from degrees to pixels
   vertices = [converter.deg_to_pixel_abs(p) for p in vertices_deg]
@@ -391,8 +413,10 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   accptolerance_deg = config['accptolerance_deg']
   accptolerance_pix = converter.deg_to_pixel_rel(accptolerance_deg)
   is_height_locked = config['is_height_locked']
+  paint_all_targets = config['paint_all_targets']
   target_color_rgb = config['target_color']
   background_color = config['background_color']
+  trial_type = config['name']
   background_color_qt = QColor(background_color[0], background_color[1], background_color[2], 255)
   
   # Get various timeouts from the context (user GUI)
@@ -402,7 +426,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   fix2_duration = context.get_value('fix2_duration') / 1000
   targethold_duration = context.get_value('targethold_duration') / 1000
   penalty_delay = context.get_value('penalty_delay') / 1000
-  cum_blinking_ms = context.get_value('cum_blinking_ms') / 1000
+  blink_dur_ms = context.get_value('blink_dur_ms') / 1000
 
   def pick_random_value(min_val, max_val, step):
     # Generate the range of possible values using numpy
@@ -412,8 +436,8 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
 
   # Create a Gaussian gradient for the target with randomly selected luminance, orientation, size and location
   # Random selection is based on user-defined range min...max and step size
-  luminence_per = pick_random_value(config['luminence_per']['min'], config['luminence_per']['max'], config['luminence_step'])
-  context.trial_summary_data.used_values['luminence_per'] = luminence_per # this command based on 'get_value()' from 'task_context.py' aalows to add values to task_config['used_values']
+  luminance_per = pick_random_value(config['luminance_per']['min'], config['luminance_per']['max'], config['luminance_step'])
+  context.trial_summary_data.used_values['luminance_per'] = luminance_per # this command based on 'get_value()' from 'task_context.py' aalows to add values to task_config['used_values']
   orientation_ran = pick_random_value(config['orientation_ran']['min'], config['orientation_ran']['max'], config['orientation_step'])
   context.trial_summary_data.used_values['orientation_ran'] = orientation_ran 
   width_targ_pix = converter.deg_to_pixel_rel(pick_random_value(config['width_targ_deg']['min'], config['width_targ_deg']['max'], config['widthtargdeg_step']))
@@ -425,10 +449,13 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   context.trial_summary_data.used_values['height_targ_pix'] = height_targ_pix 
 
 
-  gaussian = gaussian_gradient(QPointF(0, 0), background_color, width_targ_pix/2, 3, luminence_per*255/100)
+  gaussian = gaussian_gradient(QPointF(0, 0), background_color_qt, width_targ_pix/2, 3, 255, luminance_per)
   def draw_gaussian(painter: QPainter):
-    if testing_locations:
+    if paint_all_targets:
       # region -- TESTING-TARGET-LOCATIONS: Drawing version that preserves every plotted Gaussian
+      # Check if the current target position already exists in drawn_objects
+      # position_exists = any(obj['position'] == targetpos_pix for obj in drawn_objects)
+      # if not position_exists: # If the position does not exist, append the new object
       drawn_objects.append({
         'position': targetpos_pix,
         'orientation': orientation_ran,
@@ -461,6 +488,17 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       # and the above lines will stretch, rotate (if uncommented), and translate the gaussian to the correct place.
       painter.restore()
       # endregion
+
+  def drawText(painter, text, location: QPoint):
+    painter.save()  # Save the current state of the painter
+    painter.setClipRect(painter.viewport())  # Set the clip region to the current viewport
+    painter.setPen(QColor(0, 0, 0))
+    painter.setFont(QFont('Arial', 20))
+    rect = painter.viewport()  # Get the current viewport rectangle
+    rect.moveTopLeft(location)  # Move the top-left corner of the rectangle to the specified location
+    rect.setHeight(50)  # Set the height of the rectangle to 50 pixels
+    painter.drawText(rect, Qt.AlignLeft | Qt.AlignTop, text)  # Draw the text within the rectangle
+    painter.restore()  # Restore the painter to its previous state
 
   def draw_gaze(painter, gaze_qpoint, color_rgba):
     path = QPainterPath()
@@ -496,17 +534,10 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   def renderer(painter: QPainter):
     nonlocal gaussian
     painter.fillRect(QRect(0, 0, 4000, 4000), background_color_qt) # QColor(128, 128, 128, 255); make the background of desired color
-    painter.fillRect(int(widget.width() - 150), int(widget.height() - 150), 150, 150, QColor(0, 0, 0, 255)) # background small square bottom-right
+    painter.fillRect(int(widget.width() - 150), int(widget.height() - 150), 150, 150, photodiode_static_square) # background small square bottom-right
 
-    # Plotting of any variables using Thalamus' pipeline QT plots
-    create_task_with_exc_handling(context.inject_analog('performance', AnalogResponse(
-      data = [trial_success_count/trial_num*100, float(trial_num)],
-      spans=[Span(begin=0, end=1, name='Photic trial success rate (%)'), Span(begin=1, end=2, name='Trial Number')],
-      sample_intervals=[0, 0]
-    )))
-
-    # photodiode_square = QColor(255, 255, 255, 255) # Create a QColor object with white color and transparency control (i.e. alpha)
-    # painter.fillRect(int(widget.width() - 100), int(widget.height()-100), 100, 100, photodiode_square) # Keep uncommented if want a constant white square for the photo-diode
+    # photodiode_blinking_square = QColor(255, 255, 255, 255) # Create a QColor object with white color and transparency control (i.e. alpha)
+    # painter.fillRect(int(widget.width() - 100), int(widget.height()-100), 100, 100, photodiode_blinking_square) # Keep uncommented if want a constant white square for the photo-diode
 
     # Draw the fixation cross and Gaussian based on the current state
     if state in (State.ACQUIRE_FIXATION, State.FIXATE1):
@@ -517,7 +548,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       # draw_gaussian(painter)
       painter.drawPath(cross)
       
-      if testing_locations:
+      if paint_all_targets:
         # region -- TESTING-TARGET-LOCATIONS: drawing of the concentric circles and XY axes
         # Dynamically calculate the center of the window
         pen.setWidth(1)
@@ -554,12 +585,10 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       painter.setPen(pen)
       draw_gaussian(painter)
       painter.drawPath(cross)
-      photodiode_square = QColor(255, 255, 255, 255) # Create a QColor object with white color and transparency control (i.e. alpha)
-      painter.fillRect(int(widget.width() - 100), int(widget.height()-100), 100, 100, photodiode_square)
+      # painter.fillRect(int(widget.width() - 100), int(widget.height()-100), 100, 100, photodiode_blinking_square) # photodiode square presentation
 
     elif state == State.HOLD_TARGET:
-      photodiode_square = QColor(255, 255, 255, 255) # Create a QColor object with white color and transparency control (i.e. alpha)
-      painter.fillRect(int(widget.width() - 100), int(widget.height()-100), 100, 100, photodiode_square)
+      painter.fillRect(int(widget.width() - 100), int(widget.height()-100), 100, 100, photodiode_blinking_square)
 
     # Draw the shadings around targets in the OPERATOR view indicating the areas where responses are accepted as correct
     with painter.masked(RenderOutput.OPERATOR): # using a context manager to temporarily change the drawing behavior of the painter object
@@ -574,12 +603,20 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       painter.fillPath(path, QColor(255, 255, 255, 128))
 
       # Drawing the gaze position as a continuously moving point
-      color_rgba = QColor(0, 206, 209, 255)
+      color_rgba = QColor(138, 43, 226, 255)
       draw_gaze(painter, gaze, color_rgba)
+
+      # Drawing text message on the operator view
+      # drawText(painter, "(0, 0)", QPoint(0, 0)) # Draw the text message
+      # temp_calc = lambda: QPoint.dotProduct(gaze - center, gaze - center)**.5 < accptolerance_pix
+      # drawn_text = f"(Diff={temp_calc()}, acpt={QPoint.dotProduct(gaze - center, gaze - center)**.5})"
+      drawText(painter, str(state), QPoint(0, 0)) # Draw the text message
+      drawn_text = f"({gaze.x()}, {gaze.y()})"
+      drawText(painter, drawn_text, gaze) # Draw the text message
       
       # Drawing all previously painted gazes of failed target holding
-      for gaze_qpoint, color_rgba in gaze_failure_store:
-        draw_gaze(painter, gaze_qpoint, color_rgba)
+      # for gaze_qpoint, color_rgba in gaze_failure_store:
+      #   draw_gaze(painter, gaze_qpoint, color_rgba)
 
       # Drawing all previously painted gazes of successful target holding
       for gaze_qpoint, color_rgba in gaze_success_store:
@@ -591,25 +628,43 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   await context.log(json.dumps(context.config))
   # await context.log(json.dumps(context.task_config.unwrap()))
 
+  # Plotting of variables using Thalamus' pipeline QT plots
+  if trial_photic_count == 0: # to avoid division by 0 error
+    photic_success_rate = 0
+  else:
+    photic_success_rate = trial_photic_success_count/trial_photic_count*100
+  if trial_catch_count == 0: # to avoid division by 0 error
+    catch_success_rate = 0
+  else:
+    catch_success_rate = trial_catch_success_count/trial_catch_count*100
+  create_task_with_exc_handling(context.inject_analog('performance', AnalogResponse(
+    data = [float(trial_num), photic_success_rate, catch_success_rate],
+    spans=[Span(begin=0, end=1, name='Trial Number'), Span(begin=1, end=2, name='Photic trial success rate (%)'), \
+            Span(begin=2, end=3, name='Catch trial success rate (%)')], sample_intervals=[0, 0, 0]
+  )))
+  await context.log(f"TRIAL_NUM={trial_num}, PHOTIC_TRIAL_SUCCESS_COUNT={trial_photic_success_count}, \
+                    PHOTIC_TRIAL_NUM={trial_photic_count}, CATCH_TRIAL_SUCCESS_COUNT={trial_catch_success_count}, \
+                    CATCH_TRIAL_NUM={trial_catch_count}") # saving any variables / data from code
+
   # This is the ACQUIRE_FIXATION state that was initiated above "state = State.ACQUIRE_FIXATION"
   print(state)
   acquired = False
   while not acquired:
     #print(state)
     # Wait for the gaze to be within the fixation window
-    acquired = await wait_for(context, lambda: QPoint.dotProduct(gaze - center, gaze-center)**.5 < accptolerance_pix, timedelta(seconds=cum_blinking_ms))
+    acquired = await wait_for(context, lambda: QPoint.dotProduct(gaze - center, gaze-center)**.5 < accptolerance_pix, timedelta(seconds=blink_dur_ms))
 
   state = State.FIXATE1
   await context.log('BehavState=FIXATE1_post-drawing') # saving any variables / data from code
   print(state)
-  print("xxxxxxxxxxxxxxxxxxxxxxxxxconfig['name']xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-  print("xxxxxxxxxxxxxxxxxxxxxxxxxconfig['name']xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-  print(config['name'])
-  print("xxxxxxxxxxxxxxxxxxxxxxxxxconfig['name']xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-  print("xxxxxxxxxxxxxxxxxxxxxxxxxconfig['name']xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
   widget.update()
   # Wait for the gaze to hold within the fixation window for the fix1 duration
-  await wait_for_hold(context, lambda: QPoint.dotProduct(gaze - center, gaze-center)**.5 < accptolerance_pix, timedelta(seconds=fix1_duration), timedelta(seconds=cum_blinking_ms))
+  success = await wait_for_hold(context, lambda: QPoint.dotProduct(gaze - center, gaze - center)**.5 < accptolerance_pix, timedelta(seconds=fix1_duration), timedelta(seconds=blink_dur_ms))
+  print("xxxxxxxxxxxxxxxxxxxxxxxxxSUCCESSxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+  print("xxxxxxxxxxxxxxxxxxxxxxxxxSUCCESSxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+  print(success)
+  print("xxxxxxxxxxxxxxxxxxxxxxxxxSUCCESSxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+  print("xxxxxxxxxxxxxxxxxxxxxxxxxSUCCESSxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")  
   await context.log(f"Gaze[X,Y]_pix-abs_after-FIXATE1={gaze}")
   await context.log(f"Gaze[X,Y]_deg-abs_after-FIXATE1={converter.relpix_to_absdeg(gaze.x(), gaze.y())}")
 
@@ -618,7 +673,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   print(state)
   widget.update()
   # Wait for the gaze to hold within fixation cross tolerances for the target presentation duration
-  success = await wait_for_hold(context, lambda: QPoint.dotProduct(gaze - center, gaze-center)**.5 < accptolerance_pix, timedelta(seconds=target_present_dur), timedelta(seconds=cum_blinking_ms))
+  success = await wait_for_hold(context, lambda: QPoint.dotProduct(gaze - center, gaze-center)**.5 < accptolerance_pix, timedelta(seconds=target_present_dur), timedelta(seconds=blink_dur_ms))
 
   if not success:
     await context.log('TrialResult=FAILURE') # saving any variables / data from code
@@ -633,7 +688,8 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   print(state)
   widget.update()
   # Wait for the gaze to hold within the fixation window for the fix2 duration
-  success = await wait_for_hold(context, lambda: QPoint.dotProduct(gaze - center, gaze-center)**.5 < accptolerance_pix, timedelta(seconds=fix2_duration), timedelta(seconds=cum_blinking_ms))
+  success = await wait_for_hold(context, lambda: QPoint.dotProduct(gaze - center, gaze-center)**.5 < accptolerance_pix, \
+                                timedelta(seconds=fix2_duration), timedelta(seconds=blink_dur_ms))
 
   if not success:
     await context.log('TrialResult=FAILURE') # saving any variables / data from code
@@ -647,8 +703,12 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   await context.log('BehavState=ACQUIRE_TARGET_start') # saving any variables / data from code
   print(state)
   widget.update()
-  # Wait for the gaze to move to the target position within the decision timeout
-  success = await wait_for(context, lambda: QPoint.dotProduct(gaze - targetpos_pix, gaze-targetpos_pix)**.5 < accptolerance_pix, timedelta(seconds=decision_timeout))
+  if trial_type=="photic":
+    # Wait for the gaze to move to the target position within the decision timeout
+    success = await wait_for(context, lambda: QPoint.dotProduct(gaze - targetpos_pix, gaze-targetpos_pix)**.5 < accptolerance_pix, timedelta(seconds=decision_timeout))
+  else: # if trial_type=="catch":
+    success = await wait_for_hold(context, lambda: QPoint.dotProduct(gaze - center, gaze-center)**.5 < accptolerance_pix, \
+                                  timedelta(seconds=decision_timeout), timedelta(seconds=blink_dur_ms))
   await context.log(f"Gaze[X,Y]_pix-abs_after-acquiring-target={gaze}")
   await context.log(f"Gaze[X,Y]_deg-abs_after-acquiring-target={converter.relpix_to_absdeg(gaze.x(), gaze.y())}")
 
@@ -665,9 +725,13 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   await context.log('BehavState=HOLD_TARGET_start') # saving any variables / data from code
   print(state)
   widget.update()
-  # Wait for the gaze to hold on the target position for the fix2 timeout
-  success = await wait_for_hold(context, lambda: QPoint.dotProduct(gaze - targetpos_pix, gaze-targetpos_pix)**.5 < accptolerance_pix,
-                                timedelta(seconds=targethold_duration), timedelta(seconds=cum_blinking_ms))
+  if trial_type=="photic":
+    # Wait for the gaze to hold on the target position for the fix2 timeout
+    success = await wait_for_hold(context, lambda: QPoint.dotProduct(gaze - targetpos_pix, gaze-targetpos_pix)**.5 < accptolerance_pix,
+                                  timedelta(seconds=targethold_duration), timedelta(seconds=blink_dur_ms))
+  else: # if trial_type=="catch":
+    success = await wait_for_hold(context, lambda: QPoint.dotProduct(gaze - center, gaze-center)**.5 < accptolerance_pix, \
+                                  timedelta(seconds=targethold_duration), timedelta(seconds=blink_dur_ms))
   await context.log(f"Gaze[X,Y]_pix-abs_after-holding-target={gaze}")
   await context.log(f"Gaze[X,Y]_deg-abs_after-holding-target={converter.relpix_to_absdeg(gaze.x(), gaze.y())}")
 
@@ -689,7 +753,9 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   success_sound.play()
   await context.sleep(timedelta(seconds=1)) # 1s delay to allow playing the sound; sound doesn't play without this delay
   if config['name'] == "photic":
-    trial_success_count += 1
+    trial_photic_success_count += 1
+  if config['name'] == "catch":
+    trial_catch_success_count += 1
   # "TaskResult" is used to determine whether the trial is or is not removed from the queue
   # If TaskResult(False), the trial is not removed from the queue. If TaskResult(True), the trial is removed from the queue.
   return TaskResult(False)

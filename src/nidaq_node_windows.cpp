@@ -326,7 +326,7 @@ namespace thalamus {
           auto daq_error = daqmxapi.DAQmxCreateTask(name.c_str(), &task_handle);
           BOOST_ASSERT_MSG(daq_error >= 0, "DAQmxCreateTask failed");
 
-          daq_error = daqmxapi.DAQmxCreateAIVoltageChan(task_handle, channel.c_str(), channel_name.c_str(), DAQmx_Val_NRSE, -10.0, 10.0, DAQmx_Val_Volts, nullptr); // "DAQmx_Val_Cfg_Default" was replaced with "DAQmx_Val_NRSE"
+          daq_error = daqmxapi.DAQmxCreateAIVoltageChan(task_handle, channel.c_str(), channel_name.c_str(), DAQmx_Val_Cfg_Default, -10.0, 10.0, DAQmx_Val_Volts, nullptr); // DAQmx_Val_Diff "DAQmx_Val_Cfg_Default" was replaced with "DAQmx_Val_NRSE"
           THALAMUS_ASSERT(daq_error >= 0, "DAQmxCreateAIVoltageChan failed %d", daq_error);
           analog_buffer.resize(buffer_size);
 
