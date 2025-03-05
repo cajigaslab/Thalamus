@@ -318,6 +318,8 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   all_target_luminance[i_periph_targs[1]] = 2*mean_luminance - first_periph_targ_luminance
   all_target_luminance[i_periph_targs[1]] = max(all_target_luminance[i_periph_targs[1]],
                                                 context.task_config['targets'][i_periph_targs[1]]['luminance']['min'])
+  context.trial_summary_data.used_values['targ' + str(i_periph_targs[1]) + '_luminance'] = all_target_luminance[i_periph_targs[1]]
+
 
   for i in i_periph_targs:
     color = all_target_colors[i]
@@ -364,6 +366,12 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
         path.addEllipse(QPointF(rect.center()), window, window)
 
       painter.fillPath(path, QColor(255, 255, 255, 128))
+
+      painter.setPen(QColor(255, 255, 255))
+      font = painter.font()
+      font.setPointSize(5*font.pointSize())
+      painter.setFont(font)
+      painter.drawText(0, 100, str(reward_message.on_time_ms))
 
   context.widget.renderer = renderer
 
