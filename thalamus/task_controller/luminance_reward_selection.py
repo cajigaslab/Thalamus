@@ -347,9 +347,11 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   
   
   state_brightness = 0
+  on_time_ms = 0
 
   show_target = False
   def renderer(painter: CanvasPainterProtocol) -> None:
+    nonlocal on_time_ms
     for i, visible in enumerate(all_targets_visible):
       if visible:
         painter.fillRect(all_target_rects[i], all_target_colors[i])
@@ -371,7 +373,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       font = painter.font()
       font.setPointSize(5*font.pointSize())
       painter.setFont(font)
-      painter.drawText(0, 100, str(reward_message.on_time_ms))
+      painter.drawText(0, 100, str(on_time_ms))
 
   context.widget.renderer = renderer
 
