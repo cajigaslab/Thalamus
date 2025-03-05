@@ -702,108 +702,108 @@ ObservableCollection::to_string(const ObservableCollection::Key &value) {
   return "";
 }
 
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Weverything"
-#endif
-#include <boost/foreach.hpp>
-#include <boost/fusion/include/adapt_struct.hpp>
-#include <boost/spirit/include/qi.hpp>
-#include <boost/variant/apply_visitor.hpp>
-#include <boost/variant/recursive_variant.hpp>
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
-namespace qi = boost::spirit::qi;
-namespace ascii = boost::spirit::ascii;
-
-struct ChildSegment {
-};
-
-struct Segment {
-  ChildSegment child_segment;
-};
-
-struct Segments {
-  std::list<Segment> segments;
-};
-
-struct JsonpathQuery {
-  Segments segments;
-};
-
-BOOST_FUSION_ADAPT_STRUCT(JsonpathQuery,
-                          (Segment, segments));
-BOOST_FUSION_ADAPT_STRUCT(Segments,
-                          (std::list<Segment>, segments));
-BOOST_FUSION_ADAPT_STRUCT(Segment,
-                          (ChildSegment, child_segment));
-
-template <typename Iterator>
-struct parser : qi::grammar<Iterator, program(), ascii::space_type> {
-  parser() : parser::base_type(expression1) {
-    qi::ulong_long_type ulong_;
-    qi::real_parser<double, qi::strict_real_policies<double>> double_;
-    qi::uint_parser<unsigned long long int, 16> hex_;
-    qi::hex_type hex2_;
-    qi::string_type char_;
-    qi::char_type one_char_;
-    qi::alpha_type alpha_;
-    qi::alnum_type alnum_;
-    qi::lit_type lit_;
-    qi::lexeme_type lexeme_;
-    qi::raw_type raw_;
-
-    name_first = alpha_ | '_';
-    name_char = alnum_ | '_';
-    member_name_shorthand = name_first >> *name_char;
-    string_literal = ('\'' >> +(char_ - '\'') >> '\'') | ('"' >> +(char_ - '"') >> '"');
-    literal = qi::int_ | string_literal | "true" | "false" | "null";
-    logical_not_op = '!';
-    current_node_identifier = '@';
-    root_identifier = '$';
-
-    jsonpath_query = segments;
-    segments = *segment;
-    segment = child_segment;
-    child_segment = bracketed_selection | ('.' >> member_name_shorthand);
-    bracketed_selection = '[' >> selector >> ']';
-
-    selector = name_selector | index_selector | filter_selector;
-    name_selector = string_literal;
-    index_selector = qi::int_;
-
-    filter_selector = '?' >> logical_expr;
-    logical_expr = logical_or_expr;
-    logical_or_expr = logical_and_expr >> *("||" >> logical_and_expr);
-    logical_and_expr = basic_expr >> *("&&" >> basic_expr);
-    basic_expr = paren_expr | comparison_expr | test_expr;
-    paren_expr = -logical_not_op >> '(' >> logcal_expr >> ')';
-
-    test_expr = -'!' >> (filter_query | function_expr);
-    filter_query = rel_query | jsonpath_query;
-    rel_query = current_node_identifier | segments;
-
-    comparison_expr = comparable >> comparison_op >> comparable;
-    comparable = literal | singular-query | function_expr;
-    comparison_op = "==" | "!=" | "<=" | ">=" | "<" | ">";
-    singular_query = rel_singular_query | abs_singular_query;
-    rel_sungilar_query = current_node_identifier >> singular_query_segments;
-    abs_sungilar_query = root_identifier >> singular_query_segments;
-    singular_query_segments = *(name_segment | index_segment);
-    name_segment = ('[' >> name_selector >> ']') | ('.' >> member_name_shorthand);
-    index_segment = '[' >> index_selector >> ']';
-  }
-
-  qi::rule<Iterator, program(), ascii::space_type> expression1;
-  qi::rule<Iterator, program(), ascii::space_type> boolean;
-  qi::rule<Iterator, program(), ascii::space_type> expression2;
-  qi::rule<Iterator, program(), ascii::space_type> compare;
-  qi::rule<Iterator, program(), ascii::space_type> shift;
-  qi::rule<Iterator, program(), ascii::space_type> expression3;
-  qi::rule<Iterator, program(), ascii::space_type> term;
-  qi::rule<Iterator, operand(), ascii::space_type> factor;
-};
+//#ifdef __clang__
+//#pragma clang diagnostic push
+//#pragma clang diagnostic ignored "-Weverything"
+//#endif
+//#include <boost/foreach.hpp>
+//#include <boost/fusion/include/adapt_struct.hpp>
+//#include <boost/spirit/include/qi.hpp>
+//#include <boost/variant/apply_visitor.hpp>
+//#include <boost/variant/recursive_variant.hpp>
+//#ifdef __clang__
+//#pragma clang diagnostic pop
+//#endif
+//namespace qi = boost::spirit::qi;
+//namespace ascii = boost::spirit::ascii;
+//
+//struct ChildSegment {
+//};
+//
+//struct Segment {
+//  ChildSegment child_segment;
+//};
+//
+//struct Segments {
+//  std::list<Segment> segments;
+//};
+//
+//struct JsonpathQuery {
+//  Segments segments;
+//};
+//
+//BOOST_FUSION_ADAPT_STRUCT(JsonpathQuery,
+//                          (Segment, segments));
+//BOOST_FUSION_ADAPT_STRUCT(Segments,
+//                          (std::list<Segment>, segments));
+//BOOST_FUSION_ADAPT_STRUCT(Segment,
+//                          (ChildSegment, child_segment));
+//
+//template <typename Iterator>
+//struct parser : qi::grammar<Iterator, program(), ascii::space_type> {
+//  parser() : parser::base_type(expression1) {
+//    qi::ulong_long_type ulong_;
+//    qi::real_parser<double, qi::strict_real_policies<double>> double_;
+//    qi::uint_parser<unsigned long long int, 16> hex_;
+//    qi::hex_type hex2_;
+//    qi::string_type char_;
+//    qi::char_type one_char_;
+//    qi::alpha_type alpha_;
+//    qi::alnum_type alnum_;
+//    qi::lit_type lit_;
+//    qi::lexeme_type lexeme_;
+//    qi::raw_type raw_;
+//
+//    name_first = alpha_ | '_';
+//    name_char = alnum_ | '_';
+//    member_name_shorthand = name_first >> *name_char;
+//    string_literal = ('\'' >> +(char_ - '\'') >> '\'') | ('"' >> +(char_ - '"') >> '"');
+//    literal = qi::int_ | string_literal | "true" | "false" | "null";
+//    logical_not_op = '!';
+//    current_node_identifier = '@';
+//    root_identifier = '$';
+//
+//    jsonpath_query = segments;
+//    segments = *segment;
+//    segment = child_segment;
+//    child_segment = bracketed_selection | ('.' >> member_name_shorthand);
+//    bracketed_selection = '[' >> selector >> ']';
+//
+//    selector = name_selector | index_selector | filter_selector;
+//    name_selector = string_literal;
+//    index_selector = qi::int_;
+//
+//    filter_selector = '?' >> logical_expr;
+//    logical_expr = logical_or_expr;
+//    logical_or_expr = logical_and_expr >> *("||" >> logical_and_expr);
+//    logical_and_expr = basic_expr >> *("&&" >> basic_expr);
+//    basic_expr = paren_expr | comparison_expr | test_expr;
+//    paren_expr = -logical_not_op >> '(' >> logcal_expr >> ')';
+//
+//    test_expr = -'!' >> (filter_query | function_expr);
+//    filter_query = rel_query | jsonpath_query;
+//    rel_query = current_node_identifier | segments;
+//
+//    comparison_expr = comparable >> comparison_op >> comparable;
+//    comparable = literal | singular-query | function_expr;
+//    comparison_op = "==" | "!=" | "<=" | ">=" | "<" | ">";
+//    singular_query = rel_singular_query | abs_singular_query;
+//    rel_sungilar_query = current_node_identifier >> singular_query_segments;
+//    abs_sungilar_query = root_identifier >> singular_query_segments;
+//    singular_query_segments = *(name_segment | index_segment);
+//    name_segment = ('[' >> name_selector >> ']') | ('.' >> member_name_shorthand);
+//    index_segment = '[' >> index_selector >> ']';
+//  }
+//
+//  qi::rule<Iterator, program(), ascii::space_type> expression1;
+//  qi::rule<Iterator, program(), ascii::space_type> boolean;
+//  qi::rule<Iterator, program(), ascii::space_type> expression2;
+//  qi::rule<Iterator, program(), ascii::space_type> compare;
+//  qi::rule<Iterator, program(), ascii::space_type> shift;
+//  qi::rule<Iterator, program(), ascii::space_type> expression3;
+//  qi::rule<Iterator, program(), ascii::space_type> term;
+//  qi::rule<Iterator, operand(), ascii::space_type> factor;
+//};
 
 ObservableCollection::Value get_jsonpath(ObservableCollection::Value store,
                                          const std::list<std::string> &tokens) {

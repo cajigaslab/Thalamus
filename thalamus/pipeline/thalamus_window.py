@@ -299,6 +299,7 @@ FACTORIES = {
     UserData(UserDataType.CHECK_BOX, 'Invert Y', False, []),
     UserData(UserDataType.DEFAULT, 'Source', '', []),
     UserData(UserDataType.CHECK_BOX, 'Computing', False, []),
+    UserData(UserDataType.CHECK_BOX, 'Render Thresholded', False, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
   ]),
   'DISTORTION': Factory(lambda c, s: DistortionWidget(c, s), [
