@@ -2,6 +2,9 @@
 #include <state.hpp>
 
 namespace thalamus {
+
+ObservableCollection::~ObservableCollection() {}
+
 ObservableCollection::ValueWrapper::ValueWrapper(
     const Key &_key, std::function<Value &()> _get_value,
     std::function<bool()> _has_value, ObservableCollection *_collection)
@@ -13,7 +16,7 @@ ObservableCollection::ValueWrapper::operator ObservableDictPtr() {
   if (std::holds_alternative<ObservableDictPtr>(value)) {
     return thalamus::get<ObservableDictPtr>(value);
   } else {
-    THALAMUS_ASSERT(false);
+    THALAMUS_ASSERT(false, "Value is not a dict");
   }
 }
 
@@ -22,7 +25,7 @@ ObservableCollection::ValueWrapper::operator ObservableListPtr() {
   if (std::holds_alternative<ObservableListPtr>(value)) {
     return thalamus::get<ObservableListPtr>(value);
   } else {
-    THALAMUS_ASSERT(false);
+    THALAMUS_ASSERT(false, "Value is not a list");
   }
 }
 
@@ -33,7 +36,7 @@ ObservableCollection::ValueWrapper::operator long long int() {
   } else if (std::holds_alternative<double>(value)) {
     return int64_t(thalamus::get<double>(value));
   } else {
-    THALAMUS_ASSERT(false);
+    THALAMUS_ASSERT(false, "Value is not a number");
   }
 }
 ObservableCollection::ValueWrapper::operator unsigned long long int() {
@@ -43,7 +46,7 @@ ObservableCollection::ValueWrapper::operator unsigned long long int() {
   } else if (std::holds_alternative<double>(value)) {
     return uint64_t(thalamus::get<double>(value));
   } else {
-    THALAMUS_ASSERT(false);
+    THALAMUS_ASSERT(false, "Value is not a number");
   }
 }
 ObservableCollection::ValueWrapper::operator unsigned long() {
@@ -53,7 +56,7 @@ ObservableCollection::ValueWrapper::operator unsigned long() {
   } else if (std::holds_alternative<double>(value)) {
     return uint32_t(thalamus::get<double>(value));
   } else {
-    THALAMUS_ASSERT(false);
+    THALAMUS_ASSERT(false, "Value is not a number");
   }
 }
 ObservableCollection::ValueWrapper::operator double() {
@@ -63,7 +66,7 @@ ObservableCollection::ValueWrapper::operator double() {
   } else if (std::holds_alternative<double>(value)) {
     return thalamus::get<double>(value);
   } else {
-    THALAMUS_ASSERT(false);
+    THALAMUS_ASSERT(false, "Value is not a number");
   }
 }
 ObservableCollection::ValueWrapper::operator bool() {
@@ -82,7 +85,7 @@ ObservableCollection::ValueWrapper::operator bool() {
   } else if (std::holds_alternative<bool>(value)) {
     return thalamus::get<bool>(value);
   } else {
-    THALAMUS_ASSERT(false);
+    THALAMUS_ASSERT(false, "Value is not a bool or number");
   }
 }
 ObservableCollection::ValueWrapper::operator std::string() {
@@ -90,7 +93,7 @@ ObservableCollection::ValueWrapper::operator std::string() {
   if (std::holds_alternative<std::string>(value)) {
     return thalamus::get<std::string>(value);
   } else {
-    THALAMUS_ASSERT(false);
+    THALAMUS_ASSERT(false, "Value is not a string");
   }
 }
 ObservableCollection::ValueWrapper::operator ObservableCollection::Value() {
@@ -698,6 +701,109 @@ ObservableCollection::to_string(const ObservableCollection::Key &value) {
   THALAMUS_ASSERT(false, "Failed to convert key to string");
   return "";
 }
+
+//#ifdef __clang__
+//#pragma clang diagnostic push
+//#pragma clang diagnostic ignored "-Weverything"
+//#endif
+//#include <boost/foreach.hpp>
+//#include <boost/fusion/include/adapt_struct.hpp>
+//#include <boost/spirit/include/qi.hpp>
+//#include <boost/variant/apply_visitor.hpp>
+//#include <boost/variant/recursive_variant.hpp>
+//#ifdef __clang__
+//#pragma clang diagnostic pop
+//#endif
+//namespace qi = boost::spirit::qi;
+//namespace ascii = boost::spirit::ascii;
+//
+//struct ChildSegment {
+//};
+//
+//struct Segment {
+//  ChildSegment child_segment;
+//};
+//
+//struct Segments {
+//  std::list<Segment> segments;
+//};
+//
+//struct JsonpathQuery {
+//  Segments segments;
+//};
+//
+//BOOST_FUSION_ADAPT_STRUCT(JsonpathQuery,
+//                          (Segment, segments));
+//BOOST_FUSION_ADAPT_STRUCT(Segments,
+//                          (std::list<Segment>, segments));
+//BOOST_FUSION_ADAPT_STRUCT(Segment,
+//                          (ChildSegment, child_segment));
+//
+//template <typename Iterator>
+//struct parser : qi::grammar<Iterator, program(), ascii::space_type> {
+//  parser() : parser::base_type(expression1) {
+//    qi::ulong_long_type ulong_;
+//    qi::real_parser<double, qi::strict_real_policies<double>> double_;
+//    qi::uint_parser<unsigned long long int, 16> hex_;
+//    qi::hex_type hex2_;
+//    qi::string_type char_;
+//    qi::char_type one_char_;
+//    qi::alpha_type alpha_;
+//    qi::alnum_type alnum_;
+//    qi::lit_type lit_;
+//    qi::lexeme_type lexeme_;
+//    qi::raw_type raw_;
+//
+//    name_first = alpha_ | '_';
+//    name_char = alnum_ | '_';
+//    member_name_shorthand = name_first >> *name_char;
+//    string_literal = ('\'' >> +(char_ - '\'') >> '\'') | ('"' >> +(char_ - '"') >> '"');
+//    literal = qi::int_ | string_literal | "true" | "false" | "null";
+//    logical_not_op = '!';
+//    current_node_identifier = '@';
+//    root_identifier = '$';
+//
+//    jsonpath_query = segments;
+//    segments = *segment;
+//    segment = child_segment;
+//    child_segment = bracketed_selection | ('.' >> member_name_shorthand);
+//    bracketed_selection = '[' >> selector >> ']';
+//
+//    selector = name_selector | index_selector | filter_selector;
+//    name_selector = string_literal;
+//    index_selector = qi::int_;
+//
+//    filter_selector = '?' >> logical_expr;
+//    logical_expr = logical_or_expr;
+//    logical_or_expr = logical_and_expr >> *("||" >> logical_and_expr);
+//    logical_and_expr = basic_expr >> *("&&" >> basic_expr);
+//    basic_expr = paren_expr | comparison_expr | test_expr;
+//    paren_expr = -logical_not_op >> '(' >> logcal_expr >> ')';
+//
+//    test_expr = -'!' >> (filter_query | function_expr);
+//    filter_query = rel_query | jsonpath_query;
+//    rel_query = current_node_identifier | segments;
+//
+//    comparison_expr = comparable >> comparison_op >> comparable;
+//    comparable = literal | singular-query | function_expr;
+//    comparison_op = "==" | "!=" | "<=" | ">=" | "<" | ">";
+//    singular_query = rel_singular_query | abs_singular_query;
+//    rel_sungilar_query = current_node_identifier >> singular_query_segments;
+//    abs_sungilar_query = root_identifier >> singular_query_segments;
+//    singular_query_segments = *(name_segment | index_segment);
+//    name_segment = ('[' >> name_selector >> ']') | ('.' >> member_name_shorthand);
+//    index_segment = '[' >> index_selector >> ']';
+//  }
+//
+//  qi::rule<Iterator, program(), ascii::space_type> expression1;
+//  qi::rule<Iterator, program(), ascii::space_type> boolean;
+//  qi::rule<Iterator, program(), ascii::space_type> expression2;
+//  qi::rule<Iterator, program(), ascii::space_type> compare;
+//  qi::rule<Iterator, program(), ascii::space_type> shift;
+//  qi::rule<Iterator, program(), ascii::space_type> expression3;
+//  qi::rule<Iterator, program(), ascii::space_type> term;
+//  qi::rule<Iterator, operand(), ascii::space_type> factor;
+//};
 
 ObservableCollection::Value get_jsonpath(ObservableCollection::Value store,
                                          const std::list<std::string> &tokens) {

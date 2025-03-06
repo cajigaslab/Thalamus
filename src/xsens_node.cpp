@@ -511,8 +511,8 @@ std::chrono::nanoseconds XsensNode::sample_interval(int) const {
 void XsensNode::inject(const thalamus::vector<std::span<double const>> &spans,
                        const thalamus::vector<std::chrono::nanoseconds> &,
                        const thalamus::vector<std::string_view> &) {
-  THALAMUS_ASSERT(spans.size() == 1);
-  THALAMUS_ASSERT(spans.front().size() == 1);
+  THALAMUS_ASSERT(spans.size() == 1, "Bad dims");
+  THALAMUS_ASSERT(spans.front().size() == 1, "Bad dims");
 }
 
 bool XsensNode::has_analog_data() const { return impl->has_analog_data; }
@@ -796,7 +796,7 @@ public:
           segment.time = handengine_time;
           segment.frame = frame_count;
           auto lookup = HAND_ENGINE_TO_XSENS_SEGMENT_IDS.find(name);
-          THALAMUS_ASSERT(lookup != HAND_ENGINE_TO_XSENS_SEGMENT_IDS.end());
+          THALAMUS_ASSERT(lookup != HAND_ENGINE_TO_XSENS_SEGMENT_IDS.end(), "Segment ID not found");
           segment.segment_id = lookup->second + 1;
         }
         std::sort(_segments.begin(), _segments.end(),
@@ -937,8 +937,8 @@ void HandEngineNode::inject(
     const thalamus::vector<std::span<double const>> &spans,
     const thalamus::vector<std::chrono::nanoseconds> &,
     const thalamus::vector<std::string_view> &) {
-  THALAMUS_ASSERT(spans.size() == 1);
-  THALAMUS_ASSERT(spans.front().size() == 1);
+  THALAMUS_ASSERT(spans.size() == 1, "Bad dims");
+  THALAMUS_ASSERT(spans.front().size() == 1, "Bad dims");
 }
 
 bool HandEngineNode::has_analog_data() const { return impl->has_analog_data; }

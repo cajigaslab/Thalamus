@@ -221,7 +221,7 @@ struct GenicamNode::Impl {
       THALAMUS_ASSERT(false, "Invalid number type");
     }
     struct Device {
-      virtual ~Device() {}
+      virtual ~Device();
       virtual RegValue get(const std::string &reg) = 0;
       virtual void
       set(const std::string &reg,
@@ -1926,42 +1926,9 @@ struct GenicamNode::Impl {
         return nodes.find(reg) != nodes.end();
       }
 
-      bool is_writable(const std::string &reg) override {
-        auto i = nodes.find(reg);
-        if (i == nodes.end()) {
-          return false;
-        } else if (std::holds_alternative<long long int>(i->second)) {
-          return false;
-        } else if (std::holds_alternative<double>(i->second)) {
-          return false;
-        } else if (std::holds_alternative<std::string>(i->second)) {
-          return false;
-        } else if (std::holds_alternative<StringReg>(i->second)) {
-          return std::get<StringReg>(i->second).access_mode != AccessMode::RO;
-        } else if (std::holds_alternative<IntReg>(i->second)) {
-          return std::get<IntReg>(i->second).access_mode != AccessMode::RO;
-        } else if (std::holds_alternative<IntConverter>(i->second)) {
-          return std::get<IntConverter>(i->second).is_writable();
-        } else if (std::holds_alternative<IntSwissKnife>(i->second)) {
-          return false;
-        } else if (std::holds_alternative<FloatReg>(i->second)) {
-          return std::get<FloatReg>(i->second).access_mode != AccessMode::RO;
-        } else if (std::holds_alternative<Converter>(i->second)) {
-          return std::get<Converter>(i->second).is_writable();
-        } else if (std::holds_alternative<SwissKnife>(i->second)) {
-          return false;
-        } else if (std::holds_alternative<Integer>(i->second)) {
-          return std::get<Integer>(i->second).is_writable();
-        } else if (std::holds_alternative<Enumeration>(i->second)) {
-          return std::get<Enumeration>(i->second).is_writable();
-        } else if (std::holds_alternative<Float>(i->second)) {
-          return std::get<Float>(i->second).is_writable();
-        } else if (std::holds_alternative<Link>(i->second)) {
-          return is_writable(std::get<Link>(i->second).name);
-        }
-        THALAMUS_ASSERT(false, "Unexpected Register type");
-      }
+      bool is_writable(const std::string &reg) override;
     };
+
     std::map<std::string, std::shared_ptr<DeviceImpl>> devices;
 
     GenTL::TL_HANDLE tl_handle = nullptr;
@@ -2531,6 +2498,44 @@ struct GenicamNode::Impl {
     }
   }
 };
+
+GenicamNode::Impl::Cti::Device::~Device() {}
+
+bool GenicamNode::Impl::Cti::DeviceImpl::is_writable(const std::string &reg) {
+  auto i = nodes.find(reg);
+  if (i == nodes.end()) {
+    return false;
+  } else if (std::holds_alternative<long long int>(i->second)) {
+    return false;
+  } else if (std::holds_alternative<double>(i->second)) {
+    return false;
+  } else if (std::holds_alternative<std::string>(i->second)) {
+    return false;
+  } else if (std::holds_alternative<StringReg>(i->second)) {
+    return std::get<StringReg>(i->second).access_mode != AccessMode::RO;
+  } else if (std::holds_alternative<IntReg>(i->second)) {
+    return std::get<IntReg>(i->second).access_mode != AccessMode::RO;
+  } else if (std::holds_alternative<IntConverter>(i->second)) {
+    return std::get<IntConverter>(i->second).is_writable();
+  } else if (std::holds_alternative<IntSwissKnife>(i->second)) {
+    return false;
+  } else if (std::holds_alternative<FloatReg>(i->second)) {
+    return std::get<FloatReg>(i->second).access_mode != AccessMode::RO;
+  } else if (std::holds_alternative<Converter>(i->second)) {
+    return std::get<Converter>(i->second).is_writable();
+  } else if (std::holds_alternative<SwissKnife>(i->second)) {
+    return false;
+  } else if (std::holds_alternative<Integer>(i->second)) {
+    return std::get<Integer>(i->second).is_writable();
+  } else if (std::holds_alternative<Enumeration>(i->second)) {
+    return std::get<Enumeration>(i->second).is_writable();
+  } else if (std::holds_alternative<Float>(i->second)) {
+    return std::get<Float>(i->second).is_writable();
+  } else if (std::holds_alternative<Link>(i->second)) {
+    return is_writable(std::get<Link>(i->second).name);
+  }
+  THALAMUS_ASSERT(false, "Unexpected Register type");
+}
 
 GenicamNode::GenicamNode(ObservableDictPtr state,
                          boost::asio::io_context &io_context, NodeGraph *)

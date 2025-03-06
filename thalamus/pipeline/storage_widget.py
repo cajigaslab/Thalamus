@@ -72,6 +72,8 @@ class StorageWidget(QWidget):
           hours = elapsed // 3600
           status.setText(f'RUNNING rec={rec:0>3} {hours:0>2}:{minutes:0>2}:{seconds:0>2}')
           await asyncio.sleep(1)
+          if isdeleted(self):
+            return
           #async with condition:
           #  try:
           #    await asyncio.wait_for(condition.wait(), timeout=1)

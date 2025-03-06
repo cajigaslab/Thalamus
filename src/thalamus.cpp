@@ -39,7 +39,9 @@
 #pragma clang diagnostic pop
 #endif
 
+#ifdef __clang__
 PERFETTO_TRACK_EVENT_STATIC_STORAGE();
+#endif
 
 namespace thalamus {
 using namespace std::chrono_literals;
@@ -130,6 +132,7 @@ int main(int argc, char **argv) {
   // QApplication app (argc, argv);
   set_current_thread_name("main");
 
+#ifdef __clang__
   std::unique_ptr<perfetto::TracingSession> tracing_session;
   perfetto::TracingInitArgs tracing_args;
   tracing_args.backends |= perfetto::kInProcessBackend;
@@ -148,6 +151,7 @@ int main(int argc, char **argv) {
     tracing_session->Setup(cfg);
     tracing_session->StartBlocking();
   }
+#endif
 
   std::shared_ptr<ObservableDict> state = std::make_shared<ObservableDict>();
   ObservableListPtr nodes = std::make_shared<ObservableList>();
@@ -213,9 +217,11 @@ int main(int argc, char **argv) {
   grpc_thread.join();
   node_graph.reset();
 
+#ifdef __clang__
   if (vm.count("trace")) {
     tracing_session->StopBlocking();
   }
+#endif
 
   {
     std::lock_guard<std::mutex> lock(shutdown_mutex);

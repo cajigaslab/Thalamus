@@ -14,7 +14,7 @@ template <typename T> double interval_to_frequency(T interval) {
 
 class AnalogNode {
 public:
-  virtual ~AnalogNode() {}
+  virtual ~AnalogNode();
   boost::signals2::signal<void(AnalogNode *)> channels_changed;
   virtual std::span<const double> data(int channel) const = 0;
   virtual std::span<const short> short_data(int) const {

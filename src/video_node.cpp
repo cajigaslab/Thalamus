@@ -164,7 +164,9 @@ struct VideoNode::Impl {
         return;
       }
       if (context.packet->stream_index != stream_index) {
+#ifdef __clang__
         TRACE_EVENT_INSTANT("thalamus", "wrong stream");
+#endif
         av_packet_unref(context.packet);
         continue;
       }
@@ -371,7 +373,7 @@ size_t VideoNode::width() const { return impl->width; }
 
 size_t VideoNode::height() const { return impl->height; }
 
-void VideoNode::inject(const thalamus_grpc::Image &) { THALAMUS_ASSERT(false); }
+void VideoNode::inject(const thalamus_grpc::Image &) { THALAMUS_ASSERT(false, "Unimplemented"); }
 
 std::chrono::nanoseconds VideoNode::time() const { return impl->time; }
 

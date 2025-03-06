@@ -147,7 +147,8 @@ message("PROTO_GENERATED_SOURCES ${PROTO_GENERATED_SOURCES}")
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   set(WARNING_FLAGS 
     -Weverything -Wno-deprecated-declarations -Wno-c11-extensions -Wno-gcc-compat -Wno-c++98-compat-pedantic
-    -Wno-c++20-compat -Wno-unsafe-buffer-usage -Wno-switch-default -Wno-c99-extensions -Wno-missing-template-arg-list-after-template-kw)
+    -Wno-c++20-compat -Wno-unsafe-buffer-usage -Wno-switch-default -Wno-c99-extensions
+    -Wno-missing-template-arg-list-after-template-kw -Wno-padded -Wno-unknown-warning-option)
 else()
   #set(WARNING_FLAGS /Wall)
   set(WARNING_FLAGS)
@@ -194,6 +195,8 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/storage_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/run_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/run_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/run2_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/run2_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/remote_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/remote_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/ophanim_node.hpp"
@@ -207,6 +210,7 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/distortion_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/distortion_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/text_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/text_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/log_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/log_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thread_pool.hpp"
@@ -237,8 +241,12 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/video_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/touchscreen_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/touchscreen_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/stim_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/stim_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/stim_printer_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/stim_printer_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/test_pulse_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/test_pulse_node.cpp"
                      #"${CMAKE_SOURCE_DIR}/src/hexascope_node.hpp"
                      #"${CMAKE_SOURCE_DIR}/src/hexascope_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/file.hpp"

@@ -114,7 +114,7 @@ static std::chrono::nanoseconds channel_sample_interval(int channel_id) {
 
 class AlphaOmega {
 public:
-  virtual ~AlphaOmega() {}
+  virtual ~AlphaOmega();
   virtual int isConnected() = 0;
   virtual int DefaultStartConnection(MAC_ADDR *pSystemMAC) = 0;
   virtual int CloseConnection() = 0;
@@ -126,6 +126,7 @@ public:
                              int *pChannels, int nChannels,
                              ULONG *pBeginTS = nullptr) = 0;
 };
+AlphaOmega::~AlphaOmega() {}
 
 #ifdef _WIN32
 class RealAlphaOmega : public AlphaOmega {
@@ -216,9 +217,7 @@ public:
                 return std::sin(double(nanoseconds.count()) / 1e9 + M_PI_4);
               }}};
   }
-  int isConnected() override {
-    return rand() % 10 == 0 ? eAO_CONNECTING : eAO_CONNECTED;
-  }
+  int isConnected() override;
   int DefaultStartConnection(MAC_ADDR *) override {
     channels.clear();
     start_time = std::chrono::steady_clock::now();
@@ -297,6 +296,10 @@ public:
     return eAO_OK;
   }
 };
+
+int MockAlphaOmega::isConnected() {
+  return rand() % 10 == 0 ? eAO_CONNECTING : eAO_CONNECTED;
+}
 
 struct AlphaOmegaNode::Impl {
   boost::asio::io_context &io_context;

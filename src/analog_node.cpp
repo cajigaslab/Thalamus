@@ -6,6 +6,8 @@
 
 using namespace thalamus;
 
+AnalogNode::~AnalogNode() {}
+
 struct WaveGeneratorNode::Impl {
   ObservableDictPtr state;
   ObservableList *nodes;
@@ -93,7 +95,7 @@ struct WaveGeneratorNode::Impl {
       }
       case Shape::RANDOM: {
         if ((time - last_switch).count() > interval) {
-          current = amplitude * impl->random_distribution(impl->random_range) +
+          current = amplitude * double(impl->random_distribution(impl->random_range)) +
                     offset;
           last_switch = time;
         }
@@ -168,6 +170,7 @@ struct WaveGeneratorNode::Impl {
     }
     name_views.assign(names.begin(), names.end());
 
+    //std::cout << "WAVE " << now.time_since_epoch().count() << std::endl;
     analog_impl.inject(spans, sample_intervals, name_views,
                        now.time_since_epoch());
     _time = new_time;

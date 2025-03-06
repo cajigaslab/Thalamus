@@ -311,7 +311,7 @@ struct RemoteNode::Impl {
         case PONG: {
           bytes_transferred += pong.ByteSizeLong();
           auto i = ping_times.find(pong.id());
-          THALAMUS_ASSERT(i != ping_times.end());
+          THALAMUS_ASSERT(i != ping_times.end(), "Ping not found");
           auto now = std::chrono::steady_clock::now();
           auto ping_time = now - i->second;
           ping_times.erase(i);
@@ -359,8 +359,8 @@ struct RemoteNode::Impl {
             channels_changed = true;
           }
 
-          for (auto z = 0; z < analog_response.sample_intervals_size() && z + 2 < sample_intervals.size(); ++z) {
-            if (analog_response.sample_intervals(z) != sample_intervals[z + 2].count()) {
+          for (auto z = 0; z < analog_response.sample_intervals_size() && size_t(z + 2) < sample_intervals.size(); ++z) {
+            if (analog_response.sample_intervals(z) != uint64_t(sample_intervals[size_t(z + 2)].count())) {
               channels_changed = true;
               break;
             }

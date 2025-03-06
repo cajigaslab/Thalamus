@@ -21,6 +21,8 @@ extern "C" {
 namespace thalamus {
 using namespace std::chrono_literals;
 
+ImageNode::~ImageNode() {}
+
 struct FfmpegNode::Impl {
   ObservableDictPtr state;
   boost::asio::io_context &io_context;
@@ -400,7 +402,7 @@ size_t FfmpegNode::width() const { return impl->width; }
 size_t FfmpegNode::height() const { return impl->height; }
 
 void FfmpegNode::inject(const thalamus_grpc::Image &) {
-  THALAMUS_ASSERT(false);
+  THALAMUS_ASSERT(false, "Unimplemented");
 }
 
 std::chrono::nanoseconds FfmpegNode::time() const { return impl->time; }

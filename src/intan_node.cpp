@@ -1,3 +1,4 @@
+#include <thalamus/tracing.hpp>
 #include <base_node.hpp>
 #include <functional>
 #include <intan_node.hpp>
@@ -6,8 +7,8 @@
 #include <numeric>
 #include <state.hpp>
 #include <string>
-#include <thalamus/async.hpp>
 #include <vector>
+#include <thalamus/async.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -94,12 +95,10 @@ struct IntanNode::Impl {
   size_t observer_id;
   boost::signals2::scoped_connection state_connection;
   boost::asio::io_context &io_context;
-  boost::asio::high_resolution_timer timer;
   Socket command_socket;
   boost::asio::ip::tcp::socket waveform_socket;
   size_t num_channels;
   size_t buffer_size;
-  int frame = 0;
   size_t num_samples = 0;
   std::chrono::nanoseconds time;
   std::chrono::nanoseconds sample_interval;
@@ -124,7 +123,7 @@ struct IntanNode::Impl {
 public:
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
        NodeGraph *, IntanNode *_outer)
-      : state(_state), io_context(_io_context), timer(io_context),
+      : state(_state), io_context(_io_context),
         command_socket(io_context, "command", state),
         waveform_socket(io_context), outer(_outer),
         connecting_condition(io_context) {
@@ -139,78 +138,86 @@ public:
   bool connected = false;
   bool streaming = false;
   CoCondition connecting_condition;
-  bool got_magic_number = false;
-
-  void reset_waveform_loop() { got_magic_number = false; }
 
   boost::asio::awaitable<void> waveform_loop() {
     try {
-      int channel = -1;
       size_t offset = 0;
       size_t filled = 0;
       unsigned char buffer[16384];
-      got_magic_number = false;
-      while (true) {
+      boost::asio::steady_timer timer(io_context);
+
+      auto receive = [&]() -> boost::asio::awaitable<void> {
         if (filled == sizeof(buffer)) {
           std::copy(buffer + offset, buffer + filled, buffer);
           filled -= offset;
           offset = 0;
         }
         auto count = co_await waveform_socket.async_receive(
-            boost::asio::buffer(buffer + filled, sizeof(buffer) - filled));
+          boost::asio::buffer(buffer + filled, sizeof(buffer) - filled));
+        filled += count;
+      };
+      while (true) {
         if (!streaming) {
+          timer.expires_after(1s);
+          co_await timer.async_wait();
           continue;
         }
-        filled += count;
-        if (!got_magic_number) {
-          while (!got_magic_number && filled - offset >= 4) {
-            auto pos = buffer + offset;
-            unsigned int magic = uint32_t(pos[0]) | uint32_t(pos[1]) << 8 |
-                                 uint32_t(pos[2]) << 16 |
-                                 uint32_t(pos[3]) << 24;
-            got_magic_number = magic == 0x2ef07a08;
-            offset += got_magic_number ? 4 : 1;
-            frame = 0;
+
+        auto got_magic_number = false;
+        TRACE_EVENT_BEGIN("intan", "Parse Magic Number");
+        while (!got_magic_number) {
+          while (filled - offset < 4) {
+            TRACE_EVENT_END("intan");
+            co_await receive();
+            TRACE_EVENT_BEGIN("intan", "Parse Magic Number");
           }
+          auto pos = buffer + offset;
+          unsigned int magic = uint32_t(pos[0]) | uint32_t(pos[1]) << 8 |
+            uint32_t(pos[2]) << 16 |
+            uint32_t(pos[3]) << 24;
+          got_magic_number = magic == 0x2ef07a08;
+          offset += got_magic_number ? 4 : 1;
         }
-        while (true) {
-          if (channel == -1) {
-            if (filled - offset >= 4) {
-              auto pos = buffer + offset;
-              unsigned int timestamp =
-                  uint32_t(pos[0]) | uint32_t(pos[1]) << 8 |
-                  uint32_t(pos[2]) << 16 | uint32_t(pos[3]) << 24;
-              data[0].push_back(timestamp);
-              offset += 4;
-              ++channel;
-            } else {
-              break;
+        TRACE_EVENT_END("intan");
+
+        int frame = 0;
+        TRACE_EVENT_BEGIN("intan", "Parse Frames");
+        while (frame < 128) {
+          while (filled - offset < 4) {
+            TRACE_EVENT_END("intan");
+            co_await receive();
+            TRACE_EVENT_BEGIN("intan", "Parse Frames");
+          }
+          auto pos = buffer + offset;
+          unsigned int timestamp =
+            uint32_t(pos[0]) | uint32_t(pos[1]) << 8 |
+            uint32_t(pos[2]) << 16 | uint32_t(pos[3]) << 24;
+          data[0].push_back(timestamp);
+          offset += 4;
+
+          size_t channel = 0;
+          while (channel < num_channels) {
+            while (filled - offset < 2) {
+              TRACE_EVENT_END("intan");
+              co_await receive();
+              TRACE_EVENT_BEGIN("intan", "Parse Frames");
             }
-          } else if (filled - offset >= 2) {
-            auto pos = buffer + offset;
+            pos = buffer + offset;
             auto sample = uint16_t(pos[0] | pos[1] << 8);
             data[size_t(channel + 1)].push_back(sample);
             offset += 2;
             ++channel;
-            if (size_t(channel) == num_channels) {
-              channel = -1;
-              ++frame;
-              if (frame == 128) {
-                got_magic_number = false;
-                break;
-              }
-            }
           }
+          ++frame;
         }
+        TRACE_EVENT_END("intan");
 
-        num_samples = std::accumulate(
-            data.begin(), data.end(), std::numeric_limits<size_t>::max(),
-            [](size_t a, auto &b) { return std::min(a, b.size()); });
-        if (num_samples > 0) {
-          outer->ready(outer);
-          for (auto &d : data) {
-            d.erase(d.begin(), d.begin() + int64_t(num_samples));
-          }
+        TRACE_EVENT("intan", "ready");
+        num_samples = 128;
+        time = std::chrono::steady_clock::now().time_since_epoch();
+        outer->ready(outer);
+        for (auto &d : data) {
+          d.clear();
         }
       }
     } catch (std::exception &e) {
@@ -290,7 +297,6 @@ public:
         co_return;
       }
       streaming = true;
-      reset_waveform_loop();
 
       std::string command = "execute clearalldataoutputs;\n";
       co_await boost::asio::async_write(
@@ -320,16 +326,18 @@ public:
           boost::asio::const_buffer(command.data(), command.size()));
       command_socket.start_reading();
 
+      co_await command_socket.wait_for_read(10s);
       auto collecting = true;
       while (collecting) {
         collecting = co_await command_socket.wait_for_read(100ms);
       }
 
       auto sample_rate_response = command_socket.take();
+      THALAMUS_LOG(info) << "get sampleratehertz response:" << sample_rate_response;
       std::vector<std::string> tokens =
           absl::StrSplit(sample_rate_response, ' ');
       sample_rate_response = "";
-      if (tokens.size() < 3 || *(tokens.end() - 3) != "Return:" ||
+      if (tokens.size() < 3 || !absl::EndsWith(*(tokens.end() - 3), "Return:") ||
           *(tokens.end() - 2) != "SampleRateHertz") {
         THALAMUS_LOG(error) << "Unexpected response to get sampleratehertz: "
                             << sample_rate_response;

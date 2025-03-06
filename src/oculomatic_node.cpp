@@ -114,8 +114,7 @@ struct OculomaticNode::Impl {
     y_denominator =
         y_denominator == 0 ? dimensions.second - 2 * y_gain : y_denominator;
 #ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Weverything"
+#pragma clang diagnostic pop
 #endif
 
     if (invert_x && invert_y) {
@@ -188,6 +187,7 @@ struct OculomaticNode::Impl {
     TRACE_EVENT_END("thalamus");
     pool.push([width, event_id, height, frame_id = next_input_frame++,
                current_need_recenter, out, sample_time, frame_interval,
+               render_thresholded = this->render_thresholded,
                &this_current_result = current_result,
                &this_mat_pool = this->mat_pool,
                &this_output_frames = this->output_frames,
@@ -208,15 +208,24 @@ struct OculomaticNode::Impl {
       std::vector<std::vector<cv::Point>> contours;
       std::vector<cv::Vec4i> hierarchy;
 
-      {
+      auto do_threshold = [&] {
         TRACE_EVENT("thalamus", "cv:threshold");
         cv::threshold(moved_in, moved_in, double(this_threshold), 255,
                       cv::THRESH_BINARY_INV);
-      }
-      {
+      };
+      auto do_color = [&] {
         TRACE_EVENT("thalamus", "cv:cvtColor");
         cv::cvtColor(moved_in, *out, cv::COLOR_GRAY2RGB);
+      };
+
+      if(render_thresholded) {
+        do_threshold();
+        do_color();
+      } else {
+        do_color();
+        do_threshold();
       }
+
       if (!this_computing) {
         TRACE_EVENT_END("thalamus");
         boost::asio::post(this_io_context, [&this_current_result,
@@ -318,6 +327,8 @@ struct OculomaticNode::Impl {
                      cv::Point(static_cast<int>(center.first),
                                static_cast<int>(center.second)),
                      10, cv::Scalar(0, 0, 255), -1);
+          cv::drawMarker(*out, cv::Point(static_cast<int>(this_centering_pix.first), static_cast<int>(this_centering_pix.second)),
+                     cv::Scalar(0, 255, 0), cv::MARKER_CROSS, 20, 3);
         }
       } else {
         gaze = std::make_pair(1e6, 1e6);
@@ -351,6 +362,8 @@ struct OculomaticNode::Impl {
     });
   }
 
+  bool render_thresholded = false;
+
   void on_change(ObservableCollection::Action,
                  const ObservableCollection::Key &k,
                  const ObservableCollection::Value &v) {
@@ -358,6 +371,8 @@ struct OculomaticNode::Impl {
     auto key_str = std::get<std::string>(k);
     if (key_str == "Computing") {
       computing = std::get<bool>(v);
+    } else if (key_str == "Render Thresholded") {
+      render_thresholded = std::get<bool>(v);
     } else if (key_str == "Threshold") {
       threshold = size_t(std::get<long long int>(v));
     } else if (key_str == "Min Area") {
@@ -506,11 +521,21 @@ bool OculomaticNode::has_analog_data() const {
   return impl->current_result.has_analog;
 }
 
-boost::json::value OculomaticNode::process(const boost::json::value &) {
-  impl->need_recenter = true;
+boost::json::value OculomaticNode::process(const boost::json::value & request) {
+  if(!request.is_object()) {
+    return boost::json::value();
+  }
+
+  auto object = request.as_object();
+  if(object.contains("type") && object["type"] == "recenter" || object.contains("keydown")) {
+    impl->need_recenter = true;
+  }
+
   return boost::json::value();
 }
+
 size_t OculomaticNode::modalities() const {
   return infer_modalities<OculomaticNode>();
 }
+
 } // namespace thalamus

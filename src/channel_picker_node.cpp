@@ -245,7 +245,7 @@ void ChannelPickerNode::inject(
     const thalamus::vector<std::span<double const>> &,
     const thalamus::vector<std::chrono::nanoseconds> &,
     const thalamus::vector<std::string_view> &) {
-  THALAMUS_ASSERT(false);
+  THALAMUS_ASSERT(false, "Unimplemented");
 }
 
 bool ChannelPickerNode::has_analog_data() const { return true; }

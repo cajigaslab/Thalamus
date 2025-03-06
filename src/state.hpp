@@ -53,7 +53,6 @@ public:
                      std::function<void()>)>
       remote_storage;
 
-public:
   using Changed = boost::signals2::signal<void(Action, const Key &, Value &)>;
   Changed changed;
   using RecursiveChanged = boost::signals2::signal<void(
@@ -134,7 +133,7 @@ public:
     bool operator!=(const MapIteratorWrapper &other) const;
   };
   ObservableCollection(ObservableCollection *parent = nullptr);
-  virtual ~ObservableCollection() {}
+  virtual ~ObservableCollection();
 
   static ObservableCollection::Value from_json(const boost::json::value &);
   static boost::json::value to_json(const ObservableCollection::Value &);

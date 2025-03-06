@@ -11,7 +11,7 @@
 
 #ifdef _WIN32
 #include <WinSock2.h>
-#elif __APPLE__
+#elif defined(__APPLE__)
 #include <arpa/inet.h>
 #else
 #include <endian.h>
@@ -402,6 +402,7 @@ struct StorageNode::Impl {
   std::thread _thread;
   std::atomic_uint queued_records = 0;
   std::atomic_ullong queued_bytes = 0;
+  std::atomic_ullong written_bytes = 0;
 
   const size_t zbuffer_size = 1024;
 
@@ -455,7 +456,7 @@ struct StorageNode::Impl {
   };
 
   struct Encoder {
-    virtual ~Encoder() {}
+    virtual ~Encoder();
     virtual void work() = 0;
     virtual void finish() = 0;
     virtual void push(thalamus_grpc::StorageRecord &&record) = 0;
@@ -465,7 +466,7 @@ struct StorageNode::Impl {
   struct IdentityEncoder : public Encoder {
     std::list<thalamus_grpc::StorageRecord> queue;
 
-    void work() override {}
+    void work() override;
     void finish() override {}
     void push(thalamus_grpc::StorageRecord &&record) override {
       queue.push_back(std::move(record));
@@ -669,9 +670,7 @@ struct StorageNode::Impl {
       }
       out_queue.push_back(compressed_record);
     }
-    void push(thalamus_grpc::StorageRecord &&record) override {
-      in_queue.push_back(std::move(record));
-    }
+    void push(thalamus_grpc::StorageRecord &&record) override;
     std::optional<thalamus_grpc::StorageRecord> pull() override {
       if (!out_queue.empty()) {
         std::optional<thalamus_grpc::StorageRecord> result =
@@ -771,9 +770,7 @@ struct StorageNode::Impl {
       compressed_data->resize(compressed_data->size() - zstream.avail_out);
       out_queue.push_back(std::move(compressed_record));
     }
-    void push(thalamus_grpc::StorageRecord &&record) override {
-      in_queue.push_back(std::move(record));
-    }
+    void push(thalamus_grpc::StorageRecord &&record) override;
     std::optional<thalamus_grpc::StorageRecord> pull() override {
       if (!out_queue.empty()) {
         std::optional<thalamus_grpc::StorageRecord> result =
@@ -876,6 +873,7 @@ struct StorageNode::Impl {
       }
 
       TRACE_EVENT("thalamus", "write");
+      written_bytes += buffer.size();
       output_stream.write(buffer.data(), int64_t(buffer.size()));
     };
 
@@ -987,6 +985,10 @@ struct StorageNode::Impl {
 
     update_metrics(0, 0, queued_records, [&] { return "Output Queue Count"; });
     update_metrics(0, 1, queued_bytes, [&] { return "Output Queue Bytes"; });
+    update_metrics(0, 2, written_bytes, [&] { return "Written Bytes"; });
+    queued_records = 0;
+    queued_bytes = 0;
+    written_bytes = 0;
 
     auto now = std::chrono::steady_clock::now();
     auto elapsed = now - last_publish;
@@ -1011,6 +1013,7 @@ struct StorageNode::Impl {
     records.clear();
     queued_bytes = 0;
     queued_records = 0;
+    written_bytes = 0;
     _thread = std::thread([&, output_file] { thread_target(output_file); });
     stats_timer.expires_after(1s);
     stats_timer.async_wait(std::bind(&Impl::on_stats_timer, this, _1));
@@ -1114,6 +1117,15 @@ struct StorageNode::Impl {
   }
 };
 
+StorageNode::Impl::Encoder::~Encoder() {}
+void StorageNode::Impl::ZlibEncoder::push(thalamus_grpc::StorageRecord &&record) {
+  in_queue.push_back(std::move(record));
+}
+void StorageNode::Impl::VideoEncoder::push(thalamus_grpc::StorageRecord &&record) {
+  in_queue.push_back(std::move(record));
+}
+void StorageNode::Impl::IdentityEncoder::work() {}
+
 StorageNode::StorageNode(ObservableDictPtr state,
                          boost::asio::io_context &io_context, NodeGraph *graph)
     : impl(new Impl(state, io_context, graph, this)) {}
@@ -1133,7 +1145,7 @@ StorageNode::get_next_file(const std::filesystem::path &name,
       absl::FormatTime("%Y%m%d", start_time, absl::LocalTimeZone());
   auto filename =
       absl::StrFormat("%s.%s.%d", name.string(), start_time_str, rec);
-  return filename;
+  return std::move(filename);
 }
 
 void StorageNode::record(std::ofstream &output,
