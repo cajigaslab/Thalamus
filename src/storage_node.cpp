@@ -1,3 +1,4 @@
+#include <thalamus/tracing.hpp>
 #include <fstream>
 #include <image_node.hpp>
 #include <modalities_util.hpp>
@@ -5,7 +6,6 @@
 #include <text_node.hpp>
 #include <thalamus/async.hpp>
 #include <thalamus/thread.hpp>
-#include <thalamus/tracing.hpp>
 #include <thread_pool.hpp>
 #include <util.hpp>
 

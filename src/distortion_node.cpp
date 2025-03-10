@@ -1,6 +1,6 @@
+#include <thalamus/tracing.hpp>
 #include <distortion_node.hpp>
 #include <shared_mutex>
-#include <thalamus/tracing.hpp>
 #include <thread_pool.hpp>
 
 #include <modalities_util.hpp>

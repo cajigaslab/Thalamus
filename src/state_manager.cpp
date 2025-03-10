@@ -1,6 +1,6 @@
+#include <thalamus/tracing.hpp>
 #include <state_manager.hpp>
 #include <thalamus/thread.hpp>
-#include <thalamus/tracing.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push

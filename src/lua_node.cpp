@@ -1,6 +1,6 @@
+#include <thalamus/tracing.hpp>
 #include <lua_node.hpp>
 #include <modalities_util.hpp>
-#include <thalamus/tracing.hpp>
 #include <vector>
 
 #ifdef __clang__

@@ -1,9 +1,7 @@
-// #include <QApplication>
-// #include <QScreen>
+#include <thalamus/tracing.hpp>
 #include "node_graph_impl.hpp"
 #include <state.hpp>
 #include <thalamus.hpp>
-#include <thalamus/tracing.hpp>
 #ifdef _WIN32
 #include <timeapi.h>
 #endif
@@ -46,11 +44,26 @@ PERFETTO_TRACK_EVENT_STATIC_STORAGE();
 namespace thalamus {
 using namespace std::chrono_literals;
 
+[[noreturn]]
+static void on_terminate() {
+  auto exception = std::current_exception();
+  if(exception) {
+    try {
+      std::rethrow_exception(exception);
+    } catch(const std::exception& e) {
+      THALAMUS_ASSERT(false, "%s", e.what());
+    }
+  } else {
+    THALAMUS_ASSERT(false, "Terminated");
+  }
+}
+
 int main(int argc, char **argv) {
 #ifdef _WIN32
   timeBeginPeriod(1);
 #endif
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
+  std::set_terminate(on_terminate);
 
   auto steady_start = std::chrono::steady_clock::now();
   auto system_start = std::chrono::system_clock::now();

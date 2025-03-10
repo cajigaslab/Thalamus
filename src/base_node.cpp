@@ -1,6 +1,6 @@
+#include <thalamus/tracing.hpp>
 #include <base_node.hpp>
 #include <modalities_util.hpp>
-#include <thalamus/tracing.hpp>
 #include <util.hpp>
 
 namespace thalamus {

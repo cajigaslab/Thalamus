@@ -1,7 +1,7 @@
+#include <thalamus/tracing.hpp>
 #include <atomic>
 #include <modalities_util.hpp>
 #include <thalamus/thread.hpp>
-#include <thalamus/tracing.hpp>
 #include <video_node.hpp>
 
 #ifdef __clang__

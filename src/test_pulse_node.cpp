@@ -1,5 +1,5 @@
-#include <test_pulse_node.hpp>
 #include <thalamus/tracing.hpp>
+#include <test_pulse_node.hpp>
 #include <analog_node.hpp>
 #include <stim_node.hpp>
 #include <thalamus.pb.h>
@@ -37,7 +37,6 @@ struct TestPulseNode::Impl {
     if(data.empty()) {
       return;
     }
-    auto current_value = data.back();
     auto now = source->time();
     for(auto current_value : data) {
       if(current_value > 40000 && current_value - last_value > 1000 && now - last_time > 500ms) {

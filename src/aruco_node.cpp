@@ -1,8 +1,8 @@
+#include <thalamus/tracing.hpp>
 #include <aruco_node.hpp>
 #include <distortion_node.hpp>
 #include <image_node.hpp>
 #include <modalities_util.hpp>
-#include <thalamus/tracing.hpp>
 #include <thread_pool.hpp>
 
 #ifdef __clang__

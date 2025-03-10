@@ -1,6 +1,6 @@
+#include <thalamus/tracing.hpp>
 #include <modalities_util.hpp>
 #include <thalamus/thread.hpp>
-#include <thalamus/tracing.hpp>
 #include <thread_pool.hpp>
 
 #ifdef __clang__

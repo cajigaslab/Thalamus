@@ -1,10 +1,10 @@
+#include <thalamus/tracing.hpp>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iostream>
 #include <map>
 #include <modalities_util.hpp>
-#include <thalamus/tracing.hpp>
 #include <util.hpp>
 #include <vector>
 #include <xsens_node.hpp>
