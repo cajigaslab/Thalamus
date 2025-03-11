@@ -58,15 +58,30 @@ if(WIN32)
       && cmake -E touch_nocreate "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
       WORKING_DIRECTORY "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>")
   else()
+    set(FFMPEG_ALL_LINK_OPTIONS_SPACED "${ALL_C_LINK_OPTIONS_SPACED}")
+    string(REPLACE "/DEBUG" "" FFMPEG_ALL_LINK_OPTIONS_SPACED "${ALL_C_LINK_OPTIONS_SPACED}")
+
+    string(REPLACE "-Zi" "" FFMPEG_ALL_COMPILE_OPTIONS_SPACED "${FFMPEG_ALL_COMPILE_OPTIONS_SPACED}")
+    add_library(ffmpeg_m m_stub.cpp)
+    set_target_properties(ffmpeg_m PROPERTIES 
+      ARCHIVE_OUTPUT_DIRECTORY "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>"
+      LIBRARY_OUTPUT_DIRECTORY "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>"
+      OUTPUT_NAME m)
+    string(REGEX REPLACE "^([a-zA-Z]):" "/\\1" FFMPEG_COMPILER "${CMAKE_C_COMPILER}")
+    string(REPLACE "clang-cl" "clang" FFMPEG_COMPILER "${FFMPEG_COMPILER}")
+    string(REPLACE "Program Files (x86)" "Progra~2" FFMPEG_COMPILER "${FFMPEG_COMPILER}")
+    string(REPLACE "Program Files" "Progra~1" FFMPEG_COMPILER "${FFMPEG_COMPILER}")
     add_custom_command(
       OUTPUT "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
-      DEPENDS sdl
+      DEPENDS sdl ffmpeg_m
       COMMAND
-      ${MSYS2_ROOT}\\msys2_shell.cmd -here -use-full-path -no-start -defterm -c "'${CMAKE_SOURCE_DIR}/config_ffmpeg_clang.bash' '${ffmpeg_SOURCE_DIR}/configure' '${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install' '${FFMPEG_ALL_COMPILE_OPTIONS_SPACED}' $<IF:$<CONFIG:Debug>,--enable-debug,>"
+      ${MSYS2_ROOT}\\msys2_shell.cmd -here -use-full-path -no-start -defterm -c "export 'PKG_CONFIG_PATH=${FFMPEG_SDL_PKG_CONFIG_DIR}' && '${ffmpeg_SOURCE_DIR}/configure' --enable-sdl --target-os=win64 --arch=x86_64 '--cc=${FFMPEG_COMPILER}' --enable-static --disable-shared '--prefix=${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install' '--extra-cflags=${FFMPEG_ALL_COMPILE_OPTIONS_SPACED}' '--extra-ldflags=${FFMPEG_ALL_LINK_OPTIONS_SPACED}' $<IF:$<CONFIG:Debug>,--enable-debug,>"
       && cmake -E touch_nocreate "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
+      && ${MSYS2_ROOT}\\msys2_shell.cmd -here -use-full-path -no-start -defterm -c "sed -i s/LIBPREF=lib/LIBPREF=/ ffbuild/config.mak"
+      && ${MSYS2_ROOT}\\msys2_shell.cmd -here -use-full-path -no-start -defterm -c "sed -i s/LIBSUF=.a/LIBSUF=.lib/ ffbuild/config.mak"
       WORKING_DIRECTORY "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>")
   endif()
-  set(FFMPEG_MAKE_COMMAND ${MSYS2_ROOT}\\msys2_shell.cmd -here -use-full-path -no-start -defterm -c \"${CMAKE_SOURCE_DIR}/make_ffmpeg.bash ${CPU_COUNT}\")
+  set(FFMPEG_MAKE_COMMAND ${MSYS2_ROOT}\\msys2_shell.cmd -here -use-full-path -no-start -defterm -c \"export VERBOSE=1 && make -j ${CPU_COUNT} && make install\")
 else()
   string(REPLACE "-nostdinc++" "" FFMPEG_COMPILE_OPTIONS_SPACED "${ALL_C_COMPILE_OPTIONS_SPACED}")
   if(APPLE)
@@ -77,21 +92,32 @@ else()
     DEPENDS zlib_processed sdl
     COMMAND cmake -E env 
     "PKG_CONFIG_PATH=${ZLIB_PKG_CONFIG_DIR}:${SDL_PKG_CONFIG_DIR}"
-    "${ffmpeg_SOURCE_DIR}/configure" ${FFMPEG_APPLE_FLAGS} --cc=clang "--extra-cflags=${FFMPEG_COMPILE_OPTIONS_SPACED}" "--extra-ldflags=${ALL_C_COMPILE_OPTIONS_SPACED}" --enable-static --disable-shared --disable-sndio $<IF:$<CONFIG:Debug>,--enable-debug,> --prefix=${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install
+    "${ffmpeg_SOURCE_DIR}/configure" ${FFMPEG_APPLE_FLAGS} --cc=clang "--extra-cflags=${FFMPEG_COMPILE_OPTIONS_SPACED}" "--extra-ldflags=${ALL_C_LINK_OPTIONS_SPACED}" --enable-static --disable-shared --disable-sndio $<IF:$<CONFIG:Debug>,--enable-debug,> --prefix=${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install
     && cmake -E touch_nocreate "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
     WORKING_DIRECTORY "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>")
   set(FFMPEG_MAKE_COMMAND make -j ${CPU_COUNT} && make install)
 endif()
 
 if(WIN32)
-  set(FFMPEG_OUTPUT_LIBRARIES
-    "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libavcodec.a"
-    "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libavdevice.a"
-    "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libavfilter.a"
-    "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libavformat.a"
-    "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libavutil.a"
-    "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libswresample.a"
-    "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libswscale.a")
+  if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
+    set(FFMPEG_OUTPUT_LIBRARIES
+      "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libavcodec.a"
+      "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libavdevice.a"
+      "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libavfilter.a"
+      "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libavformat.a"
+      "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libavutil.a"
+      "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libswresample.a"
+      "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/libswscale.a")
+  else()
+    set(FFMPEG_OUTPUT_LIBRARIES
+      "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/avcodec.lib"
+      "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/avdevice.lib"
+      "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/avfilter.lib"
+      "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/avformat.lib"
+      "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/avutil.lib"
+      "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/swresample.lib"
+      "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/swscale.lib")
+  endif()
   set(FFMPEG_LIBRARIES "${FFMPEG_OUTPUT_LIBRARIES}"
     Ws2_32.lib Secur32.lib Bcrypt.lib Mfplat.lib Ole32.lib User32.lib dxguid.lib uuid.lib Mfuuid.lib strmiids.lib Kernel32.lib Psapi.lib)
   set(FFMPEG_EXECUTABLE "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/bin/ffmpeg.exe")
@@ -173,7 +199,11 @@ endif()
 
 if(WIN32)
   set(THALAMUS_EXPORT "__declspec(dllexport)")
-  set(FFMPEG_OUT_ARG "-Fo")
+  if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
+    set(FFMPEG_OUT_ARG "-Fo")
+  else()
+    set(FFMPEG_OUT_ARG "-o")
+  endif()
 else()
   set(THALAMUS_EXPORT "__attribute__((visibility(\"default\")))")
   set(FFMPEG_OUT_ARG "-o")

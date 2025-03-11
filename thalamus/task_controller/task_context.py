@@ -141,12 +141,12 @@ class Sleeper():
     self.conditions.append((functor_condition, future))
     return future
 
-  def any(self, *futures: 'typing.Awaitable[typing.Any]') -> 'typing.Awaitable[typing.Any]':
+  def any(self, *awaitables: 'typing.Awaitable[typing.Any]') -> 'typing.Awaitable[typing.Any]':
     """
-    Sleeps until one of the futures finishes at which point the finished future is returned
+    Sleeps until one of the awaitables finishes at which point the finished future is returned
     """
     async def inner() -> typing.Awaitable[typing.Any]:
-      done, _ = await asyncio.wait(futures, return_when=asyncio.FIRST_COMPLETED)
+      done, _ = await asyncio.wait([asyncio.ensure_future(f) for f in awaitables], return_when=asyncio.FIRST_COMPLETED)
       self.tasks.remove(task)
       return await next(iter(done))
 
@@ -702,7 +702,7 @@ class TaskContext(TaskContextProtocol):
     current_index = self.config['reward_schedule']['index']
     reward = float(self.config['reward_schedule']['schedules'][int(channel)][current_index])
     self.trial_summary_data.used_values['reward'] = reward
-    return reward
+    return max(reward, 0.0)
 
   def process(self) -> None:
     '''

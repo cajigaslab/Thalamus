@@ -34,12 +34,14 @@ from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
 from ..qt import *
 from .util import create_task_with_exc_handling
+import grpc
 #from .. import recorder2_pb2
 #from .. import recorder2_pb2_grpc
 
 LOGGER = logging.getLogger(__name__)
 
 VOLTAGE_RANGE = -10, 10
+POINT_SIZE = 10
 
 def load_transform(config: ObservableDict) -> QTransform:
   '''
@@ -236,6 +238,13 @@ class CanvasPainter(QPainter):
     if self.current_output_mask in (RenderOutput.ANY, self.output_mask):
       super().drawImage(*args, **kwargs)
 
+  def drawText(self, *args: typing.Any, **kwargs: typing.Any) -> None: # pylint: disable=invalid-name
+    '''
+    Override that implements masked rendering
+    '''
+    if self.current_output_mask in (RenderOutput.ANY, self.output_mask):
+      super().drawText(*args, **kwargs)
+
   @contextlib.contextmanager
   def masked(self, mask: RenderOutput) -> typing.Iterator['CanvasPainterProtocol']:
     '''
@@ -376,7 +385,7 @@ class InputConfig():
     path.setFillRule(Qt.FillRule.WindingFill)
     for point in points:
       scaled_point = transform.map(point)
-      path.addEllipse(scaled_point, 2, 2)
+      path.addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
 
   def __str__(self) -> str:
     return f'InputConfig(touch_channels={self.touch_channels})'
@@ -801,6 +810,8 @@ class Canvas(QOpenGLWidget):
         self.on_touch(local_point)
     except asyncio.CancelledError:
       pass
+    except grpc.aio.AioRpcError as e:
+      pass
 
   def on_touch(self, point: QPoint) -> None:
     """
@@ -809,8 +820,7 @@ class Canvas(QOpenGLWidget):
     offset = point - self.input_config.last_touch
     #print('touch')
     if QPoint.dotProduct(offset, offset) > 2:
-      #print('touch2')
-      self.input_config.touch_path.addEllipse(QPointF(point), 20, 20)
+      self.input_config.touch_path.addEllipse(QPointF(point), POINT_SIZE, POINT_SIZE)
       self.input_config.last_touch = offset
 
     self.listeners.touch_listener(point)
@@ -829,43 +839,48 @@ class Canvas(QOpenGLWidget):
     """
     Processes eye input
     """
-    async for message in messages:
-      x, y = None, None
-      for span in message.spans:
-        if span.name == 'X' and span.begin < span.end:
-          x = message.data[span.end-1]
-        elif span.name == 'Y' and span.begin < span.end:
-          y = message.data[span.end-1]
-      assert x is not None and y is not None
+    try:
+      async for message in messages:
+        x, y = None, None
+        for span in message.spans:
+          if span.name == 'X' and span.begin < span.end:
+            x = message.data[span.end-1]
+          elif span.name == 'Y' and span.begin < span.end:
+            y = message.data[span.end-1]
+        assert x is not None and y is not None
 
-      voltage_point = QPointF(x, -y)
+        voltage_point = QPointF(x, -y)
 
-      if y >= 0:
-        if x >= 0:
-          self.input_config.points[0].append(voltage_point)
-          scaled_point = self.input_config.gaze_transforms[0].map(voltage_point)
-          self.input_config.gaze_paths[0].addEllipse(scaled_point, 2, 2)
+        if y >= 0:
+          if x >= 0:
+            self.input_config.points[0].append(voltage_point)
+            scaled_point = self.input_config.gaze_transforms[0].map(voltage_point)
+            self.input_config.gaze_paths[0].addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
+          else:
+            self.input_config.points[1].append(voltage_point)
+            scaled_point = self.input_config.gaze_transforms[1].map(voltage_point)
+            self.input_config.gaze_paths[1].addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
         else:
-          self.input_config.points[1].append(voltage_point)
-          scaled_point = self.input_config.gaze_transforms[1].map(voltage_point)
-          self.input_config.gaze_paths[1].addEllipse(scaled_point, 2, 2)
-      else:
-        if x < 0:
-          self.input_config.points[2].append(voltage_point)
-          scaled_point = self.input_config.gaze_transforms[2].map(voltage_point)
-          self.input_config.gaze_paths[2].addEllipse(scaled_point, 2, 2)
-        else:
-          self.input_config.points[3].append(voltage_point)
-          scaled_point = self.input_config.gaze_transforms[3].map(voltage_point)
-          self.input_config.gaze_paths[3].addEllipse(scaled_point, 2, 2)
+          if x < 0:
+            self.input_config.points[2].append(voltage_point)
+            scaled_point = self.input_config.gaze_transforms[2].map(voltage_point)
+            self.input_config.gaze_paths[2].addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
+          else:
+            self.input_config.points[3].append(voltage_point)
+            scaled_point = self.input_config.gaze_transforms[3].map(voltage_point)
+            self.input_config.gaze_paths[3].addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
 
-      #geometry = qt_screen_geometry()
-      #global_point = QPoint(scaled_point.x() + geometry.width()/2, scaled_point.y() + geometry.height()/2)
-      #local_point = self.mapFromGlobal(global_point)
+        #geometry = qt_screen_geometry()
+        #global_point = QPoint(scaled_point.x() + geometry.width()/2, scaled_point.y() + geometry.height()/2)
+        #local_point = self.mapFromGlobal(global_point)
 
-      local_point = QPoint(int(scaled_point.x()) + self.width()//2, int(scaled_point.y()) + self.height()//2)
+        local_point = QPoint(int(scaled_point.x()) + self.width()//2, int(scaled_point.y()) + self.height()//2)
 
-      self.on_gaze(local_point)
+        self.on_gaze(local_point)
+    except asyncio.CancelledError:
+      pass
+    except grpc.aio.AioRpcError as e:
+      pass
 
   def keyReleaseEvent(self, e: QKeyEvent) -> None: # pylint: disable=invalid-name
     '''

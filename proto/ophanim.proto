@@ -4,13 +4,16 @@ import "util.proto";
 
 package ophanim_grpc;
 
+message Empty {
+}
+
 // The greeting service definition.
 service Ophanim {
   // Sends multiple greetings
   rpc oculomatic (OculomaticRequest) returns (stream Gaze) {}
   rpc images (ImagesRequest) returns (stream Image) {}
-  rpc play_all(util_grpc.Empty) returns (util_grpc.Empty) {}
-  rpc stop_all(util_grpc.Empty) returns (util_grpc.Empty) {}
+  rpc play_all(Empty) returns (Empty) {}
+  rpc stop_all(Empty) returns (Empty) {}
 }
 
 message OculomaticRequest {

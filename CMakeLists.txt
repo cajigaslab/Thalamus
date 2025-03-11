@@ -15,9 +15,9 @@ project(thalamus)
 message("CMAKE_SYSTEM_PROCESSOR ${CMAKE_SYSTEM_PROCESSOR}")
 
 if(WIN32)
-  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    execute_process(COMMAND "${CMAKE_CXX_COMPILER}" "${CMAKE_SOURCE_DIR}/stub_atomic.cpp" -c -o "${CMAKE_BINARY_DIR}/atomic.lib")
-  endif()
+  #if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  #  execute_process(COMMAND "${CMAKE_CXX_COMPILER}" "${CMAKE_SOURCE_DIR}/stub_atomic.cpp" -c -o "${CMAKE_BINARY_DIR}/atomic.lib")
+  #endif()
 endif()
 
 if(APPLE)
@@ -53,9 +53,15 @@ else()
   set(CMAKE_PARALLEL --parallel ${CPU_COUNT})
 endif()
 
-if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
-  list(APPEND ALL_COMPILE_OPTIONS /Zi /MP)
-  list(APPEND ALL_LINK_OPTIONS /DEBUG)
+if(WIN32)
+  if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
+    list(APPEND ALL_COMPILE_OPTIONS /MP)
+    list(APPEND ALL_COMPILE_OPTIONS /Zi)
+    list(APPEND ALL_LINK_OPTIONS /DEBUG)
+  else()
+    message("Release debug symbols enabled")
+    list(APPEND ALL_COMPILE_OPTIONS -g)
+  endif()
 else()
   if(NOT DEFINED ENV{GITHUB_REPOSITORY})
     message("Release debug symbols enabled")
@@ -90,11 +96,12 @@ include(cmake/sdl.cmake)
 include(cmake/ffmpeg.cmake)
 include(cmake/glib.cmake)
 include(cmake/cairo.cmake)
-if(NOT "${SANITIZER}" STREQUAL "")
+include(cmake/inja.cmake)
+#if(NOT "${SANITIZER}" STREQUAL "")
   include(cmake/lua.cmake)
-else()
-  include(cmake/luajit.cmake)
-endif()
+  #else()
+  #  include(cmake/luajit.cmake)
+  #endif()
  
 if(NOT WIN32 AND NOT APPLE)
   include(cmake/llvm.cmake)
@@ -138,7 +145,10 @@ message("PROTO_SOURCES ${PROTO_SOURCES}")
 message("PROTO_GENERATED_SOURCES ${PROTO_GENERATED_SOURCES}")
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  set(WARNING_FLAGS -Wall -Wextra -Wpedantic -Wno-deprecated-declarations -Wno-c11-extensions -Wno-gcc-compat)
+  set(WARNING_FLAGS 
+    -Weverything -Wno-deprecated-declarations -Wno-c11-extensions -Wno-gcc-compat -Wno-c++98-compat-pedantic
+    -Wno-c++20-compat -Wno-unsafe-buffer-usage -Wno-switch-default -Wno-c99-extensions
+    -Wno-missing-template-arg-list-after-template-kw -Wno-padded -Wno-unknown-warning-option)
 else()
   #set(WARNING_FLAGS /Wall)
   set(WARNING_FLAGS)
@@ -154,7 +164,7 @@ if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
 endif()
 
 add_library(hydrate "src/hydrate.cpp")
-target_link_libraries(hydrate boost grpc++ hdf5-static zlib_processed)
+target_link_libraries(hydrate boost grpc++ hdf5-static ffmpeg zlib_processed)
 add_dependencies(hydrate protoc_generated)
 target_compile_definitions(hydrate PRIVATE _USE_MATH_DEFINES NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS _GNU_SOURCE)
 target_include_directories(hydrate PRIVATE "${CMAKE_SOURCE_DIR}/src")
@@ -185,6 +195,8 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/storage_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/run_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/run_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/run2_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/run2_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/remote_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/remote_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/ophanim_node.hpp"
@@ -198,6 +210,7 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/distortion_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/distortion_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/text_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/text_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/log_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/log_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thread_pool.hpp"
@@ -228,10 +241,12 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/video_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/touchscreen_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/touchscreen_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/stim_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/stim_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/stim_printer_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/stim_printer_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/loop_test_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/loop_test_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/test_pulse_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/test_pulse_node.cpp"
                      #"${CMAKE_SOURCE_DIR}/src/hexascope_node.hpp"
                      #"${CMAKE_SOURCE_DIR}/src/hexascope_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/file.hpp"
@@ -267,7 +282,7 @@ target_compile_options(thalamus PRIVATE ${WARNING_FLAGS})
 target_compile_definitions(thalamus PRIVATE _USE_MATH_DEFINES)
 target_include_directories(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(thalamus opencv hdf5-static lua
-  boost grpc++ grpc++_reflection 
+  boost grpc++ grpc++_reflection inja
   absl::str_format_internal absl::strings absl::str_format ffmpeg cairo perfetto)
 if(NOT APPLE)
   target_link_libraries(thalamus zlib_processed)
@@ -283,10 +298,14 @@ target_compile_definitions(native PRIVATE _GNU_SOURCE)
 
 target_compile_options(native PRIVATE ${WARNING_FLAGS})
 target_include_directories(native PRIVATE "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(native PRIVATE thalamus hydrate thalamus_ffmpeg ffmpeg sdl protoc_generated lua cairo)
+target_link_libraries(native PRIVATE hydrate thalamus opencv thalamus_ffmpeg ffmpeg sdl protoc_generated lua cairo)
 
 if(APPLE)
   target_link_options(native PRIVATE -pagezero_size 10000 -image_base 7fff04c4a000)
+endif()
+
+if(NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
+  target_link_options(native PRIVATE -g)
 endif()
 
 add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "$<TARGET_FILE:native>" "${CMAKE_SOURCE_DIR}/thalamus")

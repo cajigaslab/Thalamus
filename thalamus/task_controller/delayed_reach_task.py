@@ -438,7 +438,11 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     show_start_target = False
     context.widget.update()
     with next_state(context, State.INTERTRIAL, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
-      await context.sleep(config.intertrial_timeout)
+      await wait_for(context, lambda: touch_pos.x() > 0, config.intertrial_timeout)
+      if touch_pos.x() > 0:
+        with fail_trial():
+          await context.sleep(config.fail_timeout)
+          return task_context.TaskResult(False)
 
     blank_space_touched = False
     with next_state(context, State.START_ON, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
@@ -527,6 +531,11 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     success_sound.play()      
 
     await context.sleep(config.success_timeout)
+
+  if touch_pos.x() > 0: 
+    with fail_trial(): 
+      await context.sleep(config.fail_timeout)
+      return task_context.TaskResult(False)
 
   context.behav_result = behav_result
   return task_context.TaskResult(True)

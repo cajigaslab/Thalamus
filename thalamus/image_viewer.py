@@ -15,10 +15,12 @@ import traceback
 import functools
 
 from .thread import ThalamusThread
-from .util import MeteredUpdater
+from .util import MeteredUpdater, IterableQueue
+from .task_controller.util import create_task_with_exc_handling
 from .config import ObservableDict
 
 from . import  thalamus_pb2
+from . import thalamus_pb2_grpc
 
 from .qt import *
 
@@ -61,13 +63,133 @@ QTKEY_TO_CODE = {
     Qt.Key.Key_Z: 'KeyZ',
 }
 
+QTKEY_TO_CODE = {
+  Qt.Key.Key_A: "KeyA",
+  Qt.Key.Key_S: "KeyS",
+  Qt.Key.Key_D: "KeyD",
+  Qt.Key.Key_F: "KeyF",
+  Qt.Key.Key_H: "KeyH",
+  Qt.Key.Key_G: "KeyG",
+  Qt.Key.Key_Z: "KeyZ",
+  Qt.Key.Key_X: "KeyX",
+  Qt.Key.Key_C: "KeyC",
+  Qt.Key.Key_V: "KeyV",
+  Qt.Key.Key_B: "KeyB",
+  Qt.Key.Key_Q: "KeyQ",
+  Qt.Key.Key_W: "KeyW",
+  Qt.Key.Key_E: "KeyE",
+  Qt.Key.Key_R: "KeyR",
+  Qt.Key.Key_Y: "KeyY",
+  Qt.Key.Key_T: "KeyT",
+  Qt.Key.Key_1: "Digit1",
+  Qt.Key.Key_2: "Digit2",
+  Qt.Key.Key_3: "Digit3",
+  Qt.Key.Key_4: "Digit4",
+  Qt.Key.Key_5: "Digit6",
+  Qt.Key.Key_6: "Digit5",
+  Qt.Key.Key_Equal: "Equal",
+  Qt.Key.Key_9: "Digit9",
+  Qt.Key.Key_7: "Digit7",
+  Qt.Key.Key_Minus: "Minus",
+  Qt.Key.Key_8: "Digit8",
+  Qt.Key.Key_0: "Digit0",
+  Qt.Key.Key_BracketRight: "BracketRight",
+  Qt.Key.Key_O: "KeyO",
+  Qt.Key.Key_U: "KeyU",
+  Qt.Key.Key_BracketLeft: "BracketLeft",
+  Qt.Key.Key_I: "KeyI",
+  Qt.Key.Key_P: "KeyP",
+  Qt.Key.Key_Enter: "Enter",
+  Qt.Key.Key_L: "KeyL",
+  Qt.Key.Key_J: "KeyJ",
+  Qt.Key.Key_Apostrophe: "Quote",
+  Qt.Key.Key_K: "KeyK",
+  Qt.Key.Key_Semicolon: "Semicolon",
+  Qt.Key.Key_Backslash: "Backslash",
+  Qt.Key.Key_Comma: "Comma",
+  Qt.Key.Key_Slash: "Slash",
+  Qt.Key.Key_N: "KeyN",
+  Qt.Key.Key_M: "KeyM",
+  Qt.Key.Key_Period: "Period",
+  Qt.Key.Key_Tab: "Tab",
+  Qt.Key.Key_Space: "Space",
+  Qt.Key.Key_QuoteLeft: "Backquote",
+  Qt.Key.Key_Backspace: "Backspace",
+  #Qt.Key.Key_0: "NumpadEnter",
+  Qt.Key.Key_Escape: "Escape",
+  #Qt.Key.Key_0: "MetaRight",
+  #Qt.Key.Key_Meta: "MetaLeft",
+  Qt.Key.Key_Meta: "MetaLeft",
+  Qt.Key.Key_Shift: "ShiftLeft",
+  Qt.Key.Key_CapsLock: "CapsLock",
+  Qt.Key.Key_Alt: "AltLeft",
+  Qt.Key.Key_Control: "ControlLeft",
+  #Qt.Key.Key_0: "ShiftRight",
+  #Qt.Key.Key_0: "AltRight",
+  #Qt.Key.Key_0: "ControlRight",
+  Qt.Key.Key_F17: "F17",
+  #Qt.Key.Key_0: "NumpadDecimal",
+  #Qt.Key.Key_0: "NumpadMultiply",
+  #Qt.Key.Key_0: "NumpadAdd",
+  #Qt.Key.Key_0: "NumLock",
+  #Qt.Key.Key_0: "VolumeUp",
+  #Qt.Key.Key_0: "VolumeDown",
+  #Qt.Key.Key_0: "VolumeMute",
+  #Qt.Key.Key_0: "NumpadDivide",
+  #Qt.Key.Key_0: "NumpadEnter",
+  #Qt.Key.Key_0: "NumpadSubtract",
+  Qt.Key.Key_F18: "F18",
+  Qt.Key.Key_F19: "F19",
+  #Qt.Key.Key_0: "NumpadEqual",
+  #Qt.Key.Key_0: "Numpad0",
+  #Qt.Key.Key_0: "Numpad1",
+  #Qt.Key.Key_0: "Numpad2",
+  #Qt.Key.Key_0: "Numpad3",
+  #Qt.Key.Key_0: "Numpad4",
+  #Qt.Key.Key_0: "Numpad5",
+  #Qt.Key.Key_0: "Numpad6",
+  #Qt.Key.Key_0: "Numpad7",
+  Qt.Key.Key_F20: "F20",
+  #Qt.Key.Key_0: "Numpad8",
+  #Qt.Key.Key_0: "Numpad9",
+  #Qt.Key.Key_0: "NumpadComma",
+  Qt.Key.Key_F5: "F5",
+  Qt.Key.Key_F6: "F6",
+  Qt.Key.Key_F7: "F7",
+  Qt.Key.Key_F3: "F3",
+  Qt.Key.Key_F8: "F8",
+  Qt.Key.Key_F9: "F9",
+  Qt.Key.Key_F11: "F11",
+  Qt.Key.Key_F13: "F13",
+  Qt.Key.Key_F16: "F16",
+  Qt.Key.Key_F14: "F14",
+  Qt.Key.Key_F10: "F10",
+  #Qt.Key.Key_0: "ContextMenu",
+  Qt.Key.Key_F12: "F12",
+  Qt.Key.Key_F15: "F15",
+  Qt.Key.Key_Help: "Help",
+  Qt.Key.Key_Home: "Home",
+  Qt.Key.Key_PageUp: "PageUp",
+  Qt.Key.Key_Delete: "Delete",
+  Qt.Key.Key_F4: "F4",
+  Qt.Key.Key_End: "End",
+  Qt.Key.Key_F2: "F2",
+  Qt.Key.Key_PageDown: "PageDown",
+  Qt.Key.Key_F1: "F1",
+  Qt.Key.Key_Left: "ArrowLeft",
+  Qt.Key.Key_Right: "ArrowRight",
+  Qt.Key.Key_Down: "ArrowDown",
+  Qt.Key.Key_Up: "ArrowUp",
+}
+
 class ImageWidget(QWidget):
-  def __init__(self, node: ObservableDict, stream: typing.AsyncIterable[thalamus_pb2.Image], stub, done_future):
+  def __init__(self, node: ObservableDict, stream: typing.AsyncIterable[thalamus_pb2.Image], control_queue: IterableQueue, stub: thalamus_pb2_grpc.ThalamusStub, done_future):
     self.node = node
     self.stream = stream
     self.stub = stub
     self.image: typing.Optional[QImage] = None
     self.done_future = done_future
+    self.control_queue = control_queue
 
     x, y, w, h = [100, 100, 400, 400]
 
@@ -94,7 +216,7 @@ class ImageWidget(QWidget):
     
     self.show()
 
-  def key_event(self, e, event_type):
+  def key_event(self, e: QKeyEvent, event_type):
     if e.key() not in QTKEY_TO_CODE:
       return
     event = {
@@ -107,16 +229,45 @@ class ImageWidget(QWidget):
       node = self.node['name'],
       json = json.dumps(event)
     )
-    async def request_func():
-      response = await self.stub.node_request(request)
-      print(response)
-    asyncio.get_event_loop().create_task(request_func())
+    create_task_with_exc_handling(self.control_queue.put(request))
 
-  def keyReleaseEvent(self, a0):
+  def mouse_event(self, e: QMouseEvent, event_type):
+    if self.image is None:
+      return
+
+    scale = min(self.width()/self.image.width(), self.height()/self.image.height())
+    offset = -(self.image.width()*scale - self.width())/2, -(self.image.height()*scale - self.height())/2
+
+    event = {
+      event_type :{
+        'type': event_type,
+        'offsetX': int(float(qt_get_x(e) + offset[0])/self.width()*self.image.width()),
+        'offsetY': int(float(qt_get_y(e) + offset[1])/self.height()*self.image.height()),
+        'button': qt_get_button_int(e),
+        'buttons': qt_get_buttons_int(e)
+      }
+    }
+    request = thalamus_pb2.NodeRequest(
+      node = self.node['name'],
+      json = json.dumps(event)
+    )
+    print(request)
+    create_task_with_exc_handling(self.control_queue.put(request))
+
+  def keyReleaseEvent(self, a0: QKeyEvent):
     self.key_event(a0, 'keyup')
 
-  def keyPressEvent(self, a0):
+  def keyPressEvent(self, a0: QKeyEvent):
     self.key_event(a0, 'keydown')
+
+  def mousePressEvent(self, a0: QMouseEvent):
+    self.mouse_event(a0, 'mousedown')
+
+  def mouseReleaseEvent(self, a0: QMouseEvent):
+    self.mouse_event(a0, 'mouseup')
+
+  def mouseMoveEvent(self, a0: QMouseEvent):
+    self.mouse_event(a0, 'mousemove')
 
   def paintEvent(self, a0):
     super().paintEvent(a0)
@@ -205,8 +356,7 @@ class ImageWidget(QWidget):
         self.update()
         response = thalamus_pb2.Image()
     except grpc.aio.AioRpcError as e:
-      if e.code() != grpc.StatusCode.CANCELLED:
-        raise
+      pass
     except asyncio.CancelledError:
       pass
 
@@ -251,25 +401,45 @@ async def main():
       def on_change(source, action, key, value):
         print(source, action, key, value)
 
-      node = None
+      node: typing.Optional[ObservableDict] = None
       for n in thread.config['nodes']:
         if n['name'] == args.node:
           n.add_recursive_observer(on_change)
           node = n
           break
+      assert node is not None
 
+      assert thread.stub is not None
       request = thalamus_pb2.ImageRequest(node=thalamus_pb2.NodeSelector(name=args.node), framerate=args.framerate)
       stream = thread.stub.image(request)
 
+      control_queue = IterableQueue()
+      control_stream = thread.stub.node_request_stream(control_queue)
+      async def control_consumer():
+        try:
+          async for v in control_stream:
+            print(v)
+        except asyncio.CancelledError:
+          pass
+        except grpc.aio.AioRpcError as e:
+          if e.code() not in (grpc.StatusCode.CANCELLED, grpc.StatusCode.UNAVAILABLE):
+            raise
+      consumer_task = create_task_with_exc_handling(control_consumer())
+
       done_future = asyncio.get_event_loop().create_future()
-      widget = ImageWidget(node, stream, thread.stub, done_future)
+      widget = ImageWidget(node, stream, control_queue, thread.stub, done_future)
 
       while not done_future.done():
         QApplication.processEvents()
         await asyncio.sleep(.016)
       if not done_future.done():
         done_future.set_result(None)
+
+      consumer_task.cancel()
+      await consumer_task
     except KeyboardInterrupt:
+      pass
+    except grpc.aio.AioRpcError as e:
       pass
     finally:
       task.cancel()

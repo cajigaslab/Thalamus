@@ -7,7 +7,11 @@ elseif("${SANITIZER}" STREQUAL memory)
 endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  set(CAIRO_COMPILER CC=clang CXX=clang++)
+  if(WIN32)
+    set(GLIB_COMPILER CC=clang-cl CXX=clang-cl)
+  else()
+    set(GLIB_COMPILER CC=clang CXX=clang++)
+  endif()
 endif()
 
 if(WIN32)
@@ -32,7 +36,7 @@ add_custom_command(
   ${CAIRO_COMPILER}
   "${PIXMAN_PKG_CONFIG_ENV}"
   "CFLAGS=${OSX_TARGET_PARAMETER}"
-  meson setup "${pixman_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>"
+  meson setup "${pixman_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>" --reconfigure
   -Dtests=disabled ${CAIRO_SANITIZER} -Ddefault_library=static -Db_vscrt=static_from_buildtype 
   --prefix "${pixman_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install"
   --buildtype=$<IF:$<CONFIG:Debug>,debug,release>
@@ -46,7 +50,7 @@ else()
   set(PIXMAN_LIBRARIES "${pixman_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/x86_64-linux-gnu/libpixman-1.a")
   set(PIXMAN_PKGCONFIG_DIR "${pixman_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/lib/x86_64-linux-gnu/pkgconfig")
 endif()
-set(PIXMAN_INCLUDE_DIRS "${pixman_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/include/cairo")
+set(PIXMAN_INCLUDE_DIRS "${pixman_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install/include/pixman-1")
 
 add_custom_command(DEPENDS "${pixman_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/build.ninja"
   OUTPUT ${PIXMAN_LIBRARIES}
@@ -77,7 +81,7 @@ add_custom_command(
   ${CAIRO_COMPILER}
   "${CAIRO_PKG_CONFIG_ENV}"
   "CFLAGS=${OSX_TARGET_PARAMETER}"
-  meson setup "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>"
+  meson setup "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>" --reconfigure
   -Dtests=disabled ${CAIRO_SANITIZER} -Ddefault_library=static -Dpng=disabled -Dfontconfig=disabled -Dfreetype=disabled -Db_vscrt=static_from_buildtype 
   --prefix "${cairo_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install"
   --buildtype=$<IF:$<CONFIG:Debug>,debug,release>

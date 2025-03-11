@@ -35,6 +35,11 @@ if HAS_QT6:
   def qt_get_y(e):
     return e.position().y()
 
+  def qt_get_button_int(e) -> int:
+    return e.button().value
+  def qt_get_buttons_int(e) -> int:
+    return e.buttons().value
+
   try:
     import PyQt6.sip
     isdeleted = PyQt6.sip.isdeleted
@@ -84,6 +89,11 @@ else:
   def qt_get_y(e):
     return e.y()
 
+  def qt_get_button_int(e) -> int:
+    return int(e.button())
+  def qt_get_buttons_int(e) -> int:
+    return int(e.buttons())
+
   try:
     import PyQt5.sip
     isdeleted = PyQt5.sip.isdeleted
@@ -102,6 +112,7 @@ else:
   qt_move_attr(Qt, Qt.DockWidgetArea, 'BottomDockWidgetArea')
   qt_move_attr(Qt, Qt.DockWidgetArea, 'NoDockWidgetArea')
   qt_move_attr(QAbstractItemView, QAbstractItemView.SelectionMode, 'SingleSelection')
+  qt_move_attr(QAbstractItemView, QAbstractItemView.SelectionMode, 'ExtendedSelection')
   qt_move_attr(QSizePolicy, QSizePolicy.Policy, 'Expanding')
   qt_move_attr(Qt, Qt.Orientation, 'Horizontal')
   qt_move_attr(Qt, Qt.Orientation, 'Vertical')
@@ -117,10 +128,14 @@ else:
   qt_move_attr(Qt, Qt.AlignmentFlag, 'AlignTop')
   qt_move_attr(Qt, Qt.AlignmentFlag, 'AlignLeft')
   qt_move_attr(Qt, Qt.AlignmentFlag, 'AlignRight')
+  qt_move_attr(Qt, Qt.AlignmentFlag, 'AlignCenter')
   qt_move_attr(Qt, Qt.AlignmentFlag, 'AlignHCenter')
   qt_move_attr(Qt, Qt.AlignmentFlag, 'AlignJustify')
   qt_move_attr(Qt, Qt.CursorShape, 'SplitHCursor')
   qt_move_attr(Qt, Qt.CursorShape, 'SplitVCursor')
+  qt_move_attr(Qt, Qt.FillRule, 'WindingFill')
+  qt_move_attr(Qt, Qt.FocusPolicy, 'StrongFocus')
+  qt_move_attr(Qt, Qt.WidgetAttribute, 'WA_TransparentForMouseEvents')
   qt_move_attr(QImage, QImage.Format, 'Format_Grayscale8')
   qt_move_attr(QImage, QImage.Format, 'Format_RGB888')
   qt_move_attr(QImage, QImage.Format, 'Format_Indexed8')

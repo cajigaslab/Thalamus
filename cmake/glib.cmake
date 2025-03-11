@@ -16,7 +16,11 @@ file(MAKE_DIRECTORY "${glib_BINARY_DIR}/Debug/install")
 file(MAKE_DIRECTORY "${glib_BINARY_DIR}/Release/install")
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  set(GLIB_COMPILER CC=clang CXX=clang++)
+  if(WIN32)
+    set(GLIB_COMPILER CC=clang-cl CXX=clang-cl)
+  else()
+    set(GLIB_COMPILER CC=clang CXX=clang++)
+  endif()
 endif()
 
 add_custom_command(
@@ -24,7 +28,7 @@ add_custom_command(
   COMMAND cmake -E env 
   "CFLAGS=${OSX_TARGET_PARAMETER}"
   ${GLIB_COMPILER}
-  meson setup "${glib_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>"
+  meson setup "${glib_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>" --reconfigure
     -Dtests=false ${GLIB_SANITIZER} -Dselinux=disabled -Dlibmount=disabled -Db_lundef=false -Ddefault_library=static -Db_vscrt=static_from_buildtype
     --prefix "${glib_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install"
     --buildtype=$<IF:$<CONFIG:Debug>,debug,release>

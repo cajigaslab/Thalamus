@@ -127,7 +127,10 @@ class ThalamusThread:
                   match.context.value.setitem(match.path.fields[0], value, lambda: None, True)
     except asyncio.CancelledError:
       pass
+    except grpc.aio.AioRpcError:
+      pass
     except:
+      print('============================================')
       traceback.print_exc()
     finally:
       self.running = False

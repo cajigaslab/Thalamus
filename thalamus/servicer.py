@@ -1,4 +1,5 @@
 import json
+import grpc
 import typing
 import asyncio
 import logging
@@ -169,6 +170,8 @@ class ThalamusServicer(thalamus_pb2_grpc.ThalamusServicer):
           self.pending_out = []
           await queue.put(thalamus_pb2.ObservableTransaction(acknowledged = transaction.id))
       except asyncio.CancelledError:
+        pass
+      except grpc.aio.AioRpcError:
         pass
       finally:
         await queue.put(None)
