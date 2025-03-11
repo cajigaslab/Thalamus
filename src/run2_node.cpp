@@ -11,6 +11,7 @@
 #endif
 
 #include <absl/strings/escaping.h>
+#include <absl/strings/str_replace.h>
 
 using namespace thalamus;
 
@@ -75,7 +76,9 @@ struct Run2Node::Impl {
         return;
       }
       boost::asio::post(io_context, [&,node,address,value,redirect=moved_response->redirect()] {
-        redirects[address] = redirect.empty() ? address : redirect;
+        std::vector<std::string> address_tokens = absl::StrSplit(address, ':');
+        auto processed = absl::StrReplaceAll(redirect, {{"localhost", address_tokens.front()}});
+        redirects[address] = redirect.empty() ? address : processed;
         set_remote(node, address, value);
       });
     });
