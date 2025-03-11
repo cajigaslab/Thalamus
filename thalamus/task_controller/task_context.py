@@ -646,6 +646,7 @@ class TaskContext(TaskContextProtocol):
         self.config['reward_schedule']['index'] = (current_index + 1) % modulus
       if not self.sleeper.running:
         break
+      self.sleeper.cancel()
 
       if not was_cancelled:
         trial_summ = {

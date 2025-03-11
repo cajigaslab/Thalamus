@@ -173,7 +173,7 @@ def get_target_rectangles(context, dpi):
     p_win = Rvec*pos_vis + t
 
   
-    all_target_rects.append(QRect(p_win[0] - targ_width_px/2, p_win[1] - targ_height_px/2, targ_width_px, targ_height_px))
+    all_target_rects.append(QRect(int(p_win[0] - targ_width_px/2), int(p_win[1] - targ_height_px/2), int(targ_width_px), int(targ_height_px)))
 
   return all_target_rects
 
@@ -182,7 +182,7 @@ def get_start_touch_target_index(context):
   i_start_targ = [itarg for itarg, x in enumerate(all_target_configs) if x['target_type'] == 'fixation' and x['target_effector'] == 'touch']      
   
   if len(i_start_targ) == 0:
-    i_start_targ = [0]
+    i_start_targ = 0
   else:
     i_start_targ = i_start_targ[0]
 
@@ -193,7 +193,7 @@ def get_start_gaze_target_index(context):
   i_start_targ = [itarg for itarg, x in enumerate(all_target_configs) if x['target_type'] == 'fixation' and x['target_effector'] == 'gaze']    
   
   if len(i_start_targ) == 0:
-    i_start_targ = [0]
+    i_start_targ = 0
   else:
     i_start_targ = i_start_targ[0]
 
@@ -328,7 +328,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
       for i, rect in enumerate(all_target_rects):
         window = all_target_windows[i]
-        path.addEllipse(rect.center(), window, window)
+        path.addEllipse(QPointF(rect.center()), window, window)
 
       painter.fillPath(path, QColor(255, 255, 255, 128))
 

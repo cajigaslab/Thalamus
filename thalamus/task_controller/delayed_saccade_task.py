@@ -201,7 +201,7 @@ def get_target_rectangles(context):
 
     p_win = Rvec*pos_vis + t
 
-    all_target_rects.append(QRect(p_win[0] - targ_width_px/2, p_win[1] - targ_height_px/2, targ_width_px, targ_height_px))
+    all_target_rects.append(QRect(int(p_win[0] - targ_width_px/2), int(p_win[1] - targ_height_px/2), int(targ_width_px), int(targ_height_px)))
 
   return all_target_rects
 

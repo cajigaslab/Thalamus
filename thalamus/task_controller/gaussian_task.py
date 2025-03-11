@@ -75,8 +75,8 @@ class TargetWidget(QWidget):
       Form.Constant('Audio Scale Left', 'audio_scale_left', 0),
       Form.Constant('Audio Scale Right', 'audio_scale_right', 0),
       Form.Constant('Subject\'s distance to the screen', 'subj_dist_m', .57, 'm'),
-      Form.Constant('Monitor\'s width', 'monitor_width_pix', 1920, 'pix'),
-      Form.Constant('Monitor\'s height', 'monitor_height_pix', 1080, 'pix'),
+      Form.Constant('Monitor\'s width', 'monitor_W_pix', 1920, 'pix'),
+      Form.Constant('Monitor\'s height', 'monitor_H_pix', 1080, 'pix'),
       Form.Color('Color', 'color', QColor(255, 255,255)),
       Form.Bool('Is Fixation', 'is_fixation', False),
       Form.Choice('Shape', 'shape', shapes),  # Add the shape attribute
@@ -130,8 +130,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Constant('Gaze acceptance diameter \u2300 (0.1-4.0)', 'accptolerance_deg', 2, '\u00B0'), # Define the diameter in degrees of the area where gaze is accepted as being correct
     Form.Constant('Subject\'s distance to the screen', 'subj_dist_m', .57, 'm'),
     Form.Constant('Monitor\'s width', 'monitor_width_m', .5283, 'm'),
-    Form.Constant('Monitor\'s width', 'monitor_width_pix', 1920, 'pix'),
-    Form.Constant('Monitor\'s height', 'monitor_height_pix', 1080, 'pix'),
+    Form.Constant('Monitor\'s width', 'monitor_W_pix', 1920, 'pix'),
+    Form.Constant('Monitor\'s height', 'monitor_H_pix', 1080, 'pix'),
     Form.Uniform('Fixation Duration 1', 'fix1_duration', 1000, 2000, 'ms'),
     Form.Uniform('Target Presentation Duration', 'target_present_dur', 2000, 4000, 'ms'), 
     Form.Uniform('Fixation Duration 2', 'fix2_duration', 1000, 2000, 'ms'),
@@ -146,12 +146,12 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   layout.addWidget(form)
 
   # spinbox allows to constraint value options for above constants
-  monitor_width_pix_spinbox = form.findChild(QDoubleSpinBox, "monitor_width_pix")
-  monitor_width_pix_spinbox.setRange(100, 4000)
-  monitor_width_pix_spinbox.setSingleStep(10)
-  monitor_height_pix_spinbox = form.findChild(QDoubleSpinBox, "monitor_height_pix")
-  monitor_height_pix_spinbox.setRange(100, 4000)
-  monitor_height_pix_spinbox.setSingleStep(10)
+  monitor_W_pix_spinbox = form.findChild(QDoubleSpinBox, "monitor_W_pix")
+  monitor_W_pix_spinbox.setRange(100, 4000)
+  monitor_W_pix_spinbox.setSingleStep(10)
+  monitor_H_pix_spinbox = form.findChild(QDoubleSpinBox, "monitor_H_pix")
+  monitor_H_pix_spinbox.setRange(100, 4000)
+  monitor_H_pix_spinbox.setSingleStep(10)
   widthtargdeg_step_spinbox = form.findChild(QDoubleSpinBox, "widthtargdeg_step")
   widthtargdeg_step_spinbox.setRange(.1, 1.0)
   widthtargdeg_step_spinbox.setSingleStep(.1)
@@ -168,7 +168,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   orientation_ran_max_spinbox.setRange(0, 150)
   orientation_ran_max_spinbox.setSingleStep(15)
   accptolerance_deg_spinbox = form.findChild(QDoubleSpinBox, "accptolerance_deg")
-  accptolerance_deg_spinbox.setRange(.1, 4.0)
+  accptolerance_deg_spinbox.setRange(.1, 60.0)
   accptolerance_deg_spinbox.setSingleStep(0.1)
   luminance_step_spinbox = form.findChild(QDoubleSpinBox, "luminance_step")
   luminance_step_spinbox.setRange(1, 100)
@@ -279,6 +279,15 @@ def gaussian_gradient(center: QPointF, gradient_background: QColor, radius: floa
   gradient.setColorAt(1, QColor(gradient_background.red(), gradient_background.green(), gradient_background.blue(), 0)) #Qt.GlobalColor.black
   return gradient
 
+def gaze_valid(gaze: QPoint, monitor_W_pix: int, monitor_H_pix: int) -> QPoint:
+    """
+    A function to check and change if needed the current gaze value.
+    """
+    if gaze.x() < 0 or gaze.x() > monitor_W_pix or gaze.y() < 0 or gaze.y() > monitor_H_pix:
+      return QPoint(0, 0)
+    else:
+      return gaze
+
 # Define an enumeration for the different states of a task
 class State(enum.Enum):
   ACQUIRE_FIXATION = enum.auto()
@@ -289,6 +298,7 @@ class State(enum.Enum):
   HOLD_TARGET = enum.auto()
   SUCCESS = enum.auto()
   FAILURE = enum.auto()
+  ABORT = enum.auto()
 
 converter = None
 center = None
@@ -324,14 +334,14 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   """
   # Get the task configuration
   config = context.task_config
-  monitor_width_pix = config['monitor_width_pix']
-  monitor_height_pix = config['monitor_height_pix']
+  monitor_W_pix = config['monitor_W_pix']
+  monitor_H_pix = config['monitor_H_pix']
   subj_dist_m = config['subj_dist_m']
   monitor_width_m = config['monitor_width_m']
 
   if converter is None:
     # converter = Converter(Size(1920, 1080), .5283, .57)
-    converter = Converter(Size(monitor_width_pix, monitor_height_pix), monitor_width_m, subj_dist_m)
+    converter = Converter(Size(monitor_W_pix, monitor_H_pix), monitor_width_m, subj_dist_m)
     center = QPoint(int(converter.screen_pixels.width), int(converter.screen_pixels.height))/2
     center_f = QPointF(float(converter.screen_pixels.width), float(converter.screen_pixels.height))/2
     num_circles = 7 # The last 2 circles usually end up being too large for the screen height, hence the actual # = num_circles - 2
@@ -588,7 +598,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       # painter.fillRect(int(widget.width() - 100), int(widget.height()-100), 100, 100, photodiode_blinking_square) # photodiode square presentation
 
     elif state == State.HOLD_TARGET:
-      painter.fillRect(int(widget.width() - 100), int(widget.height()-100), 100, 100, photodiode_blinking_square)
+      painter.fillRect(int(widget.width() - 100), int(widget.height()-100), 100, 100, photodiode_blinking_square) 
 
     # Draw the shadings around targets in the OPERATOR view indicating the areas where responses are accepted as correct
     with painter.masked(RenderOutput.OPERATOR): # using a context manager to temporarily change the drawing behavior of the painter object
@@ -604,15 +614,16 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
 
       # Drawing the gaze position as a continuously moving point
       color_rgba = QColor(138, 43, 226, 255)
-      draw_gaze(painter, gaze, color_rgba)
+      draw_gaze(painter, gaze_valid(gaze, monitor_W_pix, monitor_H_pix), color_rgba)
 
       # Drawing text message on the operator view
       # drawText(painter, "(0, 0)", QPoint(0, 0)) # Draw the text message
       # temp_calc = lambda: QPoint.dotProduct(gaze - center, gaze - center)**.5 < accptolerance_pix
       # drawn_text = f"(Diff={temp_calc()}, acpt={QPoint.dotProduct(gaze - center, gaze - center)**.5})"
       drawText(painter, str(state), QPoint(0, 0)) # Draw the text message
-      drawn_text = f"({gaze.x()}, {gaze.y()})"
-      drawText(painter, drawn_text, gaze) # Draw the text message
+      temp_gaze = gaze_valid(gaze, monitor_W_pix, monitor_H_pix)
+      drawn_text = f"({temp_gaze.x()}, {temp_gaze.y()})"
+      drawText(painter, drawn_text, temp_gaze) # Draw the text message
       
       # Drawing all previously painted gazes of failed target holding
       # for gaze_qpoint, color_rgba in gaze_failure_store:
@@ -625,8 +636,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   # Set the renderer function to the widget's renderer
   widget.renderer = renderer
   # Store the context information into .tha file
-  await context.log(json.dumps(context.config))
-  # await context.log(json.dumps(context.task_config.unwrap()))
+  await context.log(json.dumps(context.config)) 
 
   # Plotting of variables using Thalamus' pipeline QT plots
   if trial_photic_count == 0: # to avoid division by 0 error
@@ -648,38 +658,49 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
 
   # This is the ACQUIRE_FIXATION state that was initiated above "state = State.ACQUIRE_FIXATION"
   print(state)
+  reaquire_dur_s = 999999 # a very long duration to avoid passing ACQUIRE_FIXATION before acquiring the fixation cross
   acquired = False
   while not acquired:
     #print(state)
     # Wait for the gaze to be within the fixation window
-    acquired = await wait_for(context, lambda: QPoint.dotProduct(gaze - center, gaze-center)**.5 < accptolerance_pix, timedelta(seconds=blink_dur_ms))
+    # print("xxxxxxxxxxxxxxxxxxxxxxxxxtemp_GAZExxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+    # print("xxxxxxxxxxxxxxxxxxxxxxxxxtemp_GAZExxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+    # print(QPoint.dotProduct(temp_gaze - center, temp_gaze - center)**.5)
+    # print("xxxxxxxxxxxxxxxxxxxxxxxxxtemp_GAZExxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+    # print("xxxxxxxxxxxxxxxxxxxxxxxxxtemp_GAZExxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx") 
+    acquired = await wait_for(context, lambda: QPoint.dotProduct(gaze_valid(gaze, monitor_W_pix, monitor_H_pix) - center, \
+            gaze_valid(gaze, monitor_W_pix, monitor_H_pix) - center)**.5 < accptolerance_pix, \
+                              timedelta(seconds=reaquire_dur_s))
 
   state = State.FIXATE1
   await context.log('BehavState=FIXATE1_post-drawing') # saving any variables / data from code
   print(state)
   widget.update()
   # Wait for the gaze to hold within the fixation window for the fix1 duration
-  success = await wait_for_hold(context, lambda: QPoint.dotProduct(gaze - center, gaze - center)**.5 < accptolerance_pix, timedelta(seconds=fix1_duration), timedelta(seconds=blink_dur_ms))
-  print("xxxxxxxxxxxxxxxxxxxxxxxxxSUCCESSxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-  print("xxxxxxxxxxxxxxxxxxxxxxxxxSUCCESSxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-  print(success)
-  print("xxxxxxxxxxxxxxxxxxxxxxxxxSUCCESSxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-  print("xxxxxxxxxxxxxxxxxxxxxxxxxSUCCESSxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")  
-  await context.log(f"Gaze[X,Y]_pix-abs_after-FIXATE1={gaze}")
-  await context.log(f"Gaze[X,Y]_deg-abs_after-FIXATE1={converter.relpix_to_absdeg(gaze.x(), gaze.y())}")
+  success = False
+  while not success:
+    success = await wait_for_hold(context, lambda: QPoint.dotProduct(gaze_valid(gaze, monitor_W_pix, monitor_H_pix) - center, \
+                        gaze_valid(gaze, monitor_W_pix, monitor_H_pix) - center)**.5 < accptolerance_pix, \
+                        timedelta(seconds=fix1_duration), timedelta(seconds=0)) # 0sec to ensure continous fixation
+  temp_gaze = gaze_valid(gaze, monitor_W_pix, monitor_H_pix)
+  await context.log(f"Gaze[X,Y]_pix-abs_after-FIXATE1={temp_gaze}")
+  await context.log(f"Gaze[X,Y]_deg-abs_after-FIXATE1={converter.relpix_to_absdeg(temp_gaze.x(), temp_gaze.y())}")
 
   state = State.TARGET_PRESENTATION
   await context.log('BehavState=TARGET_PRESENTATION_post-drawing') # saving any variables / data from code
   print(state)
   widget.update()
   # Wait for the gaze to hold within fixation cross tolerances for the target presentation duration
-  success = await wait_for_hold(context, lambda: QPoint.dotProduct(gaze - center, gaze-center)**.5 < accptolerance_pix, timedelta(seconds=target_present_dur), timedelta(seconds=blink_dur_ms))
+  # if don't reaquire the target within blink_dur_ms, then ABORT the trial
+  success = await wait_for_hold(context, lambda: QPoint.dotProduct(gaze_valid(gaze, monitor_W_pix, monitor_H_pix) - center, \
+                        gaze_valid(gaze, monitor_W_pix, monitor_H_pix)-center)**.5 < accptolerance_pix, \
+                        timedelta(seconds=target_present_dur), timedelta(seconds=blink_dur_ms))
 
   if not success:
-    await context.log('TrialResult=FAILURE') # saving any variables / data from code
-    state = State.FAILURE
+    await context.log('TrialResult=ABORT') # saving any variables / data from code
+    state = State.ABORT
     print(state)
-    failure_sound.play()
+    failure_sound.play() # add ABORT sound
     await context.sleep(timedelta(seconds=penalty_delay))
     return TaskResult(False)
 
@@ -688,14 +709,15 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   print(state)
   widget.update()
   # Wait for the gaze to hold within the fixation window for the fix2 duration
-  success = await wait_for_hold(context, lambda: QPoint.dotProduct(gaze - center, gaze-center)**.5 < accptolerance_pix, \
+  success = await wait_for_hold(context, lambda: QPoint.dotProduct(gaze_valid(gaze, monitor_W_pix, monitor_H_pix) - center, \
+                                gaze_valid(gaze, monitor_W_pix, monitor_H_pix)-center)**.5 < accptolerance_pix, \
                                 timedelta(seconds=fix2_duration), timedelta(seconds=blink_dur_ms))
 
   if not success:
-    await context.log('TrialResult=FAILURE') # saving any variables / data from code
-    state = State.FAILURE
+    await context.log('TrialResult=ABORT') # saving any variables / data from code
+    state = State.ABORT
     print(state)
-    failure_sound.play()
+    failure_sound.play() # add ABORT sound
     await context.sleep(timedelta(seconds=penalty_delay))
     return TaskResult(False)
 
@@ -705,15 +727,19 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   widget.update()
   if trial_type=="photic":
     # Wait for the gaze to move to the target position within the decision timeout
-    success = await wait_for(context, lambda: QPoint.dotProduct(gaze - targetpos_pix, gaze-targetpos_pix)**.5 < accptolerance_pix, timedelta(seconds=decision_timeout))
+    success = await wait_for(context, lambda: QPoint.dotProduct(gaze_valid(gaze, monitor_W_pix, monitor_H_pix) - targetpos_pix, \
+                            gaze_valid(gaze, monitor_W_pix, monitor_H_pix)-targetpos_pix)**.5 < accptolerance_pix, \
+                            timedelta(seconds=decision_timeout))
   else: # if trial_type=="catch":
-    success = await wait_for_hold(context, lambda: QPoint.dotProduct(gaze - center, gaze-center)**.5 < accptolerance_pix, \
-                                  timedelta(seconds=decision_timeout), timedelta(seconds=blink_dur_ms))
-  await context.log(f"Gaze[X,Y]_pix-abs_after-acquiring-target={gaze}")
-  await context.log(f"Gaze[X,Y]_deg-abs_after-acquiring-target={converter.relpix_to_absdeg(gaze.x(), gaze.y())}")
+    success = await wait_for_hold(context, lambda: QPoint.dotProduct(gaze_valid(gaze, monitor_W_pix, monitor_H_pix) - center, \
+                            gaze_valid(gaze, monitor_W_pix, monitor_H_pix)-center)**.5 < accptolerance_pix, \
+                            timedelta(seconds=decision_timeout), timedelta(seconds=blink_dur_ms))
+  temp_gaze = gaze_valid(gaze, monitor_W_pix, monitor_H_pix) 
+  await context.log(f"Gaze[X,Y]_pix-abs_after-acquiring-target={temp_gaze}")
+  await context.log(f"Gaze[X,Y]_deg-abs_after-acquiring-target={converter.relpix_to_absdeg(temp_gaze.x(), temp_gaze.y())}")
 
   if not success:
-    gaze_failure_store.append((gaze, QColor(255, 69, 0, 128)))
+    gaze_failure_store.append((gaze_valid(gaze, monitor_W_pix, monitor_H_pix), QColor(255, 69, 0, 128)))
     await context.log('TrialResult=FAILURE') # saving any variables / data from code
     state = State.FAILURE
     print(state)
@@ -727,16 +753,19 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   widget.update()
   if trial_type=="photic":
     # Wait for the gaze to hold on the target position for the fix2 timeout
-    success = await wait_for_hold(context, lambda: QPoint.dotProduct(gaze - targetpos_pix, gaze-targetpos_pix)**.5 < accptolerance_pix,
+    success = await wait_for_hold(context, lambda: QPoint.dotProduct(gaze_valid(gaze, monitor_W_pix, monitor_H_pix) - targetpos_pix, \
+                                  gaze_valid(gaze, monitor_W_pix, monitor_H_pix)-targetpos_pix)**.5 < accptolerance_pix,
                                   timedelta(seconds=targethold_duration), timedelta(seconds=blink_dur_ms))
   else: # if trial_type=="catch":
-    success = await wait_for_hold(context, lambda: QPoint.dotProduct(gaze - center, gaze-center)**.5 < accptolerance_pix, \
+    success = await wait_for_hold(context, lambda: QPoint.dotProduct(gaze_valid(gaze, monitor_W_pix, monitor_H_pix) - center, \
+                                  gaze_valid(gaze, monitor_W_pix, monitor_H_pix)-center)**.5 < accptolerance_pix, \
                                   timedelta(seconds=targethold_duration), timedelta(seconds=blink_dur_ms))
-  await context.log(f"Gaze[X,Y]_pix-abs_after-holding-target={gaze}")
-  await context.log(f"Gaze[X,Y]_deg-abs_after-holding-target={converter.relpix_to_absdeg(gaze.x(), gaze.y())}")
+  temp_gaze = gaze_valid(gaze, monitor_W_pix, monitor_H_pix)
+  await context.log(f"Gaze[X,Y]_pix-abs_after-holding-target={temp_gaze}")
+  await context.log(f"Gaze[X,Y]_deg-abs_after-holding-target={converter.relpix_to_absdeg(temp_gaze.x(), temp_gaze.y())}")
 
   if not success:
-    gaze_failure_store.append((gaze, QColor(255, 69, 0, 128)))
+    gaze_failure_store.append((gaze_valid(gaze, monitor_W_pix, monitor_H_pix), QColor(255, 69, 0, 128)))
     await context.log('TrialResult=FAILURE') # saving any variables / data from code
     state = State.FAILURE
     print(state)
@@ -745,7 +774,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     await context.sleep(timedelta(seconds=penalty_delay))
     return TaskResult(False)
 
-  gaze_success_store.append((gaze, QColor(0, 255, 0, 128)))
+  gaze_success_store.append((gaze_valid(gaze, monitor_W_pix, monitor_H_pix), QColor(0, 255, 0, 128)))
   await context.log('TrialResult=SUCCESS') # saving any variables / data from code
   state = State.SUCCESS
   print(state)
