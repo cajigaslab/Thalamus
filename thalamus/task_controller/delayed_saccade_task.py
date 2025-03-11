@@ -360,7 +360,10 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   show_start_target = False
   show_presented_target = False
   state_brightness = 0
+  on_time_ms = 0
   def renderer(painter: QPainter) -> None:
+    nonlocal on_time_ms
+
     color_base = all_target_colors[i_start_targ]
     scale = (all_target_on_luminance[i_start_targ] if not dim_start_target
              else all_target_off_luminance[i_start_targ])
@@ -412,7 +415,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       font = painter.font()
       font.setPointSize(5*font.pointSize())
       painter.setFont(font)
-      painter.drawText(0, 100, str(reward_message.on_time_ms))
+      painter.drawText(0, 100, str(on_time_ms))
 
     state_color = QColor(state_brightness, state_brightness, state_brightness)
     state_width = 70
