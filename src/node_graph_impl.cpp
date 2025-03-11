@@ -17,7 +17,7 @@
 #include <pupil_node.hpp>
 #include <remote_node.hpp>
 #ifndef _WIN32
-#include <ros_node2.hpp>
+#include <ros2_node.hpp>
 #endif
 #include <run_node.hpp>
 #include <run2_node.hpp>
