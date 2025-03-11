@@ -724,7 +724,7 @@ ObservableCollection::Value get_jsonpath(ObservableCollection::Value store,
   return current;
 }
 
-struct to_bool_visitor {
+struct ToBoolVisitor {
   bool operator()(std::monostate) {
     return false;
   }
@@ -732,7 +732,14 @@ struct to_bool_visitor {
     return val == 0;
   }
   bool operator()(double val) {
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#endif
     return val == 0;
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
   }
   bool operator()(bool val) {
     return val;
@@ -749,7 +756,7 @@ struct to_bool_visitor {
 };
 
 static bool to_bool(ObservableCollection::Value v) {
-  return std::visit(to_bool_visitor{}, v);
+  return std::visit(ToBoolVisitor{}, v);
 }
 
 struct JsonpathVisitor {
@@ -880,7 +887,7 @@ ObservableCollection::Value get_jsonpath(ObservableCollection::Value store,
                                          const std::string &query) {
   auto begin = query.begin();
   auto end = query.end();
-  parser<std::string::const_iterator> p;
+  Parser<std::string::const_iterator> p;
   JsonpathQuery parsed;
   auto r = phrase_parse(begin, end, p, ascii::space_type(), parsed);
   if(r && begin == end) {
@@ -893,7 +900,7 @@ void set_jsonpath(ObservableCollection::Value store, const std::string &query,
                   ObservableCollection::Value value, bool from_remote) {
   auto begin = query.begin();
   auto text_end = query.end();
-  parser<std::string::const_iterator> p;
+  Parser<std::string::const_iterator> p;
   JsonpathQuery parsed;
   auto r = phrase_parse(begin, text_end, p, ascii::space_type(), parsed);
   if(!r || begin != text_end) {

@@ -109,9 +109,9 @@ async def async_main() -> None:
   
   bmbi_native_filename = resource_filename('thalamus', 'native' + ('.exe' if sys.platform == 'win32' else ''))
   bmbi_native_proc = None
-  command = bmbi_native_filename, 'thalamus', '--port', str(arguments.port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else [])
+  command = "build/clang-debug/native.exe", 'thalamus', '--port', str(arguments.port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else [])
   print('COMMAND', ' '.join(command))
-  #bmbi_native_proc = await asyncio.create_subprocess_exec(*command)
+  bmbi_native_proc = await asyncio.create_subprocess_exec(*command)
 
   channel = grpc.aio.insecure_channel(f'localhost:{arguments.port}')
   await channel.channel_ready()

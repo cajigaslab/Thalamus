@@ -665,10 +665,10 @@ Service::events(::grpc::ServerContext *context,
   return ::grpc::Status::OK;
 }
 
-::grpc::Status Service::get_redirect(::grpc::ServerContext *context,
-                                 const ::thalamus_grpc::Empty *request,
+::grpc::Status Service::get_redirect(::grpc::ServerContext *,
+                                 const ::thalamus_grpc::Empty *,
                                  ::thalamus_grpc::Redirect *response) {
-  response->set_redirect(observable_bridge_redirect);
+  response->set_redirect(impl->observable_bridge_redirect);
   return ::grpc::Status::OK;
 }
 

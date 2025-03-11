@@ -15,8 +15,8 @@
 using namespace thalamus;
 
 struct Run2Node::Impl {
-  boost::asio::io_context& io_context;
   ObservableDictPtr state;
+  boost::asio::io_context& io_context;
   ObservableListPtr targets_state = nullptr;
   ObservableList *nodes;
   boost::signals2::scoped_connection state_connection;
@@ -28,8 +28,8 @@ struct Run2Node::Impl {
   std::map<std::string, std::unique_ptr<thalamus_grpc::Thalamus::Stub>> stubs;
   std::map<std::string, std::string> redirects;
 
-  Impl(ObservableDictPtr _state, boost::asio::io_context& io_context, NodeGraph *_graph)
-      : state(_state), io_context(io_context), graph(_graph) {
+  Impl(ObservableDictPtr _state, boost::asio::io_context& _io_context, NodeGraph *_graph)
+      : state(_state), io_context(_io_context), graph(_graph) {
     nodes = static_cast<ObservableList *>(state->parent);
     using namespace std::placeholders;
     state_connection =
@@ -38,21 +38,22 @@ struct Run2Node::Impl {
   }
 
   void set_remote(std::string node, std::string address, bool value) {
+    address = redirects[address];
     auto stub = graph->get_thalamus_stub(address);
 
-    auto context = std::make_unique<grpc::ClientContext>();
-    std::unique_ptr<thalamus_grpc::Empty> response = std::make_unique<thalamus_grpc::Empty>();
-    std::unique_ptr<thalamus_grpc::ObservableTransaction> request = std::make_unique<thalamus_grpc::ObservableTransaction>();
+    auto context = std::make_shared<grpc::ClientContext>();
+    auto request = std::make_shared<thalamus_grpc::ObservableTransaction>();
+    auto response = std::make_shared<thalamus_grpc::Empty>();
 
     auto change = request->add_changes();
     auto node_address = absl::StrFormat("$.nodes[?@.name == '%s'].Running", absl::CEscape(node));
     change->set_address(node_address);
-    change->set_value(value);
+    change->set_value(value ? "true" : "false");
     change->set_action(thalamus_grpc::ObservableChange_Action::ObservableChange_Action_Set);
 
     stub->async()->observable_bridge_write(context.get(), request.get(), response.get(),
-        [address,node_address,value,context=std::move(context),request=std::move(request),response=std::move(response)](grpc::Status s) mutable {
-          THALAMUS_LOG(info) << absl::StrFormat("address: %s, request: %s, value: %s, status: %s", address, node_address, value, s.error_message());
+        [address,node_address,value,moved_context=context,moved_request=request,moved_response=response](grpc::Status s) {
+          THALAMUS_LOG(info) << absl::StrFormat("address: %s, request: %s, value: %d, status: %s", address, node_address, value, s.error_message());
         });
   }
 
@@ -63,13 +64,18 @@ struct Run2Node::Impl {
 
     auto stub = graph->get_thalamus_stub(address);
 
-    auto context = std::make_unique<grpc::ClientContext>();
-    std::unique_ptr<thalamus_grpc::Redirect> response;
-    std::unique_ptr<thalamus_grpc::Empty> request;
+    auto context = std::make_shared<grpc::ClientContext>();
+    auto request = std::make_shared<thalamus_grpc::Empty>();
+    auto response = std::make_shared<thalamus_grpc::Redirect>();
     stub->async()->get_redirect(context.get(), request.get(), response.get(),
-    [&,stub,node,address,value,context=std::move(context),request=std::move(request),response=std::move(response)](Status s) mutable {
-      boost::asio::post(io_context, [&,node,address,value,stub,redirect=response.redirect()] {
-        redirects[address] = redirect;
+    [this,node,address,value,moved_context=context,moved_request=request,moved_response=response](grpc::Status s) {
+      THALAMUS_LOG(info) << absl::StrFormat("redirect status, address: %s, redirect: %s, status: %s", address, moved_response->redirect(), s.error_message());
+      if(!s.ok()) {
+        THALAMUS_LOG(warning) << "Aborting";
+        return;
+      }
+      boost::asio::post(io_context, [&,node,address,value,redirect=moved_response->redirect()] {
+        redirects[address] = redirect.empty() ? address : redirect;
         set_remote(node, address, value);
       });
     });
@@ -79,21 +85,8 @@ struct Run2Node::Impl {
                  ObservableCollection::Action,
                  const ObservableCollection::Key &k,
                  const ObservableCollection::Value &v) {
-    if(source == state.get()) {
-      auto key_str = std::get<std::string>(k);
-      if(key_str == "Targets") {
-        targets_state = std::get<ObservableListPtr>(v);
-        targets_state->recap(std::bind(&Impl::on_change, this, targets_state.get(), _1, _2, _3));
-      }
-    } else if(source == targets_state.get()) {
-      for(size_t i = 0;i < targets_state->size();++i) {
-        ObservableDictPtr v2 = targets_state->at(i);
-        targets_state->recap(std::bind(&Impl::on_change, this, v2.get(), _1, _2, _3));
-      }
-      targets_state->recap(std::bind(&Impl::on_change, this, targets_state.get(), _1, _2, _3));
-    } else if(source && source->parent == targets_state.get()) {
-      auto index = targets_state->key_of(*source);
-
+    if(source != state.get()) {
+      return;
     }
     auto key_str = std::get<std::string>(k);
     if (key_str == "Running") {
@@ -104,8 +97,10 @@ struct Run2Node::Impl {
       ObservableListPtr targets = state->at("Targets");
       for(size_t i = 0;i < targets->size();++i) {
         ObservableDictPtr target = targets->at(i);
-        std::string name = target->contains("Name") ? std::string() : target->at("Name");
-        std::string address = target->contains("Address") ? std::string() : target->at("Address");
+        std::string name =
+            target->contains("Name") ? target->at("Name") : std::string();
+        std::string address = target->contains("Address")
+                                  ?  target->at("Address") : std::string();
 
         if(address.empty()) {
           for(size_t j = 0;j < nodes->size();++j) {
@@ -121,22 +116,9 @@ struct Run2Node::Impl {
         }
 
         if(!redirects.contains(address)) {
-          get_redirect(name, address);
-        }
-
-        auto context = std::make_unique<grpc::ClientContext>();
-        thalamus_grpc::Thalamus::Stub* stub = nullptr;
-        if(!address.empty()) {
-          stub = graph->get_thalamus_stub(address);
-        }
-
-        auto do_run = [] {
-        }
-
-        if(stub) {
-          if(!redirects.contains()) {
-          }
+          get_redirect(name, address, value_bool);
         } else {
+          set_remote(name, address, value_bool);
         }
       }
     }

@@ -34,37 +34,45 @@ struct Compare {
   std::string op;
   CompareArg rhs;
 };
-BOOST_FUSION_ADAPT_STRUCT(Compare, lhs, op, rhs);
 
 struct LogicalAnd {
   std::vector<Compare> expressions;
 };
-BOOST_FUSION_ADAPT_STRUCT(LogicalAnd, expressions);
 
 struct LogicalOr {
   std::vector<LogicalAnd> expressions;
 };
-BOOST_FUSION_ADAPT_STRUCT(LogicalOr, expressions);
 
 struct Selector {
    std::variant<std::string, int, LogicalOr> value;
 };
-BOOST_FUSION_ADAPT_STRUCT(Selector, value);
 
 struct ChildSegment {
   std::variant<Selector, std::string> segment;
 };
-BOOST_FUSION_ADAPT_STRUCT(ChildSegment, segment);
 using Segment = ChildSegment;
 
 struct JsonpathQuery {
   std::vector<Segment> segments;
 };
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdisabled-macro-expansion"
+#endif
+BOOST_FUSION_ADAPT_STRUCT(Selector, value);
+BOOST_FUSION_ADAPT_STRUCT(Compare, lhs, op, rhs);
+BOOST_FUSION_ADAPT_STRUCT(ChildSegment, segment);
+BOOST_FUSION_ADAPT_STRUCT(LogicalOr, expressions);
+BOOST_FUSION_ADAPT_STRUCT(LogicalAnd, expressions);
 BOOST_FUSION_ADAPT_STRUCT(JsonpathQuery, segments);
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 template <typename Iterator>
-struct parser : qi::grammar<Iterator, JsonpathQuery(), ascii::space_type> {
-  parser() : parser::base_type(jsonpath_query) {
+struct Parser : qi::grammar<Iterator, JsonpathQuery(), ascii::space_type> {
+  Parser() : Parser::base_type(jsonpath_query) {
     using namespace qi::labels;
     using boost::phoenix::at_c;
     using boost::phoenix::push_back;

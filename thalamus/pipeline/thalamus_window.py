@@ -41,6 +41,7 @@ from .sync_widget import SyncWidget
 from .stim_widget import StimWidget
 from .analog_widget import AnalogWidget
 from .storage_widget import StorageWidget
+from .run2_widget import Run2Widget
 from ..util import NodeSelector
 from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
@@ -262,7 +263,7 @@ FACTORIES = {
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.DEFAULT, 'Targets', '', []),
   ]),
-  'RUNNER2': Factory(create_run_widget, [
+  'RUNNER2': Factory(Run2Widget, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
   ]),
   'OPHANIM': Factory(None, [
