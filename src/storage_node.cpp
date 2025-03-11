@@ -402,6 +402,7 @@ struct StorageNode::Impl {
   std::thread _thread;
   std::atomic_uint queued_records = 0;
   std::atomic_ullong queued_bytes = 0;
+  std::atomic_ullong written_bytes = 0;
 
   const size_t zbuffer_size = 1024;
 
@@ -872,6 +873,7 @@ struct StorageNode::Impl {
       }
 
       TRACE_EVENT("thalamus", "write");
+      written_bytes += buffer.size();
       output_stream.write(buffer.data(), int64_t(buffer.size()));
     };
 
@@ -983,6 +985,10 @@ struct StorageNode::Impl {
 
     update_metrics(0, 0, queued_records, [&] { return "Output Queue Count"; });
     update_metrics(0, 1, queued_bytes, [&] { return "Output Queue Bytes"; });
+    update_metrics(0, 2, written_bytes, [&] { return "Written Bytes"; });
+    queued_records = 0;
+    queued_bytes = 0;
+    written_bytes = 0;
 
     auto now = std::chrono::steady_clock::now();
     auto elapsed = now - last_publish;
@@ -1007,6 +1013,7 @@ struct StorageNode::Impl {
     records.clear();
     queued_bytes = 0;
     queued_records = 0;
+    written_bytes = 0;
     _thread = std::thread([&, output_file] { thread_target(output_file); });
     stats_timer.expires_after(1s);
     stats_timer.async_wait(std::bind(&Impl::on_stats_timer, this, _1));

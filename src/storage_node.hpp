@@ -5,6 +5,7 @@
 #include <state.hpp>
 #include <string>
 #include <xsens_node.hpp>
+#include <modalities.h>
 
 #include <grpc_impl.hpp>
 
@@ -46,6 +47,6 @@ public:
   void inject(const thalamus::vector<std::span<double const>> &,
               const thalamus::vector<std::chrono::nanoseconds> &,
               const thalamus::vector<std::string_view> &) override;
-  size_t modalities() const override { return 0; }
+  size_t modalities() const override { return THALAMUS_MODALITY_ANALOG; }
 };
 } // namespace thalamus

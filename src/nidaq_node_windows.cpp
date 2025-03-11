@@ -385,7 +385,7 @@ struct NidaqNode::Impl {
         _sample_interval = std::chrono::nanoseconds(size_t(1e9 / sample_rate));
 
         size_t polling_interval_raw = state->at("Poll Interval");
-        std::chrono::microseconds polling_interval(polling_interval_raw);
+        std::chrono::milliseconds polling_interval(polling_interval_raw);
 
         _every_n_samples = zero_latency ? 1 : int(polling_interval / _sample_interval);
 
