@@ -609,10 +609,8 @@ struct DataCount {
   size_t max_pose_length = 0;
 };
 
-DataCount count_data(const std::string &filename,
-                     const std::optional<std::string> slash_replace);
-DataCount count_data(const std::string &filename,
-                     const std::optional<std::string> slash_replace) {
+static DataCount count_data(const std::string &filename,
+                            const std::optional<std::string> slash_replace) {
   std::optional<thalamus_grpc::StorageRecord> record;
   std::ifstream input_stream(filename, std::ios::binary);
   DataCount result;
@@ -675,57 +673,82 @@ DataCount count_data(const std::string &filename,
       auto image = record->image();
       auto key = std::pair<std::string, std::string>(node_name, "");
       switch (image.format()) {
-      case thalamus_grpc::Image::Format::Image_Format_Gray:
+      case thalamus_grpc::Image::Format::Image_Format_Gray: {
         ++counts["image/" + key.first + "/data"];
         ++counts["image/" + key.first + "/received"];
-        result.dimensions["image/" + key.first + "/data"] =
-            std::make_tuple(image.width(), image.height(), 0);
+        auto& existing = result.dimensions["image/" + key.first + "/data"];
+        existing = std::make_tuple(std::max(size_t(image.width()), std::get<0>(existing)),
+                                   std::max(size_t(image.height()), std::get<1>(existing)),
+                                   0);
         result.datatypes["image/" + key.first + "/data"] = H5T_NATIVE_UCHAR;
         break;
-      case thalamus_grpc::Image::Format::Image_Format_RGB:
+      }
+      case thalamus_grpc::Image::Format::Image_Format_RGB: {
         ++counts["image/" + key.first + "/data"];
         ++counts["image/" + key.first + "/received"];
-        result.dimensions["image/" + key.first + "/data"] =
-            std::make_tuple(image.width(), image.height(), 3);
+        auto& existing = result.dimensions["image/" + key.first + "/data"];
+        existing = std::make_tuple(std::max(size_t(image.width()), std::get<0>(existing)),
+                                   std::max(size_t(image.height()), std::get<1>(existing)),
+                                   3);
         result.datatypes["image/" + key.first + "/data"] = H5T_NATIVE_UCHAR;
         break;
-      case thalamus_grpc::Image::Format::Image_Format_YUYV422:
+      }
+      case thalamus_grpc::Image::Format::Image_Format_YUYV422: {
         ++counts["image/" + key.first + "/data"];
         ++counts["image/" + key.first + "/received"];
-        result.dimensions["image/" + key.first + "/data"] =
-            std::make_tuple(2 * image.width(), image.height(), 0);
+        auto& existing = result.dimensions["image/" + key.first + "/data"];
+        existing = std::make_tuple(std::max(size_t(2 * image.width()), std::get<0>(existing)),
+                                   std::max(size_t(image.height()), std::get<1>(existing)),
+                                   0);
         result.datatypes["image/" + key.first + "/data"] = H5T_NATIVE_UCHAR;
         break;
+      }
       case thalamus_grpc::Image::Format::Image_Format_YUV420P:
-      case thalamus_grpc::Image::Format::Image_Format_YUVJ420P:
+      case thalamus_grpc::Image::Format::Image_Format_YUVJ420P: {
         ++counts["image/" + key.first + "/y"];
         ++counts["image/" + key.first + "/u"];
         ++counts["image/" + key.first + "/v"];
         ++counts["image/" + key.first + "/received"];
-        result.dimensions["image/" + key.first + "/y"] =
-            std::make_tuple(image.width(), image.height(), 0);
+        {
+          auto& existing = result.dimensions["image/" + key.first + "/y"];
+          existing = std::make_tuple(std::max(size_t(image.width()), std::get<0>(existing)),
+                                     std::max(size_t(image.height()), std::get<1>(existing)), 0);
+        }
         result.datatypes["image/" + key.first + "/y"] = H5T_NATIVE_UCHAR;
-        result.dimensions["image/" + key.first + "/u"] =
-            std::make_tuple(image.width() / 2, image.height() / 2, 0);
+        {
+          auto& existing = result.dimensions["image/" + key.first + "/u"];
+          existing = std::make_tuple(std::max(size_t(image.width()/2), std::get<0>(existing)),
+                                     std::max(size_t(image.height()/2), std::get<1>(existing)), 0);
+        }
         result.datatypes["image/" + key.first + "/u"] = H5T_NATIVE_UCHAR;
-        result.dimensions["image/" + key.first + "/v"] =
-            std::make_tuple(image.width() / 2, image.height() / 2, 0);
+        {
+          auto& existing = result.dimensions["image/" + key.first + "/v"];
+          existing = std::make_tuple(std::max(size_t(image.width()/2), std::get<0>(existing)),
+                                     std::max(size_t(image.height()/2), std::get<1>(existing)), 0);
+        }
         result.datatypes["image/" + key.first + "/v"] = H5T_NATIVE_UCHAR;
         break;
-      case thalamus_grpc::Image::Format::Image_Format_Gray16:
+      }
+      case thalamus_grpc::Image::Format::Image_Format_Gray16: {
         ++counts["image/" + key.first + "/data"];
         ++counts["image/" + key.first + "/received"];
-        result.dimensions["image/" + key.first + "/data"] =
-            std::make_tuple(image.width(), image.height(), 0);
+        auto& existing = result.dimensions["image/" + key.first + "/data"];
+        existing = std::make_tuple(std::max(size_t(image.width()), std::get<0>(existing)),
+                                   std::max(size_t(image.height()), std::get<1>(existing)),
+                                   0);
         result.datatypes["image/" + key.first + "/data"] = H5T_NATIVE_USHORT;
         break;
-      case thalamus_grpc::Image::Format::Image_Format_RGB16:
+      }
+      case thalamus_grpc::Image::Format::Image_Format_RGB16: {
         ++counts["image/" + key.first + "/data"];
         ++counts["image/" + key.first + "/received"];
-        result.dimensions["image/" + key.first + "/data"] =
-            std::make_tuple(image.width(), image.height(), 3);
+        auto& existing = result.dimensions["image/" + key.first + "/data"];
+        existing = std::make_tuple(std::max(size_t(image.width()), std::get<0>(existing)),
+                                   std::max(size_t(image.height()), std::get<1>(existing)),
+                                   3);
         result.datatypes["image/" + key.first + "/data"] = H5T_NATIVE_USHORT;
         break;
+      }
       case thalamus_grpc::Image::Format::Image_Format_MPEG1:
       case thalamus_grpc::Image::Format::Image_Format_MPEG4:
       case thalamus_grpc::Image::Format::
