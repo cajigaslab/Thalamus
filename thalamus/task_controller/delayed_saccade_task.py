@@ -360,7 +360,9 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   show_start_target = False
   show_presented_target = False
   state_brightness = 0
+  on_time_ms = 0
   def renderer(painter: QPainter) -> None:
+    nonlocal on_time_ms
     color_base = all_target_colors[i_start_targ]
     scale = (all_target_on_luminance[i_start_targ] if not dim_start_target
              else all_target_off_luminance[i_start_targ])
@@ -397,7 +399,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
           painter.render_stl(stl_mesh)
         else:
           color, scale = all_target_colors[i_presented_targ], all_target_on_luminance[i_presented_targ]
-          color = QColor(scale*color.red(), scale*color.green(), scale*color.blue())
+          color = QColor(int(scale*color.red()), int(scale*color.green()), int(scale*color.blue()))
           painter.fillRect(all_target_rects[i_presented_targ], color)
 
     with painter.masked(RenderOutput.OPERATOR):
@@ -412,7 +414,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       font = painter.font()
       font.setPointSize(5*font.pointSize())
       painter.setFont(font)
-      painter.drawText(0, 100, str(reward_message.on_time_ms))
+      painter.drawText(0, 100, str(on_time_ms))
 
     state_color = QColor(state_brightness, state_brightness, state_brightness)
     state_width = 70

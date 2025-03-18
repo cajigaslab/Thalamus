@@ -5,6 +5,10 @@ from typing import ClassVar as _ClassVar, Mapping as _Mapping, Optional as _Opti
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class Empty(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
 class TaskConfig(_message.Message):
     __slots__ = ("body",)
     BODY_FIELD_NUMBER: _ClassVar[int]

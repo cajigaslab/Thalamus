@@ -19,7 +19,7 @@ from ..qt import *
 
 from . import task_context
 from .widgets import Form, ListAsTabsWidget
-from .util import wait_for, wait_for_hold, RenderOutput, animate, nullcontext, stimulator
+from .util import wait_for, wait_for_hold, RenderOutput, animate, nullcontext, stimulator, create_task_with_exc_handling
 from .. import task_controller_pb2
 from ..config import ObservableCollection
 
@@ -220,9 +220,10 @@ def distance(lhs, rhs):
 def toggle_brightness(brightness):
   return 0 if brightness == 255 else 255
 
-async def next_state(context, new_state, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
-  await context.log(f'BehavState={new_state.name}')
-  return stimulator(context, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period) if new_state == stim_phase else nullcontext()
+def next_state(context, new_state, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
+  create_task_with_exc_handling(context.log(f'BehavState={new_state.name}'))
+  return nullcontext()
+  #return stimulator(context, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period) if new_state == stim_phase else nullcontext()
 
 @animate(30)
 async def run(context: task_context.TaskContextProtocol) -> task_context.TaskResult: #pylint: disable=too-many-statements

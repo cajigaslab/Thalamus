@@ -1,4 +1,3 @@
-from . import util_pb2 as _util_pb2
 from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
@@ -17,6 +16,10 @@ AnalogModality: Modalities
 MocapModality: Modalities
 ImageModality: Modalities
 TextModality: Modalities
+
+class Empty(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
 
 class Compressed(_message.Message):
     __slots__ = ("data", "type", "stream", "size")
@@ -203,6 +206,8 @@ class Image(_message.Message):
         YUVJ420P: _ClassVar[Image.Format]
         Gray16: _ClassVar[Image.Format]
         RGB16: _ClassVar[Image.Format]
+        MPEG1: _ClassVar[Image.Format]
+        MPEG4: _ClassVar[Image.Format]
     Gray: Image.Format
     RGB: Image.Format
     YUYV422: Image.Format
@@ -210,6 +215,8 @@ class Image(_message.Message):
     YUVJ420P: Image.Format
     Gray16: Image.Format
     RGB16: Image.Format
+    MPEG1: Image.Format
+    MPEG4: Image.Format
     DATA_FIELD_NUMBER: _ClassVar[int]
     WIDTH_FIELD_NUMBER: _ClassVar[int]
     HEIGHT_FIELD_NUMBER: _ClassVar[int]
@@ -357,20 +364,24 @@ class InjectTextRequest(_message.Message):
     def __init__(self, node: _Optional[str] = ..., text: _Optional[_Union[Text, _Mapping]] = ...) -> None: ...
 
 class AnalogResponse(_message.Message):
-    __slots__ = ("data", "spans", "sample_intervals", "channels_changed", "int_data", "is_int_data")
+    __slots__ = ("data", "spans", "sample_intervals", "channels_changed", "int_data", "is_int_data", "time", "remote_time")
     DATA_FIELD_NUMBER: _ClassVar[int]
     SPANS_FIELD_NUMBER: _ClassVar[int]
     SAMPLE_INTERVALS_FIELD_NUMBER: _ClassVar[int]
     CHANNELS_CHANGED_FIELD_NUMBER: _ClassVar[int]
     INT_DATA_FIELD_NUMBER: _ClassVar[int]
     IS_INT_DATA_FIELD_NUMBER: _ClassVar[int]
+    TIME_FIELD_NUMBER: _ClassVar[int]
+    REMOTE_TIME_FIELD_NUMBER: _ClassVar[int]
     data: _containers.RepeatedScalarFieldContainer[float]
     spans: _containers.RepeatedCompositeFieldContainer[Span]
     sample_intervals: _containers.RepeatedScalarFieldContainer[int]
     channels_changed: bool
     int_data: _containers.RepeatedScalarFieldContainer[int]
     is_int_data: bool
-    def __init__(self, data: _Optional[_Iterable[float]] = ..., spans: _Optional[_Iterable[_Union[Span, _Mapping]]] = ..., sample_intervals: _Optional[_Iterable[int]] = ..., channels_changed: bool = ..., int_data: _Optional[_Iterable[int]] = ..., is_int_data: bool = ...) -> None: ...
+    time: int
+    remote_time: int
+    def __init__(self, data: _Optional[_Iterable[float]] = ..., spans: _Optional[_Iterable[_Union[Span, _Mapping]]] = ..., sample_intervals: _Optional[_Iterable[int]] = ..., channels_changed: bool = ..., int_data: _Optional[_Iterable[int]] = ..., is_int_data: bool = ..., time: _Optional[int] = ..., remote_time: _Optional[int] = ...) -> None: ...
 
 class GraphRequest(_message.Message):
     __slots__ = ("node", "channels", "bin_ns", "channel_names")
