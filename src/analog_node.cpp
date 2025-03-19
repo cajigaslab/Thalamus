@@ -1,8 +1,8 @@
+#include <thalamus/tracing.hpp>
 #include <analog_node.hpp>
 #include <cstdint>
 #include <modalities_util.hpp>
 #include <random>
-#include <thalamus/tracing.hpp>
 
 using namespace thalamus;
 
@@ -170,7 +170,6 @@ struct WaveGeneratorNode::Impl {
     }
     name_views.assign(names.begin(), names.end());
 
-    //std::cout << "WAVE " << now.time_since_epoch().count() << std::endl;
     analog_impl.inject(spans, sample_intervals, name_views,
                        now.time_since_epoch());
     _time = new_time;

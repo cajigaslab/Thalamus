@@ -510,7 +510,10 @@ class TaskContext(TaskContextProtocol):
         selected = random.choices(clusters, weights=weights, k=1)[0]
         LOGGER.info('GOT %s', selected["name"])
         #LOGGER.info(json.dumps(selected.unwrap(), indent=2))
-        queue.append(selected.copy())
+        selected_copy = selected.copy()
+        for task in selected_copy.get('tasks', []):
+          task['task_cluster_name'] = selected_copy['name']
+        queue.append(selected_copy)
         result = self.__sample_task(True)
 
     if not recurse:
@@ -550,9 +553,8 @@ class TaskContext(TaskContextProtocol):
     if 'task_cluster_name' in self.task_config:
       cluster_name = self.task_config.get('task_cluster_name', None)
     else:
-      assert self.task_config.parent is not None, 'self.task_config.parent is None'
-      assert self.task_config.parent.parent is not None, 'self.task_config.parent.parent is None'
-      cluster_name = self.task_config.parent.parent['name']
+      LOGGER.error('Trying to update status but tasks is missing cluster name')
+      return
 
     task_name = cluster_name + '/' + self.task_config['name']
     self.trial_summary_data.trial_history[task_name]['success' if success else 'failure'] += 1

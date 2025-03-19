@@ -363,6 +363,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   on_time_ms = 0
   def renderer(painter: QPainter) -> None:
     nonlocal on_time_ms
+
     color_base = all_target_colors[i_start_targ]
     scale = (all_target_on_luminance[i_start_targ] if not dim_start_target
              else all_target_off_luminance[i_start_targ])

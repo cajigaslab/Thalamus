@@ -249,6 +249,8 @@ class TreeObservableCollectionModel(QAbstractItemModel):
     keys = self.item_to_keys[id(item)]
     if index.column() >= self.prefix_columns:
       key = self.columns[index.column()-self.prefix_columns]
+      if len(keys) <= index.row():
+        return flags
       row_key = keys[index.row()]
       #print('flags10', item, key, row_key)
       item = item.get(row_key, None)

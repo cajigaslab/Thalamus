@@ -237,7 +237,10 @@ class TaskClusterWidget(QWidget):
     """
     Copies this task config and appends it to the queue
     """
-    self.queue.append(self.config.copy())
+    config = self.config.copy()
+    for task in config.get('tasks', []):
+      task['task_cluster_name'] = config['name']
+    self.queue.append(config)
 
   def on_name_changed(self) -> None:
     """

@@ -342,16 +342,20 @@ class ObservableCollection(abc.ABC):
     starts with the leaves and moves inward, triggering observers along the way.
     """
     items = list(other.items() if isinstance(other, dict) else enumerate(other))
+    is_dict = isinstance(self.content, dict)
+    contains = (lambda k: k in self) if is_dict else (lambda k: k in range(len(self.content)))
     for key, value in items:
-      current_value = self[key] if key in self else None
+      current_value = self[key] if contains(key) else None
       if isinstance(current_value, ObservableCollection):
         current_value.assign(value, callback, from_remote)
+      elif not is_dict and len(self) == key:
+        self.append(value, callback, from_remote)
       else:
         self.setitem(key, value, callback, from_remote)
 
-    current_keys = set(self.content.keys() if isinstance(self.content, dict) else range(len(self.content)))
+    current_keys = set(self.content.keys() if is_dict else range(len(self.content)))
     new_keys = set(i[0] for i in items)
-    for key in current_keys - new_keys:
+    for key in sorted(current_keys - new_keys, reverse=True):
       self.delitem(key, callback, from_remote)
 
   def merge(self, other: typing.Union[typing.Dict[typing.Any, typing.Any], typing.List[typing.Any]], callback = lambda: None, from_remote = False) -> None:

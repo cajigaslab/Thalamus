@@ -20,6 +20,7 @@ from ..qt import *
 from . import task_context
 from .widgets import Form, ListAsTabsWidget
 from .util import wait_for, wait_for_hold, RenderOutput, animate, nullcontext, stimulator, create_task_with_exc_handling
+from .. import thalamus_pb2
 from .. import task_controller_pb2
 from ..config import ObservableCollection
 
@@ -438,22 +439,22 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     state_brightness = 0
     show_start_target = False
     context.widget.update()
-    with next_state(context, State.INTERTRIAL, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
+    with await next_state(context, State.INTERTRIAL, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
       await wait_for(context, lambda: touch_pos.x() > 0, config.intertrial_timeout)
       if touch_pos.x() > 0:
-        with fail_trial():
+        with await fail_trial():
           await context.sleep(config.fail_timeout)
           return task_context.TaskResult(False)
 
     blank_space_touched = False
-    with next_state(context, State.START_ON, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
+    with await next_state(context, State.START_ON, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
       state_brightness = toggle_brightness(state_brightness)
       show_start_target = True
       context.widget.update()
       acquired = await wait_for(context, lambda: start_target_acquired or blank_space_touched, config.start_timeout)
 
     if blank_space_touched:
-      with fail_trial():
+      with await fail_trial():
         await context.sleep(config.fail_timeout)
         return task_context.TaskResult(False)
 
@@ -464,20 +465,20 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       context.widget.update()
 
   # state: startacq
-  with next_state(context, State.START_ACQ, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
+  with await next_state(context, State.START_ACQ, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
     success = await wait_for_hold(context, lambda: start_target_acquired, config.baseline_timeout, config.blink_timeout)
   if not success:
-    with fail_trial():
+    with await fail_trial():
       await context.sleep(config.fail_timeout)
       return task_context.TaskResult(False)
 
   state_brightness = toggle_brightness(state_brightness)
   show_presented_target = True
   context.widget.update()
-  with next_state(context, State.TARGS_ON, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
+  with await next_state(context, State.TARGS_ON, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
     success = await wait_for_hold(context, lambda: start_target_acquired, config.cue_timeout, config.blink_timeout)
   if not success:
-    with fail_trial(): 
+    with await fail_trial(): 
       await context.sleep(config.fail_timeout)
       return task_context.TaskResult(False)
 
@@ -485,27 +486,27 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   dim_start_target = True
   state_brightness = toggle_brightness(state_brightness)
   context.widget.update()
-  with next_state(context, State.GO, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
+  with await next_state(context, State.GO, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
     acquired = await wait_for(context, lambda: presented_targ_acquired or blank_space_touched, config.reach_timeout)
 
   if not acquired or blank_space_touched:
-    with fail_trial(): 
+    with await fail_trial(): 
       await context.sleep(config.fail_timeout)
       return task_context.TaskResult(False)
   final_i_selected_target = last_selected_target
   behav_result['selected_target_id'] = final_i_selected_target
 
-  with next_state(context, State.TARGS_ACQ, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
+  with await next_state(context, State.TARGS_ACQ, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
     success = await wait_for_hold(context, lambda: presented_targ_acquired, config.hold_timeout, config.blink_timeout)
  
   if not presented_targ_acquired: #end trial if initial touch incorrect
     context.behav_result = behav_result
-    with fail_trial(): 
+    with await fail_trial(): 
       await context.sleep(config.fail_timeout)
       return task_context.TaskResult(False)
 
   if not success:
-    with fail_trial(): 
+    with await fail_trial(): 
       await context.sleep(config.fail_timeout)
       return task_context.TaskResult(False)
   
@@ -515,7 +516,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   """
   show_presented_target = False
 
-  with next_state(context, State.SUCCESS, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
+  with await next_state(context, State.SUCCESS, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
     state_brightness = toggle_brightness(state_brightness)
     context.widget.update()
 
@@ -532,11 +533,6 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     success_sound.play()      
 
     await context.sleep(config.success_timeout)
-
-  if touch_pos.x() > 0: 
-    with fail_trial(): 
-      await context.sleep(config.fail_timeout)
-      return task_context.TaskResult(False)
 
   context.behav_result = behav_result
   return task_context.TaskResult(True)

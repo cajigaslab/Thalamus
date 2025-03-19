@@ -1,7 +1,7 @@
+#include <thalamus/tracing.hpp>
 #include <alpha_omega_node.hpp>
 #include <modalities_util.hpp>
 #include <regex>
-#include <thalamus/tracing.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push

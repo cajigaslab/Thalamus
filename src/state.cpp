@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <state.hpp>
+#include <jsonpath_grammar.hpp>
 
 namespace thalamus {
 
@@ -702,109 +703,6 @@ ObservableCollection::to_string(const ObservableCollection::Key &value) {
   return "";
 }
 
-//#ifdef __clang__
-//#pragma clang diagnostic push
-//#pragma clang diagnostic ignored "-Weverything"
-//#endif
-//#include <boost/foreach.hpp>
-//#include <boost/fusion/include/adapt_struct.hpp>
-//#include <boost/spirit/include/qi.hpp>
-//#include <boost/variant/apply_visitor.hpp>
-//#include <boost/variant/recursive_variant.hpp>
-//#ifdef __clang__
-//#pragma clang diagnostic pop
-//#endif
-//namespace qi = boost::spirit::qi;
-//namespace ascii = boost::spirit::ascii;
-//
-//struct ChildSegment {
-//};
-//
-//struct Segment {
-//  ChildSegment child_segment;
-//};
-//
-//struct Segments {
-//  std::list<Segment> segments;
-//};
-//
-//struct JsonpathQuery {
-//  Segments segments;
-//};
-//
-//BOOST_FUSION_ADAPT_STRUCT(JsonpathQuery,
-//                          (Segment, segments));
-//BOOST_FUSION_ADAPT_STRUCT(Segments,
-//                          (std::list<Segment>, segments));
-//BOOST_FUSION_ADAPT_STRUCT(Segment,
-//                          (ChildSegment, child_segment));
-//
-//template <typename Iterator>
-//struct parser : qi::grammar<Iterator, program(), ascii::space_type> {
-//  parser() : parser::base_type(expression1) {
-//    qi::ulong_long_type ulong_;
-//    qi::real_parser<double, qi::strict_real_policies<double>> double_;
-//    qi::uint_parser<unsigned long long int, 16> hex_;
-//    qi::hex_type hex2_;
-//    qi::string_type char_;
-//    qi::char_type one_char_;
-//    qi::alpha_type alpha_;
-//    qi::alnum_type alnum_;
-//    qi::lit_type lit_;
-//    qi::lexeme_type lexeme_;
-//    qi::raw_type raw_;
-//
-//    name_first = alpha_ | '_';
-//    name_char = alnum_ | '_';
-//    member_name_shorthand = name_first >> *name_char;
-//    string_literal = ('\'' >> +(char_ - '\'') >> '\'') | ('"' >> +(char_ - '"') >> '"');
-//    literal = qi::int_ | string_literal | "true" | "false" | "null";
-//    logical_not_op = '!';
-//    current_node_identifier = '@';
-//    root_identifier = '$';
-//
-//    jsonpath_query = segments;
-//    segments = *segment;
-//    segment = child_segment;
-//    child_segment = bracketed_selection | ('.' >> member_name_shorthand);
-//    bracketed_selection = '[' >> selector >> ']';
-//
-//    selector = name_selector | index_selector | filter_selector;
-//    name_selector = string_literal;
-//    index_selector = qi::int_;
-//
-//    filter_selector = '?' >> logical_expr;
-//    logical_expr = logical_or_expr;
-//    logical_or_expr = logical_and_expr >> *("||" >> logical_and_expr);
-//    logical_and_expr = basic_expr >> *("&&" >> basic_expr);
-//    basic_expr = paren_expr | comparison_expr | test_expr;
-//    paren_expr = -logical_not_op >> '(' >> logcal_expr >> ')';
-//
-//    test_expr = -'!' >> (filter_query | function_expr);
-//    filter_query = rel_query | jsonpath_query;
-//    rel_query = current_node_identifier | segments;
-//
-//    comparison_expr = comparable >> comparison_op >> comparable;
-//    comparable = literal | singular-query | function_expr;
-//    comparison_op = "==" | "!=" | "<=" | ">=" | "<" | ">";
-//    singular_query = rel_singular_query | abs_singular_query;
-//    rel_sungilar_query = current_node_identifier >> singular_query_segments;
-//    abs_sungilar_query = root_identifier >> singular_query_segments;
-//    singular_query_segments = *(name_segment | index_segment);
-//    name_segment = ('[' >> name_selector >> ']') | ('.' >> member_name_shorthand);
-//    index_segment = '[' >> index_selector >> ']';
-//  }
-//
-//  qi::rule<Iterator, program(), ascii::space_type> expression1;
-//  qi::rule<Iterator, program(), ascii::space_type> boolean;
-//  qi::rule<Iterator, program(), ascii::space_type> expression2;
-//  qi::rule<Iterator, program(), ascii::space_type> compare;
-//  qi::rule<Iterator, program(), ascii::space_type> shift;
-//  qi::rule<Iterator, program(), ascii::space_type> expression3;
-//  qi::rule<Iterator, program(), ascii::space_type> term;
-//  qi::rule<Iterator, operand(), ascii::space_type> factor;
-//};
-
 ObservableCollection::Value get_jsonpath(ObservableCollection::Value store,
                                          const std::list<std::string> &tokens) {
   ObservableCollection::Value current = store;
@@ -826,28 +724,212 @@ ObservableCollection::Value get_jsonpath(ObservableCollection::Value store,
   return current;
 }
 
+struct ToBoolVisitor {
+  bool operator()(std::monostate) {
+    return false;
+  }
+  bool operator()(long long int val) {
+    return val == 0;
+  }
+  bool operator()(double val) {
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#endif
+    return val == 0;
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+  }
+  bool operator()(bool val) {
+    return val;
+  }
+  bool operator()(std::string val) {
+    return !val.empty();
+  }
+  bool operator()(const ObservableDictPtr& val) {
+    return val != nullptr;
+  }
+  bool operator()(const ObservableListPtr& val) {
+    return val != nullptr;
+  }
+};
+
+static bool to_bool(ObservableCollection::Value v) {
+  return std::visit(ToBoolVisitor{}, v);
+}
+
+struct JsonpathVisitor {
+  ObservableCollection::Value abs;
+  ObservableCollection::Value rel;
+
+  ObservableCollection::Value operator()(const Literal &logic) {
+    if(std::holds_alternative<int>(logic)) {
+      return std::get<int>(logic);
+    } else {
+      return std::get<std::string>(logic);
+    }
+  }
+
+  ObservableCollection::Value operator()(const SingularQuery &query) {
+    ObservableCollection::Value current = rel;
+    for(const auto& segment : query) {
+      if(std::holds_alternative<std::monostate>(current)) {
+        return current;
+      }
+      current = std::visit(JsonpathVisitor{abs, current}, segment);
+    }
+    return current;
+  }
+
+  ObservableCollection::Value operator()(const Compare &logic) {
+    auto lhs = std::visit(*this, logic.lhs);
+    auto rhs = std::visit(*this, logic.rhs);
+    if(logic.op == "==") {
+      return lhs == rhs;
+    } else if (logic.op == "!=") {
+      return lhs != rhs;
+    } else if (logic.op == "<=") {
+      return lhs <= rhs;
+    } else if (logic.op == ">=") {
+      return lhs >= rhs;
+    } else {
+      return std::monostate();
+    }
+  }
+
+  ObservableCollection::Value operator()(const LogicalAnd &logic) {
+    std::vector<ObservableCollection::Value> values;
+    auto handler = [&] (ObservableCollection::Value value) {
+      auto result = true;
+      for(auto expr : logic.expressions) {
+        result = result && to_bool((*this)(expr));
+        if(!result) {
+          break;
+        }
+      }
+      if(result) {
+        values.push_back(value);
+      }
+    };
+    handler(rel);
+    return values.empty() ? std::monostate() : values.front();
+  }
+
+  ObservableCollection::Value operator()(const LogicalOr &logic) {
+    std::vector<ObservableCollection::Value> values;
+    auto handler = [&] (ObservableCollection::Value value) {
+      auto result = false;
+      for(auto expr : logic.expressions) {
+        result = result || to_bool(JsonpathVisitor{abs, value}(expr));
+        if(result) {
+          break;
+        }
+      }
+      if(result) {
+        values.push_back(value);
+      }
+    };
+    if (std::holds_alternative<ObservableDictPtr>(rel)) {
+      auto held = thalamus::get<ObservableDictPtr>(rel);
+      for(auto i = held->begin();i != held->end();++i) {
+        handler(i->second);
+      }
+    } else if (std::holds_alternative<ObservableListPtr>(rel)) {
+      auto held = thalamus::get<ObservableListPtr>(rel);
+      for(auto i = held->begin();i != held->end();++i) {
+        handler(*i);
+      }
+    }
+    return values.empty() ? std::monostate() : values.front();
+  }
+
+  ObservableCollection::Value operator()(const Selector &selector) {
+    return std::visit(*this, selector.value);
+  }
+
+  ObservableCollection::Value operator()(int index) {
+    if (std::holds_alternative<ObservableListPtr>(rel)) {
+      const auto &held = thalamus::get<ObservableListPtr>(rel);
+      return held->size() > size_t(index) ? ObservableCollection::Value(held->at(size_t(index))) : std::monostate();
+    } else if (std::holds_alternative<ObservableDictPtr>(rel)) {
+      const auto &held = thalamus::get<ObservableDictPtr>(rel);
+      return held->contains(index) ? ObservableCollection::Value(held->at(index)) : std::monostate();
+    } else {
+      return std::monostate();
+    }
+  }
+
+  ObservableCollection::Value operator()(const std::string &query) {
+    if (std::holds_alternative<ObservableDictPtr>(rel)) {
+      const auto &held = thalamus::get<ObservableDictPtr>(rel);
+      return held->contains(query) ? ObservableCollection::Value(held->at(query)) : std::monostate();
+    } else {
+      return std::monostate();
+    }
+  }
+
+  ObservableCollection::Value operator()(const JsonpathQuery &query) {
+    ObservableCollection::Value current = abs;
+    for(const auto& segment : query.segments) {
+      current = std::visit(JsonpathVisitor{abs, current}, segment.segment);
+    }
+    return current;
+  }
+};
+
+static ObservableCollection::Value get_jsonpath(ObservableCollection::Value store,
+                                         const JsonpathQuery &query) {
+  return JsonpathVisitor{store, store}(query);
+}
+
 ObservableCollection::Value get_jsonpath(ObservableCollection::Value store,
                                          const std::string &query) {
-  std::list<std::string> tokens =
-      absl::StrSplit(query, absl::ByAnyChar("[].'\""), absl::SkipEmpty());
-  return get_jsonpath(store, tokens);
+  auto begin = query.begin();
+  auto end = query.end();
+  Parser<std::string::const_iterator> p;
+  JsonpathQuery parsed;
+  auto r = phrase_parse(begin, end, p, ascii::space_type(), parsed);
+  if(r && begin == end) {
+    return get_jsonpath(store, parsed);
+  }
+  return std::monostate();
 }
 
 void set_jsonpath(ObservableCollection::Value store, const std::string &query,
                   ObservableCollection::Value value, bool from_remote) {
-  std::list<std::string> tokens =
-      absl::StrSplit(query, absl::ByAnyChar("[].'\""), absl::SkipEmpty());
+  auto begin = query.begin();
+  auto text_end = query.end();
+  Parser<std::string::const_iterator> p;
+  JsonpathQuery parsed;
+  auto r = phrase_parse(begin, text_end, p, ascii::space_type(), parsed);
+  if(!r || begin != text_end) {
+    THALAMUS_LOG(error) << "Failed to parse JSON Path expression at " << std::string(begin, text_end);
+    return;
+  }
+
+  auto& tokens = parsed.segments;
   ObservableCollection::Value current = store;
-  std::string end;
+  ObservableCollection::Key end;
   if (!tokens.empty()) {
-    end = tokens.back();
+    auto end_segment = tokens.back();
+    if(std::holds_alternative<Selector>(end_segment.segment)) {
+      auto selector = std::get<Selector>(end_segment.segment);
+      if(std::holds_alternative<int>(selector.value)) {
+        end = std::get<int>(selector.value);
+      } else if(std::holds_alternative<std::string>(selector.value)) {
+        end = std::get<std::string>(selector.value);
+      }
+    } else if(std::holds_alternative<std::string>(end_segment.segment)) {
+      end = std::get<std::string>(end_segment.segment);
+    }
     tokens.pop_back();
-    current = get_jsonpath(store, tokens);
+    current = get_jsonpath(store, parsed);
   }
 
   if (std::holds_alternative<ObservableDictPtr>(current)) {
     auto held = thalamus::get<ObservableDictPtr>(current);
-    if (end.empty()) {
+    if (std::holds_alternative<std::monostate>(end)) {
       BOOST_ASSERT(std::holds_alternative<ObservableDictPtr>(value));
       auto unwrapped_value = thalamus::get<ObservableDictPtr>(value);
       held->assign(*unwrapped_value, from_remote);
@@ -856,19 +938,15 @@ void set_jsonpath(ObservableCollection::Value store, const std::string &query,
     }
   } else if (std::holds_alternative<ObservableListPtr>(current)) {
     auto held = thalamus::get<ObservableListPtr>(current);
-    if (end.empty()) {
+    if (std::holds_alternative<std::monostate>(end)) {
       BOOST_ASSERT(std::holds_alternative<ObservableListPtr>(value));
       auto unwrapped_value = thalamus::get<ObservableListPtr>(value);
       held->assign(*unwrapped_value, from_remote);
     } else {
-      size_t index;
-      auto success = absl::SimpleAtoi(end, &index);
-      THALAMUS_ASSERT(success, "Failed to convert index into number");
+      size_t index = size_t(std::get<long long int>(end));
       while (held->size() < index) {
         held->push_back(ObservableCollection::Value(), nullptr, from_remote);
       }
-      THALAMUS_ASSERT(index <= held->size(),
-                       "index must be less than or equal to array size");
       if (held->size() == index) {
         held->push_back(value, nullptr, from_remote);
       } else {
