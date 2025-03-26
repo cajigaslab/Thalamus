@@ -368,7 +368,7 @@ struct StorageNode::Impl {
     queue_record(std::move(record));
   }
 
-  void prepare_storage(const std::string &filename) {
+  std::string prepare_storage(const std::string &filename) {
     inja::json tdata;
     auto time = graph->get_system_clock_at_start();
     int rec_number = get_rec_number(filename, tdata, time);
@@ -392,6 +392,7 @@ struct StorageNode::Impl {
     }
 
     output_stream = std::ofstream(rendered, std::ios::trunc | std::ios::binary);
+    return rendered;
   }
 
   void close_file() { output_stream.close(); }
@@ -782,9 +783,15 @@ struct StorageNode::Impl {
     }
   };
 
-  void thread_target(std::string output_file) {
+  void thread_target(std::string output_file, const boost::json::value& config) {
     set_current_thread_name("STORAGE");
-    prepare_storage(output_file);
+
+    auto filename = prepare_storage(output_file);
+    {
+      std::ofstream config_output(filename + ".json");
+      config_output << config;
+    }
+
     Finally f([&] { close_file(); });
 
     SimplePool<thalamus_grpc::StorageRecord> record_pool;
@@ -1014,7 +1021,14 @@ struct StorageNode::Impl {
     queued_bytes = 0;
     queued_records = 0;
     written_bytes = 0;
-    _thread = std::thread([&, output_file] { thread_target(output_file); });
+
+    //Walk up to root config
+    ObservableCollection* root = state.get();
+    while(root->parent) {
+      root = root->parent;
+    }
+
+    _thread = std::thread([&, output_file, json_object=root->to_json()] { thread_target(output_file, json_object); });
     stats_timer.expires_after(1s);
     stats_timer.async_wait(std::bind(&Impl::on_stats_timer, this, _1));
   }

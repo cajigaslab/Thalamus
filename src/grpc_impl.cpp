@@ -1491,7 +1491,7 @@ Service::image(::grpc::ServerContext *context,
     std::condition_variable cond;
     std::vector<thalamus_grpc::Image> images;
     std::vector<std::chrono::steady_clock::time_point> frame_times;
-
+ 
     using signal_type = decltype(raw_node->ready);
     auto connection = raw_node->ready.connect(
         signal_type::slot_type([&](const Node *) {

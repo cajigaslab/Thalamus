@@ -1000,6 +1000,11 @@ void ObservableList::set_remote_storage(
   }
 }
 
+boost::json::value ObservableList::to_json() {
+  boost::json::array result = *this;
+  return result;
+}
+
 ObservableDict::ObservableDict(ObservableCollection *_parent)
     : ObservableCollection(_parent), content(Map()) {}
 
@@ -1282,4 +1287,10 @@ void ObservableDict::set_remote_storage(
     }
   }
 }
+
+boost::json::value ObservableDict::to_json() {
+  boost::json::object result = *this;
+  return result;
+}
+
 } // namespace thalamus
