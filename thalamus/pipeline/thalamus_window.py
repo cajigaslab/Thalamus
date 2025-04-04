@@ -41,6 +41,7 @@ from .sync_widget import SyncWidget
 from .stim_widget import StimWidget
 from .analog_widget import AnalogWidget
 from .storage_widget import StorageWidget
+from .storage2_widget import Storage2Widget
 from .run2_widget import Run2Widget
 from ..util import NodeSelector
 from .. import thalamus_pb2
@@ -276,6 +277,12 @@ FACTORIES = {
     UserData(UserDataType.CHECK_BOX, 'Compress Analog', False, []),
     UserData(UserDataType.CHECK_BOX, 'Compress Video', False, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, [])
+  ]),
+  'STORAGE2': Factory(Storage2Widget, [
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+    UserData(UserDataType.DEFAULT, 'Output File', 'test.tha', []),
+    UserData(UserDataType.CHECK_BOX, 'Compress Analog', False, []),
+    UserData(UserDataType.CHECK_BOX, 'Compress Video', False, []),
   ]),
   'STARTER': Factory(None, [
     UserData(UserDataType.SPINBOX, 'Channel',  0, []),

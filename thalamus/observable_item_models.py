@@ -346,6 +346,7 @@ class TreeObservableCollectionDelegate(QItemDelegate):
     choices = self.choices(item, key)
     if choices is not None:
       result = QComboBox(parent)
+      result.setEditable(True)
       return result
 
     value = item[key] if key in item else None
