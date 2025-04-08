@@ -21,6 +21,12 @@ class Empty(_message.Message):
     __slots__ = ()
     def __init__(self) -> None: ...
 
+class Redirect(_message.Message):
+    __slots__ = ("redirect",)
+    REDIRECT_FIELD_NUMBER: _ClassVar[int]
+    redirect: str
+    def __init__(self, redirect: _Optional[str] = ...) -> None: ...
+
 class Compressed(_message.Message):
     __slots__ = ("data", "type", "stream", "size")
     class Type(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
