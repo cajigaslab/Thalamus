@@ -6,6 +6,8 @@ import logging
 import datetime
 import typing_extensions
 
+import numpy
+
 from ..qt import *
 
 from . import task_context
@@ -13,6 +15,8 @@ from .widgets import Form, ListAsTabsWidget
 from .util import wait_for, wait_for_hold, TaskResult, TaskContextProtocol, CanvasPainterProtocol
 from .. import task_controller_pb2
 from ..config import *
+
+from ..thalamus_pb2 import StimRequest, StimDeclaration, AnalogResponse, Span
 
 LOGGER = logging.getLogger(__name__)
 
@@ -242,7 +246,45 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   the realization's values.
   """
   assert context.widget, 'Widget is None'
-  await context.sleep(datetime.timedelta(seconds=10))
+
+  sample_rate = 10e3
+  sample_interval = int(1e9/sample_rate)
+  all_enabled = [context.task_config['AO0 Enabled'], context.task_config['AO1 Enabled'], context.task_config['AO2 Enabled'], context.task_config['AO3 Enabled']]
+  all_count = [context.task_config['AO0 Count'], context.task_config['AO1 Count'], context.task_config['AO2 Count'], context.task_config['AO3 Count']]
+  all_frequency = [context.task_config['AO0 Frequency'], context.task_config['AO1 Frequency'], context.task_config['AO2 Frequency'], context.task_config['AO3 Frequency']]
+  all_amplitude = [context.task_config['AO0 Amplitude'], context.task_config['AO1 Amplitude'], context.task_config['AO2 Amplitude'], context.task_config['AO3 Amplitude']]
+
+  max_duration = max(a/b for a,b in zip(all_count, all_frequency))
+  max_duration = min(max_duration, 1)
+  max_samples = int(max_duration*sample_rate)
+  
+  #stim_request = StimRequest()
+  stim_declaration: StimDeclaration = StimDeclaration()
+  stim_data: AnalogResponse = stim_declaration.data
+  for i, values in enumerate(zip(all_enabled, all_count, all_frequency, all_amplitude)):
+    enabled, count, frequency, amplitude = values
+    span_start = len(stim_data.data)
+    if enabled:
+      period = 1/frequency
+      period_samples = int(period*sample_rate)
+      period_samples_half = period_samples/2
+      signal_samples = int(period_samples*count)
+      signal_samples = min(signal_samples, max_samples)
+      channel_data = numpy.zeros((max_samples,))
+      channel_data[:signal_samples] = amplitude*(1 - ((numpy.arange(signal_samples)//period_samples_half) % 2))
+      channel_data[-1] = 0
+      stim_data.data.extend(channel_data)
+    else:
+      stim_data.data.extend(numpy.zeros((max_samples,)))
+    stim_data.spans.append(Span(begin=span_start,end=len(stim_data.data),name=f'/PXI1Slot4/ao{i}'))
+    stim_data.sample_intervals.append(sample_interval)
+
+  await context.arm_stim('Ceci', stim_declaration)
+
+  await context.sleep(datetime.timedelta(seconds=1))
+  await context.trigger_stim('Ceci')
+  await context.sleep(datetime.timedelta(seconds=1))
+
   return TaskResult(True)
 
   config = Config(

@@ -390,7 +390,7 @@ struct NidaqNode::Impl {
         _every_n_samples = zero_latency ? 1 : int(polling_interval / _sample_interval);
 
         std::string channel_name = name + " channel";
-        buffer_size = 2 * size_t(_every_n_samples) * _num_channels;
+        buffer_size = 20 * size_t(_every_n_samples) * _num_channels;
         std::function<void()> reader;
 
         auto daq_error = daqmxapi->DAQmxCreateTask(name.c_str(), &task_handle);
