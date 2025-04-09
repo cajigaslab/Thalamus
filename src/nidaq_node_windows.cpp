@@ -390,7 +390,7 @@ struct NidaqNode::Impl {
         _every_n_samples = zero_latency ? 1 : int(polling_interval / _sample_interval);
 
         std::string channel_name = name + " channel";
-        buffer_size = 2 * size_t(_every_n_samples) * _num_channels;
+        buffer_size = 20 * size_t(_every_n_samples) * _num_channels;
         std::function<void()> reader;
 
         auto daq_error = daqmxapi->DAQmxCreateTask(name.c_str(), &task_handle);
@@ -875,11 +875,20 @@ struct NidaqOutputNode::Impl {
     return response;
   }
 
+  size_t next_stim = 0;
+
   thalamus_grpc::StimResponse inline_arm_stim(const thalamus_grpc::StimDeclaration& declaration) {
     TRACE_EVENT("thalamus", "NidaqOutputNode::inline_arm_stim");
     thalamus_grpc::StimResponse response;
     auto &error = *response.mutable_error();
-    auto daq_error = daqmxapi->DAQmxCreateTask("Stim", &stim_task);
+
+    if (stim_task != nullptr) {
+      daqmxapi->DAQmxClearTask(stim_task);
+      stim_task = nullptr;
+    }
+
+    std::string task_name = absl::StrFormat("Stim %d", next_stim++);
+    auto daq_error = daqmxapi->DAQmxCreateTask(task_name.c_str(), &stim_task);
 
     if (daq_error < 0) {
       error.set_code(daq_error);
@@ -1019,7 +1028,7 @@ struct NidaqOutputNode::Impl {
 
   thalamus_grpc::StimResponse trigger_stim(size_t id) {
     TRACE_EVENT("thalamus", "NidaqOutputNode::trigger_stim");
-    if (armed_stim == std::numeric_limits<int>::max() && armed_stim != int(id)) {
+    if (armed_stim != std::numeric_limits<int>::max() && armed_stim != int(id)) {
       thalamus_grpc::StimResponse response = arm_stim(int(id));
       if (response.error().code()) {
         return response;
