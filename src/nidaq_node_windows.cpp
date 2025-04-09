@@ -856,10 +856,6 @@ struct NidaqOutputNode::Impl {
     thalamus_grpc::StimResponse response;
     auto &error = *response.mutable_error();
 
-    if (stim_task) {
-      daqmxapi->DAQmxClearTask(stim_task);
-      stim_task = nullptr;
-    }
     armed_stim = -1;
 
     if (!stims.contains(id)) {
@@ -872,8 +868,19 @@ struct NidaqOutputNode::Impl {
     auto binary = base64_decode(encoded);
     thalamus_grpc::StimDeclaration declaration;
     declaration.ParseFromString(binary);
+    auto result = inline_arm_stim(declaration);
+    if(result.error().code() == 0) {
+      armed_stim = id;
+    }
+    return response;
+  }
 
+  thalamus_grpc::StimResponse inline_arm_stim(const thalamus_grpc::StimDeclaration& declaration) {
+    TRACE_EVENT("thalamus", "NidaqOutputNode::inline_arm_stim");
+    thalamus_grpc::StimResponse response;
+    auto &error = *response.mutable_error();
     auto daq_error = daqmxapi->DAQmxCreateTask("Stim", &stim_task);
+
     if (daq_error < 0) {
       error.set_code(daq_error);
       error.set_message(
@@ -996,14 +1003,14 @@ struct NidaqOutputNode::Impl {
       return response;
     }
 
-    armed_stim = id;
+    armed_stim = std::numeric_limits<int>::max();
 
     return response;
   }
 
   thalamus_grpc::StimResponse trigger_stim(size_t id) {
     TRACE_EVENT("thalamus", "NidaqOutputNode::trigger_stim");
-    if (armed_stim != int(id)) {
+    if (armed_stim == std::numeric_limits<int>::max() && armed_stim != int(id)) {
       thalamus_grpc::StimResponse response = arm_stim(int(id));
       if (response.error().code()) {
         return response;
@@ -1104,6 +1111,9 @@ NidaqOutputNode::stim(thalamus_grpc::StimRequest &&request) {
       break;
     case thalamus_grpc::StimRequest::kArm:
       response.set_value(impl->arm_stim(int(request.arm())));
+      break;
+    case thalamus_grpc::StimRequest::kInlineArm:
+      response.set_value(impl->inline_arm_stim(request.inline_arm()));
       break;
     case thalamus_grpc::StimRequest::kTrigger:
       response.set_value(impl->trigger_stim(request.trigger()));
