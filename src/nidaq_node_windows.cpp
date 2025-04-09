@@ -1008,6 +1008,15 @@ struct NidaqOutputNode::Impl {
     return response;
   }
 
+  thalamus_grpc::StimResponse inline_trigger_stim(const thalamus_grpc::StimDeclaration& declaration) {
+    TRACE_EVENT("thalamus", "NidaqOutputNode::inline_trigger_stim");
+    auto result = inline_arm_stim(declaration);
+    if(result.error().code() == 0) {
+      result = trigger_stim(0);
+    }
+    return result;
+  }
+
   thalamus_grpc::StimResponse trigger_stim(size_t id) {
     TRACE_EVENT("thalamus", "NidaqOutputNode::trigger_stim");
     if (armed_stim == std::numeric_limits<int>::max() && armed_stim != int(id)) {
@@ -1117,6 +1126,9 @@ NidaqOutputNode::stim(thalamus_grpc::StimRequest &&request) {
       break;
     case thalamus_grpc::StimRequest::kTrigger:
       response.set_value(impl->trigger_stim(request.trigger()));
+      break;
+    case thalamus_grpc::StimRequest::kInlineTrigger:
+      response.set_value(impl->inline_trigger_stim(request.inline_trigger()));
       break;
     case thalamus_grpc::StimRequest::kRetrieve:
       response.set_value(impl->retrieve_stim(int(request.retrieve())));

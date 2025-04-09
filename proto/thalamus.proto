@@ -69,7 +69,8 @@ message StimRequest {
     uint32 arm = 3;
     uint32 trigger = 4;
     uint32 retrieve = 5;
-    StimDeclaration inline_arm = 6;
+    StimDeclaration inline_arm = 7;
+    StimDeclaration inline_trigger = 8;
   }
   uint32 id = 6;
 }
