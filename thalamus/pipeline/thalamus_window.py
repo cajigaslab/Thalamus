@@ -372,6 +372,11 @@ FACTORIES = {
     UserData(UserDataType.DOUBLE_SPINBOX, 'Probe Frequency', 10.0, []),
     UserData(UserDataType.SPINBOX, 'Probe Size', 128, []),
     UserData(UserDataType.CHECK_BOX, 'Running', False, [])]),
+  'REMOTE_LOG': Factory(None, [
+    UserData(UserDataType.DEFAULT, 'Address', '', []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Probe Frequency', 10.0, []),
+    UserData(UserDataType.SPINBOX, 'Probe Size', 128, []),
+    UserData(UserDataType.CHECK_BOX, 'Running', False, [])]),
   'ROS2': Factory(lambda c, s: Ros2Widget(c, s), []),
   'PUPIL': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),

@@ -16,6 +16,7 @@
 #include <ophanim_node.hpp>
 #include <pupil_node.hpp>
 #include <remote_node.hpp>
+#include <remotelog_node.hpp>
 #ifndef _WIN32
 #include <ros2_node.hpp>
 #endif
@@ -139,6 +140,7 @@ public:
         {"ROS2", new NodeFactory<Ros2Node>()},
 #endif
         {"REMOTE", new NodeFactory<RemoteNode>()},
+        {"REMOTE_LOG", new NodeFactory<RemoteLogNode>()},
         {"CHESSBOARD", new NodeFactory<ChessBoardNode>()},
         {"PUPIL", new NodeFactory<PupilNode>()},
         {"LOG", new NodeFactory<LogNode>()},
@@ -362,6 +364,13 @@ NodeGraph::NodeConnection NodeGraphImpl::get_node_scoped(
 
 std::shared_ptr<grpc::Channel>
 NodeGraphImpl::get_channel(const std::string &url) {
+  std::vector<std::string> tokens = absl::StrSplit(url, ':');
+  int port;
+  bool parsed = absl::SimpleAtoi(tokens.back(), &port);
+  if(!parsed) {
+    return get_channel(url + ":50050");
+  }
+
   if (!impl->channels.contains(url) || !impl->channels[url].lock()) {
     auto channel = grpc::CreateChannel(url, grpc::InsecureChannelCredentials());
     impl->channels[url] = channel;

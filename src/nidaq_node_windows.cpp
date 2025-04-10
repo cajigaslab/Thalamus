@@ -15,6 +15,7 @@
 #include <NIDAQmx.h>
 #include <Windows.h>
 #include <absl/strings/numbers.h>
+#include <absl/strings/str_split.h>
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
@@ -228,6 +229,9 @@ static bool prepare_nidaq() {
 }
 
 static thalamus::vector<std::string> get_channels(const std::string &channel) {
+  if (channel.find(",") != std::string::npos) {
+    return absl::StrSplit(channel, ',');
+  }
   std::regex nidaq_regex("([a-zA-Z0-9/]+)(\\d+)(:(\\d+))?$");
 
   std::smatch match_result;

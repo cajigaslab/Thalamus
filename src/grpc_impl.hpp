@@ -29,7 +29,7 @@ class Service : public thalamus_grpc::Thalamus::Service {
 
 public:
   boost::signals2::signal<void(::thalamus_grpc::Event &)> events_signal;
-  boost::signals2::signal<void(::thalamus_grpc::Text &)> log_signal;
+  boost::signals2::signal<void(const ::thalamus_grpc::Text &)> log_signal;
   // boost::signals2::signal<void(::thalamus_grpc::ObservableChange&)>
   // change_signal;
 
@@ -56,6 +56,9 @@ public:
   ::grpc::Status log(::grpc::ServerContext *context,
                      ::grpc::ServerReader<::thalamus_grpc::Text> *reader,
                      ::thalamus_grpc::Empty *) override;
+  ::grpc::Status logout(::grpc::ServerContext *context,
+                        const ::thalamus_grpc::Empty *,
+                        ::grpc::ServerWriter<::thalamus_grpc::Text> *writer) override;
   ::grpc::Status observable_bridge(
       ::grpc::ServerContext *context,
       ::grpc::ServerReaderWriter<::thalamus_grpc::ObservableChange,

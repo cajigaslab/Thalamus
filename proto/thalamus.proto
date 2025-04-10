@@ -10,6 +10,7 @@ message Empty {
 service Thalamus {
   rpc events(stream Event) returns (Empty) {}
   rpc log(stream Text) returns (Empty) {}
+  rpc logout(Empty) returns (stream Text) {}
   rpc observable_bridge(stream ObservableChange) returns (stream ObservableChange) {}
   rpc observable_bridge_v2(stream ObservableTransaction) returns (stream ObservableTransaction) {}
   rpc observable_bridge_read(ObservableReadRequest) returns (stream ObservableTransaction) {}
@@ -130,6 +131,7 @@ message NodeResponse {
 message Text {
   string text = 1;
   uint64 time = 2;
+  uint64 remote_time = 3;
 }
 
 message StorageRecord {

@@ -1,5 +1,6 @@
 #include <thalamus/tracing.hpp>
 #include <algorithm>
+#include <stop_token>
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
@@ -546,6 +547,48 @@ Service::events(::grpc::ServerContext *context,
            !context->IsCancelled()) {
     }
   }
+  return ::grpc::Status::OK;
+}
+
+struct jconnection : public boost::signals2::scoped_connection {
+  boost::signals2::scoped_connection connection;
+
+  struct State {
+    bool joining = false;
+    std::mutex mutex;
+  };
+  std::shared_ptr<State> state = std::make_shared<State>();
+
+  template<typename Signal, typename Callback>
+  jconnection(Signal& signal, Callback&& callback) {
+    connection = signal.connect([c_state=this->state, c_callback=std::forward<Callback>(callback)](auto&&... args) {
+      std::lock_guard<std::mutex> lock(c_state->mutex);
+      if(c_state->joining) {
+        return;
+      }
+      c_callback(std::forward<decltype(args)>(args)...);
+    });
+  }
+  ~jconnection() {
+    std::lock_guard<std::mutex> lock(state->mutex);
+    state->joining = true;
+  }
+};
+
+::grpc::Status Service::logout(::grpc::ServerContext *context,
+                      const ::thalamus_grpc::Empty *,
+                      ::grpc::ServerWriter<::thalamus_grpc::Text> *writer) {
+  set_current_thread_name("logout");
+  Impl::ContextGuard guard(this, context);
+
+  jconnection connection(log_signal, [writer](const ::thalamus_grpc::Text& text) {
+    writer->Write(text);
+  });
+
+  while(!context->IsCancelled()) {
+    std::this_thread::sleep_for(1s);
+  }
+
   return ::grpc::Status::OK;
 }
 
