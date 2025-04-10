@@ -1717,10 +1717,15 @@ Service::image(::grpc::ServerContext *context,
     reader->Write(response);
 
     while (reader->Read(&request)) {
-      if (request.has_node()) {
-        node_name = request.node();
-        break;
-      }
+
+      //Being able to redirect between nodes is problematic for remote nodes so I'm disabling it.
+      //If a client wants to use a remote node for stimulation it should name the remote node.  But
+      //if NodeSelectors get forwarded to the remote Thalamus instance where the remote node doesn't exist
+      //then the stimulation pipe will break and the reason it broke will not be made clear.
+      //if (request.has_node()) {
+      //  node_name = request.node();
+      //  break;
+      //}
 
       std::promise<void> response_promise;
       auto response_future = response_promise.get_future();

@@ -5,6 +5,7 @@ import typing
 import logging
 import datetime
 import typing_extensions
+import asyncio
 
 import numpy
 
@@ -12,7 +13,7 @@ from ..qt import *
 
 from . import task_context
 from .widgets import Form, ListAsTabsWidget
-from .util import wait_for, wait_for_hold, TaskResult, TaskContextProtocol, CanvasPainterProtocol
+from .util import wait_for, wait_for_hold, TaskResult, TaskContextProtocol, CanvasPainterProtocol, RenderOutput, create_task_with_exc_handling
 from .. import task_controller_pb2
 from ..config import *
 
@@ -179,6 +180,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   """
   form = Form.build(task_config, ["Name:", "Min:", "Max:"],
     Form.Uniform('Intertrial Interval', 'intertrial_timeout', 1, 1, 's'),
+    Form.Uniform('Success Interval', 'success_timeout', 1, 1, 's'),
+    Form.Uniform('Fail Interval', 'fail_timeout', 1, 1, 's'),
     Form.Uniform('Start Interval', 'start_timeout', 1, 1, 's'),
     Form.Uniform('Hold Interval', 'hold_timeout', 1, 1, 's'),
     Form.Uniform('Blink Interval', 'blink_timeout', 1, 1, 's'),
@@ -235,6 +238,26 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
 
   return result
 
+class State(enum.Enum):
+  NONE = enum.auto()
+  FAIL = enum.auto()
+  SUCCESS = enum.auto()
+  INTERTRIAL = enum.auto()
+  START_ON = enum.auto()
+  START_ACQ = enum.auto()
+  GO = enum.auto()
+  TARGS_ACQ = enum.auto()
+
+def ecc_to_px(ecc, dpi):
+  """
+  converts degrees of eccentricity to pixels relative to the optical center.
+  """
+  d_m = 0.4 # meters (approximate, TODO: get proper measurement)
+  x_m = d_m*numpy.tan(numpy.radians(ecc))
+  x_inch = x_m/0.0254
+  x_px = x_inch*dpi
+  return x_px
+
 async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-many-statements
   """
   Implementation of the state machine for the simple task
@@ -247,12 +270,24 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   """
   assert context.widget, 'Widget is None'
 
+  intertrial_timeout = datetime.timedelta(seconds=context.get_value('intertrial_timeout'))
+  success_timeout = datetime.timedelta(seconds=context.get_value('success_timeout'))
+  fail_timeout = datetime.timedelta(seconds=context.get_value('fail_timeout'))
+  start_timeout = datetime.timedelta(seconds=context.get_value('start_timeout'))
+  window_size = context.get_value('window_size')
+
+  dpi = context.config.get('dpi', None) or context.widget.logicalDpiX()
+  window_size = ecc_to_px(window_size, dpi)
+  window_size_squared = window_size*window_size
+
   sample_rate = 10e3
   sample_interval = int(1e9/sample_rate)
   all_enabled = [context.task_config['AO0 Enabled'], context.task_config['AO1 Enabled'], context.task_config['AO2 Enabled'], context.task_config['AO3 Enabled']]
   all_count = [context.task_config['AO0 Count'], context.task_config['AO1 Count'], context.task_config['AO2 Count'], context.task_config['AO3 Count']]
   all_frequency = [context.task_config['AO0 Frequency'], context.task_config['AO1 Frequency'], context.task_config['AO2 Frequency'], context.task_config['AO3 Frequency']]
   all_amplitude = [context.task_config['AO0 Amplitude'], context.task_config['AO1 Amplitude'], context.task_config['AO2 Amplitude'], context.task_config['AO3 Amplitude']]
+  mux = round(context.task_config['Mux'])
+  mux_bits = [5*((mux >> i) & 1) for i in range(4)]
 
   max_duration = max(a/b for a,b in zip(all_count, all_frequency))
   max_duration = min(max_duration, 1)
@@ -278,82 +313,98 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       stim_data.data.extend(numpy.zeros((max_samples,)))
     stim_data.spans.append(Span(begin=span_start,end=len(stim_data.data),name=f'/PXI1Slot4/ao{i}'))
     stim_data.sample_intervals.append(sample_interval)
+  
 
+  mux_signal = AnalogResponse(
+    data=mux_bits,
+    spans=[
+      Span(begin=0,end=1,name='/PXI1Slot4/port0/line0'),
+      Span(begin=1,end=2,name='/PXI1Slot4/port0/line1'),
+      Span(begin=2,end=3,name='/PXI1Slot4/port0/line2'),
+      Span(begin=3,end=4,name='/PXI1Slot4/port0/line3'),
+    ],
+    sample_intervals=[0, 0, 0, 0])
+  print(mux_signal)
+  await context.inject_analog('Mux', mux_signal)
   await context.arm_stim('Ceci', stim_declaration)
 
-  await context.sleep(datetime.timedelta(seconds=1))
-  await context.trigger_stim('Ceci')
-  await context.sleep(datetime.timedelta(seconds=1))
+  display_indicator = False
+  state = State.NONE
+  touched = False
+  async def transition(new_state: State, toggle_display=True):
+    nonlocal state, display_indicator, touched
+    state = new_state
+    touched = False
+    if toggle_display:
+      display_indicator = not display_indicator
+      context.widget.update()
+    await context.log(f'BehavState={state.name}')
 
-  return TaskResult(True)
+  async def fail():
+    await transition(State.FAIL, False)
+    await context.sleep(fail_timeout)
+    return TaskResult(False)
 
-  config = Config(
-    datetime.timedelta(seconds=context.get_value('intertrial_timeout', RANDOM_DEFAULT)),
-    datetime.timedelta(seconds=context.get_value('start_timeout', RANDOM_DEFAULT)),
-    datetime.timedelta(seconds=context.get_value('hold_timeout', RANDOM_DEFAULT)),
-    datetime.timedelta(seconds=context.get_value('blink_timeout', RANDOM_DEFAULT)),
-    datetime.timedelta(seconds=context.get_value('fail_timeout', RANDOM_DEFAULT)),
-    datetime.timedelta(seconds=context.get_value('success_timeout', RANDOM_DEFAULT)),
-    QRect(int(context.get_value('target_x', RANDOM_DEFAULT)),
-                       int(context.get_value('target_y', RANDOM_DEFAULT)),
-                       int(context.get_value('target_width', RANDOM_DEFAULT)),
-                       int(context.get_value('target_height', RANDOM_DEFAULT))),
-    context.get_color('target_color', COLOR_DEFAULT)
-  )
+  fixation_point = QPoint(int(context.widget.width()/2), int(context.widget.height()/2))
+  fixating = False
+  def gaze_handler(cursor: QPoint) -> None:
+    nonlocal fixating
+    offset = cursor - fixation_point
+    fixating = QPoint.dotProduct(offset, offset) < window_size_squared
 
-  """
-  Defining drawing and cursor behavior.
-  """
+  def touch_handler(cursor: QPoint):
+    nonlocal touched
+    if cursor.x() < 0:
+      return
+    touched = True
 
-  target_acquired = False
-  def touch_handler(cursor: QPoint) -> None:
-    nonlocal target_acquired
-    target_acquired = config.target_rectangle.contains(cursor)
+  deliver_stim = False
+  def renderer(painter: QPainter):
+    nonlocal display_indicator, deliver_stim
+    if state == State.START_ON:
+      rect = QRect(fixation_point.x() - 20, fixation_point.y() - 20, 40, 40)
+      painter.fillRect(rect, Qt.GlobalColor.red)
+    elif state == State.SUCCESS:
+      if deliver_stim and painter.output_mask == RenderOutput.SUBJECT:
+        print('STIMMING')
+        create_task_with_exc_handling(asyncio.gather(
+          context.log('STIM'),
+          context.trigger_stim('Ceci')
+        ))
+        deliver_stim = False
+        
+    if display_indicator:
+      indicator_size = 150
+      indicator_rect = QRect(
+        context.widget.width()-indicator_size,
+        context.widget.height()-indicator_size,
+        indicator_size, indicator_size)
+      painter.fillRect(indicator_rect, Qt.GlobalColor.white)
+
+    with painter.masked(RenderOutput.OPERATOR):
+      painter.setBrush(QColor(255, 255, 255, 128))
+      painter.drawEllipse(fixation_point, window_size, window_size)
 
   context.widget.touch_listener = touch_handler
-
-  show_target = False
-  def renderer(painter: CanvasPainterProtocol) -> None:
-    if show_target:
-      painter.fillRect(config.target_rectangle, config.target_color)
-
+  context.widget.gaze_listener = gaze_handler
   context.widget.renderer = renderer
 
   while True:
-    await context.log('BehavState=intertrial')
-    show_target = False
-    context.widget.update()
-    await context.sleep(config.intertrial_timeout)
+    await transition(State.INTERTRIAL)
+    await wait_for(context, lambda: touched, intertrial_timeout)
+    if touched:
+      return await fail()
 
-    await context.log('BehavState=start_on')
-    show_target = True
-    context.widget.update()
-    acquired = await wait_for(context, lambda: target_acquired, config.start_timeout)
+    await transition(State.START_ON)
+    await wait_for(context, lambda: touched or fixating, start_timeout)
+    if touched:
+      return await fail()
 
-    if acquired:
+    if fixating:
       break
 
-  # state: startacq
-  success = await wait_for_hold(context, lambda: target_acquired, config.hold_timeout, config.blink_timeout)
+  deliver_stim = True
+  await transition(State.SUCCESS)
+  await context.sleep(success_timeout)
 
-  """
-  The trial's outcome (success or failure) at this point is decided, and now
-  we can wait (optionally) by success_timeout or fail_timeout.
-  """
-  show_target = False
-  context.widget.update()
-  if success:
-    await context.log('BehavState=success')
-
-    await context.sleep(config.success_timeout)
-    return TaskResult(True)
-
-  await context.log('BehavState=fail')
-
-  await context.sleep(config.fail_timeout)
-  return TaskResult(False)
-  #pylint: disable=unreachable
-  """
-  The return value is a TaskResult instance, and this contains the success/failure,
-  as well as maybe other things that we want to add.
-  """
+  return TaskResult(True)
