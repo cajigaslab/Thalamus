@@ -1,6 +1,5 @@
 #include <thalamus/tracing.hpp>
 #include <algorithm>
-#include <stop_token>
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
@@ -1765,10 +1764,11 @@ Service::image(::grpc::ServerContext *context,
       //If a client wants to use a remote node for stimulation it should name the remote node.  But
       //if NodeSelectors get forwarded to the remote Thalamus instance where the remote node doesn't exist
       //then the stimulation pipe will break and the reason it broke will not be made clear.
-      //if (request.has_node()) {
+      if (request.has_node()) {
+        continue;
       //  node_name = request.node();
       //  break;
-      //}
+      }
 
       std::promise<void> response_promise;
       auto response_future = response_promise.get_future();
