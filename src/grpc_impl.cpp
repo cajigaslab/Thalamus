@@ -1759,6 +1759,7 @@ Service::image(::grpc::ServerContext *context,
     reader->Write(response);
 
     while (reader->Read(&request)) {
+      TRACE_EVENT("thalamus", "stim_grpc");
 
       //Being able to redirect between nodes is problematic for remote nodes so I'm disabling it.
       //If a client wants to use a remote node for stimulation it should name the remote node.  But
@@ -1775,6 +1776,7 @@ Service::image(::grpc::ServerContext *context,
       std::future<thalamus_grpc::StimResponse> inner_future;
       auto id = request.id();
       boost::asio::post(impl->io_context, [&] {
+        TRACE_EVENT("thalamus", "stim_main");
         inner_future = node->stim(std::move(request));
         response_promise.set_value();
       });

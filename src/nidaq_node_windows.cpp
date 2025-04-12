@@ -43,6 +43,7 @@ struct DAQmxAPI {
   decltype(&::DAQmxSetBufInputBufSize) DAQmxSetBufInputBufSize;
   decltype(&::DAQmxGetErrorString) DAQmxGetErrorString;
   decltype(&::DAQmxGetExtendedErrorInfo) DAQmxGetExtendedErrorInfo;
+  decltype(&::DAQmxTaskControl) DAQmxTaskControl;
 };
 static DAQmxAPI *daqmxapi;
 
@@ -219,6 +220,14 @@ static bool prepare_nidaq() {
     THALAMUS_LOG(info)
         << "Failed to load DAQmxGetExtendedErrorInfo.  NI features disabled";
     return false;
+  }
+  daqmxapi->DAQmxTaskControl =
+      reinterpret_cast<decltype(&DAQmxTaskControl)>(
+          ::GetProcAddress(nidaq_dll_handle, "DAQmxTaskControl"));
+  if (!daqmxapi->DAQmxTaskControl) {
+      THALAMUS_LOG(info)
+          << "Failed to load DAQmxTaskControl.  NI features disabled";
+      return false;
   }
 #ifdef __clang__
 #pragma clang diagnostic pop
@@ -1016,6 +1025,21 @@ struct NidaqOutputNode::Impl {
       return response;
     }
 
+    {
+        TRACE_EVENT("thalamus", "DAQmxTaskControl");
+        daq_error =
+            daqmxapi->DAQmxTaskControl(stim_task, DAQmx_Val_Task_Commit);
+        if (daq_error < 0) {
+            daqmxapi->DAQmxClearTask(stim_task);
+            stim_task = nullptr;
+            error.set_code(daq_error);
+            error.set_message(
+                absl::StrFormat("DAQmxTaskControl failed %d", daq_error));
+            THALAMUS_LOG(error) << error.message();
+            return response;
+        }
+    }
+    
     armed_stim = std::numeric_limits<int>::max();
 
     return response;
