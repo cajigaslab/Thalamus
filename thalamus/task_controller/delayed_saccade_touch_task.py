@@ -509,7 +509,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     with await next_state(context, State.INTERTRIAL, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
       await wait_for(context, lambda: touch_pos.x() > 0, config.intertrial_timeout)
       if touch_pos.x() > 0: # touching the screen during ITI = failure
-        print("Fail: touched during iti")
+        print("Fail: Touched during iti")
         with await fail_trial():
           await context.sleep(config.fail_timeout)
           return task_context.TaskResult(False)
