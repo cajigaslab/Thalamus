@@ -509,6 +509,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     with await next_state(context, State.INTERTRIAL, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
       await wait_for(context, lambda: touch_pos.x() > 0, config.intertrial_timeout)
       if touch_pos.x() > 0: # touching the screen during ITI = failure
+        print("Fail: touched during iti")
         with await fail_trial():
           await context.sleep(config.fail_timeout)
           return task_context.TaskResult(False)
@@ -522,6 +523,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       acquired = await wait_for(context, lambda: start_target_touched and start_target_gazed or blank_space_touched, config.start_timeout)
 
     if blank_space_touched:
+      print("Status: Start on; Fail: Blank space touched")
       with await fail_trial():
         await context.sleep(config.fail_timeout)
         return task_context.TaskResult(False)
@@ -540,6 +542,10 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       lambda: start_target_touched, lambda: start_target_gazed,
       config.hand_blink, config.eye_blink)
   if not success:
+    if not start_target_touched:
+      print("Status: Start Acquired; Fail: Hand left start during baseline interval")
+    if not start_target_gazed:
+      print("Status: Start Acquired; Fail: Gaze left start during baseline interval")
     with await fail_trial():
       await context.sleep(config.fail_timeout)
       return task_context.TaskResult(False)
@@ -553,6 +559,10 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       lambda: start_target_touched, lambda: start_target_gazed, 
       config.hand_blink, config.eye_blink)
   if not success:
+    if not start_target_touched:
+      print("Status: Targets on; Fail: Hand left start during cue interval")
+    if not start_target_gazed:
+      print("Status: Targets on; Fail: Gaze left start during cue interval")
     with await fail_trial():
       await context.sleep(config.fail_timeout)
       return task_context.TaskResult(False)
@@ -565,6 +575,10 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     acquired = await wait_for(context, lambda: presented_targ_gazed or not start_target_touched, config.saccade_timeout) 
 
   if not acquired or not start_target_touched:
+    if not start_target_touched:
+      print("Status: GO; Fail: Hand left start target before targ acquired")
+    if not acquired:
+      print("Status: GO; Fail: Target not acquired")
     with await fail_trial():
       await context.sleep(config.fail_timeout)
       return task_context.TaskResult(False)
@@ -576,12 +590,17 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     success = await wait_for_dual_hold(context, config.hold_timeout, 
       lambda: start_target_touched, lambda: presented_targ_gazed,
       config.hand_blink, config.eye_blink)  
-  if not presented_targ_gazed: #end trial if gaze incorrect (IG: not sure what this does)
+  if not presented_targ_gazed or not start_target_touched: 
+    if not presented_targ_gazed
+      print("Status: Targs acquired; Fail: Gaze left window during hold")
+    if not start_target_touched
+      print("Status: Targs acquired; Fail: Hand left start target during hold")
     context.behav_result = behav_result
     with await fail_trial():
       await context.sleep(config.fail_timeout)
       return task_context.TaskResult(False)
-  if not success:
+  if not success: # IG: not sure if/when this is reached
+    print("Status: Targs acquired; Fail: Incomplete target hold")
     with await fail_trial():
       await context.sleep(config.fail_timeout)
       return task_context.TaskResult(False)
@@ -599,7 +618,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
     on_time_ms = int(context.get_reward(all_reward_channels[final_i_selected_target]))
 
-    print("delivering reward %d"%(on_time_ms,) )
+    print("Delivering reward %d"%(on_time_ms,) )
     signal = thalamus_pb2.AnalogResponse(
         data=[5,0],
         spans=[thalamus_pb2.Span(begin=0,end=2,name='Reward')],
