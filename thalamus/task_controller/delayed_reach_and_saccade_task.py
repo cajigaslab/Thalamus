@@ -430,7 +430,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       path = QPainterPath()
 
       for rect in all_target_rects:
-        path.addEllipse(rect.center(), window, window)
+        path.addEllipse(QPointF(rect.center()), window, window)
 
       painter.fillPath(path, QColor(255, 255, 255, 128))
 
