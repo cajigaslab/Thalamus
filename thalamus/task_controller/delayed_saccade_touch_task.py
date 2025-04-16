@@ -600,10 +600,10 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       lambda: start_target_touched, lambda: presented_targ_gazed,
       config.hand_blink, config.eye_blink)  
   if not presented_targ_gazed or not start_target_touched: 
-    if not presented_targ_gazed
+    if not presented_targ_gazed:
       print("Status: Targs acquired; Fail: Gaze left window during hold")
       behav_result['failure_mode'] = 9
-    if not start_target_touched
+    if not start_target_touched:
       print("Status: Targs acquired; Fail: Hand left start target during hold")
       behav_result['failure_mode'] = 10
     context.behav_result = behav_result
