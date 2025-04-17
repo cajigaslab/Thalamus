@@ -481,7 +481,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   context.widget.renderer = renderer
 
   behav_result = {}
-  behav_result['failure_mode'] = 0
+  behav_result['failure_mode'] = []
   if config.is_choice:
     behav_result['presented_target_ids'] = i_periph_targs
   else:
@@ -511,7 +511,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       await wait_for(context, lambda: touch_pos.x() > 0, config.intertrial_timeout)
       if touch_pos.x() > 0: # touching the screen during ITI = failure
         print("Fail: Touched during iti")
-        behav_result['failure_mode'] = 1
+        behav_result['failure_mode'].append(1)
         with await fail_trial():
           await context.sleep(config.fail_timeout)
           return task_context.TaskResult(False)
@@ -526,7 +526,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
     if blank_space_touched:
       print("Status: Start on; Fail: Blank space touched")
-      behav_result['failure_mode'] = 2
+      behav_result['failure_mode'].append(2)
       with await fail_trial():
         await context.sleep(config.fail_timeout)
         return task_context.TaskResult(False)
@@ -547,10 +547,10 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   if not success:
     if not start_target_touched:
       print("Status: Start Acquired; Fail: Hand left start during baseline interval")
-      behav_result['failure_mode'] = 3
+      behav_result['failure_mode'].append(3)
     if not start_target_gazed:
       print("Status: Start Acquired; Fail: Gaze left start during baseline interval")
-      behav_result['failure_mode'] = 4
+      behav_result['failure_mode'].append(4)
     with await fail_trial():
       await context.sleep(config.fail_timeout)
       return task_context.TaskResult(False)
@@ -566,10 +566,10 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   if not success:
     if not start_target_touched:
       print("Status: Targets on; Fail: Hand left start during cue interval")
-      behav_result['failure_mode'] = 5
+      behav_result['failure_mode'].append(5)
     if not start_target_gazed:
       print("Status: Targets on; Fail: Gaze left start during cue interval")
-      behav_result['failure_mode'] = 6
+      behav_result['failure_mode'].append(6)
     with await fail_trial():
       await context.sleep(config.fail_timeout)
       return task_context.TaskResult(False)
@@ -584,10 +584,10 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   if not acquired or not start_target_touched:
     if not start_target_touched:
       print("Status: GO; Fail: Hand left start target before targ acquired")
-      behav_result['failure_mode'] = 7
+      behav_result['failure_mode'].append(7)
     if not acquired:
       print("Status: GO; Fail: Target not acquired")
-      behav_result['failure_mode'] = 8
+      behav_result['failure_mode'].append(8)
     with await fail_trial():
       await context.sleep(config.fail_timeout)
       return task_context.TaskResult(False)
@@ -602,17 +602,17 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   if not presented_targ_gazed or not start_target_touched: 
     if not presented_targ_gazed:
       print("Status: Targs acquired; Fail: Gaze left window during hold")
-      behav_result['failure_mode'] = 9
+      behav_result['failure_mode'].append(9)
     if not start_target_touched:
       print("Status: Targs acquired; Fail: Hand left start target during hold")
-      behav_result['failure_mode'] = 10
+      behav_result['failure_mode'].append(10)
     context.behav_result = behav_result
     with await fail_trial():
       await context.sleep(config.fail_timeout)
       return task_context.TaskResult(False)
   if not success: # IG: not sure if/when this is reached
     print("Status: Targs acquired; Fail: Incomplete target hold")
-    behav_result['failure_mode'] = 11
+    behav_result['failure_mode'].append(11)
     with await fail_trial():
       await context.sleep(config.fail_timeout)
       return task_context.TaskResult(False)
