@@ -387,7 +387,6 @@ class ControlWindow(QMainWindow):
     status_layout = QVBoxLayout()
     self.status_list = QListWidget()
     self.status_list.setObjectName('status_list')
-    #self.status_list.setHeaderLabel("Status")
     status_layout.addWidget(self.status_list)
     button = QPushButton("Reset History")
     button.setObjectName('reset_history')
