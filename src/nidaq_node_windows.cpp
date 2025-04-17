@@ -31,6 +31,7 @@ struct DAQmxAPI {
   decltype(&::DAQmxReadAnalogF64) DAQmxReadAnalogF64;
   decltype(&::DAQmxCreateTask) DAQmxCreateTask;
   decltype(&::DAQmxCreateAIVoltageChan) DAQmxCreateAIVoltageChan;
+  decltype(&::DAQmxCreateAICurrentChan) DAQmxCreateAICurrentChan;
   decltype(&::DAQmxCfgSampClkTiming) DAQmxCfgSampClkTiming;
   decltype(&::DAQmxRegisterEveryNSamplesEvent) DAQmxRegisterEveryNSamplesEvent;
   decltype(&::DAQmxWriteDigitalLines) DAQmxWriteDigitalLines;
@@ -38,6 +39,7 @@ struct DAQmxAPI {
   decltype(&::DAQmxWriteAnalogF64) DAQmxWriteAnalogF64;
   decltype(&::DAQmxCreateDOChan) DAQmxCreateDOChan;
   decltype(&::DAQmxCreateAOVoltageChan) DAQmxCreateAOVoltageChan;
+  decltype(&::DAQmxCreateAOCurrentChan) DAQmxCreateAOCurrentChan;
   decltype(&::DAQmxRegisterDoneEvent) DAQmxRegisterDoneEvent;
   decltype(&::DAQmxCfgDigEdgeStartTrig) DAQmxCfgDigEdgeStartTrig;
   decltype(&::DAQmxSetBufInputBufSize) DAQmxSetBufInputBufSize;
@@ -125,6 +127,14 @@ static bool prepare_nidaq() {
         << "Failed to load DAQmxCreateAIVoltageChan.  NI features disabled";
     return false;
   }
+  daqmxapi->DAQmxCreateAICurrentChan =
+      reinterpret_cast<decltype(&DAQmxCreateAICurrentChan)>(
+          ::GetProcAddress(nidaq_dll_handle, "DAQmxCreateAICurrentChan"));
+  if (!daqmxapi->DAQmxCreateAICurrentChan) {
+    THALAMUS_LOG(info)
+        << "Failed to load DAQmxCreateAICurrentChan.  NI features disabled";
+    return false;
+  }
   daqmxapi->DAQmxCfgSampClkTiming =
       reinterpret_cast<decltype(&DAQmxCfgSampClkTiming)>(
           ::GetProcAddress(nidaq_dll_handle, "DAQmxCfgSampClkTiming"));
@@ -179,6 +189,14 @@ static bool prepare_nidaq() {
   if (!daqmxapi->DAQmxCreateAOVoltageChan) {
     THALAMUS_LOG(info)
         << "Failed to load DAQmxCreateAOVoltageChan.  NI features disabled";
+    return false;
+  }
+  daqmxapi->DAQmxCreateAOCurrentChan =
+      reinterpret_cast<decltype(&DAQmxCreateAOCurrentChan)>(
+          ::GetProcAddress(nidaq_dll_handle, "DAQmxCreateAOCurrentChan"));
+  if (!daqmxapi->DAQmxCreateAOCurrentChan) {
+    THALAMUS_LOG(info)
+        << "Failed to load DAQmxCreateAOCurrentChan.  NI features disabled";
     return false;
   }
   daqmxapi->DAQmxRegisterDoneEvent =
@@ -377,6 +395,19 @@ struct NidaqNode::Impl {
     return 0;
   }
 
+  const std::map<std::string, int32> terminal_configs = {
+    {"Default", DAQmx_Val_Cfg_Default},
+    {"RSE", DAQmx_Val_RSE},
+    {"NRSE", DAQmx_Val_NRSE},
+    {"Diff", DAQmx_Val_Diff},
+    {"Pseudo Diff", DAQmx_Val_PseudoDiff}
+  };
+  const std::map<std::string, int32> shunt_resistor_locations = {
+    {"Default", DAQmx_Val_Default},
+    {"Internal", DAQmx_Val_Internal},
+    {"External", DAQmx_Val_External}
+  };
+
   void on_change(ObservableCollection::Action,
                  const ObservableCollection::Key &k,
                  const ObservableCollection::Value &v) {
@@ -395,6 +426,14 @@ struct NidaqNode::Impl {
         double sample_rate = state->at("Sample Rate");
         bool zero_latency = state->at("Zero Latency");
 
+        std::string terminal_config_str = state->at("Terminal Config");
+        int32 terminal_config = terminal_configs.at(terminal_config_str);
+        std::string channel_type = state->at("Channel Type");
+
+        std::string shunt_resistor_location_str = state->at("Shunt Resistor Location");
+        int32 shunt_resistor_location = shunt_resistor_locations.at(shunt_resistor_location_str);
+        double shunt_resistor_ohms = state->at("Shunt Resistor Ohms");
+
         _sample_interval = std::chrono::nanoseconds(size_t(1e9 / sample_rate));
 
         size_t polling_interval_raw = state->at("Poll Interval");
@@ -409,11 +448,21 @@ struct NidaqNode::Impl {
         auto daq_error = daqmxapi->DAQmxCreateTask(name.c_str(), &task_handle);
         THALAMUS_ASSERT(daq_error >= 0, "DAQmxCreateTask failed");
 
-        daq_error = daqmxapi->DAQmxCreateAIVoltageChan(
-            task_handle, channel.c_str(), channel_name.c_str(),
-            DAQmx_Val_Cfg_Default, -10.0, 10.0, DAQmx_Val_Volts, nullptr);
-        THALAMUS_ASSERT(daq_error >= 0, "DAQmxCreateAIVoltageChan failed %d",
-                        daq_error);
+        if(channel_type == "Voltage") {
+          daq_error = daqmxapi->DAQmxCreateAIVoltageChan(
+              task_handle, channel.c_str(), channel_name.c_str(),
+              terminal_config, -10.0, 10.0, DAQmx_Val_Volts, nullptr);
+          THALAMUS_ASSERT(daq_error >= 0, "DAQmxCreateAIVoltageChan failed %d",
+                          daq_error);
+        } else if (channel_type == "Current") {
+          daq_error = daqmxapi->DAQmxCreateAICurrentChan(
+              task_handle, channel.c_str(), channel_name.c_str(),
+              terminal_config, -10.0, 10.0, DAQmx_Val_Amps, shunt_resistor_location, shunt_resistor_ohms, nullptr);
+          THALAMUS_ASSERT(daq_error >= 0, "DAQmxCreateAIVoltageChan failed %d",
+                          daq_error);
+        } else {
+          THALAMUS_ASSERT(false, "Unexpected channel type: %s", channel_type);
+        }
         analog_buffer.resize(buffer_size);
 
         daq_error = daqmxapi->DAQmxCfgSampClkTiming(
@@ -930,17 +979,34 @@ struct NidaqOutputNode::Impl {
       channel_names.push_back(span.name());
     }
     auto physical_channels = absl::StrJoin(channel_names, ",");
-    daq_error = daqmxapi->DAQmxCreateAOVoltageChan(
-        stim_task, physical_channels.c_str(), "", -10.0, 10.0, DAQmx_Val_Volts,
-        nullptr);
-    if (daq_error < 0) {
-      daqmxapi->DAQmxClearTask(stim_task);
-      stim_task = nullptr;
-      error.set_code(daq_error);
-      error.set_message(
-          absl::StrFormat("DAQmxCreateAOVoltageChan failed %d", daq_error));
-      THALAMUS_LOG(error) << error.message();
-      return response;
+    if(declaration.data().channel_type() == thalamus_grpc::AnalogResponse_ChannelType_Voltage) {
+      daq_error = daqmxapi->DAQmxCreateAOVoltageChan(
+          stim_task, physical_channels.c_str(), "", -10.0, 10.0, DAQmx_Val_Volts,
+          nullptr);
+      if (daq_error < 0) {
+        daqmxapi->DAQmxClearTask(stim_task);
+        stim_task = nullptr;
+        error.set_code(daq_error);
+        error.set_message(
+            absl::StrFormat("DAQmxCreateAOVoltageChan failed %d", daq_error));
+        THALAMUS_LOG(error) << error.message();
+        return response;
+      }
+    } else if (declaration.data().channel_type() == thalamus_grpc::AnalogResponse_ChannelType_Current) {
+      daq_error = daqmxapi->DAQmxCreateAOCurrentChan(
+          stim_task, physical_channels.c_str(), "", -10.0, 10.0, DAQmx_Val_Amps,
+          nullptr);
+      if (daq_error < 0) {
+        daqmxapi->DAQmxClearTask(stim_task);
+        stim_task = nullptr;
+        error.set_code(daq_error);
+        error.set_message(
+            absl::StrFormat("DAQmxCreateAOCurrentChan failed %d", daq_error));
+        THALAMUS_LOG(error) << error.message();
+        return response;
+      }
+    } else {
+      THALAMUS_ASSERT(false, "Unexpected channel type: %d", declaration.data().channel_type());
     }
 
     size_t sample_interval = declaration.data().sample_intervals().empty()

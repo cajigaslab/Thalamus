@@ -37,14 +37,21 @@ macro(apply_protoc_grpc OUTPUT_SOURCES)
           -I "${PROTO_DIRECTORY}"
           ${PROTO_ABSOLUTE}
           DEPENDS "${PROTO_ABSOLUTE}" $<TARGET_FILE:protobuf::protoc>)
-    if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
-      set_source_files_properties(
-        ${${OUTPUT_SOURCES}}
-        PROPERTIES
-        COMPILE_FLAGS /wd4267)
-    endif()
     list(APPEND ${OUTPUT_SOURCES} ${apply_protoc_grpc_GENERATED})
   endforeach()
+  
+  if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
+    set_source_files_properties(
+      ${${OUTPUT_SOURCES}}
+      PROPERTIES
+      COMPILE_FLAGS /wd4267)
+  else()
+    message("apply_protoc_grpc ${OUTPUT_SOURCES} ${${OUTPUT_SOURCES}}")
+    set_source_files_properties(
+      ${${OUTPUT_SOURCES}}
+      PROPERTIES
+      COMPILE_FLAGS -Wno-invalid-offsetof)
+  endif()
 
 endmacro()
 
@@ -68,6 +75,11 @@ macro(apply_protoc OUTPUT_SOURCES)
         ${${OUTPUT_SOURCES}}
         PROPERTIES
         COMPILE_FLAGS /wd4267)
+    else()
+      set_source_files_properties(
+        ${${OUTPUT_SOURCES}}
+        PROPERTIES
+        COMPILE_FLAGS -Wno-invalid-offsetof)
     endif()
     list(APPEND ${OUTPUT_SOURCES} ${apply_protoc_grpc_GENERATED})
   endforeach()
