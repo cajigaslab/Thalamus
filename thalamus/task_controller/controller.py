@@ -475,6 +475,7 @@ class ControlWindow(QMainWindow):
     '''
     Resets the trial history
     '''
+    self.task_context.reset_trial_history()
 
   def on_load_reward_schedule(self) -> None:
     '''
