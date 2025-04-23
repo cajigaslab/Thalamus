@@ -2284,6 +2284,7 @@ struct GenicamNode::Impl {
   }
 
   ~Impl() {
+    stop_stream();
     (*state)["Running"].assign(false, [&] {});
   }
 
@@ -2585,8 +2586,8 @@ bool GenicamNode::prepare() { return true; }
 
 void GenicamNode::cleanup() {
   if (Impl::ctis) {
-    // delete Impl::ctis;
-    // delete Impl::parser;
+    delete Impl::ctis;
+    delete Impl::parser;
     Impl::ctis = nullptr;
     Impl::parser = nullptr;
   }
