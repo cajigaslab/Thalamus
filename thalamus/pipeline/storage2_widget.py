@@ -7,6 +7,57 @@ import datetime
 import asyncio
 import time
 import bisect
+import pathlib
+import typing
+
+class FilePicker(QWidget):
+  def __init__(self, value = '', parent = None):
+    super().__init__(parent)
+    self.text = QLineEdit(value)
+    button = QPushButton('...')
+    layout = QHBoxLayout()
+    layout.addWidget(self.text)
+    layout.addWidget(button)
+    self.setLayout(layout)
+
+    def on_button():
+      dir = pathlib.Path(self.value()).parent
+      file_name = QFileDialog.getOpenFileName(self.parentWidget(), "Load Reward Schedule", str(dir))
+      if file_name and file_name[0]:
+        self.text.setText(file_name[0])
+
+    button.clicked.connect(on_button)
+
+  def value(self):
+    return self.text.text()
+
+  def set_value(self, value):
+    return self.text.setText(value)
+
+
+class FileDelegate(QItemDelegate):
+  def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
+    print('createEditor')
+    return FilePicker('', parent)
+
+  def setEditorData(self, editor: QWidget, index: QModelIndex) -> None:
+    editor = typing.cast(FilePicker, editor)
+    data = index.data(Qt.ItemDataRole.EditRole)
+    print('setEditorData', data)
+    editor.set_value(data)
+
+  def setModelData(self, editor: QWidget, model: QAbstractItemModel, index: QModelIndex):
+    print('setModelData')
+    editor = typing.cast(FilePicker, editor)
+    data = editor.value()
+    model.setData(index, data, Qt.ItemDataRole.EditRole)
+
+  def sizeHint(self, option, index):
+    return FilePicker('', None).sizeHint()
+
+  def updateEditorGeometry(self, editor, option: QStyleOptionViewItem, index):
+    editor = typing.cast(FilePicker, editor)
+    editor.setGeometry(option.rect)
 
 class Storage2Widget(QWidget):
   def __init__(self, config: ObservableDict, stub: thalamus_pb2_grpc.ThalamusStub):
@@ -29,6 +80,10 @@ class Storage2Widget(QWidget):
       'Text'
     ]
 
+    if 'Files' not in config:
+      config['Files'] = []
+    files = config['Files']
+
     def node_choices(collection, key):
       if key == 'Node':
         return sorted(node['name'] for node in config_parent)
@@ -36,9 +91,16 @@ class Storage2Widget(QWidget):
     model = TreeObservableCollectionModel(sources, key_column='#', columns=columns, show_extra_values=False, is_editable=lambda *arg: True)
     delegate = TreeObservableCollectionDelegate(model, 3, node_choices)
 
+    file_model = TreeObservableCollectionModel(files, key_column='#', columns=['Path'], show_extra_values=False, is_editable=lambda *arg: True)
+    file_delegate = FileDelegate()
+
     qlist = QTreeView()
     qlist.setModel(model)
     qlist.setItemDelegate(delegate)
+
+    file_qlist = QTreeView()
+    file_qlist.setModel(file_model)
+    file_qlist.setItemDelegate(file_delegate)
 
     add_button = QPushButton('Add')
     remove_button = QPushButton('Remove')
@@ -59,6 +121,21 @@ class Storage2Widget(QWidget):
     add_button.clicked.connect(on_add)
     remove_button.clicked.connect(on_remove)
 
+    add_file_button = QPushButton('Add')
+    remove_file_button = QPushButton('Remove')
+
+    def on_add_file():
+      files.append({
+        'Path': '',
+      })
+
+    def on_remove_file():
+      for item in list(file_qlist.selectedIndexes())[::-1]:
+        del files[item.row()]
+
+    add_file_button.clicked.connect(on_add_file)
+    remove_file_button.clicked.connect(on_remove_file)
+
     if 'rec' not in config:
       config['rec'] = 0
 
@@ -71,6 +148,11 @@ class Storage2Widget(QWidget):
     button_layout = QHBoxLayout()
     button_layout.addWidget(add_button)
     button_layout.addWidget(remove_button)
+    layout.addLayout(button_layout)
+    layout.addWidget(file_qlist)
+    button_layout = QHBoxLayout()
+    button_layout.addWidget(add_file_button)
+    button_layout.addWidget(remove_file_button)
     layout.addLayout(button_layout)
     self.setLayout(layout)
     self.task = None

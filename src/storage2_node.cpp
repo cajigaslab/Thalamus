@@ -791,13 +791,22 @@ struct Storage2Node::Impl {
     }
   };
 
-  void thread_target(std::string output_file, const boost::json::value& config) {
+  void thread_target(std::string output_file, const boost::json::value& config, const std::vector<std::filesystem::path>& files) {
     set_current_thread_name("STORAGE");
 
     auto filename = prepare_storage(output_file);
+    std::filesystem::path filepath(filename);
     {
       std::ofstream config_output(filename + ".json");
       config_output << config;
+    }
+    for(auto& file : files) {
+      std::filesystem::copy_file(file, filepath.parent_path() / (
+            file.stem().filename().string()
+            + filepath.stem().extension().string()
+            + filepath.extension().string()
+            + file.extension().string()),
+          std::filesystem::copy_options::overwrite_existing);
     }
 
     Finally f([&] { close_file(); });
@@ -1036,7 +1045,17 @@ struct Storage2Node::Impl {
       root = root->parent;
     }
 
-    _thread = std::thread([&, output_file, json_object=root->to_json()] { thread_target(output_file, json_object); });
+    std::vector<std::filesystem::path> files;
+    if(state->contains("Files")) {
+      ObservableListPtr config_files = state->at("Files");
+      for(auto i : *config_files) {
+        ObservableDictPtr file = i;
+        std::string path = file->at("Path");
+        files.emplace_back(path);
+      }
+    }
+
+    _thread = std::thread([&, output_file, json_object=root->to_json(), files] { thread_target(output_file, json_object, files); });
     stats_timer.expires_after(1s);
     stats_timer.async_wait(std::bind(&Impl::on_stats_timer, this, _1));
   }
