@@ -1,6 +1,7 @@
 """
 Implementation of the simple task
 """
+import math
 import typing
 import logging
 import datetime
@@ -8,6 +9,7 @@ import typing_extensions
 import asyncio
 
 import numpy
+import scipy.signal
 
 from ..qt import *
 
@@ -34,6 +36,199 @@ Config = typing.NamedTuple('Config', [
 
 RANDOM_DEFAULT = {'min': 1, 'max':1}
 COLOR_DEFAULT = [255, 255, 255]
+
+class WaveformWidget(QWidget):
+  def __init__(self, config: ObservableDict):
+    super().__init__()
+    self.config = config
+    self.path = None
+    self.bounds = 0, 0, 0, 0
+
+    config.add_recursive_observer(lambda *args: self.update_wave(), lambda: isdeleted(self), True)
+
+  def update_wave(self):
+    try:
+      stimulation_channel = self.config['Stimulation Channel']
+
+      if stimulation_channel == "AO3":
+          dc_off = 13e-4
+      elif stimulation_channel == "AO2":
+          dc_off = 30e-4
+      elif stimulation_channel == "AO1":
+          dc_off = 10e-4
+      elif stimulation_channel == "AO0":
+          dc_off = 20e-4
+      else:
+          dc_off = 0
+
+      sample_rate_hz = 10e3
+      sample_period_s = 1/sample_rate_hz
+      amplitude_ua = self.config['Amplitude (uA)']
+      amplitude_a = amplitude_ua/1e6
+      amplitude_v = amplitude_a*1e4
+      pulse_width_us = self.config['Pulse Width (us)']
+      pulse_width_s = pulse_width_us/1e6
+      pulse_width_samples = pulse_width_s*sample_rate_hz
+      pulse_width_hz = 1/(2*pulse_width_s)
+      frequency_hz = self.config['Frequency (Hz)']
+      duration_s = 1/frequency_hz
+      num_pulses = self.config['Number of Pulses']
+      interphase_delay_ms = self.config['Interphase Delay (ms)']
+      interphase_delay_s = interphase_delay_ms/1e3
+      interphase_delay_samples = interphase_delay_s*sample_rate_hz
+      stimulation_duration_s = self.config['Stimulation Duration (s)']
+      discharge_duration_s = self.config['Discharge Duration (s)']
+      is_biphasic = self.config['Discharge Duration (ms)'] == 'Biphasic'
+      polarity = self.config['Lead'] == 'Cathode-leading'
+      repetitions = stimulation_duration_s/duration_s
+
+      cycle_time = numpy.arange(0, duration_s, sample_period_s)
+      if is_biphasic:
+        phases_per_pulse = 2
+        duty_cycle = num_pulses*phases_per_pulse*pulse_width_s*frequency_hz
+
+        duty_wave = .5*scipy.signal.square(2*numpy.pi*frequency_hz*cycle_time, duty_cycle) + .5
+        duty_wave[:-1] = duty_wave[1:]
+        duty_wave[-1] = 0
+        
+        stim_wave = scipy.signal.square(2*numpy.pi*pulse_width_hz*cycle_time, duty_cycle)
+        stim_wave *= ((polarity*amplitude_v)-dc_off)
+        stim_wave = 0.5*((polarity*amplitude_v)-dc_off)*(square + 1)
+        stim_wave[:-1] = stim_wave[1:]
+        stim_wave[-1] = 0
+        out_wave = stim_wave
+      else:
+        phases_per_pulse = 1
+        duty_cycle = num_pulses*phases_per_pulse*pulse_width_s*frequency_hz
+
+        square = .5*scipy.signal.square(2*numpy.pi*frequency_hz*cycle_time, duty_cycle) + .5
+        out_wave = ((polarity*amplitude_v)-dc_off)*square
+        out_wave[:-1] = out_wave[1:]
+        out_wave[-1] = 0
+          
+      if interphase_delay_ms:
+        phase_samples = pulse_width_samples+interphase_delay_samples
+        total_samples = phases_per_pulse*num_pulses*phase_samples
+        sample_range = numpy.range(total_samples)
+
+        out_wave = numpy.where((sample_range % phase_samples) < pulse_width_samples, out_wave, 0)
+
+      out_wave = numpy.hstack(int(repetitions)*[out_wave] + [out_wave[:int(len(out_wave)*(repetitions % 1))]])
+    except ZeroDivisionError:
+      return
+    self.out_wave = out_wave
+    self.path = QPainterPath()
+    self.path.moveTo(0, out_wave[0])
+    for i, sample in enumerate(out_wave):
+      t = i*sample_period_s
+      if t >= stimulation_duration_s:
+        break
+      self.path.lineTo(t, sample)
+
+    self.bounds = 0, numpy.min(out_wave), len(out_wave)*sample_period_s, (numpy.max(out_wave) - numpy.min(out_wave))
+    self.update()
+
+  def paintEvent(self, e: QPaintEvent):
+    if self.path is None or self.bounds[2] == 0 or self.bounds[3] == 0:
+      return
+
+    painter = QPainter(self)
+    #painter.translate(0, self.height())
+    painter.scale(self.width()/self.bounds[2], self.height()/self.bounds[3])
+    painter.drawPath(self.path)
+    #painter.drawEllipse(0, 0, 100, 100)
+
+class StimWidget(QWidget):
+  def __init__(self, config: ObservableDict):
+    super().__init__()
+    layout = QGridLayout()
+
+    def add_switch(field: str, options: typing.List[str]):
+      if field not in config:
+        config[field] = options[0]
+
+      def on_switch(button: QRadioButton):
+        if not button.isChecked:
+          return
+        
+        for option, radio in zip(options, radios):
+          if radio is button:
+            config[field] = option
+
+      radios = [QRadioButton(option) for option in options]
+      group = QButtonGroup()
+      row = layout.rowCount()
+      layout.addWidget(QLabel(f'{field}:'), row, 0)
+      for i, radio in enumerate(radios):
+        radio.clicked.connect(lambda: on_switch(radio))
+        group.addButton(radio)
+        layout.addWidget(radio, row, i+1)
+
+      def on_config_change(action, key, value):
+        if key == field:
+          for radio, option in zip(radios, options):
+            if value == option:
+              radio.setChecked(True)
+      config.add_observer(on_config_change, lambda: isdeleted(self), True)
+
+    def add_combo(field: str, options: typing.List[str]):
+      if field not in config:
+        config[field] = options[0] if options else ''
+        
+      def on_change(button: QRadioButton):
+        config[field] = combo.currentData()
+
+      combo = QComboBox()
+      combo.addItems(options)
+      combo.currentTextChanged.connect(on_change)
+      row = layout.rowCount()
+      layout.addWidget(QLabel(f'{field}:'), row, 0)
+      layout.addWidget(combo, row, 1, 1, 2)
+
+      def on_config_change(action, key, value):
+        if key == field:
+          combo.setCurrentText(value)
+      config.add_observer(on_config_change, lambda: isdeleted(self), True)
+
+      return combo
+    
+    def add_spinbox(field: str, default_value: float = 0, is_double: bool = True):
+      if field not in config:
+        config[field] = float(default_value) if is_double else int(default_value)
+        
+      def on_change(value: typing.Union[int, float]):
+        config[field] = value
+
+      spinbox = QDoubleSpinBox() if is_double else QSpinBox()
+      spinbox.setMaximum(2**30)
+      spinbox.valueChanged.connect(on_change)
+      row = layout.rowCount()
+      layout.addWidget(QLabel(f'{field}:'), row, 0)
+      layout.addWidget(spinbox, row, 1, 1, 2)
+
+      def on_config_change(action, key, value):
+        if key == field:
+          spinbox.setValue(value)
+      config.add_observer(on_config_change, lambda: isdeleted(self), True)
+
+    add_switch('Polarity', ['Monopolar', 'Bipolar'])
+    add_combo('Stimulation Channel', ['AO0', 'AO1', 'AO2', 'AO3'])
+    return_combo = add_combo('Return Channel', [])
+    return_combo.setEnabled(False)
+    add_switch('Phase', ['Biphasic', 'Monophasic'])
+    add_switch('Lead', ['Cathode-leading', 'Anode-leading'])
+    add_spinbox('Amplitude (uA)', 100)
+    add_spinbox('Pulse Width (us)', 200)
+    add_spinbox('Frequency (Hz)', 200)
+    add_spinbox('Number of Pulses', 1, False)
+    add_spinbox('Interphase Delay (ms)', 0)
+    add_spinbox('Stimulation Duration (s)', .5)
+    add_spinbox('Discharge Duration (s)', .5)
+    wave = WaveformWidget(config)
+    layout.addWidget(wave, 0, layout.columnCount(), layout.rowCount(), 1)
+
+    self.setLayout(layout)
+
 
 class ElectrodeModel(typing_extensions.Protocol):
   def set_mux(self, mux: int) -> None: ...
@@ -187,22 +382,22 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Uniform('Blink Interval', 'blink_timeout', 1, 1, 's'),
     Form.Constant('Window Size', 'window_size', 0, '\u00B0'),
     Form.Color('Color', 'target_color', QColor(255, 255, 255)),
-    Form.Bool('AO0 Enabled', 'AO0 Enabled', False),
-    Form.Constant('AO0 Amplitude (uA)', 'AO0 Amplitude', 1),
-    Form.Constant('AO0 Frequency', 'AO0 Frequency', 1),
-    Form.Constant('AO0 Count', 'AO0 Count', 1),
-    Form.Bool('AO1 Enabled', 'AO1 Enabled', False),
-    Form.Constant('AO1 Amplitude (uA)', 'AO1 Amplitude', 1),
-    Form.Constant('AO1 Frequency', 'AO1 Frequency', 1),
-    Form.Constant('AO1 Count', 'AO1 Count', 1),
-    Form.Bool('AO2 Enabled', 'AO2 Enabled', False),
-    Form.Constant('AO2 Amplitude (uA)', 'AO2 Amplitude', 1),
-    Form.Constant('AO2 Frequency', 'AO2 Frequency', 1),
-    Form.Constant('AO2 Count', 'AO2 Count', 1),
-    Form.Bool('AO3 Enabled', 'AO3 Enabled', False),
-    Form.Constant('AO3 Amplitude (uA)', 'AO3 Amplitude', 1),
-    Form.Constant('AO3 Frequency', 'AO3 Frequency', 1),
-    Form.Constant('AO3 Count', 'AO3 Count', 1),
+    #Form.Bool('AO0 Enabled', 'AO0 Enabled', False),
+    #Form.Constant('AO0 Amplitude (uA)', 'AO0 Amplitude', 1),
+    #Form.Constant('AO0 Frequency', 'AO0 Frequency', 1),
+    #Form.Constant('AO0 Count', 'AO0 Count', 1),
+    #Form.Bool('AO1 Enabled', 'AO1 Enabled', False),
+    #Form.Constant('AO1 Amplitude (uA)', 'AO1 Amplitude', 1),
+    #Form.Constant('AO1 Frequency', 'AO1 Frequency', 1),
+    #Form.Constant('AO1 Count', 'AO1 Count', 1),
+    #Form.Bool('AO2 Enabled', 'AO2 Enabled', False),
+    #Form.Constant('AO2 Amplitude (uA)', 'AO2 Amplitude', 1),
+    #Form.Constant('AO2 Frequency', 'AO2 Frequency', 1),
+    #Form.Constant('AO2 Count', 'AO2 Count', 1),
+    #Form.Bool('AO3 Enabled', 'AO3 Enabled', False),
+    #Form.Constant('AO3 Amplitude (uA)', 'AO3 Amplitude', 1),
+    #Form.Constant('AO3 Frequency', 'AO3 Frequency', 1),
+    #Form.Constant('AO3 Count', 'AO3 Count', 1),
     Form.Constant('Mux', 'Mux', 0,),
     Form.Choice('Electrode', 'Electrode', [
       ('Microprobe', 'Microprobe'),
@@ -210,6 +405,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     ])
   )
   layout.addWidget(form)
+  stim_widget = StimWidget(task_config)
+  layout.addWidget(stim_widget)
 
   mux_spinbox = form.findChild(QDoubleSpinBox, 'Mux')
   assert mux_spinbox is not None
