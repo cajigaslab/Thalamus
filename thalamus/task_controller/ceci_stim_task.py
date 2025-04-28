@@ -188,19 +188,19 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Constant('Window Size', 'window_size', 0, '\u00B0'),
     Form.Color('Color', 'target_color', QColor(255, 255, 255)),
     Form.Bool('AO0 Enabled', 'AO0 Enabled', False),
-    Form.Constant('AO0 Amplitude', 'AO0 Amplitude', 1),
+    Form.Constant('AO0 Amplitude (uA)', 'AO0 Amplitude', 1),
     Form.Constant('AO0 Frequency', 'AO0 Frequency', 1),
     Form.Constant('AO0 Count', 'AO0 Count', 1),
     Form.Bool('AO1 Enabled', 'AO1 Enabled', False),
-    Form.Constant('AO1 Amplitude', 'AO1 Amplitude', 1),
+    Form.Constant('AO1 Amplitude (uA)', 'AO1 Amplitude', 1),
     Form.Constant('AO1 Frequency', 'AO1 Frequency', 1),
     Form.Constant('AO1 Count', 'AO1 Count', 1),
     Form.Bool('AO2 Enabled', 'AO2 Enabled', False),
-    Form.Constant('AO2 Amplitude', 'AO2 Amplitude', 1),
+    Form.Constant('AO2 Amplitude (uA)', 'AO2 Amplitude', 1),
     Form.Constant('AO2 Frequency', 'AO2 Frequency', 1),
     Form.Constant('AO2 Count', 'AO2 Count', 1),
     Form.Bool('AO3 Enabled', 'AO3 Enabled', False),
-    Form.Constant('AO3 Amplitude', 'AO3 Amplitude', 1),
+    Form.Constant('AO3 Amplitude (uA)', 'AO3 Amplitude', 1),
     Form.Constant('AO3 Frequency', 'AO3 Frequency', 1),
     Form.Constant('AO3 Count', 'AO3 Count', 1),
     Form.Constant('Mux', 'Mux', 0,),
@@ -280,14 +280,26 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   window_size = ecc_to_px(window_size, dpi)
   window_size_squared = window_size*window_size
 
+  volt_per_amp = 10e3
+  amp_per_uamp = 1e-6
+  volt_per_uamp = amp_per_uamp*volt_per_amp
+
   sample_rate = 10e3
   sample_interval = int(1e9/sample_rate)
   all_enabled = [context.task_config['AO0 Enabled'], context.task_config['AO1 Enabled'], context.task_config['AO2 Enabled'], context.task_config['AO3 Enabled']]
   all_count = [context.task_config['AO0 Count'], context.task_config['AO1 Count'], context.task_config['AO2 Count'], context.task_config['AO3 Count']]
   all_frequency = [context.task_config['AO0 Frequency'], context.task_config['AO1 Frequency'], context.task_config['AO2 Frequency'], context.task_config['AO3 Frequency']]
-  all_amplitude = [context.task_config['AO0 Amplitude'], context.task_config['AO1 Amplitude'], context.task_config['AO2 Amplitude'], context.task_config['AO3 Amplitude']]
+  all_amplitude = numpy.array([
+    context.task_config['AO0 Amplitude'],
+    context.task_config['AO1 Amplitude'],
+    context.task_config['AO2 Amplitude'],
+    context.task_config['AO3 Amplitude']])*volt_per_uamp
+  print(all_amplitude)
+    
   mux = round(context.task_config['Mux'])
   mux_bits = [5*((mux >> i) & 1) for i in range(4)]
+  stim_bits = [5 if e else 0 for e in all_enabled]
+  stim_bits = [stim_bits[1], stim_bits[3], stim_bits[2], stim_bits[0]]
 
   max_duration = max(a/b for a,b in zip(all_count, all_frequency))
   max_duration = min(max_duration, 1)
@@ -296,6 +308,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   #stim_request = StimRequest()
   stim_declaration: StimDeclaration = StimDeclaration()
   stim_data: AnalogResponse = stim_declaration.data
+  stim_data.channel_type = AnalogResponse.ChannelType.Voltage
   for i, values in enumerate(zip(all_enabled, all_count, all_frequency, all_amplitude)):
     enabled, count, frequency, amplitude = values
     span_start = len(stim_data.data)
@@ -316,14 +329,19 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   
 
   mux_signal = AnalogResponse(
-    data=mux_bits,
+    data=mux_bits + stim_bits + [5],
     spans=[
-      Span(begin=0,end=1,name='/PXI1Slot4/port0/line0'),
-      Span(begin=1,end=2,name='/PXI1Slot4/port0/line1'),
-      Span(begin=2,end=3,name='/PXI1Slot4/port0/line2'),
-      Span(begin=3,end=4,name='/PXI1Slot4/port0/line3'),
+      Span(begin=0,end=1,name='/PXI1Slot4/port0/line20'),
+      Span(begin=1,end=2,name='/PXI1Slot4/port0/line29'),
+      Span(begin=2,end=3,name='/PXI1Slot4/port0/line19'),
+      Span(begin=3,end=4,name='/PXI1Slot4/port0/line26'),
+      Span(begin=4,end=5,name='/PXI1Slot4/port0/line7'),
+      Span(begin=5,end=6,name='/PXI1Slot4/port0/line2'),
+      Span(begin=6,end=7,name='/PXI1Slot4/port0/line1'),
+      Span(begin=7,end=8,name='/PXI1Slot4/port0/line6'),
+      Span(begin=8,end=9,name='/PXI1Slot4/port0/line8'),
     ],
-    sample_intervals=[0, 0, 0, 0])
+    sample_intervals=[0, 0, 0, 0, 0, 0, 0, 0, 0])
   print(mux_signal)
   await context.inject_analog('Mux', mux_signal)
   await context.arm_stim('Ceci', stim_declaration)
