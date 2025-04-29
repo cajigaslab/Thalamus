@@ -68,21 +68,26 @@ class WaveformWidget(QWidget):
       amplitude_v = amplitude_a*1e4
       pulse_width_us = self.config['Pulse Width (us)']
       pulse_width_s = pulse_width_us/1e6
-      pulse_width_samples = pulse_width_s*sample_rate_hz
+      pulse_width_samples = int(pulse_width_s*sample_rate_hz)
+      if pulse_width_samples == 0:
+        return
       pulse_width_hz = 1/(2*pulse_width_s)
       frequency_hz = self.config['Frequency (Hz)']
       duration_s = 1/frequency_hz
       num_pulses = self.config['Number of Pulses']
       interphase_delay_ms = self.config['Interphase Delay (ms)']
       interphase_delay_s = interphase_delay_ms/1e3
-      interphase_delay_samples = interphase_delay_s*sample_rate_hz
+      interphase_delay_samples = int(interphase_delay_s*sample_rate_hz)
       stimulation_duration_s = self.config['Stimulation Duration (s)']
       discharge_duration_s = self.config['Discharge Duration (s)']
-      is_biphasic = self.config['Discharge Duration (ms)'] == 'Biphasic'
-      polarity = self.config['Lead'] == 'Cathode-leading'
-      repetitions = stimulation_duration_s/duration_s
+      is_biphasic = self.config['Phase'] == 'Biphasic'
+      polarity = 1 if self.config['Lead'] == 'Cathode-leading' else -1
+      repetitions = int(stimulation_duration_s/duration_s)
+      if repetitions == 0:
+        return
 
       cycle_time = numpy.arange(0, duration_s, sample_period_s)
+      cycle_samples = len(cycle_time)
       if is_biphasic:
         phases_per_pulse = 2
         duty_cycle = num_pulses*phases_per_pulse*pulse_width_s*frequency_hz
@@ -91,11 +96,13 @@ class WaveformWidget(QWidget):
         duty_wave[:-1] = duty_wave[1:]
         duty_wave[-1] = 0
         
-        stim_wave = scipy.signal.square(2*numpy.pi*pulse_width_hz*cycle_time, duty_cycle)
+        stim_wave = scipy.signal.square(2*numpy.pi*pulse_width_hz*cycle_time)
+        pulse_width_samples = numpy.where(numpy.diff(stim_wave) < 0)[0]
+        if len(pulse_width_samples) == 0:
+          return
+        pulse_width_samples = pulse_width_samples[0]+1
         stim_wave *= ((polarity*amplitude_v)-dc_off)
-        stim_wave = 0.5*((polarity*amplitude_v)-dc_off)*(square + 1)
-        stim_wave[:-1] = stim_wave[1:]
-        stim_wave[-1] = 0
+        stim_wave *= duty_wave
         out_wave = stim_wave
       else:
         phases_per_pulse = 1
@@ -107,25 +114,33 @@ class WaveformWidget(QWidget):
         out_wave[-1] = 0
           
       if interphase_delay_ms:
-        phase_samples = pulse_width_samples+interphase_delay_samples
-        total_samples = phases_per_pulse*num_pulses*phase_samples
-        sample_range = numpy.range(total_samples)
+        interphase_delay = numpy.zeros((interphase_delay_samples,))
+        
+        chunks = []
+        for i in range(0, len(out_wave), pulse_width_samples):
+          chunks.append(out_wave[i:i+pulse_width_samples])
+          chunks.append(interphase_delay)
+          cycle_samples += len(interphase_delay)
+        out_wave = numpy.hstack(chunks)
 
-        out_wave = numpy.where((sample_range % phase_samples) < pulse_width_samples, out_wave, 0)
-
-      out_wave = numpy.hstack(int(repetitions)*[out_wave] + [out_wave[:int(len(out_wave)*(repetitions % 1))]])
+      out_wave = numpy.hstack(int(repetitions)*[out_wave])
+      #numpy.savetxt("foo.csv", out_wave)
     except ZeroDivisionError:
       return
+    if len(out_wave) == 0:
+      return
+    
+    self.scales = 1000/(duration_s), 1000/(numpy.max(out_wave)-numpy.min(out_wave))
     self.out_wave = out_wave
     self.path = QPainterPath()
     self.path.moveTo(0, out_wave[0])
     for i, sample in enumerate(out_wave):
       t = i*sample_period_s
-      if t >= stimulation_duration_s:
+      if i >= cycle_samples:
         break
-      self.path.lineTo(t, sample)
+      self.path.lineTo(self.scales[0]*t, self.scales[1]*sample)
 
-    self.bounds = 0, numpy.min(out_wave), len(out_wave)*sample_period_s, (numpy.max(out_wave) - numpy.min(out_wave))
+    self.bounds = 0, numpy.min(out_wave), t, (numpy.max(out_wave) - numpy.min(out_wave))
     self.update()
 
   def paintEvent(self, e: QPaintEvent):
@@ -133,8 +148,11 @@ class WaveformWidget(QWidget):
       return
 
     painter = QPainter(self)
-    #painter.translate(0, self.height())
-    painter.scale(self.width()/self.bounds[2], self.height()/self.bounds[3])
+    painter.translate(0, .05*self.height())
+    painter.scale(1, .9)
+    painter.translate(0, self.height())
+    painter.scale(self.width()/(self.scales[0]*self.bounds[2]), -self.height()/(self.scales[1]*self.bounds[3]))
+    painter.translate(-self.scales[0]*self.bounds[0], -self.scales[1]*self.bounds[1])
     painter.drawPath(self.path)
     #painter.drawEllipse(0, 0, 100, 100)
 
@@ -148,7 +166,7 @@ class StimWidget(QWidget):
         config[field] = options[0]
 
       def on_switch(button: QRadioButton):
-        if not button.isChecked:
+        if not button.isChecked():
           return
         
         for option, radio in zip(options, radios):
@@ -156,11 +174,11 @@ class StimWidget(QWidget):
             config[field] = option
 
       radios = [QRadioButton(option) for option in options]
-      group = QButtonGroup()
+      group = QButtonGroup(self)
       row = layout.rowCount()
       layout.addWidget(QLabel(f'{field}:'), row, 0)
       for i, radio in enumerate(radios):
-        radio.clicked.connect(lambda: on_switch(radio))
+        radio.clicked.connect(lambda checked, radio=radio: on_switch(radio))
         group.addButton(radio)
         layout.addWidget(radio, row, i+1)
 
