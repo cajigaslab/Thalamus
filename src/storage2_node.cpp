@@ -801,6 +801,10 @@ struct Storage2Node::Impl {
       config_output << config;
     }
     for(auto& file : files) {
+      if(!std::filesystem::exists(file)) {
+        THALAMUS_LOG(error) << "File doesn't exist: " << file.string();
+        continue;
+      }
       std::filesystem::copy_file(file, filepath.parent_path() / (
             file.stem().filename().string()
             + filepath.stem().extension().string()
