@@ -74,6 +74,14 @@ class CentralWidget(QWidget):
     layout.setRowStretch(1, 0)
     clear_button.clicked.connect(target.canvas.clear_accumulation)
 
+    # Adding extra button to clear the canvas
+    def on_test():
+      target.canvas.do_clear = True
+    test_button = QPushButton('Test')
+    layout.addWidget(test_button, 1, 1)
+    layout.setRowStretch(1, 0)
+    test_button.clicked.connect(on_test)
+
     quadrants = [
       ("I", 2, 0),
       ("II", 2, 2),

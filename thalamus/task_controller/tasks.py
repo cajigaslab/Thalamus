@@ -26,8 +26,8 @@ from . import avatar_task
 from . import imagined_task
 from . import feedback_task
 from . import gaussian_task
+from . import center_fixation_task
 from . import psychopy_task
-from . import gaussian_task
 from .task_context import TaskDescription
 
 DESCRIPTIONS = [
@@ -104,7 +104,9 @@ DESCRIPTIONS = [
     gaussian_task.create_widget,
     gaussian_task.run),
     #add gazeanchoring stim task
-
+  TaskDescription('center_fixation_task', 'Center Fixation',
+    center_fixation_task.create_widget,
+    center_fixation_task.run),
   TaskDescription('psychopy', 'Psychopy',
     psychopy_task.create_widget,
     psychopy_task.run)
