@@ -1,7 +1,7 @@
+#include <thalamus/tracing.hpp>
 #include <alpha_omega_node.hpp>
 #include <modalities_util.hpp>
 #include <regex>
-#include <thalamus/tracing.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -332,11 +332,43 @@ struct AlphaOmegaNode::Impl {
   static std::chrono::nanoseconds next_duration;
   thalamus::vector<std::chrono::nanoseconds> sample_interval_overrides;
   std::chrono::nanoseconds time;
+  std::string NAME;
+  std::string ID;
+  std::string SELECTED;
+  std::string FREQUENCY;
 
   Impl(boost::asio::io_context &_io_context, ObservableDictPtr _state,
        AlphaOmegaNode *_outer)
       : io_context(_io_context), ao_timer(_io_context), timer(_io_context),
-        channel_count(0), state(_state), outer(_outer) {}
+        channel_count(0), state(_state), outer(_outer) {
+
+    //At some point I started showing these keys in the UI so I switched to capitalized keys.  The restore lab are the
+    //only ones using Alpha Omega so I thought it would be easy to update their config files.  However, the lower case
+    //names keep popping up, possibly copied and pasted from older configs.
+    //
+    //The below code checks the capitalization in the config and uses lower case keys if they are present.
+
+    auto is_upper = true;
+    if(state->contains("all_channels")) {
+      ObservableDictPtr all_channels = state->at("all_channels");
+      if(!all_channels->empty()) {
+        ObservableDictPtr first = all_channels->begin()->second;
+        is_upper = first->contains("Name");
+      }
+    }
+
+    if(is_upper) {
+      NAME = "Name";
+      ID = "ID";
+      SELECTED = "Selected";
+      FREQUENCY = "Frequency";
+    } else {
+      NAME = "name";
+      ID = "id";
+      SELECTED = "selected";
+      FREQUENCY = "frequency";
+    }
+  }
 
   void load_channels() {
     THALAMUS_LOG(info) << "loading channels";
@@ -346,13 +378,13 @@ struct AlphaOmegaNode::Impl {
       for (const auto &i : name_to_id) {
         THALAMUS_LOG(info) << i.first << " " << i.second;
         auto current_channel = std::make_shared<ObservableDict>();
-        (*current_channel)["Name"].assign(i.first);
-        (*current_channel)["ID"].assign(i.second);
+        (*current_channel)[NAME].assign(i.first);
+        (*current_channel)[ID].assign(i.second);
         auto interval = channel_sample_interval(i.second);
         auto frequency =
             std::chrono::nanoseconds::period::den / interval.count();
-        (*current_channel)["Frequency"].assign(frequency);
-        (*current_channel)["Selected"].assign(false);
+        (*current_channel)[FREQUENCY].assign(frequency);
+        (*current_channel)[SELECTED].assign(false);
         (*current)[i.second].assign(current_channel);
       }
       (*state)["all_channels"].assign(current, [current] {
@@ -544,9 +576,9 @@ struct AlphaOmegaNode::Impl {
     ObservableDictPtr all_channels = state->at("all_channels");
     for (auto i = all_channels->begin(); i != all_channels->end(); ++i) {
       ObservableDictPtr value = i->second;
-      bool is_selected = value->at("Selected");
-      long long int id = value->at("ID");
-      std::string name = value->at("Name");
+      bool is_selected = value->at(SELECTED);
+      long long int id = value->at(ID);
+      std::string name = value->at(NAME);
       if (is_selected) {
         channels.emplace_back(int(id), name);
       }

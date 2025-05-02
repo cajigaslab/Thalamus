@@ -75,6 +75,10 @@ public:
   observable_bridge_write(::grpc::ServerContext *context,
                           const ::thalamus_grpc::ObservableTransaction *request,
                           ::thalamus_grpc::Empty *response) override;
+  ::grpc::Status
+  get_redirect(::grpc::ServerContext *context,
+           const ::thalamus_grpc::Empty *request,
+           ::thalamus_grpc::Redirect *response) override;
 
   ::grpc::Status
   graph(::grpc::ServerContext *context,

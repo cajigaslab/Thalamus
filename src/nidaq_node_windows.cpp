@@ -1,3 +1,4 @@
+#include <thalamus/tracing.hpp>
 #include <base64.hpp>
 #include <cstdint>
 #include <grpc_impl.hpp>
@@ -6,7 +7,6 @@
 #include <numeric>
 #include <regex>
 #include <thalamus/thread.hpp>
-#include <thalamus/tracing.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push

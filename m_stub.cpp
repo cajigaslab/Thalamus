@@ -1,0 +1,1 @@
+void thalamus_m_stub() {}

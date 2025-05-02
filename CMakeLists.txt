@@ -193,6 +193,8 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/xsens_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/storage_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/storage_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/storage2_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/storage2_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/run_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/run_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/run2_node.hpp"
@@ -263,7 +265,8 @@ target_sources(thalamus PRIVATE
                "${CMAKE_SOURCE_DIR}/src/chessboard_node.cpp")
 
 if(WIN32)
-  target_compile_definitions(thalamus PRIVATE _WIN32_WINNT=0x0A00 _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN)
+  target_compile_definitions(thalamus PRIVATE _WIN32_WINNT=0x0A00 _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN BOOST_STACKTRACE_USE_WINDBG)
+  target_link_libraries(thalamus dbgeng ole32)
   if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
     target_compile_options(thalamus PRIVATE /bigobj)
   endif()

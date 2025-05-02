@@ -249,6 +249,8 @@ class TreeObservableCollectionModel(QAbstractItemModel):
     keys = self.item_to_keys[id(item)]
     if index.column() >= self.prefix_columns:
       key = self.columns[index.column()-self.prefix_columns]
+      if len(keys) <= index.row():
+        return flags
       row_key = keys[index.row()]
       #print('flags10', item, key, row_key)
       item = item.get(row_key, None)
@@ -344,6 +346,7 @@ class TreeObservableCollectionDelegate(QItemDelegate):
     choices = self.choices(item, key)
     if choices is not None:
       result = QComboBox(parent)
+      result.setEditable(True)
       return result
 
     value = item[key] if key in item else None

@@ -41,6 +41,8 @@ from .sync_widget import SyncWidget
 from .stim_widget import StimWidget
 from .analog_widget import AnalogWidget
 from .storage_widget import StorageWidget
+from .storage2_widget import Storage2Widget
+from .run2_widget import Run2Widget
 from ..util import NodeSelector
 from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
@@ -149,13 +151,37 @@ class AlphaOmegaTableModel(QAbstractTableModel):
 def create_alpha_omega_widget(node: ObservableDict, stub: thalamus_pb2_grpc.ThalamusStub):
   if 'all_channels' not in node:
     node['all_channels'] = {}
+
   all_channels = node['all_channels']
+
+  #At some point I started showing these keys in the UI so I switched to capitalized keys.  The restore lab are the
+  #only ones using Alpha Omega so I thought it would be easy to update their config files.  However, the lower case
+  #names keep popping up, possibly copied and pasted from older configs.  It's been a disaster.
+  #
+  #The below code checks the capitalization in the config and uses lower case keys if they are present.
+
+  if all_channels:
+    first_channel = next(iter(all_channels.values()))
+    is_upper = 'Name' in first_channel
+  else:
+    is_upper = True
+
+  if is_upper:
+    key_column = 'ID'
+    columns = ['Name', 'Frequency', 'Selected']
+    selected = 'Selected'
+  else:
+    key_column = 'id'
+    columns = ['name', 'frequency', 'selected']
+    selected = 'selected'
+
+
   result = QWidget()
   layout = QVBoxLayout()
   refresh_button = QPushButton('Refresh')
   tree = QTableView()
   tree.verticalHeader().hide()
-  model = TreeObservableCollectionModel(all_channels, key_column="ID", columns=['Name', 'Frequency', 'Selected'], show_extra_values=False, is_editable=lambda c, k: k == 'Selected')
+  model = TreeObservableCollectionModel(all_channels, key_column=key_column, columns=columns, show_extra_values=False, is_editable=lambda c, k: k == selected)
   sort_model = QSortFilterProxyModel()
   sort_model.setSourceModel(model)
   tree.setModel(sort_model)
@@ -252,6 +278,12 @@ FACTORIES = {
     UserData(UserDataType.CHECK_BOX, 'Compress Video', False, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, [])
   ]),
+  'STORAGE2': Factory(Storage2Widget, [
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+    UserData(UserDataType.DEFAULT, 'Output File', 'test.tha', []),
+    UserData(UserDataType.CHECK_BOX, 'Compress Analog', False, []),
+    UserData(UserDataType.CHECK_BOX, 'Compress Video', False, []),
+  ]),
   'STARTER': Factory(None, [
     UserData(UserDataType.SPINBOX, 'Channel',  0, []),
     UserData(UserDataType.DEFAULT, 'Source', '', []),
@@ -262,7 +294,7 @@ FACTORIES = {
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.DEFAULT, 'Targets', '', []),
   ]),
-  'RUNNER2': Factory(create_run_widget, [
+  'RUNNER2': Factory(Run2Widget, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
   ]),
   'OPHANIM': Factory(None, [

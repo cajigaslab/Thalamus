@@ -1,5 +1,5 @@
-#include <oculomatic_node.hpp>
 #include <thalamus/tracing.hpp>
+#include <oculomatic_node.hpp>
 #include <thread_pool.hpp>
 
 #include <modalities_util.hpp>
@@ -187,7 +187,7 @@ struct OculomaticNode::Impl {
     TRACE_EVENT_END("thalamus");
     pool.push([width, event_id, height, frame_id = next_input_frame++,
                current_need_recenter, out, sample_time, frame_interval,
-               render_thresholded = this->render_thresholded,
+               current_render_thresholded = this->render_thresholded,
                &this_current_result = current_result,
                &this_mat_pool = this->mat_pool,
                &this_output_frames = this->output_frames,
@@ -218,7 +218,7 @@ struct OculomaticNode::Impl {
         cv::cvtColor(moved_in, *out, cv::COLOR_GRAY2RGB);
       };
 
-      if(render_thresholded) {
+      if(current_render_thresholded) {
         do_threshold();
         do_color();
       } else {
@@ -527,7 +527,7 @@ boost::json::value OculomaticNode::process(const boost::json::value & request) {
   }
 
   auto object = request.as_object();
-  if(object.contains("type") && object["type"] == "recenter" || object.contains("keydown")) {
+  if((object.contains("type") && object["type"] == "recenter") || object.contains("keydown")) {
     impl->need_recenter = true;
   }
 

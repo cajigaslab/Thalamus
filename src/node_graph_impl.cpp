@@ -24,6 +24,7 @@
 #include <spikeglx_node.hpp>
 #include <stim_printer_node.hpp>
 #include <sync_node.hpp>
+#include <storage2_node.hpp>
 #include <task_controller_node.hpp>
 #include <thalamus_config.h>
 #include <thread_pool.hpp>
@@ -118,6 +119,7 @@ public:
         {"HAND_ENGINE", new NodeFactory<HandEngineNode>()},
         {"WAVE", new NodeFactory<WaveGeneratorNode>()},
         {"STORAGE", new NodeFactory<StorageNode>()},
+        {"STORAGE2", new NodeFactory<Storage2Node>()},
         {"RUNNER", new NodeFactory<RunNode>()},
         {"RUNNER2", new NodeFactory<Run2Node>()},
         {"OPHANIM", new NodeFactory<OphanimNode>()},

@@ -2,7 +2,7 @@
 #include <fstream>
 #include <image_node.hpp>
 #include <modalities_util.hpp>
-#include <storage_node.hpp>
+#include <storage2_node.hpp>
 #include <text_node.hpp>
 #include <thalamus/async.hpp>
 #include <thalamus/thread.hpp>
@@ -74,7 +74,7 @@ static int get_rec_number(const std::filesystem::path &name,
   return i;
 }
 
-struct StorageNode::Impl {
+struct Storage2Node::Impl {
   struct AnalogStorage {
     std::string name;
     int num_channels;
@@ -99,14 +99,14 @@ struct StorageNode::Impl {
   thalamus::vector<std::string> names;
   std::chrono::nanoseconds metrics_time;
   std::chrono::steady_clock::time_point last_publish;
-  StorageNode *outer;
+  Storage2Node *outer;
   std::map<std::pair<int, int>, size_t> offsets;
   boost::asio::steady_timer stats_timer;
   boost::asio::io_context &io_context;
   ThreadPool &pool;
 
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
-       NodeGraph *_graph, StorageNode *_outer)
+       NodeGraph *_graph, Storage2Node *_outer)
       : state(_state), graph(_graph), outer(_outer), stats_timer(_io_context),
         io_context(_io_context), pool(graph->get_thread_pool()) {
     using namespace std::placeholders;
@@ -125,7 +125,7 @@ struct StorageNode::Impl {
   }
 
   void on_event(const thalamus_grpc::Event &e) {
-    TRACE_EVENT("thalamus", "StorageNode::on_event");
+    TRACE_EVENT("thalamus", "Storage2Node::on_event");
     if (!is_running) {
       return;
     }
@@ -134,7 +134,7 @@ struct StorageNode::Impl {
 
     thalamus_grpc::StorageRecord record;
     {
-      TRACE_EVENT("thalamus", "StorageNode::on_event(build record)");
+      TRACE_EVENT("thalamus", "Storage2Node::on_event(build record)");
       auto body = record.mutable_event();
       *body = e;
       record.set_time(e.time());
@@ -144,7 +144,7 @@ struct StorageNode::Impl {
   }
 
   void on_log(const thalamus_grpc::Text &e) {
-    TRACE_EVENT("thalamus", "StorageNode::on_log");
+    TRACE_EVENT("thalamus", "Storage2Node::on_log");
     if (!is_running) {
       return;
     }
@@ -153,7 +153,7 @@ struct StorageNode::Impl {
 
     thalamus_grpc::StorageRecord record;
     {
-      TRACE_EVENT("thalamus", "StorageNode::on_event(build record)");
+      TRACE_EVENT("thalamus", "Storage2Node::on_event(build record)");
       auto body = record.mutable_text();
       *body = e;
       record.set_time(e.time());
@@ -170,7 +170,7 @@ struct StorageNode::Impl {
       return;
     }
 
-    TRACE_EVENT("thalamus", "StorageNode::on_analog_data");
+    TRACE_EVENT("thalamus", "Storage2Node::on_analog_data");
 
     thalamus_grpc::StorageRecord record;
     auto body = record.mutable_analog();
@@ -179,7 +179,7 @@ struct StorageNode::Impl {
     }
 
     {
-      TRACE_EVENT("thalamus", "StorageNode::on_analog_data(build record)");
+      TRACE_EVENT("thalamus", "Storage2Node::on_analog_data(build record)");
       record.set_time(uint64_t(locked_analog->time().count()));
       record.set_node(name);
       body->set_time(uint64_t(locked_analog->time().count()));
@@ -203,8 +203,10 @@ struct StorageNode::Impl {
           std::string channel_name(channel_name_view.begin(),
                                    channel_name_view.end());
 
-          update_metrics(metrics_index, i, data.size(),
-                         [&] { return name + "(" + channel_name + ")"; });
+          if(node != outer) {
+            update_metrics(metrics_index, i, data.size(),
+                           [&] { return name + "(" + channel_name + ")"; });
+          }
           auto span = body->add_spans();
 
           if constexpr (std::is_same<typename decltype(data)::value_type,
@@ -261,18 +263,20 @@ struct StorageNode::Impl {
     metrics.at(offset->second).first += double(count);
   }
 
-  void on_image_data(Node *, const std::string &name, ImageNode *locked_analog,
+  void on_image_data(Node * node, const std::string &name, ImageNode *locked_analog,
                      size_t metrics_index) {
     if (!is_running || !locked_analog->has_image_data()) {
       return;
     }
 
-    TRACE_EVENT("thalamus", "StorageNode::on_image_data");
-    update_metrics(int(metrics_index), 0, 1, [&] { return name; });
+    TRACE_EVENT("thalamus", "Storage2Node::on_image_data");
+    if(node != outer) {
+      update_metrics(int(metrics_index), 0, 1, [&] { return name; });
+    }
 
     thalamus_grpc::StorageRecord record;
     {
-      TRACE_EVENT("thalamus", "StorageNode::on_image_data(build record)");
+      TRACE_EVENT("thalamus", "Storage2Node::on_image_data(build record)");
       auto body = record.mutable_image();
       body->set_width(uint32_t(locked_analog->width()));
       body->set_height(uint32_t(locked_analog->height()));
@@ -308,18 +312,20 @@ struct StorageNode::Impl {
     queue_record(std::move(record));
   }
 
-  void on_text_data(Node *, const std::string &name, TextNode *locked_text,
+  void on_text_data(Node * node, const std::string &name, TextNode *locked_text,
                     size_t metrics_index) {
     if (!is_running || !locked_text->has_text_data()) {
       return;
     }
 
-    TRACE_EVENT("thalamus", "StorageNode::on_text_data");
+    TRACE_EVENT("thalamus", "Storage2Node::on_text_data");
 
-    update_metrics(int(metrics_index), 0, 1, [&] { return name; });
+    if(node != outer) {
+      update_metrics(int(metrics_index), 0, 1, [&] { return name; });
+    }
     thalamus_grpc::StorageRecord record;
     {
-      TRACE_EVENT("thalamus", "StorageNode::on_text_data(build record)");
+      TRACE_EVENT("thalamus", "Storage2Node::on_text_data(build record)");
       auto body = record.mutable_text();
       auto text = locked_text->text();
 
@@ -332,18 +338,20 @@ struct StorageNode::Impl {
     queue_record(std::move(record));
   }
 
-  void on_xsens_data(Node *, const std::string &name,
+  void on_xsens_data(Node * node, const std::string &name,
                      MotionCaptureNode *locked_xsens, size_t metrics_index) {
     if (!is_running || !locked_xsens->has_motion_data()) {
       return;
     }
 
-    TRACE_EVENT("thalamus", "StorageNode::on_motion_data");
-    update_metrics(int(metrics_index), 0, 1, [&] { return name; });
+    TRACE_EVENT("thalamus", "Storage2Node::on_motion_data");
+    if(node != outer) {
+      update_metrics(int(metrics_index), 0, 1, [&] { return name; });
+    }
 
     thalamus_grpc::StorageRecord record;
     {
-      TRACE_EVENT("thalamus", "StorageNode::on_motion_data(build record)");
+      TRACE_EVENT("thalamus", "Storage2Node::on_motion_data(build record)");
       auto body = record.mutable_xsens();
       body->set_pose_name(locked_xsens->pose_name());
       auto segments = locked_xsens->segments();
@@ -783,13 +791,26 @@ struct StorageNode::Impl {
     }
   };
 
-  void thread_target(std::string output_file, const boost::json::value& config) {
+  void thread_target(std::string output_file, const boost::json::value& config, const std::vector<std::filesystem::path>& files) {
     set_current_thread_name("STORAGE");
 
     auto filename = prepare_storage(output_file);
+    std::filesystem::path filepath(filename);
     {
       std::ofstream config_output(filename + ".json");
       config_output << config;
+    }
+    for(auto& file : files) {
+      if(!std::filesystem::exists(file)) {
+        THALAMUS_LOG(error) << "File doesn't exist: " << file.string();
+        continue;
+      }
+      std::filesystem::copy_file(file, filepath.parent_path() / (
+            file.stem().filename().string()
+            + filepath.stem().extension().string()
+            + filepath.extension().string()
+            + file.extension().string()),
+          std::filesystem::copy_options::overwrite_existing);
     }
 
     Finally f([&] { close_file(); });
@@ -972,7 +993,7 @@ struct StorageNode::Impl {
   }
 
   void queue_record(thalamus_grpc::StorageRecord &&record, int stream = 0) {
-    // TRACE_EVENT("thalamus", "StorageNode::queue_record");
+    // TRACE_EVENT("thalamus", "Storage2Node::queue_record");
     ++queued_records;
     queued_bytes += record.ByteSizeLong();
     std::lock_guard<std::mutex> lock(records_mutex);
@@ -981,7 +1002,7 @@ struct StorageNode::Impl {
   }
 
   void on_stats_timer(const boost::system::error_code &error) {
-    TRACE_EVENT("thalamus", "StorageNode::on_stats_timer");
+    TRACE_EVENT("thalamus", "Storage2Node::on_stats_timer");
     if (error.value() == boost::asio::error::operation_aborted) {
       return;
     }
@@ -1028,7 +1049,17 @@ struct StorageNode::Impl {
       root = root->parent;
     }
 
-    _thread = std::thread([&, output_file, json_object=root->to_json()] { thread_target(output_file, json_object); });
+    std::vector<std::filesystem::path> files;
+    if(state->contains("Files")) {
+      ObservableListPtr config_files = state->at("Files");
+      for(auto i : *config_files) {
+        ObservableDictPtr file = i;
+        std::string path = file->at("Path");
+        files.emplace_back(path);
+      }
+    }
+
+    _thread = std::thread([&, output_file, json_object=root->to_json(), files] { thread_target(output_file, json_object, files); });
     stats_timer.expires_after(1s);
     stats_timer.async_wait(std::bind(&Impl::on_stats_timer, this, _1));
   }
@@ -1048,6 +1079,10 @@ struct StorageNode::Impl {
                  const ObservableCollection::Value &) {
     auto key_str = std::get<std::string>(key);
     if (key_str == "rec") {
+      return;
+    }
+
+    if (key_str == "start") {
       return;
     }
 
@@ -1084,72 +1119,74 @@ struct StorageNode::Impl {
       metrics.clear();
       offsets.clear();
       names.clear();
-      std::string source_str = state->at("Sources");
-      auto tokens = absl::StrSplit(source_str, ',');
-      auto i = 2;
-      for (auto &raw_token : tokens) {
-        auto token = std::string(absl::StripAsciiWhitespace(raw_token));
+      ObservableListPtr sources_list = state->at("Sources");
+      for(size_t i = 0;i < sources_list->size();++i) {
+        ObservableDictPtr source_dict = sources_list->at(i);
+        std::string node = source_dict->at("Node");
+        bool record_time_series = source_dict->at("Time Series");
+        bool record_image = source_dict->at("Image");
+        bool record_motion = source_dict->at("Motion");
+        bool record_text = source_dict->at("Text");
 
-        graph->get_node(token, [this, token, i](auto source) {
+        graph->get_node(node, [this, node, matrics_index=i+2, record_time_series, record_image, record_motion, record_text](auto source) {
           auto locked_source = source.lock();
           if (!locked_source) {
             return;
           }
 
-          if (node_cast<MotionCaptureNode *>(locked_source.get()) != nullptr) {
+          if (record_motion && node_cast<MotionCaptureNode *>(locked_source.get()) != nullptr) {
             auto xsens_source =
                 node_cast<MotionCaptureNode *>(locked_source.get());
             auto xsens_source_connection =
                 locked_source->ready.connect(std::bind(
-                    &Impl::on_xsens_data, this, _1, token, xsens_source, i));
+                    &Impl::on_xsens_data, this, _1, node, xsens_source, matrics_index));
             source_connections.push_back(std::move(xsens_source_connection));
           }
-          if (node_cast<AnalogNode *>(locked_source.get()) != nullptr) {
+          if (record_time_series && node_cast<AnalogNode *>(locked_source.get()) != nullptr) {
             auto analog_source = node_cast<AnalogNode *>(locked_source.get());
             auto analog_source_connection = locked_source->ready.connect(
-                std::bind(&Impl::on_data, this, _1, token, analog_source, i));
+                std::bind(&Impl::on_data, this, _1, node, analog_source, matrics_index));
             source_connections.push_back(std::move(analog_source_connection));
           }
-          if (node_cast<ImageNode *>(locked_source.get()) != nullptr) {
+          if (record_image && node_cast<ImageNode *>(locked_source.get()) != nullptr) {
             auto image_source = node_cast<ImageNode *>(locked_source.get());
             auto image_source_connection =
                 locked_source->ready.connect(std::bind(
-                    &Impl::on_image_data, this, _1, token, image_source, i));
+                    &Impl::on_image_data, this, _1, node, image_source, matrics_index));
             source_connections.push_back(std::move(image_source_connection));
           }
-          if (node_cast<TextNode *>(locked_source.get()) != nullptr) {
+          if (record_text && node_cast<TextNode *>(locked_source.get()) != nullptr) {
             auto text_source = node_cast<TextNode *>(locked_source.get());
             auto text_source_connection =
                 locked_source->ready.connect(std::bind(
-                    &Impl::on_text_data, this, _1, token, text_source, i));
+                    &Impl::on_text_data, this, _1, node, text_source, matrics_index));
             source_connections.push_back(std::move(text_source_connection));
           }
         });
-        ++i;
       }
     }
   }
 };
 
-StorageNode::Impl::Encoder::~Encoder() {}
-void StorageNode::Impl::ZlibEncoder::push(thalamus_grpc::StorageRecord &&record) {
+Storage2Node::Impl::Encoder::~Encoder() {}
+void Storage2Node::Impl::ZlibEncoder::push(thalamus_grpc::StorageRecord &&record) {
   in_queue.push_back(std::move(record));
 }
-void StorageNode::Impl::VideoEncoder::push(thalamus_grpc::StorageRecord &&record) {
+void Storage2Node::Impl::VideoEncoder::push(thalamus_grpc::StorageRecord &&record) {
   in_queue.push_back(std::move(record));
 }
-void StorageNode::Impl::IdentityEncoder::work() {}
+void Storage2Node::Impl::IdentityEncoder::work() {}
 
-StorageNode::StorageNode(ObservableDictPtr state,
+Storage2Node::Storage2Node(ObservableDictPtr state,
                          boost::asio::io_context &io_context, NodeGraph *graph)
     : impl(new Impl(state, io_context, graph, this)) {}
 
-StorageNode::~StorageNode() {}
+Storage2Node::~Storage2Node() {}
 
-std::string StorageNode::type_name() { return "STORAGE"; }
+std::string Storage2Node::type_name() { return "STORAGE2"; }
 
 std::filesystem::path
-StorageNode::get_next_file(const std::filesystem::path &name,
+Storage2Node::get_next_file(const std::filesystem::path &name,
                            std::chrono::system_clock::time_point time) {
   inja::json tdata;
   auto rec = get_rec_number(name, tdata, time);
@@ -1162,7 +1199,7 @@ StorageNode::get_next_file(const std::filesystem::path &name,
   return std::move(filename);
 }
 
-void StorageNode::record(std::ofstream &output,
+void Storage2Node::record(std::ofstream &output,
                          const thalamus_grpc::StorageRecord &record) {
   auto serialized = record.SerializePartialAsString();
   auto size = serialized.size();
@@ -1172,7 +1209,7 @@ void StorageNode::record(std::ofstream &output,
   output.write(serialized.data(), int64_t(serialized.size()));
 }
 
-void StorageNode::record(std::ofstream &output, const std::string &serialized) {
+void Storage2Node::record(std::ofstream &output, const std::string &serialized) {
   auto size = serialized.size();
   size = htonll(size);
   auto size_bytes = reinterpret_cast<char *>(&size);
@@ -1180,27 +1217,27 @@ void StorageNode::record(std::ofstream &output, const std::string &serialized) {
   output.write(serialized.data(), int64_t(serialized.size()));
 }
 
-std::span<const double> StorageNode::data(int channel) const {
+std::span<const double> Storage2Node::data(int channel) const {
   return std::span<const double>(&(impl->metrics.begin() + channel)->first,
                                  &(impl->metrics.begin() + channel)->first + 1);
 }
 
-int StorageNode::num_channels() const { return int(impl->metrics.size()); }
+int Storage2Node::num_channels() const { return int(impl->metrics.size()); }
 
-std::chrono::nanoseconds StorageNode::sample_interval(int) const { return 1s; }
+std::chrono::nanoseconds Storage2Node::sample_interval(int) const { return 1s; }
 
-std::chrono::nanoseconds StorageNode::time() const {
+std::chrono::nanoseconds Storage2Node::time() const {
   return impl->metrics_time;
 }
 
-std::string_view StorageNode::name(int channel) const {
+std::string_view Storage2Node::name(int channel) const {
   return impl->names.at(size_t(channel));
 }
-std::span<const std::string> StorageNode::get_recommended_channels() const {
+std::span<const std::string> Storage2Node::get_recommended_channels() const {
   return std::span<const std::string>(impl->names.begin(), impl->names.end());
 }
 
-void StorageNode::inject(const thalamus::vector<std::span<double const>> &,
+void Storage2Node::inject(const thalamus::vector<std::span<double const>> &,
                          const thalamus::vector<std::chrono::nanoseconds> &,
                          const thalamus::vector<std::string_view> &) {}
 } // namespace thalamus

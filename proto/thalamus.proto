@@ -14,6 +14,7 @@ service Thalamus {
   rpc observable_bridge_v2(stream ObservableTransaction) returns (stream ObservableTransaction) {}
   rpc observable_bridge_read(ObservableReadRequest) returns (stream ObservableTransaction) {}
   rpc observable_bridge_write(ObservableTransaction) returns (Empty) {}
+  rpc get_redirect(Empty) returns (Redirect) {}
   rpc graph(GraphRequest) returns (stream GraphResponse) {}
   rpc analog(AnalogRequest) returns (stream AnalogResponse) {}
   rpc spectrogram(SpectrogramRequest) returns (stream SpectrogramResponse) {}
@@ -33,6 +34,10 @@ service Thalamus {
   rpc ping(stream Ping) returns (stream Pong) {}
   rpc inject_text(stream InjectTextRequest) returns (stream Pong) {}
   rpc stim(stream StimRequest) returns (stream StimResponse) {}
+}
+
+message Redirect {
+  string redirect = 1;
 }
 
 message Compressed {

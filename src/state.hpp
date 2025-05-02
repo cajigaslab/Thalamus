@@ -145,6 +145,7 @@ public:
       set_remote_storage(std::function<bool(Action, const std::string &,
                                             ObservableCollection::Value,
                                             std::function<void()>)>) = 0;
+  virtual boost::json::value to_json() = 0;
 
   std::string address() const;
   void notify(ObservableCollection *, Action, const Key &, Value &);
@@ -192,6 +193,7 @@ public:
       std::function<bool(Action, const std::string &,
                          ObservableCollection::Value, std::function<void()>)>
           remote_storage) override;
+  boost::json::value to_json() override;
 };
 
 class ObservableDict : public ObservableCollection {
@@ -235,6 +237,7 @@ public:
       std::function<bool(Action, const std::string &,
                          ObservableCollection::Value, std::function<void()>)>
           remote_storage) override;
+  boost::json::value to_json() override;
 };
 ObservableCollection::Value get_jsonpath(ObservableCollection::Value store,
                                          const std::list<std::string> &tokens);

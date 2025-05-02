@@ -1,7 +1,7 @@
+#include <thalamus/tracing.hpp>
 #include <algebra_node.hpp>
 #include <calculator.hpp>
 #include <modalities_util.hpp>
-#include <thalamus/tracing.hpp>
 #include <vector>
 
 #ifdef __clang__

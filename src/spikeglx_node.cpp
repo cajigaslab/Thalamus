@@ -1,3 +1,4 @@
+#include <thalamus/tracing.hpp>
 #include <base_node.hpp>
 #include <functional>
 #include <map>
@@ -7,7 +8,6 @@
 #include <string>
 #include <thalamus/async.hpp>
 #include <thalamus/atoi.h>
-#include <thalamus/tracing.hpp>
 #include <thread_pool.hpp>
 #include <vector>
 

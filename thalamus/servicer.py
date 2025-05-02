@@ -6,6 +6,7 @@ import logging
 import traceback
 
 import jsonpath_ng
+import jsonpath_ng.ext
 
 from . import thalamus_pb2
 from . import thalamus_pb2_grpc
@@ -135,7 +136,7 @@ class ThalamusServicer(thalamus_pb2_grpc.ThalamusServicer):
             value = json.loads(change.value)
 
             try:
-              jsonpath_expr = jsonpath_ng.parse(change.address)
+              jsonpath_expr = jsonpath_ng.ext.parse(change.address)
             except Exception as _exc: # pylint: disable=broad-except
               LOGGER.exception('Failed to parse JSONPATH %s', change.address)
               continue
@@ -229,7 +230,7 @@ class ThalamusServicer(thalamus_pb2_grpc.ThalamusServicer):
       value = json.loads(change.value)
 
       try:
-        jsonpath_expr = jsonpath_ng.parse(change.address)
+        jsonpath_expr = jsonpath_ng.ext.parse(change.address)
       except Exception as _exc: # pylint: disable=broad-except
         LOGGER.exception('Failed to parse JSONPATH %s', change.address)
         continue
@@ -260,8 +261,12 @@ class ThalamusServicer(thalamus_pb2_grpc.ThalamusServicer):
         elif isinstance(match.path, jsonpath_ng.Fields):
           match.context.value[match.path.fields[0]] = value
 
+    if not request.peer_name:
+      return thalamus_pb2.Empty()
+
     async with self.condition:
-      self.condition.wait(lambda: request.peer_name in self.peer_name_to_queue)
+      await self.condition.wait_for(lambda: request.peer_name in self.peer_name_to_queue)
       queue = self.peer_name_to_queue[request.peer_name]
       await queue.put(thalamus_pb2.ObservableTransaction(acknowledged = request.id))
+    return thalamus_pb2.Empty()
 

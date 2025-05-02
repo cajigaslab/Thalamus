@@ -1,3 +1,4 @@
+#include <thalamus/tracing.hpp>
 #include <algorithm>
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -14,7 +15,6 @@
 #include <modalities_util.hpp>
 #include <text_node.hpp>
 #include <thalamus/thread.hpp>
-#include <thalamus/tracing.hpp>
 
 namespace thalamus {
 using namespace std::chrono_literals;
@@ -662,6 +662,13 @@ Service::events(::grpc::ServerContext *context,
                        impl->observable_bridge_clients.end(), stream);
     impl->observable_bridge_clients.erase(i);
   }
+  return ::grpc::Status::OK;
+}
+
+::grpc::Status Service::get_redirect(::grpc::ServerContext *,
+                                 const ::thalamus_grpc::Empty *,
+                                 ::thalamus_grpc::Redirect *response) {
+  response->set_redirect(impl->observable_bridge_redirect);
   return ::grpc::Status::OK;
 }
 
@@ -1484,7 +1491,7 @@ Service::image(::grpc::ServerContext *context,
     std::condition_variable cond;
     std::vector<thalamus_grpc::Image> images;
     std::vector<std::chrono::steady_clock::time_point> frame_times;
-
+ 
     using signal_type = decltype(raw_node->ready);
     auto connection = raw_node->ready.connect(
         signal_type::slot_type([&](const Node *) {
