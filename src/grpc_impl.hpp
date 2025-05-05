@@ -106,6 +106,10 @@ public:
         const ::thalamus_grpc::NodeSelector *request,
         ::grpc::ServerWriter<::thalamus_grpc::XsensResponse> *writer) override;
   ::grpc::Status
+  motion_capture(::grpc::ServerContext *context,
+        const ::thalamus_grpc::NodeSelector *request,
+        ::grpc::ServerWriter<::thalamus_grpc::XsensResponse> *writer) override;
+  ::grpc::Status
   image(::grpc::ServerContext *context,
         const ::thalamus_grpc::ImageRequest *request,
         ::grpc::ServerWriter<::thalamus_grpc::Image> *writer) override;
@@ -127,6 +131,10 @@ public:
   ::grpc::Status inject_analog(
       ::grpc::ServerContext *context,
       ::grpc::ServerReader<::thalamus_grpc::InjectAnalogRequest> *reader,
+      ::thalamus_grpc::Empty *) override;
+  ::grpc::Status inject_motion_capture(
+      ::grpc::ServerContext *context,
+      ::grpc::ServerReader<::thalamus_grpc::InjectMotionCaptureRequest> *reader,
       ::thalamus_grpc::Empty *) override;
   ::grpc::Status
   get_modalities(::grpc::ServerContext *context,

@@ -2487,6 +2487,14 @@ struct GenicamNode::Impl {
       if(!state->contains(k)) {
         state->at(k).assign(v);
       }
+      auto key_str = std::get<std::string>(k);
+      if(key_str == "AcquisitionFrameRate") {
+        if(std::holds_alternative<long long>(v)) {
+          target_framerate = double(std::get<long long>(v));
+        } else if (std::holds_alternative<double>(v)) {
+          target_framerate = std::get<double>(v);
+        }
+      }
       return;
     }
 

@@ -721,6 +721,97 @@ Service::events(::grpc::ServerContext *context,
   return ::grpc::Status::OK;
 }
 
+::grpc::Status Service::inject_motion_capture(
+    ::grpc::ServerContext *context,
+    ::grpc::ServerReader<::thalamus_grpc::InjectMotionCaptureRequest> *reader,
+    ::thalamus_grpc::Empty *) {
+  set_current_thread_name("inject_motion_capture");
+  Impl::ContextGuard guard(this, context);
+  ::thalamus_grpc::InjectMotionCaptureRequest request;
+  std::string node_name;
+  if (!reader->Read(&request)) {
+    THALAMUS_LOG(error) << "Couldn't read name of node to inject into";
+    return ::grpc::Status::OK;
+  }
+  if (!request.has_node()) {
+    THALAMUS_LOG(error)
+        << "First message of inject_motion_capture request should contain node name";
+    return ::grpc::Status::OK;
+  }
+
+  node_name = request.node();
+
+  while (!context->IsCancelled()) {
+    std::promise<void> promise;
+    auto future = promise.get_future();
+    std::shared_ptr<Node> raw_node;
+    boost::asio::post(impl->io_context, [&] {
+      impl->node_graph.get_node(node_name, [&](auto ptr) {
+        raw_node = ptr.lock();
+        promise.set_value();
+      });
+    });
+    THALAMUS_LOG(info) << "Waiting for node";
+    while (future.wait_for(1s) == std::future_status::timeout &&
+           !context->IsCancelled()) {
+      if (impl->io_context.stopped()) {
+        return ::grpc::Status::OK;
+      }
+    }
+    if (context->IsCancelled()) {
+      continue;
+    }
+    THALAMUS_LOG(info) << "Got node";
+
+    MotionCaptureNode *node = node_cast<MotionCaptureNode *>(raw_node.get());
+    if (!node) {
+      std::this_thread::sleep_for(1s);
+      continue;
+    }
+
+    thalamus::vector<MotionCaptureNode::Segment> epi_segments;
+    while (reader->Read(&request)) {
+      if (request.has_node()) {
+        node_name = request.node();
+        break;
+      }
+
+      auto &proto_segments = request.data().segments();
+      epi_segments.clear();
+      for(const auto& proto_segment : proto_segments) {
+        epi_segments.emplace_back();
+        auto& epi_segment = epi_segments.back();
+        epi_segment.frame = proto_segment.frame();
+        epi_segment.segment_id = proto_segment.id();
+        epi_segment.time = proto_segment.time();
+        epi_segment.actor = uint8_t(proto_segment.actor());
+        epi_segment.rotation = {
+          proto_segment.q0(),
+          proto_segment.q1(),
+          proto_segment.q2(),
+          proto_segment.q3(),
+        };
+        epi_segment.position = {
+          proto_segment.x(),
+          proto_segment.y(),
+          proto_segment.z()
+        };
+      }
+
+      std::promise<void> inject_promise;
+      auto inject_future = inject_promise.get_future();
+      boost::asio::post(impl->io_context, [&] {
+        node->inject(epi_segments);
+        inject_promise.set_value();
+      });
+      while (inject_future.wait_for(1s) == std::future_status::timeout &&
+             !context->IsCancelled()) {
+      }
+    }
+  }
+  return ::grpc::Status::OK;
+}
+
 ::grpc::Status Service::inject_analog(
     ::grpc::ServerContext *context,
     ::grpc::ServerReader<::thalamus_grpc::InjectAnalogRequest> *reader,
@@ -1376,6 +1467,13 @@ Service::analog(::grpc::ServerContext *context,
 
   ping_thread.join();
   return result;
+}
+
+::grpc::Status
+Service::motion_capture(::grpc::ServerContext *context,
+               const ::thalamus_grpc::NodeSelector *request,
+               ::grpc::ServerWriter<::thalamus_grpc::XsensResponse> *writer) {
+  return xsens(context, request, writer);
 }
 
 ::grpc::Status
