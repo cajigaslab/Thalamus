@@ -257,6 +257,7 @@ FACTORIES = {
     UserData(UserDataType.CHECK_BOX, 'Stream', False, []),
     UserData(UserDataType.SPINBOX, 'Poll Interval (ms)', 10, []),
     UserData(UserDataType.DEFAULT, 'Address', "localhost:4142", []),
+    UserData(UserDataType.DEFAULT, 'Metadata Node', "", []),
   ]),
   'PULSE': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Toggle', False, []),

@@ -10,6 +10,7 @@
 #include <thalamus/atoi.h>
 #include <thread_pool.hpp>
 #include <vector>
+#include <typeinfo>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -28,6 +29,11 @@ using namespace std::chrono_literals;
 using namespace std::placeholders;
 
 #define BUFFER_SIZE 16777216
+
+template <typename T>
+concept Streamable = requires(std::ostream os, T value) {
+  { os << value };
+};
 
 struct SpikeGlxNode::Impl {
   ObservableDictPtr state;
@@ -67,6 +73,7 @@ struct SpikeGlxNode::Impl {
   std::vector<std::pair<std::string, std::function<void()>>> spikeglx_queue;
   bool queue_busy = false;
   ThreadPool &pool;
+  NodeGraph* graph;
 
   enum class Device { IMEC, NI };
   std::map<std::pair<Device, int>, std::chrono::nanoseconds> sample_intervals;
@@ -91,9 +98,10 @@ struct SpikeGlxNode::Impl {
   // static unsigned long long io_track;
 
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
-       NodeGraph *graph, SpikeGlxNode *_outer)
+       NodeGraph *_graph, SpikeGlxNode *_outer)
       : state(_state), io_context(_io_context), timer(io_context),
-        socket(io_context), outer(_outer), pool(graph->get_thread_pool())
+        socket(io_context), outer(_outer), pool(_graph->get_thread_pool()),
+        graph(_graph)
         //, queue(io_context)
         ,
         turnstile(io_context), connecting_condition(_io_context) {
@@ -444,6 +452,7 @@ struct SpikeGlxNode::Impl {
       // std::cout << "imec waited" << std::endl;
       connected = true;
       (*state)["Connected"].assign(true);
+      boost::asio::co_spawn(io_context, heartbeat(), boost::asio::detached);
     } catch (std::exception &e) {
       THALAMUS_LOG(error) << boost::diagnostic_information(e);
       (*state)["Error"].assign(e.what());
@@ -458,6 +467,20 @@ struct SpikeGlxNode::Impl {
     co_await connect(ec);
     if(ec) {
       (*state)["Connected"].assign(false);
+    }
+  }
+
+  boost::asio::awaitable<void> heartbeat() {
+    boost::asio::steady_timer heartbeat_timer(io_context);
+    while(true) {
+      boost::system::error_code ec;
+      co_await co_query("NOOP", ec);
+      if(ec) {
+        (*state)["Connected"].assign(false);
+        co_return;
+      }
+      heartbeat_timer.expires_after(1s);
+      co_await heartbeat_timer.async_wait();
     }
   }
 
@@ -520,19 +543,21 @@ struct SpikeGlxNode::Impl {
 
   boost::asio::awaitable<void> send_metadata(boost::system::error_code& ec) {
     if(!new_metadata.empty()) {
+      THALAMUS_LOG(info) << "SENDING METADATA";
       co_await co_command("SETMETADATA", ec);
       if(ec) {
         co_return;
       }
       for(auto& pair : new_metadata) {
+        auto g = pair->to_json();
+        THALAMUS_LOG(info) << "send_metadata, " << boost::json::serialize(g);
         std::string key = pair->at("Key");
         ObservableCollection::Value value = pair->at("Value");
         std::stringstream stream;
         std::visit([&](const auto& arg) {
-            if constexpr (std::is_same<decltype(arg), std::string>::value
-                || std::is_same<decltype(arg), double>::value
-                || std::is_same<decltype(arg), long long>::value) {
-              stream << std::get<std::string>(key) << "=" << arg;
+            THALAMUS_LOG(info) << typeid(arg).name();
+            if constexpr (Streamable<decltype(arg)>) {
+              stream << key << "=" << arg;
             }
         }, value);
         if(!stream.str().empty()) {
@@ -892,42 +917,60 @@ struct SpikeGlxNode::Impl {
   std::set<ObservableDictPtr> new_metadata;
 
   void on_metadata_change(ObservableCollection* source,
-                 ObservableCollection::Action,
+                 ObservableCollection::Action a,
                  const ObservableCollection::Key &k,
                  const ObservableCollection::Value &v) {
+    THALAMUS_LOG(info) << "on_metadata_change";
+    if(a == ObservableCollection::Action::Delete) {
+      return;
+    }
     if(source == metadata_node.get()) {
       auto key_str = std::get<std::string>(k);
+      THALAMUS_LOG(info) << "on_metadata_change(metadata_node), key=" << key_str;
       if(key_str == "Metadata") {
         metadata_list = std::get<ObservableListPtr>(v);
         metadata_list->recap(std::bind(&Impl::on_metadata_change, this, metadata_list.get(), _1, _2, _3));
       }
     } else if(source == metadata_list.get()) {
+      auto g = std::get<ObservableDictPtr>(v)->to_json();
+      THALAMUS_LOG(info) << "on_metadata_change(metadata_list), " << boost::json::serialize(g);
       new_metadata.insert(std::get<ObservableDictPtr>(v));
+    } else if(source->parent == metadata_list.get()) {
+      auto source_shared = static_cast<ObservableDict*>(source)->shared_from_this();
+      THALAMUS_LOG(info) << "on_metadata_change(child)";
+      new_metadata.insert(source_shared);
     }
   }
+
+  boost::signals2::scoped_connection node_getter;
 
   void on_change(ObservableCollection::Action,
                  const ObservableCollection::Key &k,
                  const ObservableCollection::Value &v) {
     TRACE_EVENT("thalamus", "SpikeGlxNode::on_change");
     auto key_str = std::get<std::string>(k);
+    THALAMUS_LOG(info) << "spikeglx, " << key_str;
     if (key_str.starts_with("imec_subset")) {
       std::vector<std::string> tokens = absl::StrSplit(key_str, '_');
       auto index = parse_number<size_t>(tokens.back());
       imec_subsets.resize(index + 1, "*");
       imec_subsets[index] = std::get<std::string>(v);
-    } else if (key_str == "Metadata Source") {
-      auto nodes = dynamic_cast<ObservableList*>(state->parent);
+    } else if (key_str == "Metadata Node") {
       auto value_str = std::get<std::string>(v);
-      for(auto& node : *nodes) {
-        ObservableDictPtr dict = node;
-        std::string name = dict->at("name");
-        if(name == value_str) {
-          metadata_node = dict;
-          metadata_connection = dict->recursive_changed.connect(std::bind(&Impl::on_metadata_change, this, _1, _2, _3, _4));
-          dict->recap(std::bind(&Impl::on_metadata_change, this, metadata_node.get(), _1, _2, _3));
+      node_getter = graph->get_node_scoped(value_str, [&,value_str](std::weak_ptr<Node>) {
+        auto nodes = dynamic_cast<ObservableList*>(state->parent);
+        THALAMUS_LOG(info) << "Setting Metadata Node, " << value_str << " " << boost::json::serialize(nodes->to_json());
+        for(auto& node : *nodes) {
+          ObservableDictPtr dict = node;
+          std::string name = dict->at("name");
+          THALAMUS_LOG(info) << "candidate, " << name << (name == value_str);
+          if(name == value_str) {
+            metadata_node = dict;
+            metadata_connection = dict->recursive_changed.connect(std::bind(&Impl::on_metadata_change, this, _1, _2, _3, _4));
+            dict->recap(std::bind(&Impl::on_metadata_change, this, metadata_node.get(), _1, _2, _3));
+          }
         }
-      }
+      });
     } else if (key_str == "Connected") {
       auto new_is_connected = std::get<bool>(v);
       if (new_is_connected) {

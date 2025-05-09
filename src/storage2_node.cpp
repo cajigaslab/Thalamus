@@ -384,12 +384,12 @@ struct Storage2Node::Impl {
     thalamus_grpc::StorageRecord record;
     boost::asio::post(io_context, [this_state = this->state, rec_number, &record] {
       (*this_state)["rec"].assign(rec_number, [] {});
-      if(this_state->contains("metadata")) {
+      if(this_state->contains("Metadata")) {
         auto proto_metadata = record.mutable_metadata();
         record.set_time(static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count()));
         std::string name = this_state->at("name");
         record.set_node(name);
-        ObservableListPtr metadata = this_state->at("metadata");
+        ObservableListPtr metadata = this_state->at("Metadata");
         auto rec_found = false;
         for(auto& pair_wrapper : *metadata) {
           ObservableDictPtr pair = pair_wrapper;
@@ -415,8 +415,8 @@ struct Storage2Node::Impl {
           proto_pair->set_key("Rec");
           proto_pair->set_integral(rec_number);
           ObservableDictPtr pair = std::make_shared<ObservableDict>();
-          pair->at("Key").assign("Rec");
-          pair->at("Value").assign(rec_number);
+          (*pair)["Key"].assign("Rec");
+          (*pair)["Value"].assign(rec_number);
           metadata->push_back(pair);
         }
       } else {
@@ -426,10 +426,10 @@ struct Storage2Node::Impl {
         proto_pair->set_integral(rec_number);
         ObservableListPtr metadata = std::make_shared<ObservableList>();
         ObservableDictPtr pair = std::make_shared<ObservableDict>();
-        pair->at("Key").assign("Rec");
-        pair->at("Value").assign(rec_number);
+        (*pair)["Key"].assign("Rec");
+        (*pair)["Value"].assign(rec_number);
         metadata->push_back(pair);
-        this_state->at("Metadata").assign(metadata);
+        (*this_state)["Metadata"].assign(metadata);
       }
     });
 

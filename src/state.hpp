@@ -152,7 +152,7 @@ public:
   void notify(ObservableCollection *, Action, const Key &, Value &);
 };
 
-class ObservableList : public ObservableCollection {
+class ObservableList : public ObservableCollection, public std::enable_shared_from_this<ObservableList>{
   Vector content;
 
 public:
@@ -197,7 +197,7 @@ public:
   boost::json::value to_json() override;
 };
 
-class ObservableDict : public ObservableCollection {
+class ObservableDict : public ObservableCollection, public std::enable_shared_from_this<ObservableDict> {
   Map content;
 
 public:
