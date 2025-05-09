@@ -31,8 +31,11 @@ using namespace std::placeholders;
 
 struct SpikeGlxNode::Impl {
   ObservableDictPtr state;
+  ObservableDictPtr metadata_node;
+  ObservableListPtr metadata_list;
   size_t observer_id;
   boost::signals2::scoped_connection state_connection;
+  boost::signals2::scoped_connection metadata_connection;
   boost::asio::io_context &io_context;
   boost::asio::high_resolution_timer timer;
   boost::asio::ip::tcp::socket socket;
@@ -314,6 +317,8 @@ struct SpikeGlxNode::Impl {
     if (ec) {
       THALAMUS_LOG(error) << ec.what();
       (*state)["Error"].assign(ec.what());
+      connected = false;
+      return;
     }
 
     ec = socket.close(ec);
@@ -452,7 +457,7 @@ struct SpikeGlxNode::Impl {
     boost::system::error_code ec;
     co_await connect(ec);
     if(ec) {
-      throw boost::system::system_error(ec);
+      (*state)["Connected"].assign(false);
     }
   }
 
@@ -509,6 +514,38 @@ struct SpikeGlxNode::Impl {
         return absl::StrFormat("FETCH -1 %d 50000 %s", offset, subset);
       } else {
         return absl::StrFormat("FETCH 0 0 %d 50000 %s", offset, subset);
+      }
+    }
+  }
+
+  boost::asio::awaitable<void> send_metadata(boost::system::error_code& ec) {
+    if(!new_metadata.empty()) {
+      co_await co_command("SETMETADATA", ec);
+      if(ec) {
+        co_return;
+      }
+      for(auto& pair : new_metadata) {
+        std::string key = pair->at("Key");
+        ObservableCollection::Value value = pair->at("Value");
+        std::stringstream stream;
+        std::visit([&](const auto& arg) {
+            if constexpr (std::is_same<decltype(arg), std::string>::value
+                || std::is_same<decltype(arg), double>::value
+                || std::is_same<decltype(arg), long long>::value) {
+              stream << std::get<std::string>(key) << "=" << arg;
+            }
+        }, value);
+        if(!stream.str().empty()) {
+          co_await co_command(stream.str());
+          if(ec) {
+            co_return;
+          }
+        }
+      }
+      new_metadata.clear();
+      co_await co_query("");
+      if(ec) {
+        co_return;
       }
     }
   }
@@ -610,12 +647,23 @@ struct SpikeGlxNode::Impl {
 
       if(!do_stream) {
         while(streaming) {
+          co_await send_metadata(ec);
+          if(check_error()) {
+            co_return;
+          }
           poll_timer.expires_after(1s);
           co_await poll_timer.async_wait();
         }
         co_return;
       }
       while (streaming) {
+        if(!new_metadata.empty()) {
+          co_await send_metadata(ec);
+          if(check_error()) {
+            co_return;
+          }
+        }
+
         auto start_time = std::chrono::steady_clock::now();
         for (auto &pair : inputs) {
           auto [js, ip] = pair;
@@ -836,7 +884,25 @@ struct SpikeGlxNode::Impl {
     TRACE_EVENT("thalamus", "SpikeGlxNode::stop_stream");
     streaming = false;
     if(connected) {
-      co_await co_query("SETRECORDENAB 0");
+      boost::system::error_code ec;
+      co_await co_query("SETRECORDENAB 0", ec);
+    }
+  }
+
+  std::set<ObservableDictPtr> new_metadata;
+
+  void on_metadata_change(ObservableCollection* source,
+                 ObservableCollection::Action,
+                 const ObservableCollection::Key &k,
+                 const ObservableCollection::Value &v) {
+    if(source == metadata_node.get()) {
+      auto key_str = std::get<std::string>(k);
+      if(key_str == "Metadata") {
+        metadata_list = std::get<ObservableListPtr>(v);
+        metadata_list->recap(std::bind(&Impl::on_metadata_change, this, metadata_list.get(), _1, _2, _3));
+      }
+    } else if(source == metadata_list.get()) {
+      new_metadata.insert(std::get<ObservableDictPtr>(v));
     }
   }
 
@@ -850,6 +916,18 @@ struct SpikeGlxNode::Impl {
       auto index = parse_number<size_t>(tokens.back());
       imec_subsets.resize(index + 1, "*");
       imec_subsets[index] = std::get<std::string>(v);
+    } else if (key_str == "Metadata Source") {
+      auto nodes = dynamic_cast<ObservableList*>(state->parent);
+      auto value_str = std::get<std::string>(v);
+      for(auto& node : *nodes) {
+        ObservableDictPtr dict = node;
+        std::string name = dict->at("name");
+        if(name == value_str) {
+          metadata_node = dict;
+          metadata_connection = dict->recursive_changed.connect(std::bind(&Impl::on_metadata_change, this, _1, _2, _3, _4));
+          dict->recap(std::bind(&Impl::on_metadata_change, this, metadata_node.get(), _1, _2, _3));
+        }
+      }
     } else if (key_str == "Connected") {
       auto new_is_connected = std::get<bool>(v);
       if (new_is_connected) {

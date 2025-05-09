@@ -327,9 +327,9 @@ struct Storage2Node::Impl {
     {
       TRACE_EVENT("thalamus", "Storage2Node::on_text_data(build record)");
       auto body = record.mutable_text();
-      auto text = locked_text->text();
+      auto body_text = locked_text->text();
 
-      body->set_text(text.data(), text.size());
+      body->set_text(body_text.data(), body_text.size());
 
       record.set_time(size_t(locked_text->time().count()));
       record.set_node(name);
@@ -381,8 +381,56 @@ struct Storage2Node::Impl {
     auto time = graph->get_system_clock_at_start();
     int rec_number = get_rec_number(filename, tdata, time);
 
-    boost::asio::post(io_context, [_state = this->state, rec_number] {
-      (*_state)["rec"].assign(rec_number, [] {});
+    thalamus_grpc::StorageRecord record;
+    boost::asio::post(io_context, [this_state = this->state, rec_number, &record] {
+      (*this_state)["rec"].assign(rec_number, [] {});
+      if(this_state->contains("metadata")) {
+        auto proto_metadata = record.mutable_metadata();
+        record.set_time(static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count()));
+        std::string name = this_state->at("name");
+        record.set_node(name);
+        ObservableListPtr metadata = this_state->at("metadata");
+        auto rec_found = false;
+        for(auto& pair_wrapper : *metadata) {
+          ObservableDictPtr pair = pair_wrapper;
+          std::string key = pair->at("Key");
+          ObservableCollection::Value value = pair->at("Value");
+          if(key == "Rec") {
+            pair->at("Value").assign(rec_number);
+            value = rec_number;
+            rec_found = true;
+          }
+          auto proto_pair = proto_metadata->add_keyvalues();
+          proto_pair->set_key(key);
+          if (std::holds_alternative<std::string>(value)) {
+            proto_pair->set_text(std::get<std::string>(value));
+          } else if (std::holds_alternative<double>(value)) {
+            proto_pair->set_decimal(std::get<double>(value));
+          } else if (std::holds_alternative<long long>(value)) {
+            proto_pair->set_integral(std::get<long long>(value));
+          }
+        }
+        if(!rec_found) {
+          auto proto_pair = proto_metadata->add_keyvalues();
+          proto_pair->set_key("Rec");
+          proto_pair->set_integral(rec_number);
+          ObservableDictPtr pair = std::make_shared<ObservableDict>();
+          pair->at("Key").assign("Rec");
+          pair->at("Value").assign(rec_number);
+          metadata->push_back(pair);
+        }
+      } else {
+        auto proto_metadata = record.mutable_metadata();
+        auto proto_pair = proto_metadata->add_keyvalues();
+        proto_pair->set_key("Rec");
+        proto_pair->set_integral(rec_number);
+        ObservableListPtr metadata = std::make_shared<ObservableList>();
+        ObservableDictPtr pair = std::make_shared<ObservableDict>();
+        pair->at("Key").assign("Rec");
+        pair->at("Value").assign(rec_number);
+        metadata->push_back(pair);
+        this_state->at("Metadata").assign(metadata);
+      }
     });
 
     tdata["rec"] = absl::StrFormat("%03d", rec_number);
@@ -400,6 +448,7 @@ struct Storage2Node::Impl {
     }
 
     output_stream = std::ofstream(rendered, std::ios::trunc | std::ios::binary);
+    this->outer->record(output_stream, record);
     return rendered;
   }
 
@@ -1236,4 +1285,5 @@ std::span<const std::string> Storage2Node::get_recommended_channels() const {
 void Storage2Node::inject(const thalamus::vector<std::span<double const>> &,
                          const thalamus::vector<std::chrono::nanoseconds> &,
                          const thalamus::vector<std::string_view> &) {}
+
 } // namespace thalamus

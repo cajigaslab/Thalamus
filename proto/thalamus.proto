@@ -138,6 +138,7 @@ message StorageRecord {
     Image image = 6;
     Text text = 7;
     Compressed compressed = 8;
+    Metadata metadata = 9;
   }
   uint64 time = 4;
   string node = 5;
@@ -327,3 +328,17 @@ message Notification {
   string title = 2;
   string message = 3;
 }
+
+message Pair {
+  string key = 1;
+  oneof value {
+    string text = 2;
+    double decimal = 3;
+    int64 integral = 4;
+  }
+}
+
+message Metadata {
+  repeated Pair keyvalues = 1;
+}
+

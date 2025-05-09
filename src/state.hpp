@@ -91,6 +91,7 @@ public:
     Vector::iterator iterator;
     Vector::iterator end;
     ObservableCollection *collection;
+    std::optional<ValueWrapper> value_wrapper;
     friend ObservableList;
     friend ObservableDict;
 
@@ -99,7 +100,7 @@ public:
     VectorIteratorWrapper(size_t key, Vector::iterator iterator,
                           Vector::iterator end,
                           ObservableCollection *collection);
-    ValueWrapper operator*();
+    ValueWrapper& operator*();
     VectorIteratorWrapper &operator+(size_t count);
     VectorIteratorWrapper &operator+=(size_t count);
     VectorIteratorWrapper &operator++();
@@ -124,7 +125,7 @@ public:
     MapIteratorWrapper();
     MapIteratorWrapper(Map::iterator iterator, Map::iterator end,
                        ObservableCollection *collection);
-    ValueWrapper operator*();
+    std::pair<Key, ValueWrapper>& operator*();
     std::pair<Key, ValueWrapper> *operator->();
     MapIteratorWrapper &operator++();
     MapIteratorWrapper operator++(int);

@@ -114,14 +114,15 @@ ObservableCollection::VectorIteratorWrapper::VectorIteratorWrapper(
     ObservableCollection *_collection)
     : key(_key), iterator(_iterator), end(_end), collection(_collection) {}
 
-ObservableCollection::ValueWrapper
+ObservableCollection::ValueWrapper&
 ObservableCollection::VectorIteratorWrapper::operator*() {
-  auto _iterator = this->iterator;
-  auto _end = this->end;
-  return ValueWrapper(
+  auto this_iterator = this->iterator;
+  auto this_end = this->end;
+  value_wrapper = ValueWrapper(
       static_cast<long long int>(key),
-      [_iterator]() -> Value & { return *_iterator; },
-      [_iterator, _end]() -> bool { return _iterator != _end; }, collection);
+      [this_iterator]() -> Value & { return *this_iterator; },
+      [this_iterator, this_end]() -> bool { return this_iterator != this_end; }, collection);
+  return *value_wrapper;
 }
 
 ObservableCollection::VectorIteratorWrapper &
@@ -183,27 +184,23 @@ ObservableCollection::MapIteratorWrapper::MapIteratorWrapper(
     ObservableCollection *_collection)
     : iterator(_iterator), end(_end), collection(_collection) {}
 
-ObservableCollection::ValueWrapper
+std::pair<ObservableCollection::Key, ObservableCollection::ValueWrapper>&
 ObservableCollection::MapIteratorWrapper::operator*() {
-  auto _iterator = this->iterator;
-  auto _end = this->end;
-  return ValueWrapper(
-      _iterator->first, [_iterator]() -> Value & { return _iterator->second; },
-      [_iterator, _end]() -> bool { return _iterator != _end; }, collection);
+  auto this_iterator = this->iterator;
+  auto this_end = this->end;
+  pair = std::make_pair(
+      this_iterator->first,
+      ValueWrapper(
+          this_iterator->first,
+          [this_iterator]() -> Value & { return this_iterator->second; },
+          [this_iterator, this_end]() -> bool { return this_iterator != this_end; },
+          collection));
+  return pair.value();
 }
 
 std::pair<ObservableCollection::Key, ObservableCollection::ValueWrapper> *
 ObservableCollection::MapIteratorWrapper::operator->() {
-  auto _iterator = this->iterator;
-  auto _end = this->end;
-  pair = std::make_pair(
-      _iterator->first,
-      ValueWrapper(
-          _iterator->first,
-          [_iterator]() -> Value & { return _iterator->second; },
-          [_iterator, _end]() -> bool { return _iterator != _end; },
-          collection));
-  return &pair.value();
+  return &(**this);
 }
 
 ObservableCollection::MapIteratorWrapper &
