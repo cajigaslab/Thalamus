@@ -2166,7 +2166,13 @@ struct GenicamNode::Impl {
             }
 
             auto new_device = std::make_shared<DeviceImpl>(dev_handle, this);
-            devices[device_id] = std::move(new_device);
+            std::string device_key;
+            if(new_device->exists("DeviceID")) {
+              device_key = std::get<std::string>(new_device->get("DeviceID"));
+            } else {
+              device_key = device_id;
+            }
+            devices[device_key] = std::move(new_device);
           }
         }
       }
