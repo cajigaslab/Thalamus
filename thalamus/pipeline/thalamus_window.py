@@ -424,6 +424,7 @@ FACTORIES = {
       "DICT_ARUCO_MIP_36h12"])
   ]),
   'HEXASCOPE': Factory(HexascopeWidget, []),
+  'WALLCLOCK': Factory(None, []),
 }
 
 FACTORY_NAMES = {}
