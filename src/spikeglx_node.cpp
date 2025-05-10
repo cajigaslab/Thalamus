@@ -10,7 +10,6 @@
 #include <thalamus/atoi.h>
 #include <thread_pool.hpp>
 #include <vector>
-#include <typeinfo>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -38,7 +37,7 @@ concept Streamable = requires(std::ostream os, T value) {
 struct SpikeGlxNode::Impl {
   ObservableDictPtr state;
   ObservableDictPtr metadata_node;
-  ObservableListPtr metadata_list;
+  ObservableListPtr metadata_list = std::make_shared<ObservableList>();
   size_t observer_id;
   boost::signals2::scoped_connection state_connection;
   boost::signals2::scoped_connection metadata_connection;
@@ -95,6 +94,7 @@ struct SpikeGlxNode::Impl {
   short latency = 0;
   Device current_js;
   int current_ip;
+  bool constructed = false;
   // static unsigned long long io_track;
 
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
@@ -113,8 +113,10 @@ struct SpikeGlxNode::Impl {
     state_connection =
         state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
     (*state)["Running"].assign(false);
+    (*state)["Connected"].assign(false);
     memset(&address, 0, sizeof(address));
     state->recap(std::bind(&Impl::on_change, this, _1, _2, _3));
+    constructed = true;
   }
 
   ~Impl() { (*state)["Running"].assign(false); }
@@ -222,18 +224,25 @@ struct SpikeGlxNode::Impl {
         : condition(_io_context) {}
 
     struct Turn {
-      CoTurnstile &turnstile;
-      bool holds = true;
-      Turn() = delete;
+      CoTurnstile* turnstile;
+      Turn() : turnstile(nullptr) {}
       Turn(Turn &) = delete;
       Turn(const Turn &) = delete;
+      Turn& operator=(Turn& t) = delete;
+      Turn& operator=(const Turn& t) = delete;
 
-      Turn(CoTurnstile &t) : turnstile(t) {}
-      Turn(Turn &&t) : turnstile(t.turnstile) { t.holds = false; }
+      Turn(CoTurnstile* t) : turnstile(t) {}
+      Turn(Turn &&t) : turnstile(t.turnstile) { t.turnstile = nullptr; }
+      Turn& operator=(Turn&& t) { 
+        this->turnstile = t.turnstile;
+        t.turnstile = nullptr;
+        return *this;
+      }
+
       ~Turn() {
-        if (holds) {
-          ++turnstile.current;
-          turnstile.condition.notify();
+        if (turnstile) {
+          ++turnstile->current;
+          turnstile->condition.notify();
         }
       }
     };
@@ -241,16 +250,19 @@ struct SpikeGlxNode::Impl {
     boost::asio::awaitable<Turn> wait() {
       auto ticket = next++;
       co_await condition.wait([&] { return ticket == current; });
-      co_return Turn(*this);
+      co_return Turn(this);
     }
   };
 
   CoTurnstile turnstile;
 
-  boost::asio::awaitable<std::string> co_query(std::string command, boost::system::error_code& ec) {
+  boost::asio::awaitable<std::string> co_query(std::string command, boost::system::error_code& ec, bool lock = true) {
     // TRACE_EVENT("thalamus", "SpikeGlxNode::co_query",
     // perfetto::Track(io_track));
-    auto turn = turnstile.wait();
+    CoTurnstile::Turn turn;
+    if(lock) {
+      turn = co_await turnstile.wait();
+    }
 
     auto command_nl = command + "\n";
     auto count = 0ull;
@@ -291,10 +303,13 @@ struct SpikeGlxNode::Impl {
     co_return result;
   }
 
-  boost::asio::awaitable<void> co_command(std::string command, boost::system::error_code& ec) {
+  boost::asio::awaitable<void> co_command(std::string command, boost::system::error_code& ec, bool lock = true) {
     // TRACE_EVENT("thalamus", "SpikeGlxNode::co_command",
     // perfetto::Track(io_track));
-    auto turn = turnstile.wait();
+    CoTurnstile::Turn turn;
+    if(lock) {
+      turn = co_await turnstile.wait();
+    }
 
     auto command_nl = command + "\n";
 
@@ -458,6 +473,7 @@ struct SpikeGlxNode::Impl {
       (*state)["Error"].assign(e.what());
       (*state)["Connected"].assign(false);
       disconnect();
+      ec = boost::system::errc::make_error_code(boost::system::errc::io_error);
       co_return;
     }
   }
@@ -542,37 +558,33 @@ struct SpikeGlxNode::Impl {
   }
 
   boost::asio::awaitable<void> send_metadata(boost::system::error_code& ec) {
-    if(!new_metadata.empty()) {
-      THALAMUS_LOG(info) << "SENDING METADATA";
-      co_await co_command("SETMETADATA", ec);
-      if(ec) {
-        co_return;
-      }
-      for(auto& pair : new_metadata) {
-        auto g = pair->to_json();
-        THALAMUS_LOG(info) << "send_metadata, " << boost::json::serialize(g);
-        std::string key = pair->at("Key");
-        ObservableCollection::Value value = pair->at("Value");
-        std::stringstream stream;
-        std::visit([&](const auto& arg) {
-            THALAMUS_LOG(info) << typeid(arg).name();
-            if constexpr (Streamable<decltype(arg)>) {
-              stream << key << "=" << arg;
-            }
-        }, value);
-        if(!stream.str().empty()) {
-          co_await co_command(stream.str());
-          if(ec) {
-            co_return;
-          }
+    if(new_metadata.empty()) {
+      co_return;
+    }
+    THALAMUS_LOG(info) << "SENDING METADATA";
+    auto turn = co_await turnstile.wait();
+    co_await co_command("SETMETADATA", ec, false);
+    if(ec) {
+      co_return;
+    }
+    for(auto& pair : new_metadata) {
+      std::string key = pair->at("Key");
+      ObservableCollection::Value value = pair->at("Value");
+      std::stringstream stream;
+      std::visit([&](const auto& arg) {
+        if constexpr (Streamable<decltype(arg)>) {
+          stream << key << "=" << arg;
+        }
+      }, value);
+      if(!stream.str().empty()) {
+        co_await co_command(stream.str(), ec, false);
+        if(ec) {
+          co_return;
         }
       }
-      new_metadata.clear();
-      co_await co_query("");
-      if(ec) {
-        co_return;
-      }
     }
+    new_metadata.clear();
+    co_await co_query("", ec, false);
   }
 
   boost::asio::awaitable<void> stream() {
@@ -592,6 +604,8 @@ struct SpikeGlxNode::Impl {
     try {
       co_await connect(ec);
       if (!connected) {
+        (*state)["Connected"].assign(false);
+        (*state)["Running"].assign(false);
         co_return;
       }
 
@@ -669,6 +683,7 @@ struct SpikeGlxNode::Impl {
       }
 
       boost::asio::steady_timer poll_timer(io_context);
+      std::copy(metadata_list->begin(), metadata_list->end(), std::inserter(new_metadata, new_metadata.end()));
 
       if(!do_stream) {
         while(streaming) {
@@ -972,6 +987,9 @@ struct SpikeGlxNode::Impl {
         }
       });
     } else if (key_str == "Connected") {
+      if(!constructed) {
+        return;
+      }
       auto new_is_connected = std::get<bool>(v);
       if (new_is_connected) {
         boost::asio::co_spawn(io_context, connect(), boost::asio::detached);
@@ -981,6 +999,9 @@ struct SpikeGlxNode::Impl {
     } else if (key_str == "Stream") {
       do_stream = std::get<bool>(v);
     } else if (key_str == "Running") {
+      if(!constructed) {
+        return;
+      }
       auto is_running = std::get<bool>(v);
       if (is_running) {
         boost::asio::co_spawn(io_context, stream(), boost::asio::detached);
@@ -1094,8 +1115,8 @@ size_t SpikeGlxNode::modalities() const { return THALAMUS_MODALITY_ANALOG; }
 bool SpikeGlxNode::is_short_data() const { return true; }
 
 boost::json::value SpikeGlxNode::process(const boost::json::value &) {
-  boost::asio::co_spawn(impl->io_context, impl->connect(),
-                        boost::asio::detached);
+  //boost::asio::co_spawn(impl->io_context, impl->connect(),
+  //                      boost::asio::detached);
   return boost::json::value();
   // impl->connect([&] {
   //   auto command = impl->spike_glx_version < 20240000 ? "GETIMPROBECOUNT" :

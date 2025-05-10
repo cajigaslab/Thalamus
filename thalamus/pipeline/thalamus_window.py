@@ -250,6 +250,7 @@ FACTORIES = {
     UserData(UserDataType.DEFAULT, 'Address', "localhost", []),
     UserData(UserDataType.SPINBOX, 'Command Port', 5000, []),
     UserData(UserDataType.SPINBOX, 'Waveform Port', 5001, []),
+    UserData(UserDataType.DEFAULT, 'Metadata Node', "", []),
   ]),
   'SPIKEGLX': Factory(SpikeGlxWidget, [
     UserData(UserDataType.CHECK_BOX, 'Connected', False, []),

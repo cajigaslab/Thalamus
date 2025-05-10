@@ -29,6 +29,11 @@ using namespace thalamus;
 using namespace std::chrono_literals;
 using namespace std::placeholders;
 
+template <typename T>
+concept Streamable = requires(std::ostream os, T value) {
+  { os << value };
+};
+
 struct IntanNode::Impl {
   template <typename T> struct VarGuard {
     T &var;
@@ -119,18 +124,22 @@ struct IntanNode::Impl {
   bool is_running = false;
   bool is_connected = false;
   bool getting_sample_rate = false;
+  bool constructed = false;
 
 public:
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
-       NodeGraph *, IntanNode *_outer)
+       NodeGraph *_graph, IntanNode *_outer)
       : state(_state), io_context(_io_context),
         command_socket(io_context, "command", state),
         waveform_socket(io_context), outer(_outer),
-        connecting_condition(io_context) {
+        connecting_condition(io_context),
+        graph(_graph) {
     state_connection =
         state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
     (*state)["Running"].assign(false);
+    (*state)["Connected"].assign(false);
     state->recap(std::bind(&Impl::on_change, this, _1, _2, _3));
+    constructed = true;
   }
 
   ~Impl() { (*state)["Running"].assign(false); }
@@ -138,6 +147,42 @@ public:
   bool connected = false;
   bool streaming = false;
   CoCondition connecting_condition;
+  NodeGraph* graph;
+
+  boost::asio::awaitable<void> send_metadata(boost::system::error_code& ec) {
+    if(new_metadata.empty()) {
+      co_return;
+    }
+    THALAMUS_LOG(info) << "SENDING METADATA";
+    for(auto& pair : new_metadata) {
+      std::string key = pair->at("Key");
+      ObservableCollection::Value value = pair->at("Value");
+      std::stringstream stream;
+      std::visit([&](const auto& arg) {
+          if constexpr (Streamable<decltype(arg)>) {
+            stream << "livenotes " << key << "=" << arg << ";\n";
+          }
+      }, value);
+      if(!stream.str().empty()) {
+        size_t count;
+        std::tie(ec, count) = co_await boost::asio::async_write(
+          command_socket.socket,
+          boost::asio::const_buffer(stream.str().data(), stream.str().size()),
+          boost::asio::as_tuple(boost::asio::use_awaitable));
+        if(ec) {
+          co_return;
+        }
+      }
+    }
+    new_metadata.clear();
+  }
+  boost::asio::awaitable<void> send_metadata() {
+    boost::system::error_code ec;
+    co_await send_metadata(ec);
+    if (ec) {
+      throw boost::system::system_error(ec);
+    }
+  }
 
   boost::asio::awaitable<void> waveform_loop() {
     try {
@@ -145,6 +190,17 @@ public:
       size_t filled = 0;
       unsigned char buffer[16384];
       boost::asio::steady_timer timer(io_context);
+      boost::system::error_code ec;
+      auto check_error = [&] {
+        if (ec) {
+          THALAMUS_LOG(error) << ec.what();
+          (*state)["Error"].assign(ec.what());
+          (*state)["Connected"].assign(false);
+          (*state)["Running"].assign(false);
+          return true;
+        }
+        return false;
+      };
 
       auto receive = [&]() -> boost::asio::awaitable<void> {
         if (filled == sizeof(buffer)) {
@@ -152,10 +208,13 @@ public:
           filled -= offset;
           offset = 0;
         }
-        auto count = co_await waveform_socket.async_receive(
-          boost::asio::buffer(buffer + filled, sizeof(buffer) - filled));
+        size_t count;
+        std::tie(ec, count) = co_await waveform_socket.async_receive(
+          boost::asio::buffer(buffer + filled, sizeof(buffer) - filled),
+          boost::asio::as_tuple(boost::asio::use_awaitable));
         filled += count;
       };
+
       while (true) {
         if (!streaming) {
           timer.expires_after(1s);
@@ -169,6 +228,9 @@ public:
           while (filled - offset < 4) {
             TRACE_EVENT_END("intan");
             co_await receive();
+            if(check_error()) {
+              co_return;
+            }
             TRACE_EVENT_BEGIN("intan", "Parse Magic Number");
           }
           auto pos = buffer + offset;
@@ -186,6 +248,9 @@ public:
           while (filled - offset < 4) {
             TRACE_EVENT_END("intan");
             co_await receive();
+            if(check_error()) {
+              co_return;
+            }
             TRACE_EVENT_BEGIN("intan", "Parse Frames");
           }
           auto pos = buffer + offset;
@@ -200,6 +265,9 @@ public:
             while (filled - offset < 2) {
               TRACE_EVENT_END("intan");
               co_await receive();
+              if(check_error()) {
+                co_return;
+              }
               TRACE_EVENT_BEGIN("intan", "Parse Frames");
             }
             pos = buffer + offset;
@@ -223,6 +291,7 @@ public:
     } catch (std::exception &e) {
       THALAMUS_LOG(error) << boost::diagnostic_information(e);
       (*state)["Connected"].assign(false);
+      (*state)["Running"].assign(false);
       disconnect();
     }
   }
@@ -251,6 +320,7 @@ public:
           address, std::to_string(waveform_port));
       co_await boost::asio::async_connect(waveform_socket, endpoints);
       connected = true;
+      metadata_ready = false;
       (*state)["Connected"].assign(true);
 
       boost::asio::co_spawn(io_context, waveform_loop(), boost::asio::detached);
@@ -290,6 +360,7 @@ public:
     try {
       co_await do_connect();
       if (!connected) {
+        (*state)["Running"].assign(false);
         co_return;
       }
 
@@ -369,25 +440,80 @@ public:
       co_await boost::asio::async_write(
           command_socket.socket,
           boost::asio::const_buffer(command.data(), command.size()));
+      record_start = std::chrono::steady_clock::now();
 
+      boost::asio::steady_timer timer(io_context);
+      timer.expires_after(1s);
+      co_await timer.async_wait();
+      metadata_ready = true;
+
+      std::copy(metadata_list->begin(), metadata_list->end(), std::inserter(new_metadata, new_metadata.end()));
+      boost::system::error_code ec;
+      co_await send_metadata(ec);
+      if (ec) {
+        throw boost::system::system_error(ec);
+      }
     } catch (boost::system::system_error &e) {
       THALAMUS_LOG(error) << boost::diagnostic_information(e);
       (*state)["Running"].assign(false);
+      (*state)["Connected"].assign(false);
       co_return;
     }
   }
+
+  std::optional<std::chrono::steady_clock::time_point> record_start;
 
   boost::asio::awaitable<void> stop_stream() {
     if (!streaming) {
       co_return;
     }
     streaming = false;
+    record_start = std::nullopt;
 
     THALAMUS_LOG(info) << "Stopping " << sample_interval.count();
     std::string command = "set runmode stop;\n";
     co_await boost::asio::async_write(
         command_socket.socket,
         boost::asio::const_buffer(command.data(), command.size()));
+  }
+
+  std::set<ObservableDictPtr> new_metadata;
+  ObservableListPtr metadata_list = std::make_shared<ObservableList>();
+  ObservableDictPtr metadata_node;
+  boost::signals2::scoped_connection node_getter;
+  boost::signals2::scoped_connection metadata_connection;
+  bool metadata_ready = false;
+
+  void on_metadata_change(ObservableCollection* source,
+                 ObservableCollection::Action a,
+                 const ObservableCollection::Key &k,
+                 const ObservableCollection::Value &v) {
+    THALAMUS_LOG(info) << "on_metadata_change";
+    if(a == ObservableCollection::Action::Delete) {
+      return;
+    }
+    if(source == metadata_node.get()) {
+      auto key_str = std::get<std::string>(k);
+      THALAMUS_LOG(info) << "on_metadata_change(metadata_node), key=" << key_str;
+      if(key_str == "Metadata") {
+        metadata_list = std::get<ObservableListPtr>(v);
+        metadata_list->recap(std::bind(&Impl::on_metadata_change, this, metadata_list.get(), _1, _2, _3));
+      }
+    } else if(source == metadata_list.get()) {
+      auto g = std::get<ObservableDictPtr>(v)->to_json();
+      THALAMUS_LOG(info) << "on_metadata_change(metadata_list), " << boost::json::serialize(g);
+      new_metadata.insert(std::get<ObservableDictPtr>(v));
+      if (connected && metadata_ready) {
+        boost::asio::co_spawn(io_context, send_metadata(), boost::asio::detached);
+      }
+    } else if(source->parent == metadata_list.get()) {
+      auto source_shared = static_cast<ObservableDict*>(source)->shared_from_this();
+      THALAMUS_LOG(info) << "on_metadata_change(child)";
+      new_metadata.insert(source_shared);
+      if (connected && metadata_ready) {
+        boost::asio::co_spawn(io_context, send_metadata(), boost::asio::detached);
+      }
+    }
   }
 
   void on_change(ObservableCollection::Action,
@@ -401,6 +527,9 @@ public:
     } else if (key_str == "Waveform Port") {
       waveform_port = std::get<long long>(v);
     } else if (key_str == "Connected") {
+      if(!constructed) {
+        return;
+      }
       auto new_is_connected = std::get<bool>(v);
       if (new_is_connected) {
         boost::asio::co_spawn(io_context, do_connect(), boost::asio::detached);
@@ -408,6 +537,9 @@ public:
         disconnect();
       }
     } else if (key_str == "Running") {
+      if(!constructed) {
+        return;
+      }
       auto new_is_running = std::get<bool>(v);
       if (new_is_running) {
         boost::asio::co_spawn(io_context, start_stream(),
@@ -417,6 +549,22 @@ public:
       }
     } else if (key_str == "Channels") {
       channels = std::get<ObservableListPtr>(v);
+    } else if (key_str == "Metadata Node") {
+      auto value_str = std::get<std::string>(v);
+      node_getter = graph->get_node_scoped(value_str, [&,value_str](std::weak_ptr<Node>) {
+        auto nodes = dynamic_cast<ObservableList*>(state->parent);
+        THALAMUS_LOG(info) << "Setting Metadata Node, " << value_str << " " << boost::json::serialize(nodes->to_json());
+        for(auto& node : *nodes) {
+          ObservableDictPtr dict = node;
+          std::string name = dict->at("name");
+          THALAMUS_LOG(info) << "candidate, " << name << (name == value_str);
+          if(name == value_str) {
+            metadata_node = dict;
+            metadata_connection = dict->recursive_changed.connect(std::bind(&Impl::on_metadata_change, this, _1, _2, _3, _4));
+            dict->recap(std::bind(&Impl::on_metadata_change, this, metadata_node.get(), _1, _2, _3));
+          }
+        }
+      });
     }
   }
 };

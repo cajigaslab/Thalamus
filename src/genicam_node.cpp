@@ -2281,6 +2281,7 @@ struct GenicamNode::Impl {
 
     state_connection =
         state->recursive_changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3, _4));
+    this->state->recap(std::bind(&Impl::on_change, this, state.get(), _1, _2, _3));
   }
 
   ~Impl() {

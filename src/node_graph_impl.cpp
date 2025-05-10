@@ -201,7 +201,7 @@ public:
           std::shared_ptr<Node>(factory->create(node, io_context, outer));
       node_impls.insert(node_impls.begin() + index, node_impl);
       node_types.insert(node_types.begin() + index, type_str);
-      node->recap();
+      node->recap(std::bind(&Impl::on_node, this, node.get(), _1, _2, _3));
     }
   }
 

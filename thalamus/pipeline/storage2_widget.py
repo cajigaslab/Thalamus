@@ -178,6 +178,7 @@ class Storage2Widget(QWidget):
     button_layout = QHBoxLayout()
     button_layout.addWidget(add_file_button)
     button_layout.addWidget(remove_file_button)
+    layout.addLayout(button_layout)
     layout.addWidget(metadata_qlist)
     button_layout = QHBoxLayout()
     button_layout.addWidget(add_metadata_button)

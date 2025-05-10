@@ -850,7 +850,7 @@ struct Storage2Node::Impl {
       config_output << config;
     }
     for(auto& file : files) {
-      std::filesystem::copy_file(file, filepath.parent_path() / (
+      std::filesystem::copy(file, filepath.parent_path() / (
             file.stem().filename().string()
             + filepath.stem().extension().string()
             + filepath.extension().string()
