@@ -20,6 +20,7 @@ service Thalamus {
   rpc spectrogram(SpectrogramRequest) returns (stream SpectrogramResponse) {}
   rpc channel_info(AnalogRequest) returns (stream AnalogResponse) {}
   rpc xsens(NodeSelector) returns (stream XsensResponse) {}
+  rpc motion_capture(NodeSelector) returns (stream XsensResponse) {}
   rpc image(ImageRequest) returns (stream Image) {}
   rpc eval(stream EvalResponse) returns (stream EvalRequest) {}
   rpc get_type_name(StringMessage) returns (StringMessage) {}
@@ -34,6 +35,7 @@ service Thalamus {
   rpc ping(stream Ping) returns (stream Pong) {}
   rpc inject_text(stream InjectTextRequest) returns (stream Pong) {}
   rpc stim(stream StimRequest) returns (stream StimResponse) {}
+  rpc inject_motion_capture(stream InjectMotionCaptureRequest) returns (Empty) {}
 }
 
 message Redirect {
@@ -259,6 +261,13 @@ message InjectTextRequest {
   oneof body {
     string node = 1;
     Text text = 2;
+  }
+}
+
+message InjectMotionCaptureRequest {
+  oneof body {
+    string node = 1;
+    XsensResponse data = 2;
   }
 }
 
