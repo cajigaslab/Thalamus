@@ -766,6 +766,7 @@ static DataCount count_data(const std::string &filename,
     } break;
     case thalamus_grpc::StorageRecord::BODY_NOT_SET:
     case thalamus_grpc::StorageRecord::kCompressed:
+    case thalamus_grpc::StorageRecord::kMetadata:
       break;
       // std::cout << "Unhandled record type " << record->body_case() <<
       // std::endl;
@@ -1184,6 +1185,7 @@ int generate_csv(boost::program_options::variables_map &vm) {
     case thalamus_grpc::StorageRecord::kImage:
     case thalamus_grpc::StorageRecord::kText:
     case thalamus_grpc::StorageRecord::kCompressed:
+    case thalamus_grpc::StorageRecord::kMetadata:
     case thalamus_grpc::StorageRecord::BODY_NOT_SET:
       break;
     }
@@ -1883,6 +1885,7 @@ int main(int argc, char **argv) {
       } break;
       case thalamus_grpc::StorageRecord::BODY_NOT_SET:
       case thalamus_grpc::StorageRecord::kCompressed:
+      case thalamus_grpc::StorageRecord::kMetadata:
         break;
         // std::cout << "Unhandled record type " << record->body_case() <<
         // std::endl;

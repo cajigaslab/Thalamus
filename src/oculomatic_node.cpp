@@ -39,8 +39,8 @@ struct OculomaticNode::Impl {
   std::atomic_bool frame_pending;
   std::vector<unsigned char> intermediate;
   Format format;
-  bool need_recenter;
-  std::pair<double, double> centering_offset;
+  bool need_recenter = false;
+  std::pair<double, double> centering_offset = std::make_pair(AOUT_MIN, AOUT_MIN);
   std::pair<int, int> centering_pix;
   NodeGraph *graph;
   size_t threshold;
@@ -193,6 +193,7 @@ struct OculomaticNode::Impl {
                &this_output_frames = this->output_frames,
                &this_next_output_frame = this->next_output_frame,
                &this_io_context = io_context,
+               this_state = state,
                this_centering_pix = this->centering_pix,
                this_centering_offset = this->centering_offset,
                &this_ref_centering_pix = this->centering_pix,
@@ -299,11 +300,14 @@ struct OculomaticNode::Impl {
               this_invert_x, this_invert_y);
           boost::asio::post(this_io_context, [new_centering_pix,
                                               new_centering_offset,
+                                              this_state,
                                               &this_ref_centering_pix,
                                               &this_ref_centering_offset] {
             TRACE_EVENT("thalamus", "OculomaticNode apply recenter");
             this_ref_centering_pix = new_centering_pix;
             this_ref_centering_offset = new_centering_offset;
+            (*this_state)["Pix X"].assign(new_centering_pix.first);
+            (*this_state)["Pix Y"].assign(new_centering_pix.second);
           });
         }
         gaze = normalize_center(
@@ -387,6 +391,10 @@ struct OculomaticNode::Impl {
       invert_x = std::get<bool>(v);
     } else if (key_str == "Invert Y") {
       invert_y = std::get<bool>(v);
+    } else if (key_str == "Pix X") {
+      centering_pix.first = int(std::get<long long>(v));
+    } else if (key_str == "Pix Y") {
+      centering_pix.second = int(std::get<long long>(v));
     } else if (key_str == "Source") {
       std::string source_str = state->at("Source");
       auto token = std::string(absl::StripAsciiWhitespace(source_str));
