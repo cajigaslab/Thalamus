@@ -858,12 +858,15 @@ struct Storage2Node::Impl {
         THALAMUS_LOG(error) << "File doesn't exist: " << file.string();
         continue;
       }
-      std::filesystem::copy(file, filepath.parent_path() / (
+      auto destination = filepath.parent_path() / (
             file.stem().filename().string()
             + filepath.stem().extension().string()
             + filepath.extension().string()
-            + file.extension().string()),
-          std::filesystem::copy_options::overwrite_existing);
+            + file.extension().string());
+      THALAMUS_LOG(info) << file << " -> " << destination;
+      std::filesystem::copy(file, destination,
+          std::filesystem::copy_options::overwrite_existing
+          | std::filesystem::copy_options::recursive);
     }
 
     Finally f([&] { close_file(); });
