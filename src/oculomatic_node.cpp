@@ -505,11 +505,11 @@ void OculomaticNode::inject(
     const thalamus::vector<std::span<double const>> &data,
     const thalamus::vector<std::chrono::nanoseconds> &interval,
     const thalamus::vector<std::string_view> &) {
-  THALAMUS_ASSERT(data.size() >= 3);
-  THALAMUS_ASSERT(data[0].size() >= 1);
-  THALAMUS_ASSERT(data[1].size() >= 1);
-  THALAMUS_ASSERT(data[2].size() >= 1);
-  THALAMUS_ASSERT(interval.size() >= 1);
+  THALAMUS_ASSERT(data.size() >= 3, "Too few channels");
+  THALAMUS_ASSERT(data[0].size() >= 1, "No X specified");
+  THALAMUS_ASSERT(data[1].size() >= 1, "No Y Specified");
+  THALAMUS_ASSERT(data[2].size() >= 1, "No diameter specified");
+  THALAMUS_ASSERT(interval.size() >= 1, "No interval specified");
   this->impl->current_result.x = data[0][0];
   this->impl->current_result.y = data[1][0];
   this->impl->current_result.diameter = data[2][0];
