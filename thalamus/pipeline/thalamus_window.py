@@ -42,7 +42,7 @@ from .stim_widget import StimWidget
 from .analog_widget import AnalogWidget
 from .storage_widget import StorageWidget
 from .storage2_widget import Storage2Widget
-from .persistence_widget import PersistenceWidget
+#from .persistence_widget import PersistenceWidget
 from .run2_widget import Run2Widget
 from ..util import NodeSelector
 from .. import thalamus_pb2
