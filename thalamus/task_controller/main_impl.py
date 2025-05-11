@@ -25,7 +25,7 @@ from . import task_context as task_context_module
 from . import tasks
 from . import window as task_window
 from ..config import *
-from ..cache_manager import CacheManager
+#from ..cache_manager import CacheManager
 from .. import process
 
 from pkg_resources import resource_string, resource_filename
@@ -126,7 +126,7 @@ async def async_main() -> None:
     if 'Running' in node:
       node['Running'] = False
 
-  cache_manager = CacheManager(config)
+  #cache_manager = CacheManager(config)
 
   server = grpc.aio.server()
   servicer = ThalamusServicer(config)

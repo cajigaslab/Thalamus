@@ -382,7 +382,8 @@ struct Storage2Node::Impl {
     int rec_number = get_rec_number(filename, tdata, time);
 
     thalamus_grpc::StorageRecord record;
-    boost::asio::post(io_context, [this_state = this->state, rec_number, &record] {
+    std::promise<void> promise;
+    boost::asio::post(io_context, [this_state = this->state, rec_number, &record, &promise] {
       (*this_state)["rec"].assign(rec_number, [] {});
       if(this_state->contains("Metadata")) {
         auto proto_metadata = record.mutable_metadata();
@@ -431,7 +432,9 @@ struct Storage2Node::Impl {
         metadata->push_back(pair);
         (*this_state)["Metadata"].assign(metadata);
       }
+      promise.set_value();
     });
+    promise.get_future().wait();
 
     tdata["rec"] = absl::StrFormat("%03d", rec_number);
     auto rendered = render_filename(filename, tdata, time);
@@ -847,19 +850,23 @@ struct Storage2Node::Impl {
     std::filesystem::path filepath(filename);
     {
       std::ofstream config_output(filename + ".json");
-      config_output << config;
+      auto text = boost::json::serialize(config);
+      config_output << text;
     }
     for(auto& file : files) {
       if(!std::filesystem::exists(file)) {
         THALAMUS_LOG(error) << "File doesn't exist: " << file.string();
         continue;
       }
-      std::filesystem::copy(file, filepath.parent_path() / (
+      auto destination = filepath.parent_path() / (
             file.stem().filename().string()
             + filepath.stem().extension().string()
             + filepath.extension().string()
-            + file.extension().string()),
-          std::filesystem::copy_options::overwrite_existing);
+            + file.extension().string());
+      THALAMUS_LOG(info) << file << " -> " << destination;
+      std::filesystem::copy(file, destination,
+          std::filesystem::copy_options::overwrite_existing
+          | std::filesystem::copy_options::recursive);
     }
 
     Finally f([&] { close_file(); });

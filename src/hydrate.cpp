@@ -1169,11 +1169,11 @@ int generate_csv(boost::program_options::variables_map &vm) {
         uint64_t record_time = record->time();
         if (analog.is_int_data()) {
           for (auto i = span.begin(); i < span.end(); ++i) {
-            fprintf(column_files[span_name], "%llu,%d,\n", record_time, analog.int_data(int(i)));
+            fprintf(column_files[span_name], "%" PRIu64 ",%d,\n", record_time, analog.int_data(int(i)));
           }
         } else {
           for (auto i = span.begin(); i < span.end(); ++i) {
-            fprintf(column_files[span_name], "%llu,%f,\n", record_time, analog.data(int(i)));
+            fprintf(column_files[span_name], "%" PRIu64 ",%f,\n", record_time, analog.data(int(i)));
           }
         }
         line_count += span.end() - span.begin();

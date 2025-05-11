@@ -367,6 +367,7 @@ public:
       if (streaming) {
         co_return;
       }
+      metadata_ready = false;
       streaming = true;
 
       std::string command = "execute clearalldataoutputs;\n";
@@ -503,14 +504,14 @@ public:
       auto g = std::get<ObservableDictPtr>(v)->to_json();
       THALAMUS_LOG(info) << "on_metadata_change(metadata_list), " << boost::json::serialize(g);
       new_metadata.insert(std::get<ObservableDictPtr>(v));
-      if (connected && metadata_ready) {
+      if (streaming && metadata_ready) {
         boost::asio::co_spawn(io_context, send_metadata(), boost::asio::detached);
       }
     } else if(source->parent == metadata_list.get()) {
       auto source_shared = static_cast<ObservableDict*>(source)->shared_from_this();
       THALAMUS_LOG(info) << "on_metadata_change(child)";
       new_metadata.insert(source_shared);
-      if (connected && metadata_ready) {
+      if (streaming && metadata_ready) {
         boost::asio::co_spawn(io_context, send_metadata(), boost::asio::detached);
       }
     }
