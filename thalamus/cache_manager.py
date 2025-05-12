@@ -28,7 +28,9 @@ class CacheManager:
     connection = sqlite3.connect('thalamus.db')
     exists = connection.execute('SELECT * from sqlite_master WHERE name =\'cache\'').fetchone()
     if not exists:
-      connection.execute('CREATE TABLE cache (address, value)').fetchone()
+      connection.execute('CREATE TABLE cache (address, value)')
+      connection.execute('CREATE INDEX cache_index ON cache (address)')
+      connection.commit()
     for address, value in connection.execute('SELECT address, value FROM cache'):
       try:
         jsonpath_expr = jsonpath_ng.ext.parse(address)
