@@ -125,17 +125,17 @@ class CacheManager:
         for match in matches:
           if isinstance(match.value, ObservableCollection):
             print('Observing1', match.value)
-            observer = lambda *args, address=address: on_property_change(address, match.value, SaveConfig.ROOT, None, *args)
+            observer = lambda *args, address=address, root=match.value: on_property_change(address, root, SaveConfig.ROOT, None, *args)
             match.value.add_recursive_observer(observer, gen_end)
             match.value.recap(lambda *args: observer(match.value, *args))
           elif isinstance(match.path, jsonpath_ng.Index):
             print('Observing2', match.context.value, match.path.index)
-            observer = lambda *args, address=address, key_filter=match.path.index: on_property_change(address, match.context.value, SaveConfig.VALUE, key_filter, *args)
+            observer = lambda *args, address=address, key_filter=match.path.index, root=match.context.value: on_property_change(address, root, SaveConfig.VALUE, key_filter, *args)
             match.context.value.add_recursive_observer(observer, gen_end)
             match.context.value.recap(lambda *args: observer(match.context.value, *args))
           elif isinstance(match.path, jsonpath_ng.Fields):
             print('Observing3', match.context.value, match.path.fields[0])
-            observer = lambda *args, address=address, key_filter=match.path.fields[0]: on_property_change(address, match.context.value, SaveConfig.VALUE, key_filter, *args)
+            observer = lambda *args, address=address, key_filter=match.path.fields[0], root=match.context.value: on_property_change(address, root, SaveConfig.VALUE, key_filter, *args)
             match.context.value.add_recursive_observer(observer, gen_end)
             match.context.value.recap(lambda *args: observer(match.context.value, *args))
 
