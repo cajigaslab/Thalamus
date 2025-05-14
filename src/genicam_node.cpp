@@ -2166,7 +2166,13 @@ struct GenicamNode::Impl {
             }
 
             auto new_device = std::make_shared<DeviceImpl>(dev_handle, this);
-            devices[device_id] = std::move(new_device);
+            std::string device_key;
+            if(new_device->exists("DeviceID")) {
+              device_key = std::get<std::string>(new_device->get("DeviceID"));
+            } else {
+              device_key = device_id;
+            }
+            devices[device_key] = std::move(new_device);
           }
         }
       }
@@ -2281,6 +2287,7 @@ struct GenicamNode::Impl {
 
     state_connection =
         state->recursive_changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3, _4));
+    this->state->recap(std::bind(&Impl::on_change, this, state.get(), _1, _2, _3));
   }
 
   ~Impl() {
@@ -2480,6 +2487,14 @@ struct GenicamNode::Impl {
     if(source == camera_state.get()) {
       if(!state->contains(k)) {
         state->at(k).assign(v);
+      }
+      auto key_str = std::get<std::string>(k);
+      if(key_str == "AcquisitionFrameRate") {
+        if(std::holds_alternative<long long>(v)) {
+          target_framerate = double(std::get<long long>(v));
+        } else if (std::holds_alternative<double>(v)) {
+          target_framerate = std::get<double>(v);
+        }
       }
       return;
     }

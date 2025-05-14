@@ -234,37 +234,30 @@ struct XsensNode::Impl {
 
     if (character_id == actor) {
       auto hand_offset = 23;
-      fingers[0].update(
-          double(boost::qvm::mag(_segments[size_t(hand_offset + 3)].position -
-                                 _segments[size_t(hand_offset + 2)].position)));
-      fingers[1].update(
-          double(boost::qvm::mag(_segments[size_t(hand_offset + 7)].position -
-                                 _segments[size_t(hand_offset + 5)].position)));
-      fingers[2].update(
-          double(boost::qvm::mag(_segments[size_t(hand_offset + 11)].position -
-                                 _segments[size_t(hand_offset + 9)].position)));
-      fingers[3].update(double(
-          boost::qvm::mag(_segments[size_t(hand_offset + 15)].position -
-                          _segments[size_t(hand_offset + 13)].position)));
-      fingers[4].update(double(
-          boost::qvm::mag(_segments[size_t(hand_offset + 19)].position -
-                          _segments[size_t(hand_offset + 17)].position)));
+
+      auto bend = boost::qvm::conjugate(_segments[size_t(hand_offset + 2)].rotation)*_segments[size_t(hand_offset + 3)].rotation;
+      fingers[0].update(2*double(std::acos(boost::qvm::S(bend))));
+      bend = boost::qvm::conjugate(_segments[size_t(hand_offset + 5)].rotation)*_segments[size_t(hand_offset + 6)].rotation;
+      fingers[1].update(2*double(std::acos(boost::qvm::S(bend))));
+      bend = boost::qvm::conjugate(_segments[size_t(hand_offset + 9)].rotation)*_segments[size_t(hand_offset + 10)].rotation;
+      fingers[2].update(2*double(std::acos(boost::qvm::S(bend))));
+      bend = boost::qvm::conjugate(_segments[size_t(hand_offset + 13)].rotation)*_segments[size_t(hand_offset + 14)].rotation;
+      fingers[3].update(2*double(std::acos(boost::qvm::S(bend))));
+      bend = boost::qvm::conjugate(_segments[size_t(hand_offset + 17)].rotation)*_segments[size_t(hand_offset + 18)].rotation;
+      fingers[4].update(2*double(std::acos(boost::qvm::S(bend))));
+
       hand_offset = 43;
-      fingers[5].update(
-          double(boost::qvm::mag(_segments[size_t(hand_offset + 3)].position -
-                                 _segments[size_t(hand_offset + 2)].position)));
-      fingers[6].update(
-          double(boost::qvm::mag(_segments[size_t(hand_offset + 7)].position -
-                                 _segments[size_t(hand_offset + 5)].position)));
-      fingers[7].update(
-          double(boost::qvm::mag(_segments[size_t(hand_offset + 11)].position -
-                                 _segments[size_t(hand_offset + 9)].position)));
-      fingers[8].update(double(
-          boost::qvm::mag(_segments[size_t(hand_offset + 15)].position -
-                          _segments[size_t(hand_offset + 13)].position)));
-      fingers[9].update(double(
-          boost::qvm::mag(_segments[size_t(hand_offset + 19)].position -
-                          _segments[size_t(hand_offset + 17)].position)));
+      bend = boost::qvm::conjugate(_segments[size_t(hand_offset + 2)].rotation)*_segments[size_t(hand_offset + 3)].rotation;
+      fingers[5].update(2*double(std::acos(boost::qvm::S(bend))));
+      bend = boost::qvm::conjugate(_segments[size_t(hand_offset + 5)].rotation)*_segments[size_t(hand_offset + 6)].rotation;
+      fingers[6].update(2*double(std::acos(boost::qvm::S(bend))));
+      bend = boost::qvm::conjugate(_segments[size_t(hand_offset + 9)].rotation)*_segments[size_t(hand_offset + 10)].rotation;
+      fingers[7].update(2*double(std::acos(boost::qvm::S(bend))));
+      bend = boost::qvm::conjugate(_segments[size_t(hand_offset + 13)].rotation)*_segments[size_t(hand_offset + 14)].rotation;
+      fingers[8].update(2*double(std::acos(boost::qvm::S(bend))));
+      bend = boost::qvm::conjugate(_segments[size_t(hand_offset + 17)].rotation)*_segments[size_t(hand_offset + 18)].rotation;
+      fingers[9].update(2*double(std::acos(boost::qvm::S(bend))));
+
       has_analog_data = true;
 
       std::vector<double> mask(5, 0);
@@ -437,7 +430,10 @@ std::span<XsensNode::Segment const> XsensNode::segments() const {
 const std::string_view XsensNode::pose_name() const { return impl->pose_name; }
 
 void XsensNode::inject(const std::span<Segment const> &segments) {
+  impl->time = std::chrono::steady_clock::now().time_since_epoch();
   impl->_segment_span = segments;
+  impl->pose_name = "";
+  impl->has_analog_data = false;
   ready(this);
 }
 
@@ -878,7 +874,10 @@ const std::string_view HandEngineNode::pose_name() const {
 }
 
 void HandEngineNode::inject(const std::span<Segment const> &segments) {
+  impl->time = std::chrono::steady_clock::now().time_since_epoch();
   impl->_segment_span = segments;
+  impl->pose_name = "";
+  impl->has_analog_data = false;
   ready(this);
 }
 

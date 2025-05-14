@@ -46,6 +46,9 @@ public:
       input.second = y_channel.front();
     }
     if (input.first < -5 || input.second < -5) {
+      output.first = input.first;
+      output.second = input.second;
+      outer->ready(outer);
       return;
     }
     output.first =

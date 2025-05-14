@@ -84,6 +84,10 @@ class Storage2Widget(QWidget):
       config['Files'] = []
     files = config['Files']
 
+    if 'Metadata' not in config:
+      config['Metadata'] = []
+    metadata = config['Metadata']
+
     def node_choices(collection, key):
       if key == 'Node':
         return sorted(node['name'] for node in config_parent)
@@ -94,6 +98,8 @@ class Storage2Widget(QWidget):
     file_model = TreeObservableCollectionModel(files, key_column='#', columns=['Path'], show_extra_values=False, is_editable=lambda *arg: True)
     file_delegate = FileDelegate()
 
+    metadata_model = TreeObservableCollectionModel(metadata, key_column='#', columns=['Key', 'Value'], show_extra_values=False, is_editable=lambda *arg: True)
+
     qlist = QTreeView()
     qlist.setModel(model)
     qlist.setItemDelegate(delegate)
@@ -101,6 +107,9 @@ class Storage2Widget(QWidget):
     file_qlist = QTreeView()
     file_qlist.setModel(file_model)
     file_qlist.setItemDelegate(file_delegate)
+
+    metadata_qlist = QTreeView()
+    metadata_qlist.setModel(metadata_model)
 
     add_button = QPushButton('Add')
     remove_button = QPushButton('Remove')
@@ -124,6 +133,9 @@ class Storage2Widget(QWidget):
     add_file_button = QPushButton('Add')
     remove_file_button = QPushButton('Remove')
 
+    add_metadata_button = QPushButton('Add')
+    remove_metadata_button = QPushButton('Remove')
+
     def on_add_file():
       files.append({
         'Path': '',
@@ -135,6 +147,19 @@ class Storage2Widget(QWidget):
 
     add_file_button.clicked.connect(on_add_file)
     remove_file_button.clicked.connect(on_remove_file)
+
+    def on_add_metadata():
+      metadata.append({
+        'Key': 'Key',
+        'Value': 'Value',
+      })
+
+    def on_remove_metadata():
+      for item in list(file_qlist.selectedIndexes())[::-1]:
+        del metadata[item.row()]
+
+    add_metadata_button.clicked.connect(on_add_metadata)
+    remove_metadata_button.clicked.connect(on_remove_metadata)
 
     if 'rec' not in config:
       config['rec'] = 0
@@ -153,6 +178,11 @@ class Storage2Widget(QWidget):
     button_layout = QHBoxLayout()
     button_layout.addWidget(add_file_button)
     button_layout.addWidget(remove_file_button)
+    layout.addLayout(button_layout)
+    layout.addWidget(metadata_qlist)
+    button_layout = QHBoxLayout()
+    button_layout.addWidget(add_metadata_button)
+    button_layout.addWidget(remove_metadata_button)
     layout.addLayout(button_layout)
     self.setLayout(layout)
     self.task = None
