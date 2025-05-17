@@ -153,10 +153,14 @@ class RecordReader:
     assert self.reader is not None
     try:
       #print('reader', self.reader.tell(), self.size)
+      position = 0
       while self.is_running():
         #print('reader', 'r')
-        record = self.__read_record()
-        position = self.reader.tell()
+        record, read_size = self.__read_record() or (None, 0)
+        if self.reader.seekable():
+          position = self.reader.tell()
+        else:
+          position += read_size
         #print('reader', record)
         if record is None:
           with self.lock:
@@ -290,11 +294,15 @@ class RecordReader:
   
   def measure(self):
     assert self.reader is not None
+    if not self.reader.seekable():
+      self.size = sys.maxsize
+      return
+
     self.reader.seek(0, 2)
     self.size = self.reader.tell()
     self.reader.seek(0, 0)
 
-  def __read_record(self) -> typing.Optional[StorageRecord]:
+  def __read_record(self) -> typing.Optional[typing.Tuple[StorageRecord, int]]:
     assert self.reader is not None
     data = self.reader.read(LONG_SIZE)
     if not data:
@@ -312,7 +320,7 @@ class RecordReader:
 
     try:
       message.ParseFromString(data)
-      return message
+      return message, len(data) + LONG_SIZE
     except google.protobuf.message.DecodeError:
       return
   

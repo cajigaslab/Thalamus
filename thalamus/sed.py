@@ -62,6 +62,16 @@ class Timer:
         c()
       self.last_time = now
 
+def format_bytes(count: int):
+  if count >= 1e9:
+    return f'{count/1e9:.3f}GB'
+  elif count >= 1e6:
+    return f'{count/1e6:.3f}MB'
+  elif count >= 1e3:
+    return f'{count/1e3:.3f}KB'
+  else:
+    return f'{count}B'
+
 def main():
   parser = argparse.ArgumentParser(description='Thalamus stream editor')
   parser.add_argument('-e', '--exclude', action='store_true', help='Exclude matching nodes')
@@ -75,7 +85,7 @@ def main():
 
   output = None
 
-  if args.input is not None and args.output is not None:
+  if args.output is not None:
     if args.output.exists():
       raise RuntimeError('output file exists')
     #if args.input.resolve(True) == args.output.resolve(True):
@@ -104,7 +114,7 @@ def main():
   start_time = None
   with input, RecordReader(input, False, False) as record_reader, output:
     timer = Timer(1)
-    timer.add_callback(lambda: print(100*record_reader.progress(), file=sys.stderr))
+    timer.add_callback(lambda: print(f'{100*record_reader.progress():.2f}%\t{format_bytes(record_reader.current_position)}', file=sys.stderr))
     for record in record_reader:
       timer.poll()
       if start_time is None:
