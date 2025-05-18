@@ -573,6 +573,7 @@ struct Storage2Node::Impl {
       context->height = height;
       context->framerate = framerate;
       context->time_base = {framerate.den, framerate.num};
+      context->gop_size = framerate.num / framerate.den;
 
       context->pix_fmt = AV_PIX_FMT_YUV420P;
 
