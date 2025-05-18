@@ -792,9 +792,9 @@ struct Storage2Node::Impl {
               reinterpret_cast<unsigned char *>(compressed_data->data()) +
               offset;
           auto flag = Z_NO_FLUSH;
-          if(record.time() - last_flush_ns >= 1e9) {
+          if(record.time() - last_flush_ns >= 1'000'000'000) {
             last_flush_ns = record.time();
-            //flag = Z_SYNC_FLUSH;
+            flag = Z_SYNC_FLUSH;
           }
           auto error = deflate(&zstream, flag);
           THALAMUS_ASSERT(error == Z_OK, "ZLIB Error: %d", error);
