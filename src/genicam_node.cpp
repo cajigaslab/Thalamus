@@ -2458,6 +2458,9 @@ struct GenicamNode::Impl {
     
     for(auto i = camera_state->begin();i != camera_state->end();++i) {
       state->at(i->first) = i->second;
+      if (std::get<std::string>(i->first) == std::string("AcquisitionFrameRate")) {
+        target_framerate = i->second;
+      }
     }
     return true;
   }

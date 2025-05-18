@@ -987,7 +987,7 @@ struct Storage2Node::Impl {
             auto &image = record.image();
             auto framerate_original = image.frame_interval()
                                           ? 1e9 / double(image.frame_interval())
-                                          : 1.0 / 60;
+                                          : 60;
             auto framerate_i = std::lower_bound(
                 framerates.begin(), framerates.end(),
                 std::make_pair(framerate_original, AVRational{1, 1}),

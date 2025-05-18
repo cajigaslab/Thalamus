@@ -982,9 +982,9 @@ int generate_video(boost::program_options::variables_map &vm) {
                               location.string(), output);
   } else {
     command = absl::StrFormat(
-        "%s ffmpeg -y -f rawvideo -pixel_format %s -video_size %dx%d -i pipe: "
-        "-codec mpeg1video -f matroska -qscale:v 2 -b:v 100M -r %s \"%s\"",
-        location.string(), pixel_format, width, height, ffmpeg_framerate,
+        "%s ffmpeg -y -f rawvideo -r %s -pixel_format %s -video_size %dx%d -i pipe: "
+        "-codec mpeg1video -f matroska -qscale:v 2 -b:v 100M \"%s\"",
+        location.string(), ffmpeg_framerate, pixel_format, width, height, 
         output);
   }
   std::cout << "command " << command;
