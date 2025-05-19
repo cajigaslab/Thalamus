@@ -31,6 +31,7 @@
 #include <touchscreen_node.hpp>
 #include <video_node.hpp>
 #include <test_pulse_node.hpp>
+#include <wallclock_node.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -148,6 +149,7 @@ public:
         {"TOUCH_SCREEN", new NodeFactory<TouchScreenNode>()},
         {"STIM_PRINTER", new NodeFactory<StimPrinterNode>()},
         {"TEST_PULSE_NODE", new NodeFactory<TestPulseNode>()},
+        {"WALLCLOCK", new NodeFactory<WallClockNode>()},
         //{"HEXASCOPE", new NodeFactory<HexascopeNode>()},
         {"ARUCO", new NodeFactory<ArucoNode>()}};
 
@@ -199,7 +201,7 @@ public:
           std::shared_ptr<Node>(factory->create(node, io_context, outer));
       node_impls.insert(node_impls.begin() + index, node_impl);
       node_types.insert(node_types.begin() + index, type_str);
-      node->recap();
+      node->recap(std::bind(&Impl::on_node, this, node.get(), _1, _2, _3));
     }
   }
 

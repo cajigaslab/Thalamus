@@ -2287,6 +2287,7 @@ struct GenicamNode::Impl {
 
     state_connection =
         state->recursive_changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3, _4));
+    this->state->recap(std::bind(&Impl::on_change, this, state.get(), _1, _2, _3));
   }
 
   ~Impl() {
@@ -2486,6 +2487,14 @@ struct GenicamNode::Impl {
     if(source == camera_state.get()) {
       if(!state->contains(k)) {
         state->at(k).assign(v);
+      }
+      auto key_str = std::get<std::string>(k);
+      if(key_str == "AcquisitionFrameRate") {
+        if(std::holds_alternative<long long>(v)) {
+          target_framerate = double(std::get<long long>(v));
+        } else if (std::holds_alternative<double>(v)) {
+          target_framerate = std::get<double>(v);
+        }
       }
       return;
     }

@@ -176,7 +176,7 @@ class TreeObservableCollectionModel(QAbstractItemModel):
       if isinstance(source, ObservableList):
         for k in range(key, len(source)):
           self.__on_change(source, ObservableCollection.Action.SET, k, source[k])
-        if not recursed:
+        if not recursed and i != len(keys):
           self.__on_change(source, ObservableCollection.Action.DELETE, len(source), None, True)
         
 

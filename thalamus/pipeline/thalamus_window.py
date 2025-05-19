@@ -42,6 +42,7 @@ from .stim_widget import StimWidget
 from .analog_widget import AnalogWidget
 from .storage_widget import StorageWidget
 from .storage2_widget import Storage2Widget
+from .persistence_widget import PersistenceWidget
 from .run2_widget import Run2Widget
 from ..util import NodeSelector
 from .. import thalamus_pb2
@@ -250,6 +251,7 @@ FACTORIES = {
     UserData(UserDataType.DEFAULT, 'Address', "localhost", []),
     UserData(UserDataType.SPINBOX, 'Command Port', 5000, []),
     UserData(UserDataType.SPINBOX, 'Waveform Port', 5001, []),
+    UserData(UserDataType.DEFAULT, 'Metadata Node', "", []),
   ]),
   'SPIKEGLX': Factory(SpikeGlxWidget, [
     UserData(UserDataType.CHECK_BOX, 'Connected', False, []),
@@ -257,6 +259,7 @@ FACTORIES = {
     UserData(UserDataType.CHECK_BOX, 'Stream', False, []),
     UserData(UserDataType.SPINBOX, 'Poll Interval (ms)', 10, []),
     UserData(UserDataType.DEFAULT, 'Address', "localhost:4142", []),
+    UserData(UserDataType.DEFAULT, 'Metadata Node', "", []),
   ]),
   'PULSE': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Toggle', False, []),
@@ -423,6 +426,7 @@ FACTORIES = {
       "DICT_ARUCO_MIP_36h12"])
   ]),
   'HEXASCOPE': Factory(HexascopeWidget, []),
+  'WALLCLOCK': Factory(None, []),
 }
 
 FACTORY_NAMES = {}
@@ -1535,6 +1539,9 @@ class ThalamusWindow(QMainWindow):
     viewmenu.addAction('Add Data View').triggered.connect(lambda: self.state['data_views'].append({}))
     viewmenu.addAction('View Channel Info').triggered.connect(view_channel_info)
 
+    settingsmenu = menubar.addMenu('Settings')
+    settingsmenu.addAction('Persistence').triggered.connect(self.on_persistence)
+
     self.state['data_views'].add_observer(self.on_data_views_changed)
     for i, view in enumerate(self.state['data_views']):
       self.on_data_views_changed(ObservableCollection.Action.SET, i, view)
@@ -1542,6 +1549,15 @@ class ThalamusWindow(QMainWindow):
     self.state['node_widgets'].add_observer(self.on_node_widgets_changed)
     for i, widget in enumerate(self.state['node_widgets']):
       self.on_node_widgets_changed(ObservableCollection.Action.SET, i, widget)
+
+  def on_persistence(self):
+    if 'Persistence' not in self.state:
+      self.state['Persistence'] = {}
+
+    dialog = PersistenceWidget(self.state['Persistence'])
+    dialog.resize(self.width()//2, self.height()//2)
+    dialog.show()
+    self.dialog = dialog
 
   def moveEvent(self, a0: QMoveEvent) -> None:
     offset = self.frameGeometry().size() - self.geometry().size()
