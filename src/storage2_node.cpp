@@ -843,33 +843,47 @@ struct Storage2Node::Impl {
     }
   };
 
-  void thread_target(std::string output_file, const boost::json::value& config, const std::vector<std::filesystem::path>& files) {
+  void thread_target(std::string output_file, const boost::json::value& config, const std::vector<std::filesystem::path>& files, bool simple) {
     set_current_thread_name("STORAGE");
 
-    auto filename = prepare_storage(output_file);
-    std::filesystem::path filepath(filename);
-    {
-      std::ofstream config_output(filename + ".json");
-      auto text = boost::json::serialize(config);
-      config_output << text;
+    std::filesystem::path filepath;
+    if(!simple) {
+      auto filename = prepare_storage(output_file);
+      filepath = std::filesystem::path(filename);
+      {
+        std::ofstream config_output(filename + ".json");
+        auto text = boost::json::serialize(config);
+        config_output << text;
+      }
+    } else {
+      filepath = std::filesystem::path(output_file);
     }
     for(auto& file : files) {
       if(!std::filesystem::exists(file)) {
         THALAMUS_LOG(error) << "File doesn't exist: " << file.string();
         continue;
       }
-      auto destination = filepath.parent_path() / (
+      std::filesystem::path destination;
+      if(simple) {
+        destination = filepath.parent_path() / file.filename();
+        THALAMUS_LOG(info) << destination;
+        if(std::filesystem::exists(destination)) {
+          continue;
+        }
+      } else {
+        destination = filepath.parent_path() / (
             file.stem().filename().string()
             + filepath.stem().extension().string()
             + filepath.extension().string()
             + file.extension().string());
+      }
       THALAMUS_LOG(info) << file << " -> " << destination;
       std::filesystem::copy(file, destination,
           std::filesystem::copy_options::overwrite_existing
           | std::filesystem::copy_options::recursive);
     }
 
-    Finally f([&] { close_file(); });
+    Finally f([&] { if(!simple) {close_file();} });
 
     SimplePool<thalamus_grpc::StorageRecord> record_pool;
 
@@ -969,6 +983,9 @@ struct Storage2Node::Impl {
             lock, 1s, [&] { return !records.empty() || !is_running; });
         local_records.swap(records);
       }
+      if(simple) {
+        continue;
+      }
       for (auto &record_pair : local_records) {
         auto &[record, stream] = record_pair;
         auto body_type = record.body_case();
@@ -1045,7 +1062,9 @@ struct Storage2Node::Impl {
 
       service_encoders(false);
     }
-    service_encoders(true);
+    if(!simple) {
+      service_encoders(true);
+    }
   }
 
   void queue_record(thalamus_grpc::StorageRecord &&record, int stream = 0) {
@@ -1115,7 +1134,12 @@ struct Storage2Node::Impl {
       }
     }
 
-    _thread = std::thread([&, output_file, json_object=root->to_json(), files] { thread_target(output_file, json_object, files); });
+    auto simple = false;
+    if(state->contains("Simple Copy")) {
+      simple = state->at("Simple Copy");
+    }
+
+    _thread = std::thread([&, output_file, json_object=root->to_json(), files, simple] { thread_target(output_file, json_object, files, simple); });
     stats_timer.expires_after(1s);
     stats_timer.async_wait(std::bind(&Impl::on_stats_timer, this, _1));
   }
