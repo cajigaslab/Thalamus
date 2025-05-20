@@ -573,6 +573,7 @@ struct Storage2Node::Impl {
       context->height = height;
       context->framerate = framerate;
       context->time_base = {framerate.den, framerate.num};
+      context->gop_size = framerate.num / framerate.den;
 
       context->pix_fmt = AV_PIX_FMT_YUV420P;
 
@@ -749,6 +750,7 @@ struct Storage2Node::Impl {
     std::vector<thalamus_grpc::StorageRecord> in_queue;
     std::list<thalamus_grpc::StorageRecord> out_queue;
     thalamus_grpc::StorageRecord current;
+    uint64_t last_flush_ns = 0;
 
     ZlibEncoder(int _stream_id) : stream_id(_stream_id) {
       zstream.zalloc = nullptr;
@@ -789,7 +791,12 @@ struct Storage2Node::Impl {
           zstream.next_out =
               reinterpret_cast<unsigned char *>(compressed_data->data()) +
               offset;
-          auto error = deflate(&zstream, Z_NO_FLUSH);
+          auto flag = Z_NO_FLUSH;
+          if(record.time() - last_flush_ns >= 1'000'000'000) {
+            last_flush_ns = record.time();
+            flag = Z_SYNC_FLUSH;
+          }
+          auto error = deflate(&zstream, flag);
           THALAMUS_ASSERT(error == Z_OK, "ZLIB Error: %d", error);
           compressing = zstream.avail_out == 0;
           if (compressing) {
@@ -1003,7 +1010,7 @@ struct Storage2Node::Impl {
             auto &image = record.image();
             auto framerate_original = image.frame_interval()
                                           ? 1e9 / double(image.frame_interval())
-                                          : 1.0 / 60;
+                                          : 60;
             auto framerate_i = std::lower_bound(
                 framerates.begin(), framerates.end(),
                 std::make_pair(framerate_original, AVRational{1, 1}),
