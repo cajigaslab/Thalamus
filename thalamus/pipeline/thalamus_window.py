@@ -286,7 +286,6 @@ FACTORIES = {
     UserData(UserDataType.DEFAULT, 'Output File', 'test.tha', []),
     UserData(UserDataType.CHECK_BOX, 'Compress Analog', False, []),
     UserData(UserDataType.CHECK_BOX, 'Compress Video', False, []),
-    UserData(UserDataType.CHECK_BOX, 'Simple Copy', False, []),
   ]),
   'STARTER': Factory(None, [
     UserData(UserDataType.SPINBOX, 'Channel',  0, []),
