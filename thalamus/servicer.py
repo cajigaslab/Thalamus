@@ -14,6 +14,8 @@ from . import util_pb2
 from .config import ObservableCollection, ObservableDict, ObservableList
 from .task_controller.util import create_task_with_exc_handling
 
+from .qt import *
+
 LOGGER = logging.getLogger(__name__)
 
 class MatchContext(typing.NamedTuple):
@@ -269,4 +271,14 @@ class ThalamusServicer(thalamus_pb2_grpc.ThalamusServicer):
       queue = self.peer_name_to_queue[request.peer_name]
       await queue.put(thalamus_pb2.ObservableTransaction(acknowledged = request.id))
     return thalamus_pb2.Empty()
+
+  async def dialog(self, request: thalamus_pb2.Dialog, context):
+    if request.type == thalamus_pb2.Dialog.Type.INFO:
+      QMessageBox.information(None, request.title, request.message)
+    elif request.type == thalamus_pb2.Dialog.Type.WARN:
+      QMessageBox.warning(None, request.title, request.message)
+    elif request.type == thalamus_pb2.Dialog.Type.ERROR:
+      QMessageBox.critical(None, request.title, request.message)
+    return thalamus_pb2.Empty()
+
 

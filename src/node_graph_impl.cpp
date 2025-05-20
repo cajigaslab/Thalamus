@@ -98,6 +98,7 @@ struct NodeGraphImpl::Impl {
   std::chrono::system_clock::time_point system_time;
   std::chrono::steady_clock::time_point steady_time;
   ThreadPool thread_pool;
+  thalamus_grpc::Thalamus::Stub* stub;
 
   std::map<std::string, INodeFactory *> node_factories;
 
@@ -105,10 +106,11 @@ public:
   Impl(ObservableListPtr _nodes, boost::asio::io_context &_io_context,
        NodeGraphImpl *_outer,
        std::chrono::system_clock::time_point _system_time,
-       std::chrono::steady_clock::time_point _steady_time)
+       std::chrono::steady_clock::time_point _steady_time,
+       thalamus_grpc::Thalamus::Stub* _stub)
       : nodes(_nodes), num_nodes(nodes->size()), io_context(_io_context),
         outer(_outer), system_time(_system_time), steady_time(_steady_time),
-        thread_pool("ThreadPool") {
+        thread_pool("ThreadPool"), stub(_stub) {
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},
@@ -270,8 +272,9 @@ public:
 NodeGraphImpl::NodeGraphImpl(ObservableListPtr nodes,
                              boost::asio::io_context &io_context,
                              std::chrono::system_clock::time_point system_time,
-                             std::chrono::steady_clock::time_point steady_time)
-    : impl(new Impl(nodes, io_context, this, system_time, steady_time)) {
+                             std::chrono::steady_clock::time_point steady_time,
+                             thalamus_grpc::Thalamus::Stub* stub)
+    : impl(new Impl(nodes, io_context, this, system_time, steady_time, stub)) {
   impl->nodes->recap();
   impl->thread_pool.start();
 }
@@ -393,4 +396,15 @@ NodeGraphImpl::get_steady_clock_at_start() {
 }
 
 ThreadPool &NodeGraphImpl::get_thread_pool() { return impl->thread_pool; }
+
+void NodeGraphImpl::dialog(const thalamus_grpc::Dialog &dialog) {
+  auto context = std::make_shared<grpc::ClientContext>();
+  auto request = std::make_shared<thalamus_grpc::Dialog>(dialog);
+  auto response = std::make_shared<thalamus_grpc::Empty>();
+
+  impl->stub->async()->dialog(context.get(), request.get(), response.get(),
+        [moved_context=context,moved_request=request,moved_response=response](grpc::Status s) {
+          THALAMUS_LOG(info) << "Dialog complete " << s.error_message();
+        });
+}
 } // namespace thalamus

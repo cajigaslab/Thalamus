@@ -190,7 +190,7 @@ int main(int argc, char **argv) {
   grpc::ServerBuilder builder;
   builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
   std::unique_ptr<NodeGraphImpl> node_graph(
-      new NodeGraphImpl(nodes, io_context, system_start, steady_start));
+      new NodeGraphImpl(nodes, io_context, system_start, steady_start, stub.get()));
   Service service(state, io_context, *node_graph, state_url);
   node_graph->set_service(&service);
   builder.RegisterService(&service);

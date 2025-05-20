@@ -447,7 +447,18 @@ struct Storage2Node::Impl {
     std::filesystem::path rendered_path(rendered);
     auto parent_path = rendered_path.parent_path();
     if (!parent_path.empty()) {
-      std::filesystem::create_directories(parent_path);
+      std::error_code ec;
+      std::filesystem::create_directories(parent_path, ec);
+      if(ec) {
+        boost::asio::post(io_context, [&,ec] {
+          thalamus_grpc::Dialog d;
+          d.set_title("Storage Error");
+          d.set_message(ec.message());
+          d.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_ERROR);
+          graph->dialog(d);
+        });
+      }
+      return "";
     }
 
     output_stream = std::ofstream(rendered, std::ios::trunc | std::ios::binary);
@@ -854,6 +865,12 @@ struct Storage2Node::Impl {
     set_current_thread_name("STORAGE");
 
     auto filename = prepare_storage(output_file);
+    if(filename.empty()) {
+      boost::asio::post(io_context, [&] {
+        (*state)["Running"].assign(false);
+      });
+      return;
+    }
     std::filesystem::path filepath(filename);
     {
       std::ofstream config_output(filename + ".json");
@@ -871,9 +888,21 @@ struct Storage2Node::Impl {
             + filepath.extension().string()
             + file.extension().string());
       THALAMUS_LOG(info) << file << " -> " << destination;
+      std::error_code ec;
       std::filesystem::copy(file, destination,
           std::filesystem::copy_options::overwrite_existing
-          | std::filesystem::copy_options::recursive);
+          | std::filesystem::copy_options::recursive, ec);
+      if(ec) {
+        boost::asio::post(io_context, [&,ec] {
+          thalamus_grpc::Dialog d;
+          d.set_title("Storage Error");
+          d.set_message(ec.message());
+          d.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_ERROR);
+          graph->dialog(d);
+          (*state)["Running"].assign(false);
+        });
+        return;
+      }
     }
 
     Finally f([&] { close_file(); });

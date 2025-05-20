@@ -36,6 +36,19 @@ service Thalamus {
   rpc inject_text(stream InjectTextRequest) returns (stream Pong) {}
   rpc stim(stream StimRequest) returns (stream StimResponse) {}
   rpc inject_motion_capture(stream InjectMotionCaptureRequest) returns (Empty) {}
+  rpc dialog(Dialog) returns (Empty) {}
+}
+
+message Dialog {
+  enum Type {
+    INFO = 0;
+    WARN = 1;
+    ERROR = 2;
+    FATAL = 3;
+  }
+  string title = 1;
+  string message = 2;
+  Type type = 3;
 }
 
 message Redirect {
