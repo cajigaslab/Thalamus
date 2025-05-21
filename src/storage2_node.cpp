@@ -861,6 +861,35 @@ struct Storage2Node::Impl {
     }
   };
 
+  void simple_thread_target(std::string output_file, const boost::json::value& config, const std::vector<std::filesystem::path>& files) {
+    set_current_thread_name("STORAGE");
+
+    std::filesystem::path filepath(output_file);
+    for(auto& file : files) {
+      if(!std::filesystem::exists(file)) {
+        THALAMUS_LOG(error) << "File doesn't exist: " << file.string();
+        continue;
+      }
+      auto destination = filepath.parent_path() / file.filename();
+      THALAMUS_LOG(info) << file << " -> " << destination;
+      std::error_code ec;
+      std::filesystem::copy(file, destination,
+          std::filesystem::copy_options::overwrite_existing
+          | std::filesystem::copy_options::recursive, ec);
+      if(ec) {
+        boost::asio::post(io_context, [&,ec] {
+          thalamus_grpc::Dialog d;
+          d.set_title("File Copy Error");
+          d.set_message(ec.message());
+          d.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_ERROR);
+          graph->dialog(d);
+          (*state)["Running"].assign(false);
+        });
+        return;
+      }
+    }
+  }
+
   void thread_target(std::string output_file, const boost::json::value& config, const std::vector<std::filesystem::path>& files) {
     set_current_thread_name("STORAGE");
 
@@ -1151,7 +1180,16 @@ struct Storage2Node::Impl {
       }
     }
 
-    _thread = std::thread([&, output_file, json_object=root->to_json(), files] { thread_target(output_file, json_object, files); });
+    auto simple = false;
+    if(state->contains("Simple Copy")) {
+      simple = state->at("Simple Copy");
+    }
+
+    if(simple) {
+      _thread = std::thread([&, output_file, json_object=root->to_json(), files] { simple_thread_target(output_file, json_object, files); });
+    } else {
+      _thread = std::thread([&, output_file, json_object=root->to_json(), files] { thread_target(output_file, json_object, files); });
+    }
     stats_timer.expires_after(1s);
     stats_timer.async_wait(std::bind(&Impl::on_stats_timer, this, _1));
   }
