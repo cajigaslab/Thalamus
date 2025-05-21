@@ -37,110 +37,107 @@ Config = typing.NamedTuple('Config', [
 RANDOM_DEFAULT = {'min': 1, 'max':1}
 COLOR_DEFAULT = [255, 255, 255]
 
+def compute_waveform(config: ObservableDict):
+  try:
+    stimulation_channel = config['Stimulation Channel']
+
+    if stimulation_channel == "AO3":
+        dc_off = 13e-4
+    elif stimulation_channel == "AO2":
+        dc_off = 30e-4
+    elif stimulation_channel == "AO1":
+        dc_off = 10e-4
+    elif stimulation_channel == "AO0":
+        dc_off = 20e-4
+    else:
+        dc_off = 0
+
+    sample_rate_hz = 100e3
+    sample_period_s = 1/sample_rate_hz
+    amplitude_ua = config['Amplitude (uA)']
+    amplitude_a = amplitude_ua/1e6
+    amplitude_v = amplitude_a*1e4
+    pulse_width_us = config['Pulse Width (us)']
+    pulse_width_s = pulse_width_us/1e6
+    pulse_width_samples = int(pulse_width_s*sample_rate_hz)
+    if pulse_width_samples == 0:
+      return
+    pulse_width_hz = 1/(2*pulse_width_s)
+    frequency_hz = config['Frequency (Hz)']
+    duration_s = 1/frequency_hz
+    duration_samples = int(duration_s*sample_rate_hz)
+    num_pulses = config['Number of Pulses']
+    interphase_delay_ms = config['Interphase Delay (ms)']
+    interphase_delay_s = interphase_delay_ms/1e3
+    interphase_delay_samples = int(interphase_delay_s*sample_rate_hz)
+    stimulation_duration_s = config['Stimulation Duration (s)']
+    discharge_duration_s = config['Discharge Duration (s)']
+    is_biphasic = config['Phase'] == 'Biphasic'
+    polarity = 1 if config['Lead'] == 'Cathode-leading' else -1
+    repetitions = int(stimulation_duration_s/duration_s)
+    total_samples = int(stimulation_duration_s*sample_rate_hz)
+    if repetitions == 0:
+      return
+
+    out_wave = numpy.zeros((total_samples,))
+    for i in range(0, len(out_wave), duration_samples):
+      if is_biphasic:
+        for j in range(num_pulses):
+          offset = i + 2*j*(pulse_width_samples + interphase_delay_samples)
+          end = offset + pulse_width_samples
+          if total_samples < end:
+            break
+          out_wave[offset:end] = polarity*amplitude_v-dc_off
+          offset = i + (2*j+1)*(pulse_width_samples + interphase_delay_samples)
+          end = offset + pulse_width_samples
+          if total_samples < end:
+            break
+          out_wave[offset:end] = -polarity*amplitude_v-dc_off
+      else:
+        for j in range(num_pulses):
+          offset = i + j*(pulse_width_samples + interphase_delay_samples)
+          end = offset + pulse_width_samples
+          if total_samples < end:
+            break
+          out_wave[offset:offset + pulse_width_samples] = polarity*amplitude_v-dc_off
+
+    out_wave[0] = 0
+    out_wave[-1] = 0
+    return out_wave
+    #numpy.savetxt("foo.csv", out_wave)
+  except ZeroDivisionError:
+    return None
+
 class WaveformWidget(QWidget):
   def __init__(self, config: ObservableDict):
     super().__init__()
     self.config = config
     self.path = None
     self.bounds = 0, 0, 0, 0
+    self.last_x = None
+    self.zoom = 1
+    self.offset = 0
 
     config.add_recursive_observer(lambda *args: self.update_wave(), lambda: isdeleted(self), True)
 
   def update_wave(self):
-    try:
-      stimulation_channel = self.config['Stimulation Channel']
-
-      if stimulation_channel == "AO3":
-          dc_off = 13e-4
-      elif stimulation_channel == "AO2":
-          dc_off = 30e-4
-      elif stimulation_channel == "AO1":
-          dc_off = 10e-4
-      elif stimulation_channel == "AO0":
-          dc_off = 20e-4
-      else:
-          dc_off = 0
-
-      sample_rate_hz = 10e3
-      sample_period_s = 1/sample_rate_hz
-      amplitude_ua = self.config['Amplitude (uA)']
-      amplitude_a = amplitude_ua/1e6
-      amplitude_v = amplitude_a*1e4
-      pulse_width_us = self.config['Pulse Width (us)']
-      pulse_width_s = pulse_width_us/1e6
-      pulse_width_samples = int(pulse_width_s*sample_rate_hz)
-      if pulse_width_samples == 0:
-        return
-      pulse_width_hz = 1/(2*pulse_width_s)
-      frequency_hz = self.config['Frequency (Hz)']
-      duration_s = 1/frequency_hz
-      num_pulses = self.config['Number of Pulses']
-      interphase_delay_ms = self.config['Interphase Delay (ms)']
-      interphase_delay_s = interphase_delay_ms/1e3
-      interphase_delay_samples = int(interphase_delay_s*sample_rate_hz)
-      stimulation_duration_s = self.config['Stimulation Duration (s)']
-      discharge_duration_s = self.config['Discharge Duration (s)']
-      is_biphasic = self.config['Phase'] == 'Biphasic'
-      polarity = 1 if self.config['Lead'] == 'Cathode-leading' else -1
-      repetitions = int(stimulation_duration_s/duration_s)
-      if repetitions == 0:
-        return
-
-      cycle_time = numpy.arange(0, duration_s, sample_period_s)
-      cycle_samples = len(cycle_time)
-      if is_biphasic:
-        phases_per_pulse = 2
-        duty_cycle = num_pulses*phases_per_pulse*pulse_width_s*frequency_hz
-
-        duty_wave = .5*scipy.signal.square(2*numpy.pi*frequency_hz*cycle_time, duty_cycle) + .5
-        duty_wave[:-1] = duty_wave[1:]
-        duty_wave[-1] = 0
-        
-        stim_wave = scipy.signal.square(2*numpy.pi*pulse_width_hz*cycle_time)
-        pulse_width_samples = numpy.where(numpy.diff(stim_wave) < 0)[0]
-        if len(pulse_width_samples) == 0:
-          return
-        pulse_width_samples = pulse_width_samples[0]+1
-        stim_wave *= ((polarity*amplitude_v)-dc_off)
-        stim_wave *= duty_wave
-        out_wave = stim_wave
-      else:
-        phases_per_pulse = 1
-        duty_cycle = num_pulses*phases_per_pulse*pulse_width_s*frequency_hz
-
-        square = .5*scipy.signal.square(2*numpy.pi*frequency_hz*cycle_time, duty_cycle) + .5
-        out_wave = ((polarity*amplitude_v)-dc_off)*square
-        out_wave[:-1] = out_wave[1:]
-        out_wave[-1] = 0
-          
-      if interphase_delay_ms:
-        interphase_delay = numpy.zeros((interphase_delay_samples,))
-        
-        chunks = []
-        for i in range(0, len(out_wave), pulse_width_samples):
-          chunks.append(out_wave[i:i+pulse_width_samples])
-          chunks.append(interphase_delay)
-          cycle_samples += len(interphase_delay)
-        out_wave = numpy.hstack(chunks)
-
-      out_wave = numpy.hstack(int(repetitions)*[out_wave])
-      #numpy.savetxt("foo.csv", out_wave)
-    except ZeroDivisionError:
-      return
-    if len(out_wave) == 0:
+    out_wave = compute_waveform(self.config)
+    if out_wave is None:
       return
     
-    self.scales = 1000/(duration_s), 1000/(numpy.max(out_wave)-numpy.min(out_wave))
+    #self.scales = 1000/(duration_s), 1000/(numpy.max(out_wave)-numpy.min(out_wave))
     self.out_wave = out_wave
     self.path = QPainterPath()
     self.path.moveTo(0, out_wave[0])
+    sample_rate_hz = 100e3
+    sample_period_s = 1/sample_rate_hz
     for i, sample in enumerate(out_wave):
-      t = i*sample_period_s
-      if i >= cycle_samples:
-        break
-      self.path.lineTo(self.scales[0]*t, self.scales[1]*sample)
+      #t = i*sample_period_s
+      #if i >= cycle_samples:
+        #break
+      self.path.lineTo(i*sample_period_s, sample)
 
-    self.bounds = 0, numpy.min(out_wave), t, (numpy.max(out_wave) - numpy.min(out_wave))
+    self.bounds = 0, numpy.min(out_wave), i*sample_period_s, (numpy.max(out_wave) - numpy.min(out_wave))
     self.update()
 
   def paintEvent(self, e: QPaintEvent):
@@ -148,13 +145,45 @@ class WaveformWidget(QWidget):
       return
 
     painter = QPainter(self)
+    painter.drawText(QRect(0, 0, self.width(), self.height()), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop, f'{-self.offset*1000:.3f}ms')
+    painter.drawText(QRect(0, 0, self.width(), self.height()), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop, f'{(-self.offset + self.bounds[2]/self.zoom)*1000:.3f}ms')
+
+    pen = painter.pen()
+    pen.setCosmetic(True)
+    painter.setPen(pen)
     painter.translate(0, .05*self.height())
     painter.scale(1, .9)
     painter.translate(0, self.height())
-    painter.scale(self.width()/(self.scales[0]*self.bounds[2]), -self.height()/(self.scales[1]*self.bounds[3]))
-    painter.translate(-self.scales[0]*self.bounds[0], -self.scales[1]*self.bounds[1])
+    painter.scale(self.width()/self.bounds[2], -self.height()/self.bounds[3])
+    painter.translate(-self.bounds[0], -self.bounds[1])
+
+    painter.scale(self.zoom, 1)
+    painter.translate(self.offset, 0)
+
     painter.drawPath(self.path)
     #painter.drawEllipse(0, 0, 100, 100)
+
+  def wheelEvent(self, e: QWheelEvent):
+    if e.angleDelta().y() > 0:
+      self.zoom *= 1.1
+    else:
+      self.zoom *= .9
+      self.zoom = max(self.zoom, 1)
+    self.update()
+
+  def mousePressEvent(self, e: QMouseEvent):
+    self.last_x = qt_get_x(e)
+
+  def mouseReleaseEvent(self, e: QMouseEvent):
+    self.last_x = None
+
+  def mouseMoveEvent(self, e: QMouseEvent):
+    if self.last_x is not None:
+      new_x = qt_get_x(e)
+      self.offset += (new_x - self.last_x)*(self.bounds[2]/self.zoom)/self.width()
+      self.last_x = new_x
+      self.update()
+
 
 class StimWidget(QWidget):
   def __init__(self, config: ObservableDict):
@@ -398,6 +427,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Uniform('Start Interval', 'start_timeout', 1, 1, 's'),
     Form.Uniform('Hold Interval', 'hold_timeout', 1, 1, 's'),
     Form.Uniform('Blink Interval', 'blink_timeout', 1, 1, 's'),
+    Form.Uniform('Baseline Interval', 'baseline_timeout', 1, 1, 's'),
     Form.Constant('Window Size', 'window_size', 0, '\u00B0'),
     Form.Color('Color', 'target_color', QColor(255, 255, 255)),
     #Form.Bool('AO0 Enabled', 'AO0 Enabled', False),
@@ -477,15 +507,11 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   """
   Implementation of the state machine for the simple task
   """
-
-  """
-  Below is an object that contains a realization generated by sampling from the random
-  distributions defined in the task_config. It itself has no logic, it simply holds
-  the realization's values.
-  """
   assert context.widget, 'Widget is None'
 
   intertrial_timeout = datetime.timedelta(seconds=context.get_value('intertrial_timeout'))
+  baseline_timeout = datetime.timedelta(seconds=context.get_value('baseline_timeout'))
+  blink_timeout = datetime.timedelta(seconds=context.get_value('blink_timeout'))
   success_timeout = datetime.timedelta(seconds=context.get_value('success_timeout'))
   fail_timeout = datetime.timedelta(seconds=context.get_value('fail_timeout'))
   start_timeout = datetime.timedelta(seconds=context.get_value('start_timeout'))
@@ -495,53 +521,36 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   window_size = ecc_to_px(window_size, dpi)
   window_size_squared = window_size*window_size
 
-  volt_per_amp = 10e3
-  amp_per_uamp = 1e-6
-  volt_per_uamp = amp_per_uamp*volt_per_amp
+  stimulation_channel = context.task_config['Stimulation Channel']
+  all_enabled = [False, False, False, False]
 
-  sample_rate = 10e3
-  sample_interval = int(1e9/sample_rate)
-  all_enabled = [context.task_config['AO0 Enabled'], context.task_config['AO1 Enabled'], context.task_config['AO2 Enabled'], context.task_config['AO3 Enabled']]
-  all_count = [context.task_config['AO0 Count'], context.task_config['AO1 Count'], context.task_config['AO2 Count'], context.task_config['AO3 Count']]
-  all_frequency = [context.task_config['AO0 Frequency'], context.task_config['AO1 Frequency'], context.task_config['AO2 Frequency'], context.task_config['AO3 Frequency']]
-  all_amplitude = numpy.array([
-    context.task_config['AO0 Amplitude'],
-    context.task_config['AO1 Amplitude'],
-    context.task_config['AO2 Amplitude'],
-    context.task_config['AO3 Amplitude']])*volt_per_uamp
-  print(all_amplitude)
+  if stimulation_channel == "AO3":
+    all_enabled[3] = True
+    ao = 3
+  elif stimulation_channel == "AO2":
+    all_enabled[2] = True
+    ao = 2
+  elif stimulation_channel == "AO1":
+    all_enabled[1] = True
+    ao = 1
+  elif stimulation_channel == "AO0":
+    all_enabled[0] = True
+    ao = 0
     
   mux = round(context.task_config['Mux'])
   mux_bits = [5*((mux >> i) & 1) for i in range(4)]
   stim_bits = [5 if e else 0 for e in all_enabled]
   stim_bits = [stim_bits[1], stim_bits[3], stim_bits[2], stim_bits[0]]
-
-  max_duration = max(a/b for a,b in zip(all_count, all_frequency))
-  max_duration = min(max_duration, 1)
-  max_samples = int(max_duration*sample_rate)
   
   #stim_request = StimRequest()
   stim_declaration: StimDeclaration = StimDeclaration()
   stim_data: AnalogResponse = stim_declaration.data
   stim_data.channel_type = AnalogResponse.ChannelType.Voltage
-  for i, values in enumerate(zip(all_enabled, all_count, all_frequency, all_amplitude)):
-    enabled, count, frequency, amplitude = values
-    span_start = len(stim_data.data)
-    if enabled:
-      period = 1/frequency
-      period_samples = int(period*sample_rate)
-      period_samples_half = period_samples/2
-      signal_samples = int(period_samples*count)
-      signal_samples = min(signal_samples, max_samples)
-      channel_data = numpy.zeros((max_samples,))
-      channel_data[:signal_samples] = amplitude*(1 - ((numpy.arange(signal_samples)//period_samples_half) % 2))
-      channel_data[-1] = 0
-      stim_data.data.extend(channel_data)
-    else:
-      stim_data.data.extend(numpy.zeros((max_samples,)))
-    stim_data.spans.append(Span(begin=span_start,end=len(stim_data.data),name=f'/PXI1Slot4/ao{i}'))
-    stim_data.sample_intervals.append(sample_interval)
-  
+  waveform = compute_waveform(context.task_config)
+  if waveform is not None:
+    stim_data.data.extend(waveform)
+    stim_data.spans.append(Span(begin=0,end=len(stim_data.data),name=f'/PXI1Slot4/ao{ao}'))
+    stim_data.sample_intervals.append(int(1e9/100e3))
 
   mux_signal = AnalogResponse(
     data=mux_bits + stim_bits + [5],
@@ -559,7 +568,8 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     sample_intervals=[0, 0, 0, 0, 0, 0, 0, 0, 0])
   print(mux_signal)
   await context.inject_analog('Mux', mux_signal)
-  await context.arm_stim('Ceci', stim_declaration)
+  if waveform is not None:
+    await context.arm_stim('Ceci', stim_declaration)
 
   display_indicator = False
   state = State.NONE
@@ -635,6 +645,8 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
 
     if fixating:
       break
+
+  await wait_for_hold(context, lambda: fixating, baseline_timeout, blink_timeout)
 
   deliver_stim = True
   await transition(State.SUCCESS)
