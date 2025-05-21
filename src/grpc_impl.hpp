@@ -57,8 +57,8 @@ public:
                      ::grpc::ServerReader<::thalamus_grpc::Text> *reader,
                      ::thalamus_grpc::Empty *) override;
   ::grpc::Status logout(::grpc::ServerContext *context,
-                      const ::thalamus_grpc::Empty *,
-                      ::grpc::ServerWriter<::thalamus_grpc::Text> *writer) override;
+                        const ::thalamus_grpc::Empty *,
+                        ::grpc::ServerWriter<::thalamus_grpc::Text> *writer) override;
   ::grpc::Status observable_bridge(
       ::grpc::ServerContext *context,
       ::grpc::ServerReaderWriter<::thalamus_grpc::ObservableChange,

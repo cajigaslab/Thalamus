@@ -245,6 +245,13 @@ class CanvasPainter(QPainter):
     if self.current_output_mask in (RenderOutput.ANY, self.output_mask):
       super().drawText(*args, **kwargs)
 
+  def drawEllipse(self, *args: typing.Any, **kwargs: typing.Any) -> None: # pylint: disable=invalid-name
+    '''
+    Override that implements masked rendering
+    '''
+    if self.current_output_mask in (RenderOutput.ANY, self.output_mask):
+      super().drawEllipse(*args, **kwargs)
+
   @contextlib.contextmanager
   def masked(self, mask: RenderOutput) -> typing.Iterator['CanvasPainterProtocol']:
     '''
