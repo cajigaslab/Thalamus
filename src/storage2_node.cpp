@@ -452,13 +452,13 @@ struct Storage2Node::Impl {
       if(ec) {
         boost::asio::post(io_context, [&,ec] {
           thalamus_grpc::Dialog d;
-          d.set_title("Storage Error");
+          d.set_title("Failed to make output dir");
           d.set_message(ec.message());
           d.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_ERROR);
           graph->dialog(d);
         });
+        return "";
       }
-      return "";
     }
 
     output_stream = std::ofstream(rendered, std::ios::trunc | std::ios::binary);
@@ -895,7 +895,7 @@ struct Storage2Node::Impl {
       if(ec) {
         boost::asio::post(io_context, [&,ec] {
           thalamus_grpc::Dialog d;
-          d.set_title("Storage Error");
+          d.set_title("File Copy Error");
           d.set_message(ec.message());
           d.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_ERROR);
           graph->dialog(d);
