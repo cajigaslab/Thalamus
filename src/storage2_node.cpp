@@ -232,7 +232,9 @@ struct Storage2Node::Impl {
               j = stream_mappings.find(std::make_pair(node, i));
             }
             ++queued_records;
-            queued_bytes += record.ByteSizeLong();
+            auto record_bytes = record.ByteSizeLong();
+            queued_bytes += record_bytes;
+            currently_queued_bytes += record_bytes;
             records.emplace_back(std::move(record), j->second);
           }
         }
@@ -471,10 +473,15 @@ struct Storage2Node::Impl {
   std::vector<std::pair<thalamus_grpc::StorageRecord, int>> records;
   std::condition_variable records_condition;
   std::mutex records_mutex;
+  std::mutex stats_mutex;
   std::thread _thread;
   std::atomic_uint queued_records = 0;
   std::atomic_ullong queued_bytes = 0;
   std::atomic_ullong written_bytes = 0;
+  std::atomic_ullong queue_max_bytes = 0;
+  std::atomic_ullong currently_queued_bytes = 0;
+  long long sweep_count = 0;
+  std::chrono::steady_clock::duration total_sweep_time = 0ns;
 
   const size_t zbuffer_size = 1024;
 
@@ -861,7 +868,7 @@ struct Storage2Node::Impl {
     }
   };
 
-  void simple_thread_target(std::string output_file, const boost::json::value& config, const std::vector<std::filesystem::path>& files) {
+  void simple_thread_target(std::string output_file, const boost::json::value&, const std::vector<std::filesystem::path>& files) {
     set_current_thread_name("STORAGE");
 
     std::filesystem::path filepath(output_file);
@@ -1033,7 +1040,10 @@ struct Storage2Node::Impl {
         records_condition.wait_for(
             lock, 1s, [&] { return !records.empty() || !is_running; });
         local_records.swap(records);
+        queue_max_bytes = std::max(queue_max_bytes.load(), currently_queued_bytes.load());
+        currently_queued_bytes = 0;
       }
+      auto sweep_start = std::chrono::steady_clock::now();
       for (auto &record_pair : local_records) {
         auto &[record, stream] = record_pair;
         auto body_type = record.body_case();
@@ -1109,6 +1119,10 @@ struct Storage2Node::Impl {
       }
 
       service_encoders(false);
+      auto sweep_end = std::chrono::steady_clock::now();
+      std::lock_guard<std::mutex> stats_lock(stats_mutex);
+      ++sweep_count;
+      total_sweep_time += sweep_end - sweep_start;
     }
     service_encoders(true);
   }
@@ -1116,8 +1130,10 @@ struct Storage2Node::Impl {
   void queue_record(thalamus_grpc::StorageRecord &&record, int stream = 0) {
     // TRACE_EVENT("thalamus", "Storage2Node::queue_record");
     ++queued_records;
-    queued_bytes += record.ByteSizeLong();
+    auto record_bytes = record.ByteSizeLong();
+    queued_bytes += record_bytes;
     std::lock_guard<std::mutex> lock(records_mutex);
+    currently_queued_bytes += record_bytes;
     records.emplace_back(std::move(record), stream);
     records_condition.notify_one();
   }
@@ -1135,9 +1151,19 @@ struct Storage2Node::Impl {
     update_metrics(0, 0, queued_records, [&] { return "Output Queue Count"; });
     update_metrics(0, 1, queued_bytes, [&] { return "Output Queue Bytes"; });
     update_metrics(0, 2, written_bytes, [&] { return "Written Bytes"; });
+    update_metrics(0, 3, queue_max_bytes, [&] { return "Max Queued Bytes"; });
     queued_records = 0;
     queued_bytes = 0;
     written_bytes = 0;
+    queue_max_bytes = 0;
+    std::chrono::nanoseconds average_sweep;
+    {
+      std::lock_guard<std::mutex> stats_lock(stats_mutex);
+      average_sweep = sweep_count ? (total_sweep_time / sweep_count) : 0ns;
+      sweep_count = 0;
+      total_sweep_time = 0ns;
+    }
+    update_metrics(0, 4, size_t(average_sweep.count()), [&] { return "Average Sweep (ns)"; });
 
     auto now = std::chrono::steady_clock::now();
     auto elapsed = now - last_publish;
@@ -1163,6 +1189,13 @@ struct Storage2Node::Impl {
     queued_bytes = 0;
     queued_records = 0;
     written_bytes = 0;
+    queue_max_bytes = 0;
+    currently_queued_bytes = 0;
+    {
+      std::lock_guard<std::mutex> lock(stats_mutex);
+      sweep_count = 0;
+      total_sweep_time = 0ns;
+    }
 
     //Walk up to root config
     ObservableCollection* root = state.get();
