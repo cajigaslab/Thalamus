@@ -338,7 +338,7 @@ struct Storage2Node::Impl {
 
       for (auto i = 0; i < int(locked_analog->num_planes()); ++i) {
         auto data = locked_analog->plane(i);
-        if(body->data_size() < i) {
+        if(i < body->data_size()) {
           body->set_data(i, data.data(), data.size());
         } else {
           body->add_data(data.data(), data.size());
@@ -964,7 +964,7 @@ struct Storage2Node::Impl {
     std::map<std::string, std::unique_ptr<VideoEncoder>> video_encoders;
     std::vector<Encoder *> encoders;
     encoders.push_back(&identity_encoder);
-    std::string buffer;
+    std::string buffer, serialized;
 
     std::vector<std::pair<double, AVRational>> framerates = {
         {24000.0 / 1001, {24000, 1001}},
@@ -983,6 +983,7 @@ struct Storage2Node::Impl {
     std::sort(framerates.begin(), framerates.end(),
               [](auto &lhs, auto &rhs) { return lhs.first < rhs.first; });
 
+    std::vector<std::pair<uint64_t, std::shared_ptr<thalamus_grpc::StorageRecord>>> heap;
     auto service_encoders = [&](bool finish) {
       std::mutex mutex;
       std::condition_variable condition;
@@ -1008,18 +1009,18 @@ struct Storage2Node::Impl {
         condition.wait(lock, [&] { return pending_bands == 0; });
       }
 
-      std::vector<std::pair<uint64_t, thalamus_grpc::StorageRecord>> heap;
       auto comparator = [](decltype(heap)::value_type lhs,
                            decltype(heap)::value_type rhs) {
         return lhs.first > rhs.first;
       };
 
+      heap.clear();
       {
         TRACE_EVENT("thalamus", "sort");
         for (auto encoder : encoders) {
           auto record = encoder->pull();
           while (record) {
-            heap.emplace_back(record->time(), std::move(*record));
+            heap.emplace_back(record->time(), record);
             std::push_heap(heap.begin(), heap.end(), comparator);
             record = encoder->pull();
           }
@@ -1031,7 +1032,7 @@ struct Storage2Node::Impl {
         buffer.clear();
         while (!heap.empty()) {
           std::pop_heap(heap.begin(), heap.end(), comparator);
-          auto serialized = heap.back().second.SerializePartialAsString();
+          heap.back().second->SerializePartialToString(&serialized);
           heap.pop_back();
 
           auto size = serialized.size();
