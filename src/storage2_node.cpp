@@ -132,15 +132,15 @@ struct Storage2Node::Impl {
 
     update_metrics(1, 0, 1, [&] { return "Events"; });
 
-    thalamus_grpc::StorageRecord record;
+    auto record = std::make_shared<thalamus_grpc::StorageRecord>();
     {
       TRACE_EVENT("thalamus", "Storage2Node::on_event(build record)");
-      auto body = record.mutable_event();
+      auto body = record->mutable_event();
       *body = e;
-      record.set_time(e.time());
+      record->set_time(e.time());
     }
 
-    queue_record(std::move(record));
+    queue_record(record);
   }
 
   void on_log(const thalamus_grpc::Text &e) {
@@ -151,15 +151,15 @@ struct Storage2Node::Impl {
 
     update_metrics(1, 0, 1, [&] { return "Log"; });
 
-    thalamus_grpc::StorageRecord record;
+    auto record = std::make_shared<thalamus_grpc::StorageRecord>();
     {
       TRACE_EVENT("thalamus", "Storage2Node::on_event(build record)");
-      auto body = record.mutable_text();
+      auto body = record->mutable_text();
       *body = e;
-      record.set_time(e.time());
+      record->set_time(e.time());
     }
 
-    queue_record(std::move(record));
+    queue_record(record);
   }
 
   std::map<std::pair<Node *, int>, int> stream_mappings;
@@ -172,16 +172,16 @@ struct Storage2Node::Impl {
 
     TRACE_EVENT("thalamus", "Storage2Node::on_analog_data");
 
-    thalamus_grpc::StorageRecord record;
-    auto body = record.mutable_analog();
+    auto record = std::make_shared<thalamus_grpc::StorageRecord>();
+    auto body = record->mutable_analog();
     if (compress_analog) {
       records_mutex.lock();
     }
 
     {
       TRACE_EVENT("thalamus", "Storage2Node::on_analog_data(build record)");
-      record.set_time(uint64_t(locked_analog->time().count()));
-      record.set_node(name);
+      record->set_time(uint64_t(locked_analog->time().count()));
+      record->set_node(name);
       body->set_time(uint64_t(locked_analog->time().count()));
       body->set_remote_time(uint64_t(locked_analog->remote_time().count()));
       visit_node(locked_analog, [&]<typename T>(T *wrapper) {
@@ -191,10 +191,10 @@ struct Storage2Node::Impl {
             if (data.empty()) {
               continue;
             }
-            record = thalamus_grpc::StorageRecord();
-            body = record.mutable_analog();
-            record.set_time(uint64_t(locked_analog->time().count()));
-            record.set_node(name);
+            record = std::make_shared<thalamus_grpc::StorageRecord>();
+            body = record->mutable_analog();
+            record->set_time(uint64_t(locked_analog->time().count()));
+            record->set_node(name);
             body->set_time(uint64_t(locked_analog->time().count()));
             body->set_remote_time(
                 uint64_t(locked_analog->remote_time().count()));
@@ -232,16 +232,16 @@ struct Storage2Node::Impl {
               j = stream_mappings.find(std::make_pair(node, i));
             }
             ++queued_records;
-            auto record_bytes = record.ByteSizeLong();
+            auto record_bytes = record->ByteSizeLong();
             queued_bytes += record_bytes;
             currently_queued_bytes += record_bytes;
-            records.emplace_back(std::move(record), j->second);
+            records.emplace_back(record, j->second);
           }
         }
       });
     }
     if (!compress_analog) {
-      queue_record(std::move(record));
+      queue_record(record);
     } else {
       records_condition.notify_one();
       records_mutex.unlock();
@@ -265,6 +265,40 @@ struct Storage2Node::Impl {
     metrics.at(offset->second).first += double(count);
   }
 
+  template <typename T> struct SimplePool {
+    struct State {
+      std::mutex mutex;
+      std::vector<T *> pool;
+      bool deleted = false;
+    };
+    std::shared_ptr<State> state = std::make_shared<State>();
+    ~SimplePool() {
+      std::lock_guard<std::mutex> lock(state->mutex);
+      state->deleted = true;
+      for (auto t : state->pool) {
+        delete t;
+      }
+    }
+    std::shared_ptr<T> get() {
+      std::lock_guard<std::mutex> lock(state->mutex);
+      if (state->pool.empty()) {
+        state->pool.push_back(new T());
+      }
+      auto result = state->pool.back();
+      state->pool.pop_back();
+      return std::shared_ptr<T>(result, [state_ref=this->state](T *t) {
+        std::lock_guard<std::mutex> lock2(state_ref->mutex);
+        if(state_ref->deleted) {
+          delete t;
+        } else {
+          state_ref->pool.push_back(t);
+        }
+      });
+    }
+  };
+
+  std::map<std::string, SimplePool<thalamus_grpc::StorageRecord>> image_pools;
+
   void on_image_data(Node * node, const std::string &name, ImageNode *locked_analog,
                      size_t metrics_index) {
     if (!is_running || !locked_analog->has_image_data()) {
@@ -276,10 +310,10 @@ struct Storage2Node::Impl {
       update_metrics(int(metrics_index), 0, 1, [&] { return name; });
     }
 
-    thalamus_grpc::StorageRecord record;
+    auto record = image_pools[name].get();
     {
       TRACE_EVENT("thalamus", "Storage2Node::on_image_data(build record)");
-      auto body = record.mutable_image();
+      auto body = record->mutable_image();
       body->set_width(uint32_t(locked_analog->width()));
       body->set_height(uint32_t(locked_analog->height()));
       body->set_frame_interval(
@@ -304,14 +338,18 @@ struct Storage2Node::Impl {
 
       for (auto i = 0; i < int(locked_analog->num_planes()); ++i) {
         auto data = locked_analog->plane(i);
-        body->add_data(data.data(), data.size());
+        if(body->data_size() < i) {
+          body->set_data(i, data.data(), data.size());
+        } else {
+          body->add_data(data.data(), data.size());
+        }
       }
 
-      record.set_time(size_t(locked_analog->time().count()));
-      record.set_node(name);
+      record->set_time(size_t(locked_analog->time().count()));
+      record->set_node(name);
     }
 
-    queue_record(std::move(record));
+    queue_record(record);
   }
 
   void on_text_data(Node * node, const std::string &name, TextNode *locked_text,
@@ -325,19 +363,19 @@ struct Storage2Node::Impl {
     if(node != outer) {
       update_metrics(int(metrics_index), 0, 1, [&] { return name; });
     }
-    thalamus_grpc::StorageRecord record;
+    auto record = std::make_shared<thalamus_grpc::StorageRecord>();
     {
       TRACE_EVENT("thalamus", "Storage2Node::on_text_data(build record)");
-      auto body = record.mutable_text();
+      auto body = record->mutable_text();
       auto body_text = locked_text->text();
 
       body->set_text(body_text.data(), body_text.size());
 
-      record.set_time(size_t(locked_text->time().count()));
-      record.set_node(name);
+      record->set_time(size_t(locked_text->time().count()));
+      record->set_node(name);
     }
 
-    queue_record(std::move(record));
+    queue_record(record);
   }
 
   void on_xsens_data(Node * node, const std::string &name,
@@ -351,10 +389,10 @@ struct Storage2Node::Impl {
       update_metrics(int(metrics_index), 0, 1, [&] { return name; });
     }
 
-    thalamus_grpc::StorageRecord record;
+    auto record = std::make_shared<thalamus_grpc::StorageRecord>();
     {
       TRACE_EVENT("thalamus", "Storage2Node::on_motion_data(build record)");
-      auto body = record.mutable_xsens();
+      auto body = record->mutable_xsens();
       body->set_pose_name(locked_xsens->pose_name());
       auto segments = locked_xsens->segments();
       for (auto &segment : segments) {
@@ -371,11 +409,11 @@ struct Storage2Node::Impl {
         protobuf_segment->set_q2(boost::qvm::Y(segment.rotation));
         protobuf_segment->set_q3(boost::qvm::Z(segment.rotation));
       }
-      record.set_time(uint64_t(locked_xsens->time().count()));
-      record.set_node(name);
+      record->set_time(uint64_t(locked_xsens->time().count()));
+      record->set_node(name);
     }
 
-    queue_record(std::move(record));
+    queue_record(record);
   }
 
   std::string prepare_storage(const std::string &filename) {
@@ -470,7 +508,7 @@ struct Storage2Node::Impl {
 
   void close_file() { output_stream.close(); }
 
-  std::vector<std::pair<thalamus_grpc::StorageRecord, int>> records;
+  std::vector<std::pair<std::shared_ptr<thalamus_grpc::StorageRecord>, int>> records;
   std::condition_variable records_condition;
   std::mutex records_mutex;
   std::mutex stats_mutex;
@@ -484,28 +522,6 @@ struct Storage2Node::Impl {
   std::chrono::steady_clock::duration total_sweep_time = 0ns;
 
   const size_t zbuffer_size = 1024;
-
-  template <typename T> struct SimplePool {
-    std::mutex mutex;
-    std::list<T *> pool;
-    ~SimplePool() {
-      for (auto t : pool) {
-        delete t;
-      }
-    }
-    std::shared_ptr<T> get() {
-      std::lock_guard<std::mutex> lock(mutex);
-      if (pool.empty()) {
-        pool.push_back(new T());
-      }
-      auto result = pool.front();
-      pool.pop_front();
-      return std::shared_ptr<T>(result, [&](T *t) {
-        std::lock_guard<std::mutex> lock2(mutex);
-        pool.push_back(t);
-      });
-    }
-  };
 
   struct StreamState {
     z_stream zstream;
@@ -538,26 +554,26 @@ struct Storage2Node::Impl {
     virtual ~Encoder();
     virtual void work() = 0;
     virtual void finish() = 0;
-    virtual void push(thalamus_grpc::StorageRecord &&record) = 0;
-    virtual std::optional<thalamus_grpc::StorageRecord> pull() = 0;
+    virtual void push(std::shared_ptr<thalamus_grpc::StorageRecord> &record) = 0;
+    virtual std::shared_ptr<thalamus_grpc::StorageRecord> pull() = 0;
   };
 
   struct IdentityEncoder : public Encoder {
-    std::list<thalamus_grpc::StorageRecord> queue;
+    std::list<std::shared_ptr<thalamus_grpc::StorageRecord>> queue;
 
     void work() override;
     void finish() override {}
-    void push(thalamus_grpc::StorageRecord &&record) override {
-      queue.push_back(std::move(record));
+    void push(std::shared_ptr<thalamus_grpc::StorageRecord> &record) override {
+      queue.push_back(record);
     }
-    std::optional<thalamus_grpc::StorageRecord> pull() override {
+    std::shared_ptr<thalamus_grpc::StorageRecord> pull() override {
       if (!queue.empty()) {
-        std::optional<thalamus_grpc::StorageRecord> result =
-            std::move(queue.front());
+        std::shared_ptr<thalamus_grpc::StorageRecord> result =
+            queue.front();
         queue.pop_front();
         return result;
       }
-      return std::nullopt;
+      return nullptr;
     }
   };
 
@@ -566,8 +582,8 @@ struct Storage2Node::Impl {
     AVCodecContext *context;
     AVPacket *packet;
     AVFrame *frame;
-    std::vector<thalamus_grpc::StorageRecord> in_queue;
-    std::list<thalamus_grpc::StorageRecord> out_queue;
+    std::vector<std::shared_ptr<thalamus_grpc::StorageRecord>> in_queue;
+    std::list<std::shared_ptr<thalamus_grpc::StorageRecord>> out_queue;
     int pts = 0;
     struct SwsContext *sws_context;
     uint8_t *src_data[4], *dst_data[4];
@@ -625,12 +641,12 @@ struct Storage2Node::Impl {
     }
     void work() override {
       for (auto &record : in_queue) {
-        auto image = record.image();
+        auto image = record->image();
 
-        thalamus_grpc::StorageRecord compressed_record;
-        compressed_record.set_node(node);
-        compressed_record.set_time(record.time());
-        auto compressed_image = compressed_record.mutable_image();
+        auto compressed_record = std::make_shared<thalamus_grpc::StorageRecord>();
+        compressed_record->set_node(node);
+        compressed_record->set_time(record->time());
+        auto compressed_image = compressed_record->mutable_image();
         compressed_image->set_width(image.width());
         compressed_image->set_height(image.height());
         compressed_image->set_format(
@@ -721,9 +737,9 @@ struct Storage2Node::Impl {
       in_queue.clear();
     }
     void finish() override {
-      thalamus_grpc::StorageRecord compressed_record;
-      auto compressed_image = compressed_record.mutable_image();
-      compressed_record.set_node(node);
+      auto compressed_record = std::make_shared<thalamus_grpc::StorageRecord>();
+      auto compressed_image = compressed_record->mutable_image();
+      compressed_record->set_node(node);
       compressed_image->set_format(
           thalamus_grpc::Image::Format::Image_Format_MPEG4);
 
@@ -750,23 +766,23 @@ struct Storage2Node::Impl {
       }
       out_queue.push_back(compressed_record);
     }
-    void push(thalamus_grpc::StorageRecord &&record) override;
-    std::optional<thalamus_grpc::StorageRecord> pull() override {
+    void push(std::shared_ptr<thalamus_grpc::StorageRecord> &record) override;
+    std::shared_ptr<thalamus_grpc::StorageRecord> pull() override {
       if (!out_queue.empty()) {
-        std::optional<thalamus_grpc::StorageRecord> result =
-            std::move(out_queue.front());
+        std::shared_ptr<thalamus_grpc::StorageRecord> result =
+            out_queue.front();
         out_queue.pop_front();
         return result;
       }
-      return std::nullopt;
+      return nullptr;
     }
   };
 
   struct ZlibEncoder : public Encoder {
     int stream_id;
     z_stream zstream;
-    std::vector<thalamus_grpc::StorageRecord> in_queue;
-    std::list<thalamus_grpc::StorageRecord> out_queue;
+    std::vector<std::shared_ptr<thalamus_grpc::StorageRecord>> in_queue;
+    std::list<std::shared_ptr<thalamus_grpc::StorageRecord>> out_queue;
     thalamus_grpc::StorageRecord current;
     uint64_t last_flush_ns = 0;
 
@@ -787,10 +803,10 @@ struct Storage2Node::Impl {
 
     void work() override {
       for (auto &record : in_queue) {
-        auto serialized = record.SerializePartialAsString();
-        thalamus_grpc::StorageRecord compressed_record;
-        compressed_record.set_time(record.time());
-        auto record_compressed = compressed_record.mutable_compressed();
+        auto serialized = record->SerializePartialAsString();
+        auto compressed_record = std::make_shared<thalamus_grpc::StorageRecord>();
+        compressed_record->set_time(record->time());
+        auto record_compressed = compressed_record->mutable_compressed();
         record_compressed->set_type(
             thalamus_grpc::Compressed::Type::Compressed_Type_ANALOG);
         record_compressed->set_stream(stream_id);
@@ -810,8 +826,8 @@ struct Storage2Node::Impl {
               reinterpret_cast<unsigned char *>(compressed_data->data()) +
               offset;
           auto flag = Z_NO_FLUSH;
-          if(record.time() - last_flush_ns >= 1'000'000'000) {
-            last_flush_ns = record.time();
+          if(record->time() - last_flush_ns >= 1'000'000'000) {
+            last_flush_ns = record->time();
             flag = Z_SYNC_FLUSH;
           }
           auto error = deflate(&zstream, flag);
@@ -823,13 +839,13 @@ struct Storage2Node::Impl {
           }
         }
         compressed_data->resize(compressed_data->size() - zstream.avail_out);
-        out_queue.push_back(std::move(compressed_record));
+        out_queue.push_back(compressed_record);
       }
       in_queue.clear();
     }
     void finish() override {
-      thalamus_grpc::StorageRecord compressed_record;
-      auto record_compressed = compressed_record.mutable_compressed();
+      auto compressed_record = std::make_shared<thalamus_grpc::StorageRecord>();
+      auto record_compressed = compressed_record->mutable_compressed();
       record_compressed->set_type(
           thalamus_grpc::Compressed::Type::Compressed_Type_NONE);
       record_compressed->set_stream(stream_id);
@@ -854,17 +870,17 @@ struct Storage2Node::Impl {
         }
       }
       compressed_data->resize(compressed_data->size() - zstream.avail_out);
-      out_queue.push_back(std::move(compressed_record));
+      out_queue.push_back(compressed_record);
     }
-    void push(thalamus_grpc::StorageRecord &&record) override;
-    std::optional<thalamus_grpc::StorageRecord> pull() override {
+    void push(std::shared_ptr<thalamus_grpc::StorageRecord> &record) override;
+    std::shared_ptr<thalamus_grpc::StorageRecord> pull() override {
       if (!out_queue.empty()) {
-        std::optional<thalamus_grpc::StorageRecord> result =
-            std::move(out_queue.front());
+        std::shared_ptr<thalamus_grpc::StorageRecord> result =
+            out_queue.front();
         out_queue.pop_front();
         return result;
       }
-      return std::nullopt;
+      return nullptr;
     }
   };
 
@@ -942,8 +958,6 @@ struct Storage2Node::Impl {
     }
 
     Finally f([&] { close_file(); });
-
-    SimplePool<thalamus_grpc::StorageRecord> record_pool;
 
     IdentityEncoder identity_encoder;
     std::map<int, std::unique_ptr<ZlibEncoder>> zlib_encoders;
@@ -1034,7 +1048,7 @@ struct Storage2Node::Impl {
     };
 
     while (is_running) {
-      std::vector<std::pair<thalamus_grpc::StorageRecord, int>> local_records;
+      std::vector<std::pair<std::shared_ptr<thalamus_grpc::StorageRecord>, int>> local_records;
       {
         std::unique_lock<std::mutex> lock(records_mutex);
         records_condition.wait_for(
@@ -1046,7 +1060,7 @@ struct Storage2Node::Impl {
       auto sweep_start = std::chrono::steady_clock::now();
       for (auto &record_pair : local_records) {
         auto &[record, stream] = record_pair;
-        auto body_type = record.body_case();
+        auto body_type = record->body_case();
         if (body_type == thalamus_grpc::StorageRecord::kAnalog &&
             compress_analog) {
           if (!zlib_encoders.contains(stream)) {
@@ -1054,11 +1068,11 @@ struct Storage2Node::Impl {
             encoders.push_back(encoder.get());
             zlib_encoders[stream] = std::move(encoder);
           }
-          zlib_encoders[stream]->push(std::move(record));
+          zlib_encoders[stream]->push(record);
         } else if (body_type == thalamus_grpc::StorageRecord::kImage &&
                    compress_video) {
-          if (!video_encoders.contains(record.node())) {
-            auto &image = record.image();
+          if (!video_encoders.contains(record->node())) {
+            auto &image = record->image();
             auto framerate_original = image.frame_interval()
                                           ? 1e9 / double(image.frame_interval())
                                           : 60;
@@ -1108,15 +1122,16 @@ struct Storage2Node::Impl {
 
             auto encoder = std::make_unique<VideoEncoder>(
                 image.width(), image.height(), format, framerate,
-                record.node());
+                record->node());
             encoders.push_back(encoder.get());
-            video_encoders[record.node()] = std::move(encoder);
+            video_encoders[record->node()] = std::move(encoder);
           }
-          video_encoders[record.node()]->push(std::move(record));
+          video_encoders[record->node()]->push(record);
         } else {
-          identity_encoder.push(std::move(record));
+          identity_encoder.push(record);
         }
       }
+      local_records.clear();
 
       service_encoders(false);
       auto sweep_end = std::chrono::steady_clock::now();
@@ -1127,14 +1142,14 @@ struct Storage2Node::Impl {
     service_encoders(true);
   }
 
-  void queue_record(thalamus_grpc::StorageRecord &&record, int stream = 0) {
+  void queue_record(std::shared_ptr<thalamus_grpc::StorageRecord> &record, int stream = 0) {
     // TRACE_EVENT("thalamus", "Storage2Node::queue_record");
     ++queued_records;
-    auto record_bytes = record.ByteSizeLong();
+    auto record_bytes = record->ByteSizeLong();
     queued_bytes += record_bytes;
     std::lock_guard<std::mutex> lock(records_mutex);
     currently_queued_bytes += record_bytes;
-    records.emplace_back(std::move(record), stream);
+    records.emplace_back(record, stream);
     records_condition.notify_one();
   }
 
@@ -1196,6 +1211,7 @@ struct Storage2Node::Impl {
       sweep_count = 0;
       total_sweep_time = 0ns;
     }
+    image_pools.clear();
 
     //Walk up to root config
     ObservableCollection* root = state.get();
@@ -1332,11 +1348,11 @@ struct Storage2Node::Impl {
 };
 
 Storage2Node::Impl::Encoder::~Encoder() {}
-void Storage2Node::Impl::ZlibEncoder::push(thalamus_grpc::StorageRecord &&record) {
-  in_queue.push_back(std::move(record));
+void Storage2Node::Impl::ZlibEncoder::push(std::shared_ptr<thalamus_grpc::StorageRecord> &record) {
+  in_queue.push_back(record);
 }
-void Storage2Node::Impl::VideoEncoder::push(thalamus_grpc::StorageRecord &&record) {
-  in_queue.push_back(std::move(record));
+void Storage2Node::Impl::VideoEncoder::push(std::shared_ptr<thalamus_grpc::StorageRecord> &record) {
+  in_queue.push_back(record);
 }
 void Storage2Node::Impl::IdentityEncoder::work() {}
 
