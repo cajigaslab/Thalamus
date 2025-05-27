@@ -1178,6 +1178,10 @@ struct Storage2Node::Impl {
       return;
     }
 
+    if (key_str != "Running") {
+        return;
+    }
+
     if (!state->contains("Running")) {
       return;
     }
