@@ -52,7 +52,7 @@ def compute_waveform(config: ObservableDict):
     else:
         dc_off = 0
 
-    sample_rate_hz = 100e3
+    sample_rate_hz = 125e3
     sample_period_s = 1/sample_rate_hz
     amplitude_ua = config['Amplitude (uA)']
     amplitude_a = amplitude_ua/1e6
@@ -129,7 +129,7 @@ class WaveformWidget(QWidget):
     self.out_wave = out_wave
     self.path = QPainterPath()
     self.path.moveTo(0, out_wave[0])
-    sample_rate_hz = 100e3
+    sample_rate_hz = 125e3
     sample_period_s = 1/sample_rate_hz
     for i, sample in enumerate(out_wave):
       #t = i*sample_period_s
@@ -222,8 +222,9 @@ class StimWidget(QWidget):
       if field not in config:
         config[field] = options[0] if options else ''
         
-      def on_change(button: QRadioButton):
-        config[field] = combo.currentData()
+      def on_change(text: str):
+        print('on_change', text)
+        config[field] = text
 
       combo = QComboBox()
       combo.addItems(options)
@@ -524,6 +525,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   stimulation_channel = context.task_config['Stimulation Channel']
   all_enabled = [False, False, False, False]
 
+  print('stimulation_channel', stimulation_channel)
   if stimulation_channel == "AO3":
     all_enabled[3] = True
     ao = 3
@@ -550,7 +552,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   if waveform is not None:
     stim_data.data.extend(waveform)
     stim_data.spans.append(Span(begin=0,end=len(stim_data.data),name=f'/PXI1Slot4/ao{ao}'))
-    stim_data.sample_intervals.append(int(1e9/100e3))
+    stim_data.sample_intervals.append(int(1e9/125e3))
 
   mux_signal = AnalogResponse(
     data=mux_bits + stim_bits + [5],
