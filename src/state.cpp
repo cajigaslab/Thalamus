@@ -18,6 +18,7 @@ ObservableCollection::ValueWrapper::operator ObservableDictPtr() {
     return thalamus::get<ObservableDictPtr>(value);
   } else {
     THALAMUS_ASSERT(false, "Value is not a dict");
+    return nullptr;
   }
 }
 
@@ -27,6 +28,7 @@ ObservableCollection::ValueWrapper::operator ObservableListPtr() {
     return thalamus::get<ObservableListPtr>(value);
   } else {
     THALAMUS_ASSERT(false, "Value is not a list");
+    return nullptr;
   }
 }
 
@@ -38,6 +40,7 @@ ObservableCollection::ValueWrapper::operator long long int() {
     return int64_t(thalamus::get<double>(value));
   } else {
     THALAMUS_ASSERT(false, "Value is not a number");
+    return 0;
   }
 }
 ObservableCollection::ValueWrapper::operator unsigned long long int() {
@@ -48,6 +51,7 @@ ObservableCollection::ValueWrapper::operator unsigned long long int() {
     return uint64_t(thalamus::get<double>(value));
   } else {
     THALAMUS_ASSERT(false, "Value is not a number");
+    return 0;
   }
 }
 ObservableCollection::ValueWrapper::operator unsigned long() {
@@ -58,6 +62,7 @@ ObservableCollection::ValueWrapper::operator unsigned long() {
     return uint32_t(thalamus::get<double>(value));
   } else {
     THALAMUS_ASSERT(false, "Value is not a number");
+    return 0;
   }
 }
 ObservableCollection::ValueWrapper::operator double() {
@@ -68,6 +73,7 @@ ObservableCollection::ValueWrapper::operator double() {
     return thalamus::get<double>(value);
   } else {
     THALAMUS_ASSERT(false, "Value is not a number");
+    return 0.0;
   }
 }
 ObservableCollection::ValueWrapper::operator bool() {
@@ -87,6 +93,7 @@ ObservableCollection::ValueWrapper::operator bool() {
     return thalamus::get<bool>(value);
   } else {
     THALAMUS_ASSERT(false, "Value is not a bool or number");
+    return false;
   }
 }
 ObservableCollection::ValueWrapper::operator std::string() {
@@ -95,6 +102,7 @@ ObservableCollection::ValueWrapper::operator std::string() {
     return thalamus::get<std::string>(value);
   } else {
     THALAMUS_ASSERT(false, "Value is not a string");
+    return "";
   }
 }
 ObservableCollection::ValueWrapper::operator ObservableCollection::Value() {
