@@ -1,11 +1,12 @@
 #include <wallclock_node.hpp>
 #include <modalities_util.hpp>
+#include <thalamus/async.hpp>
 
 using namespace thalamus;
 
 struct WallClockNode::Impl {
   ObservableDictPtr state;
-  boost::asio::steady_timer timer;
+  MovableSteadyTimer timer;
   WallClockNode* outer;
 
   std::chrono::steady_clock::duration steady_time;
@@ -24,10 +25,10 @@ struct WallClockNode::Impl {
     if (error.value() == boost::asio::error::operation_aborted) {
       return;
     }
-    BOOST_ASSERT(!error);
+    THALAMUS_ASSERT(!error, "Unexpected error");
 
-    steady_time = std::chrono::steady_clock::now().time_since_epoch();
-    system_time = std::chrono::system_clock::now().time_since_epoch();
+    steady_time = MovableSteadyClock::now().time_since_epoch();
+    system_time = MovableSystemClock::now().time_since_epoch();
     system_time_double = double(std::chrono::duration_cast<std::chrono::nanoseconds>(system_time).count());
     outer->ready(outer);
     timer.expires_after(1s);
