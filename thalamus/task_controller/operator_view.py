@@ -69,7 +69,7 @@ class CentralWidget(QWidget):
     layout.addWidget(ViewWidget(target), 0, 0, 1, 4)
     layout.setRowStretch(0, 1)
 
-    clear_button = QPushButton('Clear')
+    clear_button = QPushButton('Clear Gaze History') # this button was added to the Operator View to clear the gaze history
     layout.addWidget(clear_button, 1, 0)
     layout.setRowStretch(1, 0)
     clear_button.clicked.connect(target.canvas.clear_accumulation)
@@ -77,10 +77,10 @@ class CentralWidget(QWidget):
     # Adding extra button to clear the canvas
     def on_test():
       target.canvas.do_clear = True
-    test_button = QPushButton('Test')
-    layout.addWidget(test_button, 1, 1)
+    clear_endpoints_button = QPushButton('Clear Endpoints') # this button was added to the Operator View to clear the endpoints
+    layout.addWidget(clear_endpoints_button, 1, 1)
     layout.setRowStretch(1, 0)
-    test_button.clicked.connect(on_test)
+    clear_endpoints_button.clicked.connect(on_test)
 
     quadrants = [
       ("I", 2, 0),

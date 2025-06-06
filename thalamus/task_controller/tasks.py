@@ -25,7 +25,7 @@ from . import luminance_reward_selection
 from . import avatar_task
 from . import imagined_task
 from . import feedback_task
-from . import gaussian_task
+from . import delayed_saccade_gaussian_task
 from . import center_fixation_task
 from . import psychopy_task
 from .task_context import TaskDescription
@@ -100,9 +100,9 @@ DESCRIPTIONS = [
   TaskDescription('feedback_task', 'Feedback',
     feedback_task.create_widget,
     feedback_task.run),
-  TaskDescription('gaussian_task', 'Gaussian',
-    gaussian_task.create_widget,
-    gaussian_task.run),
+  TaskDescription('delayed_saccade_gaussian_task', 'Dellayed Saccade - Gaussian',
+    delayed_saccade_gaussian_task.create_widget,
+    delayed_saccade_gaussian_task.run),
     #add gazeanchoring stim task
   TaskDescription('center_fixation_task', 'Center Fixation',
     center_fixation_task.create_widget,

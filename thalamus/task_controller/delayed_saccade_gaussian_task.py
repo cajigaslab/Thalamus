@@ -1,5 +1,5 @@
 """
-Implementation of the Gaussian delayed saccade task v2.0 (2025/04/15)
+Implementation of the delayed saccade Gaussian task v2.0 (2025/04/15)
 """
 import time
 import typing
@@ -152,6 +152,11 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   if the key (e.g. decision_timeout) is not found in the task_config, the parameters will
   default to the values provided below. The build function also wires up all the
   listeners to update the task_config when changes are made.
+  By posting the config as a message into stored file, all latest config values will be saved.
+  The exception is the "Uniform" variables, for which config stores "min" and "max" values.
+  The "Uniform" value used in a given trial is added to config when calling "get_value()" method.
+  If chosing a value for "Uniform" variable without using the "get_value()", coder needs to ensure
+  that context.trial_summary_data.used_values['variable_name'] is set to the value used in the trial.
   """
   form = Form.build(task_config, ["Name:", "Min:", "Max:"],
     Form.Choice('Task group', 'task_group', list(zip(task_groups, task_groups))),                
@@ -169,13 +174,19 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Constant('\u2194 Target width step (0.1-1.0)', 'widthtargdeg_step', 0.1, '\u00B0'),
     Form.Uniform('\u2195 Target height (0.1-1.0)', 'height_targ_deg', 0.1, 1, '\u00B0'),
     Form.Constant('\u2195 Target height step (0.1-1.0)', 'heighttargdeg_step', 0.1, '\u00B0'),
-    Form.Bool('Lock Height to Width?', 'is_height_locked', False),
+    Form.Bool('\u2194\u2195 Lock Height to Width?', 'is_height_locked', False),
     Form.Bool('Paint all targets simultaneously?', 'paint_all_targets', False),
-    Form.Uniform('\U0001F9ED Orientation (0-150)', 'orientation_ran', 0, 150, '\u00B0'),
-    Form.Constant('\U0001F9ED Orientation step size (0-150)', 'orientation_step', 30, '\u00B0'),
-    Form.Uniform('\U0001F526 Luminence (0-100)', 'luminance_per', 10, 100,'%'),
-    Form.Constant('\U0001F526 Luminence step size (0-100)', 'luminance_step', 10,'%'),
-    Form.Constant('Gaze acceptance diameter \u2300 (0.1-4.0)', 'accptolerance_deg', 2, '\u00B0'), # Define the diameter in degrees of the area where gaze is accepted as being correct
+    Form.Uniform('\U0001F9ED Target orientation (0-150)', 'orientation_targ_ran', 0, 150, '\u00B0'),
+    Form.Constant('\U0001F9ED Target orientation step size (0-150)', 'orientation_targ_step', 30, '\u00B0'),
+    Form.Uniform('\U0001F526 Target luminence (0-100)', 'luminance_targ_per', 10, 100,'%'),
+    Form.Constant('\U0001F526 Target luminence step size (0-100)', 'luminance_targ_step', 10,'%'),
+    # For LG24GQ50B-B with height of 1080 pix and at 0.57 m distance conversion factor of 0.0259 deg/pix, 
+    # the largest diameter of the screen area to display targets is int(1080 pix * 0.0259 deg/pix) = 27 deg
+    Form.Constant('\u2300 Diameter of area for target presentation', 'diameter_target_loc_span_deg', 27,'\u00B0'),
+    Form.Uniform('\U0001F9ED Polar angle range for target locations - sector #1 (0..360)', 'target_loc_angle_sector1_deg', 0, 45, '\u00B0'),
+    Form.Uniform('\U0001F9ED Polar angle range for target locations - sector #2 (0..360)', 'target_loc_angle_sector2_deg', 45, 90, '\u00B0'),
+    Form.Constant('\U0001F9ED Polar angle step around the target location circle', 'target_loc_polar_step_deg', 30,'\u00B0'),
+    Form.Constant('\u2300 Diameter of area for gaze acceptance', 'accpt_gaze_diam_deg', 4, '\u00B0'), # Define the diameter in degrees of the area where gaze is accepted as being correct
     Form.Constant('\U0001F5A5 Subject\'s distance to the screen', 'monitorsubj_dist_m', .57, 'm'),
     Form.Constant('\U0001F5A5 Subject monitor\'s width', 'monitorsubj_width_m', .5283, 'm'),
     Form.Constant('\U0001F5A5 Subject monitor\'s width', 'monitorsubj_W_pix', 1920, 'pix'),
@@ -224,27 +235,45 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   heighttargdeg_step_spinbox = form.findChild(QDoubleSpinBox, "heighttargdeg_step")
   heighttargdeg_step_spinbox.setRange(.1, 1.0)
   heighttargdeg_step_spinbox.setSingleStep(.1)
-  orientation_step_spinbox = form.findChild(QDoubleSpinBox, "orientation_step")
-  orientation_step_spinbox.setRange(1, 150)
-  orientation_step_spinbox.setSingleStep(1)
-  orientation_ran_min_spinbox = form.findChild(QDoubleSpinBox, "orientation_ran_min")
-  orientation_ran_min_spinbox.setRange(0, 150)
-  orientation_ran_min_spinbox.setSingleStep(15)  
-  orientation_ran_max_spinbox = form.findChild(QDoubleSpinBox, "orientation_ran_max")
-  orientation_ran_max_spinbox.setRange(0, 150)
-  orientation_ran_max_spinbox.setSingleStep(15)
-  accptolerance_deg_spinbox = form.findChild(QDoubleSpinBox, "accptolerance_deg")
-  accptolerance_deg_spinbox.setRange(.1, 60.0)
-  accptolerance_deg_spinbox.setSingleStep(0.1)
-  luminance_step_spinbox = form.findChild(QDoubleSpinBox, "luminance_step")
-  luminance_step_spinbox.setRange(1, 100)
-  luminance_step_spinbox.setSingleStep(1)
-  luminance_per_min_spinbox = form.findChild(QDoubleSpinBox, "luminance_per_min")
-  luminance_per_min_spinbox.setRange(0, 100)
-  luminance_per_min_spinbox.setSingleStep(5)  
-  orientation_ran_max_spinbox = form.findChild(QDoubleSpinBox, "luminance_per_max")
-  orientation_ran_max_spinbox.setRange(0, 100)
-  orientation_ran_max_spinbox.setSingleStep(5)  
+  orientation_targ_step_spinbox = form.findChild(QDoubleSpinBox, "orientation_targ_step")
+  orientation_targ_step_spinbox.setRange(1, 150)
+  orientation_targ_step_spinbox.setSingleStep(1)
+  orientation_targ_ran_min_spinbox = form.findChild(QDoubleSpinBox, "orientation_targ_ran_min")
+  orientation_targ_ran_min_spinbox.setRange(0, 150)
+  orientation_targ_ran_min_spinbox.setSingleStep(15)  
+  orientation_targ_ran_max_spinbox = form.findChild(QDoubleSpinBox, "orientation_targ_ran_max")
+  orientation_targ_ran_max_spinbox.setRange(0, 150)
+  orientation_targ_ran_max_spinbox.setSingleStep(15)
+  diameter_target_loc_span_deg = form.findChild(QDoubleSpinBox, "diameter_target_loc_span_deg")
+  diameter_target_loc_span_deg.setRange(.1, 27.0)
+  diameter_target_loc_span_deg.setSingleStep(0.1)  
+  target_loc_angle_sector1_deg_min_spinbox = form.findChild(QDoubleSpinBox, "target_loc_angle_sector1_deg_min")
+  target_loc_angle_sector1_deg_min_spinbox.setRange(0, 360)
+  target_loc_angle_sector1_deg_min_spinbox.setSingleStep(1)  
+  target_loc_angle_sector1_deg_max_spinbox = form.findChild(QDoubleSpinBox, "target_loc_angle_sector1_deg_max")
+  target_loc_angle_sector1_deg_max_spinbox.setRange(0, 360)
+  target_loc_angle_sector1_deg_max_spinbox.setSingleStep(1) 
+  target_loc_angle_sector2_deg_min_spinbox = form.findChild(QDoubleSpinBox, "target_loc_angle_sector2_deg_min")
+  target_loc_angle_sector2_deg_min_spinbox.setRange(0, 360)
+  target_loc_angle_sector2_deg_min_spinbox.setSingleStep(1)  
+  target_loc_angle_sector2_deg_max_spinbox = form.findChild(QDoubleSpinBox, "target_loc_angle_sector2_deg_max")
+  target_loc_angle_sector2_deg_max_spinbox.setRange(0, 360)
+  target_loc_angle_sector2_deg_max_spinbox.setSingleStep(1) 
+  target_loc_polar_step_deg_spinbox = form.findChild(QDoubleSpinBox, "target_loc_polar_step_deg")
+  target_loc_polar_step_deg_spinbox.setRange(5, 180)
+  target_loc_polar_step_deg_spinbox.setSingleStep(5) 
+  accpt_gaze_diam_deg_spinbox = form.findChild(QDoubleSpinBox, "accpt_gaze_diam_deg")
+  accpt_gaze_diam_deg_spinbox.setRange(.1, 60.0)
+  accpt_gaze_diam_deg_spinbox.setSingleStep(0.1)
+  luminance_targ_step_spinbox = form.findChild(QDoubleSpinBox, "luminance_targ_step")
+  luminance_targ_step_spinbox.setRange(1, 100)
+  luminance_targ_step_spinbox.setSingleStep(1)
+  luminance_targ_per_min_spinbox = form.findChild(QDoubleSpinBox, "luminance_targ_per_min")
+  luminance_targ_per_min_spinbox.setRange(0, 100)
+  luminance_targ_per_min_spinbox.setSingleStep(5)  
+  luminance_targ_per_max_spinbox = form.findChild(QDoubleSpinBox, "luminance_targ_per_max")
+  luminance_targ_per_max_spinbox.setRange(0, 100)
+  luminance_targ_per_max_spinbox.setSingleStep(5)  
   width_targ_deg_min_spinbox = form.findChild(QDoubleSpinBox, "width_targ_deg_min")
   width_targ_deg_min_spinbox.setRange(0.1, 1)
   width_targ_deg_min_spinbox.setSingleStep(0.1)  
@@ -261,7 +290,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   return result
 
 # === State Handlers (low-level, reusable) ===
-async def acquire_fixation_func(context, get_gaze, center, accptolerance_pix, monitorsubj_W_pix, monitorsubj_H_pix):
+async def acquire_fixation_func(context, get_gaze, center, accpt_gaze_radius_pix, monitorsubj_W_pix, monitorsubj_H_pix):
     reaquire_dur_s = 999999 # a very long duration to avoid passing ACQUIRE_FIXATION before acquiring the fixation cross
     while True:
         acquired = await wait_for(
@@ -269,20 +298,20 @@ async def acquire_fixation_func(context, get_gaze, center, accptolerance_pix, mo
             lambda: QPoint.dotProduct(
                 gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center,
                 gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center
-            ) ** .5 < accptolerance_pix,
+            ) ** .5 < accpt_gaze_radius_pix,
             timedelta(seconds=reaquire_dur_s)
         )
         if acquired:
             return
 
-async def fixate1_func(context, get_gaze, center, accptolerance_pix, duration, monitorsubj_W_pix, monitorsubj_H_pix):
+async def fixate1_func(context, get_gaze, center, accpt_gaze_radius_pix, duration, monitorsubj_W_pix, monitorsubj_H_pix):
     while True:
         success = await wait_for_hold(
             context,
             lambda: QPoint.dotProduct(
                 gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center,
                 gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center
-            ) ** .5 < accptolerance_pix,
+            ) ** .5 < accpt_gaze_radius_pix,
             timedelta(seconds=duration),
             timedelta(seconds=0) # 0sec to ensure waiting indefinitely
         )
@@ -290,7 +319,7 @@ async def fixate1_func(context, get_gaze, center, accptolerance_pix, duration, m
         if success:
             return
         
-async def present_target_func(context, get_gaze, center, accptolerance_pix, duration1, duration2, monitorsubj_W_pix, monitorsubj_H_pix):
+async def present_target_func(context, get_gaze, center, accpt_gaze_radius_pix, duration1, duration2, monitorsubj_W_pix, monitorsubj_H_pix):
   # Wait for the gaze to hold within fixation cross tolerances for the target presentation duration
   # if don't reaquire the target within blink_dur_ms, then ABORT the trial
   success = await wait_for_hold(
@@ -298,26 +327,26 @@ async def present_target_func(context, get_gaze, center, accptolerance_pix, dura
       lambda: QPoint.dotProduct(
           gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center,
           gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center
-      ) ** .5 < accptolerance_pix,
+      ) ** .5 < accpt_gaze_radius_pix,
       timedelta(seconds=duration1), # target presentation duration
       timedelta(seconds=duration2) # allowed single blink duration
   )
   return success
 
-async def fixate2_func(context, get_gaze, center, accptolerance_pix, duration1, duration2, monitorsubj_W_pix, monitorsubj_H_pix):
+async def fixate2_func(context, get_gaze, center, accpt_gaze_radius_pix, duration1, duration2, monitorsubj_W_pix, monitorsubj_H_pix):
   # Wait for the gaze to hold within the fixation window for the fix2 duration
   success = await wait_for_hold(
       context,
       lambda: QPoint.dotProduct(
           gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center,
           gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center
-      ) ** .5 < accptolerance_pix,
+      ) ** .5 < accpt_gaze_radius_pix,
       timedelta(seconds=duration1), # target presentation duration
       timedelta(seconds=duration2) # allowed single blink duration
   )
   return success
 
-async def acquire_target_func(context, trial_type, get_gaze, center, targetpos_pix, accptolerance_pix, duration1, duration2, monitorsubj_W_pix, monitorsubj_H_pix):
+async def acquire_target_func(context, trial_type, get_gaze, center, targetpos_pix, accpt_gaze_radius_pix, duration1, duration2, monitorsubj_W_pix, monitorsubj_H_pix):
   if trial_type=="photic":
     # Wait for the gaze to move to the target position within the decision timeout
     success = await wait_for(
@@ -325,7 +354,7 @@ async def acquire_target_func(context, trial_type, get_gaze, center, targetpos_p
         lambda: QPoint.dotProduct(
             gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - targetpos_pix,
             gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - targetpos_pix
-        ) ** .5 < accptolerance_pix,
+        ) ** .5 < accpt_gaze_radius_pix,
         timedelta(seconds=duration1) # allowed single blink duration
     )
   else: # if trial_type=="catch"
@@ -334,13 +363,13 @@ async def acquire_target_func(context, trial_type, get_gaze, center, targetpos_p
         lambda: QPoint.dotProduct(
             gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center,
             gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center
-        ) ** .5 < accptolerance_pix,
+        ) ** .5 < accpt_gaze_radius_pix,
         timedelta(seconds=duration1), # target presentation duration
         timedelta(seconds=duration2) # allowed single blink duration
     )
   return success
 
-async def hold_target_func(context, trial_type, get_gaze, center, targetpos_pix, accptolerance_pix, duration1, duration2, monitorsubj_W_pix, monitorsubj_H_pix):
+async def hold_target_func(context, trial_type, get_gaze, center, targetpos_pix, accpt_gaze_radius_pix, duration1, duration2, monitorsubj_W_pix, monitorsubj_H_pix):
   if trial_type=="photic":
   # Wait for the gaze to hold on the target position for the fix2 timeout
     success = await wait_for_hold(
@@ -348,7 +377,7 @@ async def hold_target_func(context, trial_type, get_gaze, center, targetpos_pix,
         lambda: QPoint.dotProduct(
             gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - targetpos_pix,
             gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - targetpos_pix
-        ) ** .5 < accptolerance_pix,
+        ) ** .5 < accpt_gaze_radius_pix,
         timedelta(seconds=duration1), # target presentation duration
         timedelta(seconds=duration2) # allowed single blink duration
     )
@@ -358,7 +387,7 @@ async def hold_target_func(context, trial_type, get_gaze, center, targetpos_pix,
         lambda: QPoint.dotProduct(
             gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center,
             gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center
-        ) ** .5 < accptolerance_pix,
+        ) ** .5 < accpt_gaze_radius_pix,
         timedelta(seconds=duration1), # target presentation duration
         timedelta(seconds=duration2) # allowed single blink duration
     )
@@ -369,7 +398,7 @@ async def handle_acquire_fixation(
     context,
     get_gaze,
     center,
-    accptolerance_pix,
+    accpt_gaze_radius_pix,
     monitorsubj_W_pix,
     monitorsubj_H_pix
     ):
@@ -382,7 +411,7 @@ async def handle_acquire_fixation(
         context,
         get_gaze,
         center,
-        accptolerance_pix,
+        accpt_gaze_radius_pix,
         monitorsubj_W_pix,
         monitorsubj_H_pix
     )
@@ -392,7 +421,7 @@ async def handle_fixate1(
     context,
     get_gaze,
     center,
-    accptolerance_pix,
+    accpt_gaze_radius_pix,
     fix1_duration,
     monitorsubj_W_pix,
     monitorsubj_H_pix,
@@ -404,7 +433,7 @@ async def handle_fixate1(
     await context.log('BehavState=FIXATE1_post-drawing')
     print(state)
     widget.update()
-    await fixate1_func(context, get_gaze, center, accptolerance_pix, fix1_duration, monitorsubj_W_pix, monitorsubj_H_pix)
+    await fixate1_func(context, get_gaze, center, accpt_gaze_radius_pix, fix1_duration, monitorsubj_W_pix, monitorsubj_H_pix)
     temp_gaze = gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix)
     await context.log(f"Gaze[X,Y]_pix-abs_after-FIXATE1={temp_gaze}")
     await context.log(f"Gaze[X,Y]_deg-abs_after-FIXATE1={converter.relpix_to_absdeg(temp_gaze.x(), temp_gaze.y())}")
@@ -414,7 +443,7 @@ async def handle_present_target(
     context,
     get_gaze,
     center,
-    accptolerance_pix,
+    accpt_gaze_radius_pix,
     target_present_dur,
     blink_dur_ms,
     monitorsubj_W_pix,
@@ -426,14 +455,14 @@ async def handle_present_target(
     await context.log('BehavState=TARGET_PRESENTATION_post-drawing_PHOTODIODE-SQUARE')
     print(state)
     widget.update()
-    success = await present_target_func(context, get_gaze, center, accptolerance_pix, target_present_dur, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix)
+    success = await present_target_func(context, get_gaze, center, accpt_gaze_radius_pix, target_present_dur, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix)
     return success
 
 async def handle_fixate2(
     context,
     get_gaze,
     center,
-    accptolerance_pix,
+    accpt_gaze_radius_pix,
     fix2_duration,
     blink_dur_ms,
     monitorsubj_W_pix,
@@ -445,7 +474,7 @@ async def handle_fixate2(
     await context.log('BehavState=FIXATE2')
     print(state)
     widget.update()
-    success = await fixate2_func(context, get_gaze, center, accptolerance_pix, fix2_duration, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix)
+    success = await fixate2_func(context, get_gaze, center, accpt_gaze_radius_pix, fix2_duration, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix)
     return success
 
 async def handle_acquire_target(
@@ -454,7 +483,7 @@ async def handle_acquire_target(
     get_gaze,
     center,
     targetpos_pix,
-    accptolerance_pix,
+    accpt_gaze_radius_pix,
     decision_timeout,
     blink_dur_ms,
     monitorsubj_W_pix,
@@ -467,7 +496,7 @@ async def handle_acquire_target(
     await context.log('BehavState=ACQUIRE_TARGET_start')
     print(state)
     widget.update()
-    success = await acquire_target_func(context, trial_type, get_gaze, center, targetpos_pix, accptolerance_pix, decision_timeout, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix)
+    success = await acquire_target_func(context, trial_type, get_gaze, center, targetpos_pix, accpt_gaze_radius_pix, decision_timeout, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix)
     temp_gaze = gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix)
     await context.log(f"Gaze[X,Y]_pix-abs_after-acquiring-target={temp_gaze}")
     await context.log(f"Gaze[X,Y]_deg-abs_after-acquiring-target={converter.relpix_to_absdeg(temp_gaze.x(), temp_gaze.y())}")
@@ -479,7 +508,7 @@ async def handle_hold_target(
     get_gaze,
     center,
     targetpos_pix,
-    accptolerance_pix,
+    accpt_gaze_radius_pix,
     targethold_duration,
     blink_dur_ms,
     monitorsubj_W_pix,
@@ -492,7 +521,7 @@ async def handle_hold_target(
     await context.log('BehavState=HOLD_TARGET_start')
     print(state)
     widget.update()
-    success = await hold_target_func(context, trial_type, get_gaze, center, targetpos_pix, accptolerance_pix, targethold_duration, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix)
+    success = await hold_target_func(context, trial_type, get_gaze, center, targetpos_pix, accpt_gaze_radius_pix, targethold_duration, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix)
     temp_gaze = gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix)
     await context.log(f"Gaze[X,Y]_pix-abs_after-holding-target={temp_gaze}")
     await context.log(f"Gaze[X,Y]_deg-abs_after-holding-target={converter.relpix_to_absdeg(temp_gaze.x(), temp_gaze.y())}")
@@ -511,8 +540,10 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   global converter, center, center_f, num_circles, circle_radii, rand_pos_i, \
     trial_num, trial_photic_count, trial_photic_success_count, trial_catch_count, \
     trial_catch_success_count, drawn_objects, rand_pos, reward_total_released_ms, \
-    gaze_success_store, gaze_failure_store, \
-    photodiode_blinking_square, photodiode_static_square, WATCHING, state
+    gaze_success_store, gaze_failure_store, failure_sound, abort_sound, success_sound, \
+    photodiode_blinking_square, photodiode_static_square, WATCHING, state, \
+    diameter_target_loc_span_pix, target_loc_polar_step_deg, target_loc_angle_sector1_deg_min, \
+    target_loc_angle_sector1_deg_max, target_loc_angle_sector2_deg_min, target_loc_angle_sector2_deg_max
 
   # Get the task configuration
   config = context.task_config
@@ -521,26 +552,79 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   monitorsubj_dist_m = config['monitorsubj_dist_m']
   monitorsubj_width_m = config['monitorsubj_width_m']
 
-  if converter is None:    
+  """Check if target location angle lies within the user-defined sector [min, max] (counterclockwise)."""
+  def angle_in_sector(angle, sector_min, sector_max):
+    if sector_min <= sector_max:
+        return sector_min <= angle <= sector_max
+    else:
+        # Sector wraps around 360
+        return angle >= sector_min or angle <= sector_max
+
+  def get_valid_angles(step_deg, sector1_min, sector1_max, sector2_min, sector2_max):
+      all_angles = [i for i in range(0, 360, step_deg)]
+      valid_angles = []
+      for angle in all_angles:
+          if (angle_in_sector(angle, sector1_min % 360, sector1_max % 360) or
+              angle_in_sector(angle, sector2_min % 360, sector2_max % 360)):
+              valid_angles.append(angle)
+
+      return sorted(set(valid_angles))  # remove duplicates if overlapping
+
+  if converter is None: 
+    # Everything below this line will be executed only once, when the task is started   
     # If you turn on saving only after running >=1 trial, then 
     # converter = Converter(Size(1920, 1080), .5283, .57)
     converter = Converter(Size(monitorsubj_W_pix, monitorsubj_H_pix), monitorsubj_width_m, monitorsubj_dist_m)
     center = QPoint(int(converter.screen_pixels.width), int(converter.screen_pixels.height))/2
     center_f = QPointF(float(converter.screen_pixels.width), float(converter.screen_pixels.height))/2
+
+    # Adding sound files to the task
+    current_directory = os.getcwd() # Get the current working directory
+    # Define a relative path (e.g., accessing a file in a subdirectory)
+    relative_path = os.path.join(current_directory, 'thalamus\\task_controller', 'failure_clip.wav')
+    failure_sound = QSound(relative_path) # Load the .wav file (replace with your file path)
+    relative_path = os.path.join(current_directory, 'thalamus\\task_controller', 'failure_clip.wav')
+    # Sound file is called "failure" because in default tasks it's used for FAILURE, in VCP tasks it's used for ABORT
+    abort_sound = QSound(relative_path) 
+    relative_path = os.path.join(current_directory, 'thalamus\\task_controller', 'success_clip.wav')
+    success_sound = QSound(relative_path) # Load the .wav file (replace with your file path)
+
+    diameter_target_loc_span_pix = converter.deg_to_pixel_rel(config['diameter_target_loc_span_deg'])
+    if diameter_target_loc_span_pix > monitorsubj_H_pix: # if user makes a typo and sets diameter larger than screen height
+        diameter_target_loc_span_pix = monitorsubj_H_pix
+    target_loc_polar_step_deg = config['target_loc_polar_step_deg']
+    target_loc_angle_sector1_deg_min = config['target_loc_angle_sector1_deg']['min']
+    target_loc_angle_sector1_deg_max = config['target_loc_angle_sector1_deg']['max']
+    target_loc_angle_sector2_deg_min = config['target_loc_angle_sector2_deg']['min']
+    target_loc_angle_sector2_deg_max = config['target_loc_angle_sector2_deg']['max']
+    
     num_circles = 7 # The last 2 circles usually end up being too large for the screen height, hence the actual # = num_circles - 2
     circle_radii = np.linspace(0, converter.screen_pixels.height, 10) # screen height-based step
     circle_radii += converter.screen_pixels.width/num_circles # a sum of screen width and height based steps
-    circle_radii = circle_radii[circle_radii <= converter.screen_pixels.height] # getting rid of radii that are too large for the screen height
+    circle_radii = circle_radii[circle_radii <= diameter_target_loc_span_pix] # getting rid of radii that are too large for the defined eccentricity span (i.e. diameter) of target locations
     circle_radii /= 2 # divide by 2 to get the average of the two steps to ensure Gaussians are less squished
     rand_pos_i = 0
     trial_num = 0
+
+    valid_angles_deg = get_valid_angles(target_loc_polar_step_deg, target_loc_angle_sector1_deg_min,
+        target_loc_angle_sector1_deg_max, target_loc_angle_sector2_deg_min, target_loc_angle_sector2_deg_max) # Get valid angles in degrees
+    valid_angles_rad = [np.deg2rad(a) for a in valid_angles_deg] # Convert degrees to radians
+
     # Generate random positions around a circle
     rand_pos = [
-      (center.x() + radius*np.cos(angle), center.y() + radius*np.sin(angle))
+      (center.x() + radius*np.cos(angle), center.y() - radius*np.sin(angle))
       for radius in circle_radii
-      for angle in np.arange(0, 2*np.pi, np.pi/6)
+      for angle in valid_angles_rad # Use pre-generated valid angles
     ]
     random.shuffle(rand_pos) # Shuffle the list of random positions to randomize their order
+    
+    # print("xxxxxxxxxxxxxxxxxxxxxxxxxrand_pos (pix)xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+    # print("xxxxxxxxxxxxxxxxxxxxxxxxxrand_pos (pix)xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+    # print(rand_pos)
+    # print("xxxxxxxxxxxxxxxxxxxxxxxxxrand_pos (pix)xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+    # print("xxxxxxxxxxxxxxxxxxxxxxxxxrand_pos (pix)xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx") 
+
+    # Create a QColor object for the photodiode blinking square and static square
     photodiode_blinking_square = QColor(255, 255, 255, 255) # Create a QColor object with white color and transparency control (i.e. alpha)
     photodiode_static_square = QColor(0, 0, 0, 255)
    
@@ -565,21 +649,60 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       WATCHING = True
  
 
-  """
-  Below is an object that contains a realization generated by sampling from the random
-  distributions defined in the task_config. It itself has no logic, it simply holds
-  the realization's values.
-  """
+  """ Below are commands that will be executed on every trial """
 
-  current_directory = os.getcwd() # Get the current working directory
-  # Define a relative path (e.g., accessing a file in a subdirectory)
-  relative_path = os.path.join(current_directory, 'thalamus\\task_controller', 'failure_clip_VCP.wav')
-  failure_sound = QSound(relative_path) # Load the .wav file (replace with your file path)
-  relative_path = os.path.join(current_directory, 'thalamus\\task_controller', 'failure_clip_VCP.wav')
-  # Sound file is called "failure" because in default tasks it's used for FAILURE, in VCP tasks it's used for ABORT
-  abort_sound = QSound(relative_path) 
-  relative_path = os.path.join(current_directory, 'thalamus\\task_controller', 'success_clip.wav')
-  success_sound = QSound(relative_path) 
+  # Regenerate target positions if user changes any of the parameters that affect target positions
+  if int(diameter_target_loc_span_pix) != int(converter.deg_to_pixel_rel(config['diameter_target_loc_span_deg'])) or \
+      int(target_loc_polar_step_deg) != int(config['target_loc_polar_step_deg']) or \
+      int(target_loc_angle_sector1_deg_min) != int(config['target_loc_angle_sector1_deg']['min']) or \
+      int(target_loc_angle_sector1_deg_max) != int(config['target_loc_angle_sector1_deg']['max']) or \
+      int(target_loc_angle_sector2_deg_min) != int(config['target_loc_angle_sector2_deg']['min']) or \
+      int(target_loc_angle_sector2_deg_max) != int(config['target_loc_angle_sector2_deg']['max']):
+          print("xxxxxxxxxxxxxxxxxxxxxxxxxCHANGE FLAGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+          print("xxxxxxxxxxxxxxxxxxxxxxxxxCHANGE FLAGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+          print('detected change!!')
+          print(f"diameter_pix_1={int(diameter_target_loc_span_pix)}, \
+           diameter_pix_2={int(converter.deg_to_pixel_rel(config['diameter_target_loc_span_deg']))}")
+          print(f"step_deg_1={int(target_loc_polar_step_deg)}, \
+           step_deg_2={int(config['target_loc_polar_step_deg'])}")
+          print(f"angle_sect1_deg_min_1={int(target_loc_angle_sector1_deg_min)}, \
+           angle_sect1_deg_min_2={int(config['target_loc_angle_sector1_deg']['min'])}")
+          print(f"angle_sect1_deg_max_1={int(target_loc_angle_sector1_deg_max)}, \
+           angle_sect1_deg_max_2={int(config['target_loc_angle_sector1_deg']['max'])}")
+          print(f"angle_sect2_deg_min_1={int(target_loc_angle_sector2_deg_min)}, \
+           angle_sect2_deg_min_2={int(config['target_loc_angle_sector2_deg']['min'])}")
+          print(f"angle_sect2_deg_max_1={int(target_loc_angle_sector2_deg_max)}, \
+           angle_sect2_deg_max_2={int(config['target_loc_angle_sector2_deg']['max'])}")
+          print("xxxxxxxxxxxxxxxxxxxxxxxxxCHANGE FLAGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+          print("xxxxxxxxxxxxxxxxxxxxxxxxxCHANGE FLAGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx") 
+          
+          diameter_target_loc_span_pix = converter.deg_to_pixel_rel(config['diameter_target_loc_span_deg'])
+          if diameter_target_loc_span_pix > monitorsubj_H_pix: # if user makes a typo and sets diameter larger than screen height
+              diameter_target_loc_span_pix = monitorsubj_H_pix
+          target_loc_polar_step_deg = config['target_loc_polar_step_deg']
+          target_loc_angle_sector1_deg_min = config['target_loc_angle_sector1_deg']['min']
+          target_loc_angle_sector1_deg_max = config['target_loc_angle_sector1_deg']['max']
+          target_loc_angle_sector2_deg_min = config['target_loc_angle_sector2_deg']['min']
+          target_loc_angle_sector2_deg_max = config['target_loc_angle_sector2_deg']['max']
+          
+          num_circles = 7 # The last 2 circles usually end up being too large for the screen height, hence the actual # = num_circles - 2
+          circle_radii = np.linspace(0, converter.screen_pixels.height, 10) # screen height-based step
+          circle_radii += converter.screen_pixels.width/num_circles # a sum of screen width and height based steps
+          circle_radii = circle_radii[circle_radii <= diameter_target_loc_span_pix] # getting rid of radii that are too large for the defined eccentricity span (i.e. diameter) of target locations
+          circle_radii /= 2 # divide by 2 to get the average of the two steps to ensure Gaussians are less squished
+          rand_pos_i = 0
+
+          valid_angles_deg = get_valid_angles(target_loc_polar_step_deg, target_loc_angle_sector1_deg_min,
+              target_loc_angle_sector1_deg_max, target_loc_angle_sector2_deg_min, target_loc_angle_sector2_deg_max) # Get valid angles in degrees
+          valid_angles_rad = [np.deg2rad(a) for a in valid_angles_deg] # Convert degrees to radians
+
+          # Generate random positions around a circle
+          rand_pos = [
+            (center.x() + radius*np.cos(angle), center.y() - radius*np.sin(angle)) # Note: Y is inverted in Qt, so we subtract from center.y()
+            for radius in circle_radii
+            for angle in valid_angles_rad # Use pre-generated valid angles
+          ]
+          random.shuffle(rand_pos) # Shuffle the list of random positions to randomize their order
 
   # If all random positions have been used, shuffle the list and reset the index
   if rand_pos_i == len(rand_pos):
@@ -612,8 +735,8 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   square_size = converter.deg_to_pixel_rel(square_size_deg)
 
   # Get variables from the config
-  accptolerance_deg = config['accptolerance_deg']
-  accptolerance_pix = converter.deg_to_pixel_rel(accptolerance_deg)
+  accpt_gaze_diam_deg = config['accpt_gaze_diam_deg']
+  accpt_gaze_radius_pix = converter.deg_to_pixel_rel(accpt_gaze_diam_deg / 2)
   is_height_locked = config['is_height_locked']
   paint_all_targets = config['paint_all_targets']
   target_color_rgb = config['target_color']
@@ -641,10 +764,10 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   reward_pertrial_ms = context.get_value('reward_pertrial_ms') # return a uniform random number
   reward_rate_mlps = config['reward_rate_mlps']
   reward_start_ml = config['reward_start_ml']
-  luminance_per = pick_random_value(config['luminance_per']['min'], config['luminance_per']['max'], config['luminance_step'])
-  context.trial_summary_data.used_values['luminance_per'] = luminance_per # this command based on 'get_value()' from 'task_context.py' aalows to add values to task_config['used_values']
-  orientation_ran = pick_random_value(config['orientation_ran']['min'], config['orientation_ran']['max'], config['orientation_step'])
-  context.trial_summary_data.used_values['orientation_ran'] = orientation_ran 
+  luminance_targ_per = pick_random_value(config['luminance_targ_per']['min'], config['luminance_targ_per']['max'], config['luminance_targ_step'])
+  context.trial_summary_data.used_values['luminance_targ_per'] = luminance_targ_per # this command based on 'get_value()' from 'task_context.py' aalows to add values to task_config['used_values']
+  orientation_targ_ran = pick_random_value(config['orientation_targ_ran']['min'], config['orientation_targ_ran']['max'], config['orientation_targ_step'])
+  context.trial_summary_data.used_values['orientation_targ_ran'] = orientation_targ_ran 
   width_targ_pix = converter.deg_to_pixel_rel(pick_random_value(config['width_targ_deg']['min'], config['width_targ_deg']['max'], config['widthtargdeg_step']))
   context.trial_summary_data.used_values['width_targ_pix'] = width_targ_pix 
   if is_height_locked:
@@ -653,7 +776,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     height_targ_pix = converter.deg_to_pixel_rel(pick_random_value(config['height_targ_deg']['min'], config['height_targ_deg']['max'], config['heighttargdeg_step']))
   context.trial_summary_data.used_values['height_targ_pix'] = height_targ_pix 
 
-  gaussian = gaussian_gradient(QPointF(0, 0), background_color_qt, width_targ_pix/2, 3, 255, luminance_per)
+  gaussian = gaussian_gradient(QPointF(0, 0), background_color_qt, width_targ_pix/2, 3, 255, luminance_targ_per)
   def draw_gaussian(painter: QPainter):
     if paint_all_targets:
       # region -- TESTING-TARGET-LOCATIONS: Drawing version that preserves every plotted Gaussian
@@ -662,7 +785,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       # if not position_exists: # If the position does not exist, append the new object
       drawn_objects.append({
         'position': targetpos_pix,
-        'orientation': orientation_ran,
+        'orientation': orientation_targ_ran,
         'width': width_targ_pix,
         'height': height_targ_pix,
         'gradient': gaussian
@@ -685,7 +808,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       # region -- Drawing version that plots only 1 current Gaussian
       painter.save()
       painter.translate(targetpos_pix)
-      painter.rotate(orientation_ran) #Apply rotation to gaussian
+      painter.rotate(orientation_targ_ran) #Apply rotation to gaussian
       painter.scale(1, height_targ_pix/width_targ_pix) # Apply X,Y scaling to gaussian; initial diameter is equal to width/2, hence need to scale only Y
       painter.fillRect(int(-widget.width()/2), int(-widget.height()/2), int(widget.width()), int(widget.height()), gaussian)
       # painter.fillRect draws the gaussian into a giant rectangle centered at the upper left corner of the screen 
@@ -743,7 +866,9 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
 
     # Clearing Operator View canvas
     if getattr(context.widget, 'do_clear', False):
-      print('DO CLEAR')
+      # print('DO CLEAR')
+      gaze_failure_store.clear()
+      gaze_success_store.clear()      
       context.widget.do_clear = False
 
     # photodiode_blinking_square = QColor(255, 255, 255, 255) # Create a QColor object with white color and transparency control (i.e. alpha)
@@ -809,10 +934,10 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       # with painter.masked(RenderOutput.OPERATOR) block will only appear in the operator view.
       
       path = QPainterPath()
-      path.addEllipse(targetpos_f, accptolerance_pix, accptolerance_pix)
+      path.addEllipse(targetpos_f, accpt_gaze_radius_pix, accpt_gaze_radius_pix)
       painter.fillPath(path, QColor(255, 255, 255, 128))
       path = QPainterPath()
-      path.addEllipse(center_f, accptolerance_pix, accptolerance_pix)
+      path.addEllipse(center_f, accpt_gaze_radius_pix, accpt_gaze_radius_pix)
       painter.fillPath(path, QColor(255, 255, 255, 128))
 
       # Drawing the gaze position as a continuously moving point
@@ -821,7 +946,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
 
       # Drawing text message on the operator view
       # drawText(painter, "(0, 0)", QPoint(0, 0)) # Draw the text message
-      # temp_calc = lambda: QPoint.dotProduct(gaze - center, gaze - center)**.5 < accptolerance_pix
+      # temp_calc = lambda: QPoint.dotProduct(gaze - center, gaze - center)**.5 < accpt_gaze_radius_pix
       # drawn_text = f"(Diff={temp_calc()}, acpt={QPoint.dotProduct(gaze - center, gaze - center)**.5})"
       drawText(painter, str(state), QPoint(0, 30), background_color_qt) # Draw the text message
       drawText(painter, f"TRIAL_NUM={trial_num}", QPoint(0, 60), background_color_qt) # Draw the text message
@@ -865,13 +990,13 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
                     CATCH_TRIAL_NUM={trial_catch_count}") # saving any variables / data from code
 
   # Handles State.ACQUIRE_FIXATION
-  await handle_acquire_fixation(context, lambda: gaze, center, accptolerance_pix, monitorsubj_W_pix, monitorsubj_H_pix)
+  await handle_acquire_fixation(context, lambda: gaze, center, accpt_gaze_radius_pix, monitorsubj_W_pix, monitorsubj_H_pix)
 
   # Handles State.FIXATE1
-  await handle_fixate1(context, lambda: gaze, center, accptolerance_pix, fix1_duration, monitorsubj_W_pix, monitorsubj_H_pix, widget, converter)
+  await handle_fixate1(context, lambda: gaze, center, accpt_gaze_radius_pix, fix1_duration, monitorsubj_W_pix, monitorsubj_H_pix, widget, converter)
 
   # Handles State.TARGET_PRESENTATION
-  success = await handle_present_target(context, lambda: gaze, center, accptolerance_pix, target_present_dur, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix, widget)
+  success = await handle_present_target(context, lambda: gaze, center, accpt_gaze_radius_pix, target_present_dur, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix, widget)
   
   # trial counters before the 1st "return" statement
   trial_num += 1 # Increment the trial counter
@@ -891,12 +1016,12 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     return TaskResult(False)
 
   # Handles State.FIXATE2
-  success = await handle_fixate2(context, lambda: gaze, center, accptolerance_pix, fix2_duration, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix, widget)
+  success = await handle_fixate2(context, lambda: gaze, center, accpt_gaze_radius_pix, fix2_duration, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix, widget)
   # state = State.FIXATE2
   # await context.log('BehavState=FIXATE2') # saving any variables / data from code
   # print(state)
   # widget.update()
-  # success = await fixate2_func(context, lambda: gaze, center, accptolerance_pix, fix2_duration, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix)
+  # success = await fixate2_func(context, lambda: gaze, center, accpt_gaze_radius_pix, fix2_duration, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix)
 
   if not success:
     await context.log('TrialResult=ABORT') # saving any variables / data from code
@@ -907,12 +1032,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     return TaskResult(False)
 
   # Handles State.ACQUIRE_TARGET
-  success = await handle_acquire_target(context, trial_type, lambda: gaze, center, targetpos_pix, accptolerance_pix, decision_timeout, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix, widget, converter)
-  # print("xxxxxxxxxxxxxxxxxxxxxxxxxtask_groupxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-  # print("xxxxxxxxxxxxxxxxxxxxxxxxxtask_groupxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-  # print(config['task_group'])
-  # print("xxxxxxxxxxxxxxxxxxxxxxxxxtask_groupxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-  # print("xxxxxxxxxxxxxxxxxxxxxxxxxtask_groupxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx") 
+  success = await handle_acquire_target(context, trial_type, lambda: gaze, center, targetpos_pix, accpt_gaze_radius_pix, decision_timeout, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix, widget, converter)
 
   if not success:
     gaze_failure_store.append((gaze_valid(gaze, monitorsubj_W_pix, monitorsubj_H_pix), QColor(255, 69, 0, 128)))
@@ -924,7 +1044,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     return TaskResult(False)
 
   # Handles State.HOLD_TARGET
-  success = await handle_hold_target(context, trial_type, lambda: gaze, center, targetpos_pix, accptolerance_pix, targethold_duration, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix, widget, converter)
+  success = await handle_hold_target(context, trial_type, lambda: gaze, center, targetpos_pix, accpt_gaze_radius_pix, targethold_duration, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix, widget, converter)
 
   if not success:
     gaze_failure_store.append((gaze_valid(gaze, monitorsubj_W_pix, monitorsubj_H_pix), QColor(255, 69, 0, 128)))
