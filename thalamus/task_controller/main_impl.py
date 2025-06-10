@@ -39,6 +39,7 @@ from .. import thalamus_pb2_grpc
 from .servicer import TaskControllerServicer
 from .observable_bridge import ObservableBridge
 from ..pipeline.thalamus_window import ThalamusWindow
+from ..pipeline.pypipeline import PipelineServicer
 from ..servicer import ThalamusServicer
 from ..qt import *
 from ..orchestration import Orchestrator
@@ -81,6 +82,7 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument('-o', '--ophanim-url', help='Ophanim URL')
   parser.add_argument('-t', '--trace', action='store_true', help='Enable tracing')
   parser.add_argument('-n', '--no-orchestration', action='store_true', help='Disable orchestration')
+  parser.add_argument('-y', '--pypipeline', action='store_true', help='Use Python data pipeline implementation')
   parser.add_argument('-r', '--remote-executor', action='store_true',
                       help='Send task configs to remote ROS node to execute')
   return parser.parse_args(self_args[1:])
@@ -141,7 +143,19 @@ async def async_main() -> None:
   
   bmbi_native_filename = resource_filename('thalamus', 'native' + ('.exe' if sys.platform == 'win32' else ''))
   bmbi_native_proc = None
-  bmbi_native_proc = await asyncio.create_subprocess_exec(
+  pypipeline_servicer = None
+  if arguments.pypipeline:
+    pypipeline_server = grpc.aio.server()
+    pypipeline_servicer = PipelineServicer()
+    thalamus_pb2_grpc.add_ThalamusServicer_to_server(pypipeline_servicer, pypipeline_server)
+
+    pypipeline_addr = f'[::]:{arguments.port}'
+    pypipeline_server.add_insecure_port(pypipeline_addr)
+    logging.info("Starting GRPC PyPipeline server on %s", pypipeline_addr)
+    await pypipeline_server.start()
+
+  else:
+    bmbi_native_proc = await asyncio.create_subprocess_exec(
       bmbi_native_filename, 'thalamus', '--port', str(arguments.port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else []))
 
   channel = grpc.aio.insecure_channel(f'localhost:{arguments.port}')

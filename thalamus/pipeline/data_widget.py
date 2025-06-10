@@ -133,6 +133,18 @@ class PlotCanvas(QWidget):
     self.linspace = numpy.linspace(0, 10, 2*1920)
     self.draw_value = False
     self.current_value = 0.0
+    self.ruler_path = QPainterPath()
+
+    for i in range(101):
+      if i % 10 == 0:
+        self.ruler_path.moveTo(i/100, 0.0)
+        self.ruler_path.lineTo(i/100, 1.0)
+      elif i % 5 == 0:
+        self.ruler_path.moveTo(i/100, 0.0)
+        self.ruler_path.lineTo(i/100, 2/3)
+      else:
+        self.ruler_path.moveTo(i/100, 0.0)
+        self.ruler_path.lineTo(i/100, 1/3)
 
     config.add_observer(self.on_change, lambda: isdeleted(self))
 
@@ -258,6 +270,14 @@ class PlotCanvas(QWidget):
 
     name_bounds = metrics.boundingRect(self.name)
     painter.drawText(self.width() - name_bounds.width(), self.height(), self.name)
+
+    painter.translate(metrics.height(), self.height() - metrics.height())
+    painter.scale((self.width() - 2*metrics.height()), metrics.height())
+    pen = painter.pen()
+    pen.setCosmetic(True)
+    pen.setColor(Qt.GlobalColor.black)
+    painter.setPen(pen)
+    painter.drawPath(self.ruler_path)
 
   def closeEvent(self, e):
     self.stop()

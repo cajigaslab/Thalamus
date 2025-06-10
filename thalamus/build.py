@@ -80,6 +80,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
 
   is_android = 'android' in config_settings
   is_release = 'release' in config_settings
+  code_coverage = 'code-coverage' in config_settings
   do_config = 'config' in config_settings
   clang = 'clang' in config_settings
   force_cl = 'cl' in config_settings
@@ -93,6 +94,10 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     if sanitizer:
       legacy_path = legacy_path.with_name(legacy_path.name + '-' + sanitizer)
       build_path = build_path.with_name(build_path.name + '-' + sanitizer)
+
+    if code_coverage:
+      legacy_path = legacy_path.with_name(legacy_path.name + '-code-coverage')
+      build_path = build_path.with_name(build_path.name + '-code-coverage')
 
     if legacy_path.exists():
       build_path = legacy_path
@@ -171,6 +176,8 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
 
   if sanitizer:
     cmake_command += [f'-DSANITIZER={sanitizer}']
+  if code_coverage:
+    cmake_command += [f'-DCODE_COVERAGE=ON']
 
   if is_android:
     sdk = pathlib.Path.home() / 'AppData' / 'Local' / 'Android' / 'Sdk'
@@ -190,6 +197,8 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   command = ['cmake', '--build', build_path, '--config', "Release" if is_release else "Debug", '--parallel', str(os.cpu_count())]
   if target:
     command += ['--target', target]
+  else:
+    command += ['--target', 'native']
 
   command = [str(c) for c in command]
   print(command)
@@ -199,7 +208,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   files = []
   with open(f'thalamus-{version}.dist-info/RECORD', 'w') as record_file:
     for path in itertools.chain(pathlib.Path('thalamus').rglob('*'), pathlib.Path('cortex').rglob('*')):
-      if not path.is_file() or path.name != 'native' and path.suffix not in ('.py', '.vert', '.proto', '.comp', '.frag', '.exe', '.h'):
+      if not path.is_file() or path.name != 'native' and path.suffix not in ('.py', '.pyi', '.vert', '.proto', '.comp', '.frag', '.exe', '.h'):
         continue
       files.append(path)
       digest = hashlib.sha256()

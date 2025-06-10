@@ -14,9 +14,16 @@ class CalibrationWidget(QWidget):
     super().__init__()
     self.config = config
 
-    self.screen_points = [QPoint(),
-                          QPoint(),
-                          QPoint()]
+    method = config['Method']
+    if method == 'Matrix Multiplication (3-point)':
+      self.screen_points = [QPoint(),
+                            QPoint(),
+                            QPoint()]
+    else:
+      self.screen_points = [QPoint(),
+                            QPoint(),
+                            QPoint(),
+                            QPoint()]
     self.touch_points = [[] for _ in self.screen_points]
     self.current_point = len(self.screen_points) if skip_calibration else 0
     self.path = QPainterPath()
@@ -31,9 +38,16 @@ class CalibrationWidget(QWidget):
       monitor = config['Monitor']
       screen = QApplication.screens()[monitor]
       geometry = screen.geometry()
-      self.screen_points = [QPoint(geometry.x() + geometry.width()//3,   geometry.y() + geometry.height()//3),
-                            QPoint(geometry.x() + 2*geometry.width()//3, geometry.y() + geometry.height()//3),
-                            QPoint(geometry.x() + geometry.width()//3,   geometry.y() + 2*geometry.height()//3)]
+      if method == 'Matrix Multiplication (3-point)':
+        self.screen_points = [QPoint(geometry.x() + geometry.width()//3,   geometry.y() + geometry.height()//3),
+                              QPoint(geometry.x() + 2*geometry.width()//3, geometry.y() + geometry.height()//3),
+                              QPoint(geometry.x() + geometry.width()//3,   geometry.y() + 2*geometry.height()//3)]
+      else:
+        self.screen_points = [QPoint(geometry.x() + geometry.width()//3,   geometry.y() + geometry.height()//3),
+                              QPoint(geometry.x() + 2*geometry.width()//3, geometry.y() + geometry.height()//3),
+                              QPoint(geometry.x() + geometry.width()//3,   geometry.y() + 2*geometry.height()//3),
+                              QPoint(geometry.x() + 2*geometry.width()//3,   geometry.y() + 2*geometry.height()//3)]
+
       self.update()
 
     config.add_recursive_observer(on_change, lambda: isdeleted(self))
@@ -87,7 +101,11 @@ class CalibrationWidget(QWidget):
     if self.current_point == len(self.screen_points):
       screen = numpy.array([[p.x(), p.y(), 1] for p in self.screen_points]).transpose()
       mean_touch_points = numpy.array([numpy.array(p).mean(axis=0) for p in self.touch_points]).transpose()
-      transform = numpy.matmul(screen, numpy.linalg.inv(mean_touch_points))
+      method = self.config['Method']
+      if method == 'Matrix Multiplication (3-point)':
+        transform = numpy.matmul(screen, numpy.linalg.inv(mean_touch_points))
+      else:
+        transform = numpy.linalg.lstsq(mean_touch_points.transpose(), screen.transpose())[0].transpose()
       self.config['Transform'] = [
         [transform[0,0], transform[0,1], transform[0,2]],
         [transform[1,0], transform[1,1], transform[1,2]],
@@ -140,6 +158,8 @@ class TouchScreenWidget(QWidget):
 
     if 'Monitor' not in config:
       config['Monitor'] = 0
+    if 'Method' not in config:
+      config['Method'] = 'Matrix Multiplication (3-point)'
 
     layout = QVBoxLayout()
     monitor_spinbox = QSpinBox()
@@ -147,9 +167,18 @@ class TouchScreenWidget(QWidget):
     monitor_layout = QHBoxLayout()
     monitor_layout.addWidget(QLabel('Monitor:'))
     monitor_layout.addWidget(monitor_spinbox)
+
+    method_combo = QComboBox()
+    method_combo.addItem('Matrix Multiplication (3-point)')
+    method_combo.addItem('Linear Regression (4-point)')
+    method_layout = QHBoxLayout()
+    method_layout.addWidget(QLabel('Method:'))
+    method_layout.addWidget(method_combo)
+
     calibrate_button = QPushButton('Calibrate')
     test_button = QPushButton('Test')
     layout.addLayout(monitor_layout)
+    layout.addLayout(method_layout)
     layout.addWidget(calibrate_button)
     layout.addWidget(test_button)
     layout.addStretch(1)
@@ -184,9 +213,16 @@ class TouchScreenWidget(QWidget):
 
     monitor_spinbox.valueChanged.connect(on_monitor)
 
+    def on_method(v):
+      config.update({'Method': v})
+
+    method_combo.currentTextChanged.connect(on_method)
+
     def on_change(source, action, key, value):
       if key == 'Monitor':
         monitor_spinbox.setValue(value)
+      elif key == 'Method':
+        method_combo.setCurrentText(value)
 
     config.add_recursive_observer(on_change, lambda: isdeleted(self))
     config.recap(lambda *args: on_change(config, *args))

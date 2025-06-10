@@ -29,7 +29,8 @@ class NodeGraphImpl : public NodeGraph {
 public:
   NodeGraphImpl(ObservableListPtr nodes, boost::asio::io_context &io_context,
                 std::chrono::system_clock::time_point,
-                std::chrono::steady_clock::time_point);
+                std::chrono::steady_clock::time_point,
+                thalamus_grpc::Thalamus::Stub*);
   ~NodeGraphImpl() override;
   std::optional<std::string> get_type_name(const std::string &type) override;
   void set_service(Service *service);
@@ -52,5 +53,6 @@ public:
   std::chrono::system_clock::time_point get_system_clock_at_start() override;
   std::chrono::steady_clock::time_point get_steady_clock_at_start() override;
   ThreadPool &get_thread_pool() override;
+  void dialog(const thalamus_grpc::Dialog &) override;
 };
 } // namespace thalamus
