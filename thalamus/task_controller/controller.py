@@ -119,6 +119,7 @@ class TaskWidget(QWidget):
       self.current_widget.deleteLater()
 
     task_description = None
+    #print(task_type)
     index, desc = [(i, desc) for i, desc in enumerate(self.task_descriptions) if desc.code == task_type][0]
     task_description = desc
     self.combo_box.setCurrentIndex(index)
