@@ -19,6 +19,7 @@ from ..qt import *
 from . import task_context
 from .widgets import Form, ListAsTabsWidget
 from .util import wait_for, wait_for_hold, wait_for_dual_hold, RenderOutput, animate
+from .. import thalamus_pb2
 from .. import task_controller_pb2
 from ..config import ObservableCollection
 
