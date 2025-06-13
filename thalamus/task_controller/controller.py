@@ -354,7 +354,6 @@ class ControlWindow(QMainWindow):
     add_action(view_menu, 'Operator View', lambda: self.on_operator_view(subject_window))
 
     settings_menu = self.menuBar().addMenu("&Settings")
-    add_action(settings_menu, 'Touch Screen', lambda: self.on_touch_screen())
     add_action(settings_menu, 'Orchestration', lambda: self.on_orchestration())
 
     self.task_cluster_tabs = QTabWidget()

@@ -16,6 +16,7 @@
 #include <ophanim_node.hpp>
 #include <pupil_node.hpp>
 #include <remote_node.hpp>
+#include <remotelog_node.hpp>
 #ifndef _WIN32
 #include <ros2_node.hpp>
 #endif
@@ -24,12 +25,14 @@
 #include <spikeglx_node.hpp>
 #include <stim_printer_node.hpp>
 #include <sync_node.hpp>
+#include <storage2_node.hpp>
 #include <task_controller_node.hpp>
 #include <thalamus_config.h>
 #include <thread_pool.hpp>
 #include <touchscreen_node.hpp>
 #include <video_node.hpp>
 #include <test_pulse_node.hpp>
+#include <wallclock_node.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -96,6 +99,7 @@ struct NodeGraphImpl::Impl {
   std::chrono::system_clock::time_point system_time;
   std::chrono::steady_clock::time_point steady_time;
   ThreadPool thread_pool;
+  thalamus_grpc::Thalamus::Stub* stub;
 
   std::map<std::string, INodeFactory *> node_factories;
 
@@ -103,10 +107,11 @@ public:
   Impl(ObservableListPtr _nodes, boost::asio::io_context &_io_context,
        NodeGraphImpl *_outer,
        std::chrono::system_clock::time_point _system_time,
-       std::chrono::steady_clock::time_point _steady_time)
+       std::chrono::steady_clock::time_point _steady_time,
+       thalamus_grpc::Thalamus::Stub* _stub)
       : nodes(_nodes), num_nodes(nodes->size()), io_context(_io_context),
         outer(_outer), system_time(_system_time), steady_time(_steady_time),
-        thread_pool("ThreadPool") {
+        thread_pool("ThreadPool"), stub(_stub) {
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},
@@ -118,6 +123,7 @@ public:
         {"HAND_ENGINE", new NodeFactory<HandEngineNode>()},
         {"WAVE", new NodeFactory<WaveGeneratorNode>()},
         {"STORAGE", new NodeFactory<StorageNode>()},
+        {"STORAGE2", new NodeFactory<Storage2Node>()},
         {"RUNNER", new NodeFactory<RunNode>()},
         {"RUNNER2", new NodeFactory<Run2Node>()},
         {"OPHANIM", new NodeFactory<OphanimNode>()},
@@ -137,6 +143,7 @@ public:
         {"ROS2", new NodeFactory<Ros2Node>()},
 #endif
         {"REMOTE", new NodeFactory<RemoteNode>()},
+        {"REMOTE_LOG", new NodeFactory<RemoteLogNode>()},
         {"CHESSBOARD", new NodeFactory<ChessBoardNode>()},
         {"PUPIL", new NodeFactory<PupilNode>()},
         {"LOG", new NodeFactory<LogNode>()},
@@ -146,6 +153,7 @@ public:
         {"TOUCH_SCREEN", new NodeFactory<TouchScreenNode>()},
         {"STIM_PRINTER", new NodeFactory<StimPrinterNode>()},
         {"TEST_PULSE_NODE", new NodeFactory<TestPulseNode>()},
+        {"WALLCLOCK", new NodeFactory<WallClockNode>()},
         //{"HEXASCOPE", new NodeFactory<HexascopeNode>()},
         {"ARUCO", new NodeFactory<ArucoNode>()}};
 
@@ -197,7 +205,7 @@ public:
           std::shared_ptr<Node>(factory->create(node, io_context, outer));
       node_impls.insert(node_impls.begin() + index, node_impl);
       node_types.insert(node_types.begin() + index, type_str);
-      node->recap();
+      node->recap(std::bind(&Impl::on_node, this, node.get(), _1, _2, _3));
     }
   }
 
@@ -266,8 +274,9 @@ public:
 NodeGraphImpl::NodeGraphImpl(ObservableListPtr nodes,
                              boost::asio::io_context &io_context,
                              std::chrono::system_clock::time_point system_time,
-                             std::chrono::steady_clock::time_point steady_time)
-    : impl(new Impl(nodes, io_context, this, system_time, steady_time)) {
+                             std::chrono::steady_clock::time_point steady_time,
+                             thalamus_grpc::Thalamus::Stub* stub)
+    : impl(new Impl(nodes, io_context, this, system_time, steady_time, stub)) {
   impl->nodes->recap();
   impl->thread_pool.start();
 }
@@ -360,6 +369,13 @@ NodeGraph::NodeConnection NodeGraphImpl::get_node_scoped(
 
 std::shared_ptr<grpc::Channel>
 NodeGraphImpl::get_channel(const std::string &url) {
+  std::vector<std::string> tokens = absl::StrSplit(url, ':');
+  int port;
+  bool parsed = absl::SimpleAtoi(tokens.back(), &port);
+  if(!parsed) {
+    return get_channel(url + ":50050");
+  }
+
   if (!impl->channels.contains(url) || !impl->channels[url].lock()) {
     auto channel = grpc::CreateChannel(url, grpc::InsecureChannelCredentials());
     impl->channels[url] = channel;
@@ -389,4 +405,15 @@ NodeGraphImpl::get_steady_clock_at_start() {
 }
 
 ThreadPool &NodeGraphImpl::get_thread_pool() { return impl->thread_pool; }
+
+void NodeGraphImpl::dialog(const thalamus_grpc::Dialog &dialog) {
+  auto context = std::make_shared<grpc::ClientContext>();
+  auto request = std::make_shared<thalamus_grpc::Dialog>(dialog);
+  auto response = std::make_shared<thalamus_grpc::Empty>();
+
+  impl->stub->async()->dialog(context.get(), request.get(), response.get(),
+        [moved_context=context,moved_request=request,moved_response=response](grpc::Status s) {
+          THALAMUS_LOG(info) << "Dialog complete " << s.error_message();
+        });
+}
 } // namespace thalamus

@@ -41,6 +41,8 @@ from .sync_widget import SyncWidget
 from .stim_widget import StimWidget
 from .analog_widget import AnalogWidget
 from .storage_widget import StorageWidget
+from .storage2_widget import Storage2Widget
+from .persistence_widget import PersistenceWidget
 from .run2_widget import Run2Widget
 from ..util import NodeSelector
 from .. import thalamus_pb2
@@ -150,13 +152,37 @@ class AlphaOmegaTableModel(QAbstractTableModel):
 def create_alpha_omega_widget(node: ObservableDict, stub: thalamus_pb2_grpc.ThalamusStub):
   if 'all_channels' not in node:
     node['all_channels'] = {}
+
   all_channels = node['all_channels']
+
+  #At some point I started showing these keys in the UI so I switched to capitalized keys.  The restore lab are the
+  #only ones using Alpha Omega so I thought it would be easy to update their config files.  However, the lower case
+  #names keep popping up, possibly copied and pasted from older configs.  It's been a disaster.
+  #
+  #The below code checks the capitalization in the config and uses lower case keys if they are present.
+
+  if all_channels:
+    first_channel = next(iter(all_channels.values()))
+    is_upper = 'Name' in first_channel
+  else:
+    is_upper = True
+
+  if is_upper:
+    key_column = 'ID'
+    columns = ['Name', 'Frequency', 'Selected']
+    selected = 'Selected'
+  else:
+    key_column = 'id'
+    columns = ['name', 'frequency', 'selected']
+    selected = 'selected'
+
+
   result = QWidget()
   layout = QVBoxLayout()
   refresh_button = QPushButton('Refresh')
   tree = QTableView()
   tree.verticalHeader().hide()
-  model = TreeObservableCollectionModel(all_channels, key_column="ID", columns=['Name', 'Frequency', 'Selected'], show_extra_values=False, is_editable=lambda c, k: k == 'Selected')
+  model = TreeObservableCollectionModel(all_channels, key_column=key_column, columns=columns, show_extra_values=False, is_editable=lambda c, k: k == selected)
   sort_model = QSortFilterProxyModel()
   sort_model.setSourceModel(model)
   tree.setModel(sort_model)
@@ -186,6 +212,10 @@ FACTORIES = {
     UserData(UserDataType.SPINBOX, 'Poll Interval', 16, []),
     UserData(UserDataType.CHECK_BOX, 'Zero Latency', False, []),
     UserData(UserDataType.DEFAULT, 'Channel', 'Dev1/ai0', []),
+    UserData(UserDataType.COMBO_BOX, 'Terminal Config', 'Default', ['Default', 'RSE', 'NRSE', 'Diff', 'Pseudo Diff']),
+    UserData(UserDataType.COMBO_BOX, 'Channel Type', 'Voltage', ['Voltage', 'Current']),
+    UserData(UserDataType.COMBO_BOX, 'Shunt Resistor Location', 'Default', ['Default', 'Internal', 'External']),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Shunt Resistor Ohms', '1000', []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
   ]),
   'NIDAQ_OUT': Factory(StimWidget, [
@@ -225,6 +255,7 @@ FACTORIES = {
     UserData(UserDataType.DEFAULT, 'Address', "localhost", []),
     UserData(UserDataType.SPINBOX, 'Command Port', 5000, []),
     UserData(UserDataType.SPINBOX, 'Waveform Port', 5001, []),
+    UserData(UserDataType.DEFAULT, 'Metadata Node', "", []),
   ]),
   'SPIKEGLX': Factory(SpikeGlxWidget, [
     UserData(UserDataType.CHECK_BOX, 'Connected', False, []),
@@ -232,6 +263,7 @@ FACTORIES = {
     UserData(UserDataType.CHECK_BOX, 'Stream', False, []),
     UserData(UserDataType.SPINBOX, 'Poll Interval (ms)', 10, []),
     UserData(UserDataType.DEFAULT, 'Address', "localhost:4142", []),
+    UserData(UserDataType.DEFAULT, 'Metadata Node', "", []),
   ]),
   'PULSE': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Toggle', False, []),
@@ -252,6 +284,12 @@ FACTORIES = {
     UserData(UserDataType.CHECK_BOX, 'Compress Analog', False, []),
     UserData(UserDataType.CHECK_BOX, 'Compress Video', False, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, [])
+  ]),
+  'STORAGE2': Factory(Storage2Widget, [
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+    UserData(UserDataType.DEFAULT, 'Output File', 'test.tha', []),
+    UserData(UserDataType.CHECK_BOX, 'Compress Analog', False, []),
+    UserData(UserDataType.CHECK_BOX, 'Compress Video', False, []),
   ]),
   'STARTER': Factory(None, [
     UserData(UserDataType.SPINBOX, 'Channel',  0, []),
@@ -341,6 +379,11 @@ FACTORIES = {
     UserData(UserDataType.DOUBLE_SPINBOX, 'Probe Frequency', 10.0, []),
     UserData(UserDataType.SPINBOX, 'Probe Size', 128, []),
     UserData(UserDataType.CHECK_BOX, 'Running', False, [])]),
+  'REMOTE_LOG': Factory(None, [
+    UserData(UserDataType.DEFAULT, 'Address', '', []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Probe Frequency', 10.0, []),
+    UserData(UserDataType.SPINBOX, 'Probe Size', 128, []),
+    UserData(UserDataType.CHECK_BOX, 'Running', False, [])]),
   'ROS2': Factory(lambda c, s: Ros2Widget(c, s), []),
   'PUPIL': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
@@ -392,6 +435,7 @@ FACTORIES = {
       "DICT_ARUCO_MIP_36h12"])
   ]),
   'HEXASCOPE': Factory(HexascopeWidget, []),
+  'WALLCLOCK': Factory(None, []),
 }
 
 FACTORY_NAMES = {}
@@ -1504,6 +1548,9 @@ class ThalamusWindow(QMainWindow):
     viewmenu.addAction('Add Data View').triggered.connect(lambda: self.state['data_views'].append({}))
     viewmenu.addAction('View Channel Info').triggered.connect(view_channel_info)
 
+    settingsmenu = menubar.addMenu('Settings')
+    settingsmenu.addAction('Persistence').triggered.connect(self.on_persistence)
+
     self.state['data_views'].add_observer(self.on_data_views_changed)
     for i, view in enumerate(self.state['data_views']):
       self.on_data_views_changed(ObservableCollection.Action.SET, i, view)
@@ -1511,6 +1558,15 @@ class ThalamusWindow(QMainWindow):
     self.state['node_widgets'].add_observer(self.on_node_widgets_changed)
     for i, widget in enumerate(self.state['node_widgets']):
       self.on_node_widgets_changed(ObservableCollection.Action.SET, i, widget)
+
+  def on_persistence(self):
+    if 'Persistence' not in self.state:
+      self.state['Persistence'] = {}
+
+    dialog = PersistenceWidget(self.state['Persistence'])
+    dialog.resize(self.width()//2, self.height()//2)
+    dialog.show()
+    self.dialog = dialog
 
   def moveEvent(self, a0: QMoveEvent) -> None:
     offset = self.frameGeometry().size() - self.geometry().size()

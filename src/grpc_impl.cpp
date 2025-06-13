@@ -549,6 +549,48 @@ Service::events(::grpc::ServerContext *context,
   return ::grpc::Status::OK;
 }
 
+struct JConnection : public boost::signals2::scoped_connection {
+  boost::signals2::scoped_connection connection;
+
+  struct State {
+    bool joining = false;
+    std::mutex mutex;
+  };
+  std::shared_ptr<State> state = std::make_shared<State>();
+
+  template<typename Signal, typename Callback>
+  JConnection(Signal& signal, Callback&& callback) {
+    connection = signal.connect([c_state=this->state, c_callback=std::forward<Callback>(callback)](auto&&... args) {
+      std::lock_guard<std::mutex> lock(c_state->mutex);
+      if(c_state->joining) {
+        return;
+      }
+      c_callback(std::forward<decltype(args)>(args)...);
+    });
+  }
+  ~JConnection() {
+    std::lock_guard<std::mutex> lock(state->mutex);
+    state->joining = true;
+  }
+};
+
+::grpc::Status Service::logout(::grpc::ServerContext *context,
+                      const ::thalamus_grpc::Empty *,
+                      ::grpc::ServerWriter<::thalamus_grpc::Text> *writer) {
+  set_current_thread_name("logout");
+  Impl::ContextGuard guard(this, context);
+
+  JConnection connection(log_signal, [writer](const ::thalamus_grpc::Text& text) {
+    writer->Write(text);
+  });
+
+  while(!context->IsCancelled()) {
+    std::this_thread::sleep_for(1s);
+  }
+
+  return ::grpc::Status::OK;
+}
+
 ::grpc::Status Service::observable_bridge(
     ::grpc::ServerContext *,
     ::grpc::ServerReaderWriter<::thalamus_grpc::ObservableChange,
@@ -717,6 +759,97 @@ Service::events(::grpc::ServerContext *context,
     thalamus_grpc::ObservableTransaction acknowledgement;
     acknowledgement.set_acknowledged(request->id());
     i->Write(acknowledgement);
+  }
+  return ::grpc::Status::OK;
+}
+
+::grpc::Status Service::inject_motion_capture(
+    ::grpc::ServerContext *context,
+    ::grpc::ServerReader<::thalamus_grpc::InjectMotionCaptureRequest> *reader,
+    ::thalamus_grpc::Empty *) {
+  set_current_thread_name("inject_motion_capture");
+  Impl::ContextGuard guard(this, context);
+  ::thalamus_grpc::InjectMotionCaptureRequest request;
+  std::string node_name;
+  if (!reader->Read(&request)) {
+    THALAMUS_LOG(error) << "Couldn't read name of node to inject into";
+    return ::grpc::Status::OK;
+  }
+  if (!request.has_node()) {
+    THALAMUS_LOG(error)
+        << "First message of inject_motion_capture request should contain node name";
+    return ::grpc::Status::OK;
+  }
+
+  node_name = request.node();
+
+  while (!context->IsCancelled()) {
+    std::promise<void> promise;
+    auto future = promise.get_future();
+    std::shared_ptr<Node> raw_node;
+    boost::asio::post(impl->io_context, [&] {
+      impl->node_graph.get_node(node_name, [&](auto ptr) {
+        raw_node = ptr.lock();
+        promise.set_value();
+      });
+    });
+    THALAMUS_LOG(info) << "Waiting for node";
+    while (future.wait_for(1s) == std::future_status::timeout &&
+           !context->IsCancelled()) {
+      if (impl->io_context.stopped()) {
+        return ::grpc::Status::OK;
+      }
+    }
+    if (context->IsCancelled()) {
+      continue;
+    }
+    THALAMUS_LOG(info) << "Got node";
+
+    MotionCaptureNode *node = node_cast<MotionCaptureNode *>(raw_node.get());
+    if (!node) {
+      std::this_thread::sleep_for(1s);
+      continue;
+    }
+
+    thalamus::vector<MotionCaptureNode::Segment> epi_segments;
+    while (reader->Read(&request)) {
+      if (request.has_node()) {
+        node_name = request.node();
+        break;
+      }
+
+      auto &proto_segments = request.data().segments();
+      epi_segments.clear();
+      for(const auto& proto_segment : proto_segments) {
+        epi_segments.emplace_back();
+        auto& epi_segment = epi_segments.back();
+        epi_segment.frame = proto_segment.frame();
+        epi_segment.segment_id = proto_segment.id();
+        epi_segment.time = proto_segment.time();
+        epi_segment.actor = uint8_t(proto_segment.actor());
+        epi_segment.rotation = {
+          proto_segment.q0(),
+          proto_segment.q1(),
+          proto_segment.q2(),
+          proto_segment.q3(),
+        };
+        epi_segment.position = {
+          proto_segment.x(),
+          proto_segment.y(),
+          proto_segment.z()
+        };
+      }
+
+      std::promise<void> inject_promise;
+      auto inject_future = inject_promise.get_future();
+      boost::asio::post(impl->io_context, [&] {
+        node->inject(epi_segments);
+        inject_promise.set_value();
+      });
+      while (inject_future.wait_for(1s) == std::future_status::timeout &&
+             !context->IsCancelled()) {
+      }
+    }
   }
   return ::grpc::Status::OK;
 }
@@ -1379,6 +1512,13 @@ Service::analog(::grpc::ServerContext *context,
 }
 
 ::grpc::Status
+Service::motion_capture(::grpc::ServerContext *context,
+               const ::thalamus_grpc::NodeSelector *request,
+               ::grpc::ServerWriter<::thalamus_grpc::XsensResponse> *writer) {
+  return xsens(context, request, writer);
+}
+
+::grpc::Status
 Service::xsens(::grpc::ServerContext *context,
                const ::thalamus_grpc::NodeSelector *request,
                ::grpc::ServerWriter<::thalamus_grpc::XsensResponse> *writer) {
@@ -1491,7 +1631,7 @@ Service::image(::grpc::ServerContext *context,
     std::condition_variable cond;
     std::vector<thalamus_grpc::Image> images;
     std::vector<std::chrono::steady_clock::time_point> frame_times;
-
+ 
     using signal_type = decltype(raw_node->ready);
     auto connection = raw_node->ready.connect(
         signal_type::slot_type([&](const Node *) {
@@ -1717,9 +1857,16 @@ Service::image(::grpc::ServerContext *context,
     reader->Write(response);
 
     while (reader->Read(&request)) {
+      TRACE_EVENT("thalamus", "stim_grpc");
+
+      //Being able to redirect between nodes is problematic for remote nodes so I'm disabling it.
+      //If a client wants to use a remote node for stimulation it should name the remote node.  But
+      //if NodeSelectors get forwarded to the remote Thalamus instance where the remote node doesn't exist
+      //then the stimulation pipe will break and the reason it broke will not be made clear.
       if (request.has_node()) {
-        node_name = request.node();
-        break;
+        continue;
+      //  node_name = request.node();
+      //  break;
       }
 
       std::promise<void> response_promise;
@@ -1727,6 +1874,7 @@ Service::image(::grpc::ServerContext *context,
       std::future<thalamus_grpc::StimResponse> inner_future;
       auto id = request.id();
       boost::asio::post(impl->io_context, [&] {
+        TRACE_EVENT("thalamus", "stim_main");
         inner_future = node->stim(std::move(request));
         response_promise.set_value();
       });

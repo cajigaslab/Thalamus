@@ -91,6 +91,7 @@ public:
     Vector::iterator iterator;
     Vector::iterator end;
     ObservableCollection *collection;
+    std::optional<ValueWrapper> value_wrapper;
     friend ObservableList;
     friend ObservableDict;
 
@@ -99,7 +100,7 @@ public:
     VectorIteratorWrapper(size_t key, Vector::iterator iterator,
                           Vector::iterator end,
                           ObservableCollection *collection);
-    ValueWrapper operator*();
+    ValueWrapper& operator*();
     VectorIteratorWrapper &operator+(size_t count);
     VectorIteratorWrapper &operator+=(size_t count);
     VectorIteratorWrapper &operator++();
@@ -124,7 +125,7 @@ public:
     MapIteratorWrapper();
     MapIteratorWrapper(Map::iterator iterator, Map::iterator end,
                        ObservableCollection *collection);
-    ValueWrapper operator*();
+    std::pair<Key, ValueWrapper>& operator*();
     std::pair<Key, ValueWrapper> *operator->();
     MapIteratorWrapper &operator++();
     MapIteratorWrapper operator++(int);
@@ -145,12 +146,13 @@ public:
       set_remote_storage(std::function<bool(Action, const std::string &,
                                             ObservableCollection::Value,
                                             std::function<void()>)>) = 0;
+  virtual boost::json::value to_json() = 0;
 
   std::string address() const;
   void notify(ObservableCollection *, Action, const Key &, Value &);
 };
 
-class ObservableList : public ObservableCollection {
+class ObservableList : public ObservableCollection, public std::enable_shared_from_this<ObservableList>{
   Vector content;
 
 public:
@@ -192,9 +194,10 @@ public:
       std::function<bool(Action, const std::string &,
                          ObservableCollection::Value, std::function<void()>)>
           remote_storage) override;
+  boost::json::value to_json() override;
 };
 
-class ObservableDict : public ObservableCollection {
+class ObservableDict : public ObservableCollection, public std::enable_shared_from_this<ObservableDict> {
   Map content;
 
 public:
@@ -235,6 +238,7 @@ public:
       std::function<bool(Action, const std::string &,
                          ObservableCollection::Value, std::function<void()>)>
           remote_storage) override;
+  boost::json::value to_json() override;
 };
 ObservableCollection::Value get_jsonpath(ObservableCollection::Value store,
                                          const std::list<std::string> &tokens);

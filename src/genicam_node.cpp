@@ -69,6 +69,7 @@ template <typename T> struct Caster {
 
       THALAMUS_ASSERT(false, "Not convertable: %s %s->%s", arg_text, m_name,
                       t_name);
+      return T();
     }
   }
 };
@@ -78,9 +79,13 @@ static T variant_cast(const std::variant<VARIANTS...> &arg) {
   return std::visit(Caster<T>{}, arg);
 }
 
+template<typename T>
+concept Arithmetic = std::is_arithmetic<T>::value;
+
 struct GenicamNode::Impl {
   boost::asio::io_context &io_context;
   ObservableDictPtr state;
+  ObservableDictPtr camera_state;
   boost::signals2::scoped_connection state_connection;
   boost::signals2::scoped_connection options_connection;
   bool is_running = false;
@@ -211,6 +216,7 @@ struct GenicamNode::Impl {
         return std::get<double>(from);
       }
       THALAMUS_ASSERT(false, "Invalid Reg type");
+      return 0;
     }
     static RegValue number_to_reg(const calculator::number &from) {
       if (std::holds_alternative<long long int>(from)) {
@@ -219,6 +225,7 @@ struct GenicamNode::Impl {
         return std::get<double>(from);
       }
       THALAMUS_ASSERT(false, "Invalid number type");
+      return 0;
     }
     struct Device {
       virtual ~Device();
@@ -240,6 +247,7 @@ struct GenicamNode::Impl {
         return AccessMode::WO;
       }
       THALAMUS_ASSERT(false, "Invalid access mode string: %s", text);
+      return AccessMode::RW;
     }
 
     struct IntConverter {
@@ -663,7 +671,7 @@ struct GenicamNode::Impl {
         THALAMUS_ASSERT(error == GenTL::GC_ERR_SUCCESS, "GCReadPort failed: %d",
                         error);
 
-        double result;
+        double result = 0.0;
         if (length == 4) {
           if (little_endian) {
             boost::endian::little_to_native_inplace(
@@ -697,7 +705,7 @@ struct GenicamNode::Impl {
           total_address += std::get<long long int>(device->get(p_address));
         }
 
-        GenTL::GC_ERROR error;
+        GenTL::GC_ERROR error = GenTL::GC_ERR_SUCCESS;
         size_t length2 = length;
         buffer.resize(length);
         if (length == 4) {
@@ -1357,7 +1365,7 @@ struct GenicamNode::Impl {
                 if (pair.first == "pVariable") {
                   auto var_name =
                       pair.second.get_optional<std::string>("<xmlattr>.Name");
-                  THALAMUS_ASSERT(var_name, "Name missing");
+                  THALAMUS_ASSERT(var_name.has_value(), "Name missing");
                   values[*var_name] = pair.second.data();
                 } else if (pair.first == "Expression") {
                   auto var_name =
@@ -1386,7 +1394,7 @@ struct GenicamNode::Impl {
                 if (pair.first == "pVariable") {
                   auto var_name =
                       pair.second.get_optional<std::string>("<xmlattr>.Name");
-                  THALAMUS_ASSERT(var_name, "Name missing");
+                  THALAMUS_ASSERT(var_name.has_value(), "Name missing");
                   values[*var_name] = pair.second.data();
                 } else if (pair.first == "Expression") {
                   auto var_name =
@@ -1413,7 +1421,7 @@ struct GenicamNode::Impl {
                 if (pair.first == "pVariable") {
                   auto var_name =
                       pair.second.get_optional<std::string>("<xmlattr>.Name");
-                  THALAMUS_ASSERT(var_name, "Name missing");
+                  THALAMUS_ASSERT(var_name.has_value(), "Name missing");
                   values[*var_name] = pair.second.data();
                 } else if (pair.first == "Expression") {
                   auto var_name =
@@ -1436,7 +1444,7 @@ struct GenicamNode::Impl {
                 if (pair.first == "pVariable") {
                   auto var_name =
                       pair.second.get_optional<std::string>("<xmlattr>.Name");
-                  THALAMUS_ASSERT(var_name, "Name missing");
+                  THALAMUS_ASSERT(var_name.has_value(), "Name missing");
                   values[*var_name] = pair.second.data();
                 } else if (pair.first == "Expression") {
                   auto var_name =
@@ -1883,6 +1891,7 @@ struct GenicamNode::Impl {
           return get(std::get<Link>(i->second).name);
         }
         THALAMUS_ASSERT(false, "Unexpected register type");
+        return 0;
       }
 
       void set(const std::string &reg,
@@ -2162,7 +2171,13 @@ struct GenicamNode::Impl {
             }
 
             auto new_device = std::make_shared<DeviceImpl>(dev_handle, this);
-            devices[device_id] = std::move(new_device);
+            std::string device_key;
+            if(new_device->exists("DeviceID")) {
+              device_key = std::get<std::string>(new_device->get("DeviceID"));
+            } else {
+              device_key = device_id;
+            }
+            devices[device_key] = std::move(new_device);
           }
         }
       }
@@ -2234,6 +2249,31 @@ struct GenicamNode::Impl {
   boost::signals2::scoped_connection frame_connection;
   std::once_flag load_ctis_flag;
 
+  std::shared_ptr<Cti::DeviceImpl> get_device(const std::string& name) {
+    std::vector<std::string> tokens = absl::StrSplit(name, ':');
+    if(tokens.size() < 2) {
+      return nullptr;
+    }
+
+    for (auto &cti : *ctis) {
+      if (tokens[0] == cti->name) {
+        auto i = cti->devices.find(tokens[1]);
+        if (i != cti->devices.end()) {
+          return i->second;
+        }
+        break;
+      }
+    }
+    return nullptr;
+  }
+
+  std::shared_ptr<Cti::DeviceImpl> get_device() {
+    if(!state->contains("Camera")) {
+      return nullptr;
+    }
+    return get_device(state->at("Camera"));
+  }
+
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
        GenicamNode *_outer)
       : io_context(_io_context), state(_state), outer(_outer) {
@@ -2242,29 +2282,21 @@ struct GenicamNode::Impl {
 
     load_ctis();
 
+    if(!state->contains("Camera Values")) {
+      (*state)["Camera Values"].assign(std::make_shared<ObservableDict>());
+    }
+
     analog_impl.inject({{std::span<double const>()}}, {0ns}, {""});
 
     analog_impl.ready.connect([_outer](Node *) { _outer->ready(_outer); });
 
-    for (auto &cti : *ctis) {
-      if (!cti->devices.empty()) {
-        default_camera = cti->name + ":" + cti->devices.begin()->first;
-      }
-    }
-    if (default_camera.empty()) {
-      return;
-    }
-    if (!state->contains("Camera")) {
-      (*state)["Camera"].assign(default_camera);
-    } else {
-      initialize_camera(true);
-    }
-
     state_connection =
-        state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
+        state->recursive_changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3, _4));
+    this->state->recap(std::bind(&Impl::on_change, this, state.get(), _1, _2, _3));
   }
 
   ~Impl() {
+    stop_stream();
     (*state)["Running"].assign(false, [&] {});
   }
 
@@ -2306,194 +2338,198 @@ struct GenicamNode::Impl {
         {std::chrono::nanoseconds(size_t(1e9 / target_framerate))}, {""});
   }
 
-  void initialize_camera(bool apply_state = false) {
-    TRACE_EVENT("thalamus", "GenicamNode::initialize_camera");
-    std::string camera = state->at("Camera");
-    std::vector<std::string> tokens = absl::StrSplit(camera, ':');
-    if (tokens.size() < 2) {
-      (*state)["Camera"].assign(default_camera);
-      return;
-    }
-
-    for (auto &cti : *ctis) {
-      if (tokens[0] != cti->name) {
-        continue;
+  void sanitize_camera(std::shared_ptr<Cti::DeviceImpl> d) {
+    if (!d->streaming) {
+      if (d->is_writable("GainAuto")) {
+        d->set("GainAuto", "Off");
       }
-      auto i = cti->devices.find(tokens[1]);
-      if (i != cti->devices.end()) {
-        this->device = i->second;
-        frame_connection = this->device->frame_ready.connect(
-            std::bind(&Impl::on_frame_ready, this, _1, _2, _3, _4));
-        break;
+      if (d->is_writable("ExposureAuto")) {
+        d->set("ExposureAuto", "Off");
       }
-      (*state)["Camera"].assign(default_camera);
-      return;
-    }
-
-    if (!device) {
-      return;
-    }
-
-    if (!device->streaming) {
-      if (device->is_writable("GainAuto")) {
-        device->set("GainAuto", "Off");
+      if (d->is_writable("ExposureMode")) {
+        d->set("ExposureMode", "Timed");
       }
-      if (device->is_writable("ExposureAuto")) {
-        device->set("ExposureAuto", "Off");
+      if (d->is_writable("AcquisitionFrameRateAuto")) {
+        d->set("AcquisitionFrameRateAuto", "Off");
       }
-      if (device->is_writable("ExposureMode")) {
-        device->set("ExposureMode", "Timed");
+      if (d->is_writable("AcquisitionFrameRateMode")) {
+        d->set("AcquisitionFrameRateMode", "Basic");
       }
-      if (device->is_writable("AcquisitionFrameRateAuto")) {
-        device->set("AcquisitionFrameRateAuto", "Off");
-      }
-      if (device->is_writable("AcquisitionFrameRateMode")) {
-        device->set("AcquisitionFrameRateMode", "Basic");
-      }
-      device->set("AcquisitionMode", "Continuous");
-    }
-
-    {
-      auto value = variant_cast<long long int>(this->device->get("WidthMax"));
-      (*state)["WidthMax"].assign(value);
-      value = variant_cast<long long int>(this->device->get("HeightMax"));
-      (*state)["HeightMax"].assign(value);
-    }
-
-    if (apply_state && state->contains("Width")) {
-      long long int state_width = state->at("Width");
-      this->device->set("Width", state_width);
-    } else {
-      long long int value =
-          variant_cast<long long int>(this->device->get("Width"));
-      (*state)["Width"].assign(value);
-    }
-    if (apply_state && state->contains("Height")) {
-      long long int value = state->at("Height");
-      this->device->set("Height", value);
-    } else {
-      long long int value =
-          variant_cast<long long int>(this->device->get("Height"));
-      (*state)["Height"].assign(value);
-    }
-    if (apply_state && state->contains("OffsetX")) {
-      long long int value = state->at("OffsetX");
-      this->device->set("OffsetX", value);
-    } else {
-      long long int value =
-          variant_cast<long long int>(this->device->get("OffsetX"));
-      (*state)["OffsetX"].assign(value);
-    }
-    if (apply_state && state->contains("OffsetY")) {
-      long long int value = state->at("OffsetY");
-      this->device->set("OffsetY", value);
-    } else {
-      long long int value =
-          variant_cast<long long int>(this->device->get("OffsetY"));
-      (*state)["OffsetY"].assign(value);
-    }
-    if (apply_state && state->contains("ExposureTime")) {
-      double value = state->at("ExposureTime");
-      this->device->set("ExposureTime", value);
-    } else {
-      auto value = variant_cast<double>(this->device->get("ExposureTime"));
-      (*state)["ExposureTime"].assign(value);
-    }
-    if (apply_state && state->contains("AcquisitionFrameRate")) {
-      double value = state->at("AcquisitionFrameRate");
-      target_framerate = value;
-      this->device->set("AcquisitionFrameRate", value);
-    } else {
-      auto value =
-          variant_cast<double>(this->device->get("AcquisitionFrameRate"));
-      target_framerate = value;
-      (*state)["AcquisitionFrameRate"].assign(value);
-    }
-    if (apply_state && state->contains("Gain")) {
-      double value = state->at("Gain");
-      this->device->set("Gain", value);
-    } else {
-      auto value = variant_cast<double>(this->device->get("Gain"));
-      (*state)["Gain"].assign(value);
+      d->set("AcquisitionMode", "Continuous");
     }
   }
 
-  void on_change(ObservableCollection::Action,
+  ObservableCollection::Value get_state_value(const std::string& key) {
+    if(!state->contains(key)) {
+      return std::monostate();
+    }
+    return state->at(key);
+  }
+
+  ObservableCollection::Value get_camera_state_value(const std::string& key) {
+    if(!camera_state || !camera_state->contains(key)) {
+      return std::monostate();
+    }
+    return camera_state->at(key);
+  }
+
+  struct ApproxEqualVisitor {
+    bool operator()(Arithmetic auto lhs, Arithmetic auto rhs) {
+      return std::abs(double(lhs) - double(rhs)) < .01;
+    }
+    bool operator()(auto, auto) {
+      THALAMUS_ASSERT(false, "Expected arithmetic types");
+      return false;
+    }
+  };
+
+  bool approx_equal(const ObservableCollection::Value& lhs, const ObservableCollection::Value& rhs) {
+    return std::visit(ApproxEqualVisitor(), lhs, rhs);
+  }
+
+  template<typename T>
+  void write_key_to_camera(std::shared_ptr<Cti::Device> d, const std::string& key) {
+    auto value = get_state_value(key);
+    if(!std::holds_alternative<std::monostate>(value) && !approx_equal(value, get_camera_state_value(key))) {
+      d->set(key, std::get<T>(value));
+    }
+  }
+
+  template<typename T>
+  void read_key_from_camera(std::shared_ptr<Cti::Device> d, const std::string& key) {
+    auto value = variant_cast<T>(d->get(key));
+    (*camera_state)[key].assign(value);
+  }
+
+  bool write_camera_values(bool sanitize) {
+    auto d = get_device();
+    if(!d) {
+      return false;
+    }
+
+    if(sanitize) {
+      sanitize_camera(d);
+    }
+    write_key_to_camera<long long int>(d, "Width");
+    write_key_to_camera<long long int>(d, "Height");
+    write_key_to_camera<long long int>(d, "OffsetX");
+    write_key_to_camera<long long int>(d, "OffsetY");
+    write_key_to_camera<long long int>(d, "Width");
+    write_key_to_camera<long long int>(d, "Height");
+    write_key_to_camera<long long int>(d, "OffsetX");
+    write_key_to_camera<long long int>(d, "OffsetY");
+    write_key_to_camera<double>(d, "ExposureTime");
+    write_key_to_camera<double>(d, "AcquisitionFrameRate");
+    write_key_to_camera<double>(d, "Gain");
+    return true;
+  }
+
+  bool read_camera_values(bool sanitize) {
+    if(!camera_state) {
+      return false;
+    }
+    auto d = get_device();
+    if(!d) {
+      return false;
+    }
+
+    if(sanitize) {
+      sanitize_camera(d);
+    }
+    read_key_from_camera<long long int>(d, "WidthMax");
+    read_key_from_camera<long long int>(d, "HeightMax");
+    read_key_from_camera<long long int>(d, "Width");
+    read_key_from_camera<long long int>(d, "Height");
+    read_key_from_camera<long long int>(d, "OffsetX");
+    read_key_from_camera<long long int>(d, "OffsetY");
+    read_key_from_camera<long long int>(d, "Width");
+    read_key_from_camera<long long int>(d, "Height");
+    read_key_from_camera<long long int>(d, "OffsetX");
+    read_key_from_camera<long long int>(d, "OffsetY");
+    read_key_from_camera<double>(d, "ExposureTime");
+    read_key_from_camera<double>(d, "AcquisitionFrameRate");
+    read_key_from_camera<double>(d, "Gain");
+
+    return true;
+  }
+
+  bool sync_config() {
+    if(!write_camera_values(true)) {
+      return false;
+    }
+    if(!read_camera_values(false)) {
+      return false;
+    }
+    
+    for(auto i = camera_state->begin();i != camera_state->end();++i) {
+      state->at(i->first) = i->second;
+      if (std::get<std::string>(i->first) == std::string("AcquisitionFrameRate")) {
+        target_framerate = i->second;
+      }
+    }
+    return true;
+  }
+
+  void start_stream() {
+    auto d = get_device();
+    if(!d || d->streaming) {
+      return;
+    }
+    sync_config();
+    d->start_stream(io_context);
+  }
+
+  void stop_stream() {
+    auto d = get_device();
+    if(!d || !d->streaming) {
+      return;
+    }
+    d->stop_stream();
+  }
+
+  void on_change(ObservableCollection* source,
+                 ObservableCollection::Action,
                  const ObservableCollection::Key &k,
                  const ObservableCollection::Value &v) {
     TRACE_EVENT("thalamus", "GenicamNode::on_change");
-    auto key_str = std::get<std::string>(k);
-    if (key_str == "Camera") {
-      initialize_camera();
-      return;
-    } else if (key_str == "Running") {
-      running = variant_cast<bool>(v);
-      if (device) {
-        if (running) {
-          device->start_stream(io_context);
-        } else {
-          device->stop_stream();
+    if(source == camera_state.get()) {
+      if(!state->contains(k)) {
+        state->at(k).assign(v);
+      }
+      auto key_str = std::get<std::string>(k);
+      if(key_str == "AcquisitionFrameRate") {
+        if(std::holds_alternative<long long>(v)) {
+          target_framerate = double(std::get<long long>(v));
+        } else if (std::holds_alternative<double>(v)) {
+          target_framerate = std::get<double>(v);
         }
       }
       return;
     }
 
-    if (!device) {
+    if(source != state.get()) {
       return;
     }
 
-    if (key_str == "Width") {
-      auto value = variant_cast<long long int>(v);
-      this->device->set("Width", value);
-      auto new_value = variant_cast<long long int>(this->device->get("Width"));
-      if (value != new_value) {
-        (*state)["Width"].assign(new_value);
+    auto key_str = std::get<std::string>(k);
+    if(key_str == "Camera Values") {
+      camera_state = std::get<ObservableDictPtr>(v);
+      read_camera_values(true);
+    } else if (key_str == "Camera") {
+      read_camera_values(true);
+      auto d = get_device();
+      if(!d) {
+        return;
       }
-    } else if (key_str == "Height") {
-      auto value = variant_cast<long long int>(v);
-      this->device->set("Height", value);
-      auto new_value = variant_cast<long long int>(this->device->get("Height"));
-      if (value != new_value) {
-        (*state)["Height"].assign(new_value);
-      }
-    } else if (key_str == "OffsetX") {
-      auto value = variant_cast<long long int>(v);
-      this->device->set("OffsetX", value);
-      auto new_value =
-          variant_cast<long long int>(this->device->get("OffsetX"));
-      if (value != new_value) {
-        (*state)["OffsetX"].assign(new_value);
-      }
-    } else if (key_str == "OffsetY") {
-      auto value = variant_cast<long long int>(v);
-      this->device->set("OffsetY", value);
-      auto new_value =
-          variant_cast<long long int>(this->device->get("OffsetY"));
-      if (value != new_value) {
-        (*state)["OffsetY"].assign(new_value);
-      }
-    } else if (key_str == "ExposureTime") {
-      auto value = variant_cast<double>(v);
-      this->device->set("ExposureTime", value);
-      auto new_value = variant_cast<double>(this->device->get("ExposureTime"));
-      if (std::abs(value - new_value) > 1) {
-        (*state)["ExposureTime"].assign(new_value);
-      }
-    } else if (key_str == "AcquisitionFrameRate") {
-      auto value = variant_cast<double>(v);
-      this->device->set("AcquisitionFrameRate", value);
-      auto new_value =
-          variant_cast<double>(this->device->get("AcquisitionFrameRate"));
-      target_framerate = new_value;
-      if (std::abs(value - new_value) > 1) {
-        (*state)["AcquisitionFrameRate"].assign(new_value);
-      }
-    } else if (key_str == "Gain") {
-      auto value = variant_cast<double>(v);
-      this->device->set("Gain", value);
-      auto new_value = variant_cast<double>(this->device->get("Gain"));
-      if (std::abs(value - new_value) > 1) {
-        (*state)["Gain"].assign(new_value);
+      frame_connection = d->frame_ready.connect(
+            std::bind(&Impl::on_frame_ready, this, _1, _2, _3, _4));
+      state->at("Running").assign(d->streaming);
+    } else if (key_str == "Running") {
+      running = variant_cast<bool>(v);
+      if (running) {
+        start_stream();
+      } else {
+        stop_stream();
       }
     }
   }
@@ -2535,6 +2571,7 @@ bool GenicamNode::Impl::Cti::DeviceImpl::is_writable(const std::string &reg) {
     return is_writable(std::get<Link>(i->second).name);
   }
   THALAMUS_ASSERT(false, "Unexpected Register type");
+  return false;
 }
 
 GenicamNode::GenicamNode(ObservableDictPtr state,
@@ -2573,8 +2610,8 @@ bool GenicamNode::prepare() { return true; }
 
 void GenicamNode::cleanup() {
   if (Impl::ctis) {
-    // delete Impl::ctis;
-    // delete Impl::parser;
+    delete Impl::ctis;
+    delete Impl::parser;
     Impl::ctis = nullptr;
     Impl::parser = nullptr;
   }
@@ -2628,6 +2665,8 @@ boost::json::value GenicamNode::process(const boost::json::value &request) {
       }
     }
     return result;
+  } else if(request_str == "sync_config") {
+    impl->sync_config();
   }
   return boost::json::value();
 }

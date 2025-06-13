@@ -1,10 +1,16 @@
 *.exe
 *.dll
 *.so
+*.obj
+*.mp4
+*.png
+*.pdb
+*.db
 thalamus/*.h
 thalamus/**/*.proto
 thalamus/**/*_pb2.py
 thalamus/**/*_grpc.py
+thalamus/**/*_pb2.pyi
 compile_commands.json
 dist
 build

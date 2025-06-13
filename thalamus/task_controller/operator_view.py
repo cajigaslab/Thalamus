@@ -81,6 +81,16 @@ class CentralWidget(QWidget):
     layout.addWidget(clear_endpoints_button, 1, 1)
     layout.setRowStretch(1, 0)
     clear_endpoints_button.clicked.connect(on_test)
+    auto_clear_checkbox = QCheckBox('Auto Clear')
+    layout.addWidget(auto_clear_checkbox, 1, 1)
+    auto_clear_checkbox.toggled.connect(lambda v: eye_config.update({'Auto Clear': v}))
+
+    def on_eye_config_change(a, k, v):
+      if k == 'Auto Clear':
+        auto_clear_checkbox.setChecked(v)
+
+    eye_config.add_observer(on_eye_config_change, lambda: isdeleted(self))
+    eye_config.recap(on_eye_config_change)
 
     quadrants = [
       ("I", 2, 0),

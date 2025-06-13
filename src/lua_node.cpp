@@ -1,4 +1,18 @@
 #include <thalamus/tracing.hpp>
+
+#define THALAMUS_DECLARE_TRACER(name, category, label) \
+  struct name { \
+    name() { \
+      TRACE_EVENT_BEGIN(category, label); \
+    } \
+    ~name() { \
+      TRACE_EVENT_END(category); \
+    } \
+  }
+
+THALAMUS_DECLARE_TRACER(TraceOnData, "thalamus", "LuaNode::on_data");
+THALAMUS_DECLARE_TRACER(TraceReady, "thalamus", "LuaNode_ready");
+
 #include <lua_node.hpp>
 #include <modalities_util.hpp>
 #include <vector>
@@ -221,7 +235,8 @@ public:
         channels_changed = true;
         outer->channels_changed(outer);
         source_connection = locked->ready.connect([&](auto) {
-          // TRACE_EVENT("thalamus", "LuaNode::on_data");
+          //TRACE_EVENT("thalamus", "LuaNode::on_data");
+          TraceOnData trace_on_data;
           if (!source->has_analog_data()) {
             return;
           }
@@ -317,7 +332,7 @@ public:
               std::chrono::steady_clock::now() - start;
           data.back().assign(1, double(compute_time.count()));
           time = source->time();
-          // TRACE_EVENT("thalamus", "LuaNode_ready");
+          TraceReady trace_ready;
           outer->ready(outer);
         });
       });

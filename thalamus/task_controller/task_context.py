@@ -290,6 +290,7 @@ class TaskContext(TaskContextProtocol):
     self.log_queue = IterableQueue()
     self.log_stream = stub.log(self.log_queue)
     self.inject_analog_streams: typing.Dict[str, IterableQueue] = {}
+    self.stim_streams: typing.Dict[str, IterableQueue] = {}
     self.task_config = ObservableDict({})
     self.channels: typing.Mapping[str, grpc.aio.Channel] = {}
     self.task: asyncio.tasks.Task[typing.Any] = create_task_with_exc_handling(asyncio.sleep(0))
@@ -330,6 +331,23 @@ class TaskContext(TaskContextProtocol):
   async def inject_analog(self, name: str, payload: thalamus_pb2.AnalogResponse):
     queue = await self.get_inject_stream(name)
     await queue.put(thalamus_pb2.InjectAnalogRequest(signal=payload))
+
+  async def get_stim_stream(self, name: str):
+    queue = self.stim_streams.get(name, None)
+    if queue is None:
+      queue = IterableQueue()
+      self.stub.stim(queue)
+      await queue.put(thalamus_pb2.StimRequest(node=thalamus_pb2.NodeSelector(name=name)))
+      self.stim_streams[name] = queue
+    return queue
+
+  async def arm_stim(self, name: str, payload: thalamus_pb2.StimDeclaration):
+    queue = await self.get_stim_stream(name)
+    await queue.put(thalamus_pb2.StimRequest(inline_arm=payload))
+
+  async def trigger_stim(self, name: str):
+    queue = await self.get_stim_stream(name)
+    await queue.put(thalamus_pb2.StimRequest(trigger=0))
 
   async def log(self, text: str):
     await self.log_queue.put(thalamus_pb2.Text(text=text,time=int(time.perf_counter()*1e9)))
@@ -623,7 +641,9 @@ class TaskContext(TaskContextProtocol):
         task = self.task_descriptions_map[self.task_config['task_type']]
         try:
           LOGGER.info('TRIAL START')
+          await self.log('TRIAL START ' + self.task_config["type"] + ' ' + self.task_config["name"])
           result = await task.run(self)
+          await self.log('TRIAL FINISHED ' + self.task_config["type"] + ' ' + self.task_config["name"])
           self.__update_status(result.success)
           LOGGER.info('TRIAL FINISH')
         except asyncio.CancelledError:
@@ -633,6 +653,8 @@ class TaskContext(TaskContextProtocol):
         self.widget.touch_listener = lambda e: None
         self.widget.gaze_listener = lambda e: None
         self.widget.key_release_handler = lambda e: None
+        if self.config.get('eye_scaling', {}).get('Auto Clear', False):
+          self.widget.clear_accumulation()
         self.widget.update()
       else:
         try:

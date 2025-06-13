@@ -97,11 +97,13 @@ class Form(QWidget):
     field: str
     default: bool = False
 
-  Choice = typing.NamedTuple('Choice', [
-    ('label', str),
-    ('field', str),
-    ('options', typing.List[typing.Tuple[str, str]])
-  ])
+  class Choice(typing.NamedTuple):
+    '''
+    Configuration for a row that edits a selection from several values
+    '''
+    label: str
+    field: str
+    options: typing.List[typing.Tuple[str, str]]
 
   File = typing.NamedTuple('File', [
     ('label', str),

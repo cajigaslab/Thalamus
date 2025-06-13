@@ -766,6 +766,7 @@ static DataCount count_data(const std::string &filename,
     } break;
     case thalamus_grpc::StorageRecord::BODY_NOT_SET:
     case thalamus_grpc::StorageRecord::kCompressed:
+    case thalamus_grpc::StorageRecord::kMetadata:
       break;
       // std::cout << "Unhandled record type " << record->body_case() <<
       // std::endl;
@@ -981,9 +982,9 @@ int generate_video(boost::program_options::variables_map &vm) {
                               location.string(), output);
   } else {
     command = absl::StrFormat(
-        "%s ffmpeg -y -f rawvideo -pixel_format %s -video_size %dx%d -i pipe: "
-        "-codec mpeg1video -f matroska -qscale:v 2 -b:v 100M -r %s \"%s\"",
-        location.string(), pixel_format, width, height, ffmpeg_framerate,
+        "%s ffmpeg -y -f rawvideo -r %s -pixel_format %s -video_size %dx%d -i pipe: "
+        "-codec mpeg1video -f matroska -qscale:v 2 -b:v 100M \"%s\"",
+        location.string(), ffmpeg_framerate, pixel_format, width, height, 
         output);
   }
   std::cout << "command " << command;
@@ -1168,11 +1169,11 @@ int generate_csv(boost::program_options::variables_map &vm) {
         uint64_t record_time = record->time();
         if (analog.is_int_data()) {
           for (auto i = span.begin(); i < span.end(); ++i) {
-            fprintf(column_files[span_name], "%llu,%d,\n", record_time, analog.int_data(int(i)));
+            fprintf(column_files[span_name], "%" PRIu64 ",%d,\n", record_time, analog.int_data(int(i)));
           }
         } else {
           for (auto i = span.begin(); i < span.end(); ++i) {
-            fprintf(column_files[span_name], "%llu,%f,\n", record_time, analog.data(int(i)));
+            fprintf(column_files[span_name], "%" PRIu64 ",%f,\n", record_time, analog.data(int(i)));
           }
         }
         line_count += span.end() - span.begin();
@@ -1184,6 +1185,7 @@ int generate_csv(boost::program_options::variables_map &vm) {
     case thalamus_grpc::StorageRecord::kImage:
     case thalamus_grpc::StorageRecord::kText:
     case thalamus_grpc::StorageRecord::kCompressed:
+    case thalamus_grpc::StorageRecord::kMetadata:
     case thalamus_grpc::StorageRecord::BODY_NOT_SET:
       break;
     }
@@ -1883,6 +1885,7 @@ int main(int argc, char **argv) {
       } break;
       case thalamus_grpc::StorageRecord::BODY_NOT_SET:
       case thalamus_grpc::StorageRecord::kCompressed:
+      case thalamus_grpc::StorageRecord::kMetadata:
         break;
         // std::cout << "Unhandled record type " << record->body_case() <<
         // std::endl;
