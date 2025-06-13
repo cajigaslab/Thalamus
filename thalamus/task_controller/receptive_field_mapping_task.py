@@ -287,10 +287,10 @@ async def handle_fixate(
 async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-many-statements
   """Main entry point for the Gaussian delayed saccade task."""
   global converter, center, center_f, num_circles, circle_radii, rand_pos_i, \
-    trial_num, trial_photic_count, trial_photic_success_count, trial_catch_count, \
-    trial_catch_success_count, drawn_objects, rand_pos, reward_total_released_ms, \
-    gaze_success_store, gaze_failure_store, \
-    photodiode_blinking_square, photodiode_static_square, WATCHING, state
+        trial_num, trial_photic_count, trial_photic_success_count, trial_catch_count, \
+        trial_catch_success_count, drawn_objects, rand_pos, reward_total_released_ms, \
+        gaze_success_store, gaze_failure_store, \
+        photodiode_blinking_square, photodiode_static_square, WATCHING, state
 
   # Get the task configuration
   config = context.task_config
@@ -298,11 +298,6 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   monitorsubj_H_pix = config['monitorsubj_H_pix']
   monitorsubj_dist_m = config['monitorsubj_dist_m']
   monitorsubj_width_m = config['monitorsubj_width_m']
-  number_of_checkers = config['number_of_checkers']
-  checker_size_deg = config['checker_size_deg']
-  checker_size_pix = int(converter.deg_to_pixel_rel(checker_size_deg))
-  center_x = int(converter.screen_pixels.width / 2)
-  center_y = int(converter.screen_pixels.height / 2)
 
 
   if converter is None:    
@@ -341,6 +336,14 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   the realization's values.
   """
 
+  # Get the checkerboard configuration from the task config
+  number_of_checkers = config['number_of_checkers']
+  checker_size_deg = config['checker_size_deg']
+  checker_size_pix = int(converter.deg_to_pixel_rel(checker_size_deg))
+  center_x = int(converter.screen_pixels.width / 2)
+  center_y = int(converter.screen_pixels.height / 2)
+
+  # Load the sounds for failure, abort, and success
   current_directory = os.getcwd() # Get the current working directory
   # Define a relative path (e.g., accessing a file in a subdirectory)
   relative_path = os.path.join(current_directory, 'thalamus\\task_controller', 'failure_clip.wav')
@@ -436,9 +439,9 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       # Generate grid of locations
       x_positions = np.arange(left_edge_rel_pix, right_edge_rel_pix + 1, step_size_rel_pix)
       y_positions = np.arange(bottom_edge_rel_pix, top_edge_rel_pix + 1, step_size_rel_pix)
-      locations = [(int(x), int(y)) for x in x_positions for y in y_positions]
-      random.shuffle(locations)
-      return locations  
+      checkerboard_location_pix = [(int(x), int(y)) for x in x_positions for y in y_positions]
+      random.shuffle(checkerboard_location_pix)
+      return checkerboard_location_pix  
 
   def drawText(painter, text, location: QPoint, background_color_qt: QColor):
     painter.save()  # Save the current state of the painter
@@ -482,6 +485,24 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
 
   start = time.perf_counter() # Get the current time
 
+  # Generate all checkerboard locations for this session
+  checkerboard_locations_pix = generate_checkerboard_locations(converter, config)
+  repeats_per_location = config['repeats_per_location']
+  random.shuffle(checkerboard_locations_pix)  # Shuffle all locations for the session
+
+  # Use an iterator to cycle through locations
+  location_iter = iter(checkerboard_locations_pix)
+
+  def get_next_location():
+      nonlocal location_iter, checkerboard_locations_pix
+      try:
+          return next(location_iter)
+      except StopIteration:
+          # All locations exhausted, reshuffle and restart
+          random.shuffle(checkerboard_locations_pix)
+          location_iter = iter(checkerboard_locations_pix)
+          return next(location_iter)
+      
   def renderer(painter: QPainter):
     global state
     painter.fillRect(QRect(0, 0, 4000, 4000), background_color_qt) # QColor(128, 128, 128, 255); make the background of desired color
@@ -509,11 +530,13 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
         pen.setColor(QColor(0, 255, 0))
         painter.setPen(pen)
         painter.drawEllipse(QPointF(center_x, center_y), radius_of_green_feedback_circle_pix, radius_of_green_feedback_circle_pix) # the last 2 inputs = radii of the elipse
-
+        
+        checkerboard_x_pix = int(converter.screen_pixels.width / 2) + checkerboard_locations_pix[0][0]
+        checkerboard_y_pix = int(converter.screen_pixels.height / 2) + checkerboard_locations_pix[0][1]  
         draw_checkerboard(
             painter,
-            center_x,
-            center_y,
+            checkerboard_x_pix,
+            checkerboard_y_pix,
             number_of_checkers,
             checker_size_pix
           )

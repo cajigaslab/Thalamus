@@ -27,6 +27,7 @@ from . import imagined_task
 from . import feedback_task
 from . import delayed_saccade_gaussian_task
 from . import center_fixation_task
+from . import receptive_field_mapping_task
 from . import psychopy_task
 from .task_context import TaskDescription
 
@@ -107,6 +108,9 @@ DESCRIPTIONS = [
   TaskDescription('center_fixation_task', 'Center Fixation',
     center_fixation_task.create_widget,
     center_fixation_task.run),
+  TaskDescription('receptive_field_mapping_task', 'Receptive Field Mapping',
+    receptive_field_mapping_task.create_widget,
+    receptive_field_mapping_task.run),
   TaskDescription('psychopy', 'Psychopy',
     psychopy_task.create_widget,
     psychopy_task.run)

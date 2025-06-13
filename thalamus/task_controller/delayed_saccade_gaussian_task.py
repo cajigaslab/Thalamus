@@ -160,6 +160,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   """
   form = Form.build(task_config, ["Name:", "Min:", "Max:"],
     Form.Choice('Task group', 'task_group', list(zip(task_groups, task_groups))),                
+    Form.Bool('\u2728 Display target during saccade?', 'target_doesnt_disappear', False),
     Form.Uniform('\u23F0 Fixation Duration 1', 'fix1_duration', 1000, 2000, 'ms'),
     Form.Uniform('\u23F0 Target Presentation Duration', 'target_present_dur', 2000, 4000, 'ms'), 
     Form.Uniform('\u23F0 Fixation Duration 2', 'fix2_duration', 1000, 2000, 'ms'),
@@ -738,6 +739,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   accpt_gaze_diam_deg = config['accpt_gaze_diam_deg']
   accpt_gaze_radius_pix = converter.deg_to_pixel_rel(accpt_gaze_diam_deg / 2)
   is_height_locked = config['is_height_locked']
+  target_doesnt_disappear = config['target_doesnt_disappear']
   paint_all_targets = config['paint_all_targets']
   target_color_rgb = config['target_color']
   background_color = config['background_color']
@@ -876,6 +878,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
 
     # Draw the fixation cross and Gaussian based on the current state
     if state in (State.ACQUIRE_FIXATION, State.FIXATE1):
+      # Acquiring and fixating on the fixation cross
       pen = painter.pen()
       pen.setWidth(4)
       # pen.setColor(Qt.GlobalColor.red)
@@ -906,6 +909,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
         # endregion
 
     elif state == State.FIXATE2:
+      # Fixation after target presentation
       # await context.log('BehavState=FIXATE2_start') # saving any variables / data from code
       pen = painter.pen()
       pen.setWidth(4)
@@ -913,6 +917,8 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       pen.setColor(QColor(255, 0, 0))
       painter.setPen(pen)
       painter.drawPath(cross)
+      if target_doesnt_disappear: # if we want to move gaze to the target without it disappearing
+        draw_gaussian(painter)
 
     elif state == State.TARGET_PRESENTATION:
       # await context.log('BehavState=TARGET_PRESENTATION_start') # saving any variables / data from code
@@ -924,6 +930,10 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       draw_gaussian(painter)
       painter.drawPath(cross)
       painter.fillRect(int(widget.width() - 100), int(widget.height()-100), 100, 100, photodiode_blinking_square) # photodiode white square presentation
+
+    elif state in (State.HOLD_TARGET, State.ACQUIRE_TARGET):
+      if target_doesnt_disappear: # if we want to move gaze to the target without it disappearing
+        draw_gaussian(painter)
 
     # elif state == State.HOLD_TARGET:
     #   painter.fillRect(int(widget.width() - 100), int(widget.height()-100), 100, 100, photodiode_blinking_square) # photodiode white square presentation
