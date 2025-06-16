@@ -570,23 +570,23 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     show_start_target = False
     show_targ2_target = False
     context.behav_result = behav_result
-    await context.servicer.publish_state(task_controller_pb2.BehavState(state='fail'))
     state_brightness = toggle_brightness(state_brightness)
-    fail_sound.play()
     context.widget.update()
+    await context.log(f'BehavState=fail')
+    fail_sound.play()
           
   while True:  
-    await context.servicer.publish_state(task_controller_pb2.BehavState(state='intertrial'))
     state_brightness = 0
     show_start_target = False
     context.widget.update()
+    await context.log(f'BehavState=intertrial')
     await context.sleep(config.intertrial_timeout)
 
     blank_space_touched = False
-    await context.servicer.publish_state(task_controller_pb2.BehavState(state='start_on'))
     state_brightness = toggle_brightness(state_brightness)
     show_start_target = True
     context.widget.update()
+    await context.log(f'BehavState=start_on')
     acquired = await wait_for(context, lambda: start_target_touched and start_target_gazed or blank_space_touched, config.start_timeout)
 
     if blank_space_touched:
@@ -601,7 +601,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       context.widget.update
 
   # state: startacq
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='start_acq'))
+  await context.log(f'BehavState=start_acq')
   #success = await wait_for_hold(context, lambda: start_target_touched and start_target_gazed, config.baseline_timeout, config.hand_blink)
   success = await wait_for_dual_hold(context, config.baseline_timeout, 
     lambda: start_target_touched, lambda: start_target_gazed, 
@@ -612,10 +612,10 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     await context.sleep(config.fail_timeout)
     return task_context.TaskResult(False)
 
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='targs_on'))
   state_brightness = toggle_brightness(state_brightness)  
   show_presented_target = True
   context.widget.update()
+  await context.log(f'BehavState=targs_on')
   #success = await wait_for_hold(context, lambda: start_target_touched and start_target_gazed, config.cue_timeout, config.hand_blink)
   success = await wait_for_dual_hold(context, config.cue_timeout, 
     lambda: start_target_touched, lambda: start_target_gazed, 
@@ -626,16 +626,16 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     return task_context.TaskResult(False)
 
   dim_start_target = True
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='go'))
   state_brightness = toggle_brightness(state_brightness)
   context.widget.update()
+  await context.log(f'BehavState=go')
   
   start_targ_released = await wait_for(context, lambda: not start_target_touched, config.reach_timeout)
   if not start_targ_released:
     await fail_trial()
     await context.sleep(config.fail_timeout)
     return task_context.TaskResult(False)
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='reach_start'))
+  await context.log(f'BehavState=reach_start')
   
   blank_space_touched = False
   acquired = await wait_for(context, lambda: presented_targ_touched and presented_targ_gazed or blank_space_touched, config.reach_timeout)    
@@ -644,7 +644,8 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     await context.sleep(config.fail_timeout)
     return task_context.TaskResult(False)
   state_brightness = toggle_brightness(state_brightness)
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='targs_acq'))
+  context.widget.update()
+  await context.log(f'BehavState=targs_acq')
 
 
   #success = await wait_for_hold(context, lambda: presented_targ_touched and presented_targ_gazed, config.targ2_delay, config.hand_blink)
@@ -661,8 +662,8 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   behav_result['presented_targ2_id'] = int(i_presented_targ2)
   show_targ2_target = True
   state_brightness = toggle_brightness(state_brightness)
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='targ2_on'))
   context.widget.update()
+  await context.log(f'BehavState=targ2_on')
 
   blank_space_touched = False
   acquired = await wait_for(context, lambda: targ2_gazed and presented_targ_touched or blank_space_touched, config.saccade2_timeout)
@@ -671,7 +672,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     await fail_trial()
     await context.sleep(config.fail_timeout)
     return task_context.TaskResult(False)
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='targ2_acq'))
+  await context.log(f'BehavState=targ2_acq')
 
   #success = await wait_for_hold(context, lambda: presented_targ_touched and targ2_gazed, config.hold_interval, config.hand_blink)
   success = await wait_for_dual_hold(context, config.hold_interval, 
@@ -692,9 +693,9 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   show_presented_target = False
   show_targ2_target = False
   
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='success'))
   state_brightness = toggle_brightness(state_brightness)
   context.widget.update()
+  await context.log(f'BehavState=success')
   # reward_message = RewardDeliveryCmd()
 
   # reward_message.header.stamp = context.ros_manager.node.node.get_clock().now().to_msg()
