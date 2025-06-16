@@ -215,7 +215,7 @@ FACTORIES = {
     UserData(UserDataType.COMBO_BOX, 'Terminal Config', 'Default', ['Default', 'RSE', 'NRSE', 'Diff', 'Pseudo Diff']),
     UserData(UserDataType.COMBO_BOX, 'Channel Type', 'Voltage', ['Voltage', 'Current']),
     UserData(UserDataType.COMBO_BOX, 'Shunt Resistor Location', 'Default', ['Default', 'Internal', 'External']),
-    UserData(UserDataType.DOUBLE_SPINBOX, 'Shunt Resistor Ohms', '1000', []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Shunt Resistor Ohms', 1000.0, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
   ]),
   'NIDAQ_OUT': Factory(StimWidget, [
