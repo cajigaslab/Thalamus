@@ -244,11 +244,7 @@ def get_target_rectangle(context, itarg, dpi, cache,dual_cache):
   p_win = Rvec*pos_vis + t
 
   rect = QRect(int(p_win[0] - targ_width_px/2), int(p_win[1] - targ_height_px/2), int(targ_width_px), int(targ_height_px))
-
-  
   dual_rect = QRect(int(p_win[0] - targ_width_px/2 + targ_width_px), int(p_win[1] - targ_height_px/2), int(targ_width_px), int(targ_height_px))
-  
-
   
   cache[itarg] = rect
   dual_cache[itarg] = dual_rect
