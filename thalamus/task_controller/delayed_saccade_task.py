@@ -402,7 +402,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
           painter.render_stl(stl_mesh)
         else:
           color, scale = all_target_colors[i_presented_targ], all_target_on_luminance[i_presented_targ]
-          color = QColor(scale*color.red(), scale*color.green(), scale*color.blue())
+          color = QColor(int(scale*color.red()), int(scale*color.green()), int(scale*color.blue()))
           painter.fillRect(all_target_rects[i_presented_targ], color)
 
     with painter.masked(RenderOutput.OPERATOR):
