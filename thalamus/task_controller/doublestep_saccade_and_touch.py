@@ -1,7 +1,7 @@
 #pylint: skip-file
 #type: ignore
 """
-Implementation of the simple task
+Implementation of the doublestep_saccade_and_touch task
 """
 import time
 import math
@@ -97,7 +97,9 @@ class TargetWidget(QWidget):
       Form.Constant('Audio Scale Left', 'audio_scale_left', 0),
       Form.Constant('Audio Scale Right', 'audio_scale_right', 0),
       Form.Color('Color', 'color', QColor(255, 255,255)),
-      Form.Bool('Is Fixation', 'is_fixation', False),
+      Form.Bool('Is Touch Fixation', 'is_touch_fixation', False),
+      Form.Bool('Is Gaze Fixation', 'is_gaze_fixation', False),
+      Form.Bool('Is Dual Target', 'is_dual_target', False),
       Form.Choice('Shape', 'shape', [('Box', 'box'), ('Ellipsoid', 'ellipsoid')]),
       Form.File('Stl File (Overrides shape)', 'stl_file', '', 'Select Stl File', '*.stl'),
       Form.File('Audio File', 'audio_file', '', 'Select Audio File', '*.wav'),

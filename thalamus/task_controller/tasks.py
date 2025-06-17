@@ -11,9 +11,10 @@ from . import delayed_saccade_task
 from . import delayed_saccade_touch_task
 from . import delayed_reach_and_saccade_task
 from . import double_step_reach
-from . import double_step_saccade_and_touch
+from . import doublestep_saccade_and_touch
 from . import distractor_suppression_reach
 from . import gaze_anchoring
+from . import gaze_anchoring_fast
 from . import context_dependent_reach
 from . import context_dependent_delay_reach
 from . import null_task
@@ -22,6 +23,7 @@ from . import stim_task
 from . import ceci_stim_task
 from . import delayed_reach_stim_task
 from . import doublestep_saccade
+from . import doublestep_saccade_fast
 from . import motion_capture_task
 from . import luminance_reward_selection
 from . import avatar_task
@@ -50,7 +52,7 @@ DESCRIPTIONS = [
   TaskDescription('delayed_saccade', 'Delayed Saccade',
     delayed_saccade_task.create_widget, # type: ignore
     delayed_saccade_task.run), # type: ignore
-TaskDescription('delayed_saccade_touch', 'Delayed Saccade Touch',
+  TaskDescription('delayed_saccade_touch', 'Delayed Saccade Touch',
     delayed_saccade_touch_task.create_widget, # type: ignore
     delayed_saccade_touch_task.run), # type: ignore
   TaskDescription('delayed_reach_and_saccade', 'Delayed Reach and Saccade', 
@@ -62,9 +64,12 @@ TaskDescription('delayed_saccade_touch', 'Delayed Saccade Touch',
   TaskDescription('gaze_anchoring', 'Gaze Anchoring', 
     gaze_anchoring.create_widget, # type: ignore
     gaze_anchoring.run), # type: ignore
-  TaskDescription('double_step_saccade_and_touch', 'Double Step Saccade and Touch', 
-    double_step_saccade_and_touch.create_widget, # type: ignore
-    double_step_saccade_and_touch.run), # type: ignore  
+  TaskDescription('gaze_anchoring_fast', 'Gaze Anchoring fast', 
+    gaze_anchoring_fast.create_widget, # type: ignore
+    gaze_anchoring_fast.run), # type: ignore
+  TaskDescription('doublestep_saccade_and_touch', 'Double Step Saccade and Touch', 
+    doublestep_saccade_and_touch.create_widget, # type: ignore
+    doublestep_saccade_and_touch.run), # type: ignore  
   TaskDescription('context_dependent_reach', 'Context Dependent Reach',
     context_dependent_reach.create_widget, # type: ignore
     context_dependent_reach.run), # type: ignore 
@@ -92,6 +97,9 @@ TaskDescription('delayed_saccade_touch', 'Delayed Saccade Touch',
   TaskDescription('doublestep_saccade', 'Doublestep saccade',
     doublestep_saccade.create_widget,
     doublestep_saccade.run),
+  TaskDescription('doublestep_saccade_fast', 'Doublestep saccade fast',
+    doublestep_saccade_fast.create_widget,
+    doublestep_saccade_fast.run),
   TaskDescription('luminance_reward_selection', 'Luminance Reward Selection',
     luminance_reward_selection.create_widget,
     luminance_reward_selection.run),

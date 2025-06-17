@@ -1,7 +1,9 @@
 #pylint: skip-file
 #type: ignore
 """
-Implementation of the 
+Implementation of the doublestep_saccade_and_touch task
+This archival version does not have a separate saccade and touch target. The first saccade is only cued by the start target turning off. 
+Saccade/touch target are always the same, so target location is revealed at start_on rather than at targs_on 
 """
 import time
 import math
@@ -495,23 +497,23 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     show_start_target = False
     show_targ2_target = False
     context.behav_result = behav_result
-    await context.servicer.publish_state(task_controller_pb2.BehavState(state='fail'))
     state_brightness = toggle_brightness(state_brightness)
-    fail_sound.play()
     context.widget.update()
+    await context.log(f'BehavState=fail')
+    fail_sound.play()
           
   while True:
-    await context.servicer.publish_state(task_controller_pb2.BehavState(state='intertrial'))
     state_brightness = 0
     show_start_target = False
     context.widget.update()
+    await context.log(f'BehavState=intertrial')
     await context.sleep(config.intertrial_timeout)
 
-    await context.servicer.publish_state(task_controller_pb2.BehavState(state='start_on'))
     state_brightness = toggle_brightness(state_brightness)
     show_start_target = True
     show_presented_target = True
     context.widget.update()
+    await context.log(f'BehavState=start_on')
     acquired = await wait_for(context, lambda: presented_targ_touched and start_target_gazed, config.start_timeout)
 
     if acquired:
@@ -522,7 +524,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       context.widget.update
 
   # state: startacq
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='start_acq'))
+  await context.log(f'BehavState=start_acq')
   #success = await wait_for_hold(context, lambda: start_target_touched and start_target_gazed, config.baseline_timeout, config.hand_blink)
   success = await wait_for_dual_hold(context, config.baseline_timeout, 
     lambda: presented_targ_touched, lambda: start_target_gazed, 
@@ -533,10 +535,10 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     await context.sleep(config.fail_timeout)
     return task_context.TaskResult(False)
 
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='targs_on'))
   state_brightness = toggle_brightness(state_brightness)  
   show_presented_target = True
   context.widget.update()
+  await context.log(f'BehavState=targs_on')
   #success = await wait_for_hold(context, lambda: start_target_touched and start_target_gazed, config.cue_timeout, config.hand_blink)
   success = await wait_for_dual_hold(context, config.cue_timeout, 
     lambda: presented_targ_touched, lambda: start_target_gazed, 
@@ -547,23 +549,25 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     return task_context.TaskResult(False)
 
   dim_start_target = True
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='go'))
   state_brightness = toggle_brightness(state_brightness)
   context.widget.update()
+  await context.log(f'BehavState=go')
   
   start_targ_released = await wait_for(context, lambda: not start_target_touched, config.reach_timeout)
   if not start_targ_released:
     await fail_trial()
     await context.sleep(config.fail_timeout)
     return task_context.TaskResult(False)
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='reach_start'))
+  await context.log(f'BehavState=reach_start')
   
   acquired = await wait_for(context, lambda: presented_targ_touched and presented_targ_gazed, config.reach_timeout)    
   if not acquired:
     await fail_trial()
     await context.sleep(config.fail_timeout)
     return task_context.TaskResult(False)
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='targs_acq'))
+  state_brightness = toggle_brightness(state_brightness)
+  context.widget.update()
+  await context.log(f'BehavState=targs_acq')
 
 
   #success = await wait_for_hold(context, lambda: presented_targ_touched and presented_targ_gazed, config.targ2_delay, config.hand_blink)
@@ -579,15 +583,15 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   behav_result['presented_targ2_id'] = int(i_presented_targ2)
   show_targ2_target = True
   state_brightness = toggle_brightness(state_brightness)
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='targ2_on'))
   context.widget.update()
+  await context.log(f'BehavState=targ2_on')
 
   acquired = await wait_for(context, lambda: targ2_gazed and presented_targ_touched, config.saccade2_timeout)
   if not acquired:
     await fail_trial()
     await context.sleep(config.fail_timeout)
     return task_context.TaskResult(False)
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='targ2_acq'))
+  await context.log(f'BehavState=targ2_acq')
 
   #success = await wait_for_hold(context, lambda: presented_targ_touched and targ2_gazed, config.hold_interval, config.hand_blink)
   success = await wait_for_dual_hold(context, config.hold_interval, 
@@ -608,16 +612,17 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   show_presented_target = False
   show_targ2_target = False
   
-  await context.servicer.publish_state(task_controller_pb2.BehavState(state='success'))
   state_brightness = toggle_brightness(state_brightness)
   context.widget.update()
-  reward_message = RewardDeliveryCmd()
-
-  reward_message.header.stamp = context.ros_manager.node.node.get_clock().now().to_msg()
-  reward_message.on_time_ms = int(context.get_reward(all_reward_channels[final_i_touched_target]))
+  await context.log(f'BehavState=success')
+  on_time_ms = int(context.get_reward(all_reward_channels[selected_targ2]))
   
-  print("delivering reward %d"%(reward_message.on_time_ms,) )
-  context.publish(RewardDeliveryCmd, 'deliver_reward', reward_message)
+  print("delivering reward %d"%(on_time_ms,) )
+  signal = thalamus_pb2.AnalogResponse(
+      data=[5,0],
+      spans=[thalamus_pb2.Span(begin=0,end=2,name='Reward')],
+      sample_intervals=[1_000_000*on_time_ms])
+  await context.inject_analog('Reward', signal)
     
   success_sound.play()      
 
