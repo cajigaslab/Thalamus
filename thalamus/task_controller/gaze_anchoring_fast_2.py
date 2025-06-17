@@ -682,34 +682,51 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     return task_context.TaskResult(False)
   await context.log(f'BehavState=reach_start')
   
+  timeout = min(config.reach_timeout,config.targ2_delay)
   blank_space_touched = False
-  acquired = await wait_for(context, lambda: presented_targ_touched and presented_targ_gazed or blank_space_touched, config.reach_timeout)    
-  if not acquired or blank_space_touched:
+  t0 = time.perf_counter()
+  acquired = await wait_for(context, lambda: presented_targ_touched and presented_targ_gazed or blank_space_touched, timeout)  
+  t1 = time.perf_counter()
+  elapsed_time = datetime.timedelta(seconds=t1-t0)  
+  if (not acquired and elapsed_time>=config.reach_timeout) or blank_space_touched:
     await fail_trial()
     await context.sleep(config.fail_timeout)
     return task_context.TaskResult(False)
-  state_brightness = toggle_brightness(state_brightness)
-  context.widget.update()
-  await context.log(f'BehavState=targs_acq')
-
-
-  #success = await wait_for_hold(context, lambda: presented_targ_touched and presented_targ_gazed, config.targ2_delay, config.hand_blink)
-  success = await wait_for_dual_hold(context, config.targ2_delay, 
-    lambda: presented_targ_touched, lambda: presented_targ_gazed, 
-    config.hand_blink, config.eye_blink)
-  if not success:
-    await fail_trial()
-    await context.sleep(config.fail_timeout)
-    return task_context.TaskResult(False)
-
-
-  blank_space_touched = False
-  behav_result['presented_targ2_id'] = int(i_presented_targ2)
-  show_targ2_target = True
-  show_presented_dual_target = False
-  state_brightness = toggle_brightness(state_brightness)
-  context.widget.update()
-  await context.log(f'BehavState=targ2_on')
+  elif (not acquired and elapsed_time>=config.targ2_delay):
+    behav_result['presented_targ2_id'] = int(i_presented_targ2)
+    show_targ2_target = True
+    state_brightness = toggle_brightness(state_brightness)
+    context.widget.update()
+    await context.log(f'BehavState=targ2_on')
+    remaining_time = config.reach_timeout-elapsed_time
+    acquired = await wait_for(context, lambda: presented_targ_touched and presented_targ_gazed or blank_space_touched, remaining_time)  
+    if not acquired or blank_space_touched:
+      await fail_trial()
+      await context.sleep(config.fail_timeout)
+      return task_context.TaskResult(False)
+    state_brightness = toggle_brightness(state_brightness)
+    context.widget.update()
+    await context.log(f'BehavState=targs_acq')
+    # targ1 success has implicitly occurred because no hold is required
+  else:
+    state_brightness = toggle_brightness(state_brightness)
+    context.widget.update()
+    await context.log(f'BehavState=targs_acq')
+    remaining_delay = config.targ2_delay-elapsed_time
+    #success = await wait_for_hold(context, lambda: presented_targ_touched, remaining_delay, config.hand_blink)
+    success = await wait_for_dual_hold(context, remaining_delay, 
+      lambda: presented_targ_touched, lambda: presented_targ_gazed, 
+      config.hand_blink, config.eye_blink)
+    if not success:
+      await fail_trial()
+      await context.sleep(config.fail_timeout)
+      return task_context.TaskResult(False)
+    blank_space_touched = False
+    behav_result['presented_targ2_id'] = int(i_presented_targ2)
+    show_targ2_target = True
+    state_brightness = toggle_brightness(state_brightness)
+    context.widget.update()
+    await context.log(f'BehavState=targ2_on')
 
   blank_space_touched = False
   acquired = await wait_for(context, lambda: targ2_gazed and presented_targ_touched or blank_space_touched, config.saccade2_timeout)
