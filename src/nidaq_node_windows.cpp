@@ -765,6 +765,9 @@ struct NidaqOutputNode::Impl {
   }
 
   bool check_error(int error) {
+    if (error >= 0) {
+      return false;
+    }
     auto count = daqmxapi->DAQmxGetErrorString(error, nullptr, 0);
     std::string message(size_t(count), ' ');
     daqmxapi->DAQmxGetErrorString(error, message.data(), uint32_t(message.size()));
