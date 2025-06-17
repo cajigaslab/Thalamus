@@ -77,8 +77,8 @@ class TargetWidget(QWidget):
       Form.Constant('Audio Scale Left', 'audio_scale_left', 0),
       Form.Constant('Audio Scale Right', 'audio_scale_right', 0),
       Form.Color('Color', 'color', QColor(255, 255,255)),
-      Form.Bool('Is Touch Fixation', 'is_touch_fixation', False),
-      Form.Bool('Is Gaze Fixation', 'is_gaze_fixation', False),
+      Form.Color('Dual color', 'dual_color', QColor(255, 255,255)),
+      Form.Bool('Is Fixation', 'is_fixation', False),
       Form.Choice('Shape', 'shape', [('Box', 'box'), ('Ellipsoid', 'ellipsoid')]),
       Form.File('Stl File (Overrides shape)', 'stl_file', '', 'Select Stl File', '*.stl'),
       Form.File('Audio File', 'audio_file', '', 'Select Audio File', '*.wav'),
@@ -95,7 +95,8 @@ class TargetWidget(QWidget):
       Form.Uniform('Auditory Spatial Offset', 'auditory_spatial_offset', 0, 0),
       Form.Uniform('Auditory Spatial Offset Around Fixation', 'auditory_spatial_offset_around_fixation', 0, 0),
       Form.Uniform('On Luminance', 'on_luminance', 1, 1),
-      Form.Uniform('Off Luminance', 'off_luminance', 0, 0)
+      Form.Uniform('Off Luminance', 'off_luminance', 0, 0),
+      Form.Uniform('Dual Luminance', 'dual_luminance', 0, 0)
     )
     layout.addWidget(random_form, 1, 3, 1, 2)
 
@@ -178,6 +179,7 @@ def ecc_to_px(ecc, dpi):
 
 def get_target_rectangles(context, dpi):
   all_target_rects = []
+  dual_target_rects = []
 
   ntargets = len(context.task_config['targets'])
   for itarg in range(ntargets): # looping through all targets, including fixation
@@ -201,30 +203,20 @@ def get_target_rectangles(context, dpi):
     p_win = Rvec*pos_vis + t
 
     all_target_rects.append(QRect(int(p_win[0] - targ_width_px/2), int(p_win[1] - targ_height_px/2), int(targ_width_px), int(targ_height_px)))
+    dual_target_rects.append(QRect(int(p_win[0] - targ_width_px/2 + targ_width_px), int(p_win[1] - targ_height_px/2), int(targ_width_px), int(targ_height_px)))
 
-  return all_target_rects
+  return all_target_rects, dual_target_rects
 
-def get_start_touch_target_index(context):
+def get_start_target_index(context):
   all_target_configs = context.task_config['targets']
-  i_start_touch_targ = \
-    [itarg for itarg, x in enumerate(all_target_configs) if x['is_touch_fixation']]
-  if len(i_start_touch_targ) == 0:
-    i_start_touch_targ = [0]
+  i_start_targ = \
+    [itarg for itarg, x in enumerate(all_target_configs) if x['is_fixation']]
+  if len(i_start_targ) == 0:
+    i_start_targ = [0]
   else:
-    i_start_touch_targ = i_start_touch_targ[0]
+    i_start_targ = i_start_targ[0]
 
-  return i_start_touch_targ
-
-def get_start_gaze_target_index(context):
-  all_target_configs = context.task_config['targets']
-  i_start_gaze_targ = \
-    [itarg for itarg, x in enumerate(all_target_configs) if x['is_gaze_fixation']]
-  if len(i_start_gaze_targ) == 0:
-    i_start_gaze_targ = [0]
-  else:
-    i_start_gaze_targ = i_start_gaze_targ[0]
-
-  return i_start_gaze_targ
+  return i_start_targ
 
 def distance(lhs, rhs):
   return ((lhs.x() - rhs.x())**2 + (lhs.y() - rhs.y())**2)**.5
@@ -298,19 +290,20 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   first that is selected.
   """
   ntargets = len(context.task_config['targets'])
-  i_start_touch_targ = get_start_touch_target_index(context)
-  i_start_gaze_targ = get_start_gaze_target_index(context)
-  i_periph_targs = [x for x in range(ntargets) if x is not i_start_touch_targ and x is not i_start_gaze_targ]
+  i_start_targ = get_start_target_index(context)
+  i_periph_targs = [x for x in range(ntargets) if x is not i_start_targ]
   n_periph_targs = len(i_periph_targs)
 
   dpi = context.config.get('dpi', None) or context.widget.logicalDpiX()
 
-  all_target_rects = get_target_rectangles(context, dpi)
+  all_target_rects, dual_target_rects = get_target_rectangles(context, dpi)
   all_target_windows = [ecc_to_px(context.get_target_value(itarg, 'window_size'), dpi)
                         for itarg in range(ntargets)]
   all_target_colors = [context.get_target_color(itarg, 'color', COLOR_DEFAULT) for itarg in range(ntargets)]
+  dual_target_colors = [context.get_target_color(itarg, 'dual_color', COLOR_DEFAULT) for itarg in range(ntargets)]
   all_target_on_luminance = [context.get_target_value(i, 'on_luminance', COLOR_DEFAULT) for i in range(ntargets)]
   all_target_off_luminance = [context.get_target_value(i, 'off_luminance', COLOR_DEFAULT) for i in range(ntargets)]
+  all_target_dual_luminance = [context.get_target_value(i, 'dual_luminance', COLOR_DEFAULT) for i in range(ntargets)]
   all_target_names = [context.get_target_value(i, 'name', None) for i in range(ntargets)]
   all_reward_channels = [context.get_target_value(i, 'reward_channel', None) for i in range(ntargets)]
   def load_stl(filename: str) -> typing.Optional[stl.mesh.Mesh]:
@@ -342,14 +335,14 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     nonlocal i_touched_target
     nonlocal last_touched_target
     nonlocal touch_pos
-    start_target_touched = distance(all_target_rects[i_start_touch_targ].center(), cursor) < all_target_windows[i_start_touch_targ]
+    start_target_touched = distance(all_target_rects[i_start_targ].center(), cursor) < all_target_windows[i_start_targ]
     in_windows = [distance(all_target_rects[i].center(), cursor) < all_target_windows[i]
                                   for i in range(ntargets)]
     blank_space_touched = blank_space_touched or not any(in_windows) and cursor.x() >= 0
     if config.is_choice:
 
       in_periph_windows = [distance(all_target_rects[i].center(), cursor) < all_target_windows[i]
-                                    for i in range(ntargets) if i != i_start_touch_targ and i != i_start_gaze_targ]
+                                    for i in range(ntargets) if i != i_start_targ]
       presented_targ_touched = any(in_periph_windows)
 
       if presented_targ_touched:
@@ -385,7 +378,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     # nonlocal presented_targ_touched_and_gazed 
     # nonlocal targ2_touched_and_gazed 
 
-    start_target_gazed = distance(all_target_rects[i_start_gaze_targ].center(), cursor) < all_target_windows[i_start_gaze_targ]
+    start_target_gazed = distance(all_target_rects[i_start_targ].center(), cursor) < all_target_windows[i_start_targ]
     
     presented_targ_gazed = distance(
       all_target_rects[i_presented_targ].center(), cursor) < all_target_windows[i_presented_targ]
@@ -403,22 +396,21 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     # targ2_touched_and_gazed = targ2_touched and targ2_gazed    
   context.widget.gaze_listener = gaze_handler
 
-  dim_start_gaze_target = False
+  dim_start_target = False
   show_start_target = False
+  show_start_dual_target = False
   show_presented_target = False
   state_brightness = 0
   def renderer(painter: QPainter) -> None:
-    # The start_gaze_targ is turned off at GO cue
-    color_base = all_target_colors[i_start_gaze_targ]
-    scale = (all_target_on_luminance[i_start_gaze_targ] if not dim_start_gaze_target
-             else all_target_off_luminance[i_start_gaze_targ])
+    color_base = all_target_colors[i_start_targ]
+    scale = (all_target_on_luminance[i_start_targ] if not dim_start_target
+             else all_target_off_luminance[i_start_targ])
     color_scaled = QColor(int(scale*color_base.red()), int(scale*color_base.green()), int(scale*color_base.blue()))
     
-    window = all_target_windows[i_start_touch_targ]
-    stl_mesh = all_target_stls[i_start_touch_targ]
-    if show_start_touch_target:
+    window = all_target_windows[i_start_targ]
+    stl_mesh = all_target_stls[i_start_targ]
+    if show_start_target:
       if stl_mesh:
-        # Treat the start_touch_target as the "start" target
         angle = (100*time.time()) % 360
         painter.model_view.translate(0, 0, -10)
         painter.model_view.rotate(angle, 1/math.sqrt(3), 1/math.sqrt(3), 1/math.sqrt(3))
@@ -426,19 +418,18 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
         painter.model_view.scale(.1)
         painter.render_stl(stl_mesh)
       else:
-        painter.fillRect(all_target_rects[i_start_touch_targ], all_target_colors[i_start_touch_targ])
-
-    stl_mesh = all_target_stls[i_start_gaze_targ]
-    if show_start_gaze_target:
-      if stl_mesh:
-        painter.render_stl(stl_mesh,color_scaled)
-      else:
-        painter.fillRect(all_target_rects[i_start_gaze_targ], color_scaled)
-
+        painter.fillRect(all_target_rects[i_start_targ], color_scaled)
+    if show_start_dual_target:
+      dual_color_base = dual_target_colors[i_start_targ]
+      scale = (all_target_dual_luminance[i_start_targ] if not dim_start_target
+             else all_target_off_luminance[i_start_targ])
+      dual_color_base = QColor(int(scale*dual_color_base.red()), int(scale*dual_color_base.green()), int(scale*dual_color_base.blue()))
+      painter.fillRect(dual_target_rects[i_start_targ], dual_color_base)
+    
     if config.is_choice:
       if show_presented_target:
         for i, value in enumerate(zip(all_target_rects, all_target_colors, all_target_stls)):
-          if i == i_start_touch_targ or i == i_start_gaze_targ:
+          if i == i_start_targ:
             continue
 
           rect, color, stl_mesh = value
@@ -489,13 +480,13 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
   def fail_trial():    
     nonlocal show_presented_target
-    nonlocal show_start_touch_target
-    nonlocal show_start_gaze_target
+    nonlocal show_start_target
+    nonlocal show_start_dual_target
     nonlocal state_brightness
     context.behav_result = behav_result
     show_presented_target = False
-    show_start_touch_target = False
-    show_start_gaze_target = False
+    show_start_target = False
+    show_start_dual_target = False
     state_brightness = toggle_brightness(state_brightness)
     context.widget.update() 
     fail_sound.play()
@@ -504,8 +495,8 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
           
   while True: 
     state_brightness = 0
-    show_start_touch_target = False
-    show_start_gaze_target = False
+    show_start_target = False
+    show_start_dual_target = False
     context.widget.update()
     with await next_state(context, State.INTERTRIAL, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
       await wait_for(context, lambda: touch_pos.x() > 0, config.intertrial_timeout)
@@ -518,8 +509,8 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
     blank_space_touched = False
     state_brightness = toggle_brightness(state_brightness)
-    show_start_touch_target = True
-    show_start_gaze_target = True
+    show_start_target = True
+    show_start_dual_target = True
     context.widget.update()
     with await next_state(context, State.START_ON, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
       acquired = await wait_for(context, lambda: start_target_touched and start_target_gazed or blank_space_touched, config.start_timeout)
@@ -534,8 +525,8 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     if acquired:
       break
     else:
-      show_start_touch_target = False
-      show_start_gaze_target = False
+      show_start_target = False
+      show_start_dual_target = False
       context.widget.update
 
   # state: startacq 
@@ -575,7 +566,8 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       return task_context.TaskResult(False)
 
   blank_space_touched = False
-  dim_start_gaze_target = True
+  show_start_dual_target = False
+  #dim_start_gaze_target = True
   state_brightness = toggle_brightness(state_brightness)
   context.widget.update()
   with await next_state(context, State.GO, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
@@ -622,7 +614,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   we can wait (optionally) by success_timeout or fail_timeout.
   """
   show_presented_target = False
-  show_start_touch_target = False
+  show_start_target = False
 
   with await next_state(context, State.SUCCESS, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
     state_brightness = toggle_brightness(state_brightness)
