@@ -451,8 +451,8 @@ class ListAsTabsWidget(QTabWidget):
 
     confirm = QMessageBox.question(self, "Delete",
                                    f'Delete {item_config["name"]}?',
-                                   QMessageBox.Yes | QMessageBox.No)
-    if confirm == QMessageBox.Yes:
+                                   QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+    if confirm == QMessageBox.StandardButton.Yes:
       remove_by_is(self.config, item_config)
 
   def name_updater(self, config: ObservableCollection, widget: QWidget) -> None:
