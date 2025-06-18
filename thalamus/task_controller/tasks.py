@@ -31,6 +31,8 @@ from . import imagined_task
 from . import feedback_task
 from . import psychopy_task
 from . import gaussian_task
+from . import calibrate_eye_reach
+from . import calibrate_eye_saccade
 from .task_context import TaskDescription
 
 DESCRIPTIONS = [
@@ -120,7 +122,13 @@ DESCRIPTIONS = [
     psychopy_task.run),
   TaskDescription('gaussian', 'Gaussian',
     gaussian_task.create_widget,
-    gaussian_task.run)
+    gaussian_task.run),
+  TaskDescription('calibrate_eye_reach', 'Calibrate eye reach',
+    calibrate_eye_reach.create_widget,
+    calibrate_eye_reach.run),
+  TaskDescription('calibrate_eye_saccade', 'Calibrate eye saccade',
+    calibrate_eye_saccade.create_widget,
+    calibrate_eye_saccade.run)
 ]
 
 DESCRIPTIONS_MAP = dict((description.code, description) for description in DESCRIPTIONS)
