@@ -31,7 +31,7 @@ Config = typing.NamedTuple('Config', [
   ('baseline_timeout', datetime.timedelta),
   ('cue_timeout', datetime.timedelta),
   ('targ2_delay', datetime.timedelta),
-  ('reach_timeout', datetime.timedelta),
+  ('saccade_timeout', datetime.timedelta),
   ('saccade2_timeout', datetime.timedelta),
   ('hold_interval', datetime.timedelta),
   ('hand_blink', datetime.timedelta),
@@ -167,7 +167,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Uniform('Baseline Interval', 'baseline_timeout', 1, 1, 's'),
     Form.Uniform('Cue Interval', 'cue_timeout', 1, 1, 's'),
     Form.Uniform('Targ2 Delay', 'targ2_delay', 0.05, 0.2, 's'),
-    Form.Uniform('Reach Timeout', 'reach_timeout', 1, 1, 's'),    
+    Form.Uniform('Saccade Timeout', 'saccade_timeout', 1, 1, 's'),    
     Form.Uniform('Saccade 2 Timeout', 'saccade2_timeout', 1, 1, 's'),
     Form.Uniform('Hold Interval', 'hold_interval', 1, 1, 's'),
     Form.Uniform('Touch Blink Interval', 'hand_blink', 1, 1, 's'),
@@ -339,7 +339,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     datetime.timedelta(seconds=context.get_value('baseline_timeout', RANDOM_DEFAULT)),
     datetime.timedelta(seconds=context.get_value('cue_timeout', RANDOM_DEFAULT)),
     datetime.timedelta(seconds=context.get_value('targ2_delay', RANDOM_DEFAULT)),
-    datetime.timedelta(seconds=context.get_value('reach_timeout', RANDOM_DEFAULT)),
+    datetime.timedelta(seconds=context.get_value('saccade_timeout', RANDOM_DEFAULT)),
     datetime.timedelta(seconds=context.get_value('saccade2_timeout', RANDOM_DEFAULT)),
     datetime.timedelta(seconds=context.get_value('hold_interval', RANDOM_DEFAULT)),
     datetime.timedelta(seconds=context.get_value('hand_blink', RANDOM_DEFAULT)),
@@ -537,12 +537,12 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       else:
         painter.fillRect(all_target_rects[i_start_targ], color_base)
 
-    if show_start_dual_target:
-      dual_color_base = dual_target_colors[i_start_targ]
-      scale = (all_target_dual_luminance[i_start_targ] if not dim_start_target
-             else all_target_off_luminance[i_start_targ])
-      dual_color_base = QColor(int(scale*dual_color_base.red()), int(scale*dual_color_base.green()), int(scale*dual_color_base.blue()))
-      painter.fillRect(dual_target_rects[i_start_targ], dual_color_base)
+    # if show_start_dual_target:
+    #   dual_color_base = dual_target_colors[i_start_targ]
+    #   scale = (all_target_dual_luminance[i_start_targ] if not dim_start_target
+    #          else all_target_off_luminance[i_start_targ])
+    #   dual_color_base = QColor(int(scale*dual_color_base.red()), int(scale*dual_color_base.green()), int(scale*dual_color_base.blue()))
+    #   painter.fillRect(dual_target_rects[i_start_targ], dual_color_base)
 
     if show_presented_target:
       stl_mesh = all_target_stls[i_presented_targ]
@@ -627,43 +627,39 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     blank_space_touched = False
     state_brightness = toggle_brightness(state_brightness)
     show_start_target = True
-    show_start_dual_target = True
+    show_presented_target = True
     context.widget.update()
     await context.log(f'BehavState=start_on')
-    acquired = await wait_for(context, lambda: start_target_touched and start_target_gazed or blank_space_touched, config.start_timeout)
-
+    acquired = await wait_for(context, lambda: presented_targ_touched and start_target_gazed or blank_space_touched, config.start_timeout)
     if blank_space_touched:
       await fail_trial()
       await context.sleep(config.fail_timeout)
       return task_context.TaskResult(False)
-
     if acquired:
       break
     else:
       show_start_target = False
-      show_start_dual_target = False
+      show_presented_target = False
       context.widget.update
 
   # state: startacq
   await context.log(f'BehavState=start_acq')
   #success = await wait_for_hold(context, lambda: start_target_touched and start_target_gazed, config.baseline_timeout, config.hand_blink)
   success = await wait_for_dual_hold(context, config.baseline_timeout, 
-    lambda: start_target_touched, lambda: start_target_gazed, 
-    config.hand_blink, config.eye_blink)
-                            
+    lambda: presented_targ_touched, lambda: start_target_gazed, 
+    config.hand_blink, config.eye_blink)                       
   if not success:
     await fail_trial()
     await context.sleep(config.fail_timeout)
     return task_context.TaskResult(False)
 
   state_brightness = toggle_brightness(state_brightness)  
-  show_presented_target = True
   show_presented_dual_target = True
   context.widget.update()
   await context.log(f'BehavState=targs_on')
   #success = await wait_for_hold(context, lambda: start_target_touched and start_target_gazed, config.cue_timeout, config.hand_blink)
   success = await wait_for_dual_hold(context, config.cue_timeout, 
-    lambda: start_target_touched, lambda: start_target_gazed, 
+    lambda: presented_targ_touched, lambda: start_target_gazed, 
     config.hand_blink, config.eye_blink)
   if not success:
     await fail_trial()    
@@ -674,31 +670,25 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   state_brightness = toggle_brightness(state_brightness)
   context.widget.update()
   await context.log(f'BehavState=go')
-  
-  start_targ_released = await wait_for(context, lambda: not start_target_touched, config.reach_timeout)
-  if not start_targ_released:
-    await fail_trial()
-    await context.sleep(config.fail_timeout)
-    return task_context.TaskResult(False)
-  await context.log(f'BehavState=reach_start')
-  
-  timeout = min(config.reach_timeout,config.targ2_delay)
+    
+  timeout = min(config.saccade_timeout,config.targ2_delay)
   blank_space_touched = False
   t0 = time.perf_counter()
   acquired = await wait_for(context, lambda: presented_targ_touched and presented_targ_gazed or blank_space_touched, timeout)  
   t1 = time.perf_counter()
   elapsed_time = datetime.timedelta(seconds=t1-t0)  
-  if (not acquired and elapsed_time>=config.reach_timeout) or blank_space_touched:
+  if (not acquired and elapsed_time>=config.saccade_timeout) or blank_space_touched:
     await fail_trial()
     await context.sleep(config.fail_timeout)
     return task_context.TaskResult(False)
   elif (not acquired and elapsed_time>=config.targ2_delay):
     behav_result['presented_targ2_id'] = int(i_presented_targ2)
     show_targ2_target = True
+    show_presented_dual_target = False
     state_brightness = toggle_brightness(state_brightness)
     context.widget.update()
     await context.log(f'BehavState=targ2_on')
-    remaining_time = config.reach_timeout-elapsed_time
+    remaining_time = config.saccade_timeout-elapsed_time
     acquired = await wait_for(context, lambda: presented_targ_touched and presented_targ_gazed or blank_space_touched, remaining_time)  
     if not acquired or blank_space_touched:
       await fail_trial()
@@ -724,6 +714,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     blank_space_touched = False
     behav_result['presented_targ2_id'] = int(i_presented_targ2)
     show_targ2_target = True
+    show_presented_dual_target = False
     state_brightness = toggle_brightness(state_brightness)
     context.widget.update()
     await context.log(f'BehavState=targ2_on')
