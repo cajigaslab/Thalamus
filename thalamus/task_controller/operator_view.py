@@ -78,7 +78,7 @@ class CentralWidget(QWidget):
     def on_test():
       target.canvas.do_clear = True
     clear_endpoints_button = QPushButton('Clear Endpoints') # this button was added to the Operator View to clear the endpoints
-    layout.addWidget(clear_endpoints_button, 1, 1)
+    layout.addWidget(clear_endpoints_button, 1, 2)
     layout.setRowStretch(1, 0)
     clear_endpoints_button.clicked.connect(on_test)
     auto_clear_checkbox = QCheckBox('Auto Clear')

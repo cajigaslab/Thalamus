@@ -159,7 +159,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.String('\U0001F5A5 Subject monitor\'s model', 'monitorsubj_model', 'LG24GQ50B-B'),
     Form.String('\U0001F5A5 Operator monitor\'s model', 'monitoroper_model', 'DELLU2412M'),
     Form.Color('Target Color', 'target_color', QColor(255, 255, 255)),
-    Form.Color('Background Color', 'background_color', QColor(128, 128, 128, 255)),
+    Form.Color('Background Color', 'background_color', QColor(31, 31, 31, 255)),
     Form.Choice('Shape', 'shape', list(zip(shapes, shapes))),  # Add the shape attribute
   )
 
@@ -340,7 +340,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   success_sound = QSound(relative_path) 
 
   # Calculate half the length of the cross arms in pixels for 2 degree  
-  half_cross_len_pix = converter.deg_to_pixel_rel(1)  # 1 deg each side, total 2 deg 
+  half_cross_len_pix = converter.deg_to_pixel_rel(0.25)  # 0.25 deg each side, total 0.5 deg 
   # Create the cross centered at (cross_pos_pix_x, cross_pos_pix_y)
   cross = QPainterPath()
   cross.moveTo(cross_x_pix - half_cross_len_pix, cross_y_pix)
@@ -427,7 +427,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     # Draw the fixation cross and Gaussian based on the current state
     if state in (State.ACQUIRE_FIXATION, State.FIXATE):
       pen = painter.pen()
-      pen.setWidth(4)
+      pen.setWidth(2)
       pen.setColor(QColor(255, 0, 0))
       painter.setPen(pen)
       painter.drawPath(cross)
@@ -443,7 +443,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
         painter.drawEllipse(QPointF(cross_pos_pix_x, cross_pos_pix_y), radius_of_green_feedback_circle_pix, radius_of_green_feedback_circle_pix) # the last 2 inputs = radii of the elipse
     elif state == State.SUCCESS:
       pen = painter.pen()
-      pen.setWidth(4)
+      pen.setWidth(2)
       pen.setColor(QColor(255, 0, 0))
       painter.setPen(pen)
       painter.drawPath(cross)
@@ -453,6 +453,8 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       # A feature of the operator view is that you can draw stuff only for the operator into it. Anything in this 
       # with painter.masked(RenderOutput.OPERATOR) block will only appear in the operator view.
       
+      painter.fillRect(QRect(0, 0, 450, 220), QColor(255, 255, 255, 255)) # background white rectangle in the OView to see text
+
       path = QPainterPath()
       path.addEllipse(cross_pos_pix_f, accpt_gaze_radius_pix, accpt_gaze_radius_pix)
       painter.fillPath(path, QColor(255, 255, 255, 128))

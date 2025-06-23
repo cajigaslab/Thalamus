@@ -21,6 +21,26 @@ class Empty(_message.Message):
     __slots__ = ()
     def __init__(self) -> None: ...
 
+class Dialog(_message.Message):
+    __slots__ = ("title", "message", "type")
+    class Type(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+        __slots__ = ()
+        INFO: _ClassVar[Dialog.Type]
+        WARN: _ClassVar[Dialog.Type]
+        ERROR: _ClassVar[Dialog.Type]
+        FATAL: _ClassVar[Dialog.Type]
+    INFO: Dialog.Type
+    WARN: Dialog.Type
+    ERROR: Dialog.Type
+    FATAL: Dialog.Type
+    TITLE_FIELD_NUMBER: _ClassVar[int]
+    MESSAGE_FIELD_NUMBER: _ClassVar[int]
+    TYPE_FIELD_NUMBER: _ClassVar[int]
+    title: str
+    message: str
+    type: Dialog.Type
+    def __init__(self, title: _Optional[str] = ..., message: _Optional[str] = ..., type: _Optional[_Union[Dialog.Type, str]] = ...) -> None: ...
+
 class Redirect(_message.Message):
     __slots__ = ("redirect",)
     REDIRECT_FIELD_NUMBER: _ClassVar[int]
@@ -64,20 +84,24 @@ class StimDeclaration(_message.Message):
     def __init__(self, data: _Optional[_Union[AnalogResponse, _Mapping]] = ..., trigger: _Optional[str] = ..., id: _Optional[int] = ...) -> None: ...
 
 class StimRequest(_message.Message):
-    __slots__ = ("node", "declaration", "arm", "trigger", "retrieve", "id")
+    __slots__ = ("node", "declaration", "arm", "trigger", "retrieve", "inline_arm", "inline_trigger", "id")
     NODE_FIELD_NUMBER: _ClassVar[int]
     DECLARATION_FIELD_NUMBER: _ClassVar[int]
     ARM_FIELD_NUMBER: _ClassVar[int]
     TRIGGER_FIELD_NUMBER: _ClassVar[int]
     RETRIEVE_FIELD_NUMBER: _ClassVar[int]
+    INLINE_ARM_FIELD_NUMBER: _ClassVar[int]
+    INLINE_TRIGGER_FIELD_NUMBER: _ClassVar[int]
     ID_FIELD_NUMBER: _ClassVar[int]
     node: NodeSelector
     declaration: StimDeclaration
     arm: int
     trigger: int
     retrieve: int
+    inline_arm: StimDeclaration
+    inline_trigger: StimDeclaration
     id: int
-    def __init__(self, node: _Optional[_Union[NodeSelector, _Mapping]] = ..., declaration: _Optional[_Union[StimDeclaration, _Mapping]] = ..., arm: _Optional[int] = ..., trigger: _Optional[int] = ..., retrieve: _Optional[int] = ..., id: _Optional[int] = ...) -> None: ...
+    def __init__(self, node: _Optional[_Union[NodeSelector, _Mapping]] = ..., declaration: _Optional[_Union[StimDeclaration, _Mapping]] = ..., arm: _Optional[int] = ..., trigger: _Optional[int] = ..., retrieve: _Optional[int] = ..., inline_arm: _Optional[_Union[StimDeclaration, _Mapping]] = ..., inline_trigger: _Optional[_Union[StimDeclaration, _Mapping]] = ..., id: _Optional[int] = ...) -> None: ...
 
 class StimResponse(_message.Message):
     __slots__ = ("error", "declaration", "id")
@@ -166,21 +190,24 @@ class NodeResponse(_message.Message):
     def __init__(self, json: _Optional[str] = ..., id: _Optional[int] = ..., status: _Optional[_Union[NodeResponse.Status, str]] = ...) -> None: ...
 
 class Text(_message.Message):
-    __slots__ = ("text", "time")
+    __slots__ = ("text", "time", "remote_time")
     TEXT_FIELD_NUMBER: _ClassVar[int]
     TIME_FIELD_NUMBER: _ClassVar[int]
+    REMOTE_TIME_FIELD_NUMBER: _ClassVar[int]
     text: str
     time: int
-    def __init__(self, text: _Optional[str] = ..., time: _Optional[int] = ...) -> None: ...
+    remote_time: int
+    def __init__(self, text: _Optional[str] = ..., time: _Optional[int] = ..., remote_time: _Optional[int] = ...) -> None: ...
 
 class StorageRecord(_message.Message):
-    __slots__ = ("analog", "xsens", "event", "image", "text", "compressed", "time", "node")
+    __slots__ = ("analog", "xsens", "event", "image", "text", "compressed", "metadata", "time", "node")
     ANALOG_FIELD_NUMBER: _ClassVar[int]
     XSENS_FIELD_NUMBER: _ClassVar[int]
     EVENT_FIELD_NUMBER: _ClassVar[int]
     IMAGE_FIELD_NUMBER: _ClassVar[int]
     TEXT_FIELD_NUMBER: _ClassVar[int]
     COMPRESSED_FIELD_NUMBER: _ClassVar[int]
+    METADATA_FIELD_NUMBER: _ClassVar[int]
     TIME_FIELD_NUMBER: _ClassVar[int]
     NODE_FIELD_NUMBER: _ClassVar[int]
     analog: AnalogResponse
@@ -189,9 +216,10 @@ class StorageRecord(_message.Message):
     image: Image
     text: Text
     compressed: Compressed
+    metadata: Metadata
     time: int
     node: str
-    def __init__(self, analog: _Optional[_Union[AnalogResponse, _Mapping]] = ..., xsens: _Optional[_Union[XsensResponse, _Mapping]] = ..., event: _Optional[_Union[Event, _Mapping]] = ..., image: _Optional[_Union[Image, _Mapping]] = ..., text: _Optional[_Union[Text, _Mapping]] = ..., compressed: _Optional[_Union[Compressed, _Mapping]] = ..., time: _Optional[int] = ..., node: _Optional[str] = ...) -> None: ...
+    def __init__(self, analog: _Optional[_Union[AnalogResponse, _Mapping]] = ..., xsens: _Optional[_Union[XsensResponse, _Mapping]] = ..., event: _Optional[_Union[Event, _Mapping]] = ..., image: _Optional[_Union[Image, _Mapping]] = ..., text: _Optional[_Union[Text, _Mapping]] = ..., compressed: _Optional[_Union[Compressed, _Mapping]] = ..., metadata: _Optional[_Union[Metadata, _Mapping]] = ..., time: _Optional[int] = ..., node: _Optional[str] = ...) -> None: ...
 
 class ImageRequest(_message.Message):
     __slots__ = ("node", "framerate")
@@ -369,8 +397,22 @@ class InjectTextRequest(_message.Message):
     text: Text
     def __init__(self, node: _Optional[str] = ..., text: _Optional[_Union[Text, _Mapping]] = ...) -> None: ...
 
+class InjectMotionCaptureRequest(_message.Message):
+    __slots__ = ("node", "data")
+    NODE_FIELD_NUMBER: _ClassVar[int]
+    DATA_FIELD_NUMBER: _ClassVar[int]
+    node: str
+    data: XsensResponse
+    def __init__(self, node: _Optional[str] = ..., data: _Optional[_Union[XsensResponse, _Mapping]] = ...) -> None: ...
+
 class AnalogResponse(_message.Message):
-    __slots__ = ("data", "spans", "sample_intervals", "channels_changed", "int_data", "is_int_data", "time", "remote_time")
+    __slots__ = ("data", "spans", "sample_intervals", "channels_changed", "int_data", "is_int_data", "time", "remote_time", "channel_type")
+    class ChannelType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+        __slots__ = ()
+        Voltage: _ClassVar[AnalogResponse.ChannelType]
+        Current: _ClassVar[AnalogResponse.ChannelType]
+    Voltage: AnalogResponse.ChannelType
+    Current: AnalogResponse.ChannelType
     DATA_FIELD_NUMBER: _ClassVar[int]
     SPANS_FIELD_NUMBER: _ClassVar[int]
     SAMPLE_INTERVALS_FIELD_NUMBER: _ClassVar[int]
@@ -379,6 +421,7 @@ class AnalogResponse(_message.Message):
     IS_INT_DATA_FIELD_NUMBER: _ClassVar[int]
     TIME_FIELD_NUMBER: _ClassVar[int]
     REMOTE_TIME_FIELD_NUMBER: _ClassVar[int]
+    CHANNEL_TYPE_FIELD_NUMBER: _ClassVar[int]
     data: _containers.RepeatedScalarFieldContainer[float]
     spans: _containers.RepeatedCompositeFieldContainer[Span]
     sample_intervals: _containers.RepeatedScalarFieldContainer[int]
@@ -387,7 +430,8 @@ class AnalogResponse(_message.Message):
     is_int_data: bool
     time: int
     remote_time: int
-    def __init__(self, data: _Optional[_Iterable[float]] = ..., spans: _Optional[_Iterable[_Union[Span, _Mapping]]] = ..., sample_intervals: _Optional[_Iterable[int]] = ..., channels_changed: bool = ..., int_data: _Optional[_Iterable[int]] = ..., is_int_data: bool = ..., time: _Optional[int] = ..., remote_time: _Optional[int] = ...) -> None: ...
+    channel_type: AnalogResponse.ChannelType
+    def __init__(self, data: _Optional[_Iterable[float]] = ..., spans: _Optional[_Iterable[_Union[Span, _Mapping]]] = ..., sample_intervals: _Optional[_Iterable[int]] = ..., channels_changed: bool = ..., int_data: _Optional[_Iterable[int]] = ..., is_int_data: bool = ..., time: _Optional[int] = ..., remote_time: _Optional[int] = ..., channel_type: _Optional[_Union[AnalogResponse.ChannelType, str]] = ...) -> None: ...
 
 class GraphRequest(_message.Message):
     __slots__ = ("node", "channels", "bin_ns", "channel_names")
@@ -480,3 +524,21 @@ class Notification(_message.Message):
     title: str
     message: str
     def __init__(self, type: _Optional[_Union[Notification.Type, str]] = ..., title: _Optional[str] = ..., message: _Optional[str] = ...) -> None: ...
+
+class Pair(_message.Message):
+    __slots__ = ("key", "text", "decimal", "integral")
+    KEY_FIELD_NUMBER: _ClassVar[int]
+    TEXT_FIELD_NUMBER: _ClassVar[int]
+    DECIMAL_FIELD_NUMBER: _ClassVar[int]
+    INTEGRAL_FIELD_NUMBER: _ClassVar[int]
+    key: str
+    text: str
+    decimal: float
+    integral: int
+    def __init__(self, key: _Optional[str] = ..., text: _Optional[str] = ..., decimal: _Optional[float] = ..., integral: _Optional[int] = ...) -> None: ...
+
+class Metadata(_message.Message):
+    __slots__ = ("keyvalues",)
+    KEYVALUES_FIELD_NUMBER: _ClassVar[int]
+    keyvalues: _containers.RepeatedCompositeFieldContainer[Pair]
+    def __init__(self, keyvalues: _Optional[_Iterable[_Union[Pair, _Mapping]]] = ...) -> None: ...

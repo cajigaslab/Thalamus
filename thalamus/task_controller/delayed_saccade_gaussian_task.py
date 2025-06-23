@@ -31,7 +31,6 @@ INTERVAL = 1/FRAMERATE
 converter = None
 center = None
 center_f = None
-num_circles = 7 # The last 2 circles usually end up being too large for the screen height, hence the actual # = num_circles - 2
 circle_radii = []
 rand_pos_i = 0
 trial_num = 0
@@ -176,17 +175,18 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Uniform('\u2195 Target height (0.1-1.0)', 'height_targ_deg', 0.1, 1, '\u00B0'),
     Form.Constant('\u2195 Target height step (0.1-1.0)', 'heighttargdeg_step', 0.1, '\u00B0'),
     Form.Bool('\u2194\u2195 Lock Height to Width?', 'is_height_locked', False),
-    Form.Bool('Paint all targets simultaneously?', 'paint_all_targets', False),
+    Form.Bool('Paint location grid and accumulated targets?', 'paint_all_targets', False),
     Form.Uniform('\U0001F9ED Target orientation (0-150)', 'orientation_targ_ran', 0, 150, '\u00B0'),
     Form.Constant('\U0001F9ED Target orientation step size (0-150)', 'orientation_targ_step', 30, '\u00B0'),
     Form.Uniform('\U0001F526 Target luminence (0-100)', 'luminance_targ_per', 10, 100,'%'),
     Form.Constant('\U0001F526 Target luminence step size (0-100)', 'luminance_targ_step', 10,'%'),
     # For LG24GQ50B-B with height of 1080 pix and at 0.57 m distance conversion factor of 0.0259 deg/pix, 
     # the largest diameter of the screen area to display targets is int(1080 pix * 0.0259 deg/pix) = 27 deg
-    Form.Constant('\u2300 Diameter of area for target presentation', 'diameter_target_loc_span_deg', 27,'\u00B0'),
-    Form.Uniform('\U0001F9ED Polar angle range for target locations - sector #1 (0..360)', 'target_loc_angle_sector1_deg', 0, 45, '\u00B0'),
-    Form.Uniform('\U0001F9ED Polar angle range for target locations - sector #2 (0..360)', 'target_loc_angle_sector2_deg', 45, 90, '\u00B0'),
-    Form.Constant('\U0001F9ED Polar angle step around the target location circle', 'target_loc_polar_step_deg', 30,'\u00B0'),
+    Form.Uniform('\u2220 Min/Max ccentricity range for target locations', 'target_loc_eccentricity_deg', 1, 2, '\u00B0'),
+    Form.Constant('Number of eccentricity steps for target locations', 'target_loc_eccentric_circle_num', 10),
+    Form.Uniform('\u2220 Polar angle range for target locations - sector #1 (0..360)', 'target_loc_angle_sector1_deg', 0, 45, '\u00B0'),
+    Form.Uniform('\u2220 Polar angle range for target locations - sector #2 (0..360)', 'target_loc_angle_sector2_deg', 45, 90, '\u00B0'),
+    Form.Constant('\u2220 Polar angle step around the target location circle', 'target_loc_polar_step_deg', 30,'\u00B0'),
     Form.Constant('\u2300 Diameter of area for gaze acceptance', 'accpt_gaze_diam_deg', 4, '\u00B0'), # Define the diameter in degrees of the area where gaze is accepted as being correct
     Form.Constant('\U0001F5A5 Subject\'s distance to the screen', 'monitorsubj_dist_m', .57, 'm'),
     Form.Constant('\U0001F5A5 Subject monitor\'s width', 'monitorsubj_width_m', .5283, 'm'),
@@ -198,7 +198,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.String('\U0001F5A5 Subject monitor\'s model', 'monitorsubj_model', 'LG24GQ50B-B'),
     Form.String('\U0001F5A5 Operator monitor\'s model', 'monitoroper_model', 'DELLU2412M'),
     Form.Color('Target Color', 'target_color', QColor(255, 255, 255)),
-    Form.Color('Background Color', 'background_color', QColor(128, 128, 128, 255)),
+    Form.Color('Background Color', 'background_color', QColor(31, 31, 31, 255)),
     Form.Choice('Shape', 'shape', list(zip(shapes, shapes))),  # Add the shape attribute
   )
 
@@ -245,9 +245,6 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   orientation_targ_ran_max_spinbox = form.findChild(QDoubleSpinBox, "orientation_targ_ran_max")
   orientation_targ_ran_max_spinbox.setRange(0, 150)
   orientation_targ_ran_max_spinbox.setSingleStep(15)
-  diameter_target_loc_span_deg = form.findChild(QDoubleSpinBox, "diameter_target_loc_span_deg")
-  diameter_target_loc_span_deg.setRange(.1, 27.0)
-  diameter_target_loc_span_deg.setSingleStep(0.1)  
   target_loc_angle_sector1_deg_min_spinbox = form.findChild(QDoubleSpinBox, "target_loc_angle_sector1_deg_min")
   target_loc_angle_sector1_deg_min_spinbox.setRange(0, 360)
   target_loc_angle_sector1_deg_min_spinbox.setSingleStep(1)  
@@ -276,16 +273,16 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   luminance_targ_per_max_spinbox.setRange(0, 100)
   luminance_targ_per_max_spinbox.setSingleStep(5)  
   width_targ_deg_min_spinbox = form.findChild(QDoubleSpinBox, "width_targ_deg_min")
-  width_targ_deg_min_spinbox.setRange(0.1, 1)
+  width_targ_deg_min_spinbox.setRange(0.1, 10)
   width_targ_deg_min_spinbox.setSingleStep(0.1)  
   width_targ_deg_max_spinbox = form.findChild(QDoubleSpinBox, "width_targ_deg_max")
-  width_targ_deg_max_spinbox.setRange(0.1, 1)
+  width_targ_deg_max_spinbox.setRange(0.1, 10)
   width_targ_deg_max_spinbox.setSingleStep(0.1)  
   height_targ_deg_min_spinbox = form.findChild(QDoubleSpinBox, "height_targ_deg_min")
-  height_targ_deg_min_spinbox.setRange(0.1, 1)
+  height_targ_deg_min_spinbox.setRange(0.1, 10)
   height_targ_deg_min_spinbox.setSingleStep(0.1)  
   height_targ_deg_max_spinbox = form.findChild(QDoubleSpinBox, "height_targ_deg_max")
-  height_targ_deg_max_spinbox.setRange(0.1, 1)
+  height_targ_deg_max_spinbox.setRange(0.1, 10)
   height_targ_deg_max_spinbox.setSingleStep(0.1)  
 
   return result
@@ -538,13 +535,14 @@ async def handle_hold_target(
 # Define an asynchronous function to run the task with a 60 FPS animation
 async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-many-statements
   """Main entry point for the Gaussian delayed saccade task."""
-  global converter, center, center_f, num_circles, circle_radii, rand_pos_i, \
+  global converter, center, center_f, circle_radii, rand_pos_i, \
     trial_num, trial_photic_count, trial_photic_success_count, trial_catch_count, \
     trial_catch_success_count, drawn_objects, rand_pos, reward_total_released_ms, \
     gaze_success_store, gaze_failure_store, failure_sound, abort_sound, success_sound, \
     photodiode_blinking_square, photodiode_static_square, WATCHING, state, \
-    diameter_target_loc_span_pix, target_loc_polar_step_deg, target_loc_angle_sector1_deg_min, \
-    target_loc_angle_sector1_deg_max, target_loc_angle_sector2_deg_min, target_loc_angle_sector2_deg_max
+    target_loc_polar_step_deg, target_loc_angle_sector1_deg_min, \
+    target_loc_angle_sector1_deg_max, target_loc_angle_sector2_deg_min, target_loc_angle_sector2_deg_max, \
+    target_loc_eccentricity_pix_min, target_loc_eccentricity_pix_max, target_loc_eccentric_circle_num
 
   # Get the task configuration
   config = context.task_config
@@ -555,18 +553,24 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
 
   """Check if target location angle lies within the user-defined sector [min, max] (counterclockwise)."""
   def angle_in_sector(angle, sector_min, sector_max):
-    if sector_min <= sector_max:
-        return sector_min <= angle <= sector_max
+    """Return True if angle is within [sector_min, sector_max) (inclusive lower, exclusive upper), handling wrap-around."""
+    angle = angle % 360
+    sector_min = sector_min % 360
+    sector_max = sector_max % 360
+    if sector_min < sector_max:
+        return sector_min <= angle < sector_max
+    elif sector_min > sector_max:
+        return angle >= sector_min or angle < sector_max
     else:
-        # Sector wraps around 360
-        return angle >= sector_min or angle <= sector_max
+        # to support "full circle" sector, but could also be zero-width sector
+        return True
 
   def get_valid_angles(step_deg, sector1_min, sector1_max, sector2_min, sector2_max):
-      all_angles = [i for i in range(0, 360, step_deg)]
+      all_angles = [i for i in range(0, 360, int(step_deg))]
       valid_angles = []
       for angle in all_angles:
-          if (angle_in_sector(angle, sector1_min % 360, sector1_max % 360) or
-              angle_in_sector(angle, sector2_min % 360, sector2_max % 360)):
+          if (angle_in_sector(angle, sector1_min, sector1_max) or
+              angle_in_sector(angle, sector2_min, sector2_max)):
               valid_angles.append(angle)
 
       return sorted(set(valid_angles))  # remove duplicates if overlapping
@@ -590,20 +594,17 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     relative_path = os.path.join(current_directory, 'thalamus\\task_controller', 'success_clip.wav')
     success_sound = QSound(relative_path) # Load the .wav file (replace with your file path)
 
-    diameter_target_loc_span_pix = converter.deg_to_pixel_rel(config['diameter_target_loc_span_deg'])
-    if diameter_target_loc_span_pix > monitorsubj_H_pix: # if user makes a typo and sets diameter larger than screen height
-        diameter_target_loc_span_pix = monitorsubj_H_pix
     target_loc_polar_step_deg = config['target_loc_polar_step_deg']
     target_loc_angle_sector1_deg_min = config['target_loc_angle_sector1_deg']['min']
     target_loc_angle_sector1_deg_max = config['target_loc_angle_sector1_deg']['max']
     target_loc_angle_sector2_deg_min = config['target_loc_angle_sector2_deg']['min']
     target_loc_angle_sector2_deg_max = config['target_loc_angle_sector2_deg']['max']
+    target_loc_eccentricity_pix_min = converter.deg_to_pixel_rel(config['target_loc_eccentricity_deg']['min'])
+    target_loc_eccentricity_pix_max = converter.deg_to_pixel_rel(config['target_loc_eccentricity_deg']['max'])
+    target_loc_eccentric_circle_num = config['target_loc_eccentric_circle_num'] # Number of concentric circles along which target locations will be generated
     
-    num_circles = 7 # The last 2 circles usually end up being too large for the screen height, hence the actual # = num_circles - 2
-    circle_radii = np.linspace(0, converter.screen_pixels.height, 10) # screen height-based step
-    circle_radii += converter.screen_pixels.width/num_circles # a sum of screen width and height based steps
-    circle_radii = circle_radii[circle_radii <= diameter_target_loc_span_pix] # getting rid of radii that are too large for the defined eccentricity span (i.e. diameter) of target locations
-    circle_radii /= 2 # divide by 2 to get the average of the two steps to ensure Gaussians are less squished
+    circle_radii = np.linspace(target_loc_eccentricity_pix_min, target_loc_eccentricity_pix_max, \
+                               target_loc_eccentric_circle_num) # Generate radii for concentric circles along which targets are displayed
     rand_pos_i = 0
     trial_num = 0
 
@@ -653,8 +654,10 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   """ Below are commands that will be executed on every trial """
 
   # Regenerate target positions if user changes any of the parameters that affect target positions
-  if int(diameter_target_loc_span_pix) != int(converter.deg_to_pixel_rel(config['diameter_target_loc_span_deg'])) or \
+  if int(target_loc_eccentric_circle_num) != int(config['target_loc_eccentric_circle_num']) or \
       int(target_loc_polar_step_deg) != int(config['target_loc_polar_step_deg']) or \
+      int(target_loc_eccentricity_pix_min) != int(converter.deg_to_pixel_rel(config['target_loc_eccentricity_deg']['min'])) or \
+      int(target_loc_eccentricity_pix_max) != int(converter.deg_to_pixel_rel(config['target_loc_eccentricity_deg']['max'])) or \
       int(target_loc_angle_sector1_deg_min) != int(config['target_loc_angle_sector1_deg']['min']) or \
       int(target_loc_angle_sector1_deg_max) != int(config['target_loc_angle_sector1_deg']['max']) or \
       int(target_loc_angle_sector2_deg_min) != int(config['target_loc_angle_sector2_deg']['min']) or \
@@ -662,8 +665,6 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
           print("xxxxxxxxxxxxxxxxxxxxxxxxxCHANGE FLAGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
           print("xxxxxxxxxxxxxxxxxxxxxxxxxCHANGE FLAGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
           print('detected change!!')
-          print(f"diameter_pix_1={int(diameter_target_loc_span_pix)}, \
-           diameter_pix_2={int(converter.deg_to_pixel_rel(config['diameter_target_loc_span_deg']))}")
           print(f"step_deg_1={int(target_loc_polar_step_deg)}, \
            step_deg_2={int(config['target_loc_polar_step_deg'])}")
           print(f"angle_sect1_deg_min_1={int(target_loc_angle_sector1_deg_min)}, \
@@ -677,20 +678,17 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
           print("xxxxxxxxxxxxxxxxxxxxxxxxxCHANGE FLAGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
           print("xxxxxxxxxxxxxxxxxxxxxxxxxCHANGE FLAGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx") 
           
-          diameter_target_loc_span_pix = converter.deg_to_pixel_rel(config['diameter_target_loc_span_deg'])
-          if diameter_target_loc_span_pix > monitorsubj_H_pix: # if user makes a typo and sets diameter larger than screen height
-              diameter_target_loc_span_pix = monitorsubj_H_pix
           target_loc_polar_step_deg = config['target_loc_polar_step_deg']
           target_loc_angle_sector1_deg_min = config['target_loc_angle_sector1_deg']['min']
           target_loc_angle_sector1_deg_max = config['target_loc_angle_sector1_deg']['max']
           target_loc_angle_sector2_deg_min = config['target_loc_angle_sector2_deg']['min']
           target_loc_angle_sector2_deg_max = config['target_loc_angle_sector2_deg']['max']
+          target_loc_eccentricity_pix_min = converter.deg_to_pixel_rel(config['target_loc_eccentricity_deg']['min'])
+          target_loc_eccentricity_pix_max = converter.deg_to_pixel_rel(config['target_loc_eccentricity_deg']['max'])
+          target_loc_eccentric_circle_num = config['target_loc_eccentric_circle_num'] # Number of concentric circles along which target locations will be generated
           
-          num_circles = 7 # The last 2 circles usually end up being too large for the screen height, hence the actual # = num_circles - 2
-          circle_radii = np.linspace(0, converter.screen_pixels.height, 10) # screen height-based step
-          circle_radii += converter.screen_pixels.width/num_circles # a sum of screen width and height based steps
-          circle_radii = circle_radii[circle_radii <= diameter_target_loc_span_pix] # getting rid of radii that are too large for the defined eccentricity span (i.e. diameter) of target locations
-          circle_radii /= 2 # divide by 2 to get the average of the two steps to ensure Gaussians are less squished
+          circle_radii = np.linspace(target_loc_eccentricity_pix_min, target_loc_eccentricity_pix_max, \
+                                    int(target_loc_eccentric_circle_num)) # Generate radii for concentric circles along which targets are displayed
           rand_pos_i = 0
 
           valid_angles_deg = get_valid_angles(target_loc_polar_step_deg, target_loc_angle_sector1_deg_min,
@@ -719,8 +717,8 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
 
   # Define the vertices for the fixation cross in degrees
   vertices_deg = [ 
-      (-1, 0), (1, 0),  # Horizontal line
-      (0, -1), (0, 1)  # Vertical line
+      (-0.25, 0), (0.25, 0),  # Horizontal line
+      (0, -0.25), (0, 0.25)  # Vertical line
   ]
   # Convert the vertices from degrees to pixels
   vertices = [converter.deg_to_pixel_abs(p) for p in vertices_deg]
@@ -818,6 +816,21 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       painter.restore()
       # endregion
 
+  def draw_circle_sectors(painter, center_x, center_y, radius, sectors, color=QColor(0, 230, 230, 150)):
+    """
+    Draws sectors (arcs) of a circle.
+    sectors: list of (start_angle_deg, end_angle_deg) tuples
+    """
+    rect = QRectF(center_x - radius, center_y - radius, 2 * radius, 2 * radius)
+    pen = painter.pen()
+    pen.setWidth(1)
+    pen.setColor(color)
+    painter.setPen(pen)
+    for start_deg, end_deg in sectors:
+        # Qt uses 1/16th degree units, and 0 degrees is at 3 o'clock, positive is counterclockwise
+        span_deg = (end_deg - start_deg) % 360
+        painter.drawArc(rect, int(start_deg * 16), int(span_deg * 16))  # negative for clockwise
+
   def drawText(painter, text, location: QPoint, background_color_qt: QColor):
     painter.save()  # Save the current state of the painter
     painter.setClipRect(painter.viewport())  # Set the clip region to the current viewport
@@ -880,7 +893,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     if state in (State.ACQUIRE_FIXATION, State.FIXATE1):
       # Acquiring and fixating on the fixation cross
       pen = painter.pen()
-      pen.setWidth(4)
+      pen.setWidth(2)
       # pen.setColor(Qt.GlobalColor.red)
       pen.setColor(QColor(255, 0, 0))
       painter.setPen(pen)
@@ -891,28 +904,38 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
         # region -- TESTING-TARGET-LOCATIONS: drawing of the concentric circles and XY axes
         # Dynamically calculate the center of the window
         pen.setWidth(1)
-        pen.setColor(QColor(0, 0, 255, 100))  # Set color to blue with 50% transparency (alpha = 100)
+        pen.setColor(QColor(0, 230, 230, 150))  # Set color to blue with 60% transparency (alpha = 150)
         painter.setPen(pen)
         center_x = int(converter.screen_pixels.width / 2)
         center_y = int(converter.screen_pixels.height / 2)
-        # Draw the concentric circles
+        # Draw the sectors showing the target location grid
+        sectors = [
+          (target_loc_angle_sector1_deg_min, target_loc_angle_sector1_deg_max),
+          (target_loc_angle_sector2_deg_min, target_loc_angle_sector2_deg_max)
+        ]
         for radius in circle_radii:
-            painter.drawEllipse(QPointF(center_x, center_y), radius, radius)
-        # Draw the center cross (XY axes)
-        painter.drawLine(center_x, 0, center_x, converter.screen_pixels.height)  # Vertical line
-        painter.drawLine(0, center_y, int(converter.screen_pixels.width), center_y)  # Horizontal line
-        # Draw angled lines for 30° increments
-        for angle in np.arange(0, 360, 30):
-            x = int(center_x + circle_radii[-1] * np.cos(np.radians(angle)))
-            y = int(center_y + circle_radii[-1] * np.sin(np.radians(angle)))
-            painter.drawLine(center_x, center_y, x, y)
+            draw_circle_sectors(painter, center_x, center_y, radius, sectors)
+            # painter.drawEllipse(QPointF(center_x, center_y), radius, radius)
+        # Draw angled lines at polar angle step defining target locations
+        for angle in np.arange(0, 360, target_loc_polar_step_deg):
+            in_any_sector = any(angle_in_sector(angle, start, end) for start, end in sectors)
+            if in_any_sector:
+              x = int(center_x + circle_radii[-1] * np.cos(np.radians(angle)))
+              y = int(center_y - circle_radii[-1] * np.sin(np.radians(angle)))
+              painter.drawLine(center_x, center_y, x, y)
+        pen.setWidth(2)
+        pen.setColor(QColor(255, 0, 0))
+        painter.drawPath(cross)
+        # # Draw the center lines
+        # pen.setColor(QColor(0, 255, 255, 75))
+        # painter.drawLine(center_x, int(center_y - target_loc_eccentricity_pix_max), center_x, int(center_y + target_loc_eccentricity_pix_max))  # Vertical line
+        # painter.drawLine(int(center_x - target_loc_eccentricity_pix_max), center_y, int(center_x + target_loc_eccentricity_pix_max), center_y)  # Horizontal line
         # endregion
-
     elif state == State.FIXATE2:
       # Fixation after target presentation
       # await context.log('BehavState=FIXATE2_start') # saving any variables / data from code
       pen = painter.pen()
-      pen.setWidth(4)
+      pen.setWidth(2)
       # pen.setColor(Qt.GlobalColor.red)
       pen.setColor(QColor(255, 0, 0))
       painter.setPen(pen)
@@ -923,7 +946,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     elif state == State.TARGET_PRESENTATION:
       # await context.log('BehavState=TARGET_PRESENTATION_start') # saving any variables / data from code
       pen = painter.pen()
-      pen.setWidth(4)
+      pen.setWidth(2)
       # pen.setColor(Qt.GlobalColor.red)
       pen.setColor(QColor(255, 0, 0))
       painter.setPen(pen)
@@ -943,6 +966,8 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       # A feature of the operator view is that you can draw stuff only for the operator into it. Anything in this 
       # with painter.masked(RenderOutput.OPERATOR) block will only appear in the operator view.
       
+      painter.fillRect(QRect(0, 0, 450, 220), QColor(255, 255, 255, 255)) # background white rectangle in the OView to see text
+
       path = QPainterPath()
       path.addEllipse(targetpos_f, accpt_gaze_radius_pix, accpt_gaze_radius_pix)
       painter.fillPath(path, QColor(255, 255, 255, 128))
@@ -966,7 +991,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       temp_gaze = gaze_valid(gaze, monitorsubj_W_pix, monitorsubj_H_pix)
       drawn_text = f"({temp_gaze.x()}, {temp_gaze.y()})"
       drawText(painter, drawn_text, temp_gaze, background_color_qt) # Draw the text message
-    
+
 
       # Drawing all previously painted gazes of failed target holding
       # for gaze_qpoint, color_rgba in gaze_failure_store:

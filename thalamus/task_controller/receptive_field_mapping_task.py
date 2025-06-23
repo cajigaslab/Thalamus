@@ -167,7 +167,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.String('\U0001F5A5 Subject monitor\'s model', 'monitorsubj_model', 'LG24GQ50B-B'),
     Form.String('\U0001F5A5 Operator monitor\'s model', 'monitoroper_model', 'DELLU2412M'),
     Form.Color('Target Color', 'target_color', QColor(255, 255, 255)),
-    Form.Color('Background Color', 'background_color', QColor(128, 128, 128, 255)),
+    Form.Color('Background Color', 'background_color', QColor(31, 31, 31, 255)),
     Form.Choice('Shape', 'shape', list(zip(shapes, shapes))),  # Add the shape attribute
   )
 
@@ -356,8 +356,8 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
 
   # Define the vertices for the fixation cross in degrees
   vertices_deg = [ 
-      (-1, 0), (1, 0),  # Horizontal line
-      (0, -1), (0, 1)  # Vertical line
+      (-0.25, 0), (0.25, 0),  # Horizontal line
+      (0, -0.25), (0, 0.25)  # Vertical line
   ]
   # Convert the vertices from degrees to pixels
   vertices = [converter.deg_to_pixel_abs(p) for p in vertices_deg]
@@ -516,7 +516,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     # Draw the fixation cross and Gaussian based on the current state
     if state in (State.ACQUIRE_FIXATION, State.FIXATE):
       pen = painter.pen()
-      pen.setWidth(4)
+      pen.setWidth(2)
       pen.setColor(QColor(255, 0, 0))
       painter.setPen(pen)
       painter.drawPath(cross)
@@ -543,7 +543,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     
     elif state == State.SUCCESS:
       pen = painter.pen()
-      pen.setWidth(4)
+      pen.setWidth(2)
       pen.setColor(QColor(255, 0, 0))
       painter.setPen(pen)
       painter.drawPath(cross)
@@ -554,6 +554,8 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       # A feature of the operator view is that you can draw stuff only for the operator into it. Anything in this 
       # with painter.masked(RenderOutput.OPERATOR) block will only appear in the operator view.
       
+      painter.fillRect(QRect(0, 0, 450, 220), QColor(255, 255, 255, 255)) # background white rectangle in the OView to see text
+
       path = QPainterPath()
       path.addEllipse(center_f, accptolerance_pix, accptolerance_pix)
       painter.fillPath(path, QColor(255, 255, 255, 128))
@@ -569,7 +571,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       temp_gaze = gaze_valid(gaze, monitorsubj_W_pix, monitorsubj_H_pix)
       drawn_text = f"({temp_gaze.x()}, {temp_gaze.y()})"
       drawText(painter, drawn_text, temp_gaze, background_color_qt) # Draw the text message
-    
+
       # Drawing all previously painted gazes of failed target holding
       # for gaze_qpoint, color_rgba in gaze_failure_store:
       #   draw_gaze(painter, gaze_qpoint, color_rgba)
