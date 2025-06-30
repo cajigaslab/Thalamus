@@ -580,7 +580,7 @@ class ControlWindow(QMainWindow):
     if self.config_data.file_name is None:
       self.on_save_as_config()
       return
-
+    self.task_context.config['eye_scaling_init']=self.task_context.config['eye_scaling']
     save(self.config_data.file_name, self.task_context.config)
 
   def on_save_as_config(self) -> None:

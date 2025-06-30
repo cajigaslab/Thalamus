@@ -137,7 +137,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Uniform('Success Interval', 'success_timeout', 1, 1, 's'),
     Form.Bool('Is Choice', 'is_choice', False),
     Form.Bool('Eye cal: average scaling', 'average_scaling', True),
-    Form.Constant('Eye cal: max change', 'max_eye_change', 10),
+    Form.Constant('Eye cal: max change per step', 'max_eye_change_step', 20),
+    Form.Constant('Eye cal: max change total', 'max_eye_change', 100),
     Form.Constant('State Indicator X', 'state_indicator_x', 180),
     Form.Constant('State Indicator Y', 'state_indicator_y', 0),
     Form.Choice('Stim Phase', 'stim_phase', [(e.name, e.name) for e in State]),
@@ -241,6 +242,7 @@ async def next_state(context, new_state, stim_phase, stim_start, intan_cfg, puls
 async def run(context: task_context.TaskContextProtocol) -> task_context.TaskResult: #pylint: disable=too-many-statements
   
   eye_config = context.config['eye_scaling']
+  eye_config_orig = context.config['eye_scaling_init']
 
   """
   Implementation of the state machine for the simple task
@@ -503,6 +505,12 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   final_i_selected_target = last_selected_target
   behav_result['selected_target_id'] = final_i_selected_target
 
+  with await next_state(context, State.TARGS_ACQ, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
+    success = await context.any(wait_for_hold(context, lambda: presented_targ_acquired, config.hold_timeout, config.blink_timeout), context.until(lambda: touched))
+  if not success or touched:
+    await fail_trial()
+    return task_context.TaskResult(False)
+  
   quadrant = []
   if all_target_names[final_i_selected_target]=='topleft':
     quadrant = 'I'
@@ -516,6 +524,8 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   if quadrant != []:
     xscale_init = eye_config[quadrant]['x']
     yscale_init = eye_config[quadrant]['y']
+    xscale_orig = eye_config_orig[quadrant]['x']
+    yscale_orig = eye_config_orig[quadrant]['y']
     canvas = context.widget
     t = np.array([canvas.frameGeometry().width()/2,
           canvas.frameGeometry().height()/2])
@@ -533,16 +543,12 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     else:
       xscale = xscale_new
       yscale = yscale_new
-    if xscale-xscale_new < context.task_config['max_eye_change']:
+    if (xscale-xscale_init < context.task_config['max_eye_change_step'] 
+        and yscale-yscale_init < context.task_config['max_eye_change_step'] 
+        and xscale-xscale_orig < context.task_config['max_eye_change'] 
+        and yscale-yscale_orig < context.task_config['max_eye_change'] ):
       eye_config[quadrant]['x']=xscale
-    if yscale-yscale_new < context.task_config['max_eye_change']:
       eye_config[quadrant]['y']=yscale
-
-  with await next_state(context, State.TARGS_ACQ, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
-    success = await context.any(wait_for_hold(context, lambda: presented_targ_acquired, config.hold_timeout, config.blink_timeout), context.until(lambda: touched))
-  if not success or touched:
-    await fail_trial()
-    return task_context.TaskResult(False)
   
   """
   The trial's outcome (success or failure) at this point is decided, and now

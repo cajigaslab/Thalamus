@@ -135,7 +135,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Uniform('Fail Interval', 'fail_timeout', 1, 1, 's'),
     Form.Uniform('Success Interval', 'success_timeout', 1, 1, 's'),
     Form.Bool('Eye cal: average scaling', 'average_scaling', True),
-    Form.Constant('Eye cal: max change', 'max_eye_change', 100),
+    Form.Constant('Eye cal: max change per step', 'max_eye_change_step', 20),
+    Form.Constant('Eye cal: max change total', 'max_eye_change', 100),
     Form.Bool('Is Choice', 'is_choice', False),
     Form.Constant('State Indicator X', 'state_indicator_x', 180),
     Form.Constant('State Indicator Y', 'state_indicator_y', 0),
@@ -239,7 +240,8 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   the realization's values.
   """
   eye_config = context.config['eye_scaling']
-
+  eye_config_orig = context.config['eye_scaling_init']
+  
   config = Config(
     datetime.timedelta(seconds=context.get_value('intertrial_timeout', RANDOM_DEFAULT)),
     datetime.timedelta(seconds=context.get_value('start_timeout', RANDOM_DEFAULT)),
@@ -529,6 +531,8 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   if quadrant != []:
     xscale_init = eye_config[quadrant]['x']
     yscale_init = eye_config[quadrant]['y']
+    xscale_orig = eye_config_orig[quadrant]['x']
+    yscale_orig = eye_config_orig[quadrant]['y']
     canvas = context.widget
     t = np.array([canvas.frameGeometry().width()/2,
           canvas.frameGeometry().height()/2])
@@ -546,9 +550,11 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     else:
       xscale = xscale_new
       yscale = yscale_new
-    if xscale-xscale_new < context.task_config['max_eye_change']:
+    if (xscale-xscale_init < context.task_config['max_eye_change_step'] 
+        and yscale-yscale_init < context.task_config['max_eye_change_step'] 
+        and xscale-xscale_orig < context.task_config['max_eye_change'] 
+        and yscale-yscale_orig < context.task_config['max_eye_change'] ):
       eye_config[quadrant]['x']=xscale
-    if yscale-yscale_new < context.task_config['max_eye_change']:
       eye_config[quadrant]['y']=yscale
 
 
