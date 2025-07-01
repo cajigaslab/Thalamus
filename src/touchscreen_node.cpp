@@ -67,7 +67,7 @@ public:
       return;
     } else if (_source->parent == transform.get()) {
       auto row_v = transform->key_of(*_source);
-      THALAMUS_ASSERT(row_v, "Row not found in transform");
+      THALAMUS_ASSERT(row_v.has_value(), "Row not found in transform");
       auto row = size_t(std::get<long long>(*row_v));
       auto column = size_t(std::get<long long>(k));
       auto value = std::get<double>(v);
