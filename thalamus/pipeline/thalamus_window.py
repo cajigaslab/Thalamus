@@ -388,6 +388,7 @@ FACTORIES = {
   'PUPIL': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
+    UserData(UserDataType.CHECK_BOX, 'Random Saccade', False, []),
   ]),
   'CHESSBOARD': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
