@@ -550,10 +550,10 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     else:
       xscale = xscale_new
       yscale = yscale_new
-    if (xscale-xscale_init < context.task_config['max_eye_change_step'] 
-        and yscale-yscale_init < context.task_config['max_eye_change_step'] 
-        and xscale-xscale_orig < context.task_config['max_eye_change'] 
-        and yscale-yscale_orig < context.task_config['max_eye_change'] ):
+    if (abs(xscale-xscale_init) < context.task_config['max_eye_change_step'] 
+        and abs(yscale-yscale_init) < context.task_config['max_eye_change_step'] 
+        and abs(xscale-xscale_orig) < context.task_config['max_eye_change'] 
+        and abs(yscale-yscale_orig) < context.task_config['max_eye_change'] ):
       eye_config[quadrant]['x']=xscale
       eye_config[quadrant]['y']=yscale
 
