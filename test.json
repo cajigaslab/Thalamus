@@ -440,7 +440,7 @@
       "name": "experiment",
       "type": "STORAGE2",
       "Running": true,
-      "Output File": "/mnt/sraid/Troopa_Behavior_Behave1/behave",
+      "Output File": "/mnt/sraid/Troopa_Behavior_Behave1/%y%m%d/behave",
       "Compress Analog": false,
       "Compress Video": false,
       "Sources": [],
