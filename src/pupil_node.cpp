@@ -27,6 +27,7 @@ struct PupilNode::Impl {
   boost::signals2::scoped_connection source_connection;
   ImageNode *image_source;
   bool is_running = false;
+  bool random_saccade = false;
   PupilNode *outer;
   std::chrono::nanoseconds time;
   std::thread pupil_thread;
@@ -111,10 +112,12 @@ struct PupilNode::Impl {
     BOOST_ASSERT(!error);
 
     auto start = std::chrono::steady_clock::now();
-    if (start - last_saccade > 1s) {
-      target_x = (rand() % (512 - 128)) + 64;
-      target_y = (rand() % (512 - 128)) + 64;
-      last_saccade = start;
+    if(random_saccade) {
+      if (start - last_saccade > 1s) {
+        target_x = (rand() % (512 - 128)) + 64;
+        target_y = (rand() % (512 - 128)) + 64;
+        last_saccade = start;
+      }
     }
     x += (target_x - x) / 3;
     y += (target_y - y) / 3;
@@ -156,6 +159,8 @@ struct PupilNode::Impl {
       is_running = std::get<bool>(v);
       timer.expires_after(16ms);
       timer.async_wait(std::bind(&Impl::on_timer, this, _1));
+    } else if(key_str == "Random Saccade") {
+      random_saccade = std::get<bool>(v);
     }
   }
 };

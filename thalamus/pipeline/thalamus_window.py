@@ -215,7 +215,7 @@ FACTORIES = {
     UserData(UserDataType.COMBO_BOX, 'Terminal Config', 'Default', ['Default', 'RSE', 'NRSE', 'Diff', 'Pseudo Diff']),
     UserData(UserDataType.COMBO_BOX, 'Channel Type', 'Voltage', ['Voltage', 'Current']),
     UserData(UserDataType.COMBO_BOX, 'Shunt Resistor Location', 'Default', ['Default', 'Internal', 'External']),
-    UserData(UserDataType.DOUBLE_SPINBOX, 'Shunt Resistor Ohms', '1000', []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Shunt Resistor Ohms', 1000.0, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
   ]),
   'NIDAQ_OUT': Factory(StimWidget, [
@@ -290,6 +290,7 @@ FACTORIES = {
     UserData(UserDataType.DEFAULT, 'Output File', 'test.tha', []),
     UserData(UserDataType.CHECK_BOX, 'Compress Analog', False, []),
     UserData(UserDataType.CHECK_BOX, 'Compress Video', False, []),
+    UserData(UserDataType.CHECK_BOX, 'Simple Copy', False, []),
   ]),
   'STARTER': Factory(None, [
     UserData(UserDataType.SPINBOX, 'Channel',  0, []),
@@ -388,6 +389,7 @@ FACTORIES = {
   'PUPIL': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
+    UserData(UserDataType.CHECK_BOX, 'Random Saccade', False, []),
   ]),
   'CHESSBOARD': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
@@ -449,6 +451,8 @@ class Delegate(QItemDelegate):
       return QComboBox(parent)
     elif user_data.type == UserDataType.CHECK_BOX:
       return QCheckBox(parent)
+    elif user_data.type == UserDataType.DEFAULT:
+      return QLineEdit(parent)
     elif user_data.type == UserDataType.SPINBOX:
       result = QSpinBox(parent)
       result.setRange(-1000000, 1000000)
@@ -474,10 +478,13 @@ class Delegate(QItemDelegate):
     elif user_data.type == UserDataType.CHECK_BOX:
       check_box = typing.cast(QCheckBox, editor)
       check_box.setChecked(user_data.value)
+    elif user_data.type == UserDataType.DEFAULT:
+      line_edit = typing.cast(QLineEdit, editor)
+      line_edit.setText(str(index.data()))
     elif user_data.type == UserDataType.SPINBOX:
       spin_box = typing.cast(QSpinBox, editor)
       spin_box.setValue(index.data())
-    elif user_data.type == UserDataType.SPINBOX:
+    elif user_data.type == UserDataType.DOUBLE_SPINBOX:
       double_spin_box = typing.cast(QDoubleSpinBox, editor)
       double_spin_box.setValue(index.data())
     else:
@@ -494,10 +501,13 @@ class Delegate(QItemDelegate):
     elif user_data.type == UserDataType.CHECK_BOX:
       check_box = typing.cast(QCheckBox, editor)
       model.setData(index, check_box.isChecked())
+    elif user_data.type == UserDataType.DEFAULT:
+      line_edit = typing.cast(QLineEdit, editor)
+      model.setData(index, line_edit.text())
     elif user_data.type == UserDataType.SPINBOX:
       spin_box = typing.cast(QSpinBox, editor)
       model.setData(index, spin_box.value())
-    elif user_data.type == UserDataType.SPINBOX:
+    elif user_data.type == UserDataType.DOUBLE_SPINBOX:
       double_spin_box = typing.cast(QDoubleSpinBox, editor)
       model.setData(index, double_spin_box.value())
     else:

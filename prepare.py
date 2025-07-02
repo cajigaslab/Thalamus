@@ -164,6 +164,7 @@ def main():
 
     print('make exists before:', (msys2_root / 'usr/bin/make.exe').exists())
     if not (msys2_root / 'usr/bin/make.exe').exists():
+      subprocess.check_call([str(msys2_root / 'msys2_shell.cmd'), '-here', '-use-full-path', '-no-start', '-defterm', '-c', 'pacman -Syu'])
       subprocess.check_call([str(msys2_root / 'msys2_shell.cmd'), '-here', '-use-full-path', '-no-start', '-defterm', '-c', 'pacman --noconfirm -S make diffutils binutils gcc'])
     print('make exists:', (msys2_root / 'usr/bin/make.exe').exists())
 
