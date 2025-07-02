@@ -34,6 +34,7 @@ num_circles = 7 # The last 2 circles usually end up being too large for the scre
 circle_radii = []
 rand_pos_i = 0
 trial_num = 0
+abort_count = 0
 trial_photic_count = 0
 trial_photic_success_count = 0
 reward_total_released_ms = 0
@@ -43,6 +44,8 @@ drawn_objects = []
 rand_pos = []
 gaze_success_store = []
 gaze_failure_store = []
+location_iter = None
+checkerboard_locations_pix = None
 
 WATCHING = False
 
@@ -89,6 +92,7 @@ class Converter:
 
   def deg_to_pixel_rel(self, *args) -> typing.Tuple[int, int]:
     # Convert degrees to relative pixel coordinates
+    # relative means that center of the screen is [0, 0]
     if len(args) == 1: # Handle single argument case
       if isinstance(args[0], numbers.Number):
         return args[0]/self.deg_per_pixel
@@ -142,21 +146,18 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Uniform('\u23F0 Penalty Delay', 'penalty_delay', 3000, 3000, 'ms'),
     Form.Constant('\u23F0 Max allowed single blink duration', 'blink_dur_ms', 500, 'ms'),                    
     Form.Uniform('\U0001F4A7 Reward per trial', 'reward_pertrial_ms', 10, 350, 'ms'),
-    Form.Constant('\U0001F4A7 Reward starting volume', 'reward_start_ml', 500, 'mL'),
-    Form.Constant('\U0001F4A7 Reward release rate', 'reward_rate_mlps', 1000, 'mL/s'),
-    Form.Constant('Number of checkers', 'number_of_checkers', 4, ''),
-    Form.Constant('Checker size (deg)', 'checker_size_deg', 0.5, '°'),
-    Form.Constant('Checkerboard toggle rate (Hz)', 'rate_of_checkerboard_hz', 5, 'Hz'),
-    Form.Constant('Checkerboard duty cycle (%)', 'duty_cycle_checkerboard_per', 75, '%'),
-    Form.Constant('Checkerboard step size (deg)', 'step_size_rel_deg', 1, '°'),
-    Form.Constant('Checkerboard left edge (deg)', 'left_edge_rel_deg', -5, '°'),
-    Form.Constant('Checkerboard right edge (deg)', 'right_edge_rel_deg', 25, '°'),
-    Form.Constant('Checkerboard top edge (deg)', 'top_edge_rel_deg', 25, '°'),
-    Form.Constant('Checkerboard bottom edge (deg)', 'bottom_edge_rel_deg', -25, '°'),
-    Form.Constant('Repeats per location', 'repeats_per_location', 3, ''),
-    Form.Constant('Checkerboard FPS', 'checkerboard_fps', 40, 'Hz'),
-    Form.Constant('Gaze acceptance diameter (0.1-4.0)', 'accptolerance_deg', 2, '\u00B0'), # Define the diameter in degrees of the area where gaze is accepted as being correct
-    Form.Constant('\u2300 Diameter of green feedback circle', 'diameter_of_green_feedback_circle_deg', 4, '\u00B0'), # Define the diameter in degrees of the area where gaze is accepted as being correct
+    Form.Constant('\U0001F522 Number of checkers', 'number_of_checkers', 4, ''),
+    Form.Constant('\u2195\u2194 Checker size (deg)', 'checker_size_deg', 0.5, '°'),
+    Form.Constant('\U0000231B Checkerboard toggle rate (Hz)', 'rate_of_checkerboard_hz', 5, 'Hz'),
+    Form.Constant('\U0000231B Checkerboard duty cycle (%)', 'duty_cycle_checkerboard_per', 75, '%'),
+    Form.Constant('\U0001F97E Checkerboard step size (deg)', 'step_size_rel_deg', 1, '°'),
+    Form.Constant('\U0001F5FA Checkerboard left edge (deg)', 'left_edge_rel_deg', 0, '°'),
+    Form.Constant('\U0001F5FA Checkerboard right edge (deg)', 'right_edge_rel_deg', 5, '°'),
+    Form.Constant('\U0001F5FA Checkerboard top edge (deg)', 'top_edge_rel_deg', 5, '°'),
+    Form.Constant('\U0001F5FA Checkerboard bottom edge (deg)', 'bottom_edge_rel_deg', 0, '°'),
+    Form.Constant('\U0001F522 Repeats per location', 'repeats_per_location', 3, ''),
+    Form.Constant('\U0000231B Checkerboard FPS', 'checkerboard_fps', 40, 'Hz'),
+    Form.Constant('\u25EF Radius for gaze acceptance', 'accpt_gaze_radius_deg', 2, '\u00B0'), # Define the radius in degrees of the area where gaze is accepted as being correct
     Form.Constant('\U0001F5A5 Subject\'s distance to the screen', 'monitorsubj_dist_m', .57, 'm'),
     Form.Constant('\U0001F5A5 Subject monitor\'s width', 'monitorsubj_width_m', .5283, 'm'),
     Form.Constant('\U0001F5A5 Subject monitor\'s width', 'monitorsubj_W_pix', 1920, 'pix'),
@@ -196,38 +197,35 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   reward_pertrial_ms_max_spinbox = form.findChild(QDoubleSpinBox, "reward_pertrial_ms_max")
   reward_pertrial_ms_max_spinbox.setRange(100, 500)
   reward_pertrial_ms_max_spinbox.setSingleStep(1)
-  reward_rate_mlps_spinbox = form.findChild(QDoubleSpinBox, "reward_rate_mlps")
-  reward_rate_mlps_spinbox.setRange(10, 500)
-  reward_rate_mlps_spinbox.setSingleStep(1)
-  accptolerance_deg_spinbox = form.findChild(QDoubleSpinBox, "accptolerance_deg")
-  accptolerance_deg_spinbox.setRange(.1, 60.0)
-  accptolerance_deg_spinbox.setSingleStep(0.1)
+  accpt_gaze_radius_deg_spinbox = form.findChild(QDoubleSpinBox, "accpt_gaze_radius_deg")
+  accpt_gaze_radius_deg_spinbox.setRange(.1, 60.0)
+  accpt_gaze_radius_deg_spinbox.setSingleStep(0.1)
 
   return result
 
 # === State Handlers (low-level, reusable) ===
-async def acquire_fixation_func(context, get_gaze, center, accptolerance_pix, monitorsubj_W_pix, monitorsubj_H_pix):
+async def acquire_fixation_func(context, get_gaze, center, accpt_gaze_radius_pix, monitorsubj_W_pix, monitorsubj_H_pix):
     reaquire_dur_s = 999999 # a very long duration to avoid passing ACQUIRE_FIXATION before acquiring the fixation cross
     while True:
         acquired = await wait_for(
             context,
-            lambda: QPoint.dotProduct(
+            lambda: abs(QPoint.dotProduct(
                 gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center,
                 gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center
-            ) ** .5 < accptolerance_pix,
+            )) ** .5 < accpt_gaze_radius_pix,
             timedelta(seconds=reaquire_dur_s)
         )
         if acquired:
             return
 
-async def fixate_func(context, get_gaze, center, accptolerance_pix, duration1, duration2, monitorsubj_W_pix, monitorsubj_H_pix):
+async def fixate_func(context, get_gaze, center, accpt_gaze_radius_pix, duration1, duration2, monitorsubj_W_pix, monitorsubj_H_pix):
   # Wait for the gaze to hold within the fixation window for the fix2 duration
   success = await wait_for_hold(
       context,
-      lambda: QPoint.dotProduct(
+      lambda: abs(QPoint.dotProduct(
           gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center,
           gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center
-      ) ** .5 < accptolerance_pix,
+      )) ** .5 < accpt_gaze_radius_pix,
       timedelta(seconds=duration1), # target presentation duration
       timedelta(seconds=duration2) # allowed single blink duration
   )
@@ -238,7 +236,7 @@ async def handle_acquire_fixation(
     context,
     get_gaze,
     center,
-    accptolerance_pix,
+    accpt_gaze_radius_pix,
     monitorsubj_W_pix,
     monitorsubj_H_pix
     ):
@@ -251,7 +249,7 @@ async def handle_acquire_fixation(
         context,
         get_gaze,
         center,
-        accptolerance_pix,
+        accpt_gaze_radius_pix,
         monitorsubj_W_pix,
         monitorsubj_H_pix
     )
@@ -261,7 +259,7 @@ async def handle_fixate(
     context,
     get_gaze,
     center,
-    accptolerance_pix,
+    accpt_gaze_radius_pix,
     fix_dur_to_get_reward_ms,
     blink_dur_ms,
     monitorsubj_W_pix,
@@ -273,7 +271,7 @@ async def handle_fixate(
     await context.log('BehavState=FIXATE_post-drawing')
     print(state)
     widget.update()
-    success = await fixate_func(context, get_gaze, center, accptolerance_pix, fix_dur_to_get_reward_ms, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix)
+    success = await fixate_func(context, get_gaze, center, accpt_gaze_radius_pix, fix_dur_to_get_reward_ms, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix)
     return success
 
 # === Main Task Logic ===
@@ -287,9 +285,9 @@ async def handle_fixate(
 async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-many-statements
   """Main entry point for the Gaussian delayed saccade task."""
   global converter, center, center_f, num_circles, circle_radii, rand_pos_i, \
-        trial_num, trial_photic_count, trial_photic_success_count, trial_catch_count, \
+        trial_num, abort_count, trial_photic_count, trial_photic_success_count, trial_catch_count, \
         trial_catch_success_count, drawn_objects, rand_pos, reward_total_released_ms, \
-        gaze_success_store, gaze_failure_store, \
+        gaze_success_store, gaze_failure_store, location_iter, checkerboard_locations_pix, \
         photodiode_blinking_square, photodiode_static_square, WATCHING, state
 
   # Get the task configuration
@@ -299,6 +297,43 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   monitorsubj_dist_m = config['monitorsubj_dist_m']
   monitorsubj_width_m = config['monitorsubj_width_m']
 
+  def generate_checkerboard_locations(converter, config):
+    """
+    Generate a shuffled list of (x, y) pixel offsets for checkerboard locations.
+    """
+    step_size_rel_deg = config['step_size_rel_deg']
+    left_edge_rel_deg = config['left_edge_rel_deg']
+    right_edge_rel_deg = config['right_edge_rel_deg']
+    top_edge_rel_deg = config['top_edge_rel_deg']
+    bottom_edge_rel_deg = config['bottom_edge_rel_deg']
+
+    # Convert degrees to pixels
+    step_size_rel_pix = int(converter.deg_to_pixel_rel(step_size_rel_deg))
+    left_edge_rel_pix = int(converter.deg_to_pixel_rel(left_edge_rel_deg))
+    right_edge_rel_pix = int(converter.deg_to_pixel_rel(right_edge_rel_deg))
+    top_edge_rel_pix = int(converter.deg_to_pixel_rel(top_edge_rel_deg))
+    bottom_edge_rel_pix = int(converter.deg_to_pixel_rel(bottom_edge_rel_deg))
+
+    # Robust arange for any order of endpoints
+    def arange_any_order(start, stop, step):
+        if step == 0:
+            raise ValueError("step_size_rel_pix cannot be zero")
+        if start == stop:
+            return np.array([start])
+        elif (stop - start) * step > 0:
+            # step is in the correct direction
+            return np.arange(start, stop + (1 if step > 0 else -1), step)
+        else:
+            # step is in the wrong direction, flip it
+            return np.arange(start, stop + (1 if step < 0 else -1), -step)
+
+    # Generate grid of locations
+    x_positions = arange_any_order(left_edge_rel_pix, right_edge_rel_pix, step_size_rel_pix)
+    y_positions = arange_any_order(bottom_edge_rel_pix, top_edge_rel_pix, step_size_rel_pix)
+    # Invert y so that positive is up, negative is down accounting for QT's coordinate system
+    checkerboard_location_pix = [(int(x), -int(y)) for x in x_positions for y in y_positions]
+    random.shuffle(checkerboard_location_pix)
+    return checkerboard_location_pix  
 
   if converter is None:    
     # If you turn on saving only after running >=1 trial, then 
@@ -309,6 +344,13 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     photodiode_blinking_square = QColor(255, 255, 255, 255) # Create a QColor object with white color and transparency control (i.e. alpha)
     photodiode_static_square = QColor(0, 0, 0, 255)
    
+    # Generate all checkerboard locations for this session
+    checkerboard_locations_pix = generate_checkerboard_locations(converter, config)
+    repeats_per_location = config['repeats_per_location']
+    random.shuffle(checkerboard_locations_pix)  # Shuffle all locations for the session
+
+    location_iter = iter(checkerboard_locations_pix) # Create an iterator to cycle through locations
+
     def on_change(source, action, key, value):
       if not isinstance(source, ObservableDict):
         return
@@ -373,8 +415,8 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   square_size = converter.deg_to_pixel_rel(square_size_deg)
 
   # Get variables from the config
-  accptolerance_deg = config['accptolerance_deg']
-  accptolerance_pix = converter.deg_to_pixel_rel(accptolerance_deg)
+  accpt_gaze_radius_deg = config['accpt_gaze_radius_deg']
+  accpt_gaze_radius_pix = converter.deg_to_pixel_rel(accpt_gaze_radius_deg)
   target_color_rgb = config['target_color']
   background_color = config['background_color']
   background_color_qt = QColor(background_color[0], background_color[1], background_color[2], 255)
@@ -393,9 +435,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   # Create a Gaussian gradient for the target with randomly selected luminance, orientation, size and location
   # Random selection is based on user-defined range min...max and step size
   reward_pertrial_ms = context.get_value('reward_pertrial_ms') # return a uniform random number
-  reward_rate_mlps = config['reward_rate_mlps']
-  reward_start_ml = config['reward_start_ml']
-  radius_of_green_feedback_circle_pix = converter.deg_to_pixel_rel(config['diameter_of_green_feedback_circle_deg']) / 2
+  radius_of_green_feedback_circle_pix = converter.deg_to_pixel_rel(config['accpt_gaze_radius_deg'])
 
   def draw_checkerboard(
       painter: QPainter,
@@ -418,30 +458,6 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
                   checker_size_pix,
                   color
               )
-
-  def generate_checkerboard_locations(converter, config):
-      """
-      Generate a shuffled list of (x, y) pixel offsets for checkerboard locations.
-      """
-      step_size_rel_deg = config['step_size_rel_deg']
-      left_edge_rel_deg = config['left_edge_rel_deg']
-      right_edge_rel_deg = config['right_edge_rel_deg']
-      top_edge_rel_deg = config['top_edge_rel_deg']
-      bottom_edge_rel_deg = config['bottom_edge_rel_deg']
-
-      # Convert degrees to pixels
-      step_size_rel_pix = int(converter.deg_to_pixel_rel(step_size_rel_deg))
-      left_edge_rel_pix = int(converter.deg_to_pixel_rel(left_edge_rel_deg))
-      right_edge_rel_pix = int(converter.deg_to_pixel_rel(right_edge_rel_deg))
-      top_edge_rel_pix = int(converter.deg_to_pixel_rel(top_edge_rel_deg))
-      bottom_edge_rel_pix = int(converter.deg_to_pixel_rel(bottom_edge_rel_deg))
-
-      # Generate grid of locations
-      x_positions = np.arange(left_edge_rel_pix, right_edge_rel_pix + 1, step_size_rel_pix)
-      y_positions = np.arange(bottom_edge_rel_pix, top_edge_rel_pix + 1, step_size_rel_pix)
-      checkerboard_location_pix = [(int(x), int(y)) for x in x_positions for y in y_positions]
-      random.shuffle(checkerboard_location_pix)
-      return checkerboard_location_pix  
 
   def drawText(painter, text, location: QPoint, background_color_qt: QColor):
     painter.save()  # Save the current state of the painter
@@ -467,7 +483,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   assert widget is not None
 
   # Initialize gaze position
-  gaze = QPoint(0,0)
+  gaze = QPoint(99999,99999)
   def gaze_handler(cursor: QPoint) -> None:
     nonlocal gaze
     gaze = cursor
@@ -485,16 +501,8 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
 
   start = time.perf_counter() # Get the current time
 
-  # Generate all checkerboard locations for this session
-  checkerboard_locations_pix = generate_checkerboard_locations(converter, config)
-  repeats_per_location = config['repeats_per_location']
-  random.shuffle(checkerboard_locations_pix)  # Shuffle all locations for the session
-
-  # Use an iterator to cycle through locations
-  location_iter = iter(checkerboard_locations_pix)
-
   def get_next_location():
-      nonlocal location_iter, checkerboard_locations_pix
+      global location_iter, checkerboard_locations_pix
       try:
           return next(location_iter)
       except StopIteration:
@@ -502,7 +510,9 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
           random.shuffle(checkerboard_locations_pix)
           location_iter = iter(checkerboard_locations_pix)
           return next(location_iter)
-      
+  
+  current_location = get_next_location()
+
   def renderer(painter: QPainter):
     global state
     painter.fillRect(QRect(0, 0, 4000, 4000), background_color_qt) # QColor(128, 128, 128, 255); make the background of desired color
@@ -517,22 +527,23 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     if state in (State.ACQUIRE_FIXATION, State.FIXATE):
       pen = painter.pen()
       pen.setWidth(2)
-      pen.setColor(QColor(255, 0, 0))
+      pen.setColor(QColor(30, 30, 255))
       painter.setPen(pen)
       painter.drawPath(cross)
       center_x = int(converter.screen_pixels.width / 2)
       center_y = int(converter.screen_pixels.height / 2)
 
 
-      if state == State.FIXATE: # draw green circle around the fixation cross as feedback
+      if state == State.FIXATE: 
         pen = painter.pen()
         pen.setWidth(4)
         pen.setColor(QColor(0, 255, 0))
         painter.setPen(pen)
+        # draw green circle around the fixation cross as feedback
         painter.drawEllipse(QPointF(center_x, center_y), radius_of_green_feedback_circle_pix, radius_of_green_feedback_circle_pix) # the last 2 inputs = radii of the elipse
         
-        checkerboard_x_pix = int(converter.screen_pixels.width / 2) + checkerboard_locations_pix[0][0]
-        checkerboard_y_pix = int(converter.screen_pixels.height / 2) + checkerboard_locations_pix[0][1]  
+        checkerboard_x_pix = int(center_x + current_location[0])
+        checkerboard_y_pix = int(center_y + current_location[1])
         draw_checkerboard(
             painter,
             checkerboard_x_pix,
@@ -544,7 +555,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     elif state == State.SUCCESS:
       pen = painter.pen()
       pen.setWidth(2)
-      pen.setColor(QColor(255, 0, 0))
+      pen.setColor(QColor(30, 30, 255))
       painter.setPen(pen)
       painter.drawPath(cross)
       painter.fillRect(int(widget.width() - 100), int(widget.height()-100), 100, 100, photodiode_blinking_square) # photodiode white square presentation
@@ -557,7 +568,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       painter.fillRect(QRect(0, 0, 450, 220), QColor(255, 255, 255, 255)) # background white rectangle in the OView to see text
 
       path = QPainterPath()
-      path.addEllipse(center_f, accptolerance_pix, accptolerance_pix)
+      path.addEllipse(center_f, accpt_gaze_radius_pix, accpt_gaze_radius_pix)
       painter.fillPath(path, QColor(255, 255, 255, 128))
 
       # Drawing the gaze position as a continuously moving point
@@ -567,10 +578,12 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       # Drawing text message on the operator view
       drawText(painter, str(state), QPoint(0, 30), background_color_qt) # Draw the text message
       drawText(painter, f"TRIAL_NUM={trial_num}", QPoint(0, 60), background_color_qt) # Draw the text message
-      drawText(painter, f"Reward = {round(reward_total_released_ms * reward_rate_mlps / 1000)}mL / {reward_start_ml}mL", QPoint(0, 90), background_color_qt) # Draw the text message
+      drawText(painter, f"ABORT_count = {abort_count}", QPoint(0, 90), background_color_qt)
+      drawText(painter, f"Total reward = {round(reward_total_released_ms)} ms", QPoint(0, 120), background_color_qt) # Draw the text message
       temp_gaze = gaze_valid(gaze, monitorsubj_W_pix, monitorsubj_H_pix)
       drawn_text = f"({temp_gaze.x()}, {temp_gaze.y()})"
       drawText(painter, drawn_text, temp_gaze, background_color_qt) # Draw the text message
+      drawText(painter, f"Gaze (pix): x = {temp_gaze.x()}, y = {temp_gaze.y()}", QPoint(0, 150), background_color_qt)
 
       # Drawing all previously painted gazes of failed target holding
       # for gaze_qpoint, color_rgba in gaze_failure_store:
@@ -591,14 +604,15 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   print(f"Started trial # {trial_num}") # print to console
 
   # Handles State.ACQUIRE_FIXATION
-  await handle_acquire_fixation(context, lambda: gaze, center, accptolerance_pix, monitorsubj_W_pix, monitorsubj_H_pix)
+  await handle_acquire_fixation(context, lambda: gaze, center, accpt_gaze_radius_pix, monitorsubj_W_pix, monitorsubj_H_pix)
 
   # Handles State.FIXATE
-  success = await handle_fixate(context, lambda: gaze, center, accptolerance_pix, fix_dur_to_get_reward_ms, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix, widget)
+  success = await handle_fixate(context, lambda: gaze, center, accpt_gaze_radius_pix, fix_dur_to_get_reward_ms, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix, widget)
 
   if not success:
     gaze_failure_store.append((gaze_valid(gaze, monitorsubj_W_pix, monitorsubj_H_pix), QColor(255, 69, 0, 128)))
     await context.log('TrialResult=ABORT') # saving any variables / data from code
+    abort_count += 1
     state = State.ABORT
     print(state)
     abort_sound.play()

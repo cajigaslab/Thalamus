@@ -22,7 +22,7 @@ from ..config import *
 LOGGER = logging.getLogger(__name__)
 
 shapes = ['rectangle', 'gaussian', 'square'] # Define the possible shapes
-task_groups = ['photic', 'catch'] # Define the possible task types
+task_groups = ['Delayed Saccade - Photic', 'Delayed Saccade - Catch', 'Saccade - No Delay'] # Define the possible task types
 
 # Define the framerate and frame interval for the task
 FRAMERATE = 60
@@ -168,8 +168,6 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Uniform('\u23F0 Penalty Delay', 'penalty_delay', 3000, 3000, 'ms'),
     Form.Constant('\u23F0 Max allowed single blink duration', 'blink_dur_ms', 500, 'ms'),                    
     Form.Uniform('\U0001F4A7 Reward per trial', 'reward_pertrial_ms', 10, 350, 'ms'),
-    Form.Constant('\U0001F4A7 Reward starting volume', 'reward_start_ml', 500, 'mL'),
-    Form.Constant('\U0001F4A7 Reward release rate', 'reward_rate_mlps', 1000, 'mL/s'),
     Form.Uniform('\u2194 Target width (0.1-1.0)', 'width_targ_deg', 0.1, 1, '\u00B0'),
     Form.Constant('\u2194 Target width step (0.1-1.0)', 'widthtargdeg_step', 0.1, '\u00B0'),
     Form.Uniform('\u2195 Target height (0.1-1.0)', 'height_targ_deg', 0.1, 1, '\u00B0'),
@@ -187,7 +185,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Uniform('\u2220 Polar angle range for target locations - sector #1 (0..360)', 'target_loc_angle_sector1_deg', 0, 45, '\u00B0'),
     Form.Uniform('\u2220 Polar angle range for target locations - sector #2 (0..360)', 'target_loc_angle_sector2_deg', 45, 90, '\u00B0'),
     Form.Constant('\u2220 Polar angle step around the target location circle', 'target_loc_polar_step_deg', 30,'\u00B0'),
-    Form.Constant('\u2300 Diameter of area for gaze acceptance', 'accpt_gaze_diam_deg', 4, '\u00B0'), # Define the diameter in degrees of the area where gaze is accepted as being correct
+    Form.Constant('\u25EF Radius for gaze acceptance', 'accpt_gaze_radius_deg', 2, '\u00B0'), # Define the radius in degrees of the area where gaze is accepted as being correct
     Form.Constant('\U0001F5A5 Subject\'s distance to the screen', 'monitorsubj_dist_m', .57, 'm'),
     Form.Constant('\U0001F5A5 Subject monitor\'s width', 'monitorsubj_width_m', .5283, 'm'),
     Form.Constant('\U0001F5A5 Subject monitor\'s width', 'monitorsubj_W_pix', 1920, 'pix'),
@@ -227,9 +225,6 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   reward_pertrial_ms_max_spinbox = form.findChild(QDoubleSpinBox, "reward_pertrial_ms_max")
   reward_pertrial_ms_max_spinbox.setRange(100, 500)
   reward_pertrial_ms_max_spinbox.setSingleStep(1)
-  reward_rate_mlps_spinbox = form.findChild(QDoubleSpinBox, "reward_rate_mlps")
-  reward_rate_mlps_spinbox.setRange(10, 500)
-  reward_rate_mlps_spinbox.setSingleStep(1)
   widthtargdeg_step_spinbox = form.findChild(QDoubleSpinBox, "widthtargdeg_step")
   widthtargdeg_step_spinbox.setRange(.1, 1.0)
   widthtargdeg_step_spinbox.setSingleStep(.1)
@@ -260,9 +255,9 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   target_loc_polar_step_deg_spinbox = form.findChild(QDoubleSpinBox, "target_loc_polar_step_deg")
   target_loc_polar_step_deg_spinbox.setRange(5, 180)
   target_loc_polar_step_deg_spinbox.setSingleStep(5) 
-  accpt_gaze_diam_deg_spinbox = form.findChild(QDoubleSpinBox, "accpt_gaze_diam_deg")
-  accpt_gaze_diam_deg_spinbox.setRange(.1, 60.0)
-  accpt_gaze_diam_deg_spinbox.setSingleStep(0.1)
+  accpt_gaze_radius_deg_spinbox = form.findChild(QDoubleSpinBox, "accpt_gaze_radius_deg")
+  accpt_gaze_radius_deg_spinbox.setRange(.1, 60.0)
+  accpt_gaze_radius_deg_spinbox.setSingleStep(0.1)
   luminance_targ_step_spinbox = form.findChild(QDoubleSpinBox, "luminance_targ_step")
   luminance_targ_step_spinbox.setRange(1, 100)
   luminance_targ_step_spinbox.setSingleStep(1)
@@ -293,10 +288,10 @@ async def acquire_fixation_func(context, get_gaze, center, accpt_gaze_radius_pix
     while True:
         acquired = await wait_for(
             context,
-            lambda: QPoint.dotProduct(
+            lambda: abs(QPoint.dotProduct(
                 gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center,
                 gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center
-            ) ** .5 < accpt_gaze_radius_pix,
+            )) ** .5 < accpt_gaze_radius_pix,
             timedelta(seconds=reaquire_dur_s)
         )
         if acquired:
@@ -306,10 +301,10 @@ async def fixate1_func(context, get_gaze, center, accpt_gaze_radius_pix, duratio
     while True:
         success = await wait_for_hold(
             context,
-            lambda: QPoint.dotProduct(
+            lambda: abs(QPoint.dotProduct(
                 gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center,
                 gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center
-            ) ** .5 < accpt_gaze_radius_pix,
+            )) ** .5 < accpt_gaze_radius_pix,
             timedelta(seconds=duration),
             timedelta(seconds=0) # 0sec to ensure waiting indefinitely
         )
@@ -322,10 +317,10 @@ async def present_target_func(context, get_gaze, center, accpt_gaze_radius_pix, 
   # if don't reaquire the target within blink_dur_ms, then ABORT the trial
   success = await wait_for_hold(
       context,
-      lambda: QPoint.dotProduct(
+      lambda: abs(QPoint.dotProduct(
           gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center,
           gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center
-      ) ** .5 < accpt_gaze_radius_pix,
+      )) ** .5 < accpt_gaze_radius_pix,
       timedelta(seconds=duration1), # target presentation duration
       timedelta(seconds=duration2) # allowed single blink duration
   )
@@ -335,58 +330,58 @@ async def fixate2_func(context, get_gaze, center, accpt_gaze_radius_pix, duratio
   # Wait for the gaze to hold within the fixation window for the fix2 duration
   success = await wait_for_hold(
       context,
-      lambda: QPoint.dotProduct(
+      lambda: abs(QPoint.dotProduct(
           gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center,
           gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center
-      ) ** .5 < accpt_gaze_radius_pix,
-      timedelta(seconds=duration1), # target presentation duration
+      )) ** .5 < accpt_gaze_radius_pix,
+      timedelta(seconds=duration1),
       timedelta(seconds=duration2) # allowed single blink duration
   )
   return success
 
 async def acquire_target_func(context, trial_type, get_gaze, center, targetpos_pix, accpt_gaze_radius_pix, duration1, duration2, monitorsubj_W_pix, monitorsubj_H_pix):
-  if trial_type=="photic":
+  if trial_type=="Delayed Saccade - Catch":
+    success = await wait_for_hold(
+        context,
+        lambda: abs(QPoint.dotProduct(
+            gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center,
+            gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center
+        )) ** .5 < accpt_gaze_radius_pix,
+        timedelta(seconds=duration1),
+        timedelta(seconds=duration2) # allowed single blink duration
+    )
+  else: # trial_type=="Delayed Saccade - Photic" or trial_type=="Saccade - No Delay"
     # Wait for the gaze to move to the target position within the decision timeout
     success = await wait_for(
         context,
-        lambda: QPoint.dotProduct(
+        lambda: abs(QPoint.dotProduct(
             gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - targetpos_pix,
             gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - targetpos_pix
-        ) ** .5 < accpt_gaze_radius_pix,
+        )) ** .5 < accpt_gaze_radius_pix,
         timedelta(seconds=duration1) # allowed single blink duration
-    )
-  else: # if trial_type=="catch"
-    success = await wait_for_hold(
-        context,
-        lambda: QPoint.dotProduct(
-            gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center,
-            gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center
-        ) ** .5 < accpt_gaze_radius_pix,
-        timedelta(seconds=duration1), # target presentation duration
-        timedelta(seconds=duration2) # allowed single blink duration
     )
   return success
 
 async def hold_target_func(context, trial_type, get_gaze, center, targetpos_pix, accpt_gaze_radius_pix, duration1, duration2, monitorsubj_W_pix, monitorsubj_H_pix):
-  if trial_type=="photic":
+  if trial_type=="Delayed Saccade - Catch":
+    success = await wait_for_hold(
+        context,
+        lambda: abs(QPoint.dotProduct(
+            gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center,
+            gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center
+        )) ** .5 < accpt_gaze_radius_pix,
+        timedelta(seconds=duration1),
+        timedelta(seconds=duration2) # allowed single blink duration
+    )
+  else: # trial_type=="Delayed Saccade - Photic" or trial_type=="Saccade - No Delay"
   # Wait for the gaze to hold on the target position for the fix2 timeout
     success = await wait_for_hold(
         context,
-        lambda: QPoint.dotProduct(
+        lambda: abs(QPoint.dotProduct(
             gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - targetpos_pix,
             gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - targetpos_pix
-        ) ** .5 < accpt_gaze_radius_pix,
-        timedelta(seconds=duration1), # target presentation duration
-        timedelta(seconds=duration2) # allowed single blink duration
-    )
-  else: # if trial_type=="catch"
-    success = await wait_for_hold(
-        context,
-        lambda: QPoint.dotProduct(
-            gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center,
-            gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center
-        ) ** .5 < accpt_gaze_radius_pix,
-        timedelta(seconds=duration1), # target presentation duration
+        )) ** .5 < accpt_gaze_radius_pix,
+        timedelta(seconds=duration1), # target hold duration
         timedelta(seconds=duration2) # allowed single blink duration
     )
   return success
@@ -439,6 +434,7 @@ async def handle_fixate1(
 
 async def handle_present_target(
     context,
+    trial_type,
     get_gaze,
     center,
     accpt_gaze_radius_pix,
@@ -453,11 +449,15 @@ async def handle_present_target(
     await context.log('BehavState=TARGET_PRESENTATION_post-drawing_PHOTODIODE-SQUARE')
     print(state)
     widget.update()
-    success = await present_target_func(context, get_gaze, center, accpt_gaze_radius_pix, target_present_dur, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix)
+    if trial_type == "Saccade - No Delay": # if we want to move gaze to the target without it disappearing
+      success = True # we don't need to wait for the gaze to hold on the target
+    else:
+      success = await present_target_func(context, get_gaze, center, accpt_gaze_radius_pix, target_present_dur, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix)
     return success
 
 async def handle_fixate2(
     context,
+    trial_type,
     get_gaze,
     center,
     accpt_gaze_radius_pix,
@@ -472,7 +472,10 @@ async def handle_fixate2(
     await context.log('BehavState=FIXATE2')
     print(state)
     widget.update()
-    success = await fixate2_func(context, get_gaze, center, accpt_gaze_radius_pix, fix2_duration, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix)
+    if trial_type == "Saccade - No Delay": # if we want to move gaze to the target without it disappearing
+      success = True # we don't need to wait for the gaze to hold on the target
+    else:
+      success = await fixate2_func(context, get_gaze, center, accpt_gaze_radius_pix, fix2_duration, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix)
     return success
 
 async def handle_acquire_target(
@@ -734,8 +737,8 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   square_size = converter.deg_to_pixel_rel(square_size_deg)
 
   # Get variables from the config
-  accpt_gaze_diam_deg = config['accpt_gaze_diam_deg']
-  accpt_gaze_radius_pix = converter.deg_to_pixel_rel(accpt_gaze_diam_deg / 2)
+  accpt_gaze_radius_deg = config['accpt_gaze_radius_deg']
+  accpt_gaze_radius_pix = converter.deg_to_pixel_rel(accpt_gaze_radius_deg)
   is_height_locked = config['is_height_locked']
   target_doesnt_disappear = config['target_doesnt_disappear']
   paint_all_targets = config['paint_all_targets']
@@ -745,10 +748,14 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   background_color_qt = QColor(background_color[0], background_color[1], background_color[2], 255)
   
   # Get various timeouts from the context (user GUI)
-  target_present_dur = context.get_value('target_present_dur') / 1000 # dividing by 1000x to convert from ms to s
-  decision_timeout = context.get_value('decision_timeout') / 1000
+  decision_timeout = context.get_value('decision_timeout') / 1000 # dividing by 1000x to convert from ms to s
   fix1_duration = context.get_value('fix1_duration') / 1000
-  fix2_duration = context.get_value('fix2_duration') / 1000
+  if trial_type == "Saccade - No Delay":
+    fix2_duration = 0
+    target_present_dur = 0
+  else: # trial_type == "Delayed Saccade - Photic" or "Delayed Saccade - Catch"
+    fix2_duration = context.get_value('fix2_duration') / 1000
+    target_present_dur = context.get_value('target_present_dur') / 1000
   targethold_duration = context.get_value('targethold_duration') / 1000
   penalty_delay = context.get_value('penalty_delay') / 1000
   blink_dur_ms = context.get_value('blink_dur_ms') / 1000
@@ -762,8 +769,6 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   # Create a Gaussian gradient for the target with randomly selected luminance, orientation, size and location
   # Random selection is based on user-defined range min...max and step size
   reward_pertrial_ms = context.get_value('reward_pertrial_ms') # return a uniform random number
-  reward_rate_mlps = config['reward_rate_mlps']
-  reward_start_ml = config['reward_start_ml']
   luminance_targ_per = pick_random_value(config['luminance_targ_per']['min'], config['luminance_targ_per']['max'], config['luminance_targ_step'])
   context.trial_summary_data.used_values['luminance_targ_per'] = luminance_targ_per # this command based on 'get_value()' from 'task_context.py' aalows to add values to task_config['used_values']
   orientation_targ_ran = pick_random_value(config['orientation_targ_ran']['min'], config['orientation_targ_ran']['max'], config['orientation_targ_step'])
@@ -855,7 +860,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   assert widget is not None
 
   # Initialize gaze position
-  gaze = QPoint(0,0)
+  gaze = QPoint(99999,99999)
   def gaze_handler(cursor: QPoint) -> None:
     nonlocal gaze
     gaze = cursor
@@ -936,18 +941,16 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       # await context.log('BehavState=FIXATE2_start') # saving any variables / data from code
       pen = painter.pen()
       pen.setWidth(2)
-      # pen.setColor(Qt.GlobalColor.red)
       pen.setColor(QColor(255, 0, 0))
       painter.setPen(pen)
       painter.drawPath(cross)
-      if target_doesnt_disappear: # if we want to move gaze to the target without it disappearing
+      if trial_type == "Saccade - No Delay": # if we want to move gaze to the target without it disappearing
         draw_gaussian(painter)
 
     elif state == State.TARGET_PRESENTATION:
       # await context.log('BehavState=TARGET_PRESENTATION_start') # saving any variables / data from code
       pen = painter.pen()
       pen.setWidth(2)
-      # pen.setColor(Qt.GlobalColor.red)
       pen.setColor(QColor(255, 0, 0))
       painter.setPen(pen)
       draw_gaussian(painter)
@@ -955,7 +958,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       painter.fillRect(int(widget.width() - 100), int(widget.height()-100), 100, 100, photodiode_blinking_square) # photodiode white square presentation
 
     elif state in (State.HOLD_TARGET, State.ACQUIRE_TARGET):
-      if target_doesnt_disappear: # if we want to move gaze to the target without it disappearing
+      if trial_type == "Saccade - No Delay": # if we want to move gaze to the target without it disappearing
         draw_gaussian(painter)
 
     # elif state == State.HOLD_TARGET:
@@ -987,11 +990,11 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       drawText(painter, f"TRIAL_NUM={trial_num}", QPoint(0, 60), background_color_qt) # Draw the text message
       drawText(painter, f"PHOTIC_TRIAL_SUCCESS = {trial_photic_success_count} / {trial_photic_count}", QPoint(0, 90), background_color_qt) # Draw the text message
       drawText(painter, f"CATCH_TRIAL_SUCCESS = {trial_catch_success_count} / {trial_catch_count}", QPoint(0, 120), background_color_qt) # Draw the text message
-      drawText(painter, f"Reward = {round(reward_total_released_ms * reward_rate_mlps / 1000)}mL / {reward_start_ml}mL", QPoint(0, 150), background_color_qt) # Draw the text message
+      drawText(painter, f"Total reward = {round(reward_total_released_ms)} ms", QPoint(0, 150), background_color_qt) # Draw the text message
       temp_gaze = gaze_valid(gaze, monitorsubj_W_pix, monitorsubj_H_pix)
       drawn_text = f"({temp_gaze.x()}, {temp_gaze.y()})"
       drawText(painter, drawn_text, temp_gaze, background_color_qt) # Draw the text message
-
+      drawText(painter, f"Gaze (pix): x = {temp_gaze.x()}, y = {temp_gaze.y()}", QPoint(0, 180), background_color_qt)
 
       # Drawing all previously painted gazes of failed target holding
       # for gaze_qpoint, color_rgba in gaze_failure_store:
@@ -1031,13 +1034,13 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   await handle_fixate1(context, lambda: gaze, center, accpt_gaze_radius_pix, fix1_duration, monitorsubj_W_pix, monitorsubj_H_pix, widget, converter)
 
   # Handles State.TARGET_PRESENTATION
-  success = await handle_present_target(context, lambda: gaze, center, accpt_gaze_radius_pix, target_present_dur, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix, widget)
+  success = await handle_present_target(context, trial_type, lambda: gaze, center, accpt_gaze_radius_pix, target_present_dur, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix, widget)
   
   # trial counters before the 1st "return" statement
   trial_num += 1 # Increment the trial counter
-  if trial_type == "photic":
+  if trial_type == "Delayed Saccade - Photic":
     trial_photic_count += 1 # Increment the photic trial counter
-  else:
+  elif trial_type == "Delayed Saccade - Catch":
     trial_catch_count += 1 # Increment the catch trial counter
   print(f"Started trial # {trial_num}, trial type = {trial_type}")
   await context.log(f"StartedTRIAL_NUM={trial_num}") # saving any variables / data from code
@@ -1051,7 +1054,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     return TaskResult(False)
 
   # Handles State.FIXATE2
-  success = await handle_fixate2(context, lambda: gaze, center, accpt_gaze_radius_pix, fix2_duration, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix, widget)
+  success = await handle_fixate2(context, trial_type, lambda: gaze, center, accpt_gaze_radius_pix, fix2_duration, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix, widget)
   # state = State.FIXATE2
   # await context.log('BehavState=FIXATE2') # saving any variables / data from code
   # print(state)
@@ -1110,9 +1113,9 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     sample_intervals=[1_000_000*int(reward_pertrial_ms)]) # multiplyin by 1_000_000 will give us nanoseconds (ns)
   ))
 
-  if trial_type == "photic":
+  if trial_type == "Delayed Saccade - Photic":
     trial_photic_success_count += 1
-  if trial_type == "catch":
+  if trial_type == "Delayed Saccade - Catch":
     trial_catch_success_count += 1
   # "TaskResult" is used to determine whether the trial is or is not removed from the queue
   # If TaskResult(False), the trial is not removed from the queue. If TaskResult(True), the trial is removed from the queue.
