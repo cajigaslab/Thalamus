@@ -28,8 +28,9 @@ FRAMERATE = 60
 INTERVAL = 1/FRAMERATE
 
 converter = None
-cross_pos_pix = None
-cross_pos_pix_f = None
+cross_xy_pos_pix = None
+cross_xy_pos_pix_qt = None
+cross_xy_pos_pix_qtf = None
 num_circles = 7 # The last 2 circles usually end up being too large for the screen height, hence the actual # = num_circles - 2
 circle_radii = []
 rand_pos_i = 0
@@ -80,16 +81,16 @@ class Converter:
     self.m_per_pixel = screen_width_m/screen_pixels.width
 
   def deg_to_pixel_abs(self, *args) -> typing.Tuple[int, int]:
-    # Convert degrees to absolute pixel coordinates (relative means that center of the screen is [0, 0])
+    # Convert degrees to absolute pixel coordinates (absolute means that the top-left corner of the screen is [0, 0])
     result = self.deg_to_pixel_rel(*args)
     # Coordinates are relative to the center of the screen, so add the screen center to get absolute coordinates
-    if len(result) == 2:
+    if isinstance(result, tuple) and len(result) == 2:
       return result[0] + self.screen_pixels.width/2, result[1] + self.screen_pixels.height/2,
     else:
-      return result[0] + self.screen_pixels.width/2
+      return result + self.screen_pixels.width/2
 
   def deg_to_pixel_rel(self, *args) -> typing.Tuple[int, int]:
-    # Convert degrees to relative pixel coordinates
+    # Convert degrees to relative pixel coordinates (relative means that center of the screen is [0, 0])
     if len(args) == 1: # Handle single argument case
       if isinstance(args[0], numbers.Number):
         return args[0]/self.deg_per_pixel
@@ -143,8 +144,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Uniform('\u23F0 Penalty Delay', 'penalty_delay', 3000, 3000, 'ms'),
     Form.Constant('\u23F0 Max allowed single blink duration', 'blink_dur_ms', 500, 'ms'),                 
     Form.Uniform('\U0001F4A7 Reward per trial', 'reward_pertrial_ms', 10, 350, 'ms'),
-    Form.Constant('\U0001F5FA Fixation cross\' x coordinate', 'cross_x_pix', 960, 'pix'), # center of the screen is half the width
-    Form.Constant('\U0001F5FA Fixation cross\' y coordinate', 'cross_y_pix', 540, 'pix'), # center of the screen is half the height
+    Form.Constant('\U0001F5FA Fixation cross\' x coordinate', 'cross_x_pos_deg', 0, '\u00B0'), # center of the screen is [0,0] deg
+    Form.Constant('\U0001F5FA Fixation cross\' y coordinate', 'cross_y_pos_deg', 0, '\u00B0'), # center of the screen is [0,0] deg
     Form.Constant('\u25EF Radius for gaze acceptance', 'accpt_gaze_radius_deg', 2, '\u00B0'), # Define the radius in degrees of the area where gaze is accepted as being correct
     Form.Constant('\U0001F5A5 Subject\'s distance to the screen', 'monitorsubj_dist_m', .57, 'm'),
     Form.Constant('\U0001F5A5 Subject monitor\'s width', 'monitorsubj_width_m', .5283, 'm'),
@@ -173,6 +174,12 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   layout.addWidget(form)
 
   # spinbox allows to constraint value options for above constants
+  cross_x_pos_deg_spinbox = form.findChild(QDoubleSpinBox, "cross_x_pos_deg")
+  cross_x_pos_deg_spinbox.setRange(-40, 40)
+  cross_x_pos_deg_spinbox.setSingleStep(0.1)
+  cross_y_pos_deg_spinbox = form.findChild(QDoubleSpinBox, "cross_y_pos_deg")
+  cross_y_pos_deg_spinbox.setRange(-40, 40)
+  cross_y_pos_deg_spinbox.setSingleStep(0.1)
   monitorsubj_W_pix_spinbox = form.findChild(QDoubleSpinBox, "monitorsubj_W_pix")
   monitorsubj_W_pix_spinbox.setRange(100, 4000)
   monitorsubj_W_pix_spinbox.setSingleStep(10)
@@ -192,28 +199,28 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   return result
 
 # === State Handlers (low-level, reusable) ===
-async def acquire_fixation_func(context, get_gaze, cross_pos_pix, accpt_gaze_radius_pix, monitorsubj_W_pix, monitorsubj_H_pix):
+async def acquire_fixation_func(context, get_gaze, cross_xy_pos_pix_qt, accpt_gaze_radius_pix, monitorsubj_W_pix, monitorsubj_H_pix):
     reaquire_dur_s = 999999 # a very long duration to avoid passing ACQUIRE_FIXATION before acquiring the fixation cross
 
     while True:
         acquired = await wait_for(
             context,
             lambda: abs(QPoint.dotProduct(
-                gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - cross_pos_pix,
-                gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - cross_pos_pix
+                gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - cross_xy_pos_pix_qt,
+                gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - cross_xy_pos_pix_qt
             )) ** .5 < accpt_gaze_radius_pix,
             timedelta(seconds=reaquire_dur_s)
         )
         if acquired:
             return
 
-async def fixate_func(context, get_gaze, cross_pos_pix, accpt_gaze_radius_pix, duration1, duration2, monitorsubj_W_pix, monitorsubj_H_pix):
+async def fixate_func(context, get_gaze, cross_xy_pos_pix_qt, accpt_gaze_radius_pix, duration1, duration2, monitorsubj_W_pix, monitorsubj_H_pix):
   # Wait for the gaze to hold within the fixation window for the fix2 duration
   success = await wait_for_hold(
       context,
       lambda: abs(QPoint.dotProduct(
-          gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - cross_pos_pix,
-          gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - cross_pos_pix
+          gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - cross_xy_pos_pix_qt,
+          gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - cross_xy_pos_pix_qt
       )) ** .5 < accpt_gaze_radius_pix,
       timedelta(seconds=duration1), # target presentation duration
       timedelta(seconds=duration2) # allowed single blink duration
@@ -224,7 +231,7 @@ async def fixate_func(context, get_gaze, cross_pos_pix, accpt_gaze_radius_pix, d
 async def handle_acquire_fixation(
     context,
     get_gaze,
-    cross_pos_pix,
+    cross_xy_pos_pix_qt,
     accpt_gaze_radius_pix,
     monitorsubj_W_pix,
     monitorsubj_H_pix
@@ -237,7 +244,7 @@ async def handle_acquire_fixation(
     await acquire_fixation_func(
         context,
         get_gaze,
-        cross_pos_pix,
+        cross_xy_pos_pix_qt,
         accpt_gaze_radius_pix,
         monitorsubj_W_pix,
         monitorsubj_H_pix
@@ -247,7 +254,7 @@ async def handle_acquire_fixation(
 async def handle_fixate(
     context,
     get_gaze,
-    cross_pos_pix,
+    cross_xy_pos_pix_qt,
     accpt_gaze_radius_pix,
     fix_dur_to_get_reward_ms,
     blink_dur_ms,
@@ -260,7 +267,7 @@ async def handle_fixate(
     await context.log('BehavState=FIXATE_post-drawing')
     print(state)
     widget.update()
-    success = await fixate_func(context, get_gaze, cross_pos_pix, accpt_gaze_radius_pix, fix_dur_to_get_reward_ms, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix)
+    success = await fixate_func(context, get_gaze, cross_xy_pos_pix_qt, accpt_gaze_radius_pix, fix_dur_to_get_reward_ms, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix)
     return success
 
 # === Main Task Logic ===
@@ -273,10 +280,10 @@ async def handle_fixate(
 # Define an asynchronous function to run the task with a 60 FPS animation
 async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-many-statements
   """Main entry point for the Gaussian delayed saccade task."""
-  global converter, cross_pos_pix, cross_pos_pix_f, num_circles, circle_radii, rand_pos_i, \
+  global converter, cross_xy_pos_pix_qt, cross_xy_pos_pix_qtf, num_circles, circle_radii, rand_pos_i, \
     trial_num, abort_count, trial_photic_count, trial_photic_success_count, trial_catch_count, \
     trial_catch_success_count, drawn_objects, rand_pos, reward_total_released_ms, \
-    gaze_success_store, gaze_failure_store, WATCHING, state, cross_x_pix, cross_y_pix
+    gaze_success_store, gaze_failure_store, WATCHING, state
 
   # Get the task configuration
   config = context.task_config
@@ -284,22 +291,11 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   monitorsubj_H_pix = config['monitorsubj_H_pix']
   monitorsubj_dist_m = config['monitorsubj_dist_m']
   monitorsubj_width_m = config['monitorsubj_width_m']
-  cross_x_pix = config['cross_x_pix']
-  cross_y_pix = config['cross_y_pix']
-  cross_pos_pix = QPoint(int(cross_x_pix), int(cross_y_pix))
-  cross_pos_pix_f = QPointF(float(cross_x_pix), float(cross_y_pix))
 
   if converter is None:    
     # If you turn on saving only after running >=1 trial, then 
     # converter = Converter(Size(1920, 1080), .5283, .57)
     converter = Converter(Size(monitorsubj_W_pix, monitorsubj_H_pix), monitorsubj_width_m, monitorsubj_dist_m)
-    
-    # print("xxxxxxxxxxxxxxxxxxxxxxxxxcross_pix_posxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-    # print("xxxxxxxxxxxxxxxxxxxxxxxxxcross_pix_posxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-    # print(f"cross_pos_pix = {cross_pos_pix}")
-    # print(f"cross_pos_pix_f = {cross_pos_pix_f}")
-    # print("xxxxxxxxxxxxxxxxxxxxxxxxxcross_pix_posxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-    # print("xxxxxxxxxxxxxxxxxxxxxxxxxcross_pix_posxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx") 
    
     def on_change(source, action, key, value):
       if not isinstance(source, ObservableDict):
@@ -334,16 +330,40 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   relative_path = os.path.join(current_directory, 'thalamus\\task_controller', 'success_clip.wav')
   success_sound = QSound(relative_path) 
 
+  # cross_x_pos_pix = int(converter.deg_to_pixel_abs(config['cross_x_pos_deg']))
+  # cross_y_pos_pix = int(converter.deg_to_pixel_abs(config['cross_y_pos_deg']))
+  cross_xy_pos_pix = converter.deg_to_pixel_abs((config['cross_x_pos_deg'], -config['cross_y_pos_deg']))
+  cross_xy_pos_pix_qt = QPoint(int(cross_xy_pos_pix[0]), int(cross_xy_pos_pix[1])) # Qt uses top-left as origin, so we negate y-coordinate
+  cross_xy_pos_pix_qtf = QPointF(float(cross_xy_pos_pix[0]), float(cross_xy_pos_pix[1])) # Qt uses top-left as origin, so we negate y-coordinate
+
+      
+  # print("xxxxxxxxxxxxxxxxxxxxxxxxxcross_xy_pos_pix_qtxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+  # print("xxxxxxxxxxxxxxxxxxxxxxxxxcross_xy_pos_pix_qtxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+  # print(f"cross_xy_pos_pix_qt = {[cross_xy_pos_pix_qt.x(), cross_xy_pos_pix_qt.y()]}")
+  # print(f"cross_xy_pos_pix_qtf = {[cross_xy_pos_pix_qtf.x(), cross_xy_pos_pix_qtf.y()]}")
+  # print("xxxxxxxxxxxxxxxxxxxxxxxxxcross_xy_pos_pix_qtfxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+  # print("xxxxxxxxxxxxxxxxxxxxxxxxxcross_xy_pos_pix_qtfxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx") 
+
   # Calculate half the length of the cross arms in pixels for 2 degree  
   half_cross_len_pix = converter.deg_to_pixel_rel(0.25)  # 0.25 deg each side, total 0.5 deg 
-  # Create the cross centered at (cross_pos_pix_x, cross_pos_pix_y)
+  # Create the cross centered at (cross_xy_pos_pix_qt.x(), cross_xy_pos_pix_qt.y())
   cross = QPainterPath()
-  cross.moveTo(cross_x_pix - half_cross_len_pix, cross_y_pix)
-  cross.lineTo(cross_x_pix + half_cross_len_pix, cross_y_pix)
-  cross.moveTo(cross_x_pix, cross_y_pix - half_cross_len_pix)
-  cross.lineTo(cross_x_pix, cross_y_pix + half_cross_len_pix)
+  cross.moveTo(cross_xy_pos_pix_qt.x() - half_cross_len_pix, cross_xy_pos_pix_qt.y())
+  cross.lineTo(cross_xy_pos_pix_qt.x() + half_cross_len_pix, cross_xy_pos_pix_qt.y())
+  cross.moveTo(cross_xy_pos_pix_qt.x(), cross_xy_pos_pix_qt.y() - half_cross_len_pix)
+  cross.lineTo(cross_xy_pos_pix_qt.x(), cross_xy_pos_pix_qt.y() + half_cross_len_pix)
 
   # Get variables from the config
+  # eye_scaling = config.get('eye_scaling', {})
+  # my_option_value = eye_scaling.get('My Option', False)  
+  my_option_value = config.get('eye_scaling', {}).get('My Option', False)
+  print("Config id in task:", id(context.task_config))
+  # print("xxxxxxxxxxxxxxxxxxxxxxxxxcross_xy_pos_pix_qtxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+  # print("xxxxxxxxxxxxxxxxxxxxxxxxxcross_xy_pos_pix_qtxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+  # print(f"my_option_value = {my_option_value}")
+  # print("xxxxxxxxxxxxxxxxxxxxxxxxxcross_xy_pos_pix_qtfxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+  # print("xxxxxxxxxxxxxxxxxxxxxxxxxcross_xy_pos_pix_qtfxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx") 
+
   accpt_gaze_radius_deg = config['accpt_gaze_radius_deg']
   accpt_gaze_radius_pix = converter.deg_to_pixel_rel(accpt_gaze_radius_deg)
   target_color_rgb = config['target_color']
@@ -424,8 +444,6 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       pen.setColor(QColor(30, 30, 255))
       painter.setPen(pen)
       painter.drawPath(cross)
-      cross_pos_pix_x = int(cross_x_pix)
-      cross_pos_pix_y = int(cross_y_pix)
 
 
       if state == State.FIXATE: # draw green circle around the fixation cross as feedback
@@ -433,7 +451,11 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
         pen.setWidth(4)
         pen.setColor(QColor(0, 255, 0))
         painter.setPen(pen)
-        painter.drawEllipse(QPointF(cross_pos_pix_x, cross_pos_pix_y), radius_of_green_feedback_circle_pix, radius_of_green_feedback_circle_pix) # the last 2 inputs = radii of the elipse
+        with painter.masked(RenderOutput.OPERATOR):
+          painter.drawEllipse(cross_xy_pos_pix_qtf, radius_of_green_feedback_circle_pix, radius_of_green_feedback_circle_pix) # the last 2 inputs = radii of the elipse
+        if getattr(context.widget, 'feedback_choice', False): # Controlling the drawing of feedback on the subject's screen using Operator View GUI checkbox
+          painter.drawEllipse(cross_xy_pos_pix_qtf, radius_of_green_feedback_circle_pix, radius_of_green_feedback_circle_pix) # the last 2 inputs = radii of the elipse
+
     elif state == State.SUCCESS:
       pen = painter.pen()
       pen.setWidth(2)
@@ -449,7 +471,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       painter.fillRect(QRect(0, 0, 450, 220), QColor(255, 255, 255, 255)) # background white rectangle in the OView to see text
 
       path = QPainterPath()
-      path.addEllipse(cross_pos_pix_f, accpt_gaze_radius_pix, accpt_gaze_radius_pix)
+      path.addEllipse(cross_xy_pos_pix_qtf, accpt_gaze_radius_pix, accpt_gaze_radius_pix)
       painter.fillPath(path, QColor(255, 255, 255, 128))
 
       # Drawing the gaze position as a continuously moving point
@@ -485,10 +507,10 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   print(f"Started trial # {trial_num}") # print to console
 
   # Handles State.ACQUIRE_FIXATION
-  await handle_acquire_fixation(context, lambda: gaze, cross_pos_pix, accpt_gaze_radius_pix, monitorsubj_W_pix, monitorsubj_H_pix)
+  await handle_acquire_fixation(context, lambda: gaze, cross_xy_pos_pix_qt, accpt_gaze_radius_pix, monitorsubj_W_pix, monitorsubj_H_pix)
 
   # Handles State.FIXATE
-  success = await handle_fixate(context, lambda: gaze, cross_pos_pix, accpt_gaze_radius_pix, fix_dur_to_get_reward_ms, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix, widget)
+  success = await handle_fixate(context, lambda: gaze, cross_xy_pos_pix_qt, accpt_gaze_radius_pix, fix_dur_to_get_reward_ms, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix, widget)
 
   # print("xxxxxxxxxxxxxxxxxxxxxxxxxaccpt_gaze_radius_pixxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
   # print("xxxxxxxxxxxxxxxxxxxxxxxxxaccpt_gaze_radius_pixxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")

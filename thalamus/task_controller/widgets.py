@@ -216,7 +216,7 @@ class Form(QWidget):
     min_spin_box.setDecimals(config.precision)
     min_spin_box.setObjectName(f'{config.field}')
     min_spin_box.setKeyboardTracking(False)
-    min_spin_box.setRange(0, 1000000)
+    min_spin_box.setRange(-1000000, 1000000)
     min_spin_box.setSuffix(config.suffix)
     min_spin_box.setValue(self.config[config.field])
     self.grid_layout.addWidget(min_spin_box, self.row, 1, 1, 2)

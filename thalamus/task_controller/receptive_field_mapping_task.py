@@ -82,7 +82,7 @@ class Converter:
     self.m_per_pixel = screen_width_m/screen_pixels.width
 
   def deg_to_pixel_abs(self, *args) -> typing.Tuple[int, int]:
-    # Convert degrees to absolute pixel coordinates (relative means that center of the screen is [0, 0])
+    # Convert degrees to absolute pixel coordinates (absolute means that the top-left corner of the screen is [0, 0])
     result = self.deg_to_pixel_rel(*args)
     # Coordinates are relative to the center of the screen, so add the screen center to get absolute coordinates
     if len(result) == 2:
@@ -91,8 +91,7 @@ class Converter:
       return result[0] + self.screen_pixels.width/2
 
   def deg_to_pixel_rel(self, *args) -> typing.Tuple[int, int]:
-    # Convert degrees to relative pixel coordinates
-    # relative means that center of the screen is [0, 0]
+    # Convert degrees to relative pixel coordinates (relative means that center of the screen is [0, 0])
     if len(args) == 1: # Handle single argument case
       if isinstance(args[0], numbers.Number):
         return args[0]/self.deg_per_pixel
@@ -146,6 +145,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Uniform('\u23F0 Penalty Delay', 'penalty_delay', 3000, 3000, 'ms'),
     Form.Constant('\u23F0 Max allowed single blink duration', 'blink_dur_ms', 500, 'ms'),                    
     Form.Uniform('\U0001F4A7 Reward per trial', 'reward_pertrial_ms', 10, 350, 'ms'),
+    Form.Constant('\U0001F5FA Fixation cross\' x coordinate', 'cross_x_pos_deg', 0, '\u00B0'), # center of the screen is [0,0] deg
+    Form.Constant('\U0001F5FA Fixation cross\' y coordinate', 'cross_y_pos_deg', 0, '\u00B0'), # center of the screen is [0,0] deg
     Form.Constant('\U0001F522 Number of checkers', 'number_of_checkers', 4, ''),
     Form.Constant('\u2195\u2194 Checker size (deg)', 'checker_size_deg', 0.5, '°'),
     Form.Constant('\U0000231B Checkerboard toggle rate (Hz)', 'rate_of_checkerboard_hz', 5, 'Hz'),
@@ -156,7 +157,6 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Constant('\U0001F5FA Checkerboard top edge (deg)', 'top_edge_rel_deg', 5, '°'),
     Form.Constant('\U0001F5FA Checkerboard bottom edge (deg)', 'bottom_edge_rel_deg', 0, '°'),
     Form.Constant('\U0001F522 Repeats per location', 'repeats_per_location', 3, ''),
-    Form.Constant('\U0000231B Checkerboard FPS', 'checkerboard_fps', 40, 'Hz'),
     Form.Constant('\u25EF Radius for gaze acceptance', 'accpt_gaze_radius_deg', 2, '\u00B0'), # Define the radius in degrees of the area where gaze is accepted as being correct
     Form.Constant('\U0001F5A5 Subject\'s distance to the screen', 'monitorsubj_dist_m', .57, 'm'),
     Form.Constant('\U0001F5A5 Subject monitor\'s width', 'monitorsubj_width_m', .5283, 'm'),
@@ -185,6 +185,12 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   layout.addWidget(form)
 
   # spinbox allows to constraint value options for above constants
+  cross_x_pos_deg_spinbox = form.findChild(QDoubleSpinBox, "cross_x_pos_deg")
+  cross_x_pos_deg_spinbox.setRange(-40, 40)
+  cross_x_pos_deg_spinbox.setSingleStep(0.1)
+  cross_y_pos_deg_spinbox = form.findChild(QDoubleSpinBox, "cross_y_pos_deg")
+  cross_y_pos_deg_spinbox.setRange(-40, 40)
+  cross_y_pos_deg_spinbox.setSingleStep(0.1)  
   monitorsubj_W_pix_spinbox = form.findChild(QDoubleSpinBox, "monitorsubj_W_pix")
   monitorsubj_W_pix_spinbox.setRange(100, 4000)
   monitorsubj_W_pix_spinbox.setSingleStep(10)
@@ -192,10 +198,10 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   monitorsubj_H_pix_spinbox.setRange(100, 4000)
   monitorsubj_H_pix_spinbox.setSingleStep(10)
   reward_pertrial_ms_min_spinbox = form.findChild(QDoubleSpinBox, "reward_pertrial_ms_min")
-  reward_pertrial_ms_min_spinbox.setRange(10, 500)
+  reward_pertrial_ms_min_spinbox.setRange(0, 500)
   reward_pertrial_ms_min_spinbox.setSingleStep(1)
   reward_pertrial_ms_max_spinbox = form.findChild(QDoubleSpinBox, "reward_pertrial_ms_max")
-  reward_pertrial_ms_max_spinbox.setRange(100, 500)
+  reward_pertrial_ms_max_spinbox.setRange(0, 500)
   reward_pertrial_ms_max_spinbox.setSingleStep(1)
   accpt_gaze_radius_deg_spinbox = form.findChild(QDoubleSpinBox, "accpt_gaze_radius_deg")
   accpt_gaze_radius_deg_spinbox.setRange(.1, 60.0)
@@ -382,8 +388,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   number_of_checkers = config['number_of_checkers']
   checker_size_deg = config['checker_size_deg']
   checker_size_pix = int(converter.deg_to_pixel_rel(checker_size_deg))
-  center_x = int(converter.screen_pixels.width / 2)
-  center_y = int(converter.screen_pixels.height / 2)
+
 
   # Load the sounds for failure, abort, and success
   current_directory = os.getcwd() # Get the current working directory
@@ -396,19 +401,18 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   relative_path = os.path.join(current_directory, 'thalamus\\task_controller', 'success_clip.wav')
   success_sound = QSound(relative_path) 
 
-  # Define the vertices for the fixation cross in degrees
-  vertices_deg = [ 
-      (-0.25, 0), (0.25, 0),  # Horizontal line
-      (0, -0.25), (0, 0.25)  # Vertical line
-  ]
-  # Convert the vertices from degrees to pixels
-  vertices = [converter.deg_to_pixel_abs(p) for p in vertices_deg]
-  # Create a QPainterPath for the fixation cross
+  cross_xy_pos_pix = converter.deg_to_pixel_abs((config['cross_x_pos_deg'], -config['cross_y_pos_deg']))
+  cross_xy_pos_pix_qt = QPoint(int(cross_xy_pos_pix[0]), int(cross_xy_pos_pix[1])) # Qt uses top-left as origin, so we negate y-coordinate
+  cross_xy_pos_pix_qtf = QPointF(float(cross_xy_pos_pix[0]), float(cross_xy_pos_pix[1])) # Qt uses top-left as origin, so we negate y-coordinate
+
+  # Calculate half the length of the cross arms in pixels for 2 degree  
+  half_cross_len_pix = converter.deg_to_pixel_rel(0.25)  # 0.25 deg each side, total 0.5 deg 
+  # Create the cross centered at (cross_xy_pos_pix_qt.x(), cross_xy_pos_pix_qt.y())
   cross = QPainterPath()
-  cross.moveTo(vertices[0][0], vertices[0][1])
-  cross.lineTo(vertices[1][0], vertices[1][1])
-  cross.moveTo(vertices[2][0], vertices[2][1])
-  cross.lineTo(vertices[3][0], vertices[3][1])
+  cross.moveTo(cross_xy_pos_pix_qt.x() - half_cross_len_pix, cross_xy_pos_pix_qt.y())
+  cross.lineTo(cross_xy_pos_pix_qt.x() + half_cross_len_pix, cross_xy_pos_pix_qt.y())
+  cross.moveTo(cross_xy_pos_pix_qt.x(), cross_xy_pos_pix_qt.y() - half_cross_len_pix)
+  cross.lineTo(cross_xy_pos_pix_qt.x(), cross_xy_pos_pix_qt.y() + half_cross_len_pix)
   
   # Define the size of the square in degrees and convert to pixels
   square_size_deg = .5
@@ -540,7 +544,8 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
         pen.setColor(QColor(0, 255, 0))
         painter.setPen(pen)
         # draw green circle around the fixation cross as feedback
-        painter.drawEllipse(QPointF(center_x, center_y), radius_of_green_feedback_circle_pix, radius_of_green_feedback_circle_pix) # the last 2 inputs = radii of the elipse
+        with painter.masked(RenderOutput.OPERATOR):
+          painter.drawEllipse(QPointF(center_x, center_y), radius_of_green_feedback_circle_pix, radius_of_green_feedback_circle_pix) # the last 2 inputs = radii of the elipse
         
         checkerboard_x_pix = int(center_x + current_location[0])
         checkerboard_y_pix = int(center_y + current_location[1])

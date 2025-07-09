@@ -22,7 +22,7 @@ from ..config import *
 LOGGER = logging.getLogger(__name__)
 
 shapes = ['rectangle', 'gaussian', 'square'] # Define the possible shapes
-task_groups = ['Delayed Saccade - Photic', 'Delayed Saccade - Catch', 'Saccade - No Delay'] # Define the possible task types
+task_groups = ['Saccade - With Delay', 'Saccade - No Delay'] # Define the possible task groups
 
 # Define the framerate and frame interval for the task
 FRAMERATE = 60
@@ -34,8 +34,8 @@ center_f = None
 circle_radii = []
 rand_pos_i = 0
 trial_num = 0
-trial_photic_count = 0
-trial_photic_success_count = 0
+trial_saccade_count = 0
+trial_saccade_success_count = 0
 reward_total_released_ms = 0
 trial_catch_count = 0
 trial_catch_success_count = 0
@@ -95,7 +95,7 @@ class Converter:
     self.m_per_pixel = screen_width_m/screen_pixels.width
 
   def deg_to_pixel_abs(self, *args) -> typing.Tuple[int, int]:
-    # Convert degrees to absolute pixel coordinates (relative means that center of the screen is [0, 0])
+    # Convert degrees to absolute pixel coordinates (absolute means that the top-left corner of the screen is [0, 0])
     result = self.deg_to_pixel_rel(*args)
     # Coordinates are relative to the center of the screen, so add the screen center to get absolute coordinates
     if len(result) == 2:
@@ -104,7 +104,7 @@ class Converter:
       return result[0] + self.screen_pixels.width/2
 
   def deg_to_pixel_rel(self, *args) -> typing.Tuple[int, int]:
-    # Convert degrees to relative pixel coordinates
+    # Convert degrees to relative pixel coordinates (relative means that center of the screen is [0, 0])
     if len(args) == 1: # Handle single argument case
       if isinstance(args[0], numbers.Number):
         return args[0]/self.deg_per_pixel
@@ -159,7 +159,6 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   """
   form = Form.build(task_config, ["Name:", "Min:", "Max:"],
     Form.Choice('Task group', 'task_group', list(zip(task_groups, task_groups))),                
-    Form.Bool('\u2728 Display target during saccade?', 'target_doesnt_disappear', False),
     Form.Uniform('\u23F0 Fixation Duration 1', 'fix1_duration', 1000, 2000, 'ms'),
     Form.Uniform('\u23F0 Target Presentation Duration', 'target_present_dur', 2000, 4000, 'ms'), 
     Form.Uniform('\u23F0 Fixation Duration 2', 'fix2_duration', 1000, 2000, 'ms'),
@@ -168,21 +167,22 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Uniform('\u23F0 Penalty Delay', 'penalty_delay', 3000, 3000, 'ms'),
     Form.Constant('\u23F0 Max allowed single blink duration', 'blink_dur_ms', 500, 'ms'),                    
     Form.Uniform('\U0001F4A7 Reward per trial', 'reward_pertrial_ms', 10, 350, 'ms'),
-    Form.Uniform('\u2194 Target width (0.1-1.0)', 'width_targ_deg', 0.1, 1, '\u00B0'),
-    Form.Constant('\u2194 Target width step (0.1-1.0)', 'widthtargdeg_step', 0.1, '\u00B0'),
-    Form.Uniform('\u2195 Target height (0.1-1.0)', 'height_targ_deg', 0.1, 1, '\u00B0'),
-    Form.Constant('\u2195 Target height step (0.1-1.0)', 'heighttargdeg_step', 0.1, '\u00B0'),
+    Form.Constant('\U0001F3A3 Rate of catch trials', 'catch_trial_rate', 0.50),
+    Form.Uniform('\u2194 Target width', 'width_targ_deg', 1, 2, '\u00B0'),
+    Form.Constant('\u2194 Target width step', 'widthtargdeg_step', 0.1, '\u00B0'),
+    Form.Uniform('\u2195 Target height', 'height_targ_deg', 1, 2, '\u00B0'),
+    Form.Constant('\u2195 Target height step', 'heighttargdeg_step', 0.1, '\u00B0'),
     Form.Bool('\u2194\u2195 Lock Height to Width?', 'is_height_locked', False),
     Form.Bool('Paint location grid and accumulated targets?', 'paint_all_targets', False),
     Form.Uniform('\U0001F9ED Target orientation (0-150)', 'orientation_targ_ran', 0, 150, '\u00B0'),
     Form.Constant('\U0001F9ED Target orientation step size (0-150)', 'orientation_targ_step', 30, '\u00B0'),
-    Form.Uniform('\U0001F526 Target luminence (0-100)', 'luminance_targ_per', 10, 100,'%'),
+    Form.Uniform('\U0001F526 Target luminence (0-100)', 'luminance_targ_per', 90, 100,'%'),
     Form.Constant('\U0001F526 Target luminence step size (0-100)', 'luminance_targ_step', 10,'%'),
     # For LG24GQ50B-B with height of 1080 pix and at 0.57 m distance conversion factor of 0.0259 deg/pix, 
     # the largest diameter of the screen area to display targets is int(1080 pix * 0.0259 deg/pix) = 27 deg
-    Form.Uniform('\u2220 Min/Max ccentricity range for target locations', 'target_loc_eccentricity_deg', 1, 2, '\u00B0'),
+    Form.Uniform('\u2220 Min/Max ccentricity range for target locations', 'target_loc_eccentricity_deg', 2, 12, '\u00B0'),
     Form.Constant('Number of eccentricity steps for target locations', 'target_loc_eccentric_circle_num', 10),
-    Form.Uniform('\u2220 Polar angle range for target locations - sector #1 (0..360)', 'target_loc_angle_sector1_deg', 0, 45, '\u00B0'),
+    Form.Uniform('\u2220 Polar angle range for target locations - sector #1 (0..360)', 'target_loc_angle_sector1_deg', 0, 360, '\u00B0'),
     Form.Uniform('\u2220 Polar angle range for target locations - sector #2 (0..360)', 'target_loc_angle_sector2_deg', 45, 90, '\u00B0'),
     Form.Constant('\u2220 Polar angle step around the target location circle', 'target_loc_polar_step_deg', 30,'\u00B0'),
     Form.Constant('\u25EF Radius for gaze acceptance', 'accpt_gaze_radius_deg', 2, '\u00B0'), # Define the radius in degrees of the area where gaze is accepted as being correct
@@ -340,7 +340,7 @@ async def fixate2_func(context, get_gaze, center, accpt_gaze_radius_pix, duratio
   return success
 
 async def acquire_target_func(context, trial_type, get_gaze, center, targetpos_pix, accpt_gaze_radius_pix, duration1, duration2, monitorsubj_W_pix, monitorsubj_H_pix):
-  if trial_type=="Delayed Saccade - Catch":
+  if trial_type=="catch_trial": # With Delay or No Delay
     success = await wait_for_hold(
         context,
         lambda: abs(QPoint.dotProduct(
@@ -350,7 +350,7 @@ async def acquire_target_func(context, trial_type, get_gaze, center, targetpos_p
         timedelta(seconds=duration1),
         timedelta(seconds=duration2) # allowed single blink duration
     )
-  else: # trial_type=="Delayed Saccade - Photic" or trial_type=="Saccade - No Delay"
+  else: # trial_type=="saccade_trial" With Delay or No Delay
     # Wait for the gaze to move to the target position within the decision timeout
     success = await wait_for(
         context,
@@ -363,7 +363,7 @@ async def acquire_target_func(context, trial_type, get_gaze, center, targetpos_p
   return success
 
 async def hold_target_func(context, trial_type, get_gaze, center, targetpos_pix, accpt_gaze_radius_pix, duration1, duration2, monitorsubj_W_pix, monitorsubj_H_pix):
-  if trial_type=="Delayed Saccade - Catch":
+  if trial_type=="catch_trial": # With Delay or No Delay
     success = await wait_for_hold(
         context,
         lambda: abs(QPoint.dotProduct(
@@ -373,7 +373,7 @@ async def hold_target_func(context, trial_type, get_gaze, center, targetpos_pix,
         timedelta(seconds=duration1),
         timedelta(seconds=duration2) # allowed single blink duration
     )
-  else: # trial_type=="Delayed Saccade - Photic" or trial_type=="Saccade - No Delay"
+  else: # trial_type=="saccade_trial" With Delay or No Delay
   # Wait for the gaze to hold on the target position for the fix2 timeout
     success = await wait_for_hold(
         context,
@@ -434,7 +434,7 @@ async def handle_fixate1(
 
 async def handle_present_target(
     context,
-    trial_type,
+    task_group,
     get_gaze,
     center,
     accpt_gaze_radius_pix,
@@ -449,15 +449,15 @@ async def handle_present_target(
     await context.log('BehavState=TARGET_PRESENTATION_post-drawing_PHOTODIODE-SQUARE')
     print(state)
     widget.update()
-    if trial_type == "Saccade - No Delay": # if we want to move gaze to the target without it disappearing
+    if task_group == "Saccade - No Delay": # if we want to move gaze to the target without it disappearing
       success = True # we don't need to wait for the gaze to hold on the target
-    else:
+    else: # task_group == "Saccade - With Delay"
       success = await present_target_func(context, get_gaze, center, accpt_gaze_radius_pix, target_present_dur, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix)
     return success
 
 async def handle_fixate2(
     context,
-    trial_type,
+    task_group,
     get_gaze,
     center,
     accpt_gaze_radius_pix,
@@ -472,9 +472,9 @@ async def handle_fixate2(
     await context.log('BehavState=FIXATE2')
     print(state)
     widget.update()
-    if trial_type == "Saccade - No Delay": # if we want to move gaze to the target without it disappearing
+    if task_group == "Saccade - No Delay": # if we want to move gaze to the target without it disappearing
       success = True # we don't need to wait for the gaze to hold on the target
-    else:
+    else: # task_group == "Saccade - With Delay"
       success = await fixate2_func(context, get_gaze, center, accpt_gaze_radius_pix, fix2_duration, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix)
     return success
 
@@ -538,8 +538,8 @@ async def handle_hold_target(
 # Define an asynchronous function to run the task with a 60 FPS animation
 async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-many-statements
   """Main entry point for the Gaussian delayed saccade task."""
-  global converter, center, center_f, circle_radii, rand_pos_i, \
-    trial_num, trial_photic_count, trial_photic_success_count, trial_catch_count, \
+  global converter, center, center_f, circle_radii, rand_pos_i, task_group, \
+    trial_num, trial_saccade_count, trial_saccade_success_count, trial_catch_count, \
     trial_catch_success_count, drawn_objects, rand_pos, reward_total_released_ms, \
     gaze_success_store, gaze_failure_store, failure_sound, abort_sound, success_sound, \
     photodiode_blinking_square, photodiode_static_square, WATCHING, state, \
@@ -740,20 +740,23 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   accpt_gaze_radius_deg = config['accpt_gaze_radius_deg']
   accpt_gaze_radius_pix = converter.deg_to_pixel_rel(accpt_gaze_radius_deg)
   is_height_locked = config['is_height_locked']
-  target_doesnt_disappear = config['target_doesnt_disappear']
   paint_all_targets = config['paint_all_targets']
   target_color_rgb = config['target_color']
   background_color = config['background_color']
-  trial_type = config['task_group']
   background_color_qt = QColor(background_color[0], background_color[1], background_color[2], 255)
+  task_group = config['task_group']
+  if random.random() < config['catch_trial_rate'] :
+    trial_type = "catch_trial"
+  else:
+    trial_type = "saccade_trial"
   
   # Get various timeouts from the context (user GUI)
   decision_timeout = context.get_value('decision_timeout') / 1000 # dividing by 1000x to convert from ms to s
   fix1_duration = context.get_value('fix1_duration') / 1000
-  if trial_type == "Saccade - No Delay":
+  if task_group == "Saccade - No Delay": # catch_trial or saccade_trial without delay
     fix2_duration = 0
     target_present_dur = 0
-  else: # trial_type == "Delayed Saccade - Photic" or "Delayed Saccade - Catch"
+  else: # task_group == "Saccade - With Delay" catch_trial or saccade_trial with delay
     fix2_duration = context.get_value('fix2_duration') / 1000
     target_present_dur = context.get_value('target_present_dur') / 1000
   targethold_duration = context.get_value('targethold_duration') / 1000
@@ -884,7 +887,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     painter.fillRect(QRect(0, 0, 4000, 4000), background_color_qt) # QColor(128, 128, 128, 255); make the background of desired color
     painter.fillRect(int(widget.width() - 150), int(widget.height() - 150), 150, 150, photodiode_static_square) # background small square bottom-right
 
-    # Clearing Operator View canvas
+    # Clearing Operator View canvas using button in the Operator View
     if getattr(context.widget, 'do_clear', False):
       # print('DO CLEAR')
       gaze_failure_store.clear()
@@ -902,7 +905,6 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       # pen.setColor(Qt.GlobalColor.red)
       pen.setColor(QColor(255, 0, 0))
       painter.setPen(pen)
-      # draw_gaussian(painter)
       painter.drawPath(cross)
       
       if paint_all_targets:
@@ -944,7 +946,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       pen.setColor(QColor(255, 0, 0))
       painter.setPen(pen)
       painter.drawPath(cross)
-      if trial_type == "Saccade - No Delay": # if we want to move gaze to the target without it disappearing
+      if task_group == "Saccade - No Delay" and trial_type == "saccade_trial": # if we want to move gaze to the target without it disappearing
         draw_gaussian(painter)
 
     elif state == State.TARGET_PRESENTATION:
@@ -953,12 +955,13 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       pen.setWidth(2)
       pen.setColor(QColor(255, 0, 0))
       painter.setPen(pen)
-      draw_gaussian(painter)
       painter.drawPath(cross)
-      painter.fillRect(int(widget.width() - 100), int(widget.height()-100), 100, 100, photodiode_blinking_square) # photodiode white square presentation
+      if trial_type == "saccade_trial":
+        draw_gaussian(painter)
+        painter.fillRect(int(widget.width() - 100), int(widget.height()-100), 100, 100, photodiode_blinking_square) # photodiode white square presentation
 
     elif state in (State.HOLD_TARGET, State.ACQUIRE_TARGET):
-      if trial_type == "Saccade - No Delay": # if we want to move gaze to the target without it disappearing
+      if task_group == "Saccade - No Delay" and trial_type == "saccade_trial": # if we want to move gaze to the target without it disappearing
         draw_gaussian(painter)
 
     # elif state == State.HOLD_TARGET:
@@ -969,7 +972,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       # A feature of the operator view is that you can draw stuff only for the operator into it. Anything in this 
       # with painter.masked(RenderOutput.OPERATOR) block will only appear in the operator view.
       
-      painter.fillRect(QRect(0, 0, 450, 220), QColor(255, 255, 255, 255)) # background white rectangle in the OView to see text
+      painter.fillRect(QRect(0, 0, 465, 230), QColor(255, 255, 255, 255)) # background white rectangle in the OView to see text
 
       path = QPainterPath()
       path.addEllipse(targetpos_f, accpt_gaze_radius_pix, accpt_gaze_radius_pix)
@@ -986,15 +989,16 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       # drawText(painter, "(0, 0)", QPoint(0, 0)) # Draw the text message
       # temp_calc = lambda: QPoint.dotProduct(gaze - center, gaze - center)**.5 < accpt_gaze_radius_pix
       # drawn_text = f"(Diff={temp_calc()}, acpt={QPoint.dotProduct(gaze - center, gaze - center)**.5})"
-      drawText(painter, str(state), QPoint(0, 30), background_color_qt) # Draw the text message
-      drawText(painter, f"TRIAL_NUM={trial_num}", QPoint(0, 60), background_color_qt) # Draw the text message
-      drawText(painter, f"PHOTIC_TRIAL_SUCCESS = {trial_photic_success_count} / {trial_photic_count}", QPoint(0, 90), background_color_qt) # Draw the text message
-      drawText(painter, f"CATCH_TRIAL_SUCCESS = {trial_catch_success_count} / {trial_catch_count}", QPoint(0, 120), background_color_qt) # Draw the text message
-      drawText(painter, f"Total reward = {round(reward_total_released_ms)} ms", QPoint(0, 150), background_color_qt) # Draw the text message
+      drawText(painter, f"trial_type={trial_type}", QPoint(0, 10), background_color_qt) # Draw the text message
+      drawText(painter, str(state), QPoint(0, 40), background_color_qt) # Draw the text message
+      drawText(painter, f"TRIAL_NUM={trial_num}", QPoint(0, 70), background_color_qt) # Draw the text message
+      drawText(painter, f"SACCADE_TRIAL_SUCCESS = {trial_saccade_success_count} / {trial_saccade_count}", QPoint(0, 100), background_color_qt) # Draw the text message
+      drawText(painter, f"CATCH_TRIAL_SUCCESS = {trial_catch_success_count} / {trial_catch_count}", QPoint(0, 130), background_color_qt) # Draw the text message
+      drawText(painter, f"Total reward = {round(reward_total_released_ms)} ms", QPoint(0, 160), background_color_qt) # Draw the text message
       temp_gaze = gaze_valid(gaze, monitorsubj_W_pix, monitorsubj_H_pix)
       drawn_text = f"({temp_gaze.x()}, {temp_gaze.y()})"
       drawText(painter, drawn_text, temp_gaze, background_color_qt) # Draw the text message
-      drawText(painter, f"Gaze (pix): x = {temp_gaze.x()}, y = {temp_gaze.y()}", QPoint(0, 180), background_color_qt)
+      drawText(painter, f"Gaze (pix): x = {temp_gaze.x()}, y = {temp_gaze.y()}", QPoint(0, 190), background_color_qt)
 
       # Drawing all previously painted gazes of failed target holding
       # for gaze_qpoint, color_rgba in gaze_failure_store:
@@ -1010,21 +1014,21 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   await context.log(json.dumps(context.config)) 
 
   # Plotting of variables using Thalamus' pipeline QT plots
-  if trial_photic_count == 0: # to avoid division by 0 error
-    photic_success_rate = 0
+  if trial_saccade_count == 0: # to avoid division by 0 error
+    saccade_trial_success_rate = 0
   else:
-    photic_success_rate = trial_photic_success_count/trial_photic_count*100
+    saccade_trial_success_rate = trial_saccade_success_count/trial_saccade_count*100
   if trial_catch_count == 0: # to avoid division by 0 error
     catch_success_rate = 0
   else:
     catch_success_rate = trial_catch_success_count/trial_catch_count*100
   create_task_with_exc_handling(context.inject_analog('performance', AnalogResponse(
-    data = [float(trial_num), photic_success_rate, catch_success_rate],
-    spans=[Span(begin=0, end=1, name='Trial Number'), Span(begin=1, end=2, name='Photic trial success rate (%)'), \
+    data = [float(trial_num), saccade_trial_success_rate, catch_success_rate],
+    spans=[Span(begin=0, end=1, name='Trial Number'), Span(begin=1, end=2, name='Saccade trial success rate (%)'), \
             Span(begin=2, end=3, name='Catch trial success rate (%)')], sample_intervals=[0, 0, 0]
   )))
-  await context.log(f"TRIAL_NUM={trial_num}, PHOTIC_TRIAL_SUCCESS_COUNT={trial_photic_success_count}, \
-                    PHOTIC_TRIAL_NUM={trial_photic_count}, CATCH_TRIAL_SUCCESS_COUNT={trial_catch_success_count}, \
+  await context.log(f"TRIAL_NUM={trial_num}, SACCADE_TRIAL_SUCCESS_COUNT={trial_saccade_success_count}, \
+                    SACCADE_TRIAL_NUM={trial_saccade_count}, CATCH_TRIAL_SUCCESS_COUNT={trial_catch_success_count}, \
                     CATCH_TRIAL_NUM={trial_catch_count}") # saving any variables / data from code
 
   # Handles State.ACQUIRE_FIXATION
@@ -1034,14 +1038,14 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   await handle_fixate1(context, lambda: gaze, center, accpt_gaze_radius_pix, fix1_duration, monitorsubj_W_pix, monitorsubj_H_pix, widget, converter)
 
   # Handles State.TARGET_PRESENTATION
-  success = await handle_present_target(context, trial_type, lambda: gaze, center, accpt_gaze_radius_pix, target_present_dur, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix, widget)
+  success = await handle_present_target(context, task_group, lambda: gaze, center, accpt_gaze_radius_pix, target_present_dur, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix, widget)
   
   # trial counters before the 1st "return" statement
   trial_num += 1 # Increment the trial counter
-  if trial_type == "Delayed Saccade - Photic":
-    trial_photic_count += 1 # Increment the photic trial counter
-  elif trial_type == "Delayed Saccade - Catch":
+  if trial_type == "catch_trial": # With Delay or No Delay
     trial_catch_count += 1 # Increment the catch trial counter
+  else: # trial_type == "saccade_trial" With Delay or No Delay
+    trial_saccade_count += 1 # Increment the saccade trial counter
   print(f"Started trial # {trial_num}, trial type = {trial_type}")
   await context.log(f"StartedTRIAL_NUM={trial_num}") # saving any variables / data from code
 
@@ -1054,7 +1058,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     return TaskResult(False)
 
   # Handles State.FIXATE2
-  success = await handle_fixate2(context, trial_type, lambda: gaze, center, accpt_gaze_radius_pix, fix2_duration, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix, widget)
+  success = await handle_fixate2(context, task_group, lambda: gaze, center, accpt_gaze_radius_pix, fix2_duration, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix, widget)
   # state = State.FIXATE2
   # await context.log('BehavState=FIXATE2') # saving any variables / data from code
   # print(state)
@@ -1113,9 +1117,9 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     sample_intervals=[1_000_000*int(reward_pertrial_ms)]) # multiplyin by 1_000_000 will give us nanoseconds (ns)
   ))
 
-  if trial_type == "Delayed Saccade - Photic":
-    trial_photic_success_count += 1
-  if trial_type == "Delayed Saccade - Catch":
+  if trial_type == "saccade_trial":
+    trial_saccade_success_count += 1
+  if trial_type == "catch_trial":
     trial_catch_success_count += 1
   # "TaskResult" is used to determine whether the trial is or is not removed from the queue
   # If TaskResult(False), the trial is not removed from the queue. If TaskResult(True), the trial is removed from the queue.

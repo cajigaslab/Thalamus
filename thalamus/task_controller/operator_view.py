@@ -92,6 +92,28 @@ class CentralWidget(QWidget):
     eye_config.add_observer(on_eye_config_change, lambda: isdeleted(self))
     eye_config.recap(on_eye_config_change)
 
+    # Adding a checkbox for controlling visual feedback target highligting circle
+    # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+    my_checkbox = QCheckBox('Draw Subject Feedback Circle')
+    layout.addWidget(my_checkbox, 1, 3)  # Place it in row 1, column 3 (or wherever you want)
+
+    def checkbox_switch(v: bool) -> None:
+      """
+      Callback for when the checkbox is toggled
+      """
+      target.canvas.feedback_choice = v
+
+    my_checkbox.toggled.connect(checkbox_switch)
+    # my_checkbox.toggled.connect(lambda v: eye_config.update({'Draw Subject Feedback Circle': v}))
+
+    def checkbox_switch_change(a, k, v):
+        if k == 'Draw Subject Feedback Circle':
+            my_checkbox.setChecked(v)
+
+    eye_config.add_observer(checkbox_switch_change, lambda: isdeleted(self))
+    eye_config.recap(checkbox_switch_change)
+    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
     quadrants = [
       ("I", 2, 0),
       ("II", 2, 2),
