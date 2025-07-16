@@ -9,9 +9,9 @@
       "WidthMax": 1280,
       "HeightMax": 1024,
       "Width": 883,
-      "Height": 578,
+      "Height": 561,
       "OffsetX": 178,
-      "OffsetY": 117,
+      "OffsetY": 50,
       "ExposureTime": 16570.210456848145,
       "AcquisitionFrameRate": 30.0,
       "Gain": 0.0,
@@ -25,9 +25,9 @@
         "WidthMax": 1280,
         "HeightMax": 1024,
         "Width": 880,
-        "Height": 578,
+        "Height": 560,
         "OffsetX": 178,
-        "OffsetY": 116,
+        "OffsetY": 50,
         "ExposureTime": 16570.210456848145,
         "AcquisitionFrameRate": 30.0,
         "Gain": 0.0
@@ -36,7 +36,7 @@
     {
       "name": "Oculomatic",
       "type": "OCULOMATIC",
-      "Threshold": 43,
+      "Threshold": 32,
       "Min Area": 0,
       "Max Area": 98,
       "X Gain": 0.0,
@@ -53,8 +53,8 @@
         258
       ],
       "Render Thresholded": false,
-      "Pix X": 529,
-      "Pix Y": 351
+      "Pix X": 498,
+      "Pix Y": 291
     },
     {
       "name": "Windows",
@@ -168,7 +168,8 @@
         592,
         425,
         364
-      ]
+      ],
+      "Random Saccade": false
     },
     {
       "name": "Node 3",
@@ -241,7 +242,7 @@
     {
       "name": "Recording",
       "type": "RUNNER2",
-      "Running": false,
+      "Running": true,
       "Targets": [
         {
           "Name": "Storage",
@@ -278,8 +279,8 @@
       "AcquisitionFrameRate": 30.0,
       "Gain": 0.0,
       "view_geometry": [
-        1359,
-        407,
+        1448,
+        386,
         471,
         337
       ],
@@ -311,8 +312,8 @@
       "AcquisitionFrameRate": 30.0,
       "Gain": 0.0,
       "view_geometry": [
-        1421,
-        73,
+        1458,
+        32,
         455,
         365
       ],
@@ -344,8 +345,8 @@
       "AcquisitionFrameRate": 30.0,
       "Gain": 0.0,
       "view_geometry": [
-        1483,
-        673,
+        1489,
+        727,
         388,
         434
       ],
@@ -377,7 +378,7 @@
     {
       "name": "Storage",
       "type": "STORAGE2",
-      "Running": false,
+      "Running": true,
       "Output File": "/mnt/sraid/Troopa_Behavior_Behave1/behave",
       "Compress Analog": false,
       "Compress Video": true,
@@ -467,13 +468,14 @@
       "name": "Fake Pupil",
       "type": "PUPIL",
       "Running": false,
-      "View": false
+      "View": false,
+      "Random Saccade": false
     }
   ],
   "thalamus_view_geometry": [
     100,
     100,
-    384,
+    403,
     768
   ],
   "data_views": [
@@ -602,12 +604,12 @@
   ],
   "node_widgets": [
     {
-      "node": "Experiment",
+      "node": "Storage",
       "dock_area": "right",
       "view_geometry": [
         190,
         22,
-        194,
+        213,
         746
       ]
     }
@@ -616,31 +618,31 @@
     {
       "task_type": "delayed_reach",
       "type": "task",
-      "goal": 99,
-      "name": "react reach small",
+      "goal": 35,
+      "name": "center out reach",
       "intertrial_timeout": {
-        "min": 1.0,
-        "max": 1.0
+        "min": 0.5,
+        "max": 0.5
       },
       "start_timeout": {
         "min": 5.0,
         "max": 5.0
       },
       "hold_timeout": {
-        "min": 0.1,
-        "max": 0.1
+        "min": 0.3,
+        "max": 0.3
       },
       "blink_timeout": {
-        "min": 0.25,
-        "max": 0.25
+        "min": 0.2,
+        "max": 0.2
       },
       "fail_timeout": {
         "min": 1.0,
-        "max": 1.0
+        "max": 1.5
       },
       "success_timeout": {
         "min": 1.0,
-        "max": 1.0
+        "max": 1.5
       },
       "target_x": {
         "min": 1,
@@ -715,6 +717,15 @@
           "off_luminance": {
             "min": 0,
             "max": 0
+          },
+          "dual_color": [
+            255,
+            255,
+            255
+          ],
+          "dual_luminance": {
+            "min": 0,
+            "max": 0
           }
         },
         {
@@ -723,7 +734,7 @@
           "height": 1.6,
           "orientation": 0,
           "window_size": 5.5,
-          "reward_channel": 8.0,
+          "reward_channel": 3.0,
           "audio_scale_left": 0,
           "audio_scale_right": 0,
           "color": [
@@ -768,6 +779,15 @@
           "off_luminance": {
             "min": 0,
             "max": 0
+          },
+          "dual_color": [
+            255,
+            255,
+            255
+          ],
+          "dual_luminance": {
+            "min": 0,
+            "max": 0
           }
         },
         {
@@ -776,7 +796,7 @@
           "height": 1.6,
           "orientation": 0,
           "window_size": 5.5,
-          "reward_channel": 8.0,
+          "reward_channel": 3.0,
           "audio_scale_left": 0,
           "audio_scale_right": 0,
           "color": [
@@ -821,6 +841,15 @@
           "off_luminance": {
             "min": 0,
             "max": 0
+          },
+          "dual_color": [
+            255,
+            255,
+            255
+          ],
+          "dual_luminance": {
+            "min": 0,
+            "max": 0
           }
         },
         {
@@ -829,7 +858,7 @@
           "height": 1.6,
           "orientation": 0,
           "window_size": 5.5,
-          "reward_channel": 8.0,
+          "reward_channel": 3.0,
           "audio_scale_left": 0,
           "audio_scale_right": 0,
           "color": [
@@ -874,6 +903,15 @@
           "off_luminance": {
             "min": 0,
             "max": 0
+          },
+          "dual_color": [
+            255,
+            255,
+            255
+          ],
+          "dual_luminance": {
+            "min": 0,
+            "max": 0
           }
         },
         {
@@ -882,7 +920,7 @@
           "height": 1.6,
           "orientation": 0,
           "window_size": 5.5,
-          "reward_channel": 8.0,
+          "reward_channel": 3.0,
           "audio_scale_left": 0,
           "audio_scale_right": 0,
           "color": [
@@ -927,6 +965,15 @@
           "off_luminance": {
             "min": 0,
             "max": 0
+          },
+          "dual_color": [
+            255,
+            255,
+            255
+          ],
+          "dual_luminance": {
+            "min": 0,
+            "max": 0
           }
         },
         {
@@ -935,7 +982,7 @@
           "height": 1.6,
           "orientation": 0,
           "window_size": 5.5,
-          "reward_channel": 8.0,
+          "reward_channel": 3.0,
           "audio_scale_left": 0,
           "audio_scale_right": 0,
           "color": [
@@ -980,6 +1027,15 @@
           "off_luminance": {
             "min": 0,
             "max": 0
+          },
+          "dual_color": [
+            255,
+            255,
+            255
+          ],
+          "dual_luminance": {
+            "min": 0,
+            "max": 0
           }
         },
         {
@@ -988,7 +1044,7 @@
           "height": 1.6,
           "orientation": 0,
           "window_size": 5.5,
-          "reward_channel": 8.0,
+          "reward_channel": 3.0,
           "audio_scale_left": 0,
           "audio_scale_right": 0,
           "color": [
@@ -1033,6 +1089,15 @@
           "off_luminance": {
             "min": 0,
             "max": 0
+          },
+          "dual_color": [
+            255,
+            255,
+            255
+          ],
+          "dual_luminance": {
+            "min": 0,
+            "max": 0
           }
         },
         {
@@ -1041,7 +1106,7 @@
           "height": 1.6,
           "orientation": 0,
           "window_size": 5.5,
-          "reward_channel": 8.0,
+          "reward_channel": 3.0,
           "audio_scale_left": 0,
           "audio_scale_right": 0,
           "color": [
@@ -1086,20 +1151,29 @@
           "off_luminance": {
             "min": 0,
             "max": 0
+          },
+          "dual_color": [
+            255,
+            255,
+            255
+          ],
+          "dual_luminance": {
+            "min": 0,
+            "max": 0
           }
         }
       ],
       "baseline_timeout": {
-        "min": 0.1,
-        "max": 0.1
+        "min": 0.5,
+        "max": 0.8
       },
       "cue_timeout": {
-        "min": 0.01,
-        "max": 0.01
+        "min": 0.05,
+        "max": 0.05
       },
       "reach_timeout": {
-        "min": 1.0,
-        "max": 1.0
+        "min": 0.8,
+        "max": 0.8
       },
       "is_choice": false,
       "state_indicator_x": 1800.0,
@@ -1110,37 +1184,45 @@
       "pulse_count": 1,
       "pulse_frequency": 1,
       "pulse_width": 0,
-      "task_cluster_name": "Bowser",
+      "hand_blink": {
+        "min": 0.5,
+        "max": 0.5
+      },
+      "eye_blink": {
+        "min": 0.25,
+        "max": 0.25
+      },
+      "task_cluster_name": "center out tasks",
       "queue_index": 0
     },
     {
-      "task_type": "delayed_reach",
+      "task_type": "delayed_saccade_touch",
       "type": "task",
-      "goal": 99,
-      "name": "react reach small",
+      "goal": 50,
+      "name": "center out saccade touch",
       "intertrial_timeout": {
-        "min": 1.0,
-        "max": 1.0
+        "min": 0.5,
+        "max": 0.5
       },
       "start_timeout": {
         "min": 5.0,
         "max": 5.0
       },
       "hold_timeout": {
-        "min": 0.1,
-        "max": 0.1
+        "min": 0.3,
+        "max": 0.3
       },
       "blink_timeout": {
-        "min": 0.25,
-        "max": 0.25
+        "min": 0.14,
+        "max": 0.14
       },
       "fail_timeout": {
-        "min": 1.0,
-        "max": 1.0
+        "min": 1,
+        "max": 1.5
       },
       "success_timeout": {
         "min": 1.0,
-        "max": 1.0
+        "max": 1.5
       },
       "target_x": {
         "min": 1,
@@ -1152,10 +1234,10 @@
       },
       "target_width": {
         "min": 1,
-        "max": 2.0
+        "max": 1
       },
       "target_height": {
-        "min": 3.0,
+        "min": 1,
         "max": 1
       },
       "target_color": [
@@ -1165,11 +1247,11 @@
       ],
       "targets": [
         {
-          "name": "fixation",
+          "name": "fixation ",
           "width": 1.6,
           "height": 1.6,
           "orientation": 0,
-          "window_size": 5.5,
+          "window_size": 6.0,
           "reward_channel": 0.0,
           "audio_scale_left": 0,
           "audio_scale_right": 0,
@@ -1189,8 +1271,8 @@
             "max": 0.0
           },
           "angle": {
-            "min": 90.0,
-            "max": 90.0
+            "min": 180.0,
+            "max": 180.0
           },
           "volume": {
             "min": 0,
@@ -1215,6 +1297,17 @@
           "off_luminance": {
             "min": 0,
             "max": 0
+          },
+          "is_touch_fixation": false,
+          "is_gaze_fixation": true,
+          "dual_color": [
+            239,
+            41,
+            41
+          ],
+          "dual_luminance": {
+            "min": 0.0,
+            "max": 0.0
           }
         },
         {
@@ -1222,14 +1315,14 @@
           "width": 1.6,
           "height": 1.6,
           "orientation": 0,
-          "window_size": 5.5,
-          "reward_channel": 8.0,
+          "window_size": 5.0,
+          "reward_channel": 2.0,
           "audio_scale_left": 0,
           "audio_scale_right": 0,
           "color": [
-            138,
-            226,
-            52
+            239,
+            41,
+            41
           ],
           "is_fixation": false,
           "shape": "box",
@@ -1242,7 +1335,7 @@
             "max": 10.0
           },
           "angle": {
-            "min": 0.0,
+            "min": 0,
             "max": 0.0
           },
           "volume": {
@@ -1268,6 +1361,17 @@
           "off_luminance": {
             "min": 0,
             "max": 0
+          },
+          "is_touch_fixation": false,
+          "is_gaze_fixation": false,
+          "dual_color": [
+            255,
+            255,
+            255
+          ],
+          "dual_luminance": {
+            "min": 0,
+            "max": 0
           }
         },
         {
@@ -1275,14 +1379,14 @@
           "width": 1.6,
           "height": 1.6,
           "orientation": 0,
-          "window_size": 5.5,
-          "reward_channel": 8.0,
+          "window_size": 5.0,
+          "reward_channel": 2.0,
           "audio_scale_left": 0,
           "audio_scale_right": 0,
           "color": [
-            138,
-            226,
-            52
+            239,
+            41,
+            41
           ],
           "is_fixation": false,
           "shape": "box",
@@ -1321,6 +1425,17 @@
           "off_luminance": {
             "min": 0,
             "max": 0
+          },
+          "is_touch_fixation": false,
+          "is_gaze_fixation": false,
+          "dual_color": [
+            255,
+            255,
+            255
+          ],
+          "dual_luminance": {
+            "min": 0,
+            "max": 0
           }
         },
         {
@@ -1328,14 +1443,14 @@
           "width": 1.6,
           "height": 1.6,
           "orientation": 0,
-          "window_size": 5.5,
-          "reward_channel": 8.0,
+          "window_size": 5.0,
+          "reward_channel": 2.0,
           "audio_scale_left": 0,
           "audio_scale_right": 0,
           "color": [
-            138,
-            226,
-            52
+            239,
+            41,
+            41
           ],
           "is_fixation": false,
           "shape": "box",
@@ -1374,6 +1489,17 @@
           "off_luminance": {
             "min": 0,
             "max": 0
+          },
+          "is_touch_fixation": false,
+          "is_gaze_fixation": false,
+          "dual_color": [
+            255,
+            255,
+            255
+          ],
+          "dual_luminance": {
+            "min": 0,
+            "max": 0
           }
         },
         {
@@ -1381,14 +1507,14 @@
           "width": 1.6,
           "height": 1.6,
           "orientation": 0,
-          "window_size": 5.5,
-          "reward_channel": 8.0,
+          "window_size": 5.0,
+          "reward_channel": 2.0,
           "audio_scale_left": 0,
           "audio_scale_right": 0,
           "color": [
-            138,
-            226,
-            52
+            239,
+            41,
+            41
           ],
           "is_fixation": false,
           "shape": "box",
@@ -1427,6 +1553,17 @@
           "off_luminance": {
             "min": 0,
             "max": 0
+          },
+          "is_touch_fixation": false,
+          "is_gaze_fixation": false,
+          "dual_color": [
+            255,
+            255,
+            255
+          ],
+          "dual_luminance": {
+            "min": 0,
+            "max": 0
           }
         },
         {
@@ -1434,14 +1571,14 @@
           "width": 1.6,
           "height": 1.6,
           "orientation": 0,
-          "window_size": 5.5,
-          "reward_channel": 8.0,
+          "window_size": 5.0,
+          "reward_channel": 2.0,
           "audio_scale_left": 0,
           "audio_scale_right": 0,
           "color": [
-            138,
-            226,
-            52
+            239,
+            41,
+            41
           ],
           "is_fixation": false,
           "shape": "box",
@@ -1480,6 +1617,17 @@
           "off_luminance": {
             "min": 0,
             "max": 0
+          },
+          "is_touch_fixation": false,
+          "is_gaze_fixation": false,
+          "dual_color": [
+            255,
+            255,
+            255
+          ],
+          "dual_luminance": {
+            "min": 0,
+            "max": 0
           }
         },
         {
@@ -1487,14 +1635,14 @@
           "width": 1.6,
           "height": 1.6,
           "orientation": 0,
-          "window_size": 5.5,
-          "reward_channel": 8.0,
+          "window_size": 5.0,
+          "reward_channel": 2.0,
           "audio_scale_left": 0,
           "audio_scale_right": 0,
           "color": [
-            138,
-            226,
-            52
+            239,
+            41,
+            41
           ],
           "is_fixation": false,
           "shape": "box",
@@ -1533,6 +1681,17 @@
           "off_luminance": {
             "min": 0,
             "max": 0
+          },
+          "is_touch_fixation": false,
+          "is_gaze_fixation": false,
+          "dual_color": [
+            255,
+            255,
+            255
+          ],
+          "dual_luminance": {
+            "min": 0,
+            "max": 0
           }
         },
         {
@@ -1540,14 +1699,14 @@
           "width": 1.6,
           "height": 1.6,
           "orientation": 0,
-          "window_size": 5.5,
-          "reward_channel": 8.0,
+          "window_size": 5.0,
+          "reward_channel": 2.0,
           "audio_scale_left": 0,
           "audio_scale_right": 0,
           "color": [
-            138,
-            226,
-            52
+            239,
+            41,
+            41
           ],
           "is_fixation": false,
           "shape": "box",
@@ -1586,236 +1745,491 @@
           "off_luminance": {
             "min": 0,
             "max": 0
+          },
+          "is_touch_fixation": false,
+          "is_gaze_fixation": false,
+          "dual_color": [
+            255,
+            255,
+            255
+          ],
+          "dual_luminance": {
+            "min": 0,
+            "max": 0
           }
         }
       ],
       "baseline_timeout": {
-        "min": 0.1,
-        "max": 0.1
+        "min": 0.5,
+        "max": 0.8
       },
       "cue_timeout": {
         "min": 0.01,
         "max": 0.01
       },
-      "reach_timeout": {
-        "min": 1.0,
-        "max": 1.0
+      "saccade_timeout": {
+        "min": 0.8,
+        "max": 0.8
       },
       "is_choice": false,
       "state_indicator_x": 1800.0,
       "state_indicator_y": 950.0,
-      "stim_phase": "FAIL",
-      "stim_start": 1,
-      "intan_cfg": 2,
-      "pulse_count": 1,
+      "stim_phase": "targs_on",
+      "stim_start": 0.01,
+      "intan_cfg": 1.0,
+      "pulse_count": 2.0,
       "pulse_frequency": 1,
-      "pulse_width": 0,
-      "task_cluster_name": "Bowser",
+      "pulse_width": 100.0,
+      "hand_blink": {
+        "min": 0.2,
+        "max": 0.2
+      },
+      "eye_blink": {
+        "min": 0.2,
+        "max": 0.2
+      },
+      "task_cluster_name": "center out tasks",
       "queue_index": 1
+    },
+    {
+      "task_type": "gaze_anchoring",
+      "type": "task",
+      "goal": 99,
+      "name": "GA_var0",
+      "intertrial_timeout": {
+        "min": 0.5,
+        "max": 0.5
+      },
+      "start_timeout": {
+        "min": 5.0,
+        "max": 5.0
+      },
+      "hold_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "blink_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "fail_timeout": {
+        "min": 1,
+        "max": 1.0
+      },
+      "success_timeout": {
+        "min": 1.0,
+        "max": 1.0
+      },
+      "target_x": {
+        "min": 1,
+        "max": 1
+      },
+      "target_y": {
+        "min": 1,
+        "max": 1
+      },
+      "target_width": {
+        "min": 1,
+        "max": 1
+      },
+      "target_height": {
+        "min": 1,
+        "max": 1
+      },
+      "target_color": [
+        255,
+        255,
+        255
+      ],
+      "targets": [
+        {
+          "name": "start",
+          "width": 1.6,
+          "height": 1.6,
+          "orientation": 0,
+          "window_size": 5.5,
+          "reward_channel": 0.0,
+          "audio_scale_left": 0,
+          "audio_scale_right": 0,
+          "color": [
+            138,
+            226,
+            52
+          ],
+          "is_fixation": true,
+          "is_targ2": false,
+          "shape": "box",
+          "stl_file": "",
+          "audio_file": "",
+          "audio_only_if_high": false,
+          "play_in_ear": false,
+          "radius": {
+            "min": 10.0,
+            "max": 10.0
+          },
+          "angle": {
+            "min": 135.0,
+            "max": 225.0
+          },
+          "volume": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_temporal_jitter": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset_around_fixation": {
+            "min": 0,
+            "max": 0
+          },
+          "on_luminance": {
+            "min": 1,
+            "max": 1
+          },
+          "off_luminance": {
+            "min": 0,
+            "max": 0
+          },
+          "anchor": "",
+          "dual_color": [
+            239,
+            41,
+            41
+          ],
+          "dual_luminance": {
+            "min": 0.0,
+            "max": 0.0
+          }
+        },
+        {
+          "name": "targ1",
+          "width": 1.6,
+          "height": 1.6,
+          "orientation": 0,
+          "window_size": 5.5,
+          "reward_channel": 0.0,
+          "audio_scale_left": 0,
+          "audio_scale_right": 0,
+          "color": [
+            138,
+            226,
+            52
+          ],
+          "is_fixation": false,
+          "is_targ2": false,
+          "shape": "box",
+          "stl_file": "",
+          "audio_file": "",
+          "audio_only_if_high": false,
+          "play_in_ear": false,
+          "radius": {
+            "min": 0.0,
+            "max": 0.0
+          },
+          "angle": {
+            "min": 0.0,
+            "max": 0.0
+          },
+          "volume": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_temporal_jitter": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset_around_fixation": {
+            "min": 0,
+            "max": 0
+          },
+          "on_luminance": {
+            "min": 1,
+            "max": 1
+          },
+          "off_luminance": {
+            "min": 0,
+            "max": 0
+          },
+          "anchor": "",
+          "dual_color": [
+            239,
+            41,
+            41
+          ],
+          "dual_luminance": {
+            "min": 0.0,
+            "max": 0.0
+          }
+        },
+        {
+          "name": "targ2 up",
+          "width": 1.6,
+          "height": 1.6,
+          "orientation": 0,
+          "window_size": 5.5,
+          "reward_channel": 3.0,
+          "audio_scale_left": 0,
+          "audio_scale_right": 0,
+          "color": [
+            239,
+            41,
+            41
+          ],
+          "is_fixation": false,
+          "is_targ2": true,
+          "shape": "box",
+          "stl_file": "",
+          "audio_file": "",
+          "audio_only_if_high": false,
+          "play_in_ear": false,
+          "radius": {
+            "min": 11.5,
+            "max": 11.5
+          },
+          "angle": {
+            "min": 40.0,
+            "max": 50.0
+          },
+          "volume": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_temporal_jitter": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset_around_fixation": {
+            "min": 0,
+            "max": 0
+          },
+          "on_luminance": {
+            "min": 1,
+            "max": 1
+          },
+          "off_luminance": {
+            "min": 0,
+            "max": 0
+          },
+          "anchor": "",
+          "dual_color": [
+            255,
+            255,
+            255
+          ],
+          "dual_luminance": {
+            "min": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "targ2 mid",
+          "width": 1.6,
+          "height": 1.6,
+          "orientation": 0,
+          "window_size": 5.5,
+          "reward_channel": 3.0,
+          "audio_scale_left": 0,
+          "audio_scale_right": 0,
+          "color": [
+            239,
+            41,
+            41
+          ],
+          "is_fixation": false,
+          "is_targ2": true,
+          "shape": "box",
+          "stl_file": "",
+          "audio_file": "",
+          "audio_only_if_high": false,
+          "play_in_ear": false,
+          "radius": {
+            "min": 11.5,
+            "max": 11.5
+          },
+          "angle": {
+            "min": -5.0,
+            "max": 5.0
+          },
+          "volume": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_temporal_jitter": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset_around_fixation": {
+            "min": 0,
+            "max": 0
+          },
+          "on_luminance": {
+            "min": 1,
+            "max": 1
+          },
+          "off_luminance": {
+            "min": 0,
+            "max": 0
+          },
+          "anchor": "",
+          "dual_color": [
+            255,
+            255,
+            255
+          ],
+          "dual_luminance": {
+            "min": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "targ2 down",
+          "width": 1.6,
+          "height": 1.6,
+          "orientation": 0,
+          "window_size": 5.5,
+          "reward_channel": 3.0,
+          "audio_scale_left": 0,
+          "audio_scale_right": 0,
+          "color": [
+            239,
+            41,
+            41
+          ],
+          "is_fixation": false,
+          "is_targ2": true,
+          "shape": "box",
+          "stl_file": "",
+          "audio_file": "",
+          "audio_only_if_high": false,
+          "play_in_ear": false,
+          "radius": {
+            "min": 11.5,
+            "max": 11.5
+          },
+          "angle": {
+            "min": 310.0,
+            "max": 320.0
+          },
+          "volume": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_temporal_jitter": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset_around_fixation": {
+            "min": 0,
+            "max": 0
+          },
+          "on_luminance": {
+            "min": 1,
+            "max": 1
+          },
+          "off_luminance": {
+            "min": 0,
+            "max": 0
+          },
+          "anchor": "",
+          "dual_color": [
+            255,
+            255,
+            255
+          ],
+          "dual_luminance": {
+            "min": 0,
+            "max": 0
+          }
+        }
+      ],
+      "baseline_timeout": {
+        "min": 0.5,
+        "max": 0.8
+      },
+      "cue_timeout": {
+        "min": 0.05,
+        "max": 0.05
+      },
+      "targ2_delay": {
+        "min": 0.25,
+        "max": 1.15
+      },
+      "reach_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "saccade2_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "hold_interval": {
+        "min": 0.35,
+        "max": 0.4
+      },
+      "hand_blink": {
+        "min": 0.2,
+        "max": 0.2
+      },
+      "eye_blink": {
+        "min": 0.2,
+        "max": 0.2
+      },
+      "targets_are_targ2s": false,
+      "state_indicator_x": 1800.0,
+      "state_indicator_y": 950.0,
+      "task_cluster_name": "gazeanch_vartargs",
+      "queue_index": 2
     }
   ],
   "reward_schedule": {
     "schedules": [
       [
         0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
         0.0
       ],
       [
-        104.119906442843,
-        97.4041085121953,
-        99.0112935532187,
-        96.07752410211,
-        100.371952014696,
-        103.326992444981,
-        99.8740949713286,
-        97.3921586477542,
-        100.374255420597,
-        95.7663879422857,
-        103.076782413975,
-        104.065914632362,
-        98.7625158320668,
-        97.5453318132228,
-        104.400773072305,
-        95.8932140924693,
-        100.236856253647,
-        98.2902450307034,
-        98.1966894356742,
-        98.9720377652756
+        400.0,
+        400.0
       ],
       [
-        149.724826135722,
-        147.205221328837,
-        145.22792949663,
-        148.602046244106,
-        153.516031696141,
-        149.474212582912,
-        148.457007293406,
-        149.500320634894,
-        154.552723543131,
-        146.033710269207,
-        146.322576300212,
-        152.986429980995,
-        148.366520621014,
-        154.196898021645,
-        149.1836850367,
-        150.642254624473,
-        152.476454695102,
-        145.079560178632,
-        154.084885421319,
-        146.530973795095
+        200.0,
+        200.0
       ],
       [
-        197.650629962625,
-        201.406436919215,
-        195.527153903951,
-        200.751960545867,
-        202.779663935369,
-        203.870916073442,
-        202.283939860591,
-        198.7380696368,
-        196.82619646044,
-        201.047220864294,
-        199.80056279966,
-        199.077450012399,
-        204.837901357918,
-        203.737611909489,
-        195.436474755224,
-        204.547360040872,
-        204.849882593669,
-        202.113316273022,
-        199.677641968372,
-        195.961969596145
+        150.0,
+        150.0
       ],
       [
-        96.2572277848238,
-        103.194099207279,
-        104.829815713064,
-        95.1403212359431,
-        104.516832016746,
-        97.3734421023012,
-        103.584372422228,
-        96.1298734076759,
-        95.0018593677882,
-        98.175080631141,
-        98.4597244758931,
-        95.3444088073222,
-        104.771313060046,
-        99.5810371878488,
-        97.0763246417297,
-        97.8160899632892,
-        100.107581306413,
-        97.6978659567182,
-        95.6333270078626,
-        103.674781638791
-      ],
-      [
-        150.27469970711,
-        145.888358213924,
-        153.112803362013,
-        148.335196917914,
-        152.055170384902,
-        146.902632114233,
-        146.369638176266,
-        151.478337036861,
-        151.810963377716,
-        153.078863687156,
-        150.264903383561,
-        153.622942811291,
-        151.167480690271,
-        150.97410115471,
-        152.397341406397,
-        145.892932595535,
-        149.745341059357,
-        146.821466042814,
-        150.572513554253,
-        149.041952278476
-      ],
-      [
-        197.650629962625,
-        201.406436919215,
-        195.527153903951,
-        200.751960545867,
-        202.779663935369,
-        203.870916073442,
-        202.283939860591,
-        198.7380696368,
-        196.82619646044,
-        201.047220864294,
-        199.80056279966,
-        199.077450012399,
-        204.837901357918,
-        203.737611909489,
-        195.436474755224,
-        204.547360040872,
-        204.849882593669,
-        202.113316273022,
-        199.677641968372,
-        195.961969596145
-      ],
-      [
-        100.0,
-        100.0,
-        100.0,
-        100.0,
-        100.0,
-        100.0,
-        100.0,
-        100.0,
-        100.0,
-        100.0,
-        100.0,
-        100.0,
-        100.0,
-        100.0,
-        100.0,
-        100.0,
-        100.0,
-        100.0,
         100.0,
         100.0
       ],
       [
-        450.0,
-        450.0,
-        450.0,
-        450.0,
-        450.0,
-        450.0,
-        450.0,
-        450.0,
-        450.0,
-        450.0,
-        450.0,
-        450.0,
-        450.0,
-        450.0,
-        450.0,
-        450.0,
-        450.0,
-        450.0,
-        450.0,
-        450.0
+        50.0,
+        50.0
       ]
     ],
-    "index": 12
+    "index": 1
   },
   "touch_channels": [
     0,
@@ -1832,43 +2246,43 @@
   },
   "eye_scaling": {
     "I": {
-      "x": 207.0,
-      "y": 227.0
+      "x": 199.35,
+      "y": 123.5
     },
     "II": {
-      "x": 253.0,
-      "y": 233.0
+      "x": 283.36,
+      "y": 219.7
     },
     "III": {
-      "x": 199.0,
-      "y": 335.0
+      "x": 220.0,
+      "y": 400.0
     },
     "IV": {
-      "x": 266.0,
-      "y": 399.0
+      "x": 335.45,
+      "y": 460.36
     },
     "Auto Clear": true
   },
   "eye_scaling_init": {
     "I": {
-      "x": 207.0,
-      "y": 227.0
+      "x": 199.35,
+      "y": 123.5
     },
     "II": {
-      "x": 253.0,
-      "y": 233.0
+      "x": 283.36,
+      "y": 219.7
     },
     "III": {
-      "x": 199.0,
-      "y": 335.0
+      "x": 220.0,
+      "y": 400.0
     },
     "IV": {
-      "x": 266.0,
-      "y": 399.0
+      "x": 335.45,
+      "y": 460.36
     },
     "Auto Clear": true
   },
-  "status": "Bowser/react reach small = 0/1",
+  "status": "Marsy_Troopa/reach eye calibration = 52/66 calibrate eye/calibrate eye reach = 39/20 calibrate eye/calibrate eye saccade = 21/5 center out tasks/center out reach = 97/30 center out tasks/center out saccade touch = 80/8",
   "task_clusters": [
     {
       "type": "task_cluster",
@@ -1878,11 +2292,11 @@
         {
           "task_type": "delayed_reach",
           "type": "task",
-          "goal": 99,
+          "goal": 50,
           "name": "center out reach",
           "intertrial_timeout": {
-            "min": 1.0,
-            "max": 1.5
+            "min": 0.5,
+            "max": 0.5
           },
           "start_timeout": {
             "min": 5.0,
@@ -1890,11 +2304,11 @@
           },
           "hold_timeout": {
             "min": 0.3,
-            "max": 0.4
+            "max": 0.3
           },
           "blink_timeout": {
-            "min": 0.14,
-            "max": 0.14
+            "min": 0.2,
+            "max": 0.2
           },
           "fail_timeout": {
             "min": 1.0,
@@ -1994,7 +2408,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -2056,7 +2470,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -2118,7 +2532,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -2180,7 +2594,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -2242,7 +2656,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -2304,7 +2718,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -2366,7 +2780,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -2428,12 +2842,12 @@
             "max": 0.8
           },
           "cue_timeout": {
-            "min": 0.01,
-            "max": 0.01
+            "min": 0.05,
+            "max": 0.05
           },
           "reach_timeout": {
-            "min": 1.0,
-            "max": 1.0
+            "min": 0.8,
+            "max": 0.8
           },
           "is_choice": false,
           "state_indicator_x": 1800.0,
@@ -2563,7 +2977,7 @@
               "height": 2.0,
               "orientation": 0,
               "window_size": 4.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -2616,7 +3030,7 @@
               "height": 2.0,
               "orientation": 0,
               "window_size": 4.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -2669,7 +3083,7 @@
               "height": 2.0,
               "orientation": 0,
               "window_size": 4.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -2722,7 +3136,7 @@
               "height": 2.0,
               "orientation": 0,
               "window_size": 4.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -2775,7 +3189,7 @@
               "height": 2.0,
               "orientation": 0,
               "window_size": 4.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -2828,7 +3242,7 @@
               "height": 2.0,
               "orientation": 0,
               "window_size": 4.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -2881,7 +3295,7 @@
               "height": 2.0,
               "orientation": 0,
               "window_size": 4.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -2934,7 +3348,7 @@
               "height": 2.0,
               "orientation": 0,
               "window_size": 4.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -3010,16 +3424,16 @@
           "goal": 50,
           "name": "center out saccade touch",
           "intertrial_timeout": {
-            "min": 1.0,
-            "max": 2.0
+            "min": 0.5,
+            "max": 0.5
           },
           "start_timeout": {
             "min": 5.0,
             "max": 5.0
           },
           "hold_timeout": {
-            "min": 0.2,
-            "max": 0.2
+            "min": 0.3,
+            "max": 0.3
           },
           "blink_timeout": {
             "min": 0.14,
@@ -3060,7 +3474,7 @@
               "width": 1.6,
               "height": 1.6,
               "orientation": 0,
-              "window_size": 5.0,
+              "window_size": 6.0,
               "reward_channel": 0.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
@@ -3121,11 +3535,11 @@
             },
             {
               "name": "right",
-              "width": 3.0,
-              "height": 3.0,
+              "width": 1.6,
+              "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 3.0,
+              "reward_channel": 2.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -3185,11 +3599,11 @@
             },
             {
               "name": "left",
-              "width": 3.0,
-              "height": 3.0,
+              "width": 1.6,
+              "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 3.0,
+              "reward_channel": 2.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -3249,11 +3663,11 @@
             },
             {
               "name": "top",
-              "width": 3.0,
-              "height": 3.0,
+              "width": 1.6,
+              "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 4.0,
+              "reward_channel": 2.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -3313,11 +3727,11 @@
             },
             {
               "name": "topright",
-              "width": 3.0,
-              "height": 3.0,
+              "width": 1.6,
+              "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 4.0,
+              "reward_channel": 2.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -3377,11 +3791,11 @@
             },
             {
               "name": "topleft",
-              "width": 3.0,
-              "height": 3.0,
+              "width": 1.6,
+              "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 3.0,
+              "reward_channel": 2.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -3441,11 +3855,11 @@
             },
             {
               "name": "bottomleft",
-              "width": 3.0,
-              "height": 3.0,
+              "width": 1.6,
+              "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 3.0,
+              "reward_channel": 2.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -3505,11 +3919,11 @@
             },
             {
               "name": "bottomright",
-              "width": 3.0,
-              "height": 3.0,
+              "width": 1.6,
+              "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 3.0,
+              "reward_channel": 2.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -3569,16 +3983,16 @@
             }
           ],
           "baseline_timeout": {
-            "min": 0.2,
-            "max": 0.3
+            "min": 0.5,
+            "max": 0.8
           },
           "cue_timeout": {
-            "min": 0.05,
-            "max": 0.05
+            "min": 0.01,
+            "max": 0.01
           },
           "saccade_timeout": {
-            "min": 1.0,
-            "max": 1.0
+            "min": 0.8,
+            "max": 0.8
           },
           "is_choice": false,
           "state_indicator_x": 1800.0,
@@ -3719,7 +4133,7 @@
               "height": 3.0,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -3783,7 +4197,7 @@
               "height": 3.0,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -3847,7 +4261,7 @@
               "height": 3.0,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -4055,7 +4469,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -4117,7 +4531,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -4179,7 +4593,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -4241,7 +4655,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -4303,7 +4717,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -4365,7 +4779,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -4427,7 +4841,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -4513,6 +4927,58 @@
             "min": 0.25,
             "max": 0.25
           }
+        },
+        {
+          "task_type": "simple",
+          "type": "task",
+          "goal": 0,
+          "name": "Untitled",
+          "intertrial_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "start_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "hold_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "blink_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "fail_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "success_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 1
+          },
+          "target_height": {
+            "min": 1,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": []
         }
       ]
     },
@@ -4631,7 +5097,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -4684,7 +5150,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -4737,7 +5203,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -4790,7 +5256,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -4843,7 +5309,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -4896,7 +5362,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -4949,7 +5415,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -5520,7 +5986,7 @@
         {
           "task_type": "simple_touch_task",
           "type": "task",
-          "goal": 0,
+          "goal": 99,
           "name": "simple_reach_shanechi",
           "intertrial_timeout": {
             "min": 0.3,
@@ -5531,12 +5997,12 @@
             "max": 3.0
           },
           "hold_timeout": {
-            "min": 0.2,
-            "max": 0.3
+            "min": 0.3,
+            "max": 0.4
           },
           "blink_timeout": {
-            "min": 0.14,
-            "max": 0.14
+            "min": 0.25,
+            "max": 0.25
           },
           "fail_timeout": {
             "min": 0.0,
@@ -5574,7 +6040,7 @@
               "height": 1.6,
               "orientation": 4.0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 8.0,
               "color": [
@@ -5627,7 +6093,7 @@
               "height": 1.6,
               "orientation": 4.0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 8.0,
               "color": [
@@ -5680,7 +6146,7 @@
               "height": 1.6,
               "orientation": 4.0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 8.0,
               "color": [
@@ -5733,7 +6199,7 @@
               "height": 1.6,
               "orientation": 4.0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 8.0,
               "color": [
@@ -5786,7 +6252,7 @@
               "height": 1.6,
               "orientation": 4.0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 8.0,
               "color": [
@@ -5839,7 +6305,7 @@
               "height": 1.6,
               "orientation": 4.0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 8.0,
               "color": [
@@ -5892,7 +6358,7 @@
               "height": 1.6,
               "orientation": 4.0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 8.0,
               "color": [
@@ -5945,7 +6411,7 @@
               "height": 1.6,
               "orientation": 4.0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 8.0,
               "color": [
@@ -6169,7 +6635,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -6231,7 +6697,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -6293,7 +6759,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -6355,7 +6821,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -6417,7 +6883,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -6479,7 +6945,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -6541,7 +7007,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -6685,7 +7151,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 6.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -6883,7 +7349,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -6947,7 +7413,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 4.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -7011,7 +7477,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 4.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -7075,7 +7541,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 4.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -7337,7 +7803,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 4.5,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -7392,7 +7858,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 4.5,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -7447,7 +7913,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 4.5,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -7722,7 +8188,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -7786,7 +8252,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -7850,7 +8316,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -8057,7 +8523,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -8112,7 +8578,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -8167,7 +8633,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -8431,7 +8897,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -8486,7 +8952,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -8541,7 +9007,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -8743,7 +9209,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -8798,7 +9264,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -8853,7 +9319,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -8949,11 +9415,11 @@
         {
           "task_type": "gaze_anchoring",
           "type": "task",
-          "goal": 10,
+          "goal": 99,
           "name": "GA_var0",
           "intertrial_timeout": {
-            "min": 1.0,
-            "max": 1.5
+            "min": 0.5,
+            "max": 0.5
           },
           "start_timeout": {
             "min": 5.0,
@@ -9057,8 +9523,8 @@
                 41
               ],
               "dual_luminance": {
-                "min": 0.2,
-                "max": 0.2
+                "min": 0.0,
+                "max": 0.0
               }
             },
             {
@@ -9121,8 +9587,8 @@
                 41
               ],
               "dual_luminance": {
-                "min": 0.2,
-                "max": 0.2
+                "min": 0.0,
+                "max": 0.0
               }
             },
             {
@@ -9131,7 +9597,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -9195,7 +9661,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -9259,7 +9725,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -9339,16 +9805,16 @@
             "max": 1
           },
           "hold_interval": {
-            "min": 0.1,
-            "max": 0.1
+            "min": 0.35,
+            "max": 0.4
           },
           "hand_blink": {
             "min": 0.2,
-            "max": 0.24
+            "max": 0.2
           },
           "eye_blink": {
-            "min": 0.09,
-            "max": 0.09
+            "min": 0.2,
+            "max": 0.2
           },
           "targets_are_targ2s": false,
           "state_indicator_x": 1800.0,
@@ -9475,7 +9941,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -9689,7 +10155,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -9807,7 +10273,7 @@
             "max": 5.0
           },
           "hold_timeout": {
-            "min": 0.1,
+            "min": 0.15,
             "max": 0.15
           },
           "blink_timeout": {
@@ -9903,7 +10369,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -9956,7 +10422,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -10009,7 +10475,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -10062,7 +10528,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -10115,7 +10581,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -10168,7 +10634,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -10221,7 +10687,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -10274,12 +10740,12 @@
             "max": 0.3
           },
           "cue_timeout": {
-            "min": 0.35,
-            "max": 0.35
+            "min": 0.01,
+            "max": 0.01
           },
           "reach_timeout": {
-            "min": 1.0,
-            "max": 1.0
+            "min": 0.8,
+            "max": 0.8
           },
           "is_choice": false,
           "state_indicator_x": 1800.0,
@@ -10899,7 +11365,7 @@
               "height": 1.6,
               "orientation": 4.0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 8.0,
               "color": [
@@ -10952,7 +11418,7 @@
               "height": 1.6,
               "orientation": 4.0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 8.0,
               "color": [
@@ -11005,7 +11471,7 @@
               "height": 1.6,
               "orientation": 4.0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 8.0,
               "color": [
@@ -11058,7 +11524,7 @@
               "height": 1.6,
               "orientation": 4.0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 8.0,
               "color": [
@@ -11111,7 +11577,7 @@
               "height": 1.6,
               "orientation": 4.0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 8.0,
               "color": [
@@ -11164,7 +11630,7 @@
               "height": 1.6,
               "orientation": 4.0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 8.0,
               "color": [
@@ -11217,7 +11683,7 @@
               "height": 1.6,
               "orientation": 4.0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 8.0,
               "color": [
@@ -11270,7 +11736,7 @@
               "height": 1.6,
               "orientation": 4.0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 8.0,
               "color": [
@@ -11323,7 +11789,7 @@
               "height": 1.6,
               "orientation": 4.0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 8.0,
               "color": [
@@ -11494,7 +11960,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -11556,7 +12022,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -11618,7 +12084,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -11680,7 +12146,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -11742,7 +12208,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -11804,7 +12270,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -11866,7 +12332,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -12331,7 +12797,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -12384,7 +12850,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -12437,7 +12903,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -12490,7 +12956,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -12543,7 +13009,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -12596,7 +13062,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -12649,7 +13115,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -12702,7 +13168,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -12778,8 +13244,8 @@
           "goal": 99,
           "name": "reach eye calibration",
           "intertrial_timeout": {
-            "min": 1.0,
-            "max": 1.5
+            "min": 0.5,
+            "max": 0.5
           },
           "start_timeout": {
             "min": 5.0,
@@ -12790,8 +13256,8 @@
             "max": 0.15
           },
           "blink_timeout": {
-            "min": 0.2,
-            "max": 0.2
+            "min": 0.25,
+            "max": 0.25
           },
           "fail_timeout": {
             "min": 1.0,
@@ -12882,7 +13348,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -12935,7 +13401,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -12988,7 +13454,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -13041,7 +13507,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -13090,8 +13556,8 @@
             }
           ],
           "baseline_timeout": {
-            "min": 0.2,
-            "max": 0.3
+            "min": 0.1,
+            "max": 0.1
           },
           "cue_timeout": {
             "min": 0.01,
@@ -13126,7 +13592,7 @@
           },
           "hold_timeout": {
             "min": 0.1,
-            "max": 0.15
+            "max": 0.1
           },
           "blink_timeout": {
             "min": 0.2,
@@ -13221,7 +13687,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 4.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -13270,8 +13736,8 @@
             }
           ],
           "baseline_timeout": {
-            "min": 0.2,
-            "max": 0.3
+            "min": 0.1,
+            "max": 0.1
           },
           "cue_timeout": {
             "min": 0.01,
@@ -13401,7 +13867,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 4.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -13450,8 +13916,8 @@
             }
           ],
           "baseline_timeout": {
-            "min": 0.2,
-            "max": 0.3
+            "min": 0.1,
+            "max": 0.2
           },
           "cue_timeout": {
             "min": 0.01,
@@ -13486,7 +13952,7 @@
           },
           "hold_timeout": {
             "min": 0.1,
-            "max": 0.15
+            "max": 0.1
           },
           "blink_timeout": {
             "min": 0.2,
@@ -13581,7 +14047,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 7.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -13630,8 +14096,8 @@
             }
           ],
           "baseline_timeout": {
-            "min": 0.2,
-            "max": 0.3
+            "min": 0.1,
+            "max": 0.1
           },
           "cue_timeout": {
             "min": 0.01,
@@ -13708,7 +14174,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 7.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -13761,7 +14227,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 7.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -14068,7 +14534,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -14132,7 +14598,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 4.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -14196,7 +14662,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 4.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -14260,7 +14726,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 4.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -14522,7 +14988,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 4.5,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -14577,7 +15043,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 4.5,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -14632,7 +15098,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 4.5,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -14907,7 +15373,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -14971,7 +15437,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -15035,7 +15501,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -15242,7 +15708,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -15297,7 +15763,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -15352,7 +15818,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -15616,7 +16082,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -15671,7 +16137,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -15726,7 +16192,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -15937,7 +16403,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -16001,7 +16467,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -16065,7 +16531,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -16352,7 +16818,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -16416,7 +16882,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -16480,7 +16946,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -16696,7 +17162,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -16910,7 +17376,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -17020,8 +17486,8 @@
           "goal": 99,
           "name": "calibrate eye reach",
           "intertrial_timeout": {
-            "min": 1.0,
-            "max": 1.5
+            "min": 0.5,
+            "max": 0.5
           },
           "start_timeout": {
             "min": 5.0,
@@ -17032,8 +17498,8 @@
             "max": 0.15
           },
           "blink_timeout": {
-            "min": 0.2,
-            "max": 0.2
+            "min": 0.25,
+            "max": 0.25
           },
           "fail_timeout": {
             "min": 1.0,
@@ -17133,7 +17599,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -17195,7 +17661,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -17257,7 +17723,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -17319,7 +17785,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -17377,8 +17843,8 @@
             }
           ],
           "baseline_timeout": {
-            "min": 0.2,
-            "max": 0.3
+            "min": 0.1,
+            "max": 0.1
           },
           "cue_timeout": {
             "min": 0.01,
@@ -17406,7 +17872,7 @@
             "max": 0.25
           },
           "average_scaling": true,
-          "max_eye_change": 100,
+          "max_eye_change": 100.0,
           "max_eye_change_step": 80.0
         },
         {
@@ -17415,20 +17881,20 @@
           "goal": 99,
           "name": "calibrate eye saccade",
           "intertrial_timeout": {
-            "min": 1.0,
-            "max": 2.0
+            "min": 0.5,
+            "max": 0.5
           },
           "start_timeout": {
             "min": 5.0,
             "max": 5.0
           },
           "hold_timeout": {
-            "min": 0.3,
-            "max": 0.4
+            "min": 0.1,
+            "max": 0.1
           },
           "blink_timeout": {
-            "min": 0.14,
-            "max": 0.14
+            "min": 0.25,
+            "max": 0.25
           },
           "fail_timeout": {
             "min": 1,
@@ -17519,7 +17985,7 @@
               "height": 2.0,
               "orientation": 0,
               "window_size": 4.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -17572,7 +18038,7 @@
               "height": 2.0,
               "orientation": 0,
               "window_size": 4.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -17625,7 +18091,7 @@
               "height": 2.0,
               "orientation": 0,
               "window_size": 4.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -17678,7 +18144,7 @@
               "height": 2.0,
               "orientation": 0,
               "window_size": 4.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -17727,12 +18193,12 @@
             }
           ],
           "baseline_timeout": {
-            "min": 0.5,
-            "max": 0.8
+            "min": 0.1,
+            "max": 0.1
           },
           "cue_timeout": {
-            "min": 0.05,
-            "max": 0.05
+            "min": 0.01,
+            "max": 0.01
           },
           "saccade_timeout": {
             "min": 1.0,
@@ -17764,8 +18230,8 @@
           "goal": 99,
           "name": "react reach small",
           "intertrial_timeout": {
-            "min": 1.0,
-            "max": 1.0
+            "min": 0.5,
+            "max": 0.5
           },
           "start_timeout": {
             "min": 5.0,
@@ -17868,7 +18334,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 8.0,
+              "reward_channel": 1.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -17921,7 +18387,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 8.0,
+              "reward_channel": 1.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -17974,7 +18440,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 8.0,
+              "reward_channel": 1.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -18027,7 +18493,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 8.0,
+              "reward_channel": 1.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -18080,7 +18546,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 8.0,
+              "reward_channel": 1.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -18133,7 +18599,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 8.0,
+              "reward_channel": 1.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -18186,7 +18652,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 8.0,
+              "reward_channel": 1.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -18239,8 +18705,8 @@
             "max": 0.1
           },
           "cue_timeout": {
-            "min": 0.01,
-            "max": 0.01
+            "min": 0.1,
+            "max": 0.1
           },
           "reach_timeout": {
             "min": 1.0,
@@ -18313,7 +18779,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -18493,7 +18959,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -18673,7 +19139,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -18853,7 +19319,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 1.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -19033,7 +19499,7 @@
               "height": 2.0,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -19086,7 +19552,7 @@
               "height": 2.0,
               "orientation": 0,
               "window_size": 8.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -19139,7 +19605,7 @@
               "height": 2.0,
               "orientation": 0,
               "window_size": 8.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -19192,7 +19658,7 @@
               "height": 2.0,
               "orientation": 0,
               "window_size": 8.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -19245,7 +19711,7 @@
               "height": 2.0,
               "orientation": 0,
               "window_size": 8.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -19298,7 +19764,7 @@
               "height": 2.0,
               "orientation": 0,
               "window_size": 8.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -19351,7 +19817,7 @@
               "height": 2.0,
               "orientation": 0,
               "window_size": 8.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -19404,7 +19870,7 @@
               "height": 2.0,
               "orientation": 0,
               "window_size": 8.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
