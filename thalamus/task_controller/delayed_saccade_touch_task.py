@@ -568,7 +568,8 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   blank_space_touched = False
   show_start_dual_target = False
   #dim_start_gaze_target = True
-  state_brightness = toggle_brightness(state_brightness)
+  if config.cue_timeout >= datetime.timedelta(0.05): # if the cue timeout is too short, the display change for go *and* targs_on will not be detected
+    state_brightness = toggle_brightness(state_brightness)
   context.widget.update()
   with await next_state(context, State.GO, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
     acquired = await wait_for(context, lambda: presented_targ_gazed or not start_target_touched, config.saccade_timeout) 
