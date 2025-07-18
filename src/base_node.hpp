@@ -62,6 +62,7 @@ public:
   virtual std::chrono::system_clock::time_point get_system_clock_at_start() = 0;
   virtual std::chrono::steady_clock::time_point get_steady_clock_at_start() = 0;
   virtual ThreadPool &get_thread_pool() = 0;
+  virtual void dialog(const thalamus_grpc::Dialog &) = 0;
 };
 
 class NoneNode : public Node {

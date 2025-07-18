@@ -45,7 +45,10 @@ public:
     if (!y_channel.empty()) {
       input.second = y_channel.front();
     }
-    if (input.first < -5 || input.second < -5) {
+    if (input.first < -4 || input.second < -4) {
+      output.first = input.first;
+      output.second = input.second;
+      outer->ready(outer);
       return;
     }
     output.first =
@@ -64,7 +67,7 @@ public:
       return;
     } else if (_source->parent == transform.get()) {
       auto row_v = transform->key_of(*_source);
-      THALAMUS_ASSERT(row_v, "Row not found in transform");
+      THALAMUS_ASSERT(row_v.has_value(), "Row not found in transform");
       auto row = size_t(std::get<long long>(*row_v));
       auto column = size_t(std::get<long long>(k));
       auto value = std::get<double>(v);

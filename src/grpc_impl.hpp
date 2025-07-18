@@ -29,7 +29,7 @@ class Service : public thalamus_grpc::Thalamus::Service {
 
 public:
   boost::signals2::signal<void(::thalamus_grpc::Event &)> events_signal;
-  boost::signals2::signal<void(::thalamus_grpc::Text &)> log_signal;
+  boost::signals2::signal<void(const ::thalamus_grpc::Text &)> log_signal;
   // boost::signals2::signal<void(::thalamus_grpc::ObservableChange&)>
   // change_signal;
 
@@ -56,6 +56,9 @@ public:
   ::grpc::Status log(::grpc::ServerContext *context,
                      ::grpc::ServerReader<::thalamus_grpc::Text> *reader,
                      ::thalamus_grpc::Empty *) override;
+  ::grpc::Status logout(::grpc::ServerContext *context,
+                        const ::thalamus_grpc::Empty *,
+                        ::grpc::ServerWriter<::thalamus_grpc::Text> *writer) override;
   ::grpc::Status observable_bridge(
       ::grpc::ServerContext *context,
       ::grpc::ServerReaderWriter<::thalamus_grpc::ObservableChange,
@@ -106,6 +109,10 @@ public:
         const ::thalamus_grpc::NodeSelector *request,
         ::grpc::ServerWriter<::thalamus_grpc::XsensResponse> *writer) override;
   ::grpc::Status
+  motion_capture(::grpc::ServerContext *context,
+        const ::thalamus_grpc::NodeSelector *request,
+        ::grpc::ServerWriter<::thalamus_grpc::XsensResponse> *writer) override;
+  ::grpc::Status
   image(::grpc::ServerContext *context,
         const ::thalamus_grpc::ImageRequest *request,
         ::grpc::ServerWriter<::thalamus_grpc::Image> *writer) override;
@@ -127,6 +134,10 @@ public:
   ::grpc::Status inject_analog(
       ::grpc::ServerContext *context,
       ::grpc::ServerReader<::thalamus_grpc::InjectAnalogRequest> *reader,
+      ::thalamus_grpc::Empty *) override;
+  ::grpc::Status inject_motion_capture(
+      ::grpc::ServerContext *context,
+      ::grpc::ServerReader<::thalamus_grpc::InjectMotionCaptureRequest> *reader,
       ::thalamus_grpc::Empty *) override;
   ::grpc::Status
   get_modalities(::grpc::ServerContext *context,

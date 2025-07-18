@@ -69,6 +69,7 @@ template <typename T> struct Caster {
 
       THALAMUS_ASSERT(false, "Not convertable: %s %s->%s", arg_text, m_name,
                       t_name);
+      return T();
     }
   }
 };
@@ -215,6 +216,7 @@ struct GenicamNode::Impl {
         return std::get<double>(from);
       }
       THALAMUS_ASSERT(false, "Invalid Reg type");
+      return 0;
     }
     static RegValue number_to_reg(const calculator::number &from) {
       if (std::holds_alternative<long long int>(from)) {
@@ -223,6 +225,7 @@ struct GenicamNode::Impl {
         return std::get<double>(from);
       }
       THALAMUS_ASSERT(false, "Invalid number type");
+      return 0;
     }
     struct Device {
       virtual ~Device();
@@ -244,6 +247,7 @@ struct GenicamNode::Impl {
         return AccessMode::WO;
       }
       THALAMUS_ASSERT(false, "Invalid access mode string: %s", text);
+      return AccessMode::RW;
     }
 
     struct IntConverter {
@@ -667,7 +671,7 @@ struct GenicamNode::Impl {
         THALAMUS_ASSERT(error == GenTL::GC_ERR_SUCCESS, "GCReadPort failed: %d",
                         error);
 
-        double result;
+        double result = 0.0;
         if (length == 4) {
           if (little_endian) {
             boost::endian::little_to_native_inplace(
@@ -701,7 +705,7 @@ struct GenicamNode::Impl {
           total_address += std::get<long long int>(device->get(p_address));
         }
 
-        GenTL::GC_ERROR error;
+        GenTL::GC_ERROR error = GenTL::GC_ERR_SUCCESS;
         size_t length2 = length;
         buffer.resize(length);
         if (length == 4) {
@@ -1361,7 +1365,7 @@ struct GenicamNode::Impl {
                 if (pair.first == "pVariable") {
                   auto var_name =
                       pair.second.get_optional<std::string>("<xmlattr>.Name");
-                  THALAMUS_ASSERT(var_name, "Name missing");
+                  THALAMUS_ASSERT(var_name.has_value(), "Name missing");
                   values[*var_name] = pair.second.data();
                 } else if (pair.first == "Expression") {
                   auto var_name =
@@ -1390,7 +1394,7 @@ struct GenicamNode::Impl {
                 if (pair.first == "pVariable") {
                   auto var_name =
                       pair.second.get_optional<std::string>("<xmlattr>.Name");
-                  THALAMUS_ASSERT(var_name, "Name missing");
+                  THALAMUS_ASSERT(var_name.has_value(), "Name missing");
                   values[*var_name] = pair.second.data();
                 } else if (pair.first == "Expression") {
                   auto var_name =
@@ -1417,7 +1421,7 @@ struct GenicamNode::Impl {
                 if (pair.first == "pVariable") {
                   auto var_name =
                       pair.second.get_optional<std::string>("<xmlattr>.Name");
-                  THALAMUS_ASSERT(var_name, "Name missing");
+                  THALAMUS_ASSERT(var_name.has_value(), "Name missing");
                   values[*var_name] = pair.second.data();
                 } else if (pair.first == "Expression") {
                   auto var_name =
@@ -1440,7 +1444,7 @@ struct GenicamNode::Impl {
                 if (pair.first == "pVariable") {
                   auto var_name =
                       pair.second.get_optional<std::string>("<xmlattr>.Name");
-                  THALAMUS_ASSERT(var_name, "Name missing");
+                  THALAMUS_ASSERT(var_name.has_value(), "Name missing");
                   values[*var_name] = pair.second.data();
                 } else if (pair.first == "Expression") {
                   auto var_name =
@@ -1887,6 +1891,7 @@ struct GenicamNode::Impl {
           return get(std::get<Link>(i->second).name);
         }
         THALAMUS_ASSERT(false, "Unexpected register type");
+        return 0;
       }
 
       void set(const std::string &reg,
@@ -2166,7 +2171,13 @@ struct GenicamNode::Impl {
             }
 
             auto new_device = std::make_shared<DeviceImpl>(dev_handle, this);
-            devices[device_id] = std::move(new_device);
+            std::string device_key;
+            if(new_device->exists("DeviceID")) {
+              device_key = std::get<std::string>(new_device->get("DeviceID"));
+            } else {
+              device_key = device_id;
+            }
+            devices[device_key] = std::move(new_device);
           }
         }
       }
@@ -2281,9 +2292,11 @@ struct GenicamNode::Impl {
 
     state_connection =
         state->recursive_changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3, _4));
+    this->state->recap(std::bind(&Impl::on_change, this, state.get(), _1, _2, _3));
   }
 
   ~Impl() {
+    stop_stream();
     (*state)["Running"].assign(false, [&] {});
   }
 
@@ -2450,6 +2463,9 @@ struct GenicamNode::Impl {
     
     for(auto i = camera_state->begin();i != camera_state->end();++i) {
       state->at(i->first) = i->second;
+      if (std::get<std::string>(i->first) == std::string("AcquisitionFrameRate")) {
+        target_framerate = i->second;
+      }
     }
     return true;
   }
@@ -2479,6 +2495,14 @@ struct GenicamNode::Impl {
     if(source == camera_state.get()) {
       if(!state->contains(k)) {
         state->at(k).assign(v);
+      }
+      auto key_str = std::get<std::string>(k);
+      if(key_str == "AcquisitionFrameRate") {
+        if(std::holds_alternative<long long>(v)) {
+          target_framerate = double(std::get<long long>(v));
+        } else if (std::holds_alternative<double>(v)) {
+          target_framerate = std::get<double>(v);
+        }
       }
       return;
     }
@@ -2547,6 +2571,7 @@ bool GenicamNode::Impl::Cti::DeviceImpl::is_writable(const std::string &reg) {
     return is_writable(std::get<Link>(i->second).name);
   }
   THALAMUS_ASSERT(false, "Unexpected Register type");
+  return false;
 }
 
 GenicamNode::GenicamNode(ObservableDictPtr state,
@@ -2585,8 +2610,8 @@ bool GenicamNode::prepare() { return true; }
 
 void GenicamNode::cleanup() {
   if (Impl::ctis) {
-    // delete Impl::ctis;
-    // delete Impl::parser;
+    delete Impl::ctis;
+    delete Impl::parser;
     Impl::ctis = nullptr;
     Impl::parser = nullptr;
   }

@@ -39,8 +39,8 @@ struct OculomaticNode::Impl {
   std::atomic_bool frame_pending;
   std::vector<unsigned char> intermediate;
   Format format;
-  bool need_recenter;
-  std::pair<double, double> centering_offset;
+  bool need_recenter = false;
+  std::pair<double, double> centering_offset = std::make_pair(AOUT_MIN, AOUT_MIN);
   std::pair<int, int> centering_pix;
   NodeGraph *graph;
   size_t threshold;
@@ -193,6 +193,7 @@ struct OculomaticNode::Impl {
                &this_output_frames = this->output_frames,
                &this_next_output_frame = this->next_output_frame,
                &this_io_context = io_context,
+               this_state = state,
                this_centering_pix = this->centering_pix,
                this_centering_offset = this->centering_offset,
                &this_ref_centering_pix = this->centering_pix,
@@ -299,11 +300,14 @@ struct OculomaticNode::Impl {
               this_invert_x, this_invert_y);
           boost::asio::post(this_io_context, [new_centering_pix,
                                               new_centering_offset,
+                                              this_state,
                                               &this_ref_centering_pix,
                                               &this_ref_centering_offset] {
             TRACE_EVENT("thalamus", "OculomaticNode apply recenter");
             this_ref_centering_pix = new_centering_pix;
             this_ref_centering_offset = new_centering_offset;
+            (*this_state)["Pix X"].assign(new_centering_pix.first);
+            (*this_state)["Pix Y"].assign(new_centering_pix.second);
           });
         }
         gaze = normalize_center(
@@ -387,6 +391,10 @@ struct OculomaticNode::Impl {
       invert_x = std::get<bool>(v);
     } else if (key_str == "Invert Y") {
       invert_y = std::get<bool>(v);
+    } else if (key_str == "Pix X") {
+      centering_pix.first = int(std::get<long long>(v));
+    } else if (key_str == "Pix Y") {
+      centering_pix.second = int(std::get<long long>(v));
     } else if (key_str == "Source") {
       std::string source_str = state->at("Source");
       auto token = std::string(absl::StripAsciiWhitespace(source_str));
@@ -497,11 +505,11 @@ void OculomaticNode::inject(
     const thalamus::vector<std::span<double const>> &data,
     const thalamus::vector<std::chrono::nanoseconds> &interval,
     const thalamus::vector<std::string_view> &) {
-  THALAMUS_ASSERT(data.size() >= 3);
-  THALAMUS_ASSERT(data[0].size() >= 1);
-  THALAMUS_ASSERT(data[1].size() >= 1);
-  THALAMUS_ASSERT(data[2].size() >= 1);
-  THALAMUS_ASSERT(interval.size() >= 1);
+  THALAMUS_ASSERT(data.size() >= 3, "Too few channels");
+  THALAMUS_ASSERT(data[0].size() >= 1, "No X specified");
+  THALAMUS_ASSERT(data[1].size() >= 1, "No Y Specified");
+  THALAMUS_ASSERT(data[2].size() >= 1, "No diameter specified");
+  THALAMUS_ASSERT(interval.size() >= 1, "No interval specified");
   this->impl->current_result.x = data[0][0];
   this->impl->current_result.y = data[1][0];
   this->impl->current_result.diameter = data[2][0];

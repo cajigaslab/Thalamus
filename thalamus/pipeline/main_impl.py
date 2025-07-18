@@ -22,6 +22,7 @@ import itertools
 import yaml
 
 from ..config import *
+from ..cache_manager import CacheManager
 
 from pkg_resources import resource_string, resource_filename
 
@@ -97,6 +98,8 @@ async def async_main() -> None:
   for node in config['nodes']:
     if 'Running' in node:
       node['Running'] = False
+
+  cache_manager = CacheManager(config)
 
   server = grpc.aio.server()
   servicer = ThalamusServicer(config)

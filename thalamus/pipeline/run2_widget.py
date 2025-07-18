@@ -64,7 +64,7 @@ class Run2Widget(QTabWidget):
   def __set_model(self, targets):
     self.targets = targets
     def choices(item, key):
-      if key == 'Shape':
+      if key == 'Name':
         return [n['name'] for n in self.nodes]
 
     model = TreeObservableCollectionModel(self.targets, key_column='#', columns=['Name', 'Address'],

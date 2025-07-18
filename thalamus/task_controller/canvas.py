@@ -245,6 +245,13 @@ class CanvasPainter(QPainter):
     if self.current_output_mask in (RenderOutput.ANY, self.output_mask):
       super().drawText(*args, **kwargs)
 
+  def drawEllipse(self, *args: typing.Any, **kwargs: typing.Any) -> None: # pylint: disable=invalid-name
+    '''
+    Override that implements masked rendering
+    '''
+    if self.current_output_mask in (RenderOutput.ANY, self.output_mask):
+      super().drawEllipse(*args, **kwargs)
+
   @contextlib.contextmanager
   def masked(self, mask: RenderOutput) -> typing.Iterator['CanvasPainterProtocol']:
     '''
@@ -799,7 +806,7 @@ class Canvas(QOpenGLWidget):
             y = message.data[span.end-1]
         
         voltage = QPointF(x, y)
-        if voltage.x() < -5 or voltage.y() < -5:
+        if voltage.x() < -4 or voltage.y() < -4:
           self.on_touch(QPoint(-1, -1))
           continue
         self.last_voltage = voltage

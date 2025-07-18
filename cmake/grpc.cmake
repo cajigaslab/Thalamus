@@ -10,7 +10,7 @@ set(gRPC_MSVC_STATIC_RUNTIME ON)
 set(protobuf_MSVC_STATIC_RUNTIME ON CACHE BOOL "Protobuf: Link static runtime libraries")
 set(ABSL_ENABLE_INSTALL ON)
 #add_definitions(-DBORINGSSL_NO_CXX)
-#set(gRPC_BUILD_TESTS ON)
+set(gRPC_BUILD_TESTS ON)
 FetchContent_MakeAvailable(gRPC)
 #file(READ "${grpc_SOURCE_DIR}/third_party/zlib/CMakeLists.txt" FILE_CONTENTS)
 #string(REPLACE "cmake_minimum_required(VERSION 2.4.4)" "cmake_minimum_required(VERSION 3.12)" FILE_CONTENTS "${FILE_CONTENTS}")
@@ -39,9 +39,14 @@ macro(apply_protoc_grpc OUTPUT_SOURCES)
           DEPENDS "${PROTO_ABSOLUTE}" $<TARGET_FILE:protobuf::protoc>)
     if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
       set_source_files_properties(
-        ${${OUTPUT_SOURCES}}
+        ${apply_protoc_grpc_GENERATED}
         PROPERTIES
         COMPILE_FLAGS /wd4267)
+    else()
+      set_source_files_properties(
+        ${apply_protoc_grpc_GENERATED}
+        PROPERTIES
+        COMPILE_FLAGS -Wno-everything)
     endif()
     list(APPEND ${OUTPUT_SOURCES} ${apply_protoc_grpc_GENERATED})
   endforeach()
@@ -65,9 +70,14 @@ macro(apply_protoc OUTPUT_SOURCES)
           DEPENDS "${PROTO_ABSOLUTE}" $<TARGET_FILE:protobuf::protoc>)
     if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
       set_source_files_properties(
-        ${${OUTPUT_SOURCES}}
+        ${apply_protoc_grpc_GENERATED}
         PROPERTIES
         COMPILE_FLAGS /wd4267)
+    else()
+      set_source_files_properties(
+        ${apply_protoc_grpc_GENERATED}
+        PROPERTIES
+        COMPILE_FLAGS -Wno-everything)
     endif()
     list(APPEND ${OUTPUT_SOURCES} ${apply_protoc_grpc_GENERATED})
   endforeach()

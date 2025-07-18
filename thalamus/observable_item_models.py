@@ -176,7 +176,7 @@ class TreeObservableCollectionModel(QAbstractItemModel):
       if isinstance(source, ObservableList):
         for k in range(key, len(source)):
           self.__on_change(source, ObservableCollection.Action.SET, k, source[k])
-        if not recursed:
+        if not recursed and i != len(keys):
           self.__on_change(source, ObservableCollection.Action.DELETE, len(source), None, True)
         
 
@@ -346,6 +346,7 @@ class TreeObservableCollectionDelegate(QItemDelegate):
     choices = self.choices(item, key)
     if choices is not None:
       result = QComboBox(parent)
+      result.setEditable(True)
       return result
 
     value = item[key] if key in item else None

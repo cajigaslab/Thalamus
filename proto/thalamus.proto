@@ -10,6 +10,7 @@ message Empty {
 service Thalamus {
   rpc events(stream Event) returns (Empty) {}
   rpc log(stream Text) returns (Empty) {}
+  rpc logout(Empty) returns (stream Text) {}
   rpc observable_bridge(stream ObservableChange) returns (stream ObservableChange) {}
   rpc observable_bridge_v2(stream ObservableTransaction) returns (stream ObservableTransaction) {}
   rpc observable_bridge_read(ObservableReadRequest) returns (stream ObservableTransaction) {}
@@ -20,6 +21,7 @@ service Thalamus {
   rpc spectrogram(SpectrogramRequest) returns (stream SpectrogramResponse) {}
   rpc channel_info(AnalogRequest) returns (stream AnalogResponse) {}
   rpc xsens(NodeSelector) returns (stream XsensResponse) {}
+  rpc motion_capture(NodeSelector) returns (stream XsensResponse) {}
   rpc image(ImageRequest) returns (stream Image) {}
   rpc eval(stream EvalResponse) returns (stream EvalRequest) {}
   rpc get_type_name(StringMessage) returns (StringMessage) {}
@@ -34,6 +36,20 @@ service Thalamus {
   rpc ping(stream Ping) returns (stream Pong) {}
   rpc inject_text(stream InjectTextRequest) returns (stream Pong) {}
   rpc stim(stream StimRequest) returns (stream StimResponse) {}
+  rpc inject_motion_capture(stream InjectMotionCaptureRequest) returns (Empty) {}
+  rpc dialog(Dialog) returns (Empty) {}
+}
+
+message Dialog {
+  enum Type {
+    INFO = 0;
+    WARN = 1;
+    ERROR = 2;
+    FATAL = 3;
+  }
+  string title = 1;
+  string message = 2;
+  Type type = 3;
 }
 
 message Redirect {
@@ -69,6 +85,8 @@ message StimRequest {
     uint32 arm = 3;
     uint32 trigger = 4;
     uint32 retrieve = 5;
+    StimDeclaration inline_arm = 7;
+    StimDeclaration inline_trigger = 8;
   }
   uint32 id = 6;
 }
@@ -128,6 +146,7 @@ message NodeResponse {
 message Text {
   string text = 1;
   uint64 time = 2;
+  uint64 remote_time = 3;
 }
 
 message StorageRecord {
@@ -138,6 +157,7 @@ message StorageRecord {
     Image image = 6;
     Text text = 7;
     Compressed compressed = 8;
+    Metadata metadata = 9;
   }
   uint64 time = 4;
   string node = 5;
@@ -261,7 +281,19 @@ message InjectTextRequest {
   }
 }
 
+message InjectMotionCaptureRequest {
+  oneof body {
+    string node = 1;
+    XsensResponse data = 2;
+  }
+}
+
 message AnalogResponse {
+  enum ChannelType {
+    Voltage = 0;
+    Current = 1;
+  }
+  
   repeated double data = 1;
   repeated Span spans = 2;
   repeated uint64 sample_intervals = 3;
@@ -270,27 +302,28 @@ message AnalogResponse {
   bool is_int_data = 6;
   uint64 time = 7;
   uint64 remote_time = 8;
+  ChannelType channel_type = 9;
 }
-
+ 
 message GraphRequest {
   NodeSelector node = 1;
   repeated int32 channels = 2;
   uint64 bin_ns = 3;
   repeated string channel_names = 4;
 }
-
+ 
 message Span {
   uint32 begin = 1;
   uint32 end = 2;
   string name = 3;
 }
-
+ 
 message GraphResponse {
   repeated double bins = 1;
   repeated Span spans = 2;
   bool channels_changed = 3;
 }
-
+  
 message Event {
   bytes payload = 1;
   uint64 time = 2;
@@ -327,3 +360,17 @@ message Notification {
   string title = 2;
   string message = 3;
 }
+
+message Pair {
+  string key = 1;
+  oneof value {
+    string text = 2;
+    double decimal = 3;
+    int64 integral = 4;
+  }
+}
+
+message Metadata {
+  repeated Pair keyvalues = 1;
+}
+

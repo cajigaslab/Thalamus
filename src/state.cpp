@@ -18,6 +18,7 @@ ObservableCollection::ValueWrapper::operator ObservableDictPtr() {
     return thalamus::get<ObservableDictPtr>(value);
   } else {
     THALAMUS_ASSERT(false, "Value is not a dict");
+    return nullptr;
   }
 }
 
@@ -27,6 +28,7 @@ ObservableCollection::ValueWrapper::operator ObservableListPtr() {
     return thalamus::get<ObservableListPtr>(value);
   } else {
     THALAMUS_ASSERT(false, "Value is not a list");
+    return nullptr;
   }
 }
 
@@ -38,6 +40,7 @@ ObservableCollection::ValueWrapper::operator long long int() {
     return int64_t(thalamus::get<double>(value));
   } else {
     THALAMUS_ASSERT(false, "Value is not a number");
+    return 0;
   }
 }
 ObservableCollection::ValueWrapper::operator unsigned long long int() {
@@ -48,6 +51,7 @@ ObservableCollection::ValueWrapper::operator unsigned long long int() {
     return uint64_t(thalamus::get<double>(value));
   } else {
     THALAMUS_ASSERT(false, "Value is not a number");
+    return 0;
   }
 }
 ObservableCollection::ValueWrapper::operator unsigned long() {
@@ -58,6 +62,7 @@ ObservableCollection::ValueWrapper::operator unsigned long() {
     return uint32_t(thalamus::get<double>(value));
   } else {
     THALAMUS_ASSERT(false, "Value is not a number");
+    return 0;
   }
 }
 ObservableCollection::ValueWrapper::operator double() {
@@ -68,6 +73,7 @@ ObservableCollection::ValueWrapper::operator double() {
     return thalamus::get<double>(value);
   } else {
     THALAMUS_ASSERT(false, "Value is not a number");
+    return 0.0;
   }
 }
 ObservableCollection::ValueWrapper::operator bool() {
@@ -87,6 +93,7 @@ ObservableCollection::ValueWrapper::operator bool() {
     return thalamus::get<bool>(value);
   } else {
     THALAMUS_ASSERT(false, "Value is not a bool or number");
+    return false;
   }
 }
 ObservableCollection::ValueWrapper::operator std::string() {
@@ -95,6 +102,7 @@ ObservableCollection::ValueWrapper::operator std::string() {
     return thalamus::get<std::string>(value);
   } else {
     THALAMUS_ASSERT(false, "Value is not a string");
+    return "";
   }
 }
 ObservableCollection::ValueWrapper::operator ObservableCollection::Value() {
@@ -114,14 +122,15 @@ ObservableCollection::VectorIteratorWrapper::VectorIteratorWrapper(
     ObservableCollection *_collection)
     : key(_key), iterator(_iterator), end(_end), collection(_collection) {}
 
-ObservableCollection::ValueWrapper
+ObservableCollection::ValueWrapper&
 ObservableCollection::VectorIteratorWrapper::operator*() {
-  auto _iterator = this->iterator;
-  auto _end = this->end;
-  return ValueWrapper(
+  auto this_iterator = this->iterator;
+  auto this_end = this->end;
+  value_wrapper = ValueWrapper(
       static_cast<long long int>(key),
-      [_iterator]() -> Value & { return *_iterator; },
-      [_iterator, _end]() -> bool { return _iterator != _end; }, collection);
+      [this_iterator]() -> Value & { return *this_iterator; },
+      [this_iterator, this_end]() -> bool { return this_iterator != this_end; }, collection);
+  return *value_wrapper;
 }
 
 ObservableCollection::VectorIteratorWrapper &
@@ -183,27 +192,23 @@ ObservableCollection::MapIteratorWrapper::MapIteratorWrapper(
     ObservableCollection *_collection)
     : iterator(_iterator), end(_end), collection(_collection) {}
 
-ObservableCollection::ValueWrapper
+std::pair<ObservableCollection::Key, ObservableCollection::ValueWrapper>&
 ObservableCollection::MapIteratorWrapper::operator*() {
-  auto _iterator = this->iterator;
-  auto _end = this->end;
-  return ValueWrapper(
-      _iterator->first, [_iterator]() -> Value & { return _iterator->second; },
-      [_iterator, _end]() -> bool { return _iterator != _end; }, collection);
+  auto this_iterator = this->iterator;
+  auto this_end = this->end;
+  pair = std::make_pair(
+      this_iterator->first,
+      ValueWrapper(
+          this_iterator->first,
+          [this_iterator]() -> Value & { return this_iterator->second; },
+          [this_iterator, this_end]() -> bool { return this_iterator != this_end; },
+          collection));
+  return pair.value();
 }
 
 std::pair<ObservableCollection::Key, ObservableCollection::ValueWrapper> *
 ObservableCollection::MapIteratorWrapper::operator->() {
-  auto _iterator = this->iterator;
-  auto _end = this->end;
-  pair = std::make_pair(
-      _iterator->first,
-      ValueWrapper(
-          _iterator->first,
-          [_iterator]() -> Value & { return _iterator->second; },
-          [_iterator, _end]() -> bool { return _iterator != _end; },
-          collection));
-  return &pair.value();
+  return &(**this);
 }
 
 ObservableCollection::MapIteratorWrapper &

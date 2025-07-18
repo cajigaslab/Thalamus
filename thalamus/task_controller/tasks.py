@@ -18,6 +18,7 @@ from . import context_dependent_delay_reach
 from . import null_task
 from . import iphone
 from . import stim_task
+from . import ceci_stim_task
 from . import delayed_reach_stim_task
 from . import doublestep_saccade
 from . import motion_capture_task
@@ -78,6 +79,9 @@ DESCRIPTIONS = [
   TaskDescription('stim_task', 'Stim Task',
     stim_task.create_widget,
     stim_task.run),
+  TaskDescription('ceci_stim_task', 'Ceci Stim Task',
+    ceci_stim_task.create_widget,
+    ceci_stim_task.run),
   TaskDescription('delayed_read_stim_task', 'Delayed Reach Stim Task',
     delayed_reach_stim_task.create_widget,
     delayed_reach_stim_task.run),
