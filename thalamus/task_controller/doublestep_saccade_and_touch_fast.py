@@ -630,8 +630,8 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     show_presented_target = True
     context.widget.update()
     await context.log(f'BehavState=start_on')
-    acquired = await wait_for(context, lambda: presented_targ_touched and start_target_gazed or blank_space_touched, config.start_timeout)
-    if blank_space_touched:
+    acquired = await wait_for(context, lambda: presented_targ_touched and start_target_gazed or blank_space_touched or start_target_touched, config.start_timeout)
+    if blank_space_touched or start_target_touched:
       await fail_trial()
       await context.sleep(config.fail_timeout)
       return task_context.TaskResult(False)
