@@ -210,7 +210,9 @@ class Form(QWidget):
     if config.field not in self.config:
       self.config[config.field] = config.default
 
-    self.grid_layout.addWidget(QLabel(config.label), self.row, 0)
+    label = QLabel(config.label) # 'label' was added to allow to modify GUI labels from the task code
+    label.setObjectName(f'{config.field}_label')
+    self.grid_layout.addWidget(label, self.row, 0)
 
     min_spin_box = QDoubleSpinBox()
     min_spin_box.setDecimals(config.precision)

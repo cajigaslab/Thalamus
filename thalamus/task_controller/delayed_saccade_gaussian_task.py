@@ -280,6 +280,27 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   height_targ_deg_max_spinbox.setRange(0.1, 10)
   height_targ_deg_max_spinbox.setSingleStep(0.1)  
 
+  # Code below is used to update the label and freeze the GUI field when we lock the height to the width
+  w_label = form.findChild(QLabel, "monitorsubj_W_pix_label")
+  w_label_original = w_label.text()
+  i = 0
+
+  def on_change(source, action, key, value):
+    nonlocal i
+    if key == 'is_height_locked': # If the height is locked to the width, then disable the height spinboxes
+      height_targ_deg_min_spinbox.setEnabled(not value)
+      height_targ_deg_max_spinbox.setEnabled(not value)
+    elif key in ('monitorsubj_W_pix', 'monitorsubj_H_pix'): # If the monitor size is changed, then update the value in degrees
+      # add the rest of the 3 monitor dimensions
+      converter0 = Converter(Size(task_config['monitorsubj_W_pix'], task_config['monitorsubj_H_pix']), \
+                             task_config['monitorsubj_width_m'], task_config['monitorsubj_dist_m']) # replace variables with GUI inputs!!
+      # i += 1 # Replace i with conversion function into degrees
+      i = converter0.relpix_to_absdeg(task_config['monitorsubj_H_pix'], task_config['monitorsubj_W_pix'])
+      w_label.setText(w_label_original + f' ({round(i[1], 2)} deg)') # add (... deg) to the label
+      converter0 = None # destroy the converter just in case
+ 
+  task_config.add_recursive_observer(on_change, lambda: isdeleted(result), True)
+
   return result
 
 # === State Handlers (low-level, reusable) ===
@@ -706,17 +727,28 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
           ]
           random.shuffle(rand_pos) # Shuffle the list of random positions to randomize their order
 
+
+  task_group = config['task_group']
+  if random.random() < config['catch_trial_rate'] :
+    trial_type = "catch_trial"
+  else:
+    trial_type = "saccade_trial"
+
   # If all random positions have been used, shuffle the list and reset the index
   if rand_pos_i == len(rand_pos):
     random.shuffle(rand_pos)
     rand_pos_i = 0
   # Get the current target position from the list of random positions
-  targetpos_pix = QPoint(int(rand_pos[rand_pos_i][0]), int(rand_pos[rand_pos_i][1]))
-  context.trial_summary_data.used_values['targetposX_pix'] = targetpos_pix.x()
-  context.trial_summary_data.used_values['targetposY_pix'] = targetpos_pix.y()
-  targetpos_f = QPointF(int(rand_pos[rand_pos_i][0]), int(rand_pos[rand_pos_i][1]))
-  current_rand_pos_i = rand_pos_i
-  rand_pos_i += 1
+  if trial_type == "saccade_trial": # For saccade trials, the target position is randomly selected from the list of random positions
+    targetpos_pix = QPoint(int(rand_pos[rand_pos_i][0]), int(rand_pos[rand_pos_i][1]))
+    context.trial_summary_data.used_values['targetposX_pix'] = targetpos_pix.x()
+    context.trial_summary_data.used_values['targetposY_pix'] = targetpos_pix.y()
+    targetpos_pix_f = QPointF(int(rand_pos[rand_pos_i][0]), int(rand_pos[rand_pos_i][1]))
+    current_rand_pos_i = rand_pos_i
+    rand_pos_i += 1
+  elif trial_type == "catch_trial":
+    targetpos_pix = QPoint(center.x(), center.y()) # For catch trials, the target position is at the center of the screen
+    targetpos_pix_f = QPointF(center.x(), center.y())
 
   # Define the vertices for the fixation cross in degrees
   vertices_deg = [ 
@@ -744,11 +776,6 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   target_color_rgb = config['target_color']
   background_color = config['background_color']
   background_color_qt = QColor(background_color[0], background_color[1], background_color[2], 255)
-  task_group = config['task_group']
-  if random.random() < config['catch_trial_rate'] :
-    trial_type = "catch_trial"
-  else:
-    trial_type = "saccade_trial"
   
   # Get various timeouts from the context (user GUI)
   decision_timeout = context.get_value('decision_timeout') / 1000 # dividing by 1000x to convert from ms to s
@@ -975,7 +1002,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       painter.fillRect(QRect(0, 0, 465, 230), QColor(255, 255, 255, 255)) # background white rectangle in the OView to see text
 
       path = QPainterPath()
-      path.addEllipse(targetpos_f, accpt_gaze_radius_pix, accpt_gaze_radius_pix)
+      path.addEllipse(targetpos_pix_f, accpt_gaze_radius_pix, accpt_gaze_radius_pix)
       painter.fillPath(path, QColor(255, 255, 255, 128))
       path = QPainterPath()
       path.addEllipse(center_f, accpt_gaze_radius_pix, accpt_gaze_radius_pix)
