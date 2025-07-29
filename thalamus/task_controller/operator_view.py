@@ -114,6 +114,27 @@ class CentralWidget(QWidget):
     eye_config.recap(checkbox_switch_change)
     # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
+    # Adding a checkbox for controlling visual feedback fixation cross thickening
+    # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+    my_checkbox2 = QCheckBox('Highlight Fixation Cross')
+    layout.addWidget(my_checkbox2, 2, 3)  # Place it in row 1, column 3 (or wherever you want)
+
+    def checkbox_switch2(v: bool) -> None:
+      """
+      Callback for when the checkbox is toggled
+      """
+      target.canvas.feedback_choice2 = v
+
+    my_checkbox2.toggled.connect(checkbox_switch2)
+
+    def checkbox_switch_change2(a, k, v):
+        if k == 'Highlight Fixation Cross':
+            my_checkbox2.setChecked(v)
+
+    eye_config.add_observer(checkbox_switch_change2, lambda: isdeleted(self))
+    eye_config.recap(checkbox_switch_change2)
+    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
     quadrants = [
       ("I", 2, 0),
       ("II", 2, 2),

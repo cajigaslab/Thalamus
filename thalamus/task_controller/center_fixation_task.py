@@ -36,6 +36,7 @@ circle_radii = []
 rand_pos_i = 0
 trial_num = 0
 abort_count = 0
+success_count = 0
 trial_photic_count = 0
 trial_photic_success_count = 0
 reward_total_released_ms = 0
@@ -187,10 +188,10 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   monitorsubj_H_pix_spinbox.setRange(100, 4000)
   monitorsubj_H_pix_spinbox.setSingleStep(10)
   reward_pertrial_ms_min_spinbox = form.findChild(QDoubleSpinBox, "reward_pertrial_ms_min")
-  reward_pertrial_ms_min_spinbox.setRange(10, 500)
+  reward_pertrial_ms_min_spinbox.setRange(10, 1000)
   reward_pertrial_ms_min_spinbox.setSingleStep(1)
   reward_pertrial_ms_max_spinbox = form.findChild(QDoubleSpinBox, "reward_pertrial_ms_max")
-  reward_pertrial_ms_max_spinbox.setRange(100, 500)
+  reward_pertrial_ms_max_spinbox.setRange(10, 1000)
   reward_pertrial_ms_max_spinbox.setSingleStep(1)
   accpt_gaze_radius_deg_spinbox = form.findChild(QDoubleSpinBox, "accpt_gaze_radius_deg")
   accpt_gaze_radius_deg_spinbox.setRange(.1, 60.0)
@@ -281,7 +282,7 @@ async def handle_fixate(
 async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-many-statements
   """Main entry point for the Gaussian delayed saccade task."""
   global converter, cross_xy_pos_pix_qt, cross_xy_pos_pix_qtf, num_circles, circle_radii, rand_pos_i, \
-    trial_num, abort_count, trial_photic_count, trial_photic_success_count, trial_catch_count, \
+    trial_num, success_count, abort_count, trial_photic_count, trial_photic_success_count, trial_catch_count, \
     trial_catch_success_count, drawn_objects, rand_pos, reward_total_released_ms, \
     gaze_success_store, gaze_failure_store, WATCHING, state
 
@@ -455,8 +456,13 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
           painter.drawEllipse(cross_xy_pos_pix_qtf, radius_of_green_feedback_circle_pix, radius_of_green_feedback_circle_pix) # the last 2 inputs = radii of the elipse
         if getattr(context.widget, 'feedback_choice', False): # Controlling the drawing of feedback on the subject's screen using Operator View GUI checkbox
           painter.drawEllipse(cross_xy_pos_pix_qtf, radius_of_green_feedback_circle_pix, radius_of_green_feedback_circle_pix) # the last 2 inputs = radii of the elipse
+        if getattr(context.widget, 'feedback_choice2', False): # Controlling the drawing of feedback on the subject's screen using Operator View GUI checkbox
+          pen.setWidth(6)
+          pen.setColor(QColor(30, 30, 255, 255))
+          painter.setPen(pen)
+          painter.drawPath(cross)
 
-    elif state == State.SUCCESS:
+    elif state in (State.SUCCESS, State.ABORT):
       pen = painter.pen()
       pen.setWidth(2)
       pen.setColor(QColor(30, 30, 255))
@@ -480,13 +486,14 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
 
       # Drawing text message on the operator view
       drawText(painter, str(state), QPoint(0, 30), background_color_qt) # Draw the text message
-      drawText(painter, f"TRIAL_NUM = {trial_num}", QPoint(0, 60), background_color_qt)
-      drawText(painter, f"ABORT_count = {abort_count}", QPoint(0, 90), background_color_qt)
-      drawText(painter, f"Total reward = {round(reward_total_released_ms)} ms", QPoint(0, 120), background_color_qt)
+      drawText(painter, f"SUCCESS_count = {success_count}", QPoint(0, 60), background_color_qt)
+      drawText(painter, f"TRIAL_NUM = {trial_num}", QPoint(0, 90), background_color_qt)
+      drawText(painter, f"ABORT_count = {abort_count}", QPoint(0, 120), background_color_qt)
+      drawText(painter, f"Total reward = {round(reward_total_released_ms)} ms", QPoint(0, 150), background_color_qt)
       temp_gaze = gaze_valid(gaze, monitorsubj_W_pix, monitorsubj_H_pix)
       drawn_text = f"({temp_gaze.x()}, {temp_gaze.y()})"
       drawText(painter, drawn_text, temp_gaze, background_color_qt)
-      drawText(painter, f"Gaze (pix): x = {temp_gaze.x()}, y = {temp_gaze.y()}", QPoint(0, 150), background_color_qt)
+      drawText(painter, f"Gaze (pix): x = {temp_gaze.x()}, y = {temp_gaze.y()}", QPoint(0, 180), background_color_qt)
 
       # Drawing all previously painted gazes of failed target holding
       # for gaze_qpoint, color_rgba in gaze_failure_store:
@@ -530,6 +537,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
 
   gaze_success_store.append((gaze_valid(gaze, monitorsubj_W_pix, monitorsubj_H_pix), QColor(0, 255, 0, 128)))
   await context.log('TrialResult=SUCCESS') # saving any variables / data from code
+  success_count += 1
   state = State.SUCCESS
   print(state)
   # widget.update() # DC added

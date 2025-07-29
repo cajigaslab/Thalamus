@@ -625,8 +625,8 @@ class Canvas(QOpenGLWidget):
         painter.fillPath(self.input_config.touch_path, QColor(255, 0, 0))
 
         painter.setTransform(QTransform.fromTranslate(self.width()/2, self.height()/2))
-        for path in self.input_config.gaze_paths: # drawing of gaze history as blue dots
-          painter.fillPath(path, QColor(0, 0, 255))
+        # for path in self.input_config.gaze_paths: # drawing of gaze history as blue dots
+        #   painter.fillPath(path, QColor(0, 0, 255))
 
     if self.current_output_mask != RenderOutput.OPERATOR:
       for subscriber in self.listeners.paint_subscribers:
