@@ -70,7 +70,7 @@ if(WIN32)
     "cxxflags=${BOOST_ALL_COMPILE_OPTIONS_SPACED} -DBOOST_ASIO_HAS_STD_INVOKE_RESULT -D_WIN32_WINNT=0x0A00"
     "linkflags=${ALL_LINK_OPTIONS_SPACED}"
     "--build-dir=${boost_content_BINARY_DIR}"
-    --abbreviate-paths 
+    --hash
     --with-atomic --with-chrono --with-thread --with-filesystem --with-date_time --with-system --with-program_options
     --with-log --with-json --with-container address-model=64 debug-symbols=on debug-store=database runtime-link=static
     link=static cxxstd=20
