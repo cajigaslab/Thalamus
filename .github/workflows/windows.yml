@@ -10,6 +10,8 @@ jobs:
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v4
+    - name: ASD
+      run: dir C:\msys64
     - name: Set Git name 
       run: git config --global user.name "Github Actions"
     - name: Set Git email 
