@@ -33,15 +33,7 @@
 // boost::enable_error_info(std::runtime_error(absl::StrFormat(__VA_ARGS__))) <<
 // traced(boost::stacktrace::stacktrace(2,
 // std::numeric_limits<size_t>::max()));} #else
-#define THALAMUS_ASSERT(condition, ...)                                        \
-  do {                                                                         \
-    if (!(condition)) {                                                        \
-      THALAMUS_LOG(fatal) << absl::StrFormat("" __VA_ARGS__) << "\n"           \
-                          << boost::stacktrace::stacktrace(                    \
-                                 2, std::numeric_limits<size_t>::max());       \
-      std::abort();                                                            \
-    }                                                                          \
-  } while (0)
+
 #define THALAMUS_ABORT(...)                                                    \
   THALAMUS_LOG(fatal) << absl::StrFormat("" __VA_ARGS__) << "\n"               \
                       << boost::stacktrace::stacktrace(                        \
@@ -313,3 +305,6 @@ struct ReceivedEvent {
   size_t index;
 };
 } // namespace thalamus
+
+#include <thalamus/assert.hpp>
+

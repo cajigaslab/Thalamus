@@ -549,6 +549,48 @@ Service::events(::grpc::ServerContext *context,
   return ::grpc::Status::OK;
 }
 
+struct JConnection : public boost::signals2::scoped_connection {
+  boost::signals2::scoped_connection connection;
+
+  struct State {
+    bool joining = false;
+    std::mutex mutex;
+  };
+  std::shared_ptr<State> state = std::make_shared<State>();
+
+  template<typename Signal, typename Callback>
+  JConnection(Signal& signal, Callback&& callback) {
+    connection = signal.connect([c_state=this->state, c_callback=std::forward<Callback>(callback)](auto&&... args) {
+      std::lock_guard<std::mutex> lock(c_state->mutex);
+      if(c_state->joining) {
+        return;
+      }
+      c_callback(std::forward<decltype(args)>(args)...);
+    });
+  }
+  ~JConnection() {
+    std::lock_guard<std::mutex> lock(state->mutex);
+    state->joining = true;
+  }
+};
+
+::grpc::Status Service::logout(::grpc::ServerContext *context,
+                      const ::thalamus_grpc::Empty *,
+                      ::grpc::ServerWriter<::thalamus_grpc::Text> *writer) {
+  set_current_thread_name("logout");
+  Impl::ContextGuard guard(this, context);
+
+  JConnection connection(log_signal, [writer](const ::thalamus_grpc::Text& text) {
+    writer->Write(text);
+  });
+
+  while(!context->IsCancelled()) {
+    std::this_thread::sleep_for(1s);
+  }
+
+  return ::grpc::Status::OK;
+}
+
 ::grpc::Status Service::observable_bridge(
     ::grpc::ServerContext *,
     ::grpc::ServerReaderWriter<::thalamus_grpc::ObservableChange,
@@ -1815,9 +1857,16 @@ Service::image(::grpc::ServerContext *context,
     reader->Write(response);
 
     while (reader->Read(&request)) {
+      TRACE_EVENT("thalamus", "stim_grpc");
+
+      //Being able to redirect between nodes is problematic for remote nodes so I'm disabling it.
+      //If a client wants to use a remote node for stimulation it should name the remote node.  But
+      //if NodeSelectors get forwarded to the remote Thalamus instance where the remote node doesn't exist
+      //then the stimulation pipe will break and the reason it broke will not be made clear.
       if (request.has_node()) {
-        node_name = request.node();
-        break;
+        continue;
+      //  node_name = request.node();
+      //  break;
       }
 
       std::promise<void> response_promise;
@@ -1825,6 +1874,7 @@ Service::image(::grpc::ServerContext *context,
       std::future<thalamus_grpc::StimResponse> inner_future;
       auto id = request.id();
       boost::asio::post(impl->io_context, [&] {
+        TRACE_EVENT("thalamus", "stim_main");
         inner_future = node->stim(std::move(request));
         response_promise.set_value();
       });

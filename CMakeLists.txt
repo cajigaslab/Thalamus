@@ -12,6 +12,8 @@ set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 
 project(thalamus)
 
+option(CODE_COVERAGE "Enable Code Coverage" OFF)
+
 message("CMAKE_SYSTEM_PROCESSOR ${CMAKE_SYSTEM_PROCESSOR}")
 
 if(WIN32)
@@ -201,6 +203,8 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/run2_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/remote_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/remote_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/remotelog_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/remotelog_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/ophanim_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/ophanim_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/task_controller_node.hpp"
@@ -283,6 +287,14 @@ else()
   target_link_libraries(thalamus comedi m)
 endif()
 target_compile_options(thalamus PRIVATE ${WARNING_FLAGS})
+if(CODE_COVERAGE)
+  target_compile_options(hydrate PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+  target_compile_options(thalamus PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+  target_link_options(hydrate PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+  target_link_options(thalamus PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+  target_compile_definitions(hydrate PRIVATE CODE_COVERAGE)
+  target_compile_definitions(thalamus PRIVATE CODE_COVERAGE)
+endif()
 
 target_compile_definitions(thalamus PRIVATE _USE_MATH_DEFINES)
 target_include_directories(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src")
@@ -315,3 +327,24 @@ endif()
 
 add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "$<TARGET_FILE:native>" "${CMAKE_SOURCE_DIR}/thalamus")
 
+add_executable(test src/test.cpp)
+
+if(WIN32)
+  target_compile_definitions(test PRIVATE _WIN32_WINNT=0x0A00)
+endif()
+target_compile_definitions(test PRIVATE _GNU_SOURCE)
+
+target_compile_options(test PRIVATE ${WARNING_FLAGS})
+target_include_directories(test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(test PRIVATE
+  gtest hydrate thalamus opencv thalamus_ffmpeg ffmpeg sdl protoc_generated lua cairo)
+
+target_compile_options(test PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+target_link_options(test PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+if(APPLE)
+  target_link_options(test PRIVATE -pagezero_size 10000 -image_base 7fff04c4a000)
+endif()
+
+if(NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
+  target_link_options(test PRIVATE -g)
+endif()

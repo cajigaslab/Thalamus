@@ -16,6 +16,7 @@
 #pragma clang diagnostic ignored "-Weverything"
 #endif
 #include <absl/strings/str_split.h>
+#include <absl/strings/ascii.h>
 #include <boost/asio.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/signals2.hpp>
@@ -569,6 +570,11 @@ struct SpikeGlxNode::Impl {
     }
     for(auto& pair : new_metadata) {
       std::string key = pair->at("Key");
+      key = absl::StripAsciiWhitespace(key);
+      if(key.empty()) {
+        continue;
+      }
+
       ObservableCollection::Value value = pair->at("Value");
       std::stringstream stream;
       std::visit([&](const auto& arg) {

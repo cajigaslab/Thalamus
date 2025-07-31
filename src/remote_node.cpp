@@ -195,8 +195,8 @@ struct RemoteNode::Impl {
       auto xsens_stream =
           stub->Asyncxsens(&xsens_context, selector, queue.get(),
                            reinterpret_cast<void *>(XSENS_CONNECT));
-      // stim_stream = stub->Asyncstim(&stim_context, queue.get(),
-      // reinterpret_cast<void*>(STIM_CONNECT));
+      stim_stream = stub->Asyncstim(&stim_context, queue.get(),
+      reinterpret_cast<void*>(STIM_CONNECT));
       auto ping_stream = stub->Asyncping(
           &ping_context, queue.get(), reinterpret_cast<void *>(PING_CONNECT));
 

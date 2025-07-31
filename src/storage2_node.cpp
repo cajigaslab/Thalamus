@@ -232,7 +232,9 @@ struct Storage2Node::Impl {
               j = stream_mappings.find(std::make_pair(node, i));
             }
             ++queued_records;
-            queued_bytes += record.ByteSizeLong();
+            auto record_bytes = record.ByteSizeLong();
+            queued_bytes += record_bytes;
+            currently_queued_bytes += record_bytes;
             records.emplace_back(std::move(record), j->second);
           }
         }
@@ -447,7 +449,18 @@ struct Storage2Node::Impl {
     std::filesystem::path rendered_path(rendered);
     auto parent_path = rendered_path.parent_path();
     if (!parent_path.empty()) {
-      std::filesystem::create_directories(parent_path);
+      std::error_code ec;
+      std::filesystem::create_directories(parent_path, ec);
+      if(ec) {
+        boost::asio::post(io_context, [this,ec] {
+          thalamus_grpc::Dialog d;
+          d.set_title("Failed to make output dir");
+          d.set_message(ec.message());
+          d.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_ERROR);
+          graph->dialog(d);
+        });
+        return "";
+      }
     }
 
     output_stream = std::ofstream(rendered, std::ios::trunc | std::ios::binary);
@@ -460,10 +473,15 @@ struct Storage2Node::Impl {
   std::vector<std::pair<thalamus_grpc::StorageRecord, int>> records;
   std::condition_variable records_condition;
   std::mutex records_mutex;
+  std::mutex stats_mutex;
   std::thread _thread;
   std::atomic_uint queued_records = 0;
   std::atomic_ullong queued_bytes = 0;
   std::atomic_ullong written_bytes = 0;
+  std::atomic_ullong queue_max_bytes = 0;
+  std::atomic_ullong currently_queued_bytes = 0;
+  long long sweep_count = 0;
+  std::chrono::steady_clock::duration total_sweep_time = 0ns;
 
   const size_t zbuffer_size = 1024;
 
@@ -573,6 +591,7 @@ struct Storage2Node::Impl {
       context->height = height;
       context->framerate = framerate;
       context->time_base = {framerate.den, framerate.num};
+      context->gop_size = framerate.num / framerate.den;
 
       context->pix_fmt = AV_PIX_FMT_YUV420P;
 
@@ -749,6 +768,7 @@ struct Storage2Node::Impl {
     std::vector<thalamus_grpc::StorageRecord> in_queue;
     std::list<thalamus_grpc::StorageRecord> out_queue;
     thalamus_grpc::StorageRecord current;
+    uint64_t last_flush_ns = 0;
 
     ZlibEncoder(int _stream_id) : stream_id(_stream_id) {
       zstream.zalloc = nullptr;
@@ -789,7 +809,12 @@ struct Storage2Node::Impl {
           zstream.next_out =
               reinterpret_cast<unsigned char *>(compressed_data->data()) +
               offset;
-          auto error = deflate(&zstream, Z_NO_FLUSH);
+          auto flag = Z_NO_FLUSH;
+          if(record.time() - last_flush_ns >= 1'000'000'000) {
+            last_flush_ns = record.time();
+            flag = Z_SYNC_FLUSH;
+          }
+          auto error = deflate(&zstream, flag);
           THALAMUS_ASSERT(error == Z_OK, "ZLIB Error: %d", error);
           compressing = zstream.avail_out == 0;
           if (compressing) {
@@ -843,10 +868,83 @@ struct Storage2Node::Impl {
     }
   };
 
+  void simple_thread_target(std::string output_file, const boost::json::value&, const std::vector<std::filesystem::path>& files) {
+    set_current_thread_name("STORAGE");
+
+    inja::json tdata;
+    auto time = graph->get_system_clock_at_start();
+    auto rendered = render_filename(output_file, tdata, time);
+
+    std::filesystem::path filepath(rendered);
+    auto parent_path = filepath.parent_path();
+
+    {
+      std::error_code ec;
+      std::filesystem::create_directories(parent_path, ec);
+      if(ec) {
+        boost::asio::post(io_context, [this,ec] {
+          thalamus_grpc::Dialog d;
+          d.set_title("Failed to make output dir");
+          d.set_message(ec.message());
+          d.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_ERROR);
+          graph->dialog(d);
+        });
+        return;
+      }
+    }
+
+    for(auto& file : files) {
+      if(!std::filesystem::exists(file)) {
+        THALAMUS_LOG(error) << "File doesn't exist: " << file.string();
+        boost::asio::post(io_context, [this,file] {
+          thalamus_grpc::Dialog d;
+          d.set_title("File doesn't exist");
+          d.set_message(file.string() + " doesn't exist");
+          d.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_ERROR);
+          graph->dialog(d);
+        });
+        continue;
+      }
+      auto destination = filepath.parent_path() / file.filename();
+      if(std::filesystem::exists(destination)) {
+        THALAMUS_LOG(error) << "File already exist: " << destination.string();
+        boost::asio::post(io_context, [this,destination] {
+          thalamus_grpc::Dialog d;
+          d.set_title("File already exist");
+          d.set_message(destination.string() + " already exists, skipping copy.");
+          d.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_WARN);
+          graph->dialog(d);
+        });
+        continue;
+      }
+
+      THALAMUS_LOG(info) << file << " -> " << destination;
+      std::error_code ec;
+      std::filesystem::copy(file, destination, std::filesystem::copy_options::recursive, ec);
+      if(ec) {
+        boost::asio::post(io_context, [this,ec] {
+          thalamus_grpc::Dialog d;
+          d.set_title("File Copy Error");
+          d.set_message(ec.message());
+          d.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_ERROR);
+          graph->dialog(d);
+          (*state)["Running"].assign(false);
+        });
+        return;
+      }
+    }
+  }
+
   void thread_target(std::string output_file, const boost::json::value& config, const std::vector<std::filesystem::path>& files) {
     set_current_thread_name("STORAGE");
 
     auto filename = prepare_storage(output_file);
+    if(filename.empty()) {
+      boost::asio::post(io_context, [this] {
+        (*state)["Running"].assign(false);
+      });
+      return;
+    }
     std::filesystem::path filepath(filename);
     {
       std::ofstream config_output(filename + ".json");
@@ -856,6 +954,13 @@ struct Storage2Node::Impl {
     for(auto& file : files) {
       if(!std::filesystem::exists(file)) {
         THALAMUS_LOG(error) << "File doesn't exist: " << file.string();
+        boost::asio::post(io_context, [this,file] {
+          thalamus_grpc::Dialog d;
+          d.set_title("File doesn't exist");
+          d.set_message(file.string() + " doesn't exist");
+          d.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_ERROR);
+          graph->dialog(d);
+        });
         continue;
       }
       auto destination = filepath.parent_path() / (
@@ -863,10 +968,31 @@ struct Storage2Node::Impl {
             + filepath.stem().extension().string()
             + filepath.extension().string()
             + file.extension().string());
+      if(std::filesystem::exists(destination)) {
+        THALAMUS_LOG(error) << "File already exist: " << destination.string();
+        boost::asio::post(io_context, [this,destination] {
+          thalamus_grpc::Dialog d;
+          d.set_title("File already exist");
+          d.set_message(destination.string() + " already exist");
+          d.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_ERROR);
+          graph->dialog(d);
+        });
+        continue;
+      }
       THALAMUS_LOG(info) << file << " -> " << destination;
-      std::filesystem::copy(file, destination,
-          std::filesystem::copy_options::overwrite_existing
-          | std::filesystem::copy_options::recursive);
+      std::error_code ec;
+      std::filesystem::copy(file, destination, std::filesystem::copy_options::recursive, ec);
+      if(ec) {
+        boost::asio::post(io_context, [this,ec] {
+          thalamus_grpc::Dialog d;
+          d.set_title("File Copy Error");
+          d.set_message(ec.message());
+          d.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_ERROR);
+          graph->dialog(d);
+          (*state)["Running"].assign(false);
+        });
+        return;
+      }
     }
 
     Finally f([&] { close_file(); });
@@ -968,7 +1094,10 @@ struct Storage2Node::Impl {
         records_condition.wait_for(
             lock, 1s, [&] { return !records.empty() || !is_running; });
         local_records.swap(records);
+        queue_max_bytes = std::max(queue_max_bytes.load(), currently_queued_bytes.load());
+        currently_queued_bytes = 0;
       }
+      auto sweep_start = std::chrono::steady_clock::now();
       for (auto &record_pair : local_records) {
         auto &[record, stream] = record_pair;
         auto body_type = record.body_case();
@@ -986,7 +1115,7 @@ struct Storage2Node::Impl {
             auto &image = record.image();
             auto framerate_original = image.frame_interval()
                                           ? 1e9 / double(image.frame_interval())
-                                          : 1.0 / 60;
+                                          : 60;
             auto framerate_i = std::lower_bound(
                 framerates.begin(), framerates.end(),
                 std::make_pair(framerate_original, AVRational{1, 1}),
@@ -1044,6 +1173,10 @@ struct Storage2Node::Impl {
       }
 
       service_encoders(false);
+      auto sweep_end = std::chrono::steady_clock::now();
+      std::lock_guard<std::mutex> stats_lock(stats_mutex);
+      ++sweep_count;
+      total_sweep_time += sweep_end - sweep_start;
     }
     service_encoders(true);
   }
@@ -1051,8 +1184,10 @@ struct Storage2Node::Impl {
   void queue_record(thalamus_grpc::StorageRecord &&record, int stream = 0) {
     // TRACE_EVENT("thalamus", "Storage2Node::queue_record");
     ++queued_records;
-    queued_bytes += record.ByteSizeLong();
+    auto record_bytes = record.ByteSizeLong();
+    queued_bytes += record_bytes;
     std::lock_guard<std::mutex> lock(records_mutex);
+    currently_queued_bytes += record_bytes;
     records.emplace_back(std::move(record), stream);
     records_condition.notify_one();
   }
@@ -1070,9 +1205,19 @@ struct Storage2Node::Impl {
     update_metrics(0, 0, queued_records, [&] { return "Output Queue Count"; });
     update_metrics(0, 1, queued_bytes, [&] { return "Output Queue Bytes"; });
     update_metrics(0, 2, written_bytes, [&] { return "Written Bytes"; });
+    update_metrics(0, 3, queue_max_bytes, [&] { return "Max Queued Bytes"; });
     queued_records = 0;
     queued_bytes = 0;
     written_bytes = 0;
+    queue_max_bytes = 0;
+    std::chrono::nanoseconds average_sweep;
+    {
+      std::lock_guard<std::mutex> stats_lock(stats_mutex);
+      average_sweep = sweep_count ? (total_sweep_time / sweep_count) : 0ns;
+      sweep_count = 0;
+      total_sweep_time = 0ns;
+    }
+    update_metrics(0, 4, size_t(average_sweep.count()), [&] { return "Average Sweep (ns)"; });
 
     auto now = std::chrono::steady_clock::now();
     auto elapsed = now - last_publish;
@@ -1098,6 +1243,13 @@ struct Storage2Node::Impl {
     queued_bytes = 0;
     queued_records = 0;
     written_bytes = 0;
+    queue_max_bytes = 0;
+    currently_queued_bytes = 0;
+    {
+      std::lock_guard<std::mutex> lock(stats_mutex);
+      sweep_count = 0;
+      total_sweep_time = 0ns;
+    }
 
     //Walk up to root config
     ObservableCollection* root = state.get();
@@ -1115,7 +1267,16 @@ struct Storage2Node::Impl {
       }
     }
 
-    _thread = std::thread([&, output_file, json_object=root->to_json(), files] { thread_target(output_file, json_object, files); });
+    auto simple = false;
+    if(state->contains("Simple Copy")) {
+      simple = state->at("Simple Copy");
+    }
+
+    if(simple) {
+      _thread = std::thread([&, output_file, json_object=root->to_json(), files] { simple_thread_target(output_file, json_object, files); });
+    } else {
+      _thread = std::thread([&, output_file, json_object=root->to_json(), files] { thread_target(output_file, json_object, files); });
+    }
     stats_timer.expires_after(1s);
     stats_timer.async_wait(std::bind(&Impl::on_stats_timer, this, _1));
   }

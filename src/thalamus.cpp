@@ -12,6 +12,7 @@
 #include <state_manager.hpp>
 #include <thalamus/file.hpp>
 #include <thalamus/thread.hpp>
+#include <thalamus/async.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -64,6 +65,7 @@ int main(int argc, char **argv) {
 #endif
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
   std::set_terminate(on_terminate);
+  init_movable_clocks();
 
   auto steady_start = std::chrono::steady_clock::now();
   auto system_start = std::chrono::system_clock::now();
@@ -190,7 +192,7 @@ int main(int argc, char **argv) {
   grpc::ServerBuilder builder;
   builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
   std::unique_ptr<NodeGraphImpl> node_graph(
-      new NodeGraphImpl(nodes, io_context, system_start, steady_start));
+      new NodeGraphImpl(nodes, io_context, system_start, steady_start, stub.get()));
   Service service(state, io_context, *node_graph, state_url);
   node_graph->set_service(&service);
   builder.RegisterService(&service);
@@ -242,6 +244,7 @@ int main(int argc, char **argv) {
   }
   shutdown_condition.notify_all();
   termination_thread.join();
+  cleanup_movable_clocks();
   THALAMUS_LOG(info) << "Thalamus Ending";
 
   return 0;

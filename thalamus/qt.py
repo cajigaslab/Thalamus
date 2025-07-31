@@ -9,7 +9,7 @@ if HAS_QT6:
                            QContextMenuEvent, QAction, QPixmap, QPainterPath, QBrush, QKeyEvent, QStandardItemModel,
                            QSurfaceFormat, QOffscreenSurface, QOpenGLContext, QPen, QFontMetrics, QCloseEvent,
                            QMoveEvent, QResizeEvent, QMatrix4x4, QVector3D, QPaintEvent, QQuaternion, QWheelEvent,
-                           QIcon, QFontDatabase, QRadialGradient)
+                           QIcon, QFontDatabase, QRadialGradient, QWheelEvent)
   from PyQt6.QtWidgets import (QWidget, QProgressDialog, QSizePolicy, QAbstractScrollArea, QGridLayout, QSlider, 
                                QSpinBox, QLabel, QVBoxLayout, QHBoxLayout, QComboBox, QSpinBox, QCheckBox,
                                QPushButton, QDialog, QRadioButton, QTextEdit, QMainWindow, QFileDialog, QMenu,
@@ -17,7 +17,7 @@ if HAS_QT6:
                                QDoubleSpinBox, QDockWidget, QApplication, QMenuBar, QItemDelegate, QSplitter,
                                QTreeWidget, QTreeWidgetItem, QListWidget, QTreeView, QTableView, QListView,
                                QTableWidget, QTableWidgetItem, QWizard, QWizardPage, QProgressBar, QAbstractItemView,
-                               QStyleOptionViewItem, QScrollArea, QColorDialog, QFrame)
+                               QStyleOptionViewItem, QScrollArea, QColorDialog, QFrame, QHeaderView, QButtonGroup)
   from PyQt6.QtOpenGLWidgets import (QOpenGLWidget)
   from PyQt6.QtMultimedia import QSoundEffect, QMediaPlayer
   from PyQt6.QtOpenGL import (QOpenGLFramebufferObjectFormat, QOpenGLFramebufferObject, QOpenGLBuffer, QOpenGLShader,
@@ -66,7 +66,8 @@ else:
                            QSurfaceFormat, QOffscreenSurface, QOpenGLContext, QOpenGLFramebufferObjectFormat,
                            QOpenGLFramebufferObject, QPen, QStandardItem, QTextCursor, QFontMetrics, QCloseEvent,
                            QMoveEvent, QResizeEvent, QMatrix4x4, QVector3D, QPaintEvent, QQuaternion, QWheelEvent,
-                           QOpenGLBuffer, QOpenGLShaderProgram, QOpenGLShader, QIcon, QFontDatabase, QRadialGradient)
+                           QOpenGLBuffer, QOpenGLShaderProgram, QOpenGLShader, QIcon, QFontDatabase, QRadialGradient,
+                           QWheelEvent)
   from PyQt5.QtWidgets import (QWidget, QProgressDialog, QSizePolicy, QAbstractScrollArea, QGridLayout, QSlider, 
                                QSpinBox, QLabel, QVBoxLayout, QHBoxLayout, QComboBox, QSpinBox, QCheckBox, QPushButton,
                                QDialog, QRadioButton, QTextEdit, QMainWindow, QFileDialog, QMenu, QInputDialog, 
@@ -74,7 +75,7 @@ else:
                                QApplication, QOpenGLWidget, QAction, QAbstractItemView, QTreeView, QTableView,
                                QListView, QMenuBar, QItemDelegate, QSplitter, QTreeWidget, QTreeWidgetItem,
                                QListWidget, QTableWidget, QTableWidgetItem, QWizard, QWizardPage, QProgressBar,
-                               QStyleOptionViewItem, QScrollArea, QColorDialog, QFrame)
+                               QStyleOptionViewItem, QScrollArea, QColorDialog, QFrame, QHeaderView, QButtonGroup)
   from PyQt5.QtCore import (QPoint, QRect, QPointF, Qt, QSize, QSizeF, QDir, QItemSelectionModel, QModelIndex, QTimer,
                             QAbstractListModel, QAbstractItemModel, QAbstractTableModel, QLineF, QRectF, QBuffer,
                             QItemSelection, QVariant, QUrl, QSortFilterProxyModel, PYQT_VERSION_STR)
