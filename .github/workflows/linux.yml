@@ -36,7 +36,7 @@ jobs:
         echo "python3.8 -m venv pyenv" >> prepare_and_build.sh
         echo "source pyenv/bin/activate" >> prepare_and_build.sh
         echo "pip install -U pip setuptools" >> prepare_and_build.sh
-        echo "python prepare.py" >> prepare_and_build.sh
+        echo "python prepare.py --ci" >> prepare_and_build.sh
         echo "source ~/.thalamusrc" >> prepare_and_build.sh
         echo "cmake --version" >> prepare_and_build.sh
         echo "python -m build -n -w -Crelease" >> prepare_and_build.sh
