@@ -31,7 +31,19 @@ class CacheManager:
       connection.execute('CREATE TABLE cache (address, value)')
       connection.execute('CREATE INDEX cache_index ON cache (address)')
       connection.commit()
+
+    if 'Persistence' not in config:
+      config['Persistence'] = {}
+    persistence_config = config['Persistence']
+
+    if 'Cached' not in persistence_config:
+      persistence_config['Cached'] = []
+    cached_config = persistence_config['Cached']
+    cached_addresses = set(c['Address'] for c in cached_config)
+
     for address, value in connection.execute('SELECT address, value FROM cache'):
+      if address not in cached_addresses:
+        continue
       try:
         jsonpath_expr = jsonpath_ng.ext.parse(address)
       except Exception as _exc: # pylint: disable=broad-except
@@ -60,14 +72,6 @@ class CacheManager:
           match.context.value[match.path.index] = value
         elif isinstance(match.path, jsonpath_ng.Fields):
           match.context.value[match.path.fields[0]] = value
-
-    if 'Persistence' not in config:
-      config['Persistence'] = {}
-    persistence_config = config['Persistence']
-
-    if 'Cached' not in persistence_config:
-      persistence_config['Cached'] = []
-    cached_config = persistence_config['Cached']
 
     def on_property_change(address: str, root, save_config: SaveConfig, key_filter, source, action, key, value):
       print('on_property_change', address, root, save_config, key_filter, key, key_filter == key, value)
