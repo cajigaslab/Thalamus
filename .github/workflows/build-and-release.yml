@@ -117,8 +117,8 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        upload_url: ${{ steps.paths.outputs.linux }}
-        asset_path: dist/${{ steps.paths.outputs.linux }}
+        upload_url: ${{ steps.create-release.outputs.upload_url }}
+        asset_path: ${{ steps.paths.outputs.linux }}
         asset_name: ${{ steps.paths.outputs.linux }}
         asset_content_type: application/x-wheel+zip
     - name: Upload Windows Release
