@@ -23,6 +23,8 @@ jobs:
     - run: python3 -m pip install sphinx
     - run: sphinx-build -M html Thalamus/docs/source/ Thalamus/docs/build/
     - run: cp -r Thalamus/docs/build/html/* ghpages
+    - run: git diff
+      working-directory: ghpages
     - run: git config --global user.email "no@email.com"
     - run: git config --global user.name "no name"
     - run: git add -A .
