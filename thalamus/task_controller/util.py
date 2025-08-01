@@ -363,8 +363,8 @@ async def wait_for_dual_hold(context: TaskContextProtocol,
     elapsed_time = datetime.timedelta(seconds=time.perf_counter() - start)
     td_spent_blinking = datetime.timedelta(seconds=time_spent_blinking)
 
-    remaining_time = hold_duration - elapsed_time + td_spent_blinking
-    #remaining_time = hold_duration - elapsed_time
+    #remaining_time = hold_duration - elapsed_time + td_spent_blinking
+    remaining_time = hold_duration - elapsed_time
     if remaining_time.total_seconds() < 0:
       break 
     blinked = await wait_for(context, lambda: not is_held1() or not is_held2(), remaining_time)
@@ -456,8 +456,8 @@ async def wait_for_hold(context: TaskContextProtocol,
     elapsed_time = datetime.timedelta(seconds=time.perf_counter() - start)
     td_spent_blinking = datetime.timedelta(seconds=time_spent_blinking)
     
-    remaining_time = hold_duration - elapsed_time + td_spent_blinking
-    #remaining_time = hold_duration - elapsed_time
+    #remaining_time = hold_duration - elapsed_time + td_spent_blinking
+    remaining_time = hold_duration - elapsed_time
     if remaining_time.total_seconds() < 0:
       break 
     blinked = await wait_for(context, lambda: not is_held(), remaining_time)
