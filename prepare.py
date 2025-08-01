@@ -104,7 +104,7 @@ def main():
     #clang
     clang_which = shutil.which('clang')
     print('Current clang:', clang_which)
-    if not clang_which or args.ci:
+    if not clang_which:
       destination = 'C:\\Program Files\\LLVM\\bin'
       new_path.append(destination)
       expected_clang = pathlib.Path(destination) / 'clang.exe'
