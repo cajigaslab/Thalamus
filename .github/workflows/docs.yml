@@ -27,7 +27,7 @@ jobs:
     - run: git config --global user.name "no name"
     - run: git add -A
       working-directory: ghpages
-    - run: git commit -m "Update site"
+    - run: git diff --cached --exit-code || git commit -m "Update site"
       working-directory: ghpages
     - run: git push origin ghpages
       working-directory: ghpages
