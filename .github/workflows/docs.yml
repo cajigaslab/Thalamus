@@ -25,7 +25,7 @@ jobs:
     - run: cp -r Thalamus/docs/build/html/* ghpages
     - run: git config --global user.email "no@email.com"
     - run: git config --global user.name "no name"
-    - run: git add -A
+    - run: git add -A .
       working-directory: ghpages
     - run: git commit -m "Update site"
       working-directory: ghpages
