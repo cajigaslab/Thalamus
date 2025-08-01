@@ -126,8 +126,8 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        upload_url: ${{ steps.paths.outputs.windows }}
-        asset_path: dist/${{ steps.paths.outputs.windows }}
+        upload_url: ${{ steps.create-release.outputs.upload_url }}
+        asset_path: ${{ steps.paths.outputs.windows }}
         asset_name: ${{ steps.paths.outputs.windows }}
         asset_content_type: application/x-wheel+zip
           
