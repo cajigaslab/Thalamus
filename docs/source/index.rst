@@ -13,6 +13,7 @@ Welcome to Thalamus's documentation!
    dev_environment
    build
    usage
+   nodes/index
 
 Indices and tables
 ==================
