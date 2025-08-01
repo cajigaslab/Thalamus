@@ -98,9 +98,8 @@ jobs:
     - name: Get Paths
       id: paths
       run: |
-        cd dist
-        echo linux=`ls *linux*` >> "$GITHUB_OUTPUT"
-        echo windows=`ls *win*` >> "$GITHUB_OUTPUT"
+        echo linux=`ls *linux*.whl` >> "$GITHUB_OUTPUT"
+        echo windows=`ls *win*.whl` >> "$GITHUB_OUTPUT"
     - name: Create Release
       id: create-release
       uses: actions/create-release@v1
