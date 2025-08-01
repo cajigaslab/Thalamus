@@ -25,7 +25,7 @@ jobs:
       run: python bump.py patch
     - name: Test Clang
       shell: cmd
-      run: call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat" && where clang
+      run: call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat" && where clang && cl /?
     - name: Build
       shell: cmd
       run: call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat" && set PATH=C:\Program Files\LLVM\bin;%PATH% && python -m build -n -w -Crelease
