@@ -2,7 +2,10 @@ name: Documentations
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "devel" ]
+    
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -14,17 +17,16 @@ jobs:
         path: Thalamus
     - uses: actions/checkout@v4
       with:
-        repository: cajigaslab/cajigaslab.github.io
-        token: ${{ secrets.GH_PAGES_PAT }}
-        path: cajigaslab
+        ref: ghpages
+        path: ghpages
     - run: python3 -m pip install sphinx
     - run: sphinx-build -M html Thalamus/docs/source/ Thalamus/docs/build/
-    - run: cp -r Thalamus/docs/build/html/* cajigaslab
+    - run: cp -r Thalamus/docs/build/html/* ghpages
     - run: git config --global user.email "no@email.com"
     - run: git config --global user.name "no name"
     - run: git add -A
-      working-directory: cajigaslab
+      working-directory: ghpages
     - run: git commit -m "Update site"
-      working-directory: cajigaslab
-    - run: git push origin main
-      working-directory: cajigaslab
+      working-directory: ghpages
+    - run: git push origin ghpages
+      working-directory: ghpages
