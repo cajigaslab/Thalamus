@@ -1,8 +1,9 @@
 name: Documentations
 
 on:
+  workflow_dispatch: {}
   push:
-    branches: [ "devel" ]
+    branches: [ "main" ]
     
 permissions:
   contents: write
