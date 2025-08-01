@@ -57,7 +57,9 @@ jobs:
       with:
         name: linux-dist
         path: dist
-    - run: git push --tags
+    - run: |
+        git push
+        git push --tags
   build-windows:
     runs-on: windows-latest
     steps:
