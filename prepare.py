@@ -66,6 +66,7 @@ def download(url: str):
 def main():
   parser = argparse.ArgumentParser(description='Process some integers.')
   parser.add_argument('--home', default=str(pathlib.Path.home()), help='Use this folder as home')
+  parser.add_argument('--ci', action='store_true', help='Use reduced dependencies for CI build')
 
   args = parser.parse_args()
   home_str = args.home
@@ -103,7 +104,7 @@ def main():
     #clang
     clang_which = shutil.which('clang')
     print('Current clang:', clang_which)
-    if not clang_which:
+    if not clang_which or args.ci:
       destination = 'C:\\Program Files\\LLVM\\bin'
       new_path.append(destination)
       expected_clang = pathlib.Path(destination) / 'clang.exe'
@@ -164,6 +165,7 @@ def main():
 
     print('make exists before:', (msys2_root / 'usr/bin/make.exe').exists())
     if not (msys2_root / 'usr/bin/make.exe').exists():
+      subprocess.check_call([str(msys2_root / 'msys2_shell.cmd'), '-here', '-use-full-path', '-no-start', '-defterm', '-c', 'pacman --noconfirm -Syu'])
       subprocess.check_call([str(msys2_root / 'msys2_shell.cmd'), '-here', '-use-full-path', '-no-start', '-defterm', '-c', 'pacman --noconfirm -S make diffutils binutils gcc'])
     print('make exists:', (msys2_root / 'usr/bin/make.exe').exists())
 
@@ -259,7 +261,10 @@ def main():
                           'libbrotli-dev', 'autotools-dev', 'automake',
                           'swig', 'debconf-utils', 'libusb-1.0-0', 'ffmpeg'])
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-U', 'setuptools'], cwd=home_str)
-    subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-r', str(pathlib.Path.cwd()/'requirements.txt')], cwd=home_str)
+    if args.ci:
+      subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-r', str(pathlib.Path.cwd()/'requirements-ci.txt')], cwd=home_str)
+    else:
+      subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-r', str(pathlib.Path.cwd()/'requirements.txt')], cwd=home_str)
                           
     _, clang_is_current = is_up_to_date('clang++', r'clang version (\d+).(\d+).(\d+)', (10, 0, 0))
     if not clang_is_current:

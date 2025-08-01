@@ -452,7 +452,7 @@ struct Storage2Node::Impl {
       std::error_code ec;
       std::filesystem::create_directories(parent_path, ec);
       if(ec) {
-        boost::asio::post(io_context, [&,ec] {
+        boost::asio::post(io_context, [this,ec] {
           thalamus_grpc::Dialog d;
           d.set_title("Failed to make output dir");
           d.set_message(ec.message());
@@ -871,20 +871,58 @@ struct Storage2Node::Impl {
   void simple_thread_target(std::string output_file, const boost::json::value&, const std::vector<std::filesystem::path>& files) {
     set_current_thread_name("STORAGE");
 
-    std::filesystem::path filepath(output_file);
+    inja::json tdata;
+    auto time = graph->get_system_clock_at_start();
+    auto rendered = render_filename(output_file, tdata, time);
+
+    std::filesystem::path filepath(rendered);
+    auto parent_path = filepath.parent_path();
+
+    {
+      std::error_code ec;
+      std::filesystem::create_directories(parent_path, ec);
+      if(ec) {
+        boost::asio::post(io_context, [this,ec] {
+          thalamus_grpc::Dialog d;
+          d.set_title("Failed to make output dir");
+          d.set_message(ec.message());
+          d.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_ERROR);
+          graph->dialog(d);
+        });
+        return;
+      }
+    }
+
     for(auto& file : files) {
       if(!std::filesystem::exists(file)) {
         THALAMUS_LOG(error) << "File doesn't exist: " << file.string();
+        boost::asio::post(io_context, [this,file] {
+          thalamus_grpc::Dialog d;
+          d.set_title("File doesn't exist");
+          d.set_message(file.string() + " doesn't exist");
+          d.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_ERROR);
+          graph->dialog(d);
+        });
         continue;
       }
       auto destination = filepath.parent_path() / file.filename();
+      if(std::filesystem::exists(destination)) {
+        THALAMUS_LOG(error) << "File already exist: " << destination.string();
+        boost::asio::post(io_context, [this,destination] {
+          thalamus_grpc::Dialog d;
+          d.set_title("File already exist");
+          d.set_message(destination.string() + " already exists, skipping copy.");
+          d.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_WARN);
+          graph->dialog(d);
+        });
+        continue;
+      }
+
       THALAMUS_LOG(info) << file << " -> " << destination;
       std::error_code ec;
-      std::filesystem::copy(file, destination,
-          std::filesystem::copy_options::overwrite_existing
-          | std::filesystem::copy_options::recursive, ec);
+      std::filesystem::copy(file, destination, std::filesystem::copy_options::recursive, ec);
       if(ec) {
-        boost::asio::post(io_context, [&,ec] {
+        boost::asio::post(io_context, [this,ec] {
           thalamus_grpc::Dialog d;
           d.set_title("File Copy Error");
           d.set_message(ec.message());
@@ -902,7 +940,7 @@ struct Storage2Node::Impl {
 
     auto filename = prepare_storage(output_file);
     if(filename.empty()) {
-      boost::asio::post(io_context, [&] {
+      boost::asio::post(io_context, [this] {
         (*state)["Running"].assign(false);
       });
       return;
@@ -916,6 +954,13 @@ struct Storage2Node::Impl {
     for(auto& file : files) {
       if(!std::filesystem::exists(file)) {
         THALAMUS_LOG(error) << "File doesn't exist: " << file.string();
+        boost::asio::post(io_context, [this,file] {
+          thalamus_grpc::Dialog d;
+          d.set_title("File doesn't exist");
+          d.set_message(file.string() + " doesn't exist");
+          d.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_ERROR);
+          graph->dialog(d);
+        });
         continue;
       }
       auto destination = filepath.parent_path() / (
@@ -923,13 +968,22 @@ struct Storage2Node::Impl {
             + filepath.stem().extension().string()
             + filepath.extension().string()
             + file.extension().string());
+      if(std::filesystem::exists(destination)) {
+        THALAMUS_LOG(error) << "File already exist: " << destination.string();
+        boost::asio::post(io_context, [this,destination] {
+          thalamus_grpc::Dialog d;
+          d.set_title("File already exist");
+          d.set_message(destination.string() + " already exist");
+          d.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_ERROR);
+          graph->dialog(d);
+        });
+        continue;
+      }
       THALAMUS_LOG(info) << file << " -> " << destination;
       std::error_code ec;
-      std::filesystem::copy(file, destination,
-          std::filesystem::copy_options::overwrite_existing
-          | std::filesystem::copy_options::recursive, ec);
+      std::filesystem::copy(file, destination, std::filesystem::copy_options::recursive, ec);
       if(ec) {
-        boost::asio::post(io_context, [&,ec] {
+        boost::asio::post(io_context, [this,ec] {
           thalamus_grpc::Dialog d;
           d.set_title("File Copy Error");
           d.set_message(ec.message());
