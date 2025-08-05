@@ -9,6 +9,7 @@ permissions:
 jobs:
   build-linux:
     runs-on: ubuntu-latest
+    environment: main
     steps:
     - uses: actions/checkout@v4
     - name: Set Git name 
