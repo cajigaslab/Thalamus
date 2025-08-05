@@ -18,8 +18,4 @@ jobs:
       run: git config --global user.email "no@email.com"
     - run: |
         git commit --allow-empty -m "Hello World"
-        echo "PRIVATE_KEY $PRIVATE_KEY"
-        echo "$PRIVATE_KEY" > ~/private_key
-        GIT_SSH_COMMAND='ssh -i ~/private_key' git push
-      env:
-        PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+        git push https://x-access-token:${{ secrets.PAT }}@github.com/${{ github.repository }}
