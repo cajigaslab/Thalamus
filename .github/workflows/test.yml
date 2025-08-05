@@ -1,0 +1,20 @@
+name: test
+
+on:
+  workflow_dispatch: {}
+    
+permissions:
+  contents: write
+  
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set Git name 
+      run: git config --global user.name "Github Actions"
+    - name: Set Git email 
+      run: git config --global user.email "no@email.com"
+    - run: |
+        git commit --allow-empty -m "Hello World"
+        git push
