@@ -53,7 +53,7 @@ Approximately 1 hour set-up time
 
 
 # Documentaton
-The code respository for Thalamus is hosted on GitHub at https://github.com/cajigaslab/thalamus. For the detailed documentation of Thalamus usage along with Node information see https://cajigaslab.github.io/Thalamus/.
+The code respository for Thalamus is hosted on GitHub at https://github.com/cajigaslab/thalamus. For detailed documentation of Thalamus visit https://cajigaslab.github.io/Thalamus/.
 For additional examples and generation of figures in our paper, refer to the **SimpleUseCase** folder in the repo.
 
 # License
