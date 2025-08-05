@@ -1,0 +1,349 @@
+syntax = "proto3";
+
+option java_package = "org.pesaran.delsys";
+
+package delsys_grpc;
+
+message Message {
+  oneof body {
+    string license_file = 1;
+    string key_file = 2;
+  }
+}
+
+message Empty {}
+
+message Dialog {
+  enum Type {
+    INFO = 0;
+    WARN = 1;
+    ERROR = 2;
+    FATAL = 3;
+  }
+  string title = 1;
+  string message = 2;
+  Type type = 3;
+}
+
+message Redirect {
+  string redirect = 1;
+}
+
+message Compressed {
+  enum Type {
+    NONE = 0;
+    ANALOG = 1;
+  }
+  bytes data = 1;
+  Type type = 2;
+  int32 stream = 3;
+  int32 size = 4;
+}
+
+message Error {
+  int32 code = 1;
+  string message = 2;
+}
+
+message StimDeclaration {
+  AnalogResponse data = 1;
+  string trigger = 2;
+  uint32 id = 3;
+}
+
+message StimRequest {
+  oneof body {
+    NodeSelector node = 1;
+    StimDeclaration declaration = 2;
+    uint32 arm = 3;
+    uint32 trigger = 4;
+    uint32 retrieve = 5;
+    StimDeclaration inline_arm = 7;
+    StimDeclaration inline_trigger = 8;
+  }
+  uint32 id = 6;
+}
+
+message StimResponse {
+  Error error = 1;
+  StimDeclaration declaration = 2;
+  uint32 id = 3;
+}
+
+message ObservableReadRequest {
+  string peer_name = 1;
+}
+
+message ChannelId {
+  string name = 1;
+  int32 index = 2;
+}
+
+message Spectrogram {
+  ChannelId channel = 1;
+  repeated double data = 2;
+  double max_frequency = 3;
+}
+
+message SpectrogramRequest {
+  NodeSelector node = 1;
+  repeated ChannelId channels = 2;
+  double window_s = 3;
+  double hop_s = 4;
+}
+
+message SpectrogramResponse {
+  repeated Spectrogram spectrograms = 1;
+}
+
+message NodeSelector {
+  string name = 1;
+  string type = 2;
+}
+
+message NodeRequest {
+  string node = 1;
+  string json = 2;
+  uint64 id = 3;
+}
+message NodeResponse {
+  enum Status {
+    OK = 0;
+    NOT_FOUND = 1;
+  }
+  string json = 1;
+  uint64 id = 2;
+  Status status = 3;
+}
+
+message Text {
+  string text = 1;
+  uint64 time = 2;
+  uint64 remote_time = 3;
+}
+
+message StorageRecord {
+  oneof body {
+    AnalogResponse analog = 1;
+    XsensResponse xsens = 2;
+    Event event = 3;
+    Image image = 6;
+    Text text = 7;
+    Compressed compressed = 8;
+    Metadata metadata = 9;
+  }
+  uint64 time = 4;
+  string node = 5;
+}
+
+message ImageRequest {
+  NodeSelector node = 1;
+  double framerate = 2;
+}
+
+message Image {
+  enum Format {
+    Gray = 0;
+    RGB = 1;
+    YUYV422 = 2;
+    YUV420P = 3;
+    YUVJ420P = 4;
+    Gray16 = 5;
+    RGB16 = 6;
+    MPEG1 = 7;
+    MPEG4 = 8;
+  }
+  repeated bytes data = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+  Format format = 4;
+  uint64 frame_interval = 5;
+  bool last = 6;
+  bool bigendian = 7;
+}
+
+message Ping {
+  uint32 id = 1;
+  bytes payload = 2;
+}
+
+message Pong {
+  uint32 id = 2;
+  bytes payload = 3;
+}
+
+message RemoteNodeMessage {
+  oneof body {
+    AnalogRequest request = 1;
+    AnalogResponse data = 2;
+    Ping ping = 3;
+    Pong pong = 4;
+  }
+}
+
+message ReplayRequest {
+  string filename = 1;
+  repeated string nodes = 2;
+}
+
+message XsensSegment {
+    uint32 id = 1;
+    float x = 2;
+    float y = 3;
+    float z = 4;
+    float q0 = 5;
+    float q1 = 6;
+    float q2 = 7;
+    float q3 = 8;
+    uint32 frame = 9;
+    uint32 time = 10;
+    uint32 actor = 11;
+}
+
+message XsensResponse {
+  repeated XsensSegment segments = 1;
+  string pose_name = 2;
+}
+
+message StringMessage {
+    string value = 1;
+}
+
+enum Modalities {
+  AnalogModality = 0;
+  MocapModality = 1;
+  ImageModality = 2;
+  TextModality = 3;
+}
+
+message ModalitiesMessage {
+  repeated Modalities values = 1;
+}
+
+message StringListMessage {
+  repeated string value = 1;
+}
+
+message EvalResponse {
+  string value = 1;
+  uint64 id = 2;
+}
+
+message EvalRequest {
+  string code = 1;
+  uint64 id = 2;
+}
+
+message AnalogRequest {
+  NodeSelector node = 1;
+  repeated int32 channels = 2;
+  repeated string channel_names = 3;
+}
+
+message InjectAnalogRequest {
+  oneof body {
+    string node = 1;
+    AnalogResponse signal = 2;
+  }
+}
+
+message InjectTextRequest {
+  oneof body {
+    string node = 1;
+    Text text = 2;
+  }
+}
+
+message InjectMotionCaptureRequest {
+  oneof body {
+    string node = 1;
+    XsensResponse data = 2;
+  }
+}
+
+message AnalogResponse {
+  enum ChannelType {
+    Voltage = 0;
+    Current = 1;
+  }
+  
+  repeated double data = 1;
+  repeated Span spans = 2;
+  repeated uint64 sample_intervals = 3;
+  bool channels_changed = 4;
+  repeated sint32 int_data = 5;
+  bool is_int_data = 6;
+  uint64 time = 7;
+  uint64 remote_time = 8;
+  ChannelType channel_type = 9;
+}
+ 
+message GraphRequest {
+  NodeSelector node = 1;
+  repeated int32 channels = 2;
+  uint64 bin_ns = 3;
+  repeated string channel_names = 4;
+}
+ 
+message Span {
+  uint32 begin = 1;
+  uint32 end = 2;
+  string name = 3;
+}
+ 
+message GraphResponse {
+  repeated double bins = 1;
+  repeated Span spans = 2;
+  bool channels_changed = 3;
+}
+  
+message Event {
+  bytes payload = 1;
+  uint64 time = 2;
+}
+
+message ObservableChange {
+  enum Action {
+    Set = 0;
+    Delete = 1;
+  }
+  string address = 1;
+  string value = 2;
+  Action action = 3;
+  uint64 id = 4;
+  uint64 acknowledged = 5;
+}
+
+message ObservableTransaction {
+  repeated ObservableChange changes = 1;
+  uint64 id = 2;
+  uint64 acknowledged = 3;
+  string redirection = 4;
+  string peer_name = 5;
+}
+
+message Notification {
+  enum Type {
+    Error = 0;
+    Warning = 1;
+    Info = 2;
+  }
+
+  Type type = 1;
+  string title = 2;
+  string message = 3;
+}
+
+message Pair {
+  string key = 1;
+  oneof value {
+    string text = 2;
+    double decimal = 3;
+    int64 integral = 4;
+  }
+}
+
+message Metadata {
+  repeated Pair keyvalues = 1;
+}
+

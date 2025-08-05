@@ -137,7 +137,8 @@ set(PROTO_SOURCES
   proto/util.proto
   proto/task_controller.proto
   proto/ophanim.proto
-  proto/thalamus.proto)
+  proto/thalamus.proto
+  proto/delsys.proto)
 apply_protoc_grpc(PROTO_GENERATED_SOURCES ${PROTO_SOURCES})
 
 add_library(protoc_generated OBJECT ${PROTO_GENERATED_SOURCES} ${PROTO_SOURCES})
@@ -347,4 +348,15 @@ endif()
 
 if(NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
   target_link_options(test PRIVATE -g)
+endif()
+
+if(WIN32)
+  add_custom_target(dotnet
+    COMMAND msbuild dotnet.sln /p:Configuration=${CMAKE_BUILD_TYPE}
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/dotnet")
+  
+  add_custom_command(TARGET dotnet POST_BUILD COMMAND 
+    cmake -E copy "${CMAKE_SOURCE_DIR}/dotnet/dotnet/bin/${CMAKE_BUILD_TYPE}/net6.0/dotnet.exe"
+    "${CMAKE_SOURCE_DIR}/thalamus")
+  add_dependencies(native dotnet)
 endif()
