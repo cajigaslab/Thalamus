@@ -1,0 +1,38 @@
+## Overview
+
+This repository contains a MATLAB script for analyzing temporal synchronization between two analog signals—`squareWave` and `pulse`—recorded from a thalamus experiment. The goal is to detect rising edges in both signals, compute the timing lag between them, and assess the statistical properties of the resulting lag distribution.
+
+## Requirements
+
+- MATLAB R2021a or later
+- Optional: Statistics and Machine Learning Toolbox (for `kstest` and `adtest`)
+
+## Files
+
+- `ClosedLoopPerformanceTest.h5`: HDF5 data file containing recorded analog signals.
+- `ClosedLoopTest.mlx`: MATLAB script to process and analyze the signal lag between two channels.
+
+## Setup
+
+Open ClosedLoopTest.mlx in MATLAB and run as directed.
+
+## Analysis Overview
+
+1. **Signal Loading**: Reads analog signals and timestamps from the HDF5 file.
+2. **Edge Detection**: Identifies rising edges using a voltage threshold.
+3. **Lag Computation**: Calculates time difference between corresponding rising edges.
+4. **Statistical Analysis**:
+   - Mean, median, min, max, standard deviation
+   - Skewness
+   - Kolmogorov-Smirnov test
+   - Anderson-Darling test
+5. **Visualization**:
+   - Signal plot
+   - Histogram of lag values
+
+## Sample Output
+
+<p float="left">
+  <img src="https://github.com/user-attachments/assets/965d892e-03d0-4e33-b57c-79b47994718e" width="400"/>
+  <img src="https://github.com/user-attachments/assets/7fd1c8ce-d05a-4b74-bad5-a9405189d00b" width="400"/>
+</p>
