@@ -10,4 +10,7 @@ The data will be made accessible on Box and the link added here for ease of acce
 # Analysis
 You should be able to replicate the result below:
 
-<img src="https://github.com/user-attachments/assets/c98bb393-6b08-470b-b9f4-3d7a655fee91" alt="Synchronicity Test Sample Graph" width="400"/>
+<p float="left">
+  <img src="https://github.com/user-attachments/assets/c98bb393-6b08-470b-b9f4-3d7a655fee91" width="600"/>
+  <img src="https://github.com/user-attachments/assets/7396cbe3-d573-4e83-9a72-ddc2dd4d2890" width="400"/>
+</p>
