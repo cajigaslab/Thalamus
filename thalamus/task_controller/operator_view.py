@@ -74,17 +74,37 @@ class CentralWidget(QWidget):
     layout.setRowStretch(1, 0)
     clear_button.clicked.connect(target.canvas.clear_accumulation)
 
-    # Adding extra button to clear the canvas
-    def on_test():
+    # Connecting clearing of successful trial endpoints to the button
+    # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+    def press_clear_button():
       target.canvas.do_clear = True
-    clear_endpoints_button = QPushButton('Clear Endpoints') # this button was added to the Operator View to clear the endpoints
-    layout.addWidget(clear_endpoints_button, 1, 2)
+    clear_button.clicked.connect(press_clear_button)
+    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+    # Example of adding a button to clear the endpoints
+    # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+    # def on_test():
+    #   target.canvas.do_clear = True
+    # clear_endpoints_button = QPushButton('Clear Endpoints') # this button was added to the Operator View to clear the endpoints
+    # layout.addWidget(clear_endpoints_button, 1, 2)
+    # layout.setRowStretch(1, 0)
+    # clear_endpoints_button.clicked.connect(on_test)
+    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+    # Adding extra button to switch targets during eyetracker calibration
+    # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+    def press_next_button():
+      target.canvas.next_target = True
+    next_button = QPushButton('Next') # this button was added to the Operator View to switch between targets for manual eyetracker calibration
+    layout.addWidget(next_button, 1, 2)
     layout.setRowStretch(1, 0)
-    clear_endpoints_button.clicked.connect(on_test)
+    next_button.clicked.connect(press_next_button)
+    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    
+    # Adding a checkbox for controlling auto clearing of the canvas
     auto_clear_checkbox = QCheckBox('Auto Clear')
     layout.addWidget(auto_clear_checkbox, 1, 1)
     auto_clear_checkbox.toggled.connect(lambda v: eye_config.update({'Auto Clear': v}))
-
     def on_eye_config_change(a, k, v):
       if k == 'Auto Clear':
         auto_clear_checkbox.setChecked(v)

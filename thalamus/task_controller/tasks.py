@@ -26,10 +26,11 @@ from . import luminance_reward_selection
 from . import avatar_task
 from . import imagined_task
 from . import feedback_task
-from . import delayed_saccade_gaussian_task
-from . import center_fixation_task
-from . import receptive_field_mapping_task
-from . import psychopy_task
+from . import VCP_delayed_saccade_gaussian_task
+from . import VCP_center_fixation_task
+from . import VCP_receptive_field_mapping_task
+from . import VCP_eyetracker_calibration_task
+from . import VCP_psychopy_task
 from .task_context import TaskDescription
 
 DESCRIPTIONS = [
@@ -105,19 +106,22 @@ DESCRIPTIONS = [
   TaskDescription('feedback_task', 'Feedback',
     feedback_task.create_widget,
     feedback_task.run),
-  TaskDescription('delayed_saccade_gaussian_task', 'Dellayed Saccade - Gaussian',
-    delayed_saccade_gaussian_task.create_widget,
-    delayed_saccade_gaussian_task.run),
+  TaskDescription('VCP_delayed_saccade_gaussian_task', 'VCP: Dellayed Saccade - Gaussian',
+    VCP_delayed_saccade_gaussian_task.create_widget,
+    VCP_delayed_saccade_gaussian_task.run),
     #add gazeanchoring stim task
-  TaskDescription('center_fixation_task', 'Center Fixation',
-    center_fixation_task.create_widget,
-    center_fixation_task.run),
-  TaskDescription('receptive_field_mapping_task', 'Receptive Field Mapping',
-    receptive_field_mapping_task.create_widget,
-    receptive_field_mapping_task.run),
-  TaskDescription('psychopy', 'Psychopy',
-    psychopy_task.create_widget,
-    psychopy_task.run)
+  TaskDescription('VCP_center_fixation_task', 'VCP: Center Fixation',
+    VCP_center_fixation_task.create_widget,
+    VCP_center_fixation_task.run),
+  TaskDescription('VCP_receptive_field_mapping_task', 'VCP: Receptive Field Mapping',
+    VCP_receptive_field_mapping_task.create_widget,
+    VCP_receptive_field_mapping_task.run),
+  TaskDescription('VCP_eyetracker_calibration_task', 'VCP: Eyetracker Calibration',
+    VCP_eyetracker_calibration_task.create_widget,
+    VCP_eyetracker_calibration_task.run),
+  TaskDescription('VCP_psychopy_task', 'VCP: Psychopy',
+    VCP_psychopy_task.create_widget,
+    VCP_psychopy_task.run)
 ]
 
 DESCRIPTIONS_MAP = dict((description.code, description) for description in DESCRIPTIONS)
