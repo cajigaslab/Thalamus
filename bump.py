@@ -27,7 +27,7 @@ def main():
   subprocess.check_call(['git', 'add', 'pyproject.toml'])
   subprocess.check_call(['git', 'commit', '-m', f'[skip ci] v{new_version}'])
   subprocess.check_call(['git', 'tag', '-a', f'v{new_version}', '-m', f'[skip ci] v{new_version}'])
-
+ 
 
 if __name__ == '__main__':
   main()

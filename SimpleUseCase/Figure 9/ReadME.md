@@ -1,5 +1,5 @@
 # Overview
-Follow this tutorial to generate **Figure 5** using data output from Thalamus. **Figure 5** includes a plot of voltage over time to visualize the Local Field Potential (LFP), a beta power heat map, hand velocity over time, and power spectral density during motion and at rest. 
+Follow this tutorial to generate **Figure 9** using data output from Thalamus. **Figure 9** includes a plot of voltage over time to visualize the Local Field Potential (LFP), a beta power heat map, hand velocity over time, and power spectral density during motion and at rest. 
 
 # Setup
 Download the **Thalamus_Figure5.mlx** file and the .m files in the **functions** folder. Open them in MATLAB and run as directed. See **Thalamus_Figure5.pdf** for a print-out of how this should run and the associated output. 
