@@ -3,7 +3,7 @@
     {
       "name": "Cam 1",
       "type": "GENICAM",
-      "Running": false,
+      "Running": true,
       "View": true,
       "Camera": "FLIR_GenTL:21249312",
       "WidthMax": 1280,
@@ -16,8 +16,8 @@
       "AcquisitionFrameRate": 30.0,
       "Gain": 0.0,
       "view_geometry": [
-        733,
-        48,
+        735,
+        45,
         352,
         209
       ],
@@ -36,7 +36,7 @@
     {
       "name": "Oculomatic",
       "type": "OCULOMATIC",
-      "Threshold": 32,
+      "Threshold": 44,
       "Min Area": 0,
       "Max Area": 98,
       "X Gain": 0.0,
@@ -47,14 +47,14 @@
       "Computing": true,
       "View": true,
       "view_geometry": [
-        1108,
-        62,
+        1096,
+        30,
         357,
         258
       ],
       "Render Thresholded": false,
-      "Pix X": 533,
-      "Pix Y": 431
+      "Pix X": 441,
+      "Pix Y": 383
     },
     {
       "name": "Windows",
@@ -63,7 +63,7 @@
       "Node": "Labeler",
       "Probe Frequency": 10.0,
       "Probe Size": 128,
-      "Running": false
+      "Running": true
     },
     {
       "name": "Touch Screen",
@@ -174,7 +174,7 @@
     {
       "name": "Experiment",
       "type": "RUNNER2",
-      "Running": false,
+      "Running": true,
       "Targets": [
         {
           "Name": "Cam 1",
@@ -245,12 +245,12 @@
           "Address": ""
         }
       ],
-      "tab": 0
+      "tab": 1
     },
     {
       "name": "Cam 3",
       "type": "GENICAM",
-      "Running": false,
+      "Running": true,
       "View": true,
       "Camera": "FLIR_GenTL:21083320",
       "WidthMax": 1280,
@@ -283,7 +283,7 @@
     {
       "name": "Cam 2",
       "type": "GENICAM",
-      "Running": false,
+      "Running": true,
       "View": true,
       "Camera": "FLIR_GenTL:21286437",
       "WidthMax": 1280,
@@ -316,7 +316,7 @@
     {
       "name": "Cam 4",
       "type": "GENICAM",
-      "Running": false,
+      "Running": true,
       "View": true,
       "Camera": "FLIR_GenTL:21289076",
       "WidthMax": 1280,
@@ -349,21 +349,22 @@
     {
       "name": "Node 1",
       "type": "SPIKEGLX",
-      "Connected": false,
+      "Connected": true,
       "Running": false,
       "Stream": false,
       "Poll Interval (ms)": 10,
       "Address": "192.168.0.5",
-      "imec_count": 1,
+      "imec_count": 2,
       "imec_subset_0": "*",
       "Error": "Transport endpoint is not connected [system:107 at /home/bijanadmin/katie/build/clang-release/_deps/boost_content-src/boost/asio/detail/reactive_socket_service.hpp:231:33 in function 'shutdown']",
-      "Metadata Node": "Storage"
+      "Metadata Node": "Storage",
+      "imec_subset_1": "*"
     },
     {
       "name": "Storage",
       "type": "STORAGE2",
       "Running": false,
-      "Output File": "/mnt/sraid/Troopa_Behavior_Behave1/%y%m%d/behave",
+      "Output File": "/mnt/sraid/Bowser_Behavior_Behave1/%y%m%d/behave",
       "Compress Analog": false,
       "Compress Video": true,
       "Sources": [
@@ -410,13 +411,13 @@
           "Text": true
         }
       ],
-      "rec": 1,
+      "rec": 9,
       "start": 706288.714916912,
       "Files": [],
       "Metadata": [
         {
           "Key": "Rec",
-          "Value": 1
+          "Value": 9
         }
       ],
       "Simple Copy": false
@@ -424,7 +425,7 @@
     {
       "name": "experiment",
       "type": "STORAGE2",
-      "Running": false,
+      "Running": true,
       "Output File": "/mnt/sraid/Troopa_Behavior_Behave1/%y%m%d/behave",
       "Compress Analog": false,
       "Compress Video": false,
@@ -457,8 +458,8 @@
     }
   ],
   "thalamus_view_geometry": [
-    100,
-    100,
+    67,
+    27,
     384,
     768
   ],
@@ -600,6 +601,7 @@
   ],
   "queue": [
     {
+<<<<<<< Updated upstream:test.json
       "task_type": "simple_touch_and_look_task",
       "type": "task",
       "goal": 96,
@@ -607,12 +609,22 @@
       "intertrial_timeout": {
         "min": 1.0,
         "max": 1.5
+=======
+      "task_type": "gaze_anchoring_fast",
+      "type": "task",
+      "goal": 19,
+      "name": "gaze anchor standard",
+      "intertrial_timeout": {
+        "min": 1.2,
+        "max": 1.7
+>>>>>>> Stashed changes:test_current.json
       },
       "start_timeout": {
         "min": 5.0,
         "max": 5.0
       },
       "hold_timeout": {
+<<<<<<< Updated upstream:test.json
         "min": 0.3,
         "max": 0.5
       },
@@ -627,6 +639,22 @@
       "success_timeout": {
         "min": 1.0,
         "max": 1.0
+=======
+        "min": 1,
+        "max": 1
+      },
+      "blink_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "fail_timeout": {
+        "min": 1.8,
+        "max": 1.8
+      },
+      "success_timeout": {
+        "min": 1.8,
+        "max": 1.8
+>>>>>>> Stashed changes:test_current.json
       },
       "target_x": {
         "min": 1,
@@ -638,10 +666,10 @@
       },
       "target_width": {
         "min": 1,
-        "max": 2.0
+        "max": 1
       },
       "target_height": {
-        "min": 3.0,
+        "min": 1,
         "max": 1
       },
       "target_color": [
@@ -651,12 +679,20 @@
       ],
       "targets": [
         {
+<<<<<<< Updated upstream:test.json
           "name": "touch",
           "width": 1.6,
           "height": 1.6,
           "orientation": 0,
           "window_size": 20.0,
           "reward_channel": 3.0,
+=======
+          "name": "start",
+          "width": 1.6,
+          "height": 1.6,
+          "orientation": 0,
+          "window_size": 5.5,
+          "reward_channel": 0.0,
           "audio_scale_left": 0,
           "audio_scale_right": 0,
           "color": [
@@ -664,19 +700,20 @@
             226,
             52
           ],
-          "is_fixation": false,
+          "is_fixation": true,
+          "is_targ2": false,
           "shape": "box",
           "stl_file": "",
           "audio_file": "",
           "audio_only_if_high": false,
           "play_in_ear": false,
           "radius": {
-            "min": 0.0,
+            "min": 10.0,
             "max": 10.0
           },
           "angle": {
-            "min": 90.0,
-            "max": 270.0
+            "min": 180.0,
+            "max": 180.0
           },
           "volume": {
             "min": 0,
@@ -702,15 +739,96 @@
             "min": 0,
             "max": 0
           },
-          "target_type": "fixation",
-          "target_effector": "touch"
+          "anchor": "",
+          "dual_color": [
+            239,
+            41,
+            41
+          ],
+          "dual_luminance": {
+            "min": 0.0,
+            "max": 0.0
+          }
         },
         {
-          "name": "look",
+          "name": "targ1",
           "width": 1.6,
           "height": 1.6,
           "orientation": 0,
-          "window_size": 6.0,
+          "window_size": 5.5,
+          "reward_channel": 0.0,
+>>>>>>> Stashed changes:test_current.json
+          "audio_scale_left": 0,
+          "audio_scale_right": 0,
+          "color": [
+            138,
+            226,
+            52
+          ],
+          "is_fixation": false,
+          "is_targ2": false,
+          "shape": "box",
+          "stl_file": "",
+          "audio_file": "",
+          "audio_only_if_high": false,
+          "play_in_ear": false,
+          "radius": {
+<<<<<<< Updated upstream:test.json
+            "min": 0.0,
+            "max": 10.0
+          },
+          "angle": {
+            "min": 90.0,
+            "max": 270.0
+=======
+            "min": 0.0,
+            "max": 0.0
+          },
+          "angle": {
+            "min": 0.0,
+            "max": 0.0
+          },
+          "volume": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_temporal_jitter": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset_around_fixation": {
+            "min": 0,
+            "max": 0
+          },
+          "on_luminance": {
+            "min": 1,
+            "max": 1
+          },
+          "off_luminance": {
+            "min": 0,
+            "max": 0
+          },
+          "anchor": "",
+          "dual_color": [
+            239,
+            41,
+            41
+          ],
+          "dual_luminance": {
+            "min": 0.0,
+            "max": 0.0
+          }
+        },
+        {
+          "name": "targ2 up",
+          "width": 1.6,
+          "height": 1.6,
+          "orientation": 0,
+          "window_size": 5.5,
           "reward_channel": 3.0,
           "audio_scale_left": 0,
           "audio_scale_right": 0,
@@ -720,18 +838,19 @@
             41
           ],
           "is_fixation": false,
+          "is_targ2": true,
           "shape": "box",
           "stl_file": "",
           "audio_file": "",
           "audio_only_if_high": false,
           "play_in_ear": false,
           "radius": {
-            "min": 2.0,
+            "min": 10.0,
             "max": 10.0
           },
           "angle": {
-            "min": 0.0,
-            "max": 90.0
+            "min": 40.0,
+            "max": 50.0
           },
           "volume": {
             "min": 0,
@@ -757,40 +876,118 @@
             "min": 0,
             "max": 0
           },
-          "target_type": "fixation",
-          "target_effector": "gaze"
+          "anchor": "",
+          "dual_color": [
+            255,
+            255,
+            255
+          ],
+          "dual_luminance": {
+            "min": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "targ2 down",
+          "width": 1.6,
+          "height": 1.6,
+          "orientation": 0,
+          "window_size": 5.5,
+          "reward_channel": 3.0,
+          "audio_scale_left": 0,
+          "audio_scale_right": 0,
+          "color": [
+            239,
+            41,
+            41
+          ],
+          "is_fixation": false,
+          "is_targ2": true,
+          "shape": "box",
+          "stl_file": "",
+          "audio_file": "",
+          "audio_only_if_high": false,
+          "play_in_ear": false,
+          "radius": {
+            "min": 10.0,
+            "max": 10.0
+          },
+          "angle": {
+            "min": 310.0,
+            "max": 320.0
+          },
+          "volume": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_temporal_jitter": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset_around_fixation": {
+            "min": 0,
+            "max": 0
+          },
+          "on_luminance": {
+            "min": 1,
+            "max": 1
+          },
+          "off_luminance": {
+            "min": 0,
+            "max": 0
+          },
+          "anchor": "",
+          "dual_color": [
+            255,
+            255,
+            255
+          ],
+          "dual_luminance": {
+            "min": 0,
+            "max": 0
+          }
         }
       ],
       "baseline_timeout": {
-        "min": 0.5,
-        "max": 0.8
+        "min": 0.2,
+        "max": 0.3
       },
       "cue_timeout": {
         "min": 0.05,
         "max": 0.05
       },
-      "reach_timeout": {
-        "min": 1.0,
-        "max": 1.0
+      "targ2_delay": {
+        "min": 0.25,
+        "max": 1.15
       },
-      "is_choice": false,
-      "state_indicator_x": 1800.0,
-      "state_indicator_y": 950.0,
-      "stim_phase": "FAIL",
-      "stim_start": 1,
-      "intan_cfg": 2,
-      "pulse_count": 1,
-      "pulse_frequency": 1,
-      "pulse_width": 0,
-      "hand_blink": {
+      "reach_timeout": {
         "min": 1,
         "max": 1
+      },
+      "saccade2_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "hold_interval": {
+        "min": 0.4,
+        "max": 0.4
+      },
+      "hand_blink": {
+        "min": 0.25,
+        "max": 0.25
       },
       "eye_blink": {
-        "min": 1,
-        "max": 1
+        "min": 0.2,
+        "max": 0.2
       },
-      "task_cluster_name": "cluster2centered",
+      "targets_are_targ2s": false,
+      "state_indicator_x": 1800.0,
+      "state_indicator_y": 950.0,
+      "task_cluster_name": "gazeanch_experiment",
       "queue_index": 0
     }
   ],
@@ -833,7 +1030,7 @@
         50.0
       ]
     ],
-    "index": 1
+    "index": 0
   },
   "touch_channels": [
     0,
@@ -850,43 +1047,43 @@
   },
   "eye_scaling": {
     "I": {
-      "x": 207.0,
-      "y": 227.0
+      "x": 347.61,
+      "y": 198.29
     },
     "II": {
-      "x": 253.0,
-      "y": 233.0
+      "x": 272.34,
+      "y": 201.42
     },
     "III": {
-      "x": 199.0,
-      "y": 335.0
+      "x": 223.07,
+      "y": 261.02
     },
     "IV": {
-      "x": 266.0,
-      "y": 399.0
+      "x": 330.96,
+      "y": 270.83
     },
     "Auto Clear": true
   },
   "eye_scaling_init": {
     "I": {
-      "x": 207.0,
-      "y": 227.0
+      "x": 347.61,
+      "y": 198.29
     },
     "II": {
-      "x": 253.0,
-      "y": 233.0
+      "x": 272.34,
+      "y": 201.42
     },
     "III": {
-      "x": 199.0,
-      "y": 335.0
+      "x": 223.07,
+      "y": 261.02
     },
     "IV": {
-      "x": 266.0,
-      "y": 399.0
+      "x": 330.96,
+      "y": 270.83
     },
     "Auto Clear": true
   },
-  "status": "cluster2centered/simple touch no feedback = 12/0",
+  "status": "calibrate eye/calibrate eye saccade = 28/5 center out experiment/center out reach = 136/114 center out experiment/center out reach 1 = 94/48 center out experiment/center out saccade touch 1 = 171/318 gazeanch_experiment/DSST = 28/51 gazeanch_experiment/gaze anchor challenge = 18/10 gazeanch_experiment/gaze anchor standard = 480/180",
   "task_clusters": [
     {
       "type": "task_cluster",
@@ -896,7 +1093,7 @@
         {
           "task_type": "delayed_reach",
           "type": "task",
-          "goal": 99,
+          "goal": 0,
           "name": "center out reach",
           "intertrial_timeout": {
             "min": 0.8,
@@ -907,12 +1104,12 @@
             "max": 5.0
           },
           "hold_timeout": {
-            "min": 0.3,
-            "max": 0.3
+            "min": 0.01,
+            "max": 0.01
           },
           "blink_timeout": {
-            "min": 0.25,
-            "max": 0.25
+            "min": 0.5,
+            "max": 0.5
           },
           "fail_timeout": {
             "min": 1.0,
@@ -2128,9 +2325,9 @@
               "is_touch_fixation": false,
               "is_gaze_fixation": true,
               "dual_color": [
-                239,
-                41,
-                41
+                114,
+                159,
+                207
               ],
               "dual_luminance": {
                 "min": 0.0,
@@ -2608,8 +2805,8 @@
           "pulse_frequency": 1,
           "pulse_width": 100.0,
           "hand_blink": {
-            "min": 0.2,
-            "max": 0.2
+            "min": 0.8,
+            "max": 0.8
           },
           "eye_blink": {
             "min": 0.2,
@@ -3509,6 +3706,7 @@
           "cue_timeout": {
             "min": 0.05,
             "max": 0.05
+>>>>>>> Stashed changes:test_current.json
           },
           "reach_timeout": {
             "min": 1.0,
@@ -3535,7 +3733,7 @@
         {
           "task_type": "delayed_reach",
           "type": "task",
-          "goal": 15,
+          "goal": 5,
           "name": "center out reach 1",
           "intertrial_timeout": {
             "min": 0.8,
@@ -3554,8 +3752,8 @@
             "max": 0.25
           },
           "fail_timeout": {
-            "min": 1.0,
-            "max": 1.5
+            "min": 3.0,
+            "max": 3.0
           },
           "success_timeout": {
             "min": 1.0,
@@ -3577,6 +3775,50 @@
             "min": 3.0,
             "max": 1
           },
+<<<<<<< Updated upstream:test.json
+          "target_type": "fixation",
+          "target_effector": "touch"
+        },
+        {
+          "name": "look",
+          "width": 1.6,
+          "height": 1.6,
+          "orientation": 0,
+          "window_size": 6.0,
+          "reward_channel": 3.0,
+          "audio_scale_left": 0,
+          "audio_scale_right": 0,
+          "color": [
+            239,
+            41,
+            41
+          ],
+          "is_fixation": false,
+          "shape": "box",
+          "stl_file": "",
+          "audio_file": "",
+          "audio_only_if_high": false,
+          "play_in_ear": false,
+          "radius": {
+            "min": 2.0,
+            "max": 10.0
+          },
+          "angle": {
+            "min": 0.0,
+            "max": 90.0
+          },
+          "volume": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_temporal_jitter": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset": {
+            "min": 0,
+            "max": 0
+=======
           "target_color": [
             255,
             255,
@@ -3779,8 +4021,8 @@
             "max": 0.05
           },
           "reach_timeout": {
-            "min": 0.8,
-            "max": 0.8
+            "min": 1.2,
+            "max": 1.2
           },
           "is_choice": false,
           "state_indicator_x": 1800.0,
@@ -3803,7 +4045,7 @@
         {
           "task_type": "delayed_saccade_touch",
           "type": "task",
-          "goal": 15,
+          "goal": 5,
           "name": "center out saccade touch 1",
           "intertrial_timeout": {
             "min": 0.8,
@@ -3822,8 +4064,8 @@
             "max": 0.14
           },
           "fail_timeout": {
-            "min": 1,
-            "max": 1.5
+            "min": 2.0,
+            "max": 2.0
           },
           "success_timeout": {
             "min": 1.0,
@@ -4047,6 +4289,7 @@
           "baseline_timeout": {
             "min": 0.2,
             "max": 0.3
+>>>>>>> Stashed changes:test_current.json
           },
           "cue_timeout": {
             "min": 0.05,
@@ -4069,11 +4312,150 @@
             "min": 0.1,
             "max": 0.1
           },
+<<<<<<< Updated upstream:test.json
+          "target_type": "fixation",
+          "target_effector": "gaze"
+        }
+      ],
+      "baseline_timeout": {
+        "min": 0.5,
+        "max": 0.8
+      },
+      "cue_timeout": {
+        "min": 0.05,
+        "max": 0.05
+      },
+      "reach_timeout": {
+        "min": 1.0,
+        "max": 1.0
+      },
+      "is_choice": false,
+      "state_indicator_x": 1800.0,
+      "state_indicator_y": 950.0,
+      "stim_phase": "FAIL",
+      "stim_start": 1,
+      "intan_cfg": 2,
+      "pulse_count": 1,
+      "pulse_frequency": 1,
+      "pulse_width": 0,
+      "hand_blink": {
+        "min": 1,
+        "max": 1
+      },
+      "eye_blink": {
+        "min": 1,
+        "max": 1
+      },
+      "task_cluster_name": "cluster2centered",
+      "queue_index": 0
+    }
+  ],
+  "reward_schedule": {
+    "schedules": [
+      [
+        0.0,
+        0.0
+      ],
+      [
+        400.0,
+        400.0
+      ],
+      [
+        350.0,
+        350.0
+      ],
+      [
+        300.0,
+        300.0
+      ],
+      [
+        250.0,
+        250.0
+      ],
+      [
+        200.0,
+        200.0
+      ],
+      [
+        150.0,
+        150.0
+      ],
+      [
+        100.0,
+        100.0
+      ],
+      [
+        50.0,
+        50.0
+      ]
+    ],
+    "index": 1
+  },
+  "touch_channels": [
+    0,
+    1
+  ],
+  "Orchestration": {
+    "Remote Executor": false,
+    "Processes": [
+      {
+        "Command": "python3 /home/bijanadmin/Thalamus/fiducial.py",
+        "Critial (Crash on Failure)": true
+      }
+    ]
+  },
+  "eye_scaling": {
+    "I": {
+      "x": 207.0,
+      "y": 227.0
+    },
+    "II": {
+      "x": 253.0,
+      "y": 233.0
+    },
+    "III": {
+      "x": 199.0,
+      "y": 335.0
+    },
+    "IV": {
+      "x": 266.0,
+      "y": 399.0
+    },
+    "Auto Clear": true
+  },
+  "eye_scaling_init": {
+    "I": {
+      "x": 207.0,
+      "y": 227.0
+    },
+    "II": {
+      "x": 253.0,
+      "y": 233.0
+    },
+    "III": {
+      "x": 199.0,
+      "y": 335.0
+    },
+    "IV": {
+      "x": 266.0,
+      "y": 399.0
+    },
+    "Auto Clear": true
+  },
+  "status": "cluster2centered/simple touch no feedback = 12/0",
+  "task_clusters": [
+    {
+      "type": "task_cluster",
+      "name": "center out tasks",
+      "weight": 0,
+      "tasks": [
+=======
           "eye_blink": {
             "min": 0.2,
             "max": 0.2
           }
         },
+>>>>>>> Stashed changes:test_current.json
         {
           "task_type": "delayed_saccade_touch",
           "type": "task",
@@ -4282,6 +4664,628 @@
           "eye_blink": {
             "min": 0.2,
             "max": 0.2
+          }
+        },
+        {
+          "task_type": "delayed_reach",
+          "type": "task",
+          "goal": 0,
+          "name": "center out reach 1",
+          "intertrial_timeout": {
+            "min": 0.8,
+            "max": 0.8
+          },
+          "start_timeout": {
+            "min": 5.0,
+            "max": 5.0
+          },
+          "hold_timeout": {
+            "min": 0.1,
+            "max": 0.1
+          },
+          "blink_timeout": {
+            "min": 0.5,
+            "max": 0.5
+          },
+          "fail_timeout": {
+            "min": 1.0,
+            "max": 1.5
+          },
+          "success_timeout": {
+            "min": 1.0,
+            "max": 1.5
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 2.0
+          },
+          "target_height": {
+            "min": 3.0,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [
+            {
+              "name": "fixation",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 0.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": true,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 0.0,
+                "max": 0.0
+              },
+              "angle": {
+                "min": 0.0,
+                "max": 0.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "top",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 5.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 40.0,
+                "max": 40.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            }
+          ],
+          "baseline_timeout": {
+            "min": 0.2,
+            "max": 0.3
+          },
+          "cue_timeout": {
+            "min": 0.05,
+            "max": 0.05
+          },
+          "reach_timeout": {
+            "min": 1.2,
+            "max": 1.2
+          },
+          "is_choice": false,
+          "state_indicator_x": 1800.0,
+          "state_indicator_y": 950.0,
+          "stim_phase": "FAIL",
+          "stim_start": 1,
+          "intan_cfg": 2,
+          "pulse_count": 1,
+          "pulse_frequency": 1,
+          "pulse_width": 0,
+          "hand_blink": {
+            "min": 0.5,
+            "max": 0.5
+          },
+          "eye_blink": {
+            "min": 0.25,
+            "max": 0.25
+          }
+        },
+        {
+          "task_type": "delayed_saccade_touch",
+          "type": "task",
+          "goal": 99,
+          "name": "center out saccade touch 1",
+          "intertrial_timeout": {
+            "min": 0.8,
+            "max": 0.8
+          },
+          "start_timeout": {
+            "min": 5.0,
+            "max": 5.0
+          },
+          "hold_timeout": {
+            "min": 0.4,
+            "max": 0.4
+          },
+          "blink_timeout": {
+            "min": 0.14,
+            "max": 0.14
+          },
+          "fail_timeout": {
+            "min": 1,
+            "max": 1.5
+          },
+          "success_timeout": {
+            "min": 1.0,
+            "max": 1.5
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 1
+          },
+          "target_height": {
+            "min": 1,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [
+            {
+              "name": "fixation ",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 6.0,
+              "reward_channel": 0.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": true,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 0.0,
+                "max": 0.0
+              },
+              "angle": {
+                "min": 180.0,
+                "max": 180.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "is_touch_fixation": false,
+              "is_gaze_fixation": true,
+              "dual_color": [
+                239,
+                41,
+                41
+              ],
+              "dual_luminance": {
+                "min": 0.0,
+                "max": 0.0
+              }
+            },
+            {
+              "name": "left",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.0,
+              "reward_channel": 5.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                239,
+                41,
+                41
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 180.0,
+                "max": 180.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "is_touch_fixation": false,
+              "is_gaze_fixation": false,
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            }
+          ],
+          "baseline_timeout": {
+            "min": 0.2,
+            "max": 0.3
+          },
+          "cue_timeout": {
+            "min": 0.05,
+            "max": 0.05
+          },
+          "saccade_timeout": {
+            "min": 0.8,
+            "max": 0.8
+          },
+          "is_choice": false,
+          "state_indicator_x": 1800.0,
+          "state_indicator_y": 950.0,
+          "stim_phase": "targs_on",
+          "stim_start": 0.01,
+          "intan_cfg": 1.0,
+          "pulse_count": 2.0,
+          "pulse_frequency": 1,
+          "pulse_width": 100.0,
+          "hand_blink": {
+            "min": 0.2,
+            "max": 0.2
+          },
+          "eye_blink": {
+            "min": 0.2,
+            "max": 0.2
+          }
+        },
+        {
+          "task_type": "delayed_reach",
+          "type": "task",
+          "goal": 0,
+          "name": "center out reach 1",
+          "intertrial_timeout": {
+            "min": 0.8,
+            "max": 0.8
+          },
+          "start_timeout": {
+            "min": 5.0,
+            "max": 5.0
+          },
+          "hold_timeout": {
+            "min": 0.1,
+            "max": 0.1
+          },
+          "blink_timeout": {
+            "min": 0.25,
+            "max": 0.25
+          },
+          "fail_timeout": {
+            "min": 1.0,
+            "max": 1.5
+          },
+          "success_timeout": {
+            "min": 1.0,
+            "max": 1.5
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 2.0
+          },
+          "target_height": {
+            "min": 3.0,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [
+            {
+              "name": "fixation",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 0.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": true,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 0.0,
+                "max": 0.0
+              },
+              "angle": {
+                "min": 0.0,
+                "max": 0.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "bottom",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 5.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 310.0,
+                "max": 310.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            }
+          ],
+          "baseline_timeout": {
+            "min": 0.2,
+            "max": 0.3
+          },
+          "cue_timeout": {
+            "min": 0.05,
+            "max": 0.05
+          },
+          "reach_timeout": {
+            "min": 1.4,
+            "max": 1.4
+          },
+          "is_choice": false,
+          "state_indicator_x": 1800.0,
+          "state_indicator_y": 950.0,
+          "stim_phase": "FAIL",
+          "stim_start": 1,
+          "intan_cfg": 2,
+          "pulse_count": 1,
+          "pulse_frequency": 1,
+          "pulse_width": 0,
+          "hand_blink": {
+            "min": 0.5,
+            "max": 0.5
+          },
+          "eye_blink": {
+            "min": 0.25,
+            "max": 0.25
           }
         }
       ]
@@ -6399,7 +7403,7 @@
           "pulse_width": 0
         },
         {
-          "task_type": "simple_touch_and_look_task",
+          "task_type": "simple_touch_task",
           "type": "task",
           "goal": 99,
           "name": "simple touch no feedback",
@@ -6450,11 +7454,11 @@
           ],
           "targets": [
             {
-              "name": "touch",
+              "name": "fixation",
               "width": 1.6,
               "height": 1.6,
               "orientation": 0,
-              "window_size": 20.0,
+              "window_size": 6.0,
               "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
@@ -6471,65 +7475,10 @@
               "play_in_ear": false,
               "radius": {
                 "min": 0.0,
-                "max": 10.0
+                "max": 0.0
               },
               "angle": {
                 "min": 90.0,
-                "max": 270.0
-              },
-              "volume": {
-                "min": 0,
-                "max": 0
-              },
-              "auditory_temporal_jitter": {
-                "min": 0,
-                "max": 0
-              },
-              "auditory_spatial_offset": {
-                "min": 0,
-                "max": 0
-              },
-              "auditory_spatial_offset_around_fixation": {
-                "min": 0,
-                "max": 0
-              },
-              "on_luminance": {
-                "min": 1,
-                "max": 1
-              },
-              "off_luminance": {
-                "min": 0,
-                "max": 0
-              },
-              "target_type": "fixation",
-              "target_effector": "touch"
-            },
-            {
-              "name": "look",
-              "width": 1.6,
-              "height": 1.6,
-              "orientation": 0,
-              "window_size": 6.0,
-              "reward_channel": 3.0,
-              "audio_scale_left": 0,
-              "audio_scale_right": 0,
-              "color": [
-                239,
-                41,
-                41
-              ],
-              "is_fixation": false,
-              "shape": "box",
-              "stl_file": "",
-              "audio_file": "",
-              "audio_only_if_high": false,
-              "play_in_ear": false,
-              "radius": {
-                "min": 6.0,
-                "max": 10.0
-              },
-              "angle": {
-                "min": 0.0,
                 "max": 90.0
               },
               "volume": {
@@ -6555,9 +7504,7 @@
               "off_luminance": {
                 "min": 0,
                 "max": 0
-              },
-              "target_type": "fixation",
-              "target_effector": "gaze"
+              }
             }
           ],
           "baseline_timeout": {
@@ -6580,15 +7527,7 @@
           "intan_cfg": 2,
           "pulse_count": 1,
           "pulse_frequency": 1,
-          "pulse_width": 0,
-          "hand_blink": {
-            "min": 1,
-            "max": 1
-          },
-          "eye_blink": {
-            "min": 1,
-            "max": 1
-          }
+          "pulse_width": 0
         }
       ]
     },
@@ -6603,8 +7542,8 @@
           "goal": 20,
           "name": "gaze anchor L->R standard",
           "intertrial_timeout": {
-            "min": 1.0,
-            "max": 1.5
+            "min": 3.0,
+            "max": 3.0
           },
           "start_timeout": {
             "min": 5.0,
@@ -6619,12 +7558,12 @@
             "max": 1
           },
           "fail_timeout": {
-            "min": 1,
-            "max": 1.0
+            "min": 1.8,
+            "max": 1.8
           },
           "success_timeout": {
-            "min": 1.0,
-            "max": 1.0
+            "min": 1.8,
+            "max": 1.8
           },
           "target_x": {
             "min": 1,
@@ -6782,7 +7721,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 1.0,
+              "reward_channel": 5.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -6846,7 +7785,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.5,
-              "reward_channel": 1.0,
+              "reward_channel": 5.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -6944,7 +7883,7 @@
         {
           "task_type": "doublestep_saccade",
           "type": "task",
-          "goal": 2,
+          "goal": 0,
           "name": "dss_var01",
           "intertrial_timeout": {
             "min": 1.0,
@@ -7311,7 +8250,7 @@
         {
           "task_type": "gaze_anchoring_fast",
           "type": "task",
-          "goal": 2,
+          "goal": 0,
           "name": "GA_var01",
           "intertrial_timeout": {
             "min": 1.0,
@@ -7719,7 +8658,7 @@
         {
           "task_type": "delayed_saccade",
           "type": "task",
-          "goal": 1,
+          "goal": 0,
           "name": "ds",
           "intertrial_timeout": {
             "min": 1.0,
@@ -8036,9 +8975,9 @@
           }
         },
         {
-          "task_type": "doublestep_saccade_and_touch_sequence",
+          "task_type": "doublestep_saccade_and_touch_fast",
           "type": "task",
-          "goal": 99,
+          "goal": 0,
           "name": "dsst_var0",
           "intertrial_timeout": {
             "min": 1.0,
@@ -8091,14 +9030,14 @@
               "width": 1.6,
               "height": 1.6,
               "orientation": 0,
-              "window_size": 20.0,
+              "window_size": 6.0,
               "reward_channel": 0.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
-                138,
-                226,
-                52
+                239,
+                41,
+                41
               ],
               "is_fixation": true,
               "is_targ2": false,
@@ -8108,12 +9047,12 @@
               "audio_only_if_high": false,
               "play_in_ear": false,
               "radius": {
-                "min": 0.0,
-                "max": 0.0
+                "min": 10.0,
+                "max": 10.0
               },
               "angle": {
-                "min": 0.0,
-                "max": 0.0
+                "min": 135.0,
+                "max": 135.0
               },
               "volume": {
                 "min": 0,
@@ -8141,13 +9080,13 @@
               },
               "anchor": "",
               "dual_color": [
-                239,
-                41,
-                41
+                255,
+                255,
+                255
               ],
               "dual_luminance": {
-                "min": 1.0,
-                "max": 1.0
+                "min": 0,
+                "max": 0
               }
             },
             {
@@ -8160,9 +9099,9 @@
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
-                239,
-                41,
-                41
+                138,
+                226,
+                52
               ],
               "is_fixation": false,
               "is_targ2": false,
@@ -8172,12 +9111,12 @@
               "audio_only_if_high": false,
               "play_in_ear": false,
               "radius": {
-                "min": 10.0,
-                "max": 10.0
+                "min": 0.0,
+                "max": 0.0
               },
               "angle": {
-                "min": 180.0,
-                "max": 180.0
+                "min": 0.0,
+                "max": 0.0
               },
               "volume": {
                 "min": 0,
@@ -8205,13 +9144,13 @@
               },
               "anchor": "",
               "dual_color": [
-                255,
-                255,
-                255
+                239,
+                41,
+                41
               ],
               "dual_luminance": {
-                "min": 0.0,
-                "max": 0.0
+                "min": 1.0,
+                "max": 1.0
               }
             },
             {
@@ -8386,7 +9325,7 @@
         {
           "task_type": "delayed_reach",
           "type": "task",
-          "goal": 1,
+          "goal": 0,
           "name": "dr",
           "intertrial_timeout": {
             "min": 1.0,
@@ -8701,7 +9640,7 @@
         {
           "task_type": "gaze_anchoring_fast",
           "type": "task",
-          "goal": 99,
+          "goal": 0,
           "name": "GA_var0",
           "intertrial_timeout": {
             "min": 0.5,
@@ -9109,7 +10048,7 @@
         {
           "task_type": "delayed_reach_and_saccade",
           "type": "task",
-          "goal": 1,
+          "goal": 0,
           "name": "GA_catch",
           "intertrial_timeout": {
             "min": 1.0,
@@ -9330,9 +10269,13 @@
           "pulse_width": 0
         },
         {
+<<<<<<< Updated upstream:test.json
+          "task_type": "simple_touch_and_look_task",
+=======
           "task_type": "delayed_saccade",
+>>>>>>> Stashed changes:test_current.json
           "type": "task",
-          "goal": 1,
+          "goal": 0,
           "name": "dss_catch",
           "intertrial_timeout": {
             "min": 1.0,
@@ -9381,6 +10324,13 @@
           ],
           "targets": [
             {
+<<<<<<< Updated upstream:test.json
+              "name": "touch",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 20.0,
+=======
               "name": "start",
               "width": 1.6,
               "height": 1.6,
@@ -9441,6 +10391,7 @@
               "height": 1.6,
               "orientation": 0,
               "window_size": 5.0,
+>>>>>>> Stashed changes:test_current.json
               "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
@@ -9458,11 +10409,12 @@
               "play_in_ear": false,
               "radius": {
                 "min": 0.0,
-                "max": 0.0
+                "max": 10.0
               },
               "angle": {
-                "min": 0.0,
-                "max": 0.0
+<<<<<<< Updated upstream:test.json
+                "min": 90.0,
+                "max": 270.0
               },
               "volume": {
                 "min": 0,
@@ -9488,7 +10440,71 @@
                 "min": 0,
                 "max": 0
               },
+              "target_type": "fixation",
+              "target_effector": "touch"
+            },
+            {
+              "name": "look",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 6.0,
+              "reward_channel": 3.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                239,
+                41,
+                41
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 6.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 0.0,
+                "max": 90.0
+=======
+                "min": 0.0,
+                "max": 0.0
+>>>>>>> Stashed changes:test_current.json
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+<<<<<<< Updated upstream:test.json
+              "target_type": "fixation",
+              "target_effector": "gaze"
+=======
               "anchor": ""
+>>>>>>> Stashed changes:test_current.json
             }
           ],
           "baseline_timeout": {
@@ -9536,7 +10552,375 @@
           "intan_cfg": 2,
           "pulse_count": 1,
           "pulse_frequency": 1,
+<<<<<<< Updated upstream:test.json
+          "pulse_width": 0,
+          "hand_blink": {
+            "min": 1,
+            "max": 1
+          },
+          "eye_blink": {
+            "min": 1,
+            "max": 1
+          }
+        }
+      ]
+    },
+    {
+      "type": "task_cluster",
+      "name": "gazeanch_vartargs",
+      "weight": 0,
+      "tasks": [
+=======
           "pulse_width": 0
+        },
+>>>>>>> Stashed changes:test_current.json
+        {
+          "task_type": "doublestep_saccade_and_touch_fast",
+          "type": "task",
+          "goal": 20,
+          "name": "DSST",
+          "intertrial_timeout": {
+            "min": 0.2,
+            "max": 0.7
+          },
+          "start_timeout": {
+            "min": 5.0,
+            "max": 5.0
+          },
+          "hold_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "blink_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "fail_timeout": {
+            "min": 1.8,
+            "max": 1.8
+          },
+          "success_timeout": {
+            "min": 1.8,
+            "max": 1.8
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 1
+          },
+          "target_height": {
+            "min": 1,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [
+            {
+              "name": "start",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 0.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                239,
+                41,
+                41
+              ],
+              "is_fixation": true,
+              "is_targ2": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 180.0,
+                "max": 180.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "anchor": "",
+              "dual_color": [
+                138,
+                226,
+                52
+              ],
+              "dual_luminance": {
+                "min": 1.0,
+                "max": 1.0
+              }
+            },
+            {
+              "name": "targ1",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 0.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": false,
+              "is_targ2": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 0.0,
+                "max": 0.0
+              },
+              "angle": {
+                "min": 0.0,
+                "max": 0.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "anchor": "",
+              "dual_color": [
+                239,
+                41,
+                41
+              ],
+              "dual_luminance": {
+                "min": 1.0,
+                "max": 1.0
+              }
+            },
+            {
+              "name": "targ2 up",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 5.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                239,
+                41,
+                41
+              ],
+              "is_fixation": false,
+              "is_targ2": true,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 40.0,
+                "max": 50.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "anchor": "",
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "targ2 down",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 5.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                239,
+                41,
+                41
+              ],
+              "is_fixation": false,
+              "is_targ2": true,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 310.0,
+                "max": 320.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "anchor": "",
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            }
+          ],
+          "baseline_timeout": {
+            "min": 0.3,
+            "max": 0.4
+          },
+          "cue_timeout": {
+            "min": 0.05,
+            "max": 0.05
+          },
+          "targ2_delay": {
+            "min": 0.25,
+            "max": 1.15
+          },
+          "reach_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "saccade2_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "hold_interval": {
+            "min": 0.4,
+            "max": 0.4
+          },
+          "hand_blink": {
+            "min": 0.25,
+            "max": 0.25
+          },
+          "eye_blink": {
+            "min": 0.2,
+            "max": 0.2
+          },
+          "targets_are_targ2s": false,
+          "state_indicator_x": 1800.0,
+          "state_indicator_y": 950.0,
+          "saccade_timeout": {
+            "min": 1,
+            "max": 1
+          }
         }
       ]
     },
@@ -10595,10 +11979,17 @@
           "pulse_width": 100.0
         },
         {
+<<<<<<< Updated upstream:test.json
+          "task_type": "doublestep_saccade_and_touch_sequence",
+          "type": "task",
+          "goal": 99,
+          "name": "dsst_var0",
+=======
           "task_type": "simple_touch_task",
           "type": "task",
           "goal": 11,
           "name": "simple_reach_shanechi",
+>>>>>>> Stashed changes:test_current.json
           "intertrial_timeout": {
             "min": 0.3,
             "max": 0.7
@@ -10649,15 +12040,23 @@
               "name": "0",
               "width": 1.6,
               "height": 1.6,
+<<<<<<< Updated upstream:test.json
+              "orientation": 0,
+              "window_size": 20.0,
+              "reward_channel": 0.0,
+=======
               "orientation": 4.0,
               "window_size": 5.0,
               "reward_channel": 3.0,
+>>>>>>> Stashed changes:test_current.json
               "audio_scale_left": 0,
               "audio_scale_right": 8.0,
               "color": [
                 138,
                 226,
                 52
+<<<<<<< Updated upstream:test.json
+=======
               ],
               "is_fixation": false,
               "shape": "box",
@@ -10711,6 +12110,7 @@
                 138,
                 226,
                 52
+>>>>>>> Stashed changes:test_current.json
               ],
               "is_fixation": false,
               "shape": "box",
@@ -10719,12 +12119,21 @@
               "audio_only_if_high": false,
               "play_in_ear": false,
               "radius": {
+<<<<<<< Updated upstream:test.json
+                "min": 0.0,
+                "max": 0.0
+              },
+              "angle": {
+                "min": 0.0,
+                "max": 0.0
+=======
                 "min": 5.0,
                 "max": 8.0
               },
               "angle": {
                 "min": 0.0,
                 "max": 45.0
+>>>>>>> Stashed changes:test_current.json
               },
               "volume": {
                 "min": 0,
@@ -10749,6 +12158,19 @@
               "off_luminance": {
                 "min": 0,
                 "max": 0
+<<<<<<< Updated upstream:test.json
+              },
+              "anchor": "",
+              "dual_color": [
+                239,
+                41,
+                41
+              ],
+              "dual_luminance": {
+                "min": 1.0,
+                "max": 1.0
+=======
+>>>>>>> Stashed changes:test_current.json
               }
             },
             {
@@ -10761,9 +12183,9 @@
               "audio_scale_left": 0,
               "audio_scale_right": 8.0,
               "color": [
-                138,
-                226,
-                52
+                239,
+                41,
+                41
               ],
               "is_fixation": false,
               "shape": "box",
@@ -10772,12 +12194,21 @@
               "audio_only_if_high": false,
               "play_in_ear": false,
               "radius": {
+<<<<<<< Updated upstream:test.json
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 180.0,
+                "max": 180.0
+=======
                 "min": 8.0,
                 "max": 11.0
               },
               "angle": {
                 "min": 45.0,
                 "max": 90.0
+>>>>>>> Stashed changes:test_current.json
               },
               "volume": {
                 "min": 0,
@@ -10802,6 +12233,19 @@
               "off_luminance": {
                 "min": 0,
                 "max": 0
+<<<<<<< Updated upstream:test.json
+              },
+              "anchor": "",
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0.0,
+                "max": 0.0
+=======
+>>>>>>> Stashed changes:test_current.json
               }
             },
             {
@@ -17129,8 +18573,8 @@
             }
           ],
           "baseline_timeout": {
-            "min": 0.1,
-            "max": 0.1
+            "min": 0.2,
+            "max": 0.3
           },
           "cue_timeout": {
             "min": 0.05,
@@ -17524,8 +18968,8 @@
             "max": 5.0
           },
           "hold_timeout": {
-            "min": 0.6,
-            "max": 0.65
+            "min": 0.1,
+            "max": 0.1
           },
           "blink_timeout": {
             "min": 0.25,
@@ -17992,7 +19436,7 @@
           },
           "cue_timeout": {
             "min": 0.1,
-            "max": 0.1
+            "max": 0.65
           },
           "reach_timeout": {
             "min": 1.0,
@@ -19689,7 +21133,7 @@
             "max": 0.6
           },
           "cue_timeout": {
-            "min": 0.6,
+            "min": 0.1,
             "max": 0.65
           },
           "reach_timeout": {
@@ -19705,6 +21149,3186 @@
           "pulse_count": 1,
           "pulse_frequency": 1,
           "pulse_width": 0
+        }
+      ]
+    },
+    {
+      "type": "task_cluster",
+      "name": "gazeanch_experiment",
+      "weight": 0,
+      "tasks": [
+        {
+          "task_type": "gaze_anchoring_fast",
+          "type": "task",
+          "goal": 1,
+          "name": "gaze anchor challenge",
+          "intertrial_timeout": {
+            "min": 1.2,
+            "max": 1.7
+          },
+          "start_timeout": {
+            "min": 5.0,
+            "max": 5.0
+          },
+          "hold_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "blink_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "fail_timeout": {
+            "min": 1.8,
+            "max": 1.8
+          },
+          "success_timeout": {
+            "min": 1.8,
+            "max": 1.8
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 1
+          },
+          "target_height": {
+            "min": 1,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [
+            {
+              "name": "start",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 0.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": true,
+              "is_targ2": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 180.0,
+                "max": 180.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "anchor": "",
+              "dual_color": [
+                239,
+                41,
+                41
+              ],
+              "dual_luminance": {
+                "min": 0.0,
+                "max": 0.0
+              }
+            },
+            {
+              "name": "targ1",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 0.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": false,
+              "is_targ2": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 0.0,
+                "max": 0.0
+              },
+              "angle": {
+                "min": 0.0,
+                "max": 0.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "anchor": "",
+              "dual_color": [
+                239,
+                41,
+                41
+              ],
+              "dual_luminance": {
+                "min": 0.0,
+                "max": 0.0
+              }
+            },
+            {
+              "name": "targ2 up",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 3.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                239,
+                41,
+                41
+              ],
+              "is_fixation": false,
+              "is_targ2": true,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 40.0,
+                "max": 50.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "anchor": "",
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "targ2 down",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 3.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                239,
+                41,
+                41
+              ],
+              "is_fixation": false,
+              "is_targ2": true,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 310.0,
+                "max": 320.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "anchor": "",
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            }
+          ],
+          "baseline_timeout": {
+            "min": 0.2,
+            "max": 0.3
+          },
+          "cue_timeout": {
+            "min": 0.05,
+            "max": 0.05
+          },
+          "targ2_delay": {
+            "min": 0.25,
+            "max": 1.15
+          },
+          "reach_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "saccade2_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "hold_interval": {
+            "min": 1.0,
+            "max": 1.0
+          },
+          "hand_blink": {
+            "min": 0.25,
+            "max": 0.25
+          },
+          "eye_blink": {
+            "min": 0.2,
+            "max": 0.2
+          },
+          "targets_are_targ2s": false,
+          "state_indicator_x": 1800.0,
+          "state_indicator_y": 950.0
+        },
+        {
+          "task_type": "doublestep_saccade_and_touch_fast",
+          "type": "task",
+          "goal": 20,
+          "name": "DSST",
+          "intertrial_timeout": {
+            "min": 1.2,
+            "max": 1.7
+          },
+          "start_timeout": {
+            "min": 5.0,
+            "max": 5.0
+          },
+          "hold_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "blink_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "fail_timeout": {
+            "min": 1.8,
+            "max": 1.8
+          },
+          "success_timeout": {
+            "min": 1.8,
+            "max": 1.8
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 1
+          },
+          "target_height": {
+            "min": 1,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [
+            {
+              "name": "start",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 0.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                239,
+                41,
+                41
+              ],
+              "is_fixation": true,
+              "is_targ2": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 180.0,
+                "max": 180.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "anchor": "",
+              "dual_color": [
+                138,
+                226,
+                52
+              ],
+              "dual_luminance": {
+                "min": 1.0,
+                "max": 1.0
+              }
+            },
+            {
+              "name": "targ1",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 0.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": false,
+              "is_targ2": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 0.0,
+                "max": 0.0
+              },
+              "angle": {
+                "min": 0.0,
+                "max": 0.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "anchor": "",
+              "dual_color": [
+                239,
+                41,
+                41
+              ],
+              "dual_luminance": {
+                "min": 1.0,
+                "max": 1.0
+              }
+            },
+            {
+              "name": "targ2 up",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 1.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                239,
+                41,
+                41
+              ],
+              "is_fixation": false,
+              "is_targ2": true,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 40.0,
+                "max": 50.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "anchor": "",
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "targ2 down",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 1.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                239,
+                41,
+                41
+              ],
+              "is_fixation": false,
+              "is_targ2": true,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 310.0,
+                "max": 320.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "anchor": "",
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            }
+          ],
+          "baseline_timeout": {
+            "min": 0.3,
+            "max": 0.4
+          },
+          "cue_timeout": {
+            "min": 0.05,
+            "max": 0.05
+          },
+          "targ2_delay": {
+            "min": 0.25,
+            "max": 1.15
+          },
+          "reach_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "saccade2_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "hold_interval": {
+            "min": 0.4,
+            "max": 0.4
+          },
+          "hand_blink": {
+            "min": 0.25,
+            "max": 0.25
+          },
+          "eye_blink": {
+            "min": 0.2,
+            "max": 0.2
+          },
+          "targets_are_targ2s": false,
+          "state_indicator_x": 1800.0,
+          "state_indicator_y": 950.0,
+          "saccade_timeout": {
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "task_type": "gaze_anchoring_fast",
+          "type": "task",
+          "goal": 20,
+          "name": "gaze anchor standard",
+          "intertrial_timeout": {
+            "min": 1.2,
+            "max": 1.7
+          },
+          "start_timeout": {
+            "min": 5.0,
+            "max": 5.0
+          },
+          "hold_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "blink_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "fail_timeout": {
+            "min": 1.8,
+            "max": 1.8
+          },
+          "success_timeout": {
+            "min": 1.8,
+            "max": 1.8
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 1
+          },
+          "target_height": {
+            "min": 1,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [
+            {
+              "name": "start",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 0.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": true,
+              "is_targ2": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 180.0,
+                "max": 180.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "anchor": "",
+              "dual_color": [
+                239,
+                41,
+                41
+              ],
+              "dual_luminance": {
+                "min": 0.0,
+                "max": 0.0
+              }
+            },
+            {
+              "name": "targ1",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 0.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": false,
+              "is_targ2": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 0.0,
+                "max": 0.0
+              },
+              "angle": {
+                "min": 0.0,
+                "max": 0.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "anchor": "",
+              "dual_color": [
+                239,
+                41,
+                41
+              ],
+              "dual_luminance": {
+                "min": 0.0,
+                "max": 0.0
+              }
+            },
+            {
+              "name": "targ2 up",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 3.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                239,
+                41,
+                41
+              ],
+              "is_fixation": false,
+              "is_targ2": true,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 40.0,
+                "max": 50.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "anchor": "",
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "targ2 down",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 3.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                239,
+                41,
+                41
+              ],
+              "is_fixation": false,
+              "is_targ2": true,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 310.0,
+                "max": 320.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "anchor": "",
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            }
+          ],
+          "baseline_timeout": {
+            "min": 0.2,
+            "max": 0.3
+          },
+          "cue_timeout": {
+            "min": 0.05,
+            "max": 0.05
+          },
+          "targ2_delay": {
+            "min": 0.25,
+            "max": 1.15
+          },
+          "reach_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "saccade2_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "hold_interval": {
+            "min": 0.4,
+            "max": 0.4
+          },
+          "hand_blink": {
+            "min": 0.25,
+            "max": 0.25
+          },
+          "eye_blink": {
+            "min": 0.2,
+            "max": 0.2
+          },
+          "targets_are_targ2s": false,
+          "state_indicator_x": 1800.0,
+          "state_indicator_y": 950.0
+        }
+      ]
+    },
+    {
+      "type": "task_cluster",
+      "name": "center out experiment",
+      "weight": 0,
+      "tasks": [
+        {
+          "task_type": "delayed_reach",
+          "type": "task",
+          "goal": 99,
+          "name": "center out reach",
+          "intertrial_timeout": {
+            "min": 2.0,
+            "max": 2.0
+          },
+          "start_timeout": {
+            "min": 5.0,
+            "max": 5.0
+          },
+          "hold_timeout": {
+            "min": 0.2,
+            "max": 0.21
+          },
+          "blink_timeout": {
+            "min": 0.5,
+            "max": 0.5
+          },
+          "fail_timeout": {
+            "min": 1.0,
+            "max": 1.5
+          },
+          "success_timeout": {
+            "min": 1.0,
+            "max": 1.5
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 2.0
+          },
+          "target_height": {
+            "min": 3.0,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [
+            {
+              "name": "fixation",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 0.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": true,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 0.0,
+                "max": 0.0
+              },
+              "angle": {
+                "min": 90.0,
+                "max": 90.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "right",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 5.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 0.0,
+                "max": 0.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "left",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 5.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 180.0,
+                "max": 180.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "top",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 5.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 90.0,
+                "max": 90.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "topright",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 5.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 45.0,
+                "max": 45.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "topleft",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 5.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 135.0,
+                "max": 135.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "bottomleft",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 5.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 225.0,
+                "max": 225.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "bottomright",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 5.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 315.0,
+                "max": 315.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            }
+          ],
+          "baseline_timeout": {
+            "min": 0.2,
+            "max": 0.3
+          },
+          "cue_timeout": {
+            "min": 0.05,
+            "max": 0.05
+          },
+          "reach_timeout": {
+            "min": 1.0,
+            "max": 1.0
+          },
+          "is_choice": false,
+          "state_indicator_x": 1800.0,
+          "state_indicator_y": 950.0,
+          "stim_phase": "FAIL",
+          "stim_start": 1,
+          "intan_cfg": 2,
+          "pulse_count": 1,
+          "pulse_frequency": 1,
+          "pulse_width": 0,
+          "hand_blink": {
+            "min": 0.5,
+            "max": 0.5
+          },
+          "eye_blink": {
+            "min": 0.25,
+            "max": 0.25
+          }
+        },
+        {
+          "task_type": "delayed_saccade_touch",
+          "type": "task",
+          "goal": 0,
+          "name": "center out saccade touch",
+          "intertrial_timeout": {
+            "min": 3.0,
+            "max": 3.0
+          },
+          "start_timeout": {
+            "min": 5.0,
+            "max": 5.0
+          },
+          "hold_timeout": {
+            "min": 0.4,
+            "max": 0.4
+          },
+          "blink_timeout": {
+            "min": 0.14,
+            "max": 0.14
+          },
+          "fail_timeout": {
+            "min": 1,
+            "max": 1.5
+          },
+          "success_timeout": {
+            "min": 1.0,
+            "max": 1.5
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 1
+          },
+          "target_height": {
+            "min": 1,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [
+            {
+              "name": "fixation ",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 6.0,
+              "reward_channel": 0.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": true,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 0.0,
+                "max": 0.0
+              },
+              "angle": {
+                "min": 180.0,
+                "max": 180.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "is_touch_fixation": false,
+              "is_gaze_fixation": true,
+              "dual_color": [
+                114,
+                159,
+                207
+              ],
+              "dual_luminance": {
+                "min": 0.0,
+                "max": 0.0
+              }
+            },
+            {
+              "name": "right",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.0,
+              "reward_channel": 5.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                239,
+                41,
+                41
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 0,
+                "max": 0.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "is_touch_fixation": false,
+              "is_gaze_fixation": false,
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "left",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.0,
+              "reward_channel": 5.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                239,
+                41,
+                41
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 180.0,
+                "max": 180.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "is_touch_fixation": false,
+              "is_gaze_fixation": false,
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "top",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.0,
+              "reward_channel": 5.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                239,
+                41,
+                41
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 90.0,
+                "max": 90.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "is_touch_fixation": false,
+              "is_gaze_fixation": false,
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "topright",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.0,
+              "reward_channel": 5.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                239,
+                41,
+                41
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 45.0,
+                "max": 45.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "is_touch_fixation": false,
+              "is_gaze_fixation": false,
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "topleft",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.0,
+              "reward_channel": 5.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                239,
+                41,
+                41
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 135.0,
+                "max": 135.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "is_touch_fixation": false,
+              "is_gaze_fixation": false,
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "bottomleft",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.0,
+              "reward_channel": 5.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                239,
+                41,
+                41
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 225.0,
+                "max": 225.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "is_touch_fixation": false,
+              "is_gaze_fixation": false,
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "bottomright",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.0,
+              "reward_channel": 5.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                239,
+                41,
+                41
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 315.0,
+                "max": 315.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "is_touch_fixation": false,
+              "is_gaze_fixation": false,
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            }
+          ],
+          "baseline_timeout": {
+            "min": 0.2,
+            "max": 0.3
+          },
+          "cue_timeout": {
+            "min": 0.05,
+            "max": 0.05
+          },
+          "saccade_timeout": {
+            "min": 0.8,
+            "max": 0.8
+          },
+          "is_choice": false,
+          "state_indicator_x": 1800.0,
+          "state_indicator_y": 950.0,
+          "stim_phase": "targs_on",
+          "stim_start": 0.01,
+          "intan_cfg": 1.0,
+          "pulse_count": 2.0,
+          "pulse_frequency": 1,
+          "pulse_width": 100.0,
+          "hand_blink": {
+            "min": 0.8,
+            "max": 0.8
+          },
+          "eye_blink": {
+            "min": 0.2,
+            "max": 0.2
+          }
+        },
+        {
+          "task_type": "delayed_reach",
+          "type": "task",
+          "goal": 0,
+          "name": "center out reach 2",
+          "intertrial_timeout": {
+            "min": 3.0,
+            "max": 3.0
+          },
+          "start_timeout": {
+            "min": 5.0,
+            "max": 5.0
+          },
+          "hold_timeout": {
+            "min": 0.1,
+            "max": 0.1
+          },
+          "blink_timeout": {
+            "min": 0.25,
+            "max": 0.25
+          },
+          "fail_timeout": {
+            "min": 3.0,
+            "max": 3.0
+          },
+          "success_timeout": {
+            "min": 1.0,
+            "max": 1.5
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 2.0
+          },
+          "target_height": {
+            "min": 3.0,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [
+            {
+              "name": "fixation",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 0.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": true,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 0.0,
+                "max": 0.0
+              },
+              "angle": {
+                "min": 0.0,
+                "max": 0.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "top",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 5.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 40.0,
+                "max": 40.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "bottom",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 5.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 310.0,
+                "max": 310.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            }
+          ],
+          "baseline_timeout": {
+            "min": 0.2,
+            "max": 0.3
+          },
+          "cue_timeout": {
+            "min": 0.05,
+            "max": 0.05
+          },
+          "reach_timeout": {
+            "min": 1.2,
+            "max": 1.2
+          },
+          "is_choice": false,
+          "state_indicator_x": 1800.0,
+          "state_indicator_y": 950.0,
+          "stim_phase": "FAIL",
+          "stim_start": 1,
+          "intan_cfg": 2,
+          "pulse_count": 1,
+          "pulse_frequency": 1,
+          "pulse_width": 0,
+          "hand_blink": {
+            "min": 0.5,
+            "max": 0.5
+          },
+          "eye_blink": {
+            "min": 0.25,
+            "max": 0.25
+          }
+        },
+        {
+          "task_type": "delayed_saccade_touch",
+          "type": "task",
+          "goal": 0,
+          "name": "center out saccade touch 2",
+          "intertrial_timeout": {
+            "min": 3.0,
+            "max": 3.0
+          },
+          "start_timeout": {
+            "min": 5.0,
+            "max": 5.0
+          },
+          "hold_timeout": {
+            "min": 0.4,
+            "max": 0.4
+          },
+          "blink_timeout": {
+            "min": 0.14,
+            "max": 0.14
+          },
+          "fail_timeout": {
+            "min": 2.0,
+            "max": 2.0
+          },
+          "success_timeout": {
+            "min": 1.0,
+            "max": 1.5
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 1
+          },
+          "target_height": {
+            "min": 1,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [
+            {
+              "name": "fixation ",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 6.0,
+              "reward_channel": 0.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": true,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 0.0,
+                "max": 0.0
+              },
+              "angle": {
+                "min": 180.0,
+                "max": 180.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "is_touch_fixation": false,
+              "is_gaze_fixation": true,
+              "dual_color": [
+                239,
+                41,
+                41
+              ],
+              "dual_luminance": {
+                "min": 0.0,
+                "max": 0.0
+              }
+            },
+            {
+              "name": "top",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.0,
+              "reward_channel": 5.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                239,
+                41,
+                41
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 40.0,
+                "max": 40.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "is_touch_fixation": false,
+              "is_gaze_fixation": false,
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "bottom",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.0,
+              "reward_channel": 5.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                239,
+                41,
+                41
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 310.0,
+                "max": 310.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "is_touch_fixation": false,
+              "is_gaze_fixation": false,
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            }
+          ],
+          "baseline_timeout": {
+            "min": 0.2,
+            "max": 0.3
+          },
+          "cue_timeout": {
+            "min": 0.05,
+            "max": 0.05
+          },
+          "saccade_timeout": {
+            "min": 0.8,
+            "max": 0.8
+          },
+          "is_choice": false,
+          "state_indicator_x": 1800.0,
+          "state_indicator_y": 950.0,
+          "stim_phase": "targs_on",
+          "stim_start": 0.01,
+          "intan_cfg": 1.0,
+          "pulse_count": 2.0,
+          "pulse_frequency": 1,
+          "pulse_width": 100.0,
+          "hand_blink": {
+            "min": 0.1,
+            "max": 0.1
+          },
+          "eye_blink": {
+            "min": 0.2,
+            "max": 0.2
+          }
+        },
+        {
+          "task_type": "delayed_reach",
+          "type": "task",
+          "goal": 5,
+          "name": "center out reach 1",
+          "intertrial_timeout": {
+            "min": 2.0,
+            "max": 2.0
+          },
+          "start_timeout": {
+            "min": 5.0,
+            "max": 5.0
+          },
+          "hold_timeout": {
+            "min": 0.1,
+            "max": 0.1
+          },
+          "blink_timeout": {
+            "min": 0.5,
+            "max": 0.5
+          },
+          "fail_timeout": {
+            "min": 1.0,
+            "max": 1.5
+          },
+          "success_timeout": {
+            "min": 1.0,
+            "max": 1.5
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 2.0
+          },
+          "target_height": {
+            "min": 3.0,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [
+            {
+              "name": "fixation",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 0.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": true,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 0.0,
+                "max": 0.0
+              },
+              "angle": {
+                "min": 0.0,
+                "max": 0.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "targ",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 5.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 310.0,
+                "max": 310.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            }
+          ],
+          "baseline_timeout": {
+            "min": 0.2,
+            "max": 0.3
+          },
+          "cue_timeout": {
+            "min": 0.05,
+            "max": 0.05
+          },
+          "reach_timeout": {
+            "min": 1.2,
+            "max": 1.2
+          },
+          "is_choice": false,
+          "state_indicator_x": 1800.0,
+          "state_indicator_y": 950.0,
+          "stim_phase": "FAIL",
+          "stim_start": 1,
+          "intan_cfg": 2,
+          "pulse_count": 1,
+          "pulse_frequency": 1,
+          "pulse_width": 0,
+          "hand_blink": {
+            "min": 0.5,
+            "max": 0.5
+          },
+          "eye_blink": {
+            "min": 0.25,
+            "max": 0.25
+          }
+        },
+        {
+          "task_type": "delayed_saccade_touch",
+          "type": "task",
+          "goal": 5,
+          "name": "center out saccade touch 1",
+          "intertrial_timeout": {
+            "min": 2.0,
+            "max": 2.0
+          },
+          "start_timeout": {
+            "min": 5.0,
+            "max": 5.0
+          },
+          "hold_timeout": {
+            "min": 0.4,
+            "max": 0.4
+          },
+          "blink_timeout": {
+            "min": 0.14,
+            "max": 0.14
+          },
+          "fail_timeout": {
+            "min": 1,
+            "max": 1.5
+          },
+          "success_timeout": {
+            "min": 1.0,
+            "max": 1.5
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 1
+          },
+          "target_height": {
+            "min": 1,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [
+            {
+              "name": "fixation ",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 6.0,
+              "reward_channel": 0.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": true,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 0.0,
+                "max": 0.0
+              },
+              "angle": {
+                "min": 180.0,
+                "max": 180.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "is_touch_fixation": false,
+              "is_gaze_fixation": true,
+              "dual_color": [
+                239,
+                41,
+                41
+              ],
+              "dual_luminance": {
+                "min": 0.0,
+                "max": 0.0
+              }
+            },
+            {
+              "name": "targ",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 5.0,
+              "reward_channel": 5.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                239,
+                41,
+                41
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 180.0,
+                "max": 180.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "is_touch_fixation": false,
+              "is_gaze_fixation": false,
+              "dual_color": [
+                255,
+                255,
+                255
+              ],
+              "dual_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            }
+          ],
+          "baseline_timeout": {
+            "min": 0.2,
+            "max": 0.3
+          },
+          "cue_timeout": {
+            "min": 0.05,
+            "max": 0.05
+          },
+          "saccade_timeout": {
+            "min": 0.8,
+            "max": 0.8
+          },
+          "is_choice": false,
+          "state_indicator_x": 1800.0,
+          "state_indicator_y": 950.0,
+          "stim_phase": "targs_on",
+          "stim_start": 0.01,
+          "intan_cfg": 1.0,
+          "pulse_count": 2.0,
+          "pulse_frequency": 1.0,
+          "pulse_width": 100.0,
+          "hand_blink": {
+            "min": 0.3,
+            "max": 0.3
+          },
+          "eye_blink": {
+            "min": 0.2,
+            "max": 0.2
+          }
         }
       ]
     }

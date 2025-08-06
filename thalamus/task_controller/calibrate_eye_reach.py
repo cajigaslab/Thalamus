@@ -521,12 +521,20 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   quadrant = []
   if all_target_names[final_i_selected_target]=='topleft':
     quadrant = 'I'
+    quadrant_x = 'IV'
+    quadrant_y = 'II'
   elif all_target_names[final_i_selected_target]=='topright':
     quadrant = 'II'
+    quadrant_x = 'III'
+    quadrant_y = 'I'
   elif all_target_names[final_i_selected_target]=='bottomleft': 
     quadrant = 'III'
+    quadrant_x = 'II'
+    quadrant_y = 'IV'
   elif all_target_names[final_i_selected_target]=='bottomright': 
     quadrant = 'IV'
+    quadrant_x = 'I'
+    quadrant_y = 'III'
   
   if quadrant != []:
     xscale_init = eye_config[quadrant]['x']
@@ -556,6 +564,29 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
         and abs(yscale-yscale_orig) < context.task_config['max_eye_change'] ):
       eye_config[quadrant]['x']=xscale
       eye_config[quadrant]['y']=yscale
+      
+    # Test pairing scaling across quadrants
+    eye_config[quadrant_x]['x']=xscale
+    xscale_init = eye_config[quadrant_x]['x']
+    xscale_orig = eye_config_orig[quadrant_x]['x']
+    if context.task_config['average_scaling']:
+      xscale = np.mean([xscale_new,xscale_init])
+    else:
+      xscale = xscale_new
+    if (abs(xscale-xscale_init) < context.task_config['max_eye_change_step'] 
+        and abs(xscale-xscale_orig) < context.task_config['max_eye_change']):
+      eye_config[quadrant_x]['x']=xscale
+
+    eye_config[quadrant_y]['y']=yscale
+    yscale_init = eye_config[quadrant_y]['y']
+    yscale_orig = eye_config_orig[quadrant_y]['y']
+    if context.task_config['average_scaling']:
+      yscale = np.mean([yscale_new,yscale_init])
+    else:
+      yscale = yscale_new
+    if (abs(yscale-yscale_init) < context.task_config['max_eye_change_step'] 
+        and abs(yscale-yscale_orig) < context.task_config['max_eye_change']):
+      eye_config[quadrant_y]['y']=yscale
 
 
   await context.log(f'BehavState={State.TARGS_ACQ.name}')
