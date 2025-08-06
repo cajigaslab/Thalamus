@@ -13,6 +13,7 @@ from . import delayed_reach_and_saccade_task
 from . import double_step_reach
 from . import doublestep_saccade_and_touch
 from . import doublestep_saccade_and_touch_fast
+from . import doublestep_saccade_and_touch_sequence
 from . import distractor_suppression_reach
 from . import gaze_anchoring
 from . import gaze_anchoring_fast
@@ -76,6 +77,9 @@ DESCRIPTIONS = [
   TaskDescription('doublestep_saccade_and_touch_fast', 'Double Step Saccade and Touch fast', 
     doublestep_saccade_and_touch_fast.create_widget, # type: ignore
     doublestep_saccade_and_touch_fast.run), # type: ignore 
+  TaskDescription('doublestep_saccade_and_touch_sequence', 'Double Step Saccade and Touch Sequence', 
+    doublestep_saccade_and_touch_sequence.create_widget, # type: ignore
+    doublestep_saccade_and_touch_sequence.run), # type: ignore 
   TaskDescription('context_dependent_reach', 'Context Dependent Reach',
     context_dependent_reach.create_widget, # type: ignore
     context_dependent_reach.run), # type: ignore 
