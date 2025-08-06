@@ -92,10 +92,32 @@ jobs:
       with:
         name: windows-dist
         path: dist
+  build-mac:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set Git name 
+      run: git config --global user.name "Github Actions"
+    - name: Set Git email 
+      run: git config --global user.email "no@email.com"
+    - run: python3 -m venv pyenv
+    - name: Prepare
+      run: source pyenv/bin/activate && python3 prepare.py
+    - name: nasm
+      run: source $HOME/.thalamusrc && echo $PATH && echo $HOME && ls $HOME/nasm-2.15.05  && which nasm
+    - name: Version Bump
+      run: source $HOME/.thalamusrc && source pyenv/bin/activate && python3 bump.py patch
+    - name: Build
+      run: source $HOME/.thalamusrc && source pyenv/bin/activate && python3 -m build -n -w -Crelease
+    - name: Archive Distribution
+      uses: actions/upload-artifact@v4
+      with:
+        name: mac-dist
+        path: dist
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [build-linux, build-windows]
+    needs: [build-linux, build-windows, build-mac]
     steps:
     - uses: actions/download-artifact@v4
       with:
@@ -103,11 +125,15 @@ jobs:
     - uses: actions/download-artifact@v4
       with:
         name: windows-dist
+    - uses: actions/download-artifact@v4
+      with:
+        name: mac-dist
     - name: Get Paths
       id: paths
       run: |
         echo linux=`ls *linux*.whl` >> "$GITHUB_OUTPUT"
         echo windows=`ls *win*.whl` >> "$GITHUB_OUTPUT"
+        echo mac=`ls *mac*.whl` >> "$GITHUB_OUTPUT"
     - name: Create Release
       id: create-release
       uses: actions/create-release@v1
@@ -135,5 +161,14 @@ jobs:
         upload_url: ${{ steps.create-release.outputs.upload_url }}
         asset_path: ${{ steps.paths.outputs.windows }}
         asset_name: ${{ steps.paths.outputs.windows }}
+        asset_content_type: application/x-wheel+zip
+    - name: Upload Mac Release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create-release.outputs.upload_url }}
+        asset_path: ${{ steps.paths.outputs.mac }}
+        asset_name: ${{ steps.paths.outputs.mac }}
         asset_content_type: application/x-wheel+zip
           
