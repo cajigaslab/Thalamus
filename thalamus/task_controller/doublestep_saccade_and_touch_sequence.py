@@ -625,7 +625,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     state_brightness = toggle_brightness(state_brightness)
     show_start_target = True
     context.widget.update()
-    await context.log(f'BehavState=start_touch_on')
+    await context.log(f'BehavState=start_on')
     acquired = await wait_for(context, lambda: start_target_touched or blank_space_touched, config.start_timeout)
     if blank_space_touched:
       await fail_trial()
@@ -662,6 +662,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     return task_context.TaskResult(False)
 
   state_brightness = toggle_brightness(state_brightness)  
+  behav_result['presented_targ_id'] = int(i_start_targ)
   show_start_dual_target = True
   context.widget.update()
   await context.log(f'BehavState=targs_on')
