@@ -16,6 +16,7 @@ struct AmplifierSDK {
   decltype(&::SetAmplifierFamily) SetAmplifierFamily;
   decltype(&::EnumerateDevices) EnumerateDevices;
   decltype(&::OpenDevice) OpenDevice;
+  decltype(&::CloseDevice) CloseDevice;
   decltype(&::GetProperty) GetProperty;
   decltype(&::GetInfo) GetInfo;
   decltype(&::StartAcquisition) StartAcquisition;
@@ -80,6 +81,14 @@ static bool prepare_amplifier() {
     THALAMUS_LOG(info)
         << "Failed to load OpenDevice.  Brain Products features disabled";
     return false;
+  }
+
+  amplifier_sdk->CloseDevice = reinterpret_cast<decltype(&CloseDevice)>(
+      ::GetProcAddress(amplifier_dll_handle, "CloseDevice"));
+  if (!amplifier_sdk->CloseDevice) {
+      THALAMUS_LOG(info)
+          << "Failed to load CloseDevice.  Brain Products features disabled";
+      return false;
   }
   
   amplifier_sdk->GetProperty = reinterpret_cast<decltype(&GetProperty)>(
@@ -228,7 +237,7 @@ struct BrainProductsNode::Impl {
     }
     char hwi[4] = "USB";
 	  auto device_count = amplifier_sdk->EnumerateDevices(hwi, sizeof(hwi), "", 0);
-    if(device_count) {
+    if(device_count == 0) {
       on_error("BrainVision Amplifier Error", "No USB amplifier found");
       return;
     }
@@ -297,7 +306,7 @@ struct BrainProductsNode::Impl {
 		int nDataType;
     std::vector<Channel> channels;
     for(auto i = 0u;i < uint32_t(nAvailableChannels);++i) {
-      status = amplifier_sdk->GetProperty(amplifier, PG_DEVICE, i, CPROP_B32_RecordingEnabled, &nIsEnabled, sizeof(nIsEnabled));
+      status = amplifier_sdk->GetProperty(amplifier, PG_CHANNEL, i, CPROP_B32_RecordingEnabled, &nIsEnabled, sizeof(nIsEnabled));
       if(status != AMP_OK) {
         on_error("BrainVision Amplifier Error", "Failed to read channel enabled");
         return;
@@ -309,13 +318,13 @@ struct BrainProductsNode::Impl {
         //  return;
         //}
 
-        status = amplifier_sdk->GetProperty(amplifier, PG_DEVICE, i, CPROP_F32_Resolution, &fResolution, sizeof(fResolution));
+        status = amplifier_sdk->GetProperty(amplifier, PG_CHANNEL, i, CPROP_F32_Resolution, &fResolution, sizeof(fResolution));
         if(status != AMP_OK) {
           on_error("BrainVision Amplifier Error", "Failed to read channel resolution");
           return;
         }
 
-        status = amplifier_sdk->GetProperty(amplifier, PG_DEVICE, i, CPROP_I32_DataType, &nDataType, sizeof(nDataType));
+        status = amplifier_sdk->GetProperty(amplifier, PG_CHANNEL, i, CPROP_I32_DataType, &nDataType, sizeof(nDataType));
         if(status != AMP_OK) {
           on_error("BrainVision Amplifier Error", "Failed to read channel data type");
           return;
@@ -327,9 +336,10 @@ struct BrainProductsNode::Impl {
     for(auto& channel : channels) {
       auto increment = datatype_to_bytes(channel.datatype);
       if(increment < 0) {
-          on_error("BrainVision Amplifier Error", "Unexpected channel data type");
-          return;
+        on_error("BrainVision Amplifier Error", "Unexpected channel data type");
+        return;
       }
+      sampleBytes += increment;
     }
 
     std::vector<std::uint64_t> buffer(size_t(sampleBytes*sampleRate / 5)/8+1, 0);
@@ -351,15 +361,15 @@ struct BrainProductsNode::Impl {
     thalamus::vector<std::span<const double>> spans(channels.size());
     std::vector<double> output_data;
     while(!stop_token.stop_requested()) {
-      auto read_count = size_t(amplifier_sdk->GetData(amplifier, buffer_bytes, int32_t(buffer_bytes_count), int32_t(buffer_bytes_count/uint64_t(sampleBytes))));
-      //if(read_count < 0) {
-      //  on_error("BrainVision Amplifier Error", "Failed to read data");
-      //  return;
-      //}
+      auto read_count = amplifier_sdk->GetData(amplifier, buffer_bytes, int32_t(buffer_bytes_count), int32_t(buffer_bytes_count/uint64_t(sampleBytes)));
+      if(read_count < 0) {
+        on_error("BrainVision Amplifier Error", "Failed to read data");
+        return;
+      }
 
-      auto num_samples = read_count / size_t(sampleBytes);
+      auto num_samples = size_t(read_count) / size_t(sampleBytes);
       auto i = 0ull;
-      auto offset = 0ull;
+      auto offset = 0;
       output_data.resize(channels.size() * num_samples);
       while(offset < read_count) {
         offset += 8;
@@ -368,35 +378,35 @@ struct BrainProductsNode::Impl {
           switch (channel.datatype)
           {
           case DT_INT16:
-            output_data[j*channels.size() + i] = double(*reinterpret_cast<short*>(buffer_bytes_count + offset))*channel.resolution;
+            output_data[j*num_samples + i] = double(*reinterpret_cast<short*>(buffer_bytes + offset))*channel.resolution;
             offset += 2;
             break;
           case DT_UINT16:
-            output_data[j*channels.size() + i] = double(*reinterpret_cast<unsigned short*>(buffer_bytes_count + offset))*channel.resolution;
+            output_data[j*num_samples + i] = double(*reinterpret_cast<unsigned short*>(buffer_bytes + offset))*channel.resolution;
             offset += 2;
             break;
           case DT_INT32:
-            output_data[j*channels.size() + i] = double(*reinterpret_cast<int*>(buffer_bytes_count + offset))*channel.resolution;
+            output_data[j*num_samples + i] = double(*reinterpret_cast<int*>(buffer_bytes + offset))*channel.resolution;
             offset += 4;
             break;
           case DT_UINT32:
-            output_data[j*channels.size() + i] = double(*reinterpret_cast<unsigned int*>(buffer_bytes_count + offset))*channel.resolution;
+            output_data[j*num_samples + i] = double(*reinterpret_cast<unsigned int*>(buffer_bytes + offset))*channel.resolution;
             offset += 4;
             break;
           case DT_FLOAT32:
-            output_data[j*channels.size() + i] = double(*reinterpret_cast<float*>(buffer_bytes_count + offset))*channel.resolution;
+            output_data[j*num_samples + i] = double(*reinterpret_cast<float*>(buffer_bytes + offset))*channel.resolution;
             offset += 4;
             break;
           case DT_INT64:
-            output_data[j*channels.size() + i] = double(*reinterpret_cast<long long*>(buffer_bytes_count + offset))*channel.resolution;
+            output_data[j*num_samples + i] = double(*reinterpret_cast<long long*>(buffer_bytes + offset))*channel.resolution;
             offset += 8;
             break;
           case DT_UINT64:
-            output_data[j*channels.size() + i] = double(*reinterpret_cast<unsigned long long*>(buffer_bytes_count + offset))*channel.resolution;
+            output_data[j*num_samples + i] = double(*reinterpret_cast<unsigned long long*>(buffer_bytes + offset))*channel.resolution;
             offset += 8;
             break;
           case DT_FLOAT64:
-            output_data[j*channels.size() + i] = double(*reinterpret_cast<double*>(buffer_bytes_count + offset))*channel.resolution;
+            output_data[j*num_samples + i] = double(*reinterpret_cast<double*>(buffer_bytes + offset))*channel.resolution;
             offset += 8;
             break;
           default:
@@ -419,6 +429,12 @@ struct BrainProductsNode::Impl {
     if(status != AMP_OK) {
       on_error("BrainVision Amplifier Error", "Failed to start acquisition");
       return;
+    }
+
+    status = amplifier_sdk->CloseDevice(amplifier);
+    if (status != AMP_OK) {
+        on_error("BrainVision Amplifier Error", "Failed to start acquisition");
+        return;
     }
   }
 
