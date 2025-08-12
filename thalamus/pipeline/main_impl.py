@@ -24,7 +24,7 @@ import yaml
 from ..config import *
 from ..cache_manager import CacheManager
 
-from pkg_resources import resource_string, resource_filename
+from ..resources import get_path
 
 import grpc
 from .. import ophanim_pb2_grpc
@@ -110,7 +110,7 @@ async def async_main() -> None:
   logging.info("Starting GRPC server on %s", listen_addr)
   await server.start()
   
-  bmbi_native_filename = resource_filename('thalamus', 'native' + ('.exe' if sys.platform == 'win32' else ''))
+  bmbi_native_filename = get_path('native' + ('.exe' if sys.platform == 'win32' else ''))
   bmbi_native_proc = None
   command = bmbi_native_filename, 'thalamus', '--port', str(arguments.port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else [])
   print('COMMAND', ' '.join(command))

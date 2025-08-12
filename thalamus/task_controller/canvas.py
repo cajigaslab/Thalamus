@@ -23,8 +23,6 @@ import numpy
 
 import OpenGL.GL
 
-from pkg_resources import resource_string, resource_filename
-
 from ..config import ObservableCollection, ObservableDict
 from .util import CanvasPainterProtocol, RenderOutput, voidptr, TaskContextProtocol, create_task_with_exc_handling
 from .. import util_pb2

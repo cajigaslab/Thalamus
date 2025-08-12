@@ -1,9 +1,9 @@
 import sys
 import subprocess
-import pkg_resources
+from .resources import get_path
 
 EXECUTABLE_EXTENSION = '.exe' if sys.platform == 'win32' else ''
-BMBI_EXECUTABLE = pkg_resources.resource_filename('thalamus', 'native' + EXECUTABLE_EXTENSION)
+BMBI_EXECUTABLE = get_path('native' + EXECUTABLE_EXTENSION)
 
 def main():
   result = subprocess.run([BMBI_EXECUTABLE, 'hydrate'] + sys.argv[1:])

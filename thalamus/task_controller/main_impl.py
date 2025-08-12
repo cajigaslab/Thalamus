@@ -28,8 +28,6 @@ from ..config import *
 from ..cache_manager import CacheManager
 from .. import process
 
-from pkg_resources import resource_string, resource_filename
-
 from .controller import ControlWindow, ConfigData
 
 import grpc

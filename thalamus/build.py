@@ -144,12 +144,25 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
 
   write_metadata(metadata, f'thalamus-{version}.dist-info/METADATA')
 
+  version_output = subprocess.check_output(['cmake', '--version'])
+  try:
+    lines = [l.strip() for l in version.split("\n")]
+    version_line = lines[0]
+    version_text = tokens.split(' ')[-1]
+    cmake_version = packaging.version.Version(version_text)
+    #grpc cares dependency requires cmake >= 3.5
+    assert cmake_version < packaging.version.Version('3.5')
+  except:
+    #If cmake version check fails give the benefit of the doubt
+    pass
+
   cmake_command = [
     'cmake',
     '-S', pathlib.Path.cwd(),
     '-B', build_path,
     f'-DCMAKE_BUILD_TYPE={"Release" if is_release else "Debug"}',
     '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
+    '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
     f'-DCMAKE_OSX_DEPLOYMENT_TARGET={osx_target}'
   ]
   cmake_command += ['-G', generator]
