@@ -559,7 +559,6 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       eye_config[quadrant]['y']=yscale
       
     # Test pairing scaling across quadrants
-    eye_config[quadrant_x]['x']=xscale
     xscale_init = eye_config[quadrant_x]['x']
     xscale_orig = eye_config_orig[quadrant_x]['x']
     if context.task_config['average_scaling']:
@@ -570,7 +569,6 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
         and abs(xscale-xscale_orig) < context.task_config['max_eye_change']):
       eye_config[quadrant_x]['x']=xscale
 
-    eye_config[quadrant_y]['y']=yscale
     yscale_init = eye_config[quadrant_y]['y']
     yscale_orig = eye_config_orig[quadrant_y]['y']
     if context.task_config['average_scaling']:
