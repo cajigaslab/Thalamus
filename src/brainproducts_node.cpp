@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <modalities_util.hpp>
 #include <random>
+#include <thalamus/async.hpp>
 
 #include <AmplifierSDK.h>
 
@@ -18,6 +19,7 @@ struct AmplifierSDK {
   decltype(&::OpenDevice) OpenDevice;
   decltype(&::CloseDevice) CloseDevice;
   decltype(&::GetProperty) GetProperty;
+  decltype(&::SetProperty) SetProperty;
   decltype(&::GetInfo) GetInfo;
   decltype(&::StartAcquisition) StartAcquisition;
   decltype(&::StopAcquisition) StopAcquisition;
@@ -97,6 +99,14 @@ static bool prepare_amplifier() {
     THALAMUS_LOG(info)
         << "Failed to load GetProperty.  Brain Products features disabled";
     return false;
+  }
+
+  amplifier_sdk->SetProperty = reinterpret_cast<decltype(&SetProperty)>(
+      ::GetProcAddress(amplifier_dll_handle, "SetProperty"));
+  if (!amplifier_sdk->SetProperty) {
+      THALAMUS_LOG(info)
+          << "Failed to load SetProperty.  Brain Products features disabled";
+      return false;
   }
   
   amplifier_sdk->GetInfo = reinterpret_cast<decltype(&GetInfo)>(
@@ -231,143 +241,177 @@ struct BrainProductsNode::Impl {
 
   void acquisition_target(std::stop_token stop_token) {
     auto status = amplifier_sdk->SetAmplifierFamily(AmplifierFamily::eActiChampFamily);
-    if(status != AMP_OK) {
+    if (status != AMP_OK) {
       on_error("BrainVision Amplifier Error", "Failed to set amplifier family");
       return;
     }
     char hwi[4] = "USB";
-	  auto device_count = amplifier_sdk->EnumerateDevices(hwi, sizeof(hwi), "", 0);
-    if(device_count == 0) {
+    auto device_count = amplifier_sdk->EnumerateDevices(hwi, sizeof(hwi), "", 0);
+    if (device_count == 0) {
       on_error("BrainVision Amplifier Error", "No USB amplifier found");
       return;
     }
 
     HANDLE amplifier;
     status = amplifier_sdk->OpenDevice(0, &amplifier);
-    if(status != AMP_OK) {
+    if (status != AMP_OK) {
       on_error("BrainVision Amplifier Error", "Failed to open amplifier");
       return;
     }
 
+    Finally f([&] {
+      status = amplifier_sdk->CloseDevice(amplifier);
+      if (status != AMP_OK) {
+        on_error("BrainVision Amplifier Error", "Failed to start acquisition");
+        return;
+      }
+    });
+
     char cValue[200];
     status = amplifier_sdk->GetProperty(amplifier, PG_DEVICE, 0, DPROP_CHR_SerialNumber, cValue, sizeof(cValue));
     std::string serial_number = cValue;
-    if(status != AMP_OK) {
+    if (status != AMP_OK) {
       on_error("BrainVision Amplifier Error", "Failed to read serial number");
       return;
     }
 
     status = amplifier_sdk->GetProperty(amplifier, PG_DEVICE, 0, DPROP_CHR_Type, cValue, sizeof(cValue));
     std::string amp_type = cValue;
-    if(status != AMP_OK) {
+    if (status != AMP_OK) {
       on_error("BrainVision Amplifier Error", "Failed to read amp type");
       return;
     }
-    
+
     VersionNumber apiVersion, libVersion;
     amplifier_sdk->GetInfo(InfoType::eAPIVersion, static_cast<void*>(&apiVersion), sizeof(t_VersionNumber));
     amplifier_sdk->GetInfo(InfoType::eLIBVersion, static_cast<void*>(&libVersion), sizeof(t_VersionNumber));
-    std::cout <<"\n\tAPI Version " <<
+    THALAMUS_LOG(info) << "API Version " <<
       apiVersion.Major << "." <<
       apiVersion.Minor << "." <<
       apiVersion.Build << "." <<
       apiVersion.Revision;
 
-    std::cout << "\n\tLibrary Version " <<
-      libVersion.Major << "."  <<
+    THALAMUS_LOG(info) << "Library Version " <<
+      libVersion.Major << "." <<
       libVersion.Minor << "." <<
       libVersion.Build << "." <<
       libVersion.Revision;
-      
+
     float fBaseSamplingRate, fSubSampleDivisor;
     status = amplifier_sdk->GetProperty(amplifier, PG_DEVICE, 0, DPROP_F32_BaseSampleRate, &fBaseSamplingRate, sizeof(fBaseSamplingRate));
-    if(status != AMP_OK) {
+    if (status != AMP_OK) {
       on_error("BrainVision Amplifier Error", "Failed to read base sample rate");
       return;
     }
     status = amplifier_sdk->GetProperty(amplifier, PG_DEVICE, 0, DPROP_F32_SubSampleDivisor, &fSubSampleDivisor, sizeof(fSubSampleDivisor));
-    if(status != AMP_OK) {
+    if (status != AMP_OK) {
       on_error("BrainVision Amplifier Error", "Failed to read subsample divisor");
       return;
     }
     auto sampleRate = double(fBaseSamplingRate / fSubSampleDivisor);
-    std::chrono::nanoseconds sample_interval(std::int64_t(1e9/sampleRate));
+    std::chrono::nanoseconds sample_interval(std::int64_t(1e9 / sampleRate));
 
-		int nAvailableChannels = 0;
+    int nAvailableChannels = 0;
     status = amplifier_sdk->GetProperty(amplifier, PG_DEVICE, 0, DPROP_I32_AvailableChannels, &nAvailableChannels, sizeof(nAvailableChannels));
-    if(status != AMP_OK) {
+    if (status != AMP_OK) {
       on_error("BrainVision Amplifier Error", "Failed to read available channels");
       return;
     }
 
-		int nIsEnabled = 0;
-		//int nChannelType;
-		float fResolution;
-		int nDataType;
+    int nIsEnabled = 0;
+    //int nChannelType;
+    float fResolution;
+    int nDataType;
     std::vector<Channel> channels;
-    for(auto i = 0u;i < uint32_t(nAvailableChannels);++i) {
+    //float temp = -1;
+    //bool temp_bool;
+    //int ref_set = false;
+    for (auto i = 0u; i < uint32_t(nAvailableChannels); ++i) {
       status = amplifier_sdk->GetProperty(amplifier, PG_CHANNEL, i, CPROP_B32_RecordingEnabled, &nIsEnabled, sizeof(nIsEnabled));
-      if(status != AMP_OK) {
+      if (status != AMP_OK) {
         on_error("BrainVision Amplifier Error", "Failed to read channel enabled");
         return;
       }
-      if(nIsEnabled) {
-        //status = GetProperty(amplifier, PG_DEVICE, i, CPROP_I32_Type, nChannelType, sizeof(nChannelType));
-        //if(status != AMP_OK) {
-        //  on_error("BrainVision Amplifier Error", "Failed to read channel type");
-        //  return;
-        //}
-
+      if (nIsEnabled) {
         status = amplifier_sdk->GetProperty(amplifier, PG_CHANNEL, i, CPROP_F32_Resolution, &fResolution, sizeof(fResolution));
-        if(status != AMP_OK) {
+        if (status != AMP_OK) {
           on_error("BrainVision Amplifier Error", "Failed to read channel resolution");
           return;
         }
 
         status = amplifier_sdk->GetProperty(amplifier, PG_CHANNEL, i, CPROP_I32_DataType, &nDataType, sizeof(nDataType));
-        if(status != AMP_OK) {
+        if (status != AMP_OK) {
           on_error("BrainVision Amplifier Error", "Failed to read channel data type");
           return;
         }
-        channels.push_back(Channel{double(fResolution), nDataType});
+
+        channels.push_back(Channel{ double(fResolution), nDataType });
       }
     }
     int sampleBytes = 8;
-    for(auto& channel : channels) {
+    for (auto& channel : channels) {
       auto increment = datatype_to_bytes(channel.datatype);
-      if(increment < 0) {
+      if (increment < 0) {
         on_error("BrainVision Amplifier Error", "Unexpected channel data type");
         return;
       }
       sampleBytes += increment;
     }
 
-    std::vector<std::uint64_t> buffer(size_t(sampleBytes*sampleRate / 5)/8+1, 0);
+    std::vector<std::uint64_t> buffer(size_t(sampleBytes * sampleRate / 5) / 8 + 1, 0);
     auto buffer_bytes = reinterpret_cast<unsigned char*>(buffer.data());
-    auto buffer_bytes_count = buffer.size()*sizeof(std::uint64_t);
-
-    status = amplifier_sdk->StartAcquisition(amplifier, RM_NORMAL);
-    if(status != AMP_OK) {
-      on_error("BrainVision Amplifier Error", "Failed to start acquisition");
-      return;
-    }
+    auto buffer_bytes_count = buffer.size() * sizeof(std::uint64_t);
 
     thalamus::vector<std::string> channel_names(channels.size(), "");
-    for(auto i = 0ull;i < channels.size();++i) {
+    for (auto i = 0ull; i < channels.size(); ++i) {
       channel_names[i] = std::to_string(i);
     }
     thalamus::vector<std::string_view> channel_names_views(channel_names.begin(), channel_names.end());
     thalamus::vector<std::chrono::nanoseconds> sample_intervals(channels.size(), sample_interval);
     thalamus::vector<std::span<const double>> spans(channels.size());
     std::vector<double> output_data;
+
+    status = amplifier_sdk->StartAcquisition(amplifier, RM_NORMAL);
+    if (status != AMP_OK) {
+      on_error("BrainVision Amplifier Error", "Failed to start acquisition");
+      return;
+    }
+
+    Finally f2([&] {
+      status = amplifier_sdk->StopAcquisition(amplifier);
+      if (status != AMP_OK) {
+        on_error("BrainVision Amplifier Error", "Failed to start acquisition");
+        return;
+      }
+    });
+
+    //auto last_log = std::chrono::steady_clock::now();
+    //auto accum_samples = 0;
+    //auto get_data_count = 0;
+    //auto sample_mod = 0;
     while(!stop_token.stop_requested()) {
       auto read_count = amplifier_sdk->GetData(amplifier, buffer_bytes, int32_t(buffer_bytes_count), int32_t(buffer_bytes_count/uint64_t(sampleBytes)));
       if(read_count < 0) {
         on_error("BrainVision Amplifier Error", "Failed to read data");
         return;
       }
+      if (read_count == 0) {
+        std::this_thread::sleep_for(10ms);
+        continue;
+      }
+      //++get_data_count;
+      //auto now = std::chrono::steady_clock::now();
+      //if (now - last_log >= 1s) {
+      //  THALAMUS_LOG(info) << sample_mod << " " << accum_samples << " " << get_data_count;
+      //  accum_samples = 0;
+      //  sample_mod = 0;
+      //  get_data_count = 0;
+      //  last_log = now;
+      //}
 
       auto num_samples = size_t(read_count) / size_t(sampleBytes);
+      //sample_mod += read_count % sampleBytes;
+      //accum_samples += num_samples;
       auto i = 0ull;
       auto offset = 0;
       output_data.resize(channels.size() * num_samples);
@@ -423,18 +467,6 @@ struct BrainProductsNode::Impl {
       }
 
       analog_impl.inject(spans, sample_intervals, channel_names_views);
-    }
-
-    status = amplifier_sdk->StopAcquisition(amplifier);
-    if(status != AMP_OK) {
-      on_error("BrainVision Amplifier Error", "Failed to start acquisition");
-      return;
-    }
-
-    status = amplifier_sdk->CloseDevice(amplifier);
-    if (status != AMP_OK) {
-        on_error("BrainVision Amplifier Error", "Failed to start acquisition");
-        return;
     }
   }
 
