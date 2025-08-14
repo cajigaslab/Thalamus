@@ -2,12 +2,13 @@
 {
     public class MainThread : IDisposable
     {
-        private Queue<Action> work;
+        private Queue<Action> work = new Queue<Action>();
         private Thread workThread;
         private bool running = true;
         public MainThread()
         {
             workThread = new Thread(workConsumer);
+            workThread.Start();
         }
 
         void workConsumer()

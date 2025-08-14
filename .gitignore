@@ -19,3 +19,5 @@ __pycache__
 thalamus/native
 *.dist-info
 .vs
+dotnet/dotnet/bin
+dotnet/dotnet/obj

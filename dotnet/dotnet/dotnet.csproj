@@ -4,6 +4,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Thalamus</RootNamespace>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -15,7 +16,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Protobuf Include="..\..\..\proto\thalamus.proto">
+    <Protobuf Include="..\..\proto\thalamus.proto">
       <Link>Protos\thalamus.proto</Link>
     </Protobuf>
   </ItemGroup>

@@ -2,6 +2,7 @@ using CommandLine;
 using dotnet;
 using dotnet.Services;
 using Grpc.Net.Client;
+using Thalamus;
 
 Console.WriteLine("One");
 Parser.Default.ParseArguments<Options>(args)
@@ -9,7 +10,8 @@ Parser.Default.ParseArguments<Options>(args)
     {
         var stateUrl = o.StateUrl;
         Console.WriteLine("Two " + stateUrl);
-        using var channel = GrpcChannel.ForAddress(stateUrl);
+        using var channel = Util.FindStateChannel(stateUrl);
+        //using var channel = GrpcChannel.ForAddress(string.Format("http://{0}", stateUrl));
         var client = new Thalamus.Thalamus.ThalamusClient(channel);
         using var mainThread = new MainThread();
         var builder = WebApplication.CreateBuilder(args);
