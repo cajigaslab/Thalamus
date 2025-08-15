@@ -15,7 +15,9 @@ Parser.Default.ParseArguments<Options>(args)
         var client = new Thalamus.Thalamus.ThalamusClient(channel);
         using var mainThread = new MainThread();
         var builder = WebApplication.CreateBuilder(args);
-        var stateManager = new StateManager(client, mainThread, new Newtonsoft.Json.Linq.JObject());
+        var state = new ObservableCollection();
+        var stateManager = new StateManager(client, mainThread, state);
+        state.RequestChange += stateManager.RequestChange;
 
         // Add services to the container.
         builder.Services.AddGrpc();

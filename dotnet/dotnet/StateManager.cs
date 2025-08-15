@@ -4,17 +4,19 @@ using Newtonsoft.Json.Linq;
 using System.Collections.ObjectModel;
 using Thalamus;
 using Thalamus.JsonPath;
+using static Thalamus.ObservableCollection;
 
-namespace dotnet
+namespace Thalamus
 {
     public class StateManager : IDisposable
     {
-        private Thalamus.Thalamus.ThalamusClient client;
-        private JObject root;
+        private Thalamus.ThalamusClient client;
+        private ObservableCollection root;
         private AsyncDuplexStreamingCall<ObservableTransaction, ObservableTransaction> stream;
-        private Dictionary<ulong, Action> callbacks;
+        private Dictionary<ulong, Action> callbacks = [];
         private MainThread mainThread;
-        public StateManager(Thalamus.Thalamus.ThalamusClient client, MainThread mainThread, JObject root)
+        private AsyncQueue<ObservableTransaction> requests = new AsyncQueue<ObservableTransaction>();
+        public StateManager(Thalamus.ThalamusClient client, MainThread mainThread, ObservableCollection root)
         {
             this.client = client;
             this.root = root;
@@ -24,9 +26,17 @@ namespace dotnet
 
             Task.Run(async () =>
             {
+               await foreach(var transaction in requests)
+               {
+                    await stream.RequestStream.WriteAsync(transaction);
+               }
+            });
+
+            Task.Run(async () =>
+            {
                 await foreach (var response in stream.ResponseStream.ReadAllAsync())
                 {
-                    if(response.Acknowledged != 0)
+                    if (response.Acknowledged != 0)
                     {
                         var callback = callbacks[response.Acknowledged];
                         mainThread.Push(callback);
@@ -34,93 +44,104 @@ namespace dotnet
                         continue;
                     }
 
-                    foreach(var change in response.Changes)
+                    mainThread.Push(() =>
                     {
-                        var reader = new JsonTextReader(new StringReader(change.Value));
-                        var parsed = JToken.ReadFrom(reader);
-                        mainThread.Push(() =>
+                        foreach (var change in response.Changes)
                         {
-                            if(change.Address.Trim().Length == 0)
+                            var reader = new JsonTextReader(new StringReader(change.Value));
+                            var parsed = ObservableCollection.Wrap(JToken.ReadFrom(reader), null);
+                            if (change.Address.Trim().Length == 0)
                             {
-                                root.Merge(parsed);
+                                if(parsed == null)
+                                {
+                                    throw new Exception("Attemped to create null root");
+                                }
+                                root.Merge((ObservableCollection)parsed, true);
                             }
                             else
                             {
-                                var selected = root.SelectToken(change.Address);
-                                if (selected == null)
+                                var path = new JPath(change.Address);
+                                object? parent = null;
+                                object? child = root;
+                                object? key = null;
+                                foreach (var filter in path.Filters)
                                 {
-                                    var path = new JPath(change.Address);
-                                    var last = path.Filters.Last();
-                                    path.Filters.RemoveAt(path.Filters.Count - 1);
-
-                                    var parent = path.Filters.Count > 0 ? path.Evaluate(root, root, null).First() : root;
-                                    if (last is ArrayIndexFilter)
+                                    if (filter is ArrayIndexFilter index)
                                     {
-                                        var index = (ArrayIndexFilter)last;
-                                        if (parent is JObject)
-                                        {
-                                            var obj = (JObject)parent;
-                                            obj[index.Index] = parsed;
-                                        }
-                                        else if (parent is JArray)
-                                        {
-                                            var arr = (JArray)parent;
-                                            if (index.Index < arr.Count)
-                                            {
-                                                arr[index.Index] = parsed;
-                                            }
-                                            else
-                                            {
-                                                while (arr.Count < index.Index)
-                                                {
-                                                    arr.Add(null);
-                                                }
-                                                arr.Add(parsed);
-                                            }
-                                        }
+                                        key = index.Index;
                                     }
-                                    else if (last is FieldFilter)
+                                    else if (filter is FieldFilter field)
                                     {
-                                        var field = (FieldFilter)last;
-                                        var obj = (JObject)parent;
-                                        obj[field.Name] = parsed;
+                                        key = field.Name;
+                                    }
+                                    if(key == null)
+                                    {
+                                        throw new Exception("Got null key");
+                                    }
+                                    if(child is ObservableCollection current)
+                                    {
+                                        var next = current.ContainsKey(key) ? current[key] : null;
+                                        parent = child;
+                                        child = next;
                                     }
                                     else
                                     {
-                                        throw new Exception("Unexpected JSONPath filter type " + last);
+                                        throw new Exception("Indexing primitive value");
                                     }
+                                }
+
+                                if (child is ObservableCollection childColl && parsed is ObservableCollection parsedColl
+                                       && childColl.GetCollectionType() == parsedColl.GetCollectionType())
+                                {
+                                    childColl.Merge(parsedColl, true);
+                                }
+                                else if(parent is ObservableCollection parentColl)
+                                {
+                                    if(key == null)
+                                    {
+                                        throw new Exception("null key");
+                                    }
+                                    parentColl.Set(key, parsed, () => { }, true);
                                 }
                                 else
                                 {
-                                    selected.Replace(parsed);
+                                    throw new Exception("Couldn't apply change");
                                 }
                             }
-                            //Console.WriteLine(selected);
-                            //var path = new JPath(change.Address);
-                            //if(path.Filters.Count == 0)
-                            //{
-                            //    root.Merge(parsed);
-                            //}
-                            //var current = root;
-                            //foreach(var p in path.Filters.Take(path.Filters.Count-1))
-                            //{
-                            //    Console.WriteLine(p);
-                            //}
-
-                            //Console.WriteLine(path);
-                            //Console.WriteLine(parsed);
-                            //var token = state.SelectToken(change.Address);
-                            Console.WriteLine(root);
-                        });
-                    }
+                            var text = JsonConvert.SerializeObject(root, Formatting.Indented, new JsonSerializerSettings
+                            {
+                                Converters = [new ObservableCollection.JsonConverter()]
+                            });
+                            Console.WriteLine(text);
+                        }
+                    });
                 }
                 Console.WriteLine("DONE");
             });
         }
+
+        private uint nextId = 0;
+
+        public void RequestChange(ObservableChange.Types.Action action, string address, object? value, Action callback)
+        {
+            var change = new ObservableChange
+            {
+                Action = action,
+                Address = address,
+                Value = JsonConvert.SerializeObject(value),
+                Id = nextId
+            };
+            ++nextId;
+            callbacks[change.Id] = callback;
+            var transaction = new ObservableTransaction();
+            transaction.Changes.Add(change);
+            requests.Put(transaction);
+        }
+
         public void Dispose()
         {
             stream.Dispose();
-            throw new NotImplementedException();
+            requests.Dispose();
         }
     }
 }

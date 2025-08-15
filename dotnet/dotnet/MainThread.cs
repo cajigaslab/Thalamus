@@ -1,4 +1,4 @@
-﻿namespace dotnet
+﻿namespace Thalamus
 {
     public class MainThread : IDisposable
     {
