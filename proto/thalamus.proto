@@ -303,6 +303,8 @@ message AnalogResponse {
   uint64 time = 7;
   uint64 remote_time = 8;
   ChannelType channel_type = 9;
+  repeated uint64 ulong_data = 10;
+  bool is_ulong_data = 11;
 }
  
 message GraphRequest {
