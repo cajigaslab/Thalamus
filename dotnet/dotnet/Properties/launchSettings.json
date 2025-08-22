@@ -2,7 +2,7 @@
   "profiles": {
     "http": {
       "commandName": "Project",
-      "commandLineArgs": "--state-url localhost:50052",
+      "commandLineArgs": "--state-url localhost:50050 --port 50052",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       },

@@ -51,7 +51,7 @@ namespace Thalamus
             Set,
             Delete
         }
-        public delegate void OnChange(object source, ActionType action, object key, object? value);
+        public delegate void OnChange(ObservableCollection source, ActionType action, object key, object? value);
 
         public IEnumerable<object> Keys()
         {
@@ -325,20 +325,52 @@ namespace Thalamus
             var wrapped = Wrap(value, this);
             if (dictionaryContent != null)
             {
-                dictionaryContent[key] = wrapped;
-                Subscriptions(this, ActionType.Set, key, wrapped);
+                var assigned = false;
+                if (dictionaryContent.ContainsKey(key))
+                {
+                    var current = dictionaryContent[key];
+                    if(current is ObservableCollection currentColl)
+                    {
+                        if(wrapped is ObservableCollection wrappedColl)
+                        {
+                            currentColl.Merge(wrappedColl);
+                            assigned = true;
+                        }
+                    }
+                }
+                if(!assigned)
+                {
+                    dictionaryContent[key] = wrapped;
+                    Subscriptions(this, ActionType.Set, key, wrapped);
+                }
             }
             else if(arrayContent != null)
             {
                 if(arrayContent.Count == (int)key)
                 {
                     arrayContent.Add(wrapped);
+                    Subscriptions(this, ActionType.Set, key, wrapped);
                 }
                 else
                 {
-                    arrayContent[(int)key] = wrapped;
+                    var assigned = false;
+                    var current = arrayContent[(int)key];
+                    if (current is ObservableCollection currentColl)
+                    {
+                        if (wrapped is ObservableCollection wrappedColl)
+                        {
+                            currentColl.Merge(wrappedColl);
+                            assigned = true;
+                        }
+                    }
+
+
+                    if (!assigned)
+                    {
+                        arrayContent[(int)key] = wrapped;
+                        Subscriptions(this, ActionType.Set, key, wrapped);
+                    }
                 }
-                Subscriptions(this, ActionType.Set, key, wrapped);
             }
             callback();
         }
@@ -391,6 +423,14 @@ namespace Thalamus
             foreach(var k in remaining)
             {
                 Remove(k, () => { }, direct);
+            }
+        }
+
+        public void Recap()
+        {
+            foreach (var item in Items())
+            {
+                Subscriptions(this, ActionType.Set, item.Key, item.Value);
             }
         }
     }

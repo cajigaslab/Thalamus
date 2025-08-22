@@ -255,6 +255,8 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/stim_printer_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/wallclock_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/wallclock_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/delsys_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/delsys_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/test_pulse_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/test_pulse_node.cpp"
                      #"${CMAKE_SOURCE_DIR}/src/hexascope_node.hpp"
@@ -355,12 +357,16 @@ if(NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
 endif()
 
 if(WIN32)
+  #Install nuget packages during configure
+  execute_process(COMMAND msbuild -t:restore
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/dotnet")
+
   add_custom_target(dotnet
     COMMAND msbuild dotnet.sln /p:Configuration=${CMAKE_BUILD_TYPE}
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/dotnet")
   
   add_custom_command(TARGET dotnet POST_BUILD COMMAND 
-    cmake -E copy "${CMAKE_SOURCE_DIR}/dotnet/dotnet/dotnet/bin/${CMAKE_BUILD_TYPE}/net8.0/dotnet.exe"
-    "${CMAKE_SOURCE_DIR}/thalamus")
+    cmake -E copy_directory "${CMAKE_SOURCE_DIR}/dotnet/dotnet/bin/${CMAKE_BUILD_TYPE}/net8.0"
+    "${CMAKE_SOURCE_DIR}/thalamus/dotnet")
   add_dependencies(native dotnet)
 endif()

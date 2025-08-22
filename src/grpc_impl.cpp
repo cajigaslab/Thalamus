@@ -285,6 +285,19 @@ struct Service::Impl {
                 channels_changed = true;
               }));
 
+      std::promise<std::string> redirect_promise;
+      auto redirect_future = redirect_promise.get_future();
+      boost::asio::post(io_context, [&] {
+        redirect_promise.set_value(std::string(node->redirect()));
+      });
+      auto redirect = redirect_future.get();
+
+      if(!redirect.empty()) {
+        ::thalamus_grpc::AnalogResponse response;
+        response.set_redirect(redirect);
+        writer(response, ::grpc::WriteOptions());
+      }
+
       using signal_type = decltype(raw_node->ready);
       auto connection =
           raw_node->ready.connect(signal_type::slot_type([&](const Node *) {
@@ -295,6 +308,12 @@ struct Service::Impl {
             TRACE_EVENT("thalamus", "Service::analog(on ready)");
             std::lock_guard<std::mutex> lock(connection_mutex);
             ::thalamus_grpc::AnalogResponse response;
+            auto redirect = node->redirect();
+            if(!redirect.empty()) {
+              response.set_redirect(redirect);
+              writer(response, ::grpc::WriteOptions());
+              return;
+            }
 
             size_t num_channels = size_t(node->num_channels());
             if (!has_channels && channels.size() != num_channels) {
@@ -1218,12 +1237,17 @@ Service::graph(::grpc::ServerContext *context,
                                              std::adopt_lock_t());
             ::thalamus_grpc::AnalogResponse response;
 
-            for (auto c = 0; c < node->num_channels(); ++c) {
-              auto span = response.add_spans();
-              auto name = node->name(c);
-              span->set_name(name.data(), name.size());
-              response.add_sample_intervals(
-                  uint64_t(node->sample_interval(c).count()));
+            auto redirect = node->redirect();
+            if(redirect.empty()) {
+              for (auto c = 0; c < node->num_channels(); ++c) {
+                auto span = response.add_spans();
+                auto name = node->name(c);
+                span->set_name(name.data(), name.size());
+                response.add_sample_intervals(
+                    uint64_t(node->sample_interval(c).count()));
+              }
+            } else {
+              response.set_redirect(redirect);
             }
             writer->Write(response, ::grpc::WriteOptions());
 

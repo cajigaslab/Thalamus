@@ -16,14 +16,23 @@ Parser.Default.ParseArguments<Options>(args)
         using var mainThread = new MainThread();
         var builder = WebApplication.CreateBuilder(args);
         var state = new ObservableCollection();
-        var stateManager = new StateManager(client, mainThread, state);
-        state.RequestChange += stateManager.RequestChange;
+        var nodes = new ObservableCollection(new List<object>(), null);
+        state["nodes"] = nodes;
+        var done = new TaskCompletionSource();
+        using var stateManager = new StateManager(client, mainThread, state, done);
+        state.RequestChange = stateManager.RequestChange;
+
+        using var nodeGraph = new NodeGraph(nodes, mainThread);
 
         // Add services to the container.
         builder.Services.AddGrpc();
         builder.Services.AddScoped<ServiceSettings>(arg =>
         {
             return new ServiceSettings { StateUrl = stateUrl };
+        });
+        builder.Services.AddScoped<INodeGraph>(arg =>
+        {
+            return nodeGraph;
         });
         builder.Services.AddScoped<MainThread>(arg =>
         {
@@ -36,7 +45,14 @@ Parser.Default.ParseArguments<Options>(args)
         app.MapGrpcService<ThalamusService>();
         app.MapGet("/", () => "Communication with gRPC endpoints must be made through a gRPC client. To learn how to create a client, visit: https://go.microsoft.com/fwlink/?linkid=2086909");
 
-        app.Run();
+        var task = Task.Run(async () =>
+        {
+            await app.StartAsync();
+            await done.Task;
+            await app.StopAsync();
+        });
+        task.Wait();
+        //app.Run();
     });
 
 public class ServiceSettings
@@ -48,4 +64,8 @@ public class Options
 {
     [Option('s', "state-url", Required = true, HelpText = "Set output to verbose messages.")]
     public string StateUrl { get; set; }
+    [Option('p', "port", Default = 50052, HelpText = "GRPC port.")]
+    public int Port { get; set; }
+    [Option('t', "trace", Default = false, HelpText = "Enable Perfetto tracing")]
+    public bool Trace { get; set; }
 }

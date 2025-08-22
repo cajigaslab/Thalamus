@@ -7,8 +7,10 @@ namespace dotnet.Services
     public class ThalamusService : Thalamus.Thalamus.ThalamusBase
     {
         private readonly ILogger<ThalamusService> _logger;
-        public ThalamusService(ServiceSettings settings, ILogger<ThalamusService> logger)
+        private INodeGraph nodeGraph;
+        public ThalamusService(ServiceSettings settings, INodeGraph nodeGraph, ILogger<ThalamusService> logger)
         {
+            this.nodeGraph = nodeGraph;
             _logger = logger;
             Console.WriteLine(settings.StateUrl);
         }

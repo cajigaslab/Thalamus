@@ -16,7 +16,7 @@ namespace Thalamus
         private Dictionary<ulong, Action> callbacks = [];
         private MainThread mainThread;
         private AsyncQueue<ObservableTransaction> requests = new AsyncQueue<ObservableTransaction>();
-        public StateManager(Thalamus.ThalamusClient client, MainThread mainThread, ObservableCollection root)
+        public StateManager(Thalamus.ThalamusClient client, MainThread mainThread, ObservableCollection root, TaskCompletionSource done)
         {
             this.client = client;
             this.root = root;
@@ -116,6 +116,7 @@ namespace Thalamus
                         }
                     });
                 }
+                done.SetResult();
                 Console.WriteLine("DONE");
             });
         }

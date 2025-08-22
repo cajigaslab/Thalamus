@@ -34,6 +34,7 @@
 #include <test_pulse_node.hpp>
 #include <wallclock_node.hpp>
 #include <brainproducts_node.hpp>
+#include <delsys_node.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -157,6 +158,7 @@ public:
         {"WALLCLOCK", new NodeFactory<WallClockNode>()},
         {"BRAINPRODUCTS", new NodeFactory<BrainProductsNode>()},
         //{"HEXASCOPE", new NodeFactory<HexascopeNode>()},
+        {"DELSYS", new NodeFactory<DelsysNode>()},
         {"ARUCO", new NodeFactory<ArucoNode>()}};
 
     using namespace std::placeholders;

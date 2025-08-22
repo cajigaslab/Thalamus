@@ -69,6 +69,7 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument('-t', '--trace', action='store_true', help='Enable tracing')
   parser.add_argument('-p', '--port', type=int, default=50050, help='GRPC port')
   parser.add_argument('-u', '--ui-port', type=int, default=50051, help='UI GRPC port')
+  parser.add_argument('-d', '--dotnet-port', type=int, default=50052, help='dotnet GRPC port')
   return parser.parse_args(self_args[1:])
 
 async def async_main() -> None:
@@ -111,10 +112,17 @@ async def async_main() -> None:
   await server.start()
   
   bmbi_native_filename = get_path('native' + ('.exe' if sys.platform == 'win32' else ''))
+  dotnet_filename = pathlib.Path(get_path('thalamus.dotnet', 'dotnet' + ('.exe' if sys.platform == 'win32' else '')))
   bmbi_native_proc = None
   command = bmbi_native_filename, 'thalamus', '--port', str(arguments.port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else [])
   print('COMMAND', ' '.join(command))
   bmbi_native_proc = await asyncio.create_subprocess_exec(*command)
+
+  dotnet_proc = None
+  #if False:
+  if dotnet_filename.exists():
+    dotnet_command = str(dotnet_filename), '--port', str(arguments.dotnet_port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else [])
+    dotnet_proc = await asyncio.create_subprocess_exec(*dotnet_command)
 
   channel = grpc.aio.insecure_channel(f'localhost:{arguments.port}')
   await channel.channel_ready()
@@ -140,6 +148,8 @@ async def async_main() -> None:
   await channel.close()
   if bmbi_native_proc:
     await bmbi_native_proc.wait()
+  if dotnet_proc:
+    await dotnet_proc.wait()
 
   print('DONE')
 

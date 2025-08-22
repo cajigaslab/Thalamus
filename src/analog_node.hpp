@@ -26,6 +26,9 @@ public:
   virtual std::chrono::nanoseconds time() const = 0;
   virtual std::chrono::nanoseconds remote_time() const { return 0ns; }
   virtual std::string_view name(int channel) const = 0;
+  virtual std::string_view redirect() const {
+    return "";
+  }
   virtual std::span<const std::string> get_recommended_channels() const {
     return std::span<const std::string>();
   }
