@@ -3,9 +3,9 @@ using static Thalamus.ObservableCollection;
 
 namespace Thalamus
 {
-    public class INodeGraph
+    public interface INodeGraph
     {
-
+        string GetAddress();
     }
 
     public class NodeGraph : INodeGraph, IDisposable
@@ -16,9 +16,11 @@ namespace Thalamus
         private ObservableCollection nodes;
         private MainThread MainThread;
         private Dictionary<int, Node> nodeImpls = new Dictionary<int, Node>();
-        public NodeGraph(ObservableCollection nodes, MainThread mainThread)
+        private string address = "";
+        public NodeGraph(ObservableCollection nodes, MainThread mainThread, string address)
         {
             this.MainThread = mainThread;
+            this.address = address;
 
             if (DelsysNode.Prepare())
             {
@@ -27,6 +29,11 @@ namespace Thalamus
             }
             this.nodes = nodes;
             nodes.Subscriptions += new ObservableCollection.OnChange(OnChange);
+        }
+
+        public string GetAddress()
+        {
+            return GetAddress();
         }
 
         private void UpdateNode(ObservableCollection node)

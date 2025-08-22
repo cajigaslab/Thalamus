@@ -358,11 +358,11 @@ endif()
 
 if(WIN32)
   #Install nuget packages during configure
-  execute_process(COMMAND msbuild -t:restore
+  execute_process(COMMAND msbuild -t:restore "/p:Platform=Any CPU"
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/dotnet")
 
   add_custom_target(dotnet
-    COMMAND msbuild dotnet.sln /p:Configuration=${CMAKE_BUILD_TYPE}
+    COMMAND msbuild dotnet.sln /p:Configuration=${CMAKE_BUILD_TYPE} "/p:Platform=Any CPU"
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/dotnet")
   
   add_custom_command(TARGET dotnet POST_BUILD COMMAND 

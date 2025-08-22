@@ -22,7 +22,7 @@ Parser.Default.ParseArguments<Options>(args)
         using var stateManager = new StateManager(client, mainThread, state, done);
         state.RequestChange = stateManager.RequestChange;
 
-        using var nodeGraph = new NodeGraph(nodes, mainThread);
+        using var nodeGraph = new NodeGraph(nodes, mainThread, $"localhost:{o.Port}");
 
         // Add services to the container.
         builder.Services.AddGrpc();

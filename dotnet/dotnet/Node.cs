@@ -4,19 +4,10 @@ using static Thalamus.ObservableCollection;
 
 namespace Thalamus
 {
-    class Node : IDisposable
+    interface Node : IDisposable
     {
-        public delegate void OnChange(object source, ActionType action, object key, object? value);
+        public delegate void OnReady(Node node);
 
-        public OnChange Subscriptions { get; set; }
-
-        public Node()
-        {
-            Subscriptions = new OnChange((source, action, key, value) => { });
-        }
-
-        public void Dispose()
-        {
-        }
+        public OnReady Ready { get; set; }
     }
 }
