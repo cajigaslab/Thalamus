@@ -4,7 +4,7 @@ using static Thalamus.ObservableCollection;
 
 namespace Thalamus
 {
-    interface Node : IDisposable
+    public interface Node : IDisposable
     {
         public delegate void OnReady(Node node);
 

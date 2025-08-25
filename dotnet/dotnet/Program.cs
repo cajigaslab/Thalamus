@@ -2,27 +2,29 @@ using CommandLine;
 using dotnet;
 using dotnet.Services;
 using Grpc.Net.Client;
+using Nito.AsyncEx;
 using Thalamus;
 
 Console.WriteLine("One");
 Parser.Default.ParseArguments<Options>(args)
     .WithParsed<Options>(o =>
     {
+        using var thread = new AsyncContextThread();
+
         var stateUrl = o.StateUrl;
         Console.WriteLine("Two " + stateUrl);
         using var channel = Util.FindStateChannel(stateUrl);
         //using var channel = GrpcChannel.ForAddress(string.Format("http://{0}", stateUrl));
         var client = new Thalamus.Thalamus.ThalamusClient(channel);
-        using var mainThread = new MainThread();
         var builder = WebApplication.CreateBuilder(args);
         var state = new ObservableCollection();
         var nodes = new ObservableCollection(new List<object>(), null);
         state["nodes"] = nodes;
         var done = new TaskCompletionSource();
-        using var stateManager = new StateManager(client, mainThread, state, done);
+        using var stateManager = new StateManager(client, thread.Factory, state, done);
         state.RequestChange = stateManager.RequestChange;
 
-        using var nodeGraph = new NodeGraph(nodes, mainThread, $"localhost:{o.Port}");
+        using var nodeGraph = new NodeGraph(nodes, thread.Factory, $"localhost:{o.Port}");
 
         // Add services to the container.
         builder.Services.AddGrpc();
@@ -34,9 +36,9 @@ Parser.Default.ParseArguments<Options>(args)
         {
             return nodeGraph;
         });
-        builder.Services.AddScoped<MainThread>(arg =>
+        builder.Services.AddScoped<TaskFactory>(arg =>
         {
-            return mainThread;
+            return thread.Factory;
         });
 
         var app = builder.Build();

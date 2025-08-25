@@ -296,6 +296,7 @@ struct Service::Impl {
         ::thalamus_grpc::AnalogResponse response;
         response.set_redirect(redirect);
         writer(response, ::grpc::WriteOptions());
+        return ::grpc::Status::OK;
       }
 
       using signal_type = decltype(raw_node->ready);

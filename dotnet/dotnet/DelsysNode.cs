@@ -2,6 +2,7 @@ using DelsysAPI.DelsysDevices;
 using MathNet.Numerics.Statistics;
 using System.Diagnostics;
 using static Thalamus.ObservableCollection;
+using Nito.AsyncEx;
 
 namespace Thalamus
 {
@@ -19,11 +20,11 @@ namespace Thalamus
         private bool running = false;
         private Task? task = null;
         private double[] data = [];
-        private MainThread mainThread;
+        private TaskFactory taskFactory;
 
-        public DelsysNode(ObservableCollection state, MainThread mainThread, INodeGraph graph)
+        public DelsysNode(ObservableCollection state, TaskFactory taskFactory, INodeGraph graph)
         {
-            this.mainThread = mainThread;
+            this.taskFactory = taskFactory;
             Ready = new Node.OnReady(n => { });
             ChannelsChanged = new AnalogNode.OnChannelsChanged(n => { });
             this.state = state;
@@ -47,27 +48,24 @@ namespace Thalamus
 
                         if(running)
                         {
-                            task = Task.Run(async () =>
+                            task = taskFactory.Run(async () =>
                             {
                                 var start = Util.SteadyTime();
                                 var sampleTime = new TimeSpan();
                                 while (running)
                                 {
                                     await Task.Delay(16);
-                                    mainThread.Push(() =>
-                                    {
-                                        now = Util.SteadyTime();
-                                        var elapsed = now - start;
-                                        var sampleMs = sampleTime.Ticks / TimeSpan.TicksPerMillisecond;
-                                        var elapsedMs = elapsed.Ticks / TimeSpan.TicksPerMillisecond;
+                                    now = Util.SteadyTime();
+                                    var elapsed = now - start;
+                                    var sampleMs = sampleTime.Ticks / TimeSpan.TicksPerMillisecond;
+                                    var elapsedMs = elapsed.Ticks / TimeSpan.TicksPerMillisecond;
 
-                                        data = Enumerable.Range(0, (int)(elapsedMs - sampleMs)).Select(t =>
-                                        {
-                                            return Math.Sin((t + sampleMs) / 1000.0);
-                                        }).ToArray();
-                                        Ready(this);
-                                        sampleTime = elapsed;
-                                    });
+                                    data = Enumerable.Range(0, (int)(elapsedMs - sampleMs)).Select(t =>
+                                    {
+                                        return Math.Sin((t + sampleMs) / 1000.0);
+                                    }).ToArray();
+                                    Ready(this);
+                                    sampleTime = elapsed;
                                 }
                             });
                         }

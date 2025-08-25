@@ -6,20 +6,24 @@ namespace Thalamus
     public interface INodeGraph
     {
         string GetAddress();
+        public Task<Node> GetNode(NodeSelector selector);
     }
 
     public class NodeGraph : INodeGraph, IDisposable
     {
-        private Dictionary<string, Func<ObservableCollection, MainThread, INodeGraph, Node>> factories
-            = new Dictionary<string, Func<ObservableCollection, MainThread, INodeGraph, Node>>();
+        private Dictionary<string, Func<ObservableCollection, TaskFactory, INodeGraph, Node>> factories
+            = new Dictionary<string, Func<ObservableCollection, TaskFactory, INodeGraph, Node>>();
         private List<Action> Cleanup = new List<Action>();
         private ObservableCollection nodes;
-        private MainThread MainThread;
+        private TaskFactory TaskFactory;
         private Dictionary<int, Node> nodeImpls = new Dictionary<int, Node>();
         private string address = "";
-        public NodeGraph(ObservableCollection nodes, MainThread mainThread, string address)
+
+        private List<(NodeSelector selector, TaskCompletionSource<Node> task)> pendingNodeGets = [];
+
+        public NodeGraph(ObservableCollection nodes, TaskFactory taskFactory, string address)
         {
-            this.MainThread = mainThread;
+            this.TaskFactory = taskFactory;
             this.address = address;
 
             if (DelsysNode.Prepare())
@@ -31,15 +35,54 @@ namespace Thalamus
             nodes.Subscriptions += new ObservableCollection.OnChange(OnChange);
         }
 
+        public Task<Node> GetNode(NodeSelector selector)
+        {
+            var field = "";
+            var value = "";
+            if (selector.Name.Length > 0)
+            {
+                field = "name";
+                value = selector.Name;
+            }
+            else
+            {
+                field = "type";
+                value = selector.Type;
+            }
+
+            var i = 0;
+            foreach (var node in nodes.Values())
+            {
+                if (node is ObservableCollection coll)
+                {
+                    var name = coll[field];
+                    if (value == (string?)name)
+                    {
+                        return Task.FromResult(nodeImpls[i]);
+                    }
+                }
+                ++i;
+            }
+
+            var task = new TaskCompletionSource<Node>();
+            pendingNodeGets.Add((selector, task));
+            return task.Task;
+        }
+
         public string GetAddress()
         {
             return GetAddress();
         }
 
-        private void UpdateNode(ObservableCollection node)
+        private void UpdateNode(ObservableCollection node, object? field)
         {
             var type = (string?)node["type"];
             if (type == null)
+            {
+                throw new ArgumentNullException("value");
+            }
+            var name = (string?)node["name"];
+            if (name == null)
             {
                 throw new ArgumentNullException("value");
             }
@@ -56,14 +99,34 @@ namespace Thalamus
                 return;
             }
 
-            if(nodeImpls.ContainsKey(index))
+            if(field == null || (string?)field == "type")
             {
-                nodeImpls[index].Dispose();
+                if (nodeImpls.ContainsKey(index))
+                {
+                    nodeImpls[index].Dispose();
+                }
+
+                var nodeImpl = factories[type](node, TaskFactory, this);
+                nodeImpls[index] = nodeImpl;
+                node.Recap();
             }
 
-            var nodeImpl = factories[type](node, MainThread, this);
-            nodeImpls[index] = nodeImpl;
-            node.Recap();
+            List<int> toRemove = [];
+            var i = 0;
+            foreach ( var pending in pendingNodeGets )
+            {
+                if(pending.selector.Name == name || pending.selector.Type == type)
+                {
+                    pending.task.SetResult(nodeImpls[i]);
+                    toRemove.Add(i);
+                }
+                ++i;
+            }
+
+            foreach(var j in toRemove.Reverse<int>())
+            {
+                pendingNodeGets.RemoveAt(j);
+            }
         }
 
         public void OnChange(ObservableCollection source, ActionType action, object key, object? value)
@@ -76,7 +139,7 @@ namespace Thalamus
                     {
                         throw new ArgumentNullException("value");
                     }
-                    UpdateNode((ObservableCollection)value);
+                    UpdateNode((ObservableCollection)value, null);
                 }
                 else
                 {
@@ -90,7 +153,7 @@ namespace Thalamus
             }
             else if(source.Parent == nodes)
             {
-                UpdateNode(source);
+                UpdateNode(source, key);
             }
         }
 
