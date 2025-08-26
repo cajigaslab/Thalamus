@@ -1,5 +1,6 @@
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Newtonsoft.Json.Linq;
 using static Thalamus.ObservableCollection;
 
 namespace Thalamus
@@ -9,5 +10,7 @@ namespace Thalamus
         public delegate void OnReady(Node node);
 
         public OnReady Ready { get; set; }
+
+        public Task<JToken> Process(JToken request) { return Task<JToken>.FromResult((JToken)(new JObject())); }
     }
 }

@@ -138,10 +138,12 @@ message NodeResponse {
   enum Status {
     OK = 0;
     NOT_FOUND = 1;
+    REDIRECT = 2;
   }
   string json = 1;
   uint64 id = 2;
   Status status = 3;
+  string redirect = 4;
 }
 
 message Text {

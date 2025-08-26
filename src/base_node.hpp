@@ -37,6 +37,9 @@ public:
   virtual boost::json::value process(const boost::json::value &) {
     return boost::json::value();
   }
+  virtual std::string_view redirect() const {
+    return "";
+  }
 };
 
 class NodeGraph {

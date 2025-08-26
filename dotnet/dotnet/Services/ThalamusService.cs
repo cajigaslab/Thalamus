@@ -1,7 +1,10 @@
 using CommandLine.Text;
 using dotnet;
 using Grpc.Core;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Nito.AsyncEx;
+using System.Reflection.PortableExecutable;
 using Thalamus;
 
 namespace dotnet.Services
@@ -17,6 +20,22 @@ namespace dotnet.Services
             this.taskFactory = taskFactory;
             _logger = logger;
             Console.WriteLine(settings.StateUrl);
+        }
+
+        public override Task<NodeResponse> node_request(NodeRequest request, ServerCallContext context)
+        {
+            return nodeGraph.Run(async () =>
+            {
+                var node = await nodeGraph.GetNode(request.Node);
+                var reader = new JsonTextReader(new StringReader(request.Json));
+                var tok = JToken.ReadFrom(reader);
+                var jsonResponse = await node.Process(tok);
+
+                var response = new NodeResponse();
+                response.Json = JsonConvert.SerializeObject(jsonResponse);
+                response.Status = NodeResponse.Types.Status.Ok;
+                return response;
+            });
         }
 
         public override Task<Redirect> get_redirect(Empty request, ServerCallContext context)

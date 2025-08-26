@@ -134,10 +134,17 @@ class ThalamusStub():
     return self.stub.replay(request)
   def notification (self, request: thalamus_pb2.Empty) -> typing.AsyncIterable[thalamus_pb2.Notification]:
     return self.stub.notification(request)
-  def node_request (self, request: thalamus_pb2.NodeRequest) -> thalamus_pb2.NodeResponse:
-    return self.stub.node_request(request)
+  
+  async def node_request (self, request: thalamus_pb2.NodeRequest) -> thalamus_pb2.NodeResponse:
+    result = await self.stub.node_request(request)
+    if result.redirect:
+      return await self.get_redirect_stub(result.redirect).node_request(request)
+    else:
+      return result
+  
   def node_request_stream (self, request: typing.AsyncIterable[thalamus_pb2.NodeRequest]) -> typing.AsyncIterable[thalamus_pb2.NodeResponse]:
-    return self.stub.node_request_stream(request)
+    return self.__stream(lambda stub: stub.node_request_stream(request))
+  
   def inject_analog(self, request: typing.AsyncIterable[thalamus_pb2.InjectAnalogRequest]) -> thalamus_pb2.Empty:
     return self.stub.inject_analog(request)
   def get_modalities(self, request: thalamus_pb2.NodeSelector) -> thalamus_pb2.ModalitiesMessage:

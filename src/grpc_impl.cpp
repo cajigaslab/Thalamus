@@ -478,17 +478,35 @@ Service::get_type_name(::grpc::ServerContext *,
 Service::node_request(::grpc::ServerContext *,
                       const ::thalamus_grpc::NodeRequest *request,
                       ::thalamus_grpc::NodeResponse *response) {
-  auto weak = impl->node_graph.get_node(request->node());
-  auto node = weak.lock();
-  if (!node) {
-    return ::grpc::Status::OK;
-  }
+  std::promise<void> promise;
+  auto future = promise.get_future();
 
-  auto parsed = boost::json::parse(request->json());
-  auto json_response = node->process(parsed);
-  auto serialized_response = boost::json::serialize(json_response);
-  response->set_json(serialized_response);
+  boost::asio::post(impl->io_context, [&] {
+    auto weak = impl->node_graph.get_node(request->node());
+    auto node = weak.lock();
+    if (!node) {
+      response.set_status(
+        thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
+      return;
+    }
 
+    auto redirect = node->redirect();
+    if(!redirect.empty()) {
+      response.set_redirect(redirect);
+      response.set_status(
+        thalamus_grpc::NodeResponse::Status::NodeResponse_Status_REDIRECT);
+      return;
+    }
+
+    auto parsed = boost::json::parse(request->json());
+    auto json_response = node->process(parsed);
+    auto serialized_response = boost::json::serialize(json_response);
+    response->set_json(serialized_response);
+    response.set_status(
+      thalamus_grpc::NodeResponse::Status::NodeResponse_Status_OK);
+  });
+
+  future.get();
   return ::grpc::Status::OK;
 }
 
@@ -501,24 +519,39 @@ Service::node_request(::grpc::ServerContext *,
   ::thalamus_grpc::NodeRequest request;
   ::thalamus_grpc::NodeResponse response;
   while (stream->Read(&request)) {
-    if (!request.node().empty()) {
-      weak = impl->node_graph.get_node(request.node());
-    }
-    auto node = weak.lock();
-    response.set_id(request.id());
-    if (!node) {
-      response.clear_json();
-      response.set_status(
-          thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
-      continue;
-    }
+    std::promise<void> promise;
+    auto future = promise.get_future();
 
-    auto parsed = boost::json::parse(request.json());
-    auto json_response = node->process(parsed);
-    auto serialized_response = boost::json::serialize(json_response);
-    response.set_json(serialized_response);
-    response.set_status(
-        thalamus_grpc::NodeResponse::Status::NodeResponse_Status_OK);
+    boost::asio::post(impl->io_context, [&] {
+      if (!request.node().empty()) {
+        weak = impl->node_graph.get_node(request.node());
+      }
+      auto node = weak.lock();
+      response.set_id(request.id());
+      if (!node) {
+        response.clear_json();
+        response.set_status(
+            thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
+        continue;
+      }
+
+      auto redirect = node->redirect();
+      if(!redirect.empty()) {
+        response.set_redirect(redirect);
+        response.set_status(
+          thalamus_grpc::NodeResponse::Status::NodeResponse_Status_REDIRECT);
+        return;
+      }
+
+      auto parsed = boost::json::parse(request.json());
+      auto json_response = node->process(parsed);
+      auto serialized_response = boost::json::serialize(json_response);
+      response.set_json(serialized_response);
+      response.set_status(
+          thalamus_grpc::NodeResponse::Status::NodeResponse_Status_OK);
+    });
+
+    future.get();
     stream->Write(response);
   }
   return ::grpc::Status::OK;

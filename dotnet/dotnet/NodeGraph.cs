@@ -8,7 +8,12 @@ namespace Thalamus
     {
         string GetAddress();
         public Task<Node> GetNode(NodeSelector selector);
+        public Task<Node> GetNode(string selector)
+        {
+            return GetNode(new NodeSelector { Name = selector } );
+        }
         public Task Run(Func<Task> action);
+        public Task<T> Run<T>(Func<Task<T>> action);
     }
 
     public class NodeGraph : INodeGraph, IDisposable
@@ -50,6 +55,23 @@ namespace Thalamus
                 catch (Exception ex)
                 {
                     done.SetException(ex);
+                }
+            });
+        }
+
+        public Task<T> Run<T>(Func<Task<T>> action)
+        {
+            return TaskFactory.Run<T>(async () =>
+            {
+                try
+                {
+                    var result = await action();
+                    return result;
+                }
+                catch (Exception ex)
+                {
+                    done.SetException(ex);
+                    throw;
                 }
             });
         }
