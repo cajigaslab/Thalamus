@@ -185,6 +185,15 @@ namespace Thalamus
             }
         }
 
+        public void Notify(ObservableCollection source, ActionType action, object key, object? value)
+        {
+            Subscriptions(source, action, key, value);
+            if(Parent != null)
+            {
+                Parent.Notify(source, action, key, value);
+            }
+        }
+
         public object? KeyOf(object value)
         {
             foreach(var item in Items())
@@ -333,7 +342,7 @@ namespace Thalamus
                     {
                         if(wrapped is ObservableCollection wrappedColl)
                         {
-                            currentColl.Merge(wrappedColl);
+                            currentColl.Merge(wrappedColl, direct);
                             assigned = true;
                         }
                     }
@@ -341,7 +350,7 @@ namespace Thalamus
                 if(!assigned)
                 {
                     dictionaryContent[key] = wrapped;
-                    Subscriptions(this, ActionType.Set, key, wrapped);
+                    Notify(this, ActionType.Set, key, wrapped);
                 }
             }
             else if(arrayContent != null)
@@ -349,7 +358,7 @@ namespace Thalamus
                 if(arrayContent.Count == (int)key)
                 {
                     arrayContent.Add(wrapped);
-                    Subscriptions(this, ActionType.Set, key, wrapped);
+                    Notify(this, ActionType.Set, key, wrapped);
                 }
                 else
                 {
@@ -359,7 +368,7 @@ namespace Thalamus
                     {
                         if (wrapped is ObservableCollection wrappedColl)
                         {
-                            currentColl.Merge(wrappedColl);
+                            currentColl.Merge(wrappedColl, direct);
                             assigned = true;
                         }
                     }
@@ -368,7 +377,7 @@ namespace Thalamus
                     if (!assigned)
                     {
                         arrayContent[(int)key] = wrapped;
-                        Subscriptions(this, ActionType.Set, key, wrapped);
+                        Notify(this, ActionType.Set, key, wrapped);
                     }
                 }
             }
@@ -398,12 +407,12 @@ namespace Thalamus
             if (dictionaryContent != null)
             {
                 dictionaryContent.Remove(key);
-                Subscriptions(this, ActionType.Delete, key, null);
+                Notify(this, ActionType.Delete, key, null);
             }
             else if (arrayContent != null)
             {
-                arrayContent.Remove((int)key);
-                Subscriptions(this, ActionType.Delete, key, null);
+                arrayContent.RemoveAt((int)key);
+                Notify(this, ActionType.Delete, key, null);
             }
             callback();
         }
@@ -426,11 +435,15 @@ namespace Thalamus
             }
         }
 
-        public void Recap()
+        public void Recap(Action<ObservableCollection, ActionType, object, object?> callback = null)
         {
+            if(callback == null)
+            {
+                callback = Notify;
+            }
             foreach (var item in Items())
             {
-                Subscriptions(this, ActionType.Set, item.Key, item.Value);
+                callback(this, ActionType.Set, item.Key, item.Value);
             }
         }
     }

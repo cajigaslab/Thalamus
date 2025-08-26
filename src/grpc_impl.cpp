@@ -1036,14 +1036,39 @@ Service::graph(::grpc::ServerContext *context,
               channels_changed = true;
             }));
 
+    
+
+    std::promise<std::string> redirect_promise;
+    auto redirect_future = redirect_promise.get_future();
+    boost::asio::post(impl->io_context, [&] {
+      redirect_promise.set_value(std::string(node->redirect()));
+    });
+    auto redirect = redirect_future.get();
+
+    if(!redirect.empty()) {
+      ::thalamus_grpc::GraphResponse response;
+      response.set_redirect(redirect);
+      writer->Write(response);
+      return ::grpc::Status::OK;
+    }
+
     using signal_type = decltype(raw_node->ready);
     auto connection =
         raw_node->ready.connect(signal_type::slot_type([&](const Node *) {
           if (!node->has_analog_data()) {
             return;
           }
+          
           std::lock_guard<std::mutex> lock(connection_mutex);
           ::thalamus_grpc::GraphResponse response;
+
+          auto redirect = node->redirect();
+          if(!redirect.empty()) {
+            response.set_redirect(redirect);
+            writer->Write(response);
+            return;
+          }
+
           auto num_channels = size_t(node->num_channels());
           if (!has_channels && channels.size() != num_channels) {
             for (auto i = channels.size(); i < num_channels; ++i) {
@@ -1193,6 +1218,20 @@ Service::graph(::grpc::ServerContext *context,
 
     using channels_changed_signal_type = decltype(node->channels_changed);
     using signal_type = decltype(raw_node->ready);
+
+    std::promise<std::string> redirect_promise;
+    auto redirect_future = redirect_promise.get_future();
+    boost::asio::post(impl->io_context, [&] {
+      redirect_promise.set_value(std::string(node->redirect()));
+    });
+    auto redirect = redirect_future.get();
+
+    if(!redirect.empty()) {
+      ::thalamus_grpc::AnalogResponse response;
+      response.set_redirect(redirect);
+      writer->Write(response, ::grpc::WriteOptions());
+      return ::grpc::Status::OK;
+    }
 
     boost::signals2::scoped_connection channels_connection =
         node->channels_changed.connect(

@@ -21,6 +21,7 @@ namespace Thalamus
         private Task? task = null;
         private double[] data = [];
         private TaskFactory taskFactory;
+        private INodeGraph graph;
 
         public DelsysNode(ObservableCollection state, TaskFactory taskFactory, INodeGraph graph)
         {
@@ -28,9 +29,17 @@ namespace Thalamus
             Ready = new Node.OnReady(n => { });
             ChannelsChanged = new AnalogNode.OnChannelsChanged(n => { });
             this.state = state;
+            this.graph = graph;
             state.Subscriptions += OnChange;
             state.Set("Location", graph.GetAddress());
         }
+
+        public void Dispose()
+        {
+            running = false;
+            state.Subscriptions -= OnChange;
+        }
+
         public void OnChange(object source, ActionType action, object key, object? value)
         {
             if(source == state)
@@ -48,7 +57,7 @@ namespace Thalamus
 
                         if(running)
                         {
-                            task = taskFactory.Run(async () =>
+                            graph.Run(async () =>
                             {
                                 var start = Util.SteadyTime();
                                 var sampleTime = new TimeSpan();
@@ -69,16 +78,6 @@ namespace Thalamus
                                 }
                             });
                         }
-                        else
-                        {
-                            if (task != null)
-                            {
-                                task.Wait();
-                                task = null;
-                            }
-                        }
-
-
                     }
                     else if(str_key == "Key")
                     {
@@ -89,7 +88,7 @@ namespace Thalamus
                         license = (string?)value;
                     }
 
-                    if(this.key != null && license != null)
+                    if(this.key != null && this.key != "" && license != null && license != "")
                     {
                         deviceSourceCreator = new DeviceSourcePortable(this.key, license);
                         deviceSourceCreator.SetDebugOutputStream((str, args) => Console.WriteLine(string.Format(str, args)));
@@ -109,10 +108,6 @@ namespace Thalamus
         public static void Cleanup()
         {
 
-        }
-
-        public void Dispose()
-        {
         }
 
         public int NumChannels()

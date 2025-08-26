@@ -442,6 +442,7 @@ FACTORIES = {
   'HEXASCOPE': Factory(HexascopeWidget, []),
   'WALLCLOCK': Factory(None, []),
   'DELSYS': Factory(None, [
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.DEFAULT, 'Key', '', []),
     UserData(UserDataType.DEFAULT, 'License', '', []),
   ]),

@@ -2,6 +2,7 @@ using CommandLine;
 using dotnet;
 using dotnet.Services;
 using Grpc.Net.Client;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Nito.AsyncEx;
 using Thalamus;
 
@@ -9,52 +10,66 @@ Console.WriteLine("One");
 Parser.Default.ParseArguments<Options>(args)
     .WithParsed<Options>(o =>
     {
-        using var thread = new AsyncContextThread();
-
-        var stateUrl = o.StateUrl;
-        Console.WriteLine("Two " + stateUrl);
-        using var channel = Util.FindStateChannel(stateUrl);
-        //using var channel = GrpcChannel.ForAddress(string.Format("http://{0}", stateUrl));
-        var client = new Thalamus.Thalamus.ThalamusClient(channel);
-        var builder = WebApplication.CreateBuilder(args);
-        var state = new ObservableCollection();
-        var nodes = new ObservableCollection(new List<object>(), null);
-        state["nodes"] = nodes;
-        var done = new TaskCompletionSource();
-        using var stateManager = new StateManager(client, thread.Factory, state, done);
-        state.RequestChange = stateManager.RequestChange;
-
-        using var nodeGraph = new NodeGraph(nodes, thread.Factory, $"localhost:{o.Port}");
-
-        // Add services to the container.
-        builder.Services.AddGrpc();
-        builder.Services.AddScoped<ServiceSettings>(arg =>
+        AsyncContext.Run(async () =>
         {
-            return new ServiceSettings { StateUrl = stateUrl };
-        });
-        builder.Services.AddScoped<INodeGraph>(arg =>
-        {
-            return nodeGraph;
-        });
-        builder.Services.AddScoped<TaskFactory>(arg =>
-        {
-            return thread.Factory;
-        });
+            var cancellationTokenSource = new CancellationTokenSource();
+            var scheduler = TaskScheduler.FromCurrentSynchronizationContext();
+            var taskFactory = new TaskFactory(scheduler);
 
-        var app = builder.Build();
+            var stateUrl = o.StateUrl;
+            Console.WriteLine("Two " + stateUrl);
+            using var channel = Util.FindStateChannel(stateUrl);
+            //using var channel = GrpcChannel.ForAddress(string.Format("http://{0}", stateUrl));
+            var client = new Thalamus.Thalamus.ThalamusClient(channel);
+            var builder = WebApplication.CreateBuilder(args);
+            var state = new ObservableCollection();
+            var nodes = new ObservableCollection(new List<object>(), null);
+            state["nodes"] = nodes;
+            var done = new TaskCompletionSource();
+            //var exception = new TaskCompletionSource<System.Exception>();
+            //Util.SetupExceptions(done, cancellationTokenSource);
 
-        // Configure the HTTP request pipeline.
-        app.MapGrpcService<ThalamusService>();
-        app.MapGet("/", () => "Communication with gRPC endpoints must be made through a gRPC client. To learn how to create a client, visit: https://go.microsoft.com/fwlink/?linkid=2086909");
+            using var stateManager = new StateManager(client, taskFactory, state, done);
+            var stateTask = stateManager.Start(cancellationTokenSource);
+            state.RequestChange = stateManager.RequestChange;
 
-        var task = Task.Run(async () =>
-        {
-            await app.StartAsync();
-            await done.Task;
-            await app.StopAsync();
+            var url = $"localhost:{o.Port}";
+            using var nodeGraph = new NodeGraph(nodes, taskFactory, url, done);
+
+            builder.Services.AddGrpc();
+            builder.Services.AddScoped<ServiceSettings>(arg =>
+            {
+                return new ServiceSettings { StateUrl = stateUrl };
+            });
+            builder.Services.AddScoped<INodeGraph>(arg =>
+            {
+                return nodeGraph;
+            });
+            builder.Services.AddScoped<TaskFactory>(arg =>
+            {
+                return taskFactory;
+            });
+            //builder.WebHost.UseUrls($"http://{url}");
+            builder.WebHost.ConfigureKestrel(options =>
+            {
+                options.ListenAnyIP(o.Port, listenOptions =>
+                {
+                    listenOptions.Protocols = HttpProtocols.Http2;
+                });
+            });
+
+            var app = builder.Build();
+            
+            app.MapGrpcService<ThalamusService>();
+            app.MapGet("/", () => "Communication with gRPC endpoints must be made through a gRPC client. To learn how to create a client, visit: https://go.microsoft.com/fwlink/?linkid=2086909");
+            
+            var tt = await Task.WhenAny(
+                stateTask,
+                done.Task,
+                app.RunAsync(cancellationTokenSource.Token));
+            await tt;
+            Console.WriteLine("DONE12");
         });
-        task.Wait();
-        //app.Run();
     });
 
 public class ServiceSettings

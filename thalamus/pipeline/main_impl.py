@@ -32,6 +32,8 @@ from .. import thalamus_pb2_grpc
 from ..task_controller.observable_bridge import ObservableBridge
 from .thalamus_window import ThalamusWindow
 from ..servicer import ThalamusServicer
+from .. import thalamus_stub
+from ..task_controller.util import create_task_with_exc_handling
 
 from ..qt import *
 from .. import process
@@ -110,6 +112,12 @@ async def async_main() -> None:
   server.add_insecure_port(listen_addr)
   logging.info("Starting GRPC server on %s", listen_addr)
   await server.start()
+
+  async def proc_watcher(name: str, proc: asyncio.subprocess.Process):
+    await proc.wait()
+    if not done_future.done():
+      logging.error(f'{name} process terminated, shutting down UI')
+      done_future.set_result(None)
   
   bmbi_native_filename = get_path('native' + ('.exe' if sys.platform == 'win32' else ''))
   dotnet_filename = pathlib.Path(get_path('thalamus.dotnet', 'dotnet' + ('.exe' if sys.platform == 'win32' else '')))
@@ -117,16 +125,18 @@ async def async_main() -> None:
   command = bmbi_native_filename, 'thalamus', '--port', str(arguments.port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else [])
   print('COMMAND', ' '.join(command))
   bmbi_native_proc = await asyncio.create_subprocess_exec(*command)
+  create_task_with_exc_handling(proc_watcher('native.exe', bmbi_native_proc))
 
   dotnet_proc = None
   #if False:
   if dotnet_filename.exists():
     dotnet_command = str(dotnet_filename), '--port', str(arguments.dotnet_port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else [])
     dotnet_proc = await asyncio.create_subprocess_exec(*dotnet_command)
+    create_task_with_exc_handling(proc_watcher('dotnet.exe', dotnet_proc))
 
   channel = grpc.aio.insecure_channel(f'localhost:{arguments.port}')
   await channel.channel_ready()
-  stub = thalamus_pb2_grpc.ThalamusStub(channel)
+  stub = thalamus_stub.ThalamusStub(thalamus_pb2_grpc.ThalamusStub(channel))
 
   screen_geometry = qt_screen_geometry()
 

@@ -1,3 +1,4 @@
+using Nito.AsyncEx;
 using System.Xml.Linq;
 using static Thalamus.ObservableCollection;
 
@@ -7,6 +8,7 @@ namespace Thalamus
     {
         string GetAddress();
         public Task<Node> GetNode(NodeSelector selector);
+        public Task Run(Func<Task> action);
     }
 
     public class NodeGraph : INodeGraph, IDisposable
@@ -20,11 +22,13 @@ namespace Thalamus
         private string address = "";
 
         private List<(NodeSelector selector, TaskCompletionSource<Node> task)> pendingNodeGets = [];
+        private TaskCompletionSource done;
 
-        public NodeGraph(ObservableCollection nodes, TaskFactory taskFactory, string address)
+        public NodeGraph(ObservableCollection nodes, TaskFactory taskFactory, string address, TaskCompletionSource done)
         {
             this.TaskFactory = taskFactory;
             this.address = address;
+            this.done = done;
 
             if (DelsysNode.Prepare())
             {
@@ -33,6 +37,21 @@ namespace Thalamus
             }
             this.nodes = nodes;
             nodes.Subscriptions += new ObservableCollection.OnChange(OnChange);
+        }
+
+        public Task Run(Func<Task> action)
+        {
+            return TaskFactory.Run(async () =>
+            {
+                try
+                {
+                    await action();
+                }
+                catch (Exception ex)
+                {
+                    done.SetException(ex);
+                }
+            });
         }
 
         public Task<Node> GetNode(NodeSelector selector)
@@ -71,7 +90,7 @@ namespace Thalamus
 
         public string GetAddress()
         {
-            return GetAddress();
+            return address;
         }
 
         private void UpdateNode(ObservableCollection node, object? field)
@@ -108,7 +127,6 @@ namespace Thalamus
 
                 var nodeImpl = factories[type](node, TaskFactory, this);
                 nodeImpls[index] = nodeImpl;
-                node.Recap();
             }
 
             List<int> toRemove = [];

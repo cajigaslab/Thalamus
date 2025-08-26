@@ -326,6 +326,7 @@ message GraphResponse {
   repeated double bins = 1;
   repeated Span spans = 2;
   bool channels_changed = 3;
+  string redirect = 4;
 }
   
 message Event {

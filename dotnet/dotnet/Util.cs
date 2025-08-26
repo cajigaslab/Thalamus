@@ -3,10 +3,11 @@ using Grpc.Net.Client;
 using Newtonsoft.Json.Linq;
 using System.Diagnostics;
 using System.IO;
+using Nito.AsyncEx;
 
 namespace Thalamus
 {
-    public class Util
+    public static class Util
     {
         private static long frequency = Stopwatch.Frequency;
 
@@ -52,6 +53,26 @@ namespace Thalamus
 
             channel.Dispose();
             return GrpcChannel.ForAddress(string.Format("http://{0}", redirect));
+        }
+
+        public static IEnumerable<double> GetData(AnalogNode node, int channel)
+        {
+            if (node.GetDataType() == AnalogNode.DataType.DOUBLE)
+            {
+                return node.doubles(channel);
+            }
+            else if (node.GetDataType() == AnalogNode.DataType.SHORT)
+            {
+                return node.shorts(channel).Select(s => (double)s);
+            }
+            else if (node.GetDataType() == AnalogNode.DataType.ULONG)
+            {
+                return node.ulongs(channel).Select(s => (double)s);
+            }
+            else
+            {
+                throw new InvalidOperationException();
+            }
         }
     }
 }

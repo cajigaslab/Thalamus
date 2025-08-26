@@ -29,6 +29,7 @@
     <PackageReference Include="Grpc.AspNetCore" Version="2.57.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="Nito.AsyncEx.Context" Version="5.1.2" />
+    <PackageReference Include="Nito.AsyncEx.Coordination" Version="5.1.2" />
   </ItemGroup>
 
   <ItemGroup>
