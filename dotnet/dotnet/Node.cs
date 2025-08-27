@@ -12,5 +12,10 @@ namespace Thalamus
         public OnReady Ready { get; set; }
 
         public Task<JToken> Process(JToken request) { return Task<JToken>.FromResult((JToken)(new JObject())); }
+
+        public string Redirect()
+        {
+            return "";
+        }
     }
 }

@@ -138,7 +138,9 @@ class ThalamusStub():
   async def node_request (self, request: thalamus_pb2.NodeRequest) -> thalamus_pb2.NodeResponse:
     result = await self.stub.node_request(request)
     if result.redirect:
-      return await self.get_redirect_stub(result.redirect).node_request(request)
+      stub = await self.get_redirect_stub(result.redirect)
+      result = stub.node_request(request)
+      return result
     else:
       return result
   
@@ -151,6 +153,10 @@ class ThalamusStub():
     return self.stub.get_modalities(request)
   def ping(self, request: typing.AsyncIterable[thalamus_pb2.Ping]) -> typing.AsyncIterable[thalamus_pb2.Pong]:
     return self.stub.ping(request)
+
+  def text(self, request: thalamus_pb2.TextRequest) -> typing.AsyncIterable[thalamus_pb2.Text]:
+    return self.__stream(lambda stub: stub.text(request))
+  
   def inject_text(self, request: typing.AsyncIterable[thalamus_pb2.InjectTextRequest]) -> typing.AsyncIterable[thalamus_pb2.Pong]:
     return self.stub.inject_text(request)
   def stim(self, request: typing.AsyncIterable[thalamus_pb2.StimRequest]) -> typing.AsyncIterable[thalamus_pb2.StimResponse]:

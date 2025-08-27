@@ -14,6 +14,14 @@ namespace Thalamus
         }
         public Task Run(Func<Task> action);
         public Task<T> Run<T>(Func<Task<T>> action);
+        public Task Run(Action action)
+        {
+            return Run(() =>
+            {
+                action();
+                return Task.CompletedTask;
+            });
+        }
     }
 
     public class NodeGraph : INodeGraph, IDisposable

@@ -16,6 +16,7 @@ struct DelsysNode::Impl {
     using namespace std::placeholders;
     state_connection =
         state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
+    this->state->recap(std::bind(&Impl::on_change, this, _1, _2, _3));
   }
 
   void on_change(ObservableCollection::Action,
@@ -66,4 +67,13 @@ size_t DelsysNode::modalities() const { return infer_modalities<DelsysNode>(); }
 std::string_view DelsysNode::redirect() const {
   return impl->location;
 }
+
+std::string_view DelsysNode::text() const {
+  return "";
+}
+
+bool DelsysNode::has_text_data() const {
+  return false;
+}
+
 } // namespace thalamus

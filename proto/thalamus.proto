@@ -35,10 +35,15 @@ service Thalamus {
   rpc inject_analog(stream InjectAnalogRequest) returns (Empty) {}
   rpc get_modalities(NodeSelector) returns (ModalitiesMessage) {}
   rpc ping(stream Ping) returns (stream Pong) {}
+  rpc text(TextRequest) returns (stream Text) {}
   rpc inject_text(stream InjectTextRequest) returns (stream Pong) {}
   rpc stim(stream StimRequest) returns (stream StimResponse) {}
   rpc inject_motion_capture(stream InjectMotionCaptureRequest) returns (Empty) {}
   rpc dialog(Dialog) returns (Empty) {}
+}
+
+message TextRequest {
+  NodeSelector node = 1;
 }
 
 message Dialog {
@@ -150,6 +155,7 @@ message Text {
   string text = 1;
   uint64 time = 2;
   uint64 remote_time = 3;
+  string redirect = 4;
 }
 
 message StorageRecord {

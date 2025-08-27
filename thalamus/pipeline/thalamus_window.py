@@ -44,6 +44,7 @@ from .storage_widget import StorageWidget
 from .storage2_widget import Storage2Widget
 from .persistence_widget import PersistenceWidget
 from .run2_widget import Run2Widget
+from .delsys_widget import DelsysWidget
 from ..util import NodeSelector
 from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
@@ -441,7 +442,7 @@ FACTORIES = {
   ]),
   'HEXASCOPE': Factory(HexascopeWidget, []),
   'WALLCLOCK': Factory(None, []),
-  'DELSYS': Factory(None, [
+  'DELSYS': Factory(DelsysWidget, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.DEFAULT, 'Key File', '', []),
     UserData(UserDataType.DEFAULT, 'License File', '', []),

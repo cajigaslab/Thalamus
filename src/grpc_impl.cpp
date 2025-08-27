@@ -288,7 +288,7 @@ struct Service::Impl {
       std::promise<std::string> redirect_promise;
       auto redirect_future = redirect_promise.get_future();
       boost::asio::post(io_context, [&] {
-        redirect_promise.set_value(std::string(node->redirect()));
+        redirect_promise.set_value(std::string(raw_node->redirect()));
       });
       auto redirect = redirect_future.get();
 
@@ -309,7 +309,7 @@ struct Service::Impl {
             TRACE_EVENT("thalamus", "Service::analog(on ready)");
             std::lock_guard<std::mutex> lock(connection_mutex);
             ::thalamus_grpc::AnalogResponse response;
-            auto redirect = node->redirect();
+            auto redirect = raw_node->redirect();
             if(!redirect.empty()) {
               response.set_redirect(redirect);
               writer(response, ::grpc::WriteOptions());
@@ -382,6 +382,100 @@ struct Service::Impl {
         std::this_thread::sleep_for(1s);
       }
       channels_connection.disconnect();
+      connection.disconnect();
+      std::lock_guard<std::mutex> lock(connection_mutex);
+      std::this_thread::sleep_for(1s);
+    }
+
+    return ::grpc::Status::OK;
+  }
+
+  ::grpc::Status text(::grpc::ServerContext *context,
+                        const ::thalamus_grpc::TextRequest *request,
+                        std::function<bool(::thalamus_grpc::Text &msg,
+                                           ::grpc::WriteOptions options)>
+                            writer) {
+
+    Impl::ContextGuard guard(outer, context);
+    while (!context->IsCancelled()) {
+      std::promise<void> promise;
+      auto future = promise.get_future();
+      std::shared_ptr<Node> raw_node;
+      {
+        TRACE_EVENT("thalamus", "Service::text(get node)");
+        boost::asio::post(io_context, [&] {
+          node_graph.get_node(request->node(), [&](auto ptr) {
+            raw_node = ptr.lock();
+            promise.set_value();
+          });
+        });
+        while (future.wait_for(1s) == std::future_status::timeout &&
+               !context->IsCancelled()) {
+          if (io_context.stopped()) {
+            ::thalamus_grpc::Text response;
+            ::grpc::WriteOptions options;
+            options.set_last_message();
+            writer(response, options);
+            return ::grpc::Status::OK;
+          }
+        }
+        if (!node_cast<TextNode *>(raw_node.get())) {
+          std::this_thread::sleep_for(1s);
+          continue;
+        }
+      }
+
+      TextNode *node = node_cast<TextNode *>(raw_node.get());
+
+      std::mutex connection_mutex;
+
+      std::promise<std::string> redirect_promise;
+      auto redirect_future = redirect_promise.get_future();
+      boost::asio::post(io_context, [&] {
+        redirect_promise.set_value(std::string(raw_node->redirect()));
+      });
+      auto redirect = redirect_future.get();
+
+      if(!redirect.empty()) {
+        ::thalamus_grpc::Text response;
+        response.set_redirect(redirect);
+        writer(response, ::grpc::WriteOptions());
+        return ::grpc::Status::OK;
+      }
+
+      using signal_type = decltype(raw_node->ready);
+      auto connection =
+          raw_node->ready.connect(signal_type::slot_type([&](const Node *) {
+            if (!node->has_text_data()) {
+              return;
+            }
+            
+            TRACE_EVENT("thalamus", "Service::text(on ready)");
+            std::lock_guard<std::mutex> lock(connection_mutex);
+            ::thalamus_grpc::Text response;
+            auto redirect = raw_node->redirect();
+            if(!redirect.empty()) {
+              response.set_redirect(redirect);
+              writer(response, ::grpc::WriteOptions());
+              return;
+            }
+
+            response.set_text(node->text());
+            response.set_time(size_t(node->time().count()));
+            writer(response, ::grpc::WriteOptions());
+          }));
+      raw_node.reset();
+
+      while (!context->IsCancelled() && connection.connected()) {
+        if (io_context.stopped()) {
+          ::grpc::WriteOptions options;
+          options.set_last_message();
+          ::thalamus_grpc::Text response;
+          writer(response, options);
+          return ::grpc::Status::OK;
+        }
+        std::this_thread::sleep_for(1s);
+      }
       connection.disconnect();
       std::lock_guard<std::mutex> lock(connection_mutex);
       std::this_thread::sleep_for(1s);
@@ -485,16 +579,18 @@ Service::node_request(::grpc::ServerContext *,
     auto weak = impl->node_graph.get_node(request->node());
     auto node = weak.lock();
     if (!node) {
-      response.set_status(
+      response->set_status(
         thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
+      promise.set_value();
       return;
     }
 
     auto redirect = node->redirect();
     if(!redirect.empty()) {
-      response.set_redirect(redirect);
-      response.set_status(
+      response->set_redirect(redirect);
+      response->set_status(
         thalamus_grpc::NodeResponse::Status::NodeResponse_Status_REDIRECT);
+      promise.set_value();
       return;
     }
 
@@ -502,8 +598,9 @@ Service::node_request(::grpc::ServerContext *,
     auto json_response = node->process(parsed);
     auto serialized_response = boost::json::serialize(json_response);
     response->set_json(serialized_response);
-    response.set_status(
+    response->set_status(
       thalamus_grpc::NodeResponse::Status::NodeResponse_Status_OK);
+    promise.set_value();
   });
 
   future.get();
@@ -532,7 +629,8 @@ Service::node_request(::grpc::ServerContext *,
         response.clear_json();
         response.set_status(
             thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
-        continue;
+        promise.set_value();
+        return;
       }
 
       auto redirect = node->redirect();
@@ -540,6 +638,7 @@ Service::node_request(::grpc::ServerContext *,
         response.set_redirect(redirect);
         response.set_status(
           thalamus_grpc::NodeResponse::Status::NodeResponse_Status_REDIRECT);
+        promise.set_value();
         return;
       }
 
@@ -549,6 +648,7 @@ Service::node_request(::grpc::ServerContext *,
       response.set_json(serialized_response);
       response.set_status(
           thalamus_grpc::NodeResponse::Status::NodeResponse_Status_OK);
+      promise.set_value();
     });
 
     future.get();
@@ -1074,7 +1174,7 @@ Service::graph(::grpc::ServerContext *context,
     std::promise<std::string> redirect_promise;
     auto redirect_future = redirect_promise.get_future();
     boost::asio::post(impl->io_context, [&] {
-      redirect_promise.set_value(std::string(node->redirect()));
+      redirect_promise.set_value(std::string(raw_node->redirect()));
     });
     auto redirect = redirect_future.get();
 
@@ -1095,7 +1195,7 @@ Service::graph(::grpc::ServerContext *context,
           std::lock_guard<std::mutex> lock(connection_mutex);
           ::thalamus_grpc::GraphResponse response;
 
-          auto redirect = node->redirect();
+          auto redirect = raw_node->redirect();
           if(!redirect.empty()) {
             response.set_redirect(redirect);
             writer->Write(response);
@@ -1255,7 +1355,7 @@ Service::graph(::grpc::ServerContext *context,
     std::promise<std::string> redirect_promise;
     auto redirect_future = redirect_promise.get_future();
     boost::asio::post(impl->io_context, [&] {
-      redirect_promise.set_value(std::string(node->redirect()));
+      redirect_promise.set_value(std::string(raw_node->redirect()));
     });
     auto redirect = redirect_future.get();
 
@@ -1310,7 +1410,7 @@ Service::graph(::grpc::ServerContext *context,
                                              std::adopt_lock_t());
             ::thalamus_grpc::AnalogResponse response;
 
-            auto redirect = node->redirect();
+            auto redirect = raw_node->redirect();
             if(redirect.empty()) {
               for (auto c = 0; c < node->num_channels(); ++c) {
                 auto span = response.add_spans();
@@ -1570,6 +1670,17 @@ Service::analog(::grpc::ServerContext *context,
                 ::grpc::ServerWriter<::thalamus_grpc::AnalogResponse> *writer) {
   return impl->analog(context, request,
                       [&](const ::thalamus_grpc::AnalogResponse &msg,
+                          const ::grpc::WriteOptions &options) {
+                        return writer->Write(msg, options);
+                      });
+}
+
+::grpc::Status
+Service::text(::grpc::ServerContext *context,
+                const ::thalamus_grpc::TextRequest *request,
+                ::grpc::ServerWriter<::thalamus_grpc::Text> *writer) {
+  return impl->text(context, request,
+                      [&](const ::thalamus_grpc::Text &msg,
                           const ::grpc::WriteOptions &options) {
                         return writer->Write(msg, options);
                       });

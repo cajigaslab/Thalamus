@@ -1,15 +1,17 @@
+using Aero.PipeLine;
 using DelsysAPI.DelsysDevices;
 using DelsysAPI.Pipelines;
 using MathNet.Numerics.Statistics;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Newtonsoft.Json.Linq;
 using Nito.AsyncEx;
+using System;
 using System.Diagnostics;
 using static Thalamus.ObservableCollection;
 
 namespace Thalamus
 {
-    class DelsysNode : Node, AnalogNode
+    class DelsysNode : Node, AnalogNode, TextNode
     {
         private ObservableCollection state;
         private string? key = null;
@@ -27,6 +29,17 @@ namespace Thalamus
         private TaskFactory taskFactory;
         private INodeGraph graph;
         private CancellationTokenSource? cancellation = null;
+        private bool hasTextData = false;
+        private bool hasAnalogData = false;
+        private string text = "";
+        private bool scanned = false;
+        private bool collecting = false;
+
+        private List<string> channelNames = [];
+        private List<TimeSpan> sampleIntervals = [];
+        private List<int> sampleCounts = [];
+        private List<ArraySegment<double>> segments = [];
+        private List<double[]> samples = [];
 
         public DelsysNode(ObservableCollection state, TaskFactory taskFactory, INodeGraph graph)
         {
@@ -36,6 +49,7 @@ namespace Thalamus
             this.state = state;
             this.graph = graph;
             state.Subscriptions += OnChange;
+            state.Recap(OnChange);
             state.Set("Location", graph.GetAddress());
         }
 
@@ -57,35 +71,72 @@ namespace Thalamus
                 {
                     if(str_key == "Running")
                     {
-                        Console.WriteLine(string.Format("Running {0}", value));
-                        if(value == null)
+                        if(pipeline != null)
                         {
-                            throw new ArgumentException();
-                        }
-                        running = (bool)value;
-
-                        if(running)
-                        {
-                            graph.Run(async () =>
+                            if (value == null)
                             {
-                                var start = Util.SteadyTime();
-                                var sampleTime = new TimeSpan();
-                                while (running)
-                                {
-                                    await Task.Delay(16);
-                                    now = Util.SteadyTime();
-                                    var elapsed = now - start;
-                                    var sampleMs = sampleTime.Ticks / TimeSpan.TicksPerMillisecond;
-                                    var elapsedMs = elapsed.Ticks / TimeSpan.TicksPerMillisecond;
+                                throw new ArgumentException();
+                            }
+                            running = (bool)value;
 
-                                    data = Enumerable.Range(0, (int)(elapsedMs - sampleMs)).Select(t =>
-                                    {
-                                        return Math.Sin((t + sampleMs) / 1000.0);
-                                    }).ToArray();
-                                    Ready(this);
-                                    sampleTime = elapsed;
+                            if (running == true)
+                            {
+                                var pipeline = this.pipeline;
+                                if(collecting)
+                                {
+                                    state["Running"] = false;
+                                    return;
                                 }
-                            });
+                                collecting = true;
+                                graph.Run(async () =>
+                                {
+                                    if(!scanned)
+                                    {
+                                        var request = new JObject();
+                                        request["type"] = "scan";
+                                        await Process(request);
+                                    }
+                                    channelNames.Clear();
+                                    sampleIntervals.Clear();
+                                    sampleCounts.Clear();
+                                    segments.Clear();
+                                    foreach (var comp in pipeline.TrignoRfManager.Components)
+                                    {
+                                        EmitText($"Select {comp.PairNumber}");
+                                        var status = await pipeline.TrignoRfManager.SelectComponentAsync(comp);
+                                        EmitText($"Status {status}");
+                                        foreach(var channel in comp.TrignoChannels)
+                                        {
+                                            var span = Util.FromSeconds(1 / channel.SampleRate);
+                                            sampleIntervals.Add(span);
+                                            channelNames.Add($"{comp.PairNumber}:{channel.Name}");
+                                            sampleCounts.Add(0);
+                                            samples.Add(new double[0]);
+                                            segments.Add(new ArraySegment<double>());
+                                        }
+                                    }
+
+                                    EmitText($"Configure Pipeline");
+                                    var dataLine = new DataLine(pipeline);
+                                    dataLine.ConfigurePipeline();
+
+                                    EmitText($"Start Pipeline");
+                                    await pipeline.Start();
+                                });
+                            }
+                            else
+                            {
+                                EmitText($"Stop Pipeline");
+                                graph.Run(async () =>
+                                {
+                                    await pipeline.Stop();
+                                    collecting = false;
+                                });
+                            }
+                        }
+                        else
+                        {
+                            EmitText("Pipeline not ready");
                         }
                     }
                     else if(str_key == "Key File")
@@ -117,10 +168,19 @@ namespace Thalamus
                         }
                     }
 
-                    if(this.key != null && this.key != "" && license != null && license != "")
+                    if(deviceSourceCreator == null && this.key != null && this.key != "" && license != null && license != "")
                     {
                         deviceSourceCreator = new DeviceSourcePortable(this.key, license);
-                        deviceSourceCreator.SetDebugOutputStream((str, args) => Console.WriteLine(string.Format(str, args)));
+                        deviceSourceCreator.SetDebugOutputStream((str, args) =>
+                        {
+                            var text = string.Format(str, args);
+                            graph.Run(() =>
+                            {
+                                EmitText(text);
+                                Console.WriteLine(text);
+                                return Task.CompletedTask;
+                            });
+                        });
                         deviceSource = deviceSourceCreator.GetDataSource(SourceType.TRIGNO_RF);
                         deviceSource.Key = this.key;
                         deviceSource.License = license;
@@ -135,19 +195,91 @@ namespace Thalamus
                         pipeline.TrignoRfManager.ComponentLost += Log<DelsysAPI.Events.ComponentLostEventArgs>;
                         pipeline.TrignoRfManager.ComponentRemoved += Log<DelsysAPI.Events.ComponentRemovedEventArgs>;
                         pipeline.TrignoRfManager.ComponentScanComplete += Log<DelsysAPI.Events.ComponentScanCompletedEventArgs>;
-
+                        
                         pipeline.CollectionStarted += Log<DelsysAPI.Events.CollectionStartedEvent>;
-                        pipeline.CollectionDataReady += Log<DelsysAPI.Events.ComponentDataReadyEventArgs>;
+                        pipeline.CollectionDataReady += OnData;
                         pipeline.CollectionComplete += Log<DelsysAPI.Events.CollectionCompleteEvent>;
                     }
                 }
             }
         }
-        public async Task Process(JToken request)
+
+        private bool busy = false;
+
+        private void OnData(object? sender, DelsysAPI.Events.ComponentDataReadyEventArgs e)
+        {
+            if(busy)
+            {
+                return;
+            }
+
+            now = Util.SteadyTime();
+            for(var i = 0;i < sampleCounts.Count;++i)
+            {
+                sampleCounts[i] = 0;
+            }
+            foreach(var frame in e.Data)
+            {
+                var i = 0;
+                foreach(var sensor in frame.SensorData)
+                {
+                    foreach(var channel in sensor.ChannelData)
+                    {
+                        sampleCounts[i] += channel.Data.Count;
+                        ++i;
+                    }
+                }
+            }
+
+            for (var i = 0; i < sampleCounts.Count; ++i)
+            {
+                if(samples[i].Length < sampleCounts[i])
+                {
+                    samples[i] = new double[sampleCounts[i]];
+                }
+                segments[i] = new ArraySegment<double>(samples[i], 0, sampleCounts[i]);
+                sampleCounts[i] = 0;
+            }
+
+            //segments.Clear();
+            foreach (var frame in e.Data)
+            {
+                var i = 0;
+                foreach (var sensor in frame.SensorData)
+                {
+                    foreach (var channel in sensor.ChannelData)
+                    {
+                        //segments.Add(new ArraySegment<double>(samples[i], z, channel.Data.Count));
+                        channel.Data.CopyTo(0, samples[i], sampleCounts[i], channel.Data.Count);
+                        sampleCounts[i] += channel.Data.Count;
+                        ++i;
+                    }
+                }
+            }
+            busy = true;
+            graph.Run(() =>
+            {
+                hasAnalogData = true;
+                hasTextData = false;
+                Ready(this);
+                busy = false;
+            }).Wait();
+        }
+
+        private void EmitText(string text)
+        {
+            now = Util.SteadyTime();
+            this.text = text;
+            hasAnalogData = false;
+            hasTextData = true;
+            Ready(this);
+        }
+
+        public async Task<JToken> Process(JToken request)
         {
             if(request.Type != JTokenType.Object)
             {
-                return;
+                return new JObject();
             }
             var obj = (JObject)request;
 
@@ -155,7 +287,51 @@ namespace Thalamus
             if(type_tok != null && type_tok.Type == JTokenType.String)
             {
                 var type_str = (string?)type_tok;
-                if(type_str == "scan")
+                if (type_str == "pair")
+                {
+                    if(pipeline != null)
+                    {
+                        var id_tok = obj["id"];
+                        if (id_tok != null && id_tok.Type == JTokenType.Integer)
+                        {
+                            var id_maybe_int = (int?)id_tok;
+                            if (id_maybe_int != null)
+                            {
+                                var id_int = (int)id_maybe_int;
+                                if (cancellation != null)
+                                {
+                                    cancellation.Cancel();
+                                }
+                                cancellation = new CancellationTokenSource();
+                                EmitText($"Pairing component {id_int}");
+                                var success = await pipeline.TrignoRfManager.AddTrignoComponent(cancellation.Token, id_int);
+                                if(success)
+                                {
+                                    EmitText($"Component {id_int} paired");
+                                }
+                                else
+                                {
+                                    EmitText($"Component {id_int} not paired");
+                                }
+                                return new JObject();
+                            }
+                            else
+                            {
+                                throw new InvalidDataException();
+                            }
+                        }
+                        else
+                        {
+                            throw new InvalidDataException();
+                        }
+                    }
+                    else
+                    {
+                        EmitText("Pipeline not ready");
+                        return new JObject();
+                    }
+                }
+                else if(type_str == "scan")
                 {
                     if(pipeline != null)
                     {
@@ -164,46 +340,44 @@ namespace Thalamus
                             cancellation.Cancel();
                         }
                         cancellation = new CancellationTokenSource();
-                        if(state.ContainsKey("Components"))
+                        EmitText("Scanning");
+                        var success = await pipeline.Scan();
+                        if (success)
                         {
-                            if(state["Components"] is ObservableCollection components)
-                            {
-                                state["Scan Status"] = "In Progress";
-                                var tasks = components.Values().Select(async (rawComponent) =>
-                                {
-                                    if (rawComponent is ObservableCollection component)
-                                    {
-                                        component["Paired"] = false;
-                                        var sensorNumber = component["ID"];
-                                        if (sensorNumber is long sensorLong)
-                                        {
-                                            var result = pipeline.TrignoRfManager.AddTrignoComponent(cancellation.Token, (int)sensorLong);
-                                            component["Paired"] = result;
-                                        }
-                                        else
-                                        {
-                                            throw new InvalidDataException();
-                                        }
-                                    }
-                                    else
-                                    {
-                                        throw new InvalidDataException();
-                                    }
-                                });
-                                await Task.WhenAll(tasks);
-
-                                var scanResult = await pipeline.Scan();
-                                state["Scan Result"] = scanResult ? "Success" : "Failed";
-                            }
+                            scanned = true;
+                            EmitText($"Scan succeeded");
                         }
+                        else
+                        {
+                            EmitText($"Scan failed");
+                        }
+                        return new JObject();
+                    }
+                    else
+                    {
+                        EmitText("Pipeline not ready");
+                        return new JObject();
                     }
                 }
+                else
+                {
+                    throw new InvalidDataException();
+                }
+            }
+            else
+            {
+                throw new InvalidDataException();
             }
         }
 
         private void Log<T>(object? sender, T e)
         {
-            Console.WriteLine(e);
+            graph.Run(() =>
+            {
+                EmitText($"{e}");
+                Console.WriteLine(e);
+                return Task.CompletedTask;
+            });
         }
 
         public static bool Prepare()
@@ -218,12 +392,12 @@ namespace Thalamus
 
         public int NumChannels()
         {
-            return 1;
+            return channelNames.Count;
         }
 
         public TimeSpan SampleInterval(int channel)
         {
-            return Util.FromMillisconds(1);
+            return sampleIntervals[channel];
         }
 
         public TimeSpan Time()
@@ -233,22 +407,32 @@ namespace Thalamus
 
         public string Name(int channel)
         {
-            return "Sine";
+            return channelNames[channel];
         }
 
         public bool HasAnalogData()
         {
-            return true;
+            return hasAnalogData;
         }
 
         public ArraySegment<double> doubles(int channel)
         {
-            return new ArraySegment<double>(data);
+            return segments[channel];
         }
 
         public AnalogNode.DataType GetDataType()
         {
             return AnalogNode.DataType.DOUBLE;
+        }
+
+        public string Text()
+        {
+            return text;
+        }
+
+        public bool HasTextData()
+        {
+            return hasTextData;
         }
     }
 }

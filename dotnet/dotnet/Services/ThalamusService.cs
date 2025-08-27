@@ -37,6 +37,82 @@ namespace dotnet.Services
                 return response;
             });
         }
+        public override Task text(TextRequest request, IServerStreamWriter<global::Thalamus.Text> responseStream, ServerCallContext context)
+        {
+            return nodeGraph.Run(async () =>
+            {
+                while (!context.CancellationToken.IsCancellationRequested)
+                {
+                    var rawNodeMaybe = await nodeGraph.GetNode(request.Node);
+                    if (rawNodeMaybe == null)
+                    {
+                        await Task.Delay(1000);
+                        continue;
+                    }
+
+                    var rawNode = (Node)rawNodeMaybe;
+                    if (!(rawNode is TextNode))
+                    {
+                        await Task.Delay(1000);
+                        continue;
+                    }
+
+                    var node = rawNode as TextNode;
+                    if (node == null)
+                    {
+                        await Task.Delay(1000);
+                        continue;
+                    }
+                    var channelsChanged = true;
+
+                    var redirect = rawNode.Redirect();
+                    if (redirect.Length > 0)
+                    {
+                        var response = new Thalamus.Text();
+                        response.Redirect = redirect;
+                        await responseStream.WriteAsync(response);
+                        return;
+                    }
+
+                    var onReady = new Node.OnReady(async (Node _) =>
+                    {
+                        var redirect = rawNode.Redirect();
+                        if (redirect.Length > 0)
+                        {
+                            var redirectResponse = new Thalamus.Text();
+                            redirectResponse.Redirect = redirect;
+                            await responseStream.WriteAsync(redirectResponse);
+                            return;
+                        }
+
+                        if (!node.HasTextData())
+                        {
+                            return;
+                        }
+
+                        var response = new Thalamus.Text();
+                        response.Text_ = node.Text();
+                        response.Time = (ulong)Util.ToNanoseconds(node.Time());
+                        channelsChanged = false;
+
+                        await responseStream.WriteAsync(response);
+                    });
+
+                    try
+                    {
+                        rawNode.Ready += onReady;
+                        while (!context.CancellationToken.IsCancellationRequested)
+                        {
+                            await Task.Delay(1000);
+                        }
+                    }
+                    finally
+                    {
+                        rawNode.Ready -= onReady;
+                    }
+                }
+            });
+        }
 
         public override Task<Redirect> get_redirect(Empty request, ServerCallContext context)
         {
@@ -49,21 +125,24 @@ namespace dotnet.Services
             {
                 while (!context.CancellationToken.IsCancellationRequested)
                 {
-                    var rawNode = await nodeGraph.GetNode(request.Node);
-                    if (!(rawNode is AnalogNode))
+                    var rawNodeMaybe = await nodeGraph.GetNode(request.Node);
+                    if (rawNodeMaybe == null)
                     {
                         await Task.Delay(1000);
                         continue;
                     }
 
+                    var rawNode = (Node)rawNodeMaybe;
+
                     var node = rawNode as AnalogNode;
                     if (node == null)
                     {
-                        throw new InvalidDataException();
+                        await Task.Delay(1000);
+                        continue;
                     }
                     var channelsChanged = true;
 
-                    var redirect = node.Redirect();
+                    var redirect = rawNode.Redirect();
                     if (redirect.Length > 0)
                     {
                         var response = new AnalogResponse();
@@ -81,7 +160,7 @@ namespace dotnet.Services
                     });
                     var onReady = new Node.OnReady(async (Node _) =>
                     {
-                        var redirect = node.Redirect();
+                        var redirect = rawNode.Redirect();
                         if (redirect.Length > 0)
                         {
                             var redirectResponse = new AnalogResponse();
@@ -190,12 +269,14 @@ namespace dotnet.Services
             {
                 while (!context.CancellationToken.IsCancellationRequested)
                 {
-                    var rawNode = await nodeGraph.GetNode(request.Node);
-                    if (!(rawNode is AnalogNode))
+                    var rawNodeMaybe = await nodeGraph.GetNode(request.Node);
+                    if (rawNodeMaybe == null)
                     {
                         await Task.Delay(1000);
                         continue;
                     }
+
+                    var rawNode = (Node)rawNodeMaybe;
 
                     var node = rawNode as AnalogNode;
                     if (node == null)
@@ -204,8 +285,8 @@ namespace dotnet.Services
                     }
                     var channelsChanged = true;
 
-                    var redirect = node.Redirect();
-                    if(redirect.Length > 0)
+                    var redirect = rawNode.Redirect();
+                    if (redirect.Length > 0)
                     {
                         var response = new AnalogResponse();
                         response.Redirect = redirect;
@@ -222,11 +303,11 @@ namespace dotnet.Services
                     });
                     var onReady = new Node.OnReady(async (Node _) =>
                     {
-                        if(!channelsChanged)
+                        if (!channelsChanged)
                         {
                             return;
                         }
-                        var redirect = node.Redirect();
+                        var redirect = rawNode.Redirect();
                         if (redirect.Length > 0)
                         {
                             var redirectResponse = new AnalogResponse();
@@ -241,7 +322,7 @@ namespace dotnet.Services
                         }
 
                         var numChannels = node.NumChannels();
-                        if(request.ChannelNames.Count == 0)
+                        if (request.ChannelNames.Count == 0)
                         {
                             //No Channels specified, get all of them
                             while (requestIndexToNodeIndex.Count < numChannels)
@@ -276,10 +357,10 @@ namespace dotnet.Services
                         response.Time = (ulong)Util.ToNanoseconds(node.Time());
                         channelsChanged = false;
 
-                        for(var c = 0;c < requestIndexToNodeIndex.Count;++c)
+                        for (var c = 0; c < requestIndexToNodeIndex.Count; ++c)
                         {
                             var channel = requestIndexToNodeIndex[c];
-                            if(channel >= numChannels)
+                            if (channel >= numChannels)
                             {
                                 continue;
                             }
@@ -298,7 +379,7 @@ namespace dotnet.Services
                     {
                         node.ChannelsChanged += onChannelsChanged;
                         rawNode.Ready += onReady;
-                        while(!context.CancellationToken.IsCancellationRequested)
+                        while (!context.CancellationToken.IsCancellationRequested)
                         {
                             await Task.Delay(1000);
                         }
@@ -316,40 +397,42 @@ namespace dotnet.Services
         {
             return nodeGraph.Run(async () =>
             {
-            while (!context.CancellationToken.IsCancellationRequested)
-            {
-                var rawNode = await nodeGraph.GetNode(request.Node);
-                if (!(rawNode is AnalogNode))
+                while (!context.CancellationToken.IsCancellationRequested)
                 {
-                    await Task.Delay(1000);
-                    continue;
-                }
+                    var rawNodeMaybe = await nodeGraph.GetNode(request.Node);
+                    if (rawNodeMaybe == null)
+                    {
+                        await Task.Delay(1000);
+                        continue;
+                    }
 
-                var node = rawNode as AnalogNode;
-                if (node == null)
-                {
-                    throw new InvalidDataException();
-                }
-                var channelsChanged = true;
+                    var rawNode = (Node)rawNodeMaybe;
 
-                var redirect = node.Redirect();
-                if (redirect.Length > 0)
-                {
-                    var response = new GraphResponse();
-                    response.Redirect = redirect;
-                    await responseStream.WriteAsync(response);
-                    return;
-                }
+                    var node = rawNode as AnalogNode;
+                    if (node == null)
+                    {
+                        throw new InvalidDataException();
+                    }
+                    var channelsChanged = true;
 
-                var requestIndexToNodeIndex = new List<int>();
-                var mins = new List<double>();
-                var maxes = new List<double>();
-                var previousMins = new List<double>();
-                var previousMaxes = new List<double>();
-                var currentTimes = new List<TimeSpan>();
-                var binEnds = new List<TimeSpan>();
-                TimeSpan? firstTime = null;
-                var binNs = Util.FromNanoseconds((long)request.BinNs);
+                    var redirect = rawNode.Redirect();
+                    if (redirect.Length > 0)
+                    {
+                        var response = new GraphResponse();
+                        response.Redirect = redirect;
+                        await responseStream.WriteAsync(response);
+                        return;
+                    }
+
+                    var requestIndexToNodeIndex = new List<int>();
+                    var mins = new List<double>();
+                    var maxes = new List<double>();
+                    var previousMins = new List<double>();
+                    var previousMaxes = new List<double>();
+                    var currentTimes = new List<TimeSpan>();
+                    var binEnds = new List<TimeSpan>();
+                    TimeSpan? firstTime = null;
+                    var binNs = Util.FromNanoseconds((long)request.BinNs);
 
                     var onChannelsChanged = new AnalogNode.OnChannelsChanged((AnalogNode _) =>
                     {
@@ -358,7 +441,7 @@ namespace dotnet.Services
                     });
                     var onReady = new Node.OnReady(async (Node _) =>
                     {
-                        var redirect = node.Redirect();
+                        var redirect = rawNode.Redirect();
                         if (redirect.Length > 0)
                         {
                             var redirectResponse = new GraphResponse();
@@ -367,7 +450,7 @@ namespace dotnet.Services
                             return;
                         }
 
-                        if (!node.HasAnalogData())
+                        if (!node.HasAnalogData() || context.CancellationToken.IsCancellationRequested)
                         {
                             return;
                         }
@@ -406,7 +489,7 @@ namespace dotnet.Services
                             }
                         }
 
-                        if(initialized)
+                        if (initialized)
                         {
                             mins = Enumerable.Range(0, numChannels).Select(i => Double.PositiveInfinity).ToList();
                             maxes = Enumerable.Range(0, numChannels).Select(i => Double.NegativeInfinity).ToList();
@@ -420,7 +503,7 @@ namespace dotnet.Services
                         response.ChannelsChanged = channelsChanged;
                         channelsChanged = false;
                         var now = node.Time();
-                        if(firstTime == null)
+                        if (firstTime == null)
                         {
                             firstTime = now;
                         }

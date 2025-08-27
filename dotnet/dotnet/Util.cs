@@ -21,14 +21,24 @@ namespace Thalamus
             return span.Ticks * TimeSpan.NanosecondsPerTick;
         }
 
-        public static TimeSpan FromMillisconds(long ms)
+        public static TimeSpan FromMilliseconds(long ms)
         {
             return new TimeSpan(ms * TimeSpan.TicksPerMillisecond);
         }
 
-        public static long ToMillisconds(TimeSpan span)
+        public static long ToMilliseconds(TimeSpan span)
         {
             return span.Ticks / TimeSpan.TicksPerMillisecond;
+        }
+
+        public static TimeSpan FromSeconds(double s)
+        {
+            return new TimeSpan((long)(s * TimeSpan.TicksPerSecond));
+        }
+
+        public static double ToSeconds(TimeSpan span)
+        {
+            return span.Ticks / TimeSpan.TicksPerSecond;
         }
 
         public static TimeSpan SteadyTime()

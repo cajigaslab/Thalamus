@@ -5,7 +5,7 @@
 #include <text_node.hpp>
 
 namespace thalamus {
-class DelsysNode : public Node, public AnalogNode {
+class DelsysNode : public Node, public AnalogNode, public TextNode {
   struct Impl;
   std::unique_ptr<Impl> impl;
 
@@ -23,6 +23,8 @@ public:
               const thalamus::vector<std::string_view> &) override;
   std::string_view name(int channel) const override;
   int num_channels() const override;
+  std::string_view text() const override;
+  bool has_text_data() const override;
   std::chrono::nanoseconds sample_interval(int channel) const override;
   std::span<const double> data(int channel) const override;
 };

@@ -28,11 +28,6 @@ namespace Thalamus
 
         public bool HasAnalogData();
 
-        public string Redirect()
-        {
-            return "";
-        }
-
         public ArraySegment<double> doubles(int channel)
         {
             throw new NotImplementedException();

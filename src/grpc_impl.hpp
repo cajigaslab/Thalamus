@@ -95,6 +95,10 @@ public:
       ::grpc::ServerContext *context,
       const ::thalamus_grpc::AnalogRequest *request,
       ::grpc::ServerWriter<::thalamus_grpc::AnalogResponse> *writer) override;
+  ::grpc::Status text(
+      ::grpc::ServerContext *context,
+      const ::thalamus_grpc::TextRequest *request,
+      ::grpc::ServerWriter<::thalamus_grpc::Text> *writer) override;
   ::grpc::Status
   spectrogram(::grpc::ServerContext *context,
               const ::thalamus_grpc::SpectrogramRequest *request,
