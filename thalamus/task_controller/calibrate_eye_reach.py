@@ -519,11 +519,11 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   behav_result['selected_target_id'] = final_i_selected_target
 
   quadrant = []
-  if all_target_names[final_i_selected_target]=='topleft':
+  if all_target_names[final_i_selected_target]=='topright':
     quadrant = 'I'
     quadrant_x = 'IV'
     quadrant_y = 'II'
-  elif all_target_names[final_i_selected_target]=='topright':
+  elif all_target_names[final_i_selected_target]=='topleft':
     quadrant = 'II'
     quadrant_x = 'III'
     quadrant_y = 'I'
