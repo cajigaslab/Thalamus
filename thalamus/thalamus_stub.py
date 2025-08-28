@@ -87,23 +87,27 @@ class ThalamusStub():
 
     async def func():
       nonlocal stream
-      running = True
-      while running:
-        new_stream = False
-        async for m in stream:
-          if m.redirect:
-            stub = await self.get_redirect_stub(m.redirect)
-            stream.cancel()
-            stream = stream_func(stub)
-            new_stream = True
-            break
+      try:
+        running = True
+        while running:
+          new_stream = False
+          async for m in stream:
+            if m.redirect:
+              stub = await self.get_redirect_stub(m.redirect)
+              stream.cancel()
+              stream = stream_func(stub)
+              new_stream = True
+              break
 
-          await result.put(m)
-        
-        if new_stream:
-          continue
+            await result.put(m)
+          
+          if new_stream:
+            continue
 
-        running = False
+          running = False
+      except:
+        pass
+      finally:
         result.close()
 
     create_task_with_exc_handling(func())

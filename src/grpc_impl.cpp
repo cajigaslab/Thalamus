@@ -301,7 +301,7 @@ struct Service::Impl {
 
       using signal_type = decltype(raw_node->ready);
       auto connection =
-          raw_node->ready.connect(signal_type::slot_type([&](const Node *) {
+          raw_node->ready.connect(signal_type::slot_type([&](const Node * raw_node) {
             if (!node->has_analog_data()) {
               return;
             }
@@ -445,7 +445,7 @@ struct Service::Impl {
 
       using signal_type = decltype(raw_node->ready);
       auto connection =
-          raw_node->ready.connect(signal_type::slot_type([&](const Node *) {
+          raw_node->ready.connect(signal_type::slot_type([&](const Node * raw_node) {
             if (!node->has_text_data()) {
               return;
             }
@@ -1187,7 +1187,7 @@ Service::graph(::grpc::ServerContext *context,
 
     using signal_type = decltype(raw_node->ready);
     auto connection =
-        raw_node->ready.connect(signal_type::slot_type([&](const Node *) {
+        raw_node->ready.connect(signal_type::slot_type([&](const Node * raw_node) {
           if (!node->has_analog_data()) {
             return;
           }
@@ -1402,7 +1402,7 @@ Service::graph(::grpc::ServerContext *context,
       }
 
       boost::signals2::scoped_connection connection =
-          raw_node->ready.connect(signal_type::slot_type([&](const Node *) {
+          raw_node->ready.connect(signal_type::slot_type([&](const Node * raw_node) {
             if (!connection_mutex.try_lock()) {
               return;
             }

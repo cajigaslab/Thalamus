@@ -25,6 +25,7 @@ public:
   int num_channels() const override;
   std::string_view text() const override;
   bool has_text_data() const override;
+  bool has_analog_data() const override;
   std::chrono::nanoseconds sample_interval(int channel) const override;
   std::span<const double> data(int channel) const override;
 };

@@ -160,6 +160,11 @@ namespace dotnet.Services
                     });
                     var onReady = new Node.OnReady(async (Node _) =>
                     {
+                        if (context.CancellationToken.IsCancellationRequested)
+                        {
+                            return;
+                        }
+
                         var redirect = rawNode.Redirect();
                         if (redirect.Length > 0)
                         {
@@ -178,7 +183,7 @@ namespace dotnet.Services
                         if (request.ChannelNames.Count == 0)
                         {
                             //No Channels specified, get all of them
-                            while (requestIndexToNodeIndex.Count < request.ChannelNames.Count)
+                            while (requestIndexToNodeIndex.Count < numChannels)
                             {
                                 requestIndexToNodeIndex.Add(requestIndexToNodeIndex.Count);
                             }
@@ -303,7 +308,7 @@ namespace dotnet.Services
                     });
                     var onReady = new Node.OnReady(async (Node _) =>
                     {
-                        if (!channelsChanged)
+                        if (!channelsChanged || context.CancellationToken.IsCancellationRequested)
                         {
                             return;
                         }
@@ -441,6 +446,10 @@ namespace dotnet.Services
                     });
                     var onReady = new Node.OnReady(async (Node _) =>
                     {
+                        if(context.CancellationToken.IsCancellationRequested)
+                        {
+                            return;
+                        }
                         var redirect = rawNode.Redirect();
                         if (redirect.Length > 0)
                         {
@@ -450,7 +459,7 @@ namespace dotnet.Services
                             return;
                         }
 
-                        if (!node.HasAnalogData() || context.CancellationToken.IsCancellationRequested)
+                        if (!node.HasAnalogData())
                         {
                             return;
                         }
@@ -460,7 +469,7 @@ namespace dotnet.Services
                         if (request.ChannelNames.Count == 0)
                         {
                             //No Channels specified, get all of them
-                            while (requestIndexToNodeIndex.Count < request.ChannelNames.Count)
+                            while (requestIndexToNodeIndex.Count < numChannels)
                             {
                                 requestIndexToNodeIndex.Add(requestIndexToNodeIndex.Count);
                                 initialized = true;
