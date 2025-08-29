@@ -34,7 +34,7 @@ Parser.Default.ParseArguments<Options>(args)
             state.RequestChange = stateManager.RequestChange;
 
             var url = $"localhost:{o.Port}";
-            using var nodeGraph = new NodeGraph(nodes, taskFactory, url, done);
+            using var nodeGraph = new NodeGraph(client, nodes, taskFactory, url, done);
 
             builder.Services.AddGrpc();
             builder.Services.AddScoped<ServiceSettings>(arg =>

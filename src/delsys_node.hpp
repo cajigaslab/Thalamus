@@ -28,5 +28,6 @@ public:
   bool has_analog_data() const override;
   std::chrono::nanoseconds sample_interval(int channel) const override;
   std::span<const double> data(int channel) const override;
+  void process(const boost::json::value &, std::function<void(const boost::json::value &)> callback) override;
 };
 } // namespace thalamus

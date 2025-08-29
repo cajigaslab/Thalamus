@@ -37,6 +37,37 @@ namespace dotnet.Services
                 return response;
             });
         }
+
+        public override Task node_request_stream(IAsyncStreamReader<global::Thalamus.NodeRequest> requestStream, IServerStreamWriter<global::Thalamus.NodeResponse> responseStream, ServerCallContext context)
+        {
+            return nodeGraph.Run(async () =>
+            {
+                Node? maybeNode = null;
+                await foreach(var request in requestStream.ReadAllAsync())
+                {
+                    if(request.Node.Length != 0)
+                    {
+                        maybeNode = await nodeGraph.GetNode(request.Node);
+                        continue;
+                    }
+
+                    if(maybeNode is Node node)
+                    {
+                        var reader = new JsonTextReader(new StringReader(request.Json));
+                        var tok = JToken.ReadFrom(reader);
+                        var jsonResponse = await node.Process(tok);
+
+                        var response = new NodeResponse();
+                        response.Json = JsonConvert.SerializeObject(jsonResponse);
+                        response.Status = NodeResponse.Types.Status.Ok;
+                        response.Id = request.Id;
+                        await responseStream.WriteAsync(response);
+                    }
+
+                }
+            });
+        }
+
         public override Task text(TextRequest request, IServerStreamWriter<global::Thalamus.Text> responseStream, ServerCallContext context)
         {
             return nodeGraph.Run(async () =>

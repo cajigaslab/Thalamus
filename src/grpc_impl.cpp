@@ -595,12 +595,13 @@ Service::node_request(::grpc::ServerContext *,
     }
 
     auto parsed = boost::json::parse(request->json());
-    auto json_response = node->process(parsed);
-    auto serialized_response = boost::json::serialize(json_response);
-    response->set_json(serialized_response);
-    response->set_status(
-      thalamus_grpc::NodeResponse::Status::NodeResponse_Status_OK);
-    promise.set_value();
+    node->process(parsed, [&](auto json_response) {
+      auto serialized_response = boost::json::serialize(json_response);
+      response->set_json(serialized_response);
+      response->set_status(
+        thalamus_grpc::NodeResponse::Status::NodeResponse_Status_OK);
+      promise.set_value();
+    });
   });
 
   future.get();
@@ -643,12 +644,13 @@ Service::node_request(::grpc::ServerContext *,
       }
 
       auto parsed = boost::json::parse(request.json());
-      auto json_response = node->process(parsed);
-      auto serialized_response = boost::json::serialize(json_response);
-      response.set_json(serialized_response);
-      response.set_status(
-          thalamus_grpc::NodeResponse::Status::NodeResponse_Status_OK);
-      promise.set_value();
+      node->process(parsed, [&](auto json_response) {
+        auto serialized_response = boost::json::serialize(json_response);
+        response.set_json(serialized_response);
+        response.set_status(
+            thalamus_grpc::NodeResponse::Status::NodeResponse_Status_OK);
+        promise.set_value();
+      });
     });
 
     future.get();

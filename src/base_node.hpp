@@ -37,6 +37,9 @@ public:
   virtual boost::json::value process(const boost::json::value &) {
     return boost::json::value();
   }
+  virtual void process(const boost::json::value &, std::function<void(const boost::json::value &)> callback) {
+    callback(boost::json::value());
+  }
   virtual std::string_view redirect() const {
     return "";
   }

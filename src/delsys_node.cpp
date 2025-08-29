@@ -15,14 +15,18 @@ struct DelsysNode::Impl {
   thalamus_grpc::TextRequest text_request;
   std::unique_ptr<ReadReactor<thalamus_grpc::AnalogResponse>> reactor;
   std::unique_ptr<ReadReactor<thalamus_grpc::Text>> text_reactor;
+  std::unique_ptr<BidiReactor<thalamus_grpc::NodeRequest, thalamus_grpc::NodeResponse>> request_reactor;
   std::vector<double> data;
   std::vector<std::span<const double>> spans;
   std::vector<std::string> names;
   std::vector<std::chrono::nanoseconds> sample_intervals;
   bool has_analog_data = false;
   bool has_text_data = false;
+  bool response_received = false;
   std::chrono::nanoseconds now;
   std::string text;
+  std::map<uint64_t, std::function<void(const boost::json::value &)>> callbacks;
+  uint64_t next_id = 1;
   
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
        DelsysNode *_outer, NodeGraph *_graph)
@@ -93,6 +97,32 @@ struct DelsysNode::Impl {
     }
   }
 
+  void update_request_stream(bool reset) {
+    if(!request_reactor || reset) {
+      request_reactor.reset(new BidiReactor<thalamus_grpc::NodeRequest, thalamus_grpc::NodeResponse>(io_context, [&] (auto response) {
+        response_received = true;
+        auto parsed = boost::json::parse(response.json());
+        auto i = callbacks.find(response.id());
+        auto callback = i->second;
+        callbacks.erase(i);
+        callback(parsed);
+      }));
+
+      auto stub = graph->get_thalamus_stub(location);
+      response_received = false;
+      stub->async()->node_request_stream(&request_reactor->context, request_reactor.get());
+
+      request_reactor->start();
+    }
+
+    if(!response_received) {
+      thalamus_grpc::NodeRequest node_request;
+      std::string name = state->at("name");
+      node_request.set_node(name);
+      request_reactor->send(std::move(node_request));
+    }
+  }
+
   boost::asio::awaitable<void> loop() {
     boost::asio::steady_timer timer(io_context);
     while(true) {
@@ -110,7 +140,9 @@ struct DelsysNode::Impl {
                  const ObservableCollection::Key &k,
                  const ObservableCollection::Value &v) {
     auto key_str = std::get<std::string>(k);
-    if (key_str == "Location") {
+    if (key_str == "name") {
+      response_received = false;
+    } else if (key_str == "Location") {
       location = std::get<std::string>(v);
       if(!location.empty()) {
         update_stream(true);
@@ -168,6 +200,16 @@ bool DelsysNode::has_text_data() const {
 
 bool DelsysNode::has_analog_data() const {
   return impl->has_analog_data;
+}
+
+void DelsysNode::process(const boost::json::value & request, std::function<void(const boost::json::value &)> callback) {
+  impl->update_request_stream(false);
+  auto serialized_request = boost::json::serialize(request);
+  thalamus_grpc::NodeRequest sub_request;
+  sub_request.set_json(serialized_request);
+  sub_request.set_id(impl->next_id++);
+  impl->callbacks[sub_request.id()] = callback;
+  impl->request_reactor->send(std::move(sub_request));
 }
 
 } // namespace thalamus

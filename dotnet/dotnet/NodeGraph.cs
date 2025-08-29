@@ -1,5 +1,7 @@
 using Nito.AsyncEx;
+using Org.BouncyCastle.Asn1.Ocsp;
 using System.Xml.Linq;
+using Thalamus;
 using static Thalamus.ObservableCollection;
 
 namespace Thalamus
@@ -22,6 +24,9 @@ namespace Thalamus
                 return Task.CompletedTask;
             });
         }
+
+
+        void Dialog(Dialog dialog);
     }
 
     public class NodeGraph : INodeGraph, IDisposable
@@ -36,9 +41,11 @@ namespace Thalamus
 
         private List<(NodeSelector selector, TaskCompletionSource<Node> task)> pendingNodeGets = [];
         private TaskCompletionSource done;
+        private Thalamus.ThalamusClient client;
 
-        public NodeGraph(ObservableCollection nodes, TaskFactory taskFactory, string address, TaskCompletionSource done)
+        public NodeGraph(Thalamus.ThalamusClient client, ObservableCollection nodes, TaskFactory taskFactory, string address, TaskCompletionSource done)
         {
+            this.client = client;
             this.TaskFactory = taskFactory;
             this.address = address;
             this.done = done;
@@ -208,6 +215,11 @@ namespace Thalamus
         public void Dispose()
         {
             Cleanup.ForEach(x => x());
+        }
+
+
+        public void Dialog(Dialog dialog) {
+            client.dialogAsync(dialog);
         }
     }
 }
