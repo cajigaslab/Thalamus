@@ -455,6 +455,9 @@ class Canvas(QOpenGLWidget):
                port: typing.Optional[int] = None,
                mock_sleep: typing.Optional[typing.Callable[[float], 'asyncio.Future[None]']] = None) -> None:
     super().__init__()
+    
+    # set up connection to joystick here() - option
+
     self.config = config
 
     self.thalamus = thalamus

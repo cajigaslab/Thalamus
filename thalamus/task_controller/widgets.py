@@ -105,6 +105,11 @@ class Form(QWidget):
     field: str
     options: typing.List[typing.Tuple[str, str]]
 
+  class Table(typing.NamedTuple):
+    label: str
+    field: str
+    columns: typing.List[typing.Tuple[str, typing.Any]]  # (header name, default value)
+
   File = typing.NamedTuple('File', [
     ('label', str),
     ('field', str),
@@ -154,6 +159,8 @@ class Form(QWidget):
         result.append_file(arg)
       elif isinstance(arg, Form.Directory):
         result.append_directory(arg)
+      elif isinstance(arg, Form.Table):
+        result.append_table(arg)
     result.finish()
     return result
 
@@ -415,6 +422,86 @@ class Form(QWidget):
     self.config.add_observer(on_config_change, functools.partial(isdeleted, self))
 
     self.row += 1
+
+  def append_table(self, config: Table) -> None:
+    if config.field not in self.config:
+        self.config[config.field] = []
+
+    self.grid_layout.addWidget(QLabel(config.label), self.row, 0, 1, 3)
+
+    table_widget = QTableWidget()
+    table_widget.setColumnCount(len(config.columns))
+    table_widget.setHorizontalHeaderLabels([col[0] for col in config.columns])
+
+    def refresh_table():
+        table_widget.setRowCount(len(self.config[config.field]))
+        for row_idx, row_data in enumerate(self.config[config.field]):
+            for col_idx, (col_name, default) in enumerate(config.columns):
+                item_value = row_data[col_idx] if col_idx < len(row_data) else default
+
+                if isinstance(item_value, list) and len(item_value) == 3:  # Assume it's a color
+                    btn = QPushButton()
+                    btn.setStyleSheet(f"background-color: rgb({item_value[0]}, {item_value[1]}, {item_value[2]})")
+
+                    def make_handler(row, col):
+                        def handler():
+                            color = QColorDialog.getColor()
+                            if color.isValid():
+                                rgb = [color.red(), color.green(), color.blue()]
+                                self.config[config.field][row][col] = rgb
+                                refresh_table()
+                        return handler
+
+                    btn.clicked.connect(make_handler(row_idx, col_idx))
+                    table_widget.setCellWidget(row_idx, col_idx, btn)
+                else:
+                    item = QTableWidgetItem(str(item_value))
+                    item.setFlags(item.flags() | QTableWidgetItem.ItemIsEditable)
+                    table_widget.setItem(row_idx, col_idx, item)
+
+    def update_model():
+        for row in range(table_widget.rowCount()):
+            if row >= len(self.config[config.field]):
+                continue
+            updated_row = []
+            for col_idx, (col_name, default) in enumerate(config.columns):
+                widget = table_widget.cellWidget(row, col_idx)
+                if widget:
+                    updated_row.append(self.config[config.field][row][col_idx])
+                else:
+                    item = table_widget.item(row, col_idx)
+                    try:
+                        val = float(item.text())
+                    except:
+                        val = item.text()
+                    updated_row.append(val)
+            self.config[config.field][row] = updated_row
+
+    def add_row():
+        update_model()  # Save existing changes before appending
+        defaults = [col[1] if not isinstance(col[1], QColor) else [col[1].red(), col[1].green(), col[1].blue()] for col in config.columns]
+        self.config[config.field].append(defaults)
+        refresh_table()
+
+    refresh_table()
+    self.grid_layout.addWidget(table_widget, self.row + 1, 0, 1, 3)
+
+    delete_button = QPushButton("Delete Row")
+    def delete_selected_row():
+        update_model()
+        selected = table_widget.currentRow()
+        if 0 <= selected < len(self.config[config.field]):
+            del self.config[config.field][selected]
+            refresh_table()
+
+    delete_button.clicked.connect(delete_selected_row)
+
+    add_button = QPushButton("Add Row")
+    add_button.clicked.connect(add_row)
+    self.grid_layout.addWidget(add_button, self.row + 2, 0, 1, 1)
+    self.grid_layout.addWidget(delete_button, self.row + 2, 1, 1, 1)
+
+    self.row += 3
 
   def finish(self) -> None:
     '''
