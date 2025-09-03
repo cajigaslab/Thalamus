@@ -287,6 +287,7 @@ class TaskContext(TaskContextProtocol):
     self.running = False
     self.servicer = servicer
     self.stub = stub
+    self.on_operator_widget: typing.Callable[[QWidget], None] = lambda w: None
     self.log_queue = IterableQueue()
     self.log_stream = stub.log(self.log_queue)
     self.inject_analog_streams: typing.Dict[str, IterableQueue] = {}
@@ -351,6 +352,9 @@ class TaskContext(TaskContextProtocol):
 
   async def log(self, text: str):
     await self.log_queue.put(thalamus_pb2.Text(text=text,time=int(time.perf_counter()*1e9)))
+
+  def get_name(self) -> str:
+    return 'TASK_CONTROLLER'
 
   @property
   def behav_result(self) -> typing.Dict[str, typing.Any]:
@@ -561,6 +565,9 @@ class TaskContext(TaskContextProtocol):
       result = TaskResult(False)
 
     return result
+
+  def set_operator_widget(self, widget: QWidget):
+    self.on_operator_widget(widget)
 
   def __update_status(self, success: bool) -> None:
     assert self.task_config is not None, 'self.task_config is None'

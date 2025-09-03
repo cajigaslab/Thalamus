@@ -66,6 +66,8 @@ class CentralWidget(QWidget):
     eye_config = config['eye_scaling']
 
     layout = QGridLayout()
+    self.control_widget = None
+    self.layout = layout
     layout.addWidget(ViewWidget(target), 0, 0, 1, 4)
     layout.setRowStretch(0, 1)
 
@@ -145,6 +147,16 @@ class Window(QMainWindow):
         self.central_widget.update()
     except asyncio.CancelledError:
       pass
+
+  def set_control_widget(self, widget: QWidget):
+    if self.central_widget.control_widget is not None:
+      self.central_widget.layout.removeWidget(self.central_widget.control_widget)
+      self.central_widget.control_widget.setParent(None)
+      self.central_widget.control_widget.deleteLater()
+
+    self.central_widget.control_widget = widget
+    if widget is not None:
+      self.central_widget.layout.addWidget(widget, 7, 0, 1, 4)
 
   def closeEvent(self, event: QCloseEvent) -> None: # pylint: disable=invalid-name
     """

@@ -339,6 +339,13 @@ class ControlWindow(QMainWindow):
     self.valid_queue_items: typing.List[QTreeWidgetItem] = []
     self.operator_window: typing.Optional[OperatorWindow] = None
 
+    self.operator_widget = None
+    def on_operator_widget(widget):
+      self.operator_widget = widget
+      if self.operator_window is not None:
+        self.operator_window.set_control_widget(widget)
+    task_context.on_operator_widget = on_operator_widget
+
     file_menu = self.menuBar().addMenu("&File")
     add_action(file_menu, 'Start/Stop', self.on_start_stop)
     add_action(file_menu, 'Cancel Current Task', self.task_context.cancel)
@@ -451,6 +458,10 @@ class ControlWindow(QMainWindow):
     if not self.operator_window or self.operator_window.closed:
       self.operator_window = OperatorWindow(subject_window, self.task_context.config)
     self.operator_window.resize(self.width()//2, self.height()//2)
+    
+    if self.operator_widget is not None:
+      self.operator_window.set_control_widget(self.operator_widget)
+    
     self.operator_window.show()
     self.operator_window.activateWindow()
 

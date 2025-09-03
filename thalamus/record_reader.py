@@ -383,7 +383,7 @@ def main():
   print('filename', filename)
   with RecordReader(filename) as reader:
     for record in reader:
-      print(record)
+      print(record.time, record.node, record.WhichOneof('body'))
       input()
 
 if __name__ == '__main__':
