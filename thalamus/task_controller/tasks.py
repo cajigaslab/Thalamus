@@ -7,6 +7,7 @@ from . import simple_touch_task
 from . import simple_touch_and_look_task
 from . import suppressed_reach_task
 from . import delayed_reach_task
+from . import delayed_reach_task_animated
 from . import delayed_saccade_task
 from . import delayed_saccade_touch_task
 from . import delayed_reach_and_saccade_task
@@ -53,6 +54,9 @@ DESCRIPTIONS = [
   TaskDescription('delayed_reach', 'Delayed Reach',
     delayed_reach_task.create_widget, # type: ignore
     delayed_reach_task.run), # type: ignore
+  TaskDescription('delayed_reach_gif', 'Delayed Reach gif',
+    delayed_reach_task_animated.create_widget, # type: ignore
+    delayed_reach_task_animated.run), # type: ignore
   TaskDescription('delayed_saccade', 'Delayed Saccade',
     delayed_saccade_task.create_widget, # type: ignore
     delayed_saccade_task.run), # type: ignore
