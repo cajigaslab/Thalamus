@@ -28,7 +28,7 @@ from ..config import *
 LOGGER = logging.getLogger(__name__)
 
 # ─────── JOYSTICK PARAMS ───────
-SERIAL_PORT = '/dev/cu.usbmodem31101'
+SERIAL_PORT = '/dev/ttyACM0'
 BAUD_RATE = 115200
 DEAD_ZONE = 10
 MID = 512.0
@@ -68,8 +68,16 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     layout.addWidget(form)
     return result
 
+READING_JOYSTICK = False
+# initializing 'cursor' in center of screen
+cursor_x = 0.5
+cursor_y = 0.5
+joystick_x = 0.0
+joystick_y = 0.0
+
 async def run(context: TaskContextProtocol) -> TaskResult:
     assert context.widget, 'Widget is None; cannot render.'
+    global READING_JOYSTICK, cursor_x, cursor_y, joystick_x, joystick_y
 
     task_config = context.config["queue"][0]
     hold_time = task_config.get("hold_time", 1.0)
@@ -82,9 +90,6 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     use_default_layout = task_config.get("use_default_layout", True)
     custom_targets = task_config.get("custom_targets", [])
     cursor_speed = task_config.get("cursor_speed", 0.01)
-
-    joystick_x = 0.0
-    joystick_y = 0.0
 
     state = "fixation"
     state_timer = time.time()
@@ -155,7 +160,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     context.widget.renderer = renderer
 
     async def poll_joystick_from_serial():
-        nonlocal joystick_x, joystick_y
+        global joystick_x, joystick_y
         last_write = time.perf_counter()
 
         while True:
@@ -181,13 +186,9 @@ async def run(context: TaskContextProtocol) -> TaskResult:
                         ))
             await asyncio.sleep(0)
 
-    # initializing 'cursor' in center of screen
-    cursor_x = 0.5
-    cursor_y = 0.5
-
     async def trial_loop():
         nonlocal state, state_timer, target_index, target_pos, cursor_hold_start, fixation_hold_start
-        nonlocal cursor_x, cursor_y
+        global cursor_x, cursor_y, joystick_x, joystick_y
 
         while True:
             w, h = context.widget.width(), context.widget.height()
@@ -245,15 +246,17 @@ async def run(context: TaskContextProtocol) -> TaskResult:
             context.widget.update()
             await asyncio.sleep(0.01)
 
-    try:
-        ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=0.1)
-        await context.sleep(datetime.timedelta(milliseconds=200))
-        ser.reset_input_buffer()
-        print(f"[RUN] Opened serial port {ser.port} @ {BAUD_RATE} (timeout=0.1).")
-        create_task_with_exc_handling(poll_joystick_from_serial())
-    except Exception as e:
-        print(f"[RUN] ERROR: Could not open {SERIAL_PORT!r}: {e}")
-        raise
+    if not READING_JOYSTICK:
+        READING_JOYSTICK = True
+        try:
+            ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=0.1)
+            await context.sleep(datetime.timedelta(milliseconds=200))
+            ser.reset_input_buffer()
+            print(f"[RUN] Opened serial port {ser.port} @ {BAUD_RATE} (timeout=0.1).")
+            create_task_with_exc_handling(poll_joystick_from_serial())
+        except Exception as e:
+            print(f"[RUN] ERROR: Could not open {SERIAL_PORT!r}: {e}")
+            raise
 
     return await trial_loop()
     
