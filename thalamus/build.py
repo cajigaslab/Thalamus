@@ -111,7 +111,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     build_path = get_build_path()
 
   config = toml.load('pyproject.toml')
-  metadata = config['metadata']
+  metadata = config['project']
   version = metadata['version']
   description = metadata['description']
   name = metadata['name']
@@ -233,7 +233,7 @@ def build_sdist(sdist_directory, config_settings=None):
   print(config_settings)
 
   config = toml.load('pyproject.toml')
-  metadata = config['metadata']
+  metadata = config['project']
   version = metadata['version']
 
   root = pathlib.Path(f'thalamus-{version}')

@@ -6,7 +6,7 @@ import configparser
 def main():
   config = toml.load('pyproject.toml')
 
-  version = config['metadata']['version']
+  version = config['project']['version']
   parts = [int(i) for i in version.split('.')]
   if sys.argv[1] == 'major':
     parts[0] += 1
@@ -19,7 +19,7 @@ def main():
     parts[2] += 1
 
   new_version = '.'.join(str(i) for i in parts)
-  config['metadata']['version'] = new_version
+  config['project']['version'] = new_version
   
   with open('pyproject.toml', 'w') as pyproject_file:
     toml.dump(config, pyproject_file)
