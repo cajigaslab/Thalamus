@@ -182,6 +182,9 @@ def get_target_rectangles(context, dpi):
 
   return all_target_rects
 
+def toggle_brightness(brightness):
+  return 0 if brightness == 255 else 255
+
 def distance(lhs, rhs):
   return ((lhs.x() - rhs.x())**2 + (lhs.y() - rhs.y())**2)**.5
 
@@ -367,7 +370,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
     blank_space_touched = False
     await context.log('BehavState=start_on')
-    state_brightness = 255
+    state_brightness = toggle_brightness(state_brightness)
     show_presented_target = True
     context.widget.update()
     acquired = await wait_for(context, lambda: presented_targ_acquired or blank_space_touched, config.start_timeout)
@@ -396,7 +399,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   context.widget.update()
 
   await context.log('BehavState=success')
-  state_brightness = 0 
+  state_brightness = toggle_brightness(state_brightness) 
 
   on_time_ms = int(context.get_reward(all_reward_channels[final_i_selected_target]))
 
