@@ -256,7 +256,19 @@ NidaqOutputNode::~NidaqOutputNode() {}
 
 std::string NidaqOutputNode::type_name() { return "NIDAQ_OUT (MOCK)"; }
 
+std::future<thalamus_grpc::StimResponse>
+NidaqOutputNode::stim(thalamus_grpc::StimRequest &&) {
+  THALAMUS_ASSERT(false, "Unimplemented");
+  thalamus_grpc::StimResponse response;
+  std::promise<thalamus_grpc::StimResponse> promise;
+  promise.set_value(response);
+  return promise.get_future();
+}
+
 size_t NidaqNode::modalities() const { return infer_modalities<NidaqNode>(); }
+size_t NidaqOutputNode::modalities() const {
+  return infer_modalities<NidaqOutputNode>();
+}
 
 bool NidaqNode::prepare() { return true; }
 bool NidaqOutputNode::prepare() { return true; }
