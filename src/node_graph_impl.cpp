@@ -19,6 +19,8 @@
 #include <remotelog_node.hpp>
 #ifndef _WIN32
 #include <ros2_node.hpp>
+#else
+#include <mc_node.hpp>
 #endif
 #include <run_node.hpp>
 #include <run2_node.hpp>
@@ -141,6 +143,8 @@ public:
         {"LUA", new NodeFactory<LuaNode>()},
 #if !defined(_WIN32) && !defined(__APPLE__)
         {"ROS2", new NodeFactory<Ros2Node>()},
+#else
+        {"MC", new NodeFactory<McNode>()},
 #endif
         {"REMOTE", new NodeFactory<RemoteNode>()},
         {"REMOTE_LOG", new NodeFactory<RemoteLogNode>()},

@@ -438,6 +438,9 @@ FACTORIES = {
   ]),
   'HEXASCOPE': Factory(HexascopeWidget, []),
   'WALLCLOCK': Factory(None, []),
+  'MC': Factory(None, [
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+  ]),
 }
 
 FACTORY_NAMES = {}

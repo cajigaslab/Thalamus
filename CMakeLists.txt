@@ -276,7 +276,9 @@ if(WIN32)
   if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
     target_compile_options(thalamus PRIVATE /bigobj)
   endif()
-  target_sources(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src/nidaq_node_windows.cpp")
+  target_sources(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src/nidaq_node_windows.cpp"
+                                  "${CMAKE_SOURCE_DIR}/src/mc_node.hpp"
+                                  "${CMAKE_SOURCE_DIR}/src/mc_node.cpp")
 elseif(APPLE)
   target_sources(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src/nidaq_node_mac.cpp")
   target_compile_definitions(thalamus PRIVATE _GNU_SOURCE)

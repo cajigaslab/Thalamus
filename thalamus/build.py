@@ -150,7 +150,8 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     '-B', build_path,
     f'-DCMAKE_BUILD_TYPE={"Release" if is_release else "Debug"}',
     '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
-    f'-DCMAKE_OSX_DEPLOYMENT_TARGET={osx_target}'
+    f'-DCMAKE_OSX_DEPLOYMENT_TARGET={osx_target}',
+    '-DCMAKE_POLICY_VERSION_MINIMUM=3.16'
   ]
   cmake_command += ['-G', generator]
 
