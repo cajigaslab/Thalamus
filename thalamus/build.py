@@ -221,7 +221,8 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   files = []
   with open(f'thalamus-{version}.dist-info/RECORD', 'w') as record_file:
     for path in itertools.chain(pathlib.Path('thalamus').rglob('*'), pathlib.Path('cortex').rglob('*')):
-      if not path.is_file() or path.name != 'native' and path.suffix not in ('.py', '.pyi', '.vert', '.proto', '.comp', '.frag', '.exe', '.h'):
+      print(path)
+      if not path.is_file() or path.name != 'native' and "dotnet" not in str(path) and path.suffix not in ('.py', '.pyi', '.vert', '.proto', '.comp', '.frag', '.exe', '.h'):
         continue
       files.append(path)
       digest = hashlib.sha256()

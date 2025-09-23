@@ -30,6 +30,8 @@ from .. import process
 
 from .controller import ControlWindow, ConfigData
 
+from ..resources import get_path
+
 import grpc
 from .. import task_controller_pb2_grpc
 from .. import ophanim_pb2_grpc
@@ -138,8 +140,15 @@ async def async_main() -> None:
   server.add_insecure_port(listen_addr)
   logging.info("Starting GRPC server on %s", listen_addr)
   await server.start()
+
+  async def proc_watcher(name: str, proc: asyncio.subprocess.Process):
+    await proc.wait()
+    if not done_future.done():
+      logging.error(f'{name} process terminated, shutting down UI')
+      done_future.set_result(None)
   
-  bmbi_native_filename = resource_filename('thalamus', 'native' + ('.exe' if sys.platform == 'win32' else ''))
+  bmbi_native_filename = get_path('thalamus', 'native' + ('.exe' if sys.platform == 'win32' else ''))
+  dotnet_filename = pathlib.Path(get_path('thalamus.dotnet', 'dotnet' + ('.exe' if sys.platform == 'win32' else '')))
   bmbi_native_proc = None
   pypipeline_servicer = None
   if arguments.pypipeline:
@@ -155,7 +164,15 @@ async def async_main() -> None:
   else:
     bmbi_native_proc = await asyncio.create_subprocess_exec(
       bmbi_native_filename, 'thalamus', '--port', str(arguments.port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else []))
+    create_task_with_exc_handling(proc_watcher('native.exe', bmbi_native_proc))
 
+  dotnet_proc = None
+  #if False:
+  if dotnet_filename.exists():
+    dotnet_command = str(dotnet_filename), '--port', str(arguments.dotnet_port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else [])
+    dotnet_proc = await asyncio.create_subprocess_exec(*dotnet_command)
+    create_task_with_exc_handling(proc_watcher('dotnet.exe', dotnet_proc))
+    
   channel = grpc.aio.insecure_channel(f'localhost:{arguments.port}')
   await channel.channel_ready()
   stub = thalamus_pb2_grpc.ThalamusStub(channel)
@@ -209,16 +226,11 @@ async def async_main() -> None:
   thalamus.move(100, 100)
   thalamus.show()
 
-  async def native_watch():
-    print('native.exe waiting')
-    await bmbi_native_proc.wait()
-    print('native.exe closed')
-    if not done_future.done:
-      done_future.set_result(None)
-
   native_watch_task = None
   if bmbi_native_proc:
-    native_watch_task = create_task_with_exc_handling(native_watch())
+    await bmbi_native_proc.wait()
+  if dotnet_proc:
+    await dotnet_proc.wait()
 
   try:
     while not done_future.done() and not UNHANDLED_EXCEPTION:
