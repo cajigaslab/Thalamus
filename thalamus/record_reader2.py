@@ -121,11 +121,12 @@ class ZQueue:
 #  def push(self, message: Image)
 
 class RecordReader:
-  def __init__(self, file_arg: typing.Union[str, pathlib.Path, io.BufferedReader], node=None, decompress=True):
+  def __init__(self, file_arg: typing.Union[str, pathlib.Path, io.BufferedReader], node=None, decompress=True, decode_video=True):
     self.filename: typing.Optional[pathlib.Path]
     self.reader: typing.Optional[io.BufferedReader]
     self.size = 0
     self.node_filter = node
+    self.decode_video = decode_video
     self.current_position = 0
     self.decompress = decompress
     self.running = False
@@ -231,7 +232,7 @@ class RecordReader:
             self.records.append((position, PendingMessage(compressed.size, compressed.type, compressed.stream)))
         elif body_type == 'image':
           image = record.image
-          if image.format in (Image.Format.MPEG1, Image.Format.MPEG4):
+          if self.decode_video and image.format in (Image.Format.MPEG1, Image.Format.MPEG4):
             if record.node not in muxers:
               muxers[record.node] = subprocess.Popen(f'ffmpeg -hide_banner -loglevel error -y -i pipe: -f rawvideo -pix_fmt gray pipe:', stdin=subprocess.PIPE, stdout=subprocess.PIPE, shell=True)
               decoder_queues[record.node] = queue.Queue()
