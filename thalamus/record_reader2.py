@@ -203,7 +203,7 @@ class RecordReader:
         #print('reader', record)
         if record is None:
           with self.lock:
-            self.records.append((self.size, None))
+            self.records.append((self.size, 0, None))
           return
         
         if self.node_filter is not None and record.node != self.node_filter:
@@ -214,7 +214,7 @@ class RecordReader:
         if body_type == 'compressed':
           if not self.decompress:
             with self.lock:
-              self.records.append((position, record))
+              self.records.append((position, record.time, record))
               continue
 
           compressed = record.compressed
@@ -229,7 +229,7 @@ class RecordReader:
             continue
 
           with self.lock:
-            self.records.append((position, PendingMessage(compressed.size, compressed.type, compressed.stream)))
+            self.records.append((position, record.time, PendingMessage(compressed.size, compressed.type, compressed.stream)))
         elif body_type == 'image':
           image = record.image
           if self.decode_video and image.format in (Image.Format.MPEG1, Image.Format.MPEG4):
@@ -253,13 +253,13 @@ class RecordReader:
             muxers[record.node].stdin.write(image.data[0])
             if image.width > 0:
               with self.lock:
-                self.records.append((position, decoder_queues[record.node]))
+                self.records.append((position, record.time, decoder_queues[record.node]))
           else:
             with self.lock:
-              self.records.append((position, record))
+              self.records.append((position, record.time, record))
         else:
           with self.lock:
-            self.records.append((position, record))
+            self.records.append((position, record.time, record))
     except:
       traceback.print_exc()
     finally:
@@ -277,7 +277,7 @@ class RecordReader:
         #print('get_record', 'sleep')
         time.sleep(1)
         self.lock.acquire()
-      position, record = self.records.popleft()
+      position, t, record = self.records.popleft()
       if isinstance(record, PendingMessage):
         z_queue = self.z_queues[record.stream]
         self.lock.release()
@@ -286,6 +286,7 @@ class RecordReader:
       elif isinstance(record, queue.Queue):
         self.lock.release()
         record = record.get()
+        record.time = t
         self.lock.acquire()
       self.current_position = position
       return record
