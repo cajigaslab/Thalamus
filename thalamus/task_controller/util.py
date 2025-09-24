@@ -13,6 +13,10 @@ import datetime
 import threading
 import contextlib
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> aeac136cd6100d6c4ccaaca48e0bc1243ecb4f63
 from ..qt import *
 
 LOGGER = logging.getLogger(__name__)
@@ -601,19 +605,6 @@ def movella_decorator(port: int):
     async def wrapper(task_context: TaskContextProtocol, *args, **kwargs) -> TaskResult:
       async with movella_context(task_context, port) as protocol:
         return await func(task_context, *(args + (protocol,)), **kwargs)
-    
-    return wrapper
-
-  return decorator
-
-def nidaq_decorator(frequency: float = 60, 
-                    ai_voltage_chan: typing.Optional[str] = None,
-                    di_chan: typing.Optional[str] = None,
-                    ao_voltage_chan: typing.Optional[str] = None):
-  def decorator(func):
-    async def wrapper(task_context: TaskContextProtocol, *args, **kwargs) -> TaskResult:
-      async with nidaq_context(task_context, frequency, ai_voltage_chan, di_chan, ao_voltage_chan) as nidaq:
-        return await func(task_context, *(args + (nidaq,)), **kwargs)
     
     return wrapper
 
