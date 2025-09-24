@@ -163,8 +163,11 @@ class RecordReader:
         if not new_data:
           break
         data += new_data
+        #print(len(data))
+        offset = 0
         #print(len(data), frame_size, len(data) >= frame_size)
-        while len(data) >= frame_size:
+        while offset + frame_size <= len(data):
+          #print('  ', offset)
           record = StorageRecord(
             node=prototype.node,
             time=prototype.time,
@@ -177,10 +180,12 @@ class RecordReader:
               width=prototype.image.width,
             )
           )
-          record.image.data.append(data[:frame_size])
+          record.image.data.append(data[offset:offset+frame_size])
           #print(record)
           q.put(record)
-          data = data[frame_size:]
+          offset += frame_size
+        data = data[offset:]
+        #print('    ', len(data))
       proc.wait()
 
     assert self.reader is not None
