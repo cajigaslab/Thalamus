@@ -80,6 +80,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
 
   is_android = 'android' in config_settings
   is_release = 'release' in config_settings
+  code_coverage = 'code-coverage' in config_settings
   do_config = 'config' in config_settings
   clang = 'clang' in config_settings
   force_cl = 'cl' in config_settings
@@ -94,6 +95,10 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
       legacy_path = legacy_path.with_name(legacy_path.name + '-' + sanitizer)
       build_path = build_path.with_name(build_path.name + '-' + sanitizer)
 
+    if code_coverage:
+      legacy_path = legacy_path.with_name(legacy_path.name + '-code-coverage')
+      build_path = build_path.with_name(build_path.name + '-code-coverage')
+
     if legacy_path.exists():
       build_path = legacy_path
 
@@ -106,7 +111,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     build_path = get_build_path()
 
   config = toml.load('pyproject.toml')
-  metadata = config['metadata']
+  metadata = config['project']
   version = metadata['version']
   description = metadata['description']
   name = metadata['name']
@@ -171,6 +176,8 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
 
   if sanitizer:
     cmake_command += [f'-DSANITIZER={sanitizer}']
+  if code_coverage:
+    cmake_command += [f'-DCODE_COVERAGE=ON']
 
   if is_android:
     sdk = pathlib.Path.home() / 'AppData' / 'Local' / 'Android' / 'Sdk'
@@ -190,6 +197,8 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   command = ['cmake', '--build', build_path, '--config', "Release" if is_release else "Debug", '--parallel', str(os.cpu_count())]
   if target:
     command += ['--target', target]
+  else:
+    command += ['--target', 'native']
 
   command = [str(c) for c in command]
   print(command)
@@ -224,7 +233,7 @@ def build_sdist(sdist_directory, config_settings=None):
   print(config_settings)
 
   config = toml.load('pyproject.toml')
-  metadata = config['metadata']
+  metadata = config['project']
   version = metadata['version']
 
   root = pathlib.Path(f'thalamus-{version}')

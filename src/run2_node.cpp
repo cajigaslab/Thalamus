@@ -12,6 +12,7 @@
 
 #include <absl/strings/escaping.h>
 #include <absl/strings/str_replace.h>
+#include <modalities_util.hpp>
 
 using namespace thalamus;
 
@@ -23,14 +24,17 @@ struct Run2Node::Impl {
   boost::signals2::scoped_connection state_connection;
   boost::signals2::scoped_connection nodes_state_connection;
   NodeGraph *graph;
+  double running_signal = 0;
+  std::chrono::nanoseconds time;
   struct Target {
     thalamus_grpc::Thalamus::Stub* stub;
   };
   std::map<std::string, std::unique_ptr<thalamus_grpc::Thalamus::Stub>> stubs;
   std::map<std::string, std::string> redirects;
+  Run2Node* outer;
 
-  Impl(ObservableDictPtr _state, boost::asio::io_context& _io_context, NodeGraph *_graph)
-      : state(_state), io_context(_io_context), graph(_graph) {
+  Impl(ObservableDictPtr _state, boost::asio::io_context& _io_context, NodeGraph *_graph, Run2Node* _outer)
+      : state(_state), io_context(_io_context), graph(_graph), outer(_outer) {
     nodes = static_cast<ObservableList *>(state->parent);
     using namespace std::placeholders;
     state_connection =
@@ -94,6 +98,9 @@ struct Run2Node::Impl {
     auto key_str = std::get<std::string>(k);
     if (key_str == "Running") {
       auto value_bool = std::get<bool>(v);
+      running_signal = value_bool ? 5 : 0;
+      time = std::chrono::steady_clock::now().time_since_epoch();
+      outer->ready(outer);
       if (!state->contains("Targets")) {
         return;
       }
@@ -130,8 +137,40 @@ struct Run2Node::Impl {
 
 Run2Node::Run2Node(ObservableDictPtr state, boost::asio::io_context &io_context,
                  NodeGraph *graph)
-    : impl(new Impl(state, io_context, graph)) {}
+    : impl(new Impl(state, io_context, graph, this)) {}
 
 Run2Node::~Run2Node() {}
 
 std::string Run2Node::type_name() { return "RUNNER2"; }
+
+size_t Run2Node::modalities() const {
+  return infer_modalities<Run2Node>();
+}
+
+
+std::chrono::nanoseconds Run2Node::time() const {
+  return impl->time;
+}
+std::span<const double> Run2Node::data(int) const {
+  return std::span<const double>(&impl->running_signal, &impl->running_signal+1);
+}
+int Run2Node::num_channels() const {
+  return 1;
+}
+std::string_view Run2Node::name(int) const {
+  return "Running";
+}
+std::chrono::nanoseconds Run2Node::sample_interval(int) const {
+  return 0ns;
+}
+
+void
+Run2Node::inject(const thalamus::vector<std::span<double const>> &,
+       const thalamus::vector<std::chrono::nanoseconds> &,
+       const thalamus::vector<std::string_view> &) {
+  THALAMUS_ASSERT(false, "Unimplemented");
+}
+
+bool Run2Node::has_analog_data() const {
+  return true;
+}

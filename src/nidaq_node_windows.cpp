@@ -14,7 +14,11 @@
 #endif
 #include <NIDAQmx.h>
 #include <thalamus.pb.h>
+#ifdef _WIN32
 #include <Windows.h>
+#else
+#include <dlfcn.h>
+#endif
 #include <absl/strings/numbers.h>
 #include <absl/strings/str_split.h>
 #ifdef __clang__
@@ -22,7 +26,12 @@
 #endif
 
 namespace thalamus {
-static ::HMODULE nidaq_dll_handle;
+  
+#ifdef _WIN32
+static ::HMODULE library_handle;
+#else
+static void* library_handle;
+#endif
 
 struct DAQmxAPI {
   bool loaded = false;
@@ -47,8 +56,39 @@ struct DAQmxAPI {
   decltype(&::DAQmxGetErrorString) DAQmxGetErrorString;
   decltype(&::DAQmxGetExtendedErrorInfo) DAQmxGetExtendedErrorInfo;
   decltype(&::DAQmxTaskControl) DAQmxTaskControl;
+  decltype(&::DAQmxGetSysDevNames) DAQmxGetSysDevNames;
 };
 static DAQmxAPI *daqmxapi;
+
+#ifdef _WIN32
+    template <typename T> T load_function(const std::string &func_name) {
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-function-type"
+#pragma clang diagnostic ignored "-Wcast-function-type-strict"
+#endif
+      auto result = reinterpret_cast<T>(
+          ::GetProcAddress(library_handle, func_name.c_str()));
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+      if (!result) {
+        THALAMUS_LOG(info) << "Failed to load " << func_name << ".  "
+                           << "NIDAQ disabled";
+      }
+      return result;
+    }
+#else
+    template <typename T> T load_function(const std::string &func_name) {
+      auto result =
+          reinterpret_cast<T>(dlsym(library_handle, func_name.c_str()));
+      if (!result) {
+        THALAMUS_LOG(info) << "Failed to load " << func_name << ".  "
+                           << "NIDAQ disabled";
+      }
+      return result;
+    }
+#endif
 
 static bool prepare_nidaq() {
   static bool has_run = false;
@@ -57,19 +97,25 @@ static bool prepare_nidaq() {
   }
   daqmxapi = new DAQmxAPI();
   has_run = true;
-  nidaq_dll_handle = LoadLibrary("nicaiu");
-  if (!nidaq_dll_handle) {
+#ifdef _WIN32
+      library_handle = LoadLibrary("nicaiu");
+#else
+      std::string nidaqmx_path = "/usr/lib/x86_64-linux-gnu/libnidaqmx.so.25.5.0";
+      library_handle = dlopen(nidaqmx_path.c_str(), RTLD_NOW);
+#endif
+  if (!library_handle) {
     THALAMUS_LOG(info)
         << "Couldn't find nicaiu.dll.  National Instruments features disabled";
     return false;
   }
   THALAMUS_LOG(info) << "nicaiu.dll found.  Loading DAQmx API";
 
+#ifdef _WIN32
   std::string nidaq_dll_path(256, ' ');
-  DWORD filename_size = uint32_t(nidaq_dll_path.size());
+  auto filename_size = uint32_t(nidaq_dll_path.size());
   while (nidaq_dll_path.size() == filename_size) {
     nidaq_dll_path.resize(2 * nidaq_dll_path.size(), ' ');
-    filename_size = GetModuleFileNameA(nidaq_dll_handle, nidaq_dll_path.data(),
+    filename_size = GetModuleFileNameA(library_handle, nidaq_dll_path.data(),
                                        uint32_t(nidaq_dll_path.size()));
   }
   if (filename_size == 0) {
@@ -78,179 +124,44 @@ static bool prepare_nidaq() {
     nidaq_dll_path.resize(filename_size);
     THALAMUS_LOG(info) << "Absolute nicaiu.dll path = " << nidaq_dll_path;
   }
+#else
+#endif
 
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wcast-function-type"
-#pragma clang diagnostic ignored "-Wcast-function-type-strict"
-#endif
-  daqmxapi->DAQmxStartTask = reinterpret_cast<decltype(&DAQmxStartTask)>(
-      ::GetProcAddress(nidaq_dll_handle, "DAQmxStartTask"));
-  if (!daqmxapi->DAQmxStartTask) {
-    THALAMUS_LOG(info)
-        << "Failed to load DAQmxStartTask.  NI features disabled";
-    return false;
-  }
-  daqmxapi->DAQmxStopTask = reinterpret_cast<decltype(&DAQmxStopTask)>(
-      ::GetProcAddress(nidaq_dll_handle, "DAQmxStopTask"));
-  if (!daqmxapi->DAQmxStopTask) {
-    THALAMUS_LOG(info)
-        << "Failed to load DAQmxStopTask .  NI features disabled";
-    return false;
-  }
-  daqmxapi->DAQmxClearTask = reinterpret_cast<decltype(&DAQmxClearTask)>(
-      ::GetProcAddress(nidaq_dll_handle, "DAQmxClearTask"));
-  if (!daqmxapi->DAQmxClearTask) {
-    THALAMUS_LOG(info)
-        << "Failed to load DAQmxClearTask .  NI features disabled";
-    return false;
-  }
-  daqmxapi->DAQmxReadAnalogF64 =
-      reinterpret_cast<decltype(&DAQmxReadAnalogF64)>(
-          ::GetProcAddress(nidaq_dll_handle, "DAQmxReadAnalogF64"));
-  if (!daqmxapi->DAQmxReadAnalogF64) {
-    THALAMUS_LOG(info)
-        << "Failed to load DAQmxReadAnalogF64 .  NI features disabled";
-    return false;
-  }
-  daqmxapi->DAQmxCreateTask = reinterpret_cast<decltype(&DAQmxCreateTask)>(
-      ::GetProcAddress(nidaq_dll_handle, "DAQmxCreateTask"));
-  if (!daqmxapi->DAQmxCreateTask) {
-    THALAMUS_LOG(info)
-        << "Failed to load DAQmxCreateTask.  NI features disabled";
-    return false;
-  }
-  daqmxapi->DAQmxCreateAIVoltageChan =
-      reinterpret_cast<decltype(&DAQmxCreateAIVoltageChan)>(
-          ::GetProcAddress(nidaq_dll_handle, "DAQmxCreateAIVoltageChan"));
-  if (!daqmxapi->DAQmxCreateAIVoltageChan) {
-    THALAMUS_LOG(info)
-        << "Failed to load DAQmxCreateAIVoltageChan.  NI features disabled";
-    return false;
-  }
-  daqmxapi->DAQmxCreateAICurrentChan =
-      reinterpret_cast<decltype(&DAQmxCreateAICurrentChan)>(
-          ::GetProcAddress(nidaq_dll_handle, "DAQmxCreateAICurrentChan"));
-  if (!daqmxapi->DAQmxCreateAICurrentChan) {
-    THALAMUS_LOG(info)
-        << "Failed to load DAQmxCreateAICurrentChan.  NI features disabled";
-    return false;
-  }
-  daqmxapi->DAQmxCfgSampClkTiming =
-      reinterpret_cast<decltype(&DAQmxCfgSampClkTiming)>(
-          ::GetProcAddress(nidaq_dll_handle, "DAQmxCfgSampClkTiming"));
-  if (!daqmxapi->DAQmxCfgSampClkTiming) {
-    THALAMUS_LOG(info)
-        << "Failed to load DAQmxCfgSampClkTiming.  NI features disabled";
-    return false;
-  }
-  daqmxapi->DAQmxRegisterEveryNSamplesEvent =
-      reinterpret_cast<decltype(&DAQmxRegisterEveryNSamplesEvent)>(
-          ::GetProcAddress(nidaq_dll_handle,
-                           "DAQmxRegisterEveryNSamplesEvent"));
-  if (!daqmxapi->DAQmxRegisterEveryNSamplesEvent) {
-    THALAMUS_LOG(info) << "Failed to load DAQmxRegisterEveryNSamplesEvent.  NI "
-                          "features disabled";
-    return false;
-  }
-  daqmxapi->DAQmxWriteDigitalLines =
-      reinterpret_cast<decltype(&DAQmxWriteDigitalLines)>(
-          ::GetProcAddress(nidaq_dll_handle, "DAQmxWriteDigitalLines"));
-  if (!daqmxapi->DAQmxWriteDigitalLines) {
-    THALAMUS_LOG(info)
-        << "Failed to load DAQmxWriteDigitalLines.  NI features disabled";
-    return false;
-  }
-  daqmxapi->DAQmxWriteAnalogF64 =
-      reinterpret_cast<decltype(&DAQmxWriteAnalogF64)>(
-          ::GetProcAddress(nidaq_dll_handle, "DAQmxWriteAnalogF64"));
-  if (!daqmxapi->DAQmxWriteAnalogF64) {
-    THALAMUS_LOG(info)
-        << "Failed to load DAQmxWriteAnalogF64.  NI features disabled";
-    return false;
-  }
-  daqmxapi->DAQmxWriteAnalogScalarF64 =
-      reinterpret_cast<decltype(&DAQmxWriteAnalogScalarF64)>(
-          ::GetProcAddress(nidaq_dll_handle, "DAQmxWriteAnalogScalarF64"));
-  if (!daqmxapi->DAQmxWriteAnalogScalarF64) {
-    THALAMUS_LOG(info)
-        << "Failed to load DAQmxWriteAnalogScalarF64.  NI features disabled";
-    return false;
-  }
-  daqmxapi->DAQmxCreateDOChan = reinterpret_cast<decltype(&DAQmxCreateDOChan)>(
-      ::GetProcAddress(nidaq_dll_handle, "DAQmxCreateDOChan"));
-  if (!daqmxapi->DAQmxCreateDOChan) {
-    THALAMUS_LOG(info)
-        << "Failed to load DAQmxCreateDOChan.  NI features disabled";
-    return false;
-  }
-  daqmxapi->DAQmxCreateAOVoltageChan =
-      reinterpret_cast<decltype(&DAQmxCreateAOVoltageChan)>(
-          ::GetProcAddress(nidaq_dll_handle, "DAQmxCreateAOVoltageChan"));
-  if (!daqmxapi->DAQmxCreateAOVoltageChan) {
-    THALAMUS_LOG(info)
-        << "Failed to load DAQmxCreateAOVoltageChan.  NI features disabled";
-    return false;
-  }
-  daqmxapi->DAQmxCreateAOCurrentChan =
-      reinterpret_cast<decltype(&DAQmxCreateAOCurrentChan)>(
-          ::GetProcAddress(nidaq_dll_handle, "DAQmxCreateAOCurrentChan"));
-  if (!daqmxapi->DAQmxCreateAOCurrentChan) {
-    THALAMUS_LOG(info)
-        << "Failed to load DAQmxCreateAOCurrentChan.  NI features disabled";
-    return false;
-  }
-  daqmxapi->DAQmxRegisterDoneEvent =
-      reinterpret_cast<decltype(&DAQmxRegisterDoneEvent)>(
-          ::GetProcAddress(nidaq_dll_handle, "DAQmxRegisterDoneEvent"));
-  if (!daqmxapi->DAQmxRegisterDoneEvent) {
-    THALAMUS_LOG(info)
-        << "Failed to load DAQmxRegisterDoneEvent.  NI features disabled";
-    return false;
-  }
-  daqmxapi->DAQmxCfgDigEdgeStartTrig =
-      reinterpret_cast<decltype(&DAQmxCfgDigEdgeStartTrig)>(
-          ::GetProcAddress(nidaq_dll_handle, "DAQmxCfgDigEdgeStartTrig"));
-  if (!daqmxapi->DAQmxCfgDigEdgeStartTrig) {
-    THALAMUS_LOG(info)
-        << "Failed to load DAQmxCfgDigEdgeStartTrig.  NI features disabled";
-    return false;
-  }
-  daqmxapi->DAQmxSetBufInputBufSize =
-      reinterpret_cast<decltype(&DAQmxSetBufInputBufSize)>(
-          ::GetProcAddress(nidaq_dll_handle, "DAQmxSetBufInputBufSize"));
-  if (!daqmxapi->DAQmxSetBufInputBufSize) {
-    THALAMUS_LOG(info)
-        << "Failed to load DAQmxSetBufInputBufSize.  NI features disabled";
-    return false;
-  }
-  daqmxapi->DAQmxGetErrorString =
-      reinterpret_cast<decltype(&DAQmxGetErrorString)>(
-          ::GetProcAddress(nidaq_dll_handle, "DAQmxGetErrorString"));
-  if (!daqmxapi->DAQmxGetErrorString) {
-    THALAMUS_LOG(info)
-        << "Failed to load DAQmxGetErrorString.  NI features disabled";
-    return false;
-  }
-  daqmxapi->DAQmxGetExtendedErrorInfo =
-      reinterpret_cast<decltype(&DAQmxGetExtendedErrorInfo)>(
-          ::GetProcAddress(nidaq_dll_handle, "DAQmxGetExtendedErrorInfo"));
-  if (!daqmxapi->DAQmxGetExtendedErrorInfo) {
-    THALAMUS_LOG(info)
-        << "Failed to load DAQmxGetExtendedErrorInfo.  NI features disabled";
-    return false;
-  }
-  daqmxapi->DAQmxTaskControl =
-      reinterpret_cast<decltype(&DAQmxTaskControl)>(
-          ::GetProcAddress(nidaq_dll_handle, "DAQmxTaskControl"));
-  if (!daqmxapi->DAQmxTaskControl) {
-      THALAMUS_LOG(info)
-          << "Failed to load DAQmxTaskControl.  NI features disabled";
-      return false;
-  }
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
+#define LOAD_FUNC(name)                                                        \
+  do {                                                                         \
+    daqmxapi->name = load_function<decltype(daqmxapi->name)>(#name);                     \
+    if (!daqmxapi->name) {                                                     \
+      return false;                                                                  \
+    }                                                                          \
+  } while (0)
+  
+  LOAD_FUNC(DAQmxStartTask);
+  LOAD_FUNC(DAQmxStopTask);
+  LOAD_FUNC(DAQmxClearTask);
+  LOAD_FUNC(DAQmxReadAnalogF64);
+  LOAD_FUNC(DAQmxCreateTask);
+  LOAD_FUNC(DAQmxCreateAIVoltageChan);
+  LOAD_FUNC(DAQmxCreateAICurrentChan);
+  LOAD_FUNC(DAQmxCfgSampClkTiming);
+  LOAD_FUNC(DAQmxRegisterEveryNSamplesEvent);
+  LOAD_FUNC(DAQmxWriteDigitalLines);
+  LOAD_FUNC(DAQmxWriteAnalogF64);
+  LOAD_FUNC(DAQmxWriteAnalogScalarF64);
+  LOAD_FUNC(DAQmxCreateDOChan);
+  LOAD_FUNC(DAQmxCreateAOVoltageChan);
+  LOAD_FUNC(DAQmxCreateAOCurrentChan);
+  LOAD_FUNC(DAQmxRegisterDoneEvent);
+  LOAD_FUNC(DAQmxCfgDigEdgeStartTrig);
+  LOAD_FUNC(DAQmxSetBufInputBufSize);
+  LOAD_FUNC(DAQmxGetErrorString);
+  LOAD_FUNC(DAQmxGetExtendedErrorInfo);
+  LOAD_FUNC(DAQmxTaskControl);
+  LOAD_FUNC(DAQmxGetSysDevNames);
+
+  char buffer[1024];
+  auto z = daqmxapi->DAQmxGetSysDevNames(buffer, sizeof(buffer));
+  THALAMUS_LOG(info) << z << " " << buffer;
+
   daqmxapi->loaded = true;
   THALAMUS_LOG(info) << "DAQmx API loaded";
   return true;
@@ -765,6 +676,9 @@ struct NidaqOutputNode::Impl {
   }
 
   bool check_error(int error) {
+    if (error >= 0) {
+      return false;
+    }
     auto count = daqmxapi->DAQmxGetErrorString(error, nullptr, 0);
     std::string message(size_t(count), ' ');
     daqmxapi->DAQmxGetErrorString(error, message.data(), uint32_t(message.size()));
