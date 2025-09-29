@@ -1,11 +1,14 @@
 """
 Implementation of the delayed center-out reach task, joystick‐driven circle version
 
-> python -m thalamus.task_controller --pypipeline
+at home (windows)
+    > .\venv\Scripts\activate.ps1
+linux:
+    > source .venv/bin/activate
+> python -m thalamus.task_controller --pypipeline -c _.json
 
 Comments:
 This task is working base of the joystick center out task using velocity cursor.
-TODO: The table for seeing available targets does not work yet...
 """
 
 import typing
@@ -28,12 +31,17 @@ from ..config import *
 LOGGER = logging.getLogger(__name__)
 
 # ─────── JOYSTICK PARAMS ───────
-SERIAL_PORT = '/dev/ttyACM0'
+rig_port =  '/dev/ttyACM0'  # check picture
+mac_port = '/dev/cu.usbmodem313301'     # right hand side with dongle
+home_pc = 'COM3'
+
+SERIAL_PORT = home_pc
 BAUD_RATE = 115200
 DEAD_ZONE = 10
 MID = 512.0
-
+# ────────────────────────────────
 pattern = re.compile(r"x\s*=\s*(\d+)\s*,\s*y\s*=\s*(\d+)")
+
 
 def normalize(value: int) -> float:
     if abs(value - MID) < DEAD_ZONE:
@@ -44,29 +52,40 @@ def normalize(value: int) -> float:
         value = 1023
     return (value - MID) / MID
 
+
 def create_widget(task_config: ObservableCollection) -> QWidget:
     result = QWidget()
-    layout = QVBoxLayout()
+    layout = QVBoxLayout(result)
     result.setLayout(layout)
 
-    form = Form.build(task_config, ["Parameter", "Value"],
-        Form.Constant("Hold Time (s)", "hold_time", 1.0, "s"),
+    form = Form.build(
+        task_config, ["Parameter", "Value"],
+        # cursor settings
+        Form.Constant("Cursor Speed", "cursor_speed", 0.003, precision=5),
+        Form.Constant("Cursor Diameter Ratio", "cursor_diameter_ratio", 0.03),
+        Form.Color("Cursor Color", 'cursor_color', QColor(255, 0, 0)),
+        # default 8-target
+        Form.Bool("Use Default 8-Target Layout", "use_default_layout", False),
+        Form.Constant("Target Hold Time (s)", "hold_time", 1.0, "s"),
+        # others
+        Form.Constant("Auto-Fail Period (s)", 'autofail', 5, "s"),
         Form.Constant("Fixation Hold Time (s)", "fixation_hold", 0.5, "s"),
-        Form.Constant("Target Radius (% of min screen dim)", "target_radius_ratio", 0.05),
-        Form.Constant("Radial Distance (% of min screen dim)", "target_distance_ratio", 0.3),
-        Form.Color("Target Color", "target_color", QColor(0, 255, 0)),
-        Form.Constant("Cursor Diameter (% of min screen dim)", "cursor_diameter_ratio", 0.03),
-        Form.Color("Cursor Color", "cursor_color", QColor(255, 0, 0)),
-        Form.Bool("Use Default 8-Target Layout", "use_default_layout", True),
-        Form.Table("Custom Targets", "custom_targets", [
-            ("Angle (deg)", 0.0),
-            ("Radius (%)", 5.0),
-            ("Color", QColor(0, 255, 0))
-        ]),
-        Form.Constant("Cursor Speed", "cursor_speed", 0.01)
+        Form.Constant("Delay Hold Time (s)", 'delay_hold', 0.1, "s"),
+        Form.Constant("Intertrial Interval (s)", "intertrial_interval", 1, "s"),
+        Form.Constant("Fail Interval (s)", "fail_interval", 1.5, "s"),
+        Form.Constant("Success Interval (s)", "success_interval", 1, "s"),
+        # targets
+        Form.Table("Custom Targets", "custom_targets",
+                   ["hold_time",
+                    "target_radius_ratio",
+                    "target_distance_ratio",
+                    "acceptance_ratio",
+                    "angle_deg",
+                    "target_color"]),
     )
     layout.addWidget(form)
     return result
+
 
 READING_JOYSTICK = False
 # initializing 'cursor' in center of screen
@@ -74,6 +93,7 @@ cursor_x = 0.5
 cursor_y = 0.5
 joystick_x = 0.0
 joystick_y = 0.0
+
 
 async def run(context: TaskContextProtocol) -> TaskResult:
     assert context.widget, 'Widget is None; cannot render.'
@@ -90,6 +110,11 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     use_default_layout = task_config.get("use_default_layout", True)
     custom_targets = task_config.get("custom_targets", [])
     cursor_speed = task_config.get("cursor_speed", 0.01)
+    autofail = task_config.get("autofail", 5.0)
+    delay_hold = task_config.get("delay_hold", 0.1)
+    intertrial_interval = task_config.get("intertrial_interval", 1.0)
+    fail_interval = task_config.get("fail_interval", 1.5)
+    success_interval = task_config.get("success_interval", 1.0)
 
     state = "fixation"
     state_timer = time.time()
@@ -100,58 +125,71 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     fixation_hold_start = None
     num_targets = 8 if use_default_layout else len(custom_targets)
 
+    target_radius_px = 0
+    target_color_cur = QColor(0, 255, 0)
+
+    delay_hold_start = None
+    trial_start_time = None
+    iti_end_time = None
+    pending_result = None
+
     def get_target_position(index: int, width: int, height: int):
-        min_dim = min(width, height)
         cx, cy = width // 2, height // 2
 
         if use_default_layout:
+            # evenly spaced around circle
             angle = 2 * math.pi * index / num_targets
-            radius = target_distance_ratio * min_dim
-            tx = cx + radius * math.cos(angle)
-            ty = cy + radius * math.sin(angle)
-            r_px = int(target_radius_ratio * min_dim)
+            distance_ratio = target_distance_ratio
+            radius_ratio = target_radius_ratio
             col = target_color
+            acceptance = 1.0
         else:
+            # per-target parameters
             t = custom_targets[index]
-            angle_deg = float(t[0])
-            radius_pct = float(t[1])
-            color = t[2]
-            angle_rad = math.radians(angle_deg)
-            radius = (radius_pct / 100.0) * min_dim
-            tx = cx + radius * math.cos(angle_rad)
-            ty = cy + radius * math.sin(angle_rad)
-            r_px = int((5 / 100.0) * min_dim)  # Fixed to 5% of min screen dim
-            col = QColor(*color)
+            distance_ratio = float(t.get("target_distance_ratio", target_distance_ratio))
+            radius_ratio = float(t.get("target_radius_ratio", target_radius_ratio))
+            acceptance = float(t.get("acceptance_ratio", 1.0))
+            angle_deg = float(t.get("angle_deg", 360.0 * index / num_targets))
+            col_list = t.get("target_color", [0, 255, 0])
+            col = QColor(*col_list)
+            angle = math.radians(angle_deg)
 
-        return (int(tx), int(ty)), r_px, col
+        # --- unified placement: scale separately for X and Y ---
+        tx = cx + (distance_ratio * (width / 2)) * math.cos(angle)
+        ty = cy - (distance_ratio * (height / 2)) * math.sin(angle)
 
+        # target size based on min dimension
+        r_px = int(radius_ratio * min(width, height))
+
+        return (int(tx), int(ty)), r_px, col, acceptance
 
     def renderer(painter: CanvasPainterProtocol) -> None:
         w = context.widget.width()
         h = context.widget.height()
 
-        # update with velocity position
+        # cursor position (normalized → pixels)
         cx = int(cursor_x * w)
         cy = int((1.0 - cursor_y) * h)
 
         min_dim = min(w, h)
         cursor_diameter = int(cursor_diameter_ratio * min_dim)
 
-        # Draw fixation cross
-        if state == "fixation":
+        # Draw fixation cross in fixation & delay
+        if state in ("fixation", "delay"):
             painter.setPen(QPen(QColor(255, 255, 255), 2))
             center_x, center_y = w // 2, h // 2
             painter.drawLine(center_x - 10, center_y, center_x + 10, center_y)
             painter.drawLine(center_x, center_y - 10, center_x, center_y + 10)
 
-        # Draw target
-        if state in ["active", "success_delay"]:
-            pos, radius_px, color = get_target_position(target_index, w, h)
-            painter.setPen(QPen(color, 1))
-            painter.setBrush(color)
-            painter.drawEllipse(pos[0] - radius_px, pos[1] - radius_px, 2 * radius_px, 2 * radius_px)
+        # Draw target in delay & active
+        if state in ("delay", "active"):
+            painter.setPen(QPen(target_color_cur, 1))
+            painter.setBrush(target_color_cur)
+            painter.drawEllipse(target_pos[0] - target_radius_px,
+                                target_pos[1] - target_radius_px,
+                                2 * target_radius_px, 2 * target_radius_px)
 
-        # Draw cursor
+        # Draw cursor (always)
         r = cursor_diameter // 2
         painter.setPen(QPen(cursor_color, 1))
         painter.setBrush(cursor_color)
@@ -187,62 +225,102 @@ async def run(context: TaskContextProtocol) -> TaskResult:
             await asyncio.sleep(0)
 
     async def trial_loop():
-        nonlocal state, state_timer, target_index, target_pos, cursor_hold_start, fixation_hold_start
+        nonlocal state, state_timer, target_index, target_pos, target_radius_px, target_color_cur
+        nonlocal cursor_hold_start, fixation_hold_start, delay_hold_start
+        nonlocal trial_start_time, iti_end_time, pending_result
         global cursor_x, cursor_y, joystick_x, joystick_y
 
         while True:
             w, h = context.widget.width(), context.widget.height()
 
-            # integrate joystick velocity
+            # integrate joystick velocity (never lock)
             cursor_x += joystick_x * cursor_speed
             cursor_y += joystick_y * cursor_speed
-
-            # clamp to screen bounds [0,1]
             cursor_x = max(0.0, min(1.0, cursor_x))
             cursor_y = max(0.0, min(1.0, cursor_y))
 
-            # convert normalized to pixel coords
             cx = int(cursor_x * w)
             cy = int((1.0 - cursor_y) * h)
 
             center_x, center_y = w // 2, h // 2
             now = time.time()
+            fix_radius_px = int(target_radius_ratio * min(w, h))  # use global radius for fixation cross
 
             if state == "fixation":
+                # hold on cross for fixation_hold --> then immediately show target and enter DELAY
                 dist = math.hypot(cx - center_x, cy - center_y)
-                if dist < int(target_radius_ratio * min(w, h)):
+                if dist < fix_radius_px:
                     if fixation_hold_start is None:
                         fixation_hold_start = now
                     elif now - fixation_hold_start >= fixation_hold:
-                        state = "wait"
-                        state_timer = now + 1.0
+                        # choose target & set visuals
+                        target_index = random.randint(0, num_targets - 1)
+                        target_pos, target_radius_px, target_color_cur, acceptance = get_target_position(target_index, w, h)
+                        cursor_hold_start = None
+                        delay_hold_start = None
+                        trial_start_time = None  # will start when we enter ACTIVE
+                        state = "delay"  # target shown; cross still visible
                 else:
                     fixation_hold_start = None
 
-            elif state == "wait" and now >= state_timer:
-                target_index = random.randint(0, num_targets - 1)
-                target_pos, target_radius_px, _ = get_target_position(target_index, w, h)
-                cursor_hold_start = None
-                state = "active"
-
-            elif state == "active":
-                dist = math.hypot(cx - target_pos[0], cy - target_pos[1])
-                if dist < target_radius_px:
-                    if cursor_hold_start is None:
-                        cursor_hold_start = now
-                    elif now - cursor_hold_start >= hold_time:
-                        print(f"[SUCCESS] Trial complete at target {target_index}")
-                        state = "success_delay"
-                        state_timer = now + 1.0
-
-                        return TaskResult(success=True)
+            elif state == "delay":
+                # target is visible; cross is visible
+                # Keep position synced (handles window resize)
+                target_pos, target_radius_px, target_color_cur, _ = get_target_position(target_index, w, h)
+                # must KEEP holding the cross for delay_hold; leaving early = FAIL
+                dist_center = math.hypot(cx - center_x, cy - center_y)
+                if dist_center < fix_radius_px:
+                    if delay_hold_start is None:
+                        delay_hold_start = now
+                    elif now - delay_hold_start >= delay_hold:
+                        # Delay satisfied → enter ACTIVE: cross disappears, autofail starts
+                        state = "active"
+                        trial_start_time = now
                 else:
+                    # left cross too early --> FAIL immediately
+                    pending_result = False
+                    iti_end_time = now + intertrial_interval + fail_interval
+                    state = "iti"
+                    # wipe timers and visuals needed only for active/delay
                     cursor_hold_start = None
 
-            elif state == "success_delay" and now >= state_timer:
-                state = "fixation"
-                fixation_hold_start = None
+            elif state == "active":
+                # cross is hidden; target visible; movement allowed
+                # Keep position synced
+                target_pos, target_radius_px, target_color_cur, acceptance = get_target_position(target_index, w, h)
+                # Auto-fail if too slow to acquire
+                if trial_start_time and (now - trial_start_time) >= autofail:
+                    pending_result = False
+                    iti_end_time = now + intertrial_interval + fail_interval
+                    state = "iti"
+                else:
+                    # success detection with per-target hold time (when using custom layout)
+                    hold_needed = (
+                        float(custom_targets[target_index].get("hold_time", hold_time))
+                        if (not use_default_layout and 0 <= target_index < len(custom_targets))
+                        else hold_time
+                    )
 
+                    dist_tgt = math.hypot(cx - target_pos[0], cy - target_pos[1])
+                    if dist_tgt < target_radius_px * acceptance:
+                        if cursor_hold_start is None:
+                            cursor_hold_start = now
+                        elif now - cursor_hold_start >= hold_needed:
+                            # SUCCESS --> immediately hide target and enter ITI
+                            pending_result = True
+                            iti_end_time = now + intertrial_interval + success_interval
+                            state = "iti"
+                    else:
+                        cursor_hold_start = None
+
+            elif state == "iti":
+                # target hidden; cross hidden; keep cursor responsive
+                if now >= iti_end_time:
+                    # Done with ITI --> end of trial
+                    return TaskResult(success=bool(pending_result))
+                # else keep waiting without blocking
+
+            # refresh
             context.widget.update()
             await asyncio.sleep(0.01)
 
@@ -259,7 +337,6 @@ async def run(context: TaskContextProtocol) -> TaskResult:
             raise
 
     return await trial_loop()
-    
 
     while True:
         await context.sleep(datetime.timedelta(seconds=1))

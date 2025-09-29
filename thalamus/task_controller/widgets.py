@@ -108,7 +108,7 @@ class Form(QWidget):
   class Table(typing.NamedTuple):
     label: str
     field: str
-    columns: typing.List[typing.Tuple[str, typing.Any]]  # (header name, default value)
+    parameters: typing.List[str]
 
   File = typing.NamedTuple('File', [
     ('label', str),
@@ -126,6 +126,168 @@ class Form(QWidget):
   ])
 
   Row = typing.Union['Form.Uniform', 'Form.Constant', 'Form.String', 'Form.Color', 'Form.Bool', 'Form.Choice', 'Form.File', 'Form.Directory']
+
+  def append_table(self, config: "Form.Table") -> None:
+    """
+    Appends a table for editing per-target parameters with +Add and -Remove Target buttons
+    """
+
+    # Pretty display names for parameters
+    param_labels = {
+      "hold_time": "Target Hold Time (s)",
+      "target_radius_ratio": "Target Radius (% of screen)",
+      "target_distance_ratio": "Radial Distance (% of screen)",
+      "target_color": "Target Color",
+      "acceptance_ratio": "Acceptance Ratio",
+      "angle_deg": "Angle (°)",
+    }
+
+    self.config[config.field] = [{
+      "hold_time": 0.5,
+      "target_radius_ratio": 0.05,
+      "target_distance_ratio": 0.5,
+      "acceptance_ratio": 1.0,  # full radius by default
+      "angle_deg": 0.0,  # center right
+      "target_color": [255, 0, 0]   # default red
+    }]
+
+    targets = self.config[config.field]
+
+    # Create table
+    table = QTableWidget(len(config.parameters), len(targets))
+    table.setHorizontalHeaderLabels([f"Target {i + 1}" for i in range(len(targets))])
+    table.setVerticalHeaderLabels([param_labels.get(p, p) for p in config.parameters])
+    # Only allow selecting one target column at a time
+    table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectColumns)
+    table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+
+    # Helper: render one column
+    def render_column(col, target):
+      for row, param in enumerate(config.parameters):
+        value = target.get(param, "")
+        if param == "target_color":
+          button = QPushButton()
+          button.setStyleSheet(f"background-color: rgb({value[0]}, {value[1]}, {value[2]});")
+
+          def make_handler(button, row):
+            def on_click():
+              # Find which column this button is currently in
+              for col_idx in range(table.columnCount()):
+                if table.cellWidget(row, col_idx) is button:
+                  current_val = self.config[config.field][col_idx][param]
+                  color = QColorDialog.getColor(QColor(*current_val))
+                  if color.isValid():
+                    rgb = [color.red(), color.green(), color.blue()]
+                    self.config[config.field][col_idx][param] = rgb
+                    button.setStyleSheet(f"background-color: rgb({rgb[0]}, {rgb[1]}, {rgb[2]});")
+                  break
+
+            return on_click
+
+          button.clicked.connect(make_handler(button, row))
+          table.setCellWidget(row, col, button)
+
+        else:
+          item = QTableWidgetItem(str(value))
+          item.setFlags(
+            Qt.ItemFlag.ItemIsEnabled
+            | Qt.ItemFlag.ItemIsSelectable
+            | Qt.ItemFlag.ItemIsEditable
+          )
+          table.setItem(row, col, item)
+
+    # Render existing targets
+    for col, target in enumerate(targets):
+      render_column(col, target)
+
+    # Handle edits for numeric/text params
+    def on_cell_changed(row, col):
+      param = config.parameters[row]
+      if param == "target_color":  # handled via button
+        return
+      cell = table.item(row, col)
+      if cell is None:
+        return
+      text = cell.text()
+      try:
+        val = float(text)
+      except ValueError:
+        val = text
+      self.config[config.field][col][param] = val
+
+    table.cellChanged.connect(on_cell_changed)
+
+    # + Add Target button
+    add_button = QPushButton("+ Add Target")
+
+    def on_add_target():
+      base = dict(self.config[config.field][0]) if self.config[config.field] else {
+        "hold_time": 0.5,
+        "target_radius_ratio": 0.05,
+        "target_distance_ratio": 0.5,
+        "acceptance_ratio": 1.0,  # full radius by default
+        "angle_deg": 0.0,  # center right
+        "target_color": [255, 0, 0]   # default red
+      }
+      new_target = dict(base)
+      self.config[config.field].append(new_target)
+
+      new_col = table.columnCount()
+      table.insertColumn(new_col)
+      table.setHorizontalHeaderItem(new_col, QTableWidgetItem(f"Target {new_col + 1}"))
+      render_column(new_col, new_target)
+
+    add_button.clicked.connect(on_add_target)
+
+    # - Remove Selected Target button
+    remove_button = QPushButton("- Remove Selected Target")
+
+    # - Remove Selected Target button
+    remove_button = QPushButton("- Remove Selected Target")
+    remove_button.setEnabled(False)  # disabled by default
+
+    def on_selection_changed():
+      col = table.currentColumn()
+      if col >= 0:
+        remove_button.setEnabled(True)
+      else:
+        remove_button.setEnabled(False)
+
+    table.itemSelectionChanged.connect(on_selection_changed)
+
+    def on_remove_target():
+      selected = table.currentColumn()
+      if selected < 0:
+        return  # no valid column selected
+
+      # Remove from config
+      if selected < len(self.config[config.field]):
+        del self.config[config.field][selected]
+
+      # Remove from table
+      table.removeColumn(selected)
+
+      # Renumber headers
+      for i in range(table.columnCount()):
+        table.setHorizontalHeaderItem(i, QTableWidgetItem(f"Target {i + 1}"))
+
+      remove_button.setEnabled(False)  # reset state after removal
+
+    remove_button.clicked.connect(on_remove_target)
+
+    # Add to layout
+    vbox = QVBoxLayout()
+    vbox.addWidget(table)
+    vbox.addWidget(add_button)
+    vbox.addWidget(remove_button)
+
+    container = QWidget()
+    container.setLayout(vbox)
+
+    self.grid_layout.addWidget(QLabel(config.label), self.row, 0)
+    self.grid_layout.addWidget(container, self.row, 1, 1, 2)
+
+    self.row += 1
 
   def append_labels(self, *headers: str) -> None:
     '''
@@ -422,86 +584,6 @@ class Form(QWidget):
     self.config.add_observer(on_config_change, functools.partial(isdeleted, self))
 
     self.row += 1
-
-  def append_table(self, config: Table) -> None:
-    if config.field not in self.config:
-        self.config[config.field] = []
-
-    self.grid_layout.addWidget(QLabel(config.label), self.row, 0, 1, 3)
-
-    table_widget = QTableWidget()
-    table_widget.setColumnCount(len(config.columns))
-    table_widget.setHorizontalHeaderLabels([col[0] for col in config.columns])
-
-    def refresh_table():
-        table_widget.setRowCount(len(self.config[config.field]))
-        for row_idx, row_data in enumerate(self.config[config.field]):
-            for col_idx, (col_name, default) in enumerate(config.columns):
-                item_value = row_data[col_idx] if col_idx < len(row_data) else default
-
-                if isinstance(item_value, list) and len(item_value) == 3:  # Assume it's a color
-                    btn = QPushButton()
-                    btn.setStyleSheet(f"background-color: rgb({item_value[0]}, {item_value[1]}, {item_value[2]})")
-
-                    def make_handler(row, col):
-                        def handler():
-                            color = QColorDialog.getColor()
-                            if color.isValid():
-                                rgb = [color.red(), color.green(), color.blue()]
-                                self.config[config.field][row][col] = rgb
-                                refresh_table()
-                        return handler
-
-                    btn.clicked.connect(make_handler(row_idx, col_idx))
-                    table_widget.setCellWidget(row_idx, col_idx, btn)
-                else:
-                    item = QTableWidgetItem(str(item_value))
-                    item.setFlags(item.flags() | QTableWidgetItem.ItemIsEditable)
-                    table_widget.setItem(row_idx, col_idx, item)
-
-    def update_model():
-        for row in range(table_widget.rowCount()):
-            if row >= len(self.config[config.field]):
-                continue
-            updated_row = []
-            for col_idx, (col_name, default) in enumerate(config.columns):
-                widget = table_widget.cellWidget(row, col_idx)
-                if widget:
-                    updated_row.append(self.config[config.field][row][col_idx])
-                else:
-                    item = table_widget.item(row, col_idx)
-                    try:
-                        val = float(item.text())
-                    except:
-                        val = item.text()
-                    updated_row.append(val)
-            self.config[config.field][row] = updated_row
-
-    def add_row():
-        update_model()  # Save existing changes before appending
-        defaults = [col[1] if not isinstance(col[1], QColor) else [col[1].red(), col[1].green(), col[1].blue()] for col in config.columns]
-        self.config[config.field].append(defaults)
-        refresh_table()
-
-    refresh_table()
-    self.grid_layout.addWidget(table_widget, self.row + 1, 0, 1, 3)
-
-    delete_button = QPushButton("Delete Row")
-    def delete_selected_row():
-        update_model()
-        selected = table_widget.currentRow()
-        if 0 <= selected < len(self.config[config.field]):
-            del self.config[config.field][selected]
-            refresh_table()
-
-    delete_button.clicked.connect(delete_selected_row)
-
-    add_button = QPushButton("Add Row")
-    add_button.clicked.connect(add_row)
-    self.grid_layout.addWidget(add_button, self.row + 2, 0, 1, 1)
-    self.grid_layout.addWidget(delete_button, self.row + 2, 1, 1, 1)
-
-    self.row += 3
 
   def finish(self) -> None:
     '''
