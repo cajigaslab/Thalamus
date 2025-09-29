@@ -167,8 +167,8 @@ async def async_main() -> None:
     create_task_with_exc_handling(proc_watcher('native.exe', bmbi_native_proc))
 
   dotnet_proc = None
-  #if False:
-  if dotnet_filename.exists():
+  if False:
+  #if dotnet_filename.exists():
     dotnet_command = str(dotnet_filename), '--port', str(arguments.dotnet_port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else [])
     dotnet_proc = await asyncio.create_subprocess_exec(*dotnet_command)
     create_task_with_exc_handling(proc_watcher('dotnet.exe', dotnet_proc))

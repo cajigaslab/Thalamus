@@ -444,6 +444,7 @@ FACTORIES = {
   'WALLCLOCK': Factory(None, []),
   'DELSYS': Factory(DelsysWidget, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+    UserData(UserDataType.CHECK_BOX, 'Connected', False, []),
     UserData(UserDataType.DEFAULT, 'Key File', '', []),
     UserData(UserDataType.DEFAULT, 'License File', '', []),
   ]),

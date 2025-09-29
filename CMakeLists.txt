@@ -356,7 +356,7 @@ if(NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
   target_link_options(test PRIVATE -g)
 endif()
 
-if(WIN32)
+if(WIN32 AND BUILD_DOTNET)
   #Install nuget packages during configure
   execute_process(COMMAND msbuild -t:restore "/p:Platform=Any CPU"
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/dotnet")

@@ -49,7 +49,10 @@ class DelsysDelegate(QItemDelegate):
           json=json.dumps({'type': 'get_sample_modes', 'id': item['ID']})
         ))
         response = json.loads(response_json.json)
-        editor.addItems(response['sample_modes'])
+        if not response['sample_modes']:
+          editor.addItems(response['sample_modes'])
+        else:
+          editor.addItem('Scan component to see sample modes')
       create_task_with_exc_handling(fetch_sample_modes())
     else:
       return super().setEditorData(editor, index)
@@ -108,9 +111,12 @@ class DelsysWidget(QWidget):
     }))
 
     async def on_pair():
-      for row in get_selected_rows(components_view):
-        await request({'type': 'pair', 'id': row})
-    pair_component_button.clicked.connect(on_pair)
+      for row in components:
+        if not row['Paired']:
+          message = {'type': 'pair', 'id': row['ID']}
+          payload = thalamus_pb2.NodeRequest(node=config['name'],json=json.dumps(message))
+          await stub.node_request(payload)
+    pair_component_button.clicked.connect(lambda: create_task_with_exc_handling(on_pair()))
 
     def on_remove():
       for row in get_selected_rows(components_view):
@@ -147,14 +153,17 @@ class DelsysWidget(QWidget):
     log_layout.addWidget(clear_button)
     log_widget.setLayout(log_layout)
 
-    tabs = QTabWidget()
-    tabs.addTab(log_widget, 'Log')
-    tabs.addTab(components_widget, 'Components')
+    #tabs = QTabWidget()
+    #tabs.addTab(log_widget, 'Log')
+    #tabs.addTab(components_widget, 'Components')
 
     layout = QVBoxLayout()
     layout.addWidget(scan_button)
-    layout.addWidget(connect_button)
-    layout.addWidget(tabs)
+    layout.addWidget(pair_component_button)
+    layout.addWidget(components_widget)
+    layout.addWidget(log_widget)
+    #layout.addWidget(connect_button)
+    #layout.addWidget(tabs)
 
     self.setLayout(layout)
 
@@ -162,6 +171,7 @@ class DelsysWidget(QWidget):
       try:
         async for m in stub.text(thalamus_pb2.TextRequest(node=thalamus_pb2.NodeSelector(name=config['name']))):
           qlist.addItem(m.text)
+          qlist.scrollToItem(qlist.item(qlist.count()-1))
       except asyncio.CancelledError:
         pass
       
