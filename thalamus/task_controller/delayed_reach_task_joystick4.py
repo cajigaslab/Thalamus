@@ -35,7 +35,7 @@ rig_port =  '/dev/ttyACM0'  # check picture
 mac_port = '/dev/cu.usbmodem313301'     # right hand side with dongle
 home_pc = 'COM3'
 
-SERIAL_PORT = home_pc
+SERIAL_PORT = rig_port
 BAUD_RATE = 115200
 DEAD_ZONE = 10
 MID = 512.0
@@ -84,6 +84,11 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
                     "target_color"]),
     )
     layout.addWidget(form)
+
+    # table ui
+    for child in form.findChildren(QTableWidget):
+        child.setMinimumHeight(230)
+
     return result
 
 
