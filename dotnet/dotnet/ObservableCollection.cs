@@ -3,6 +3,7 @@ using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Org.BouncyCastle.Asn1.Esf;
 using System.Collections;
 
 namespace Thalamus
@@ -154,6 +155,41 @@ namespace Thalamus
             return arrayContent != null ? CollectionType.List : CollectionType.Dict;
         }
         public ObservableCollection() : this(new Dictionary<object, object?>(), null) { }
+        public ObservableCollection(CollectionType collectionType)
+        {
+            Subscriptions = new OnChange((source, action, key, value) => { });
+            if (collectionType == CollectionType.Dict)
+            {
+                dictionaryContent = [];
+            }
+            else
+            {
+                arrayContent = [];
+            }
+        }
+
+        public ObservableCollection DeepCopy()
+        {
+            var collType = GetCollectionType();
+            var result = new ObservableCollection(collType);
+            //result.Parent = Parent;
+            //if (Parent != null)
+            //{
+            //    result.RequestChange = Parent.RequestChange;
+            //}
+            foreach (var v in Items())
+            {
+                if (v.Value is ObservableCollection vColl)
+                {
+                    result.Set(v.Key, vColl.DeepCopy());
+                }
+                else
+                {
+                    result.Set(v.Key, v.Value);
+                }
+            }
+            return result;
+        }
 
         public ObservableCollection(IList original, ObservableCollection? parent)
         {
@@ -222,7 +258,7 @@ namespace Thalamus
             return "[" + (key is int ? key : "'" + key + "'") + "]";
         }
 
-        public void Add(object value, Action callback, bool direct = false)
+        public void Add(object? value, Action callback, bool direct = false)
         {
             if(RequestChange != null && !direct)
             {
@@ -238,7 +274,7 @@ namespace Thalamus
             throw new Exception("Collection is not an array");
         }
 
-        public void Add(object value)
+        public void Add(object? value)
         {
             Add(value, () => { });
         }
@@ -444,6 +480,54 @@ namespace Thalamus
             foreach (var item in Items())
             {
                 callback(this, ActionType.Set, item.Key, item.Value);
+            }
+        }
+
+        public override bool Equals(object? otherRaw)
+        {
+            if(otherRaw is ObservableCollection other)
+            {
+                var collectionType = GetCollectionType();
+                if (collectionType != other.GetCollectionType())
+                {
+                    return false;
+                }
+
+                return Count == other.Count && Keys().All(k =>
+                {
+                    if (!other.ContainsKey(k))
+                    {
+                        return false;
+                    }
+                    var thisValue = this[k];
+                    var otherValue = other[k];
+                    if (thisValue is ObservableCollection thisValueColl)
+                    {
+                        if (otherValue is ObservableCollection otherValueColl)
+                        {
+                            return thisValue.Equals(otherValueColl);
+                        }
+                        else
+                        {
+                            return false;
+                        }
+                    }
+                    else
+                    {
+                        if (otherValue is ObservableCollection otherValueColl)
+                        {
+                            return false;
+                        }
+                        else
+                        {
+                            return thisValue == otherValue;
+                        }
+                    }
+                });
+            }
+            else
+            { 
+                return false;
             }
         }
     }

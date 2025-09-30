@@ -8,6 +8,7 @@ using Nito.AsyncEx;
 using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading.Tasks;
 using Thalamus.JsonPath;
 using static Thalamus.ObservableCollection;
 
@@ -35,7 +36,6 @@ namespace Thalamus
         private bool hasAnalogData = false;
         private string text = "";
         private bool scanned = false;
-        private bool collecting = false;
 
         private List<string> channelNames = [];
         private Dictionary<Tuple<Guid, Guid>, int> channelToIndex = [];
@@ -82,30 +82,15 @@ namespace Thalamus
             }
         }
 
-        public bool CreateDataSource()
+        public void CreateDataSource()
         {
-            if(!stopTask.IsCompleted)
+            if(deviceSourceCreator != null)
             {
-                state["Connected"] = false;
-                graph.Dialog(new Dialog
-                {
-                    Message = "Pipeline busy, wait for complete stop",
-                    Title = "Delsys Error",
-                    Type = Dialog.Types.Type.Error
-                });
-                return false;
+                return;
             }
 
             if (this.key != null && this.key != "" && license != null && license != "")
             {
-                if (deviceSourceCreator != null)
-                {
-                    PipelineController.Instance.RemovePipeline(0);
-                    pipeline = null;
-                    deviceSource = null;
-                    deviceSourceCreator = null;
-                }
-
                 try
                 {
                     deviceSourceCreator = new DeviceSourcePortable(this.key, license);
@@ -146,7 +131,6 @@ namespace Thalamus
                     pipeline.CollectionComplete += collectionCompleteHandler;
                     state["Connected"] = true;
                     EmitText("Connected");
-                    return true;
                 }
                 catch (DelsysAPI.Exceptions.PipelineException ex)
                 {
@@ -162,17 +146,12 @@ namespace Thalamus
                         Title = "Delsys Error",
                         Type = Dialog.Types.Type.Error
                     });
-                    return false;
                 }
-            }
-            else
-            {
-                state["Connected"] = false;
-                return false;
             }
         }
 
         private bool armed = false;
+        private ObservableCollection lastComponents = new ObservableCollection();
 
         public void OnChange(object source, ActionType action, object key, object? value)
         {
@@ -184,173 +163,162 @@ namespace Thalamus
                     if (str_key == "Running" && ready)
                     {
                         ChannelsChanged(this);
-                        if(deviceSourceCreator == null)
+                        CreateDataSource();
+                        if(pipeline == null)
                         {
-                            if(!CreateDataSource())
-                            {
-                                state["Running"] = false;
-                                return;
-                            }
+                            return;
                         }
-                        if (pipeline != null)
+                        if (value == null)
                         {
-                            if (value == null)
-                            {
-                                throw new ArgumentException();
-                            }
-                            running = (bool)value;
+                            throw new ArgumentException();
+                        }
+                        running = (bool)value;
+                        var needConfig = !lastComponents.Equals(components);
+                        lastComponents = components.DeepCopy();
+                        EmitText($"needConfig == {needConfig}");
 
-                            if (running == true)
+                        if (running == true)
+                        {
+                            var pipeline = this.pipeline;
+                            QueueTask(async () =>
                             {
-                                var pipeline = this.pipeline;
-                                if (collecting)
+                                if (!scanned)
                                 {
-                                    state["Running"] = false;
-                                    return;
+                                    var request = new JObject();
+                                    request["type"] = "scan";
+                                    await Process(request);
                                 }
-                                collecting = true;
-                                graph.Run(async () =>
+                                if(needConfig)
                                 {
-                                    if (!scanned)
+                                    if(pipeline.CurrentState == Pipeline.ProcessState.Armed)
                                     {
-                                        var request = new JObject();
-                                        request["type"] = "scan";
-                                        await Process(request);
+                                        await pipeline.DisarmPipeline();
                                     }
-                                    if(!armed)
+                                    channelToIndex.Clear();
+                                    channelNames.Clear();
+                                    sampleIntervals.Clear();
+                                    sampleCounts.Clear();
+                                    segments.Clear();
+                                    Dictionary<long, string> sampleModes = [];
+                                    if (components is ObservableCollection compCol)
                                     {
-                                        channelToIndex.Clear();
-                                        channelNames.Clear();
-                                        sampleIntervals.Clear();
-                                        sampleCounts.Clear();
-                                        segments.Clear();
-                                        Dictionary<long, string> sampleModes = [];
-                                        if (components is ObservableCollection compCol)
+                                        foreach (var row in compCol.Values())
                                         {
-                                            foreach (var row in compCol.Values())
+                                            if (row is ObservableCollection rowCol)
                                             {
-                                                if (row is ObservableCollection rowCol)
+                                                var row_id = (long?)rowCol["ID"];
+                                                var selected = (bool?)rowCol["Selected"];
+                                                var sampleMode = (string?)rowCol["Sample Mode"];
+                                                if (selected == true && row_id != null)
                                                 {
-                                                    var row_id = (long?)rowCol["ID"];
-                                                    var selected = (bool?)rowCol["Selected"];
-                                                    var sampleMode = (string?)rowCol["Sample Mode"];
-                                                    if (selected == true && row_id != null)
+                                                    if (row_id is long row_int)
                                                     {
-                                                        if (row_id is long row_int)
-                                                        {
-                                                            sampleModes[row_int] = sampleMode ?? "";
-                                                        }
+                                                        sampleModes[row_int] = sampleMode ?? "";
                                                     }
                                                 }
                                             }
                                         }
-
-                                        foreach (var comp in pipeline.TrignoRfManager.Components)
-                                        {
-                                            if (!sampleModes.ContainsKey(comp.PairNumber))
-                                            {
-                                                EmitText($"Deselect {comp.PairNumber}");
-                                                var deselectStatus = false;
-                                                if (comp.State == DelsysAPI.Utils.SelectionState.Allocated)
-                                                {
-                                                    deselectStatus = await pipeline.TrignoRfManager.DeselectComponentAsync(comp);
-                                                }
-                                                EmitText($"Status {deselectStatus}");
-                                                continue;
-                                            }
-
-                                            //Console.WriteLine($"Select {comp.PairNumber}");
-                                            EmitText($"Select {comp.PairNumber}");
-                                            var status = false;
-
-                                            if (comp.State != DelsysAPI.Utils.SelectionState.Allocated)
-                                            {
-                                                status = await pipeline.TrignoRfManager.SelectComponentAsync(comp);
-                                            }
-                                            //Console.WriteLine($"Status {status}");
-                                            EmitText($"Status {status}");
-                                            //Console.WriteLine($"Status {comp.Configuration.SampleModes}");
-
-                                            //Console.WriteLine($"Status {sampleModes.ContainsKey(comp.PairNumber)} {sampleModes[comp.PairNumber]} {comp.Configuration.SampleModes[0]} {comp.Configuration.SampleModes.Length}");
-
-                                            //EmitText($"Status {sampleModes.ContainsKey(comp.PairNumber)} {sampleModes[comp.PairNumber]} {comp.Configuration.SampleModes[0]} {comp.Configuration.SampleModes.Length}");
-                                            var sampleModeIndex = Math.Max(0, Array.IndexOf(comp.Configuration.SampleModes, sampleModes[comp.PairNumber]));
-                                            var sampleMode = comp.Configuration.SampleModes[sampleModeIndex];
-                                            comp.SelectSampleMode(sampleMode);
-                                            //comp.Configuration.SampleMode = Math.Max(0, comp.Configuration.SampleModes.IndexOf(s => s == sampleMode));
-                                        }
-
-                                        EmitText($"Configure Pipeline");
-                                        var dataLine = new DataLine(pipeline);
-                                        dataLine.ConfigurePipeline();
-
-                                        foreach (var comp in pipeline.TrignoRfManager.Components)
-                                        {
-                                            foreach (var channel in comp.TrignoChannels)
-                                            {
-                                                if (channel != null)
-                                                {
-                                                    var span = Util.FromSeconds(1 / channel.SampleRate);
-                                                    sampleIntervals.Add(span);
-                                                    channelToIndex[Tuple.Create(comp.Id, channel.Id)] = channelNames.Count;
-                                                    channelNames.Add($"{comp.PairNumber}:{channel.Name}");
-                                                    sampleCounts.Add(0);
-                                                    samples.Add(new double[1]);
-                                                    segments.Add(new ArraySegment<double>());
-                                                }
-                                            }
-                                        }
-                                        EmitText($"Channels {channelNames}");
-
-                                        EmitText($"Start Pipeline");
-                                    }
-                                    
-
-                                    collectionCompleteSource = new TaskCompletionSource();
-                                    collectionComplete = collectionCompleteSource.Task;
-                                    await pipeline.Start();
-                                    armed = true;
-                                });
-                            }
-                            else
-                            {
-                                EmitText($"Stop Pipeline");
-                                stopTask = graph.Run(async () =>
-                                {
-                                    try
-                                    {
-
-                                    EmitText($"Stopping Pipeline");
-                                    await pipeline.Stop();
-                                    EmitText($"Stopped Pipeline");
-                                    await collectionComplete;
-                                    EmitText($"Collection Complete");
-                                    //await pipeline.DisarmPipeline();
-                                    //EmitText($"Disarmed Pipeline");
-                                    } catch (Exception e)
-                                    {
-                                        Console.WriteLine(e.Message);
                                     }
 
+                                    foreach (var comp in pipeline.TrignoRfManager.Components)
+                                    {
+                                        if (!sampleModes.ContainsKey(comp.PairNumber))
+                                        {
+                                            EmitText($"Deselect {comp.PairNumber}");
+                                            var deselectStatus = false;
+                                            if (comp.State == DelsysAPI.Utils.SelectionState.Allocated)
+                                            {
+                                                deselectStatus = await pipeline.TrignoRfManager.DeselectComponentAsync(comp);
+                                            }
+                                            EmitText($"Status {deselectStatus}");
+                                            continue;
+                                        }
 
-                                    //if (deviceSourceCreator != null)
-                                    //{
-                                    //    EmitText($"Deleting Pipeline");
-                                    //    PipelineController.Instance.RemovePipeline(0);
-                                    //    pipeline = null;
-                                    //    deviceSource = null;
-                                    //    deviceSourceCreator = null;
-                                    //    EmitText($"Deleted Pipeline");
-                                    //}
+                                        //Console.WriteLine($"Select {comp.PairNumber}");
+                                        EmitText($"Select {comp.PairNumber}");
+                                        var status = false;
 
-                                    collecting = false;
-                                    //scanned = false;
-                                });
-                            }
+                                        if (comp.State != DelsysAPI.Utils.SelectionState.Allocated)
+                                        {
+                                            status = await pipeline.TrignoRfManager.SelectComponentAsync(comp);
+                                        }
+                                        //Console.WriteLine($"Status {status}");
+                                        EmitText($"Status {status}");
+                                        //Console.WriteLine($"Status {comp.Configuration.SampleModes}");
+
+                                        //Console.WriteLine($"Status {sampleModes.ContainsKey(comp.PairNumber)} {sampleModes[comp.PairNumber]} {comp.Configuration.SampleModes[0]} {comp.Configuration.SampleModes.Length}");
+
+                                        //EmitText($"Status {sampleModes.ContainsKey(comp.PairNumber)} {sampleModes[comp.PairNumber]} {comp.Configuration.SampleModes[0]} {comp.Configuration.SampleModes.Length}");
+                                        var sampleModeIndex = Math.Max(0, Array.IndexOf(comp.Configuration.SampleModes, sampleModes[comp.PairNumber]));
+                                        var sampleMode = comp.Configuration.SampleModes[sampleModeIndex];
+                                        comp.SelectSampleMode(sampleMode);
+                                        //comp.Configuration.SampleMode = Math.Max(0, comp.Configuration.SampleModes.IndexOf(s => s == sampleMode));
+                                    }
+
+                                    EmitText($"Configure Pipeline");
+                                    var dataLine = new DataLine(pipeline);
+                                    dataLine.ConfigurePipeline();
+
+                                    foreach (var comp in pipeline.TrignoRfManager.Components)
+                                    {
+                                        if (!sampleModes.ContainsKey(comp.PairNumber))
+                                        {
+                                            continue;
+                                        }
+                                        foreach (var channel in comp.TrignoChannels)
+                                        {
+                                            if (channel != null)
+                                            {
+                                                var span = Util.FromSeconds(1 / channel.SampleRate);
+                                                sampleIntervals.Add(span);
+                                                channelToIndex[Tuple.Create(comp.Id, channel.Id)] = channelNames.Count;
+                                                channelNames.Add($"{comp.PairNumber}:{channel.Name}");
+                                                sampleCounts.Add(0);
+                                                samples.Add(new double[1]);
+                                                segments.Add(new ArraySegment<double>());
+                                            }
+                                        }
+                                    }
+                                }
+                                EmitText($"Channels {channelNames}");
+
+                                EmitText($"Start Pipeline");
+
+
+                                collectionCompleteSource = new TaskCompletionSource();
+                                collectionComplete = collectionCompleteSource.Task;
+                                await pipeline.Start();
+                                armed = true;
+
+                            });
                         }
                         else
                         {
-                            EmitText("Pipeline not ready");
+                            EmitText($"Stop Pipeline");
+                            QueueTask(async () =>
+                            {
+                                EmitText($"Stopping Pipeline");
+                                await pipeline.Stop();
+                                EmitText($"Stopped Pipeline");
+                                await collectionComplete;
+                                EmitText($"Collection Complete");
+                                //await pipeline.DisarmPipeline();
+                                //EmitText($"Disarmed Pipeline");
+
+
+                                //if (deviceSourceCreator != null)
+                                //{
+                                //    EmitText($"Deleting Pipeline");
+                                //    PipelineController.Instance.RemovePipeline(0);
+                                //    pipeline = null;
+                                //    deviceSource = null;
+                                //    deviceSourceCreator = null;
+                                //    EmitText($"Deleted Pipeline");
+                                //}
+
+                                //collecting = false;
+                                //scanned = false;
+                            });
                         }
                     }
                     else if (str_key == "Components")
@@ -406,8 +374,7 @@ namespace Thalamus
             {
                 if (value is ObservableCollection valCol)
                 {
-                    valCol["Paired"] = false;
-                    valCol["Scanned"] = false;
+                    valCol["Ready"] = false;
                 }
             }
         }
@@ -418,6 +385,7 @@ namespace Thalamus
         {
             if (busy)
             {
+                EmitText("Busy, Data dropped");
                 return;
             }
 
@@ -582,7 +550,7 @@ namespace Thalamus
                                             var row_id = (long?)rowCol["ID"];
                                             if (row_id == id_int)
                                             {
-                                                rowCol["Paired"] = success;
+                                                rowCol["Ready"] = success;
                                             }
                                         }
                                     }
@@ -636,8 +604,7 @@ namespace Thalamus
                                         var row_id = (long?)rowCol["ID"];
                                         if (row_id == component.PairNumber)
                                         {
-                                            rowCol["Paired"] = success;
-                                            rowCol["Scanned"] = success;
+                                            rowCol["Ready"] = success;
                                         }
                                     }
                                 }

@@ -49,7 +49,7 @@ class DelsysDelegate(QItemDelegate):
           json=json.dumps({'type': 'get_sample_modes', 'id': item['ID']})
         ))
         response = json.loads(response_json.json)
-        if not response['sample_modes']:
+        if response['sample_modes']:
           editor.addItems(response['sample_modes'])
         else:
           editor.addItem('Scan component to see sample modes')
@@ -85,8 +85,7 @@ class DelsysWidget(QWidget):
 
     columns = [
       'ID',
-      'Paired',
-      'Scanned',
+      'Ready',
       'Selected',
       'Sample Mode'
     ]
@@ -103,8 +102,7 @@ class DelsysWidget(QWidget):
     remove_component_button = QPushButton('Remove')
     add_component_button.clicked.connect(lambda: components.append({
       'ID': next_id(components),
-      'Paired': False,
-      'Scanned': False,
+      'Ready': False,
       'Selected': False,
       'Sample Mode': '',
       'Sample Mode Index': -1
@@ -112,7 +110,7 @@ class DelsysWidget(QWidget):
 
     async def on_pair():
       for row in components:
-        if not row['Paired']:
+        if not row['Ready']:
           message = {'type': 'pair', 'id': row['ID']}
           payload = thalamus_pb2.NodeRequest(node=config['name'],json=json.dumps(message))
           await stub.node_request(payload)
