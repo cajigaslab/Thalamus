@@ -275,6 +275,9 @@ struct Service::Impl {
       auto has_channels = !channels.empty() || !channel_names.empty();
 
       std::mutex connection_mutex;
+      std::mutex response_mutex;
+      std::condition_variable cond;
+      ::thalamus_grpc::AnalogResponse out_response;
 
       bool channels_changed = true;
       using channels_changed_signal_type = decltype(node->channels_changed);
@@ -347,7 +350,11 @@ struct Service::Impl {
 
               span->set_end(uint32_t(response.data_size()));
             }
-            writer(response, ::grpc::WriteOptions());
+
+            std::lock_guard<std::mutex> lock3(response_mutex);
+            std::swap(response, out_response);
+            cond.notify_one();
+            //writer(response, ::grpc::WriteOptions());
           }));
       raw_node.reset();
 
@@ -359,7 +366,13 @@ struct Service::Impl {
           writer(response, options);
           return ::grpc::Status::OK;
         }
-        std::this_thread::sleep_for(1s);
+        thalamus_grpc::AnalogResponse local_response;
+        {
+          std::unique_lock<std::mutex> lock2(response_mutex);
+          cond.wait_for(lock2, 1s);
+          std::swap(local_response, out_response);
+        }
+        writer(local_response, ::grpc::WriteOptions());
       }
       channels_connection.disconnect();
       connection.disconnect();
