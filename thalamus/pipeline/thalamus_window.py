@@ -379,6 +379,7 @@ FACTORIES = {
     UserData(UserDataType.DEFAULT, 'Node', '', []),
     UserData(UserDataType.DOUBLE_SPINBOX, 'Probe Frequency', 10.0, []),
     UserData(UserDataType.SPINBOX, 'Probe Size', 128, []),
+    UserData(UserDataType.CHECK_BOX, 'View', False, []),
     UserData(UserDataType.CHECK_BOX, 'Running', False, [])]),
   'REMOTE_LOG': Factory(None, [
     UserData(UserDataType.DEFAULT, 'Address', '', []),

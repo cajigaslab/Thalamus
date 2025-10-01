@@ -1,3 +1,4 @@
+#include <thalamus/tracing.hpp>
 #include <modalities_util.hpp>
 #include <remote_node.hpp>
 #include <thalamus/thread.hpp>
@@ -42,6 +43,7 @@ struct RemoteNode::Impl {
   std::mutex mutex;
   std::condition_variable condition;
   bool ready = true;
+  bool image_ready = true;
   bool has_analog_data = false;
   bool has_xsens_data = false;
   std::vector<Segment> segments;
@@ -53,6 +55,14 @@ struct RemoteNode::Impl {
   std::unique_ptr<grpc::CompletionQueue> queue;
   std::string pose_name;
   double bps = 0;
+
+  std::vector<std::vector<unsigned char>> planes;
+  size_t num_planes;
+  Format format;
+  size_t width;
+  size_t height;
+  std::chrono::nanoseconds frame_interval;
+  bool has_image_data = false;
 
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
        NodeGraph *_node_graph, RemoteNode *_outer)
@@ -89,13 +99,16 @@ struct RemoteNode::Impl {
   enum StreamState {
     ANALOG_CONNECT,
     XSENS_CONNECT,
+    IMAGE_CONNECT,
     ANALOG_READ,
     XSENS_READ,
+    IMAGE_READ,
     PING_CONNECT,
     PING,
     PONG,
     ANALOG_FINISH,
     XSENS_FINISH,
+    IMAGE_FINISH,
     PING_FINISH,
     STIM_CONNECT,
     STIM_NODE_WRITE,
@@ -182,10 +195,15 @@ struct RemoteNode::Impl {
 
       grpc::ClientContext analog_context;
       grpc::ClientContext xsens_context;
+      grpc::ClientContext image_context;
+      
       grpc::ClientContext ping_context;
       grpc::ClientContext stim_context;
       thalamus_grpc::NodeSelector selector;
       selector.set_name(node);
+      thalamus_grpc::ImageRequest image_request;
+      *image_request.mutable_node() = selector;
+      //image_request.set_framerate(10.0);
 
       thalamus_grpc::AnalogRequest analog_request;
       *analog_request.mutable_node() = selector;
@@ -195,6 +213,9 @@ struct RemoteNode::Impl {
       auto xsens_stream =
           stub->Asyncxsens(&xsens_context, selector, queue.get(),
                            reinterpret_cast<void *>(XSENS_CONNECT));
+      auto image_stream =
+          stub->Asyncimage(&image_context, image_request, queue.get(),
+                           reinterpret_cast<void *>(IMAGE_CONNECT));
       stim_stream = stub->Asyncstim(&stim_context, queue.get(),
       reinterpret_cast<void*>(STIM_CONNECT));
       auto ping_stream = stub->Asyncping(
@@ -202,6 +223,7 @@ struct RemoteNode::Impl {
 
       thalamus_grpc::AnalogResponse analog_response;
       thalamus_grpc::XsensResponse xsens_response;
+      thalamus_grpc::Image image_response;
       thalamus_grpc::Ping ping;
       thalamus_grpc::StimResponse stim_response;
       ping.set_id(0);
@@ -279,6 +301,10 @@ struct RemoteNode::Impl {
           xsens_stream->Read(&xsens_response,
                              reinterpret_cast<void *>(XSENS_READ));
           break;
+        case IMAGE_CONNECT:
+          image_stream->Read(&image_response,
+                             reinterpret_cast<void *>(IMAGE_READ));
+          break;
         case PING_CONNECT:
           ping_ready = true;
           ping_stream->Read(&pong, reinterpret_cast<void *>(PONG));
@@ -345,6 +371,7 @@ struct RemoteNode::Impl {
           break;
         }
         case ANALOG_READ: {
+          TRACE_EVENT("thalamus", "RemoteNode::ANALOG_READ");
           bytes_transferred += analog_response.ByteSizeLong();
           std::unique_lock<std::mutex> lock(mutex);
           condition.wait(lock, [&] { return ready || !running; });
@@ -388,6 +415,7 @@ struct RemoteNode::Impl {
                          });
           boost::asio::post(io_context, [&, channels_changed,
                                          moved_names = std::move(new_names)] {
+            TRACE_EVENT("thalamus", "RemoteNode::analog broadcast");
             if (channels_changed) {
               outer->channels_changed(outer);
             }
@@ -441,10 +469,70 @@ struct RemoteNode::Impl {
                              reinterpret_cast<void *>(XSENS_READ));
           break;
         }
+        case IMAGE_READ: {
+          TRACE_EVENT("thalamus", "RemoteNode::IMAGE_READ");
+          bytes_transferred += image_response.ByteSizeLong();
+          std::unique_lock<std::mutex> lock(mutex);
+          condition.wait(lock, [&] { return image_ready || !running; });
+          if (!running) {
+            continue;
+          }
+
+          time = std::chrono::steady_clock::now().time_since_epoch();
+          for(auto i = 0;i < image_response.data_size();++i) {
+            const auto& data = image_response.data(i);
+            while(i >= planes.size()) {
+              planes.emplace_back();
+            }
+            planes[i].insert(planes[i].end(), data.begin(), data.end());
+          }
+          num_planes = image_response.data_size();
+          //auto protobuf_format = image_response.format();
+          switch(image_response.format()) {
+            case thalamus_grpc::Image::Gray:
+              format = ImageNode::Format::Gray;
+              break;
+            case thalamus_grpc::Image::RGB:
+              format = ImageNode::Format::RGB;
+              break;
+            case thalamus_grpc::Image::YUYV422:
+              format = ImageNode::Format::YUYV422;
+              break;
+            case thalamus_grpc::Image::YUV420P:
+              format = ImageNode::Format::YUV420P;
+              break;
+            case thalamus_grpc::Image::YUVJ420P:
+              format = ImageNode::Format::YUVJ420P;
+              break;
+          }
+          width = image_response.width();
+          height = image_response.height();
+          frame_interval = std::chrono::nanoseconds(image_response.frame_interval());
+
+          if(image_response.last()) {
+            image_ready = false;
+            boost::asio::post(io_context, [&] {
+              TRACE_EVENT("thalamus", "RemoteNode::image broadcast");
+              std::lock_guard<std::mutex> lock2(mutex);
+              has_image_data = true;
+              outer->ready(outer);
+              has_image_data = false;
+              for(auto& plane : planes) {
+                plane.clear();
+              }
+              image_ready = true;
+              condition.notify_all();
+            });
+          }
+          image_stream->Read(&image_response,
+                             reinterpret_cast<void *>(IMAGE_READ));
+          break;
+        }
         }
       }
       analog_context.TryCancel();
       xsens_context.TryCancel();
+      image_context.TryCancel();
       ping_context.TryCancel();
       stim_context.TryCancel();
       {
@@ -603,6 +691,31 @@ RemoteNode::stim(thalamus_grpc::StimRequest &&request) {
   auto result = impl->queue_stim(std::move(request));
   impl->send_stim();
   return result;
+}
+
+ImageNode::Plane RemoteNode::plane(int i) const {
+  return Plane(impl->planes[i].begin(), impl->planes[i].end());
+}
+size_t RemoteNode::num_planes() const  {
+  return impl->num_planes;
+}
+ImageNode::Format RemoteNode::format() const  {
+  return impl->format;
+}
+size_t RemoteNode::width() const  {
+  return impl->width;
+}
+size_t RemoteNode::height() const  {
+  return impl->height;
+}
+std::chrono::nanoseconds RemoteNode::frame_interval() const  {
+  return impl->frame_interval;
+}
+void RemoteNode::inject(const thalamus_grpc::Image &) {
+  THALAMUS_ASSERT(false, "RemoteNode::inject unimplemented.");
+}
+bool RemoteNode::has_image_data() const {
+  return impl->has_image_data;
 }
 
 size_t RemoteNode::modalities() const { return infer_modalities<RemoteNode>(); }
