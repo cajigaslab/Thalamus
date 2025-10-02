@@ -71,7 +71,8 @@ class ThalamusThread:
             if not self.running:
               break
             if transaction.redirection:
-              bridge_channel = grpc.aio.insecure_channel(transaction.redirection)
+              redirection = transaction.redirection.replace('localhost', self.address.split(':')[0])
+              bridge_channel = grpc.aio.insecure_channel(redirection)
               await bridge_channel.channel_ready()
               bridge_stub = thalamus_pb2_grpc.ThalamusStub(bridge_channel)
               break

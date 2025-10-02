@@ -44,6 +44,7 @@ from ..servicer import ThalamusServicer
 from ..qt import *
 from ..orchestration import Orchestrator
 from .util import create_task_with_exc_handling
+from ..resources import get_path
 
 UNHANDLED_EXCEPTION: typing.List[Exception] = []
 

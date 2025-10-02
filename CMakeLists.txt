@@ -288,7 +288,7 @@ elseif(APPLE)
   target_sources(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src/nidaq_node_mac.cpp")
   target_compile_definitions(thalamus PRIVATE _GNU_SOURCE)
 else()
-  target_sources(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src/nidaq_node_linux.cpp"
+  target_sources(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src/nidaq_node_windows.cpp"
                                   "${CMAKE_SOURCE_DIR}/src/ros2_node.hpp"
                                   "${CMAKE_SOURCE_DIR}/src/ros2_node.cpp")
   target_link_libraries(thalamus comedi m)

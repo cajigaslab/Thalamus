@@ -31,7 +31,7 @@ We provide auto builds for Linux (glibc 2.35) and Windows (10).
 
 # Installation Guide
 ## Install from Build
-Download appropriate (Windows or Linux) build directly from actions tab
+Download appropriate (Windows or Linux) build directly from actions tab or under Releases.
 
 For Windows:
 

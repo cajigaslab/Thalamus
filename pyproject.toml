@@ -1,12 +1,39 @@
-[metadata]
+[project]
 name = "thalamus"
-version = "0.3.22"
+version = "0.3.23"
 description = "TODO: Package description"
 license = "TODO: License declaration"
 maintainer = "jarl"
 maintainer_email = "Jarl.Haggerty@Pennmedicine.penn.edu"
+requires-python = ">=3.10"
 
 [build-system]
 requires = [ "setuptools", "grpcio-tools", "toml",]
 backend-path = [ ".",]
 build-backend = "thalamus.build"
+
+[tool.poetry.dependencies]
+numpy = "2.2.6"
+opencv-contrib-python = "^4.12.0.88"
+grpcio-tools = "^1.74.0"
+grpcio-reflection = "^1.74.0"
+pyyaml = "^6.0.2"
+pyopengl = "^3.1.10"
+pyqt6 = "^6.9.1"
+matplotlib = "^3.10.6"
+jinja2 = "^3.1.6"
+h5py = "^3.14.0"
+scipy = "1.15.3"
+typing-extensions = "^4.15.0"
+numpy-stl = "^3.2.0"
+scikit-learn = "^1.7.1"
+pillow = "^11.3.0"
+lark = "^1.2.2"
+jsonpath-ng = "^1.7.0"
+wheel = "^0.45.1"
+toml = "^0.10.2"
+build = "^1.3.0"
+meson = "^1.9.0"
+ninja = "^1.13.0"
+oslex = "^0.1.3"
+psutil = "^7.0.0"

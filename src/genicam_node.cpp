@@ -1,4 +1,5 @@
 #include <calculator.hpp>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <genicam_node.hpp>
@@ -234,6 +235,7 @@ struct GenicamNode::Impl {
       set(const std::string &reg,
           const std::variant<long long int, std::string, double> &value) = 0;
       virtual bool is_writable(const std::string &) = 0;
+      virtual std::chrono::nanoseconds polling_time(const std::string &) = 0;
     };
 
     enum class AccessMode { RW, RO, WO };
@@ -267,6 +269,19 @@ struct GenicamNode::Impl {
 
       std::optional<calculator::program> to_program;   // Our program (AST)
       std::optional<calculator::program> from_program; // Our program (AST)
+
+      std::chrono::nanoseconds polling_time() {
+        std::optional<std::chrono::nanoseconds> result = std::nullopt;
+        for (auto &i : values) {
+          auto val = device->polling_time(i.second);
+          if(result) {
+            *result = std::min(val, *result);
+          } else {
+            result = val;
+          }
+        }
+        return result ? *result : 0ns;
+      }
 
       long long int read() {
         TRACE_EVENT("thalamus", "IntConverter::read");
@@ -338,6 +353,19 @@ struct GenicamNode::Impl {
       std::optional<calculator::program> to_program;   // Our program (AST)
       std::optional<calculator::program> from_program; // Our program (AST)
 
+      std::chrono::nanoseconds polling_time() {
+        std::optional<std::chrono::nanoseconds> result = std::nullopt;
+        for (auto &i : values) {
+          auto val = device->polling_time(i.second);
+          if(result) {
+            *result = std::min(val, *result);
+          } else {
+            result = val;
+          }
+        }
+        return result ? *result : 0ns;
+      }
+
       double read() {
         TRACE_EVENT("thalamus", "Converter::read");
         if (!from_program) {
@@ -405,6 +433,19 @@ struct GenicamNode::Impl {
 
       std::optional<calculator::program> program; // Our program (AST)
 
+      std::chrono::nanoseconds polling_time() {
+        std::optional<std::chrono::nanoseconds> result = std::nullopt;
+        for (auto &i : values) {
+          auto val = device->polling_time(i.second);
+          if(result) {
+            *result = std::min(val, *result);
+          } else {
+            result = val;
+          }
+        }
+        return result ? *result : 0ns;
+      }
+
       long long int read() {
         TRACE_EVENT("thalamus", "IntSwissKnife::read");
         if (!program) {
@@ -444,6 +485,19 @@ struct GenicamNode::Impl {
 
       std::optional<calculator::program> program; // Our program (AST)
 
+      std::chrono::nanoseconds polling_time() {
+        std::optional<std::chrono::nanoseconds> result = std::nullopt;
+        for (auto &i : values) {
+          auto val = device->polling_time(i.second);
+          if(result) {
+            *result = std::min(val, *result);
+          } else {
+            result = val;
+          }
+        }
+        return result ? *result : 0ns;
+      }
+
       double read() {
         TRACE_EVENT("thalamus", "SwissKnife::read");
         if (!program) {
@@ -478,6 +532,12 @@ struct GenicamNode::Impl {
       size_t length;
       AccessMode access_mode;
       std::string buffer;
+      std::chrono::nanoseconds _polling_time;
+
+      std::chrono::nanoseconds polling_time() {
+        return _polling_time;
+      }
+
       std::string read() {
         TRACE_EVENT("thalamus", "StringRed::read");
         buffer.resize(length);
@@ -516,6 +576,12 @@ struct GenicamNode::Impl {
       std::optional<size_t> lsb;
       std::optional<size_t> msb;
       std::vector<unsigned char> buffer;
+      std::chrono::nanoseconds _polling_time;
+
+      std::chrono::nanoseconds polling_time() {
+        return _polling_time;
+      }
+
       long long int read() {
         TRACE_EVENT("thalamus", "IntReg::read");
         buffer.resize(length);
@@ -650,6 +716,12 @@ struct GenicamNode::Impl {
       bool _unsigned;
       AccessMode access_mode;
       std::vector<unsigned char> buffer;
+      std::chrono::nanoseconds _polling_time;
+
+      std::chrono::nanoseconds polling_time() {
+        return _polling_time;
+      }
+
       double read() {
         TRACE_EVENT("thalamus", "FloatReg::read");
         buffer.resize(length);
@@ -800,6 +872,10 @@ struct GenicamNode::Impl {
       std::optional<std::string> max;
       std::optional<std::string> inc;
 
+      std::chrono::nanoseconds polling_time() {
+        return device->polling_time(this->value);
+      }
+
       double read() {
         TRACE_EVENT("thalamus", "Float::read");
         auto result = variant_cast<double>(device->get(this->value));
@@ -898,6 +974,10 @@ struct GenicamNode::Impl {
       std::optional<std::string> min;
       std::optional<std::string> max;
       std::optional<std::string> inc;
+
+      std::chrono::nanoseconds polling_time() {
+        return device->polling_time(this->value);
+      }
 
       long long int read() {
         TRACE_EVENT("thalamus", "Integer::read");
@@ -1268,6 +1348,8 @@ struct GenicamNode::Impl {
               }
             } else if (current_name == "StringReg") {
               size_t address = get_int<size_t>(*current, "Address", 0);
+              size_t polling_ms = get_int<size_t>(*current, "PollingTime", 0);
+              std::chrono::nanoseconds polling_time(polling_ms*1'000'000);
               auto p_address = current->get<std::string>("pAddress", "");
               auto access_mode = parse_access_mode(
                   current->get<std::string>("AccessMode", "RW"));
@@ -1285,9 +1367,11 @@ struct GenicamNode::Impl {
               auto length = get_int<size_t>(*current, "Length", 0);
               nodes[node_name] = StringReg{
                   this,   port_handle, cti, address, p_address, int_swiss_knife,
-                  length, access_mode, ""};
+                  length, access_mode, "", polling_time};
             } else if (current_name == "IntReg") {
               size_t address = get_int<size_t>(*current, "Address", 0);
+              size_t polling_ms = get_int<size_t>(*current, "PollingTime", 0);
+              std::chrono::nanoseconds polling_time(polling_ms*1'000'000);
               auto p_address = current->get<std::string>("pAddress", "");
               auto access_mode = parse_access_mode(
                   current->get<std::string>("AccessMode", "RW"));
@@ -1312,9 +1396,11 @@ struct GenicamNode::Impl {
                   this,      port_handle,     cti,          address,
                   p_address, int_swiss_knife, length,       little_endian,
                   _unsigned, access_mode,     std::nullopt, std::nullopt,
-                  {}};
+                  {}, polling_time};
             } else if (current_name == "FloatReg") {
               size_t address = get_int<size_t>(*current, "Address", 0);
+              size_t polling_ms = get_int<size_t>(*current, "PollingTime", 0);
+              std::chrono::nanoseconds polling_time(polling_ms*1'000'000);
               auto p_address = current->get<std::string>("pAddress", "");
               auto access_mode = parse_access_mode(
                   current->get<std::string>("AccessMode", "RW"));
@@ -1338,7 +1424,7 @@ struct GenicamNode::Impl {
               nodes[node_name] =
                   FloatReg{this,      port_handle,     cti,    address,
                            p_address, int_swiss_knife, length, little_endian,
-                           _unsigned, access_mode,     {}};
+                           _unsigned, access_mode,     {}, polling_time};
             } else if (current_name == "Float") {
               auto p_value = current->get_optional<std::string>("pValue");
               auto value = get_optional<double>(*current, "Value");
@@ -1461,6 +1547,8 @@ struct GenicamNode::Impl {
                              0,    formula,     values, {}, std::nullopt};
             } else if (current_name == "MaskedIntReg") {
               size_t address = get_int<size_t>(*current, "Address", 0);
+              size_t polling_ms = get_int<size_t>(*current, "PollingTime", 0);
+              std::chrono::nanoseconds polling_time(polling_ms*1'000'000);
               auto p_address = current->get<std::string>("pAddress", "");
               auto access_mode = parse_access_mode(
                   current->get<std::string>("AccessMode", "RW"));
@@ -1503,9 +1591,11 @@ struct GenicamNode::Impl {
                              : std::nullopt,
                          msb ? std::optional<long long int>(msb.value())
                              : std::nullopt,
-                         {}};
+                         {}, polling_time};
             } else if (current_name == "StructReg") {
               size_t default_address = get_int<size_t>(*current, "Address", 0);
+              size_t polling_ms = get_int<size_t>(*current, "PollingTime", 0);
+              std::chrono::nanoseconds polling_time(polling_ms*1'000'000);
               auto default_p_address =
                   current->get<std::string>("pAddress", "");
               auto access_mode = parse_access_mode(
@@ -1579,7 +1669,7 @@ struct GenicamNode::Impl {
                                : std::nullopt,
                            msb ? std::optional<long long int>(msb.value())
                                : std::nullopt,
-                           {}};
+                           {}, polling_time};
               }
             } else if (current_name == "Enumeration") {
               auto p_value = current->get_optional<std::string>("pValue");
@@ -1702,7 +1792,7 @@ struct GenicamNode::Impl {
       std::thread stream_thread;
       std::atomic_bool streaming = false;
       boost::signals2::signal<void(const unsigned char *, int, int,
-                                   std::chrono::steady_clock::time_point)>
+                                   std::chrono::steady_clock::time_point, std::optional<double>)>
           frame_ready;
       boost::asio::io_context *io_context;
 
@@ -1781,6 +1871,15 @@ struct GenicamNode::Impl {
       void stream_target(long long int frame_width,
                          long long int frame_height) {
         set_current_thread_name("GENTL");
+
+        auto start_time = std::chrono::steady_clock::now();
+        std::optional<std::chrono::steady_clock::time_point> next_temp_poll;
+        std::chrono::nanoseconds temp_poll_interval = 0ns;
+        if(exists("DeviceTemperature")) {
+          temp_poll_interval = 1'000'000'000ns;//polling_time("DeviceTemperature");
+          next_temp_poll = start_time;
+        }
+
         while (streaming) {
           GenTL::EVENT_NEW_BUFFER_DATA frame_data;
           size_t size = sizeof(GenTL::EVENT_NEW_BUFFER_DATA);
@@ -1798,16 +1897,23 @@ struct GenicamNode::Impl {
           auto now = std::chrono::steady_clock::now();
           auto index = reinterpret_cast<size_t>(frame_data.pUserPointer);
           TRACE_EVENT_END("thalamus");
+
+          std::optional<double> new_temp;
+          if (next_temp_poll && *next_temp_poll <= now) {
+            new_temp = variant_cast<double>(get("DeviceTemperature"));
+            *next_temp_poll += temp_poll_interval;
+          }
+
           io_context->post([this, &buffer = buffer_data.at(index), frame_id,
                             handle = frame_data.BufferHandle, frame_width,
-                            frame_height, now] {
+                            frame_height, now, new_temp] {
             TRACE_EVENT("thalamus", "GenicamNode Post Main",
                         perfetto::TerminatingFlow::ProcessScoped(frame_id));
             if (!streaming) {
               return;
             }
             frame_ready(buffer.data(), int(frame_width), int(frame_height),
-                        now);
+                        now, new_temp);
             TRACE_EVENT("thalamus", "Cti::DSQueueBuffer");
             auto queue_error = cti->DSQueueBuffer(ds_handle, handle);
             THALAMUS_ASSERT(queue_error == GenTL::GC_ERR_SUCCESS,
@@ -1933,6 +2039,43 @@ struct GenicamNode::Impl {
 
       bool exists(const std::string &reg) {
         return nodes.find(reg) != nodes.end();
+      }
+
+      std::chrono::nanoseconds polling_time(const std::string &reg) override {
+        TRACE_EVENT("thalamus", "DeviceImpl::get");
+        auto i = nodes.find(reg);
+        THALAMUS_ASSERT(i != nodes.end(), "Register not found: %s", reg);
+        if (std::holds_alternative<long long int>(i->second)) {
+          return 0ns;
+        } else if (std::holds_alternative<double>(i->second)) {
+          return 0ns;
+        } else if (std::holds_alternative<std::string>(i->second)) {
+          return 0ns;
+        } else if (std::holds_alternative<StringReg>(i->second)) {
+          return std::get<StringReg>(i->second).polling_time();
+        } else if (std::holds_alternative<IntReg>(i->second)) {
+          return std::get<IntReg>(i->second).polling_time();
+        } else if (std::holds_alternative<IntConverter>(i->second)) {
+          return std::get<IntConverter>(i->second).polling_time();
+        } else if (std::holds_alternative<IntSwissKnife>(i->second)) {
+          return std::get<IntSwissKnife>(i->second).polling_time();
+        } else if (std::holds_alternative<FloatReg>(i->second)) {
+          return std::get<FloatReg>(i->second).polling_time();
+        } else if (std::holds_alternative<Converter>(i->second)) {
+          return std::get<Converter>(i->second).polling_time();
+        } else if (std::holds_alternative<SwissKnife>(i->second)) {
+          return std::get<SwissKnife>(i->second).polling_time();
+        } else if (std::holds_alternative<Integer>(i->second)) {
+          return std::get<Integer>(i->second).polling_time();
+        } else if (std::holds_alternative<Enumeration>(i->second)) {
+          return 0ns;
+        } else if (std::holds_alternative<Float>(i->second)) {
+          return std::get<Float>(i->second).polling_time();
+        } else if (std::holds_alternative<Link>(i->second)) {
+          return polling_time(std::get<Link>(i->second).name);
+        }
+        THALAMUS_ASSERT(false, "Unexpected register type");
+        return 0ns;
       }
 
       bool is_writable(const std::string &reg) override;
@@ -2303,10 +2446,11 @@ struct GenicamNode::Impl {
   std::vector<std::chrono::steady_clock::time_point> frame_times;
   double framerate = 0;
   double target_framerate = 0;
+  std::optional<double> temperature;
 
   void on_frame_ready(const unsigned char *frame_data, int frame_width,
                       int frame_height,
-                      std::chrono::steady_clock::time_point now) {
+                      std::chrono::steady_clock::time_point now, std::optional<double> new_temp) {
     TRACE_EVENT("thalamus", "GenicamNode::on_frame_ready");
     while (!frame_times.empty() && now - frame_times.front() >= 1s) {
       std::pop_heap(frame_times.begin(), frame_times.end(),
@@ -2321,6 +2465,8 @@ struct GenicamNode::Impl {
     } else {
       framerate = 0;
     }
+    temperature = new_temp;
+
     frame_times.push_back(now);
     std::push_heap(frame_times.begin(), frame_times.end(),
                    [](auto &l, auto &r) { return l > r; });
@@ -2334,8 +2480,10 @@ struct GenicamNode::Impl {
     this->has_analog = true;
     TRACE_EVENT("thalamus", "GenicamNode::on_frame_ready");
     analog_impl.inject(
-        {std::span<const double>(&framerate, &framerate + 1)},
-        {std::chrono::nanoseconds(size_t(1e9 / target_framerate))}, {""});
+        {std::span<const double>(&framerate, &framerate + 1),
+         temperature ? std::span<const double>(&*temperature, &*temperature + 1) : std::span<const double>()},
+        {std::chrono::nanoseconds(size_t(1e9 / target_framerate)), 0ns},
+        {"Framerate", "Temperature (C)"});
   }
 
   void sanitize_camera(std::shared_ptr<Cti::DeviceImpl> d) {
@@ -2522,7 +2670,7 @@ struct GenicamNode::Impl {
         return;
       }
       frame_connection = d->frame_ready.connect(
-            std::bind(&Impl::on_frame_ready, this, _1, _2, _3, _4));
+            std::bind(&Impl::on_frame_ready, this, _1, _2, _3, _4, _5));
       state->at("Running").assign(d->streaming);
     } else if (key_str == "Running") {
       running = variant_cast<bool>(v);
@@ -2630,11 +2778,7 @@ std::chrono::nanoseconds GenicamNode::sample_interval(int channel) const {
 }
 
 std::string_view GenicamNode::name(int channel) const {
-  if (channel == 0) {
-    return "Framerate";
-  } else {
-    return "";
-  }
+  return impl->analog_impl.name(channel);
 }
 
 void GenicamNode::inject(

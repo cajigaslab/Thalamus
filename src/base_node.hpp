@@ -69,6 +69,14 @@ public:
   virtual std::chrono::steady_clock::time_point get_steady_clock_at_start() = 0;
   virtual ThreadPool &get_thread_pool() = 0;
   virtual void dialog(const thalamus_grpc::Dialog &) = 0;
+  virtual void log(const thalamus_grpc::Text &) = 0;
+  virtual void log(const std::string_view & text) {
+    std::chrono::nanoseconds now = std::chrono::steady_clock::now().time_since_epoch();
+    thalamus_grpc::Text message;
+    message.set_time(uint64_t(now.count()));
+    message.set_text(text);
+    log(message);
+  }
 };
 
 class NoneNode : public Node {
