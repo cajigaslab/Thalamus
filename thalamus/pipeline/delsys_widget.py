@@ -118,7 +118,7 @@ class DelsysWidget(QWidget):
 
     def on_remove():
       for row in get_selected_rows(components_view):
-        del components_view[i]
+        del components[row]
     remove_component_button.clicked.connect(on_remove)
 
     components_widget = QWidget()
