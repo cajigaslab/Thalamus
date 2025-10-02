@@ -14,6 +14,9 @@
 namespace thalamus {
 
   struct DAQmxAPI {
+    DAQmxAPI() = delete;
+    DAQmxAPI(const DAQmxAPI&) = delete;
+
     decltype(&::DAQmxStartTask) DAQmxStartTask;
     decltype(&::DAQmxStopTask) DAQmxStopTask;
     decltype(&::DAQmxClearTask) DAQmxClearTask;
