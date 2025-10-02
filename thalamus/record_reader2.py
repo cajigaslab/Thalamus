@@ -4,6 +4,7 @@ import sys
 import time
 import zlib
 import json
+import queue
 import shutil
 import typing
 import struct
@@ -120,14 +121,14 @@ class ZQueue:
 #  def push(self, message: Image)
 
 class RecordReader:
-  def __init__(self, file_arg: typing.Union[str, pathlib.Path, io.BufferedReader], decompress=True, mux=True):
+  def __init__(self, file_arg: typing.Union[str, pathlib.Path, io.BufferedReader], node=None, decompress=True, decode_video=True):
     self.filename: typing.Optional[pathlib.Path]
     self.reader: typing.Optional[io.BufferedReader]
     self.size = 0
+    self.node_filter = node
+    self.decode_video = decode_video
     self.current_position = 0
     self.decompress = decompress
-    self.mux = mux
-    self.muxers: typing.Dict[str, subprocess.Popen] = {}
     self.running = False
     self.pool = ThreadPool()
     self.thread: typing.Optional[threading.Thread] = None
@@ -150,6 +151,44 @@ class RecordReader:
 
   def reader_thread(self):
     muxers: typing.Dict[str, subprocess.Popen] = {}
+    decoder_threads: typing.Dict[str, threading.Thread] = {}
+    decoder_queues: typing.Dict[str, queue.Queue] = {}
+
+    def decoder(proc: subprocess.Popen, q: queue.Queue, prototype: StorageRecord):
+      data = b''
+      #print(prototype)
+      frame_size = prototype.image.width*prototype.image.height
+      #print(frame_size)
+      while True:
+        new_data = proc.stdout.read(2**24)
+        if not new_data:
+          break
+        data += new_data
+        #print(len(data))
+        offset = 0
+        #print(len(data), frame_size, len(data) >= frame_size)
+        while offset + frame_size <= len(data):
+          #print('  ', offset)
+          record = StorageRecord(
+            node=prototype.node,
+            time=prototype.time,
+            image=Image(
+              bigendian=prototype.image.bigendian,
+              format=Image.Format.Gray,
+              frame_interval=prototype.image.frame_interval,
+              height=prototype.image.height,
+              last=prototype.image.last,
+              width=prototype.image.width,
+            )
+          )
+          record.image.data.append(data[offset:offset+frame_size])
+          #print(record)
+          q.put(record)
+          offset += frame_size
+        data = data[offset:]
+        #print('    ', len(data))
+      proc.wait()
+
     assert self.reader is not None
     try:
       #print('reader', self.reader.tell(), self.size)
@@ -164,15 +203,18 @@ class RecordReader:
         #print('reader', record)
         if record is None:
           with self.lock:
-            self.records.append((self.size, None))
+            self.records.append((self.size, 0, None))
           return
+        
+        if self.node_filter is not None and record.node != self.node_filter:
+          continue
         
         body_type = record.WhichOneof('body')
         #print(record.node, body_type)
         if body_type == 'compressed':
           if not self.decompress:
             with self.lock:
-              self.records.append((position, record))
+              self.records.append((position, record.time, record))
               continue
 
           compressed = record.compressed
@@ -187,62 +229,45 @@ class RecordReader:
             continue
 
           with self.lock:
-            self.records.append((position, PendingMessage(compressed.size, compressed.type, compressed.stream)))
+            self.records.append((position, record.time, PendingMessage(compressed.size, compressed.type, compressed.stream)))
         elif body_type == 'image':
           image = record.image
-          if image.format in (Image.Format.MPEG1, Image.Format.MPEG4, Image.Format.Gray, Image.Format.RGB) and self.mux:
+          if self.decode_video and image.format in (Image.Format.MPEG1, Image.Format.MPEG4):
             if record.node not in muxers:
-              self.image_nodes.append(record.node)
-              output_file = f'{self.filename}.{record.node}.avi'
-              if image.format in (Image.Format.MPEG1, Image.Format.MPEG4,):
-                muxers[record.node] = subprocess.Popen(f'ffmpeg -y -i pipe: -c:v copy "{output_file}"', stdin=subprocess.PIPE, shell=True)
-              elif image.format in (Image.Format.Gray, Image.Format.RGB):
-                framerates = [
-                  (24000.0 / 1001, "24000/1001"),
-                  (24, "24"),
-                  (25, "25"),
-                  (30000.0 / 1001, "30000/1001"),
-                  (30, "30"),
-                  (50, "50"),
-                  (60000.0 / 1001, "60000/1001"),
-                  (60, "60"),
-                  (15, "15"),
-                  (5, "5"),
-                  (10, "10"),
-                  (12, "12"),
-                  (15, "15")
-                ]
-                framerate = min(framerates, key=lambda a: abs(a[0] - 1e9/(image.frame_interval or 16e6)))
-                if image.format == Image.Format.Gray:
-                  format = 'gray'
-                #elif image.format == Image.Format.RGB:
-                else:
-                  format = 'rgb24'
-                command = (f'ffmpeg -y -f rawvideo -r {framerate[1]} -pixel_format {format} -video_size {image.width}x{image.height} '
-                           f'-i pipe: -qscale:v 2 -b:v 100M "{output_file}"')
-                print('COMMAND', command)
-                muxers[record.node] = subprocess.Popen(command, stdin=subprocess.PIPE, shell=True)
-            muxer = muxers[record.node]
-            assert muxer.stdin is not None
-            if len(image.data) > 0:
-              muxer.stdin.write(image.data[0])
+              muxers[record.node] = subprocess.Popen(f'ffmpeg -hide_banner -loglevel error -y -i pipe: -f rawvideo -pix_fmt gray pipe:', stdin=subprocess.PIPE, stdout=subprocess.PIPE, shell=True)
+              decoder_queues[record.node] = queue.Queue()
+              prototype = StorageRecord(
+                node=record.node,
+                time=record.time,
+                image=Image(
+                  bigendian=image.bigendian,
+                  format=image.format,
+                  frame_interval=image.frame_interval,
+                  height=image.height,
+                  last=image.last,
+                  width=image.width,
+                )
+              )
+              decoder_threads[record.node] = threading.Thread(target=decoder,args=(muxers[record.node], decoder_queues[record.node], prototype))
+              decoder_threads[record.node].start()
+            muxers[record.node].stdin.write(image.data[0])
             if image.width > 0:
               with self.lock:
-                self.records.append((position, record))
+                self.records.append((position, record.time, decoder_queues[record.node]))
           else:
             with self.lock:
-              self.records.append((position, record))
+              self.records.append((position, record.time, record))
         else:
           with self.lock:
-            self.records.append((position, record))
+            self.records.append((position, record.time, record))
     except:
       traceback.print_exc()
     finally:
       for k, v in muxers.items():
         assert v.stdin is not None
         v.stdin.close()
-      for k, v in muxers.items():
-        v.wait()
+      for k, v in decoder_threads.items():
+        v.join()
 
   def get_record(self) -> typing.Optional[StorageRecord]:
     #print('get_record')
@@ -252,11 +277,16 @@ class RecordReader:
         #print('get_record', 'sleep')
         time.sleep(1)
         self.lock.acquire()
-      position, record = self.records.popleft()
+      position, t, record = self.records.popleft()
       if isinstance(record, PendingMessage):
         z_queue = self.z_queues[record.stream]
         self.lock.release()
         record = z_queue.pull()
+        self.lock.acquire()
+      elif isinstance(record, queue.Queue):
+        self.lock.release()
+        record = record.get()
+        record.time = t
         self.lock.acquire()
       self.current_position = position
       return record

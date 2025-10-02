@@ -643,6 +643,9 @@ static DataCount count_data(const std::string &filename,
         if (analog.is_int_data()) {
           result.datatypes["analog/" + node_name + "/" + span_name + "/data"] =
               H5T_NATIVE_SHORT;
+        } else if (analog.is_ulong_data()) {
+          result.datatypes["analog/" + node_name + "/" + span_name + "/data"] =
+              H5T_NATIVE_UINT64;
         } else {
           result.datatypes["analog/" + node_name + "/" + span_name + "/data"] =
               H5T_NATIVE_DOUBLE;
@@ -1171,6 +1174,10 @@ int generate_csv(boost::program_options::variables_map &vm) {
           for (auto i = span.begin(); i < span.end(); ++i) {
             fprintf(column_files[span_name], "%" PRIu64 ",%d,\n", record_time, analog.int_data(int(i)));
           }
+        } else if (analog.is_ulong_data()) {
+          for (auto i = span.begin(); i < span.end(); ++i) {
+            fprintf(column_files[span_name], "%" PRIu64 ",%" PRIu64 ",\n", record_time, analog.ulong_data(int(i)));
+          }
         } else {
           for (auto i = span.begin(); i < span.end(); ++i) {
             fprintf(column_files[span_name], "%" PRIu64 ",%f,\n", record_time, analog.data(int(i)));
@@ -1471,6 +1478,7 @@ int main(int argc, char **argv) {
     auto last_time = std::chrono::steady_clock::now();
     std::map<hid_t, std::vector<double>> data_caches;
     std::map<hid_t, std::vector<short>> int_data_caches;
+    std::map<hid_t, std::vector<size_t>> ulong_data_caches;
     std::map<hid_t, std::vector<Segment>> segment_caches;
     std::map<hid_t, std::vector<char *>> text_caches;
     std::map<hid_t, std::vector<unsigned char>> image_caches;
@@ -1520,6 +1528,12 @@ int main(int argc, char **argv) {
                 record->time(), analog.remote_time(), span_size, data, received,
                 data_written, received_written, H5T_NATIVE_SHORT,
                 analog.int_data().data() + span.begin(), int_data_caches[data],
+                received_caches[received], data_chunk, received_chunk);
+          } else if (analog.is_ulong_data()) {
+            write_data(
+                record->time(), analog.remote_time(), span_size, data, received,
+                data_written, received_written, H5T_NATIVE_UINT64,
+                analog.ulong_data().data() + span.begin(), ulong_data_caches[data],
                 received_caches[received], data_chunk, received_chunk);
           } else {
             write_data(record->time(), analog.remote_time(), span_size, data,

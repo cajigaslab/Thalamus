@@ -44,6 +44,7 @@ from ..servicer import ThalamusServicer
 from ..qt import *
 from ..orchestration import Orchestrator
 from .util import create_task_with_exc_handling
+from ..resources import get_path
 
 UNHANDLED_EXCEPTION: typing.List[Exception] = []
 
@@ -141,7 +142,7 @@ async def async_main() -> None:
   logging.info("Starting GRPC server on %s", listen_addr)
   await server.start()
   
-  bmbi_native_filename = resource_filename('thalamus', 'native' + ('.exe' if sys.platform == 'win32' else ''))
+  bmbi_native_filename = get_path('thalamus', 'native' + ('.exe' if sys.platform == 'win32' else ''))
   bmbi_native_proc = None
   pypipeline_servicer = None
   if arguments.pypipeline:

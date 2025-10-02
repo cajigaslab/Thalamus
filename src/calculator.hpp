@@ -147,7 +147,16 @@ struct eval {
     } else if (x.operator_ == "*") {
       return t(lhs) * t(rhs);
     } else if (x.operator_ == "/") {
-      return t(lhs) / t(rhs);
+      if constexpr (std::is_integral<LHS>::value &&
+                    std::is_integral<RHS>::value) {
+        if (lhs % rhs == 0) {
+          return t(lhs) / t(rhs);
+        } else {
+          return double(lhs) / double(rhs);
+        }
+      } else {
+        return t(lhs) / t(rhs);
+      }
     } else if (x.operator_ == "=") {
       return t(lhs) == t(rhs) ? 1ll : 0ll;
     } else if (x.operator_ == "<>") {

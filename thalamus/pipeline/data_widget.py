@@ -256,7 +256,7 @@ class PlotCanvas(QWidget):
       denom = denom if denom > 0 else 1
       interp = (self.current_value - self.range[0])/denom
       interp = max(0.0, min(1.0, interp))
-      text = "{0:.3}".format(self.current_value)
+      text = "{0:.5}".format(self.current_value)
       font = painter.font()
       font.setPixelSize(int(device_bounds.height()/2))
       painter.save()

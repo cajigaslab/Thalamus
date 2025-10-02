@@ -416,4 +416,8 @@ void NodeGraphImpl::dialog(const thalamus_grpc::Dialog &dialog) {
           THALAMUS_LOG(info) << "Dialog complete " << s.error_message();
         });
 }
+
+void NodeGraphImpl::log(const thalamus_grpc::Text & text) {
+  (*impl->service)->log_signal(text);
+}
 } // namespace thalamus
