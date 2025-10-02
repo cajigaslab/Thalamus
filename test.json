@@ -12,8 +12,8 @@
       "Height": 519,
       "OffsetX": 84,
       "OffsetY": 33,
-      "ExposureTime": 16570.210456848145,
-      "AcquisitionFrameRate": 30.0,
+      "ExposureTime": 5000.0,
+      "AcquisitionFrameRate": 150.0,
       "Gain": 0.0,
       "view_geometry": [
         735,
@@ -28,8 +28,8 @@
         "Height": 518,
         "OffsetX": 84,
         "OffsetY": 32,
-        "ExposureTime": 16570.210456848145,
-        "AcquisitionFrameRate": 30.0,
+        "ExposureTime": 4994.571208953857,
+        "AcquisitionFrameRate": 115.6659164428711,
         "Gain": 0.0
       }
     },
@@ -53,8 +53,8 @@
         258
       ],
       "Render Thresholded": false,
-      "Pix X": 508,
-      "Pix Y": 363
+      "Pix X": 533,
+      "Pix Y": 431
     },
     {
       "name": "Windows",
@@ -260,11 +260,11 @@
       "OffsetX": 0,
       "OffsetY": 0,
       "ExposureTime": 16570.210456848145,
-      "AcquisitionFrameRate": 30.0,
+      "AcquisitionFrameRate": 60.0,
       "Gain": 0.0,
       "view_geometry": [
-        1379,
-        521,
+        1299,
+        337,
         471,
         337
       ],
@@ -276,7 +276,7 @@
         "OffsetX": 0,
         "OffsetY": 0,
         "ExposureTime": 16570.210456848145,
-        "AcquisitionFrameRate": 30.0,
+        "AcquisitionFrameRate": 60.0,
         "Gain": 0.0
       }
     },
@@ -293,7 +293,7 @@
       "OffsetX": 0,
       "OffsetY": 0,
       "ExposureTime": 16570.210456848145,
-      "AcquisitionFrameRate": 30.0,
+      "AcquisitionFrameRate": 60.0,
       "Gain": 0.0,
       "view_geometry": [
         1458,
@@ -309,7 +309,7 @@
         "OffsetX": 0,
         "OffsetY": 0,
         "ExposureTime": 16570.210456848145,
-        "AcquisitionFrameRate": 30.0,
+        "AcquisitionFrameRate": 60.0,
         "Gain": 0.0
       }
     },
@@ -326,11 +326,11 @@
       "OffsetX": 0,
       "OffsetY": 0,
       "ExposureTime": 16570.210456848145,
-      "AcquisitionFrameRate": 30.0,
+      "AcquisitionFrameRate": 60.0,
       "Gain": 0.0,
       "view_geometry": [
-        1477,
-        697,
+        1435,
+        630,
         388,
         434
       ],
@@ -342,7 +342,7 @@
         "OffsetX": 0,
         "OffsetY": 0,
         "ExposureTime": 16570.210456848145,
-        "AcquisitionFrameRate": 30.0,
+        "AcquisitionFrameRate": 60.0,
         "Gain": 0.0
       }
     },
@@ -364,7 +364,7 @@
       "name": "Storage",
       "type": "STORAGE2",
       "Running": false,
-      "Output File": "/mnt/sraid/Troopa_Behavior_GA_Ephys_Behave1/%y%m%d/behave",
+      "Output File": "/mnt/sraid/Bowser_Behavior_Behave1/%y%m%d/behave",
       "Compress Analog": false,
       "Compress Video": true,
       "Sources": [
@@ -460,7 +460,7 @@
   "thalamus_view_geometry": [
     100,
     100,
-    384,
+    473,
     768
   ],
   "data_views": [
@@ -589,10 +589,10 @@
   ],
   "node_widgets": [
     {
-      "node": "Recording",
+      "node": "Experiment",
       "dock_area": "right",
       "view_geometry": [
-        190,
+        279,
         22,
         194,
         746
@@ -668,8 +668,8 @@
       "y": 335.0
     },
     "IV": {
-      "x": 400.0,
-      "y": 385.0
+      "x": 266.0,
+      "y": 399.0
     },
     "Auto Clear": true
   },
@@ -687,8 +687,8 @@
       "y": 335.0
     },
     "IV": {
-      "x": 400.0,
-      "y": 385.0
+      "x": 266.0,
+      "y": 399.0
     },
     "Auto Clear": true
   },
@@ -3664,12 +3664,12 @@
             "max": 0.25
           },
           "fail_timeout": {
-            "min": 1.0,
-            "max": 1.0
+            "min": 1.5,
+            "max": 1.5
           },
           "success_timeout": {
-            "min": 1.0,
-            "max": 1.0
+            "min": 1.5,
+            "max": 1.5
           },
           "target_x": {
             "min": 1,
@@ -3698,7 +3698,7 @@
               "width": 1.6,
               "height": 1.6,
               "orientation": 0,
-              "window_size": 5.5,
+              "window_size": 4.8,
               "reward_channel": 0.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
@@ -3751,7 +3751,7 @@
               "width": 1.6,
               "height": 1.6,
               "orientation": 0,
-              "window_size": 5.5,
+              "window_size": 4.8,
               "reward_channel": 1.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
@@ -3804,7 +3804,7 @@
               "width": 1.6,
               "height": 1.6,
               "orientation": 0,
-              "window_size": 5.5,
+              "window_size": 4.8,
               "reward_channel": 1.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
@@ -3857,7 +3857,7 @@
               "width": 1.6,
               "height": 1.6,
               "orientation": 0,
-              "window_size": 5.5,
+              "window_size": 4.8,
               "reward_channel": 1.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
@@ -3910,7 +3910,7 @@
               "width": 1.6,
               "height": 1.6,
               "orientation": 0,
-              "window_size": 5.5,
+              "window_size": 4.8,
               "reward_channel": 1.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
@@ -3963,7 +3963,7 @@
               "width": 1.6,
               "height": 1.6,
               "orientation": 0,
-              "window_size": 5.5,
+              "window_size": 4.8,
               "reward_channel": 1.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
@@ -4016,7 +4016,7 @@
               "width": 1.6,
               "height": 1.6,
               "orientation": 0,
-              "window_size": 5.5,
+              "window_size": 4.8,
               "reward_channel": 1.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
@@ -4069,7 +4069,7 @@
               "width": 1.6,
               "height": 1.6,
               "orientation": 0,
-              "window_size": 5.5,
+              "window_size": 4.8,
               "reward_channel": 1.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
@@ -4119,11 +4119,11 @@
             }
           ],
           "baseline_timeout": {
-            "min": 0.1,
-            "max": 0.1
+            "min": 0.5,
+            "max": 0.8
           },
           "cue_timeout": {
-            "min": 0.5,
+            "min": 0.3,
             "max": 0.65
           },
           "reach_timeout": {

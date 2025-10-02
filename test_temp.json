@@ -3,7 +3,7 @@
     {
       "name": "Cam 1",
       "type": "GENICAM",
-      "Running": false,
+      "Running": true,
       "View": true,
       "Camera": "FLIR_GenTL:21249312",
       "WidthMax": 1280,
@@ -24,12 +24,12 @@
       "Camera Values": {
         "WidthMax": 1280,
         "HeightMax": 1024,
-        "Width": 656,
-        "Height": 512,
-        "OffsetX": 616,
-        "OffsetY": 512,
-        "ExposureTime": 8622.76554107666,
-        "AcquisitionFrameRate": 60.24267578125,
+        "Width": 896,
+        "Height": 518,
+        "OffsetX": 84,
+        "OffsetY": 32,
+        "ExposureTime": 4994.571208953857,
+        "AcquisitionFrameRate": 115.6659164428711,
         "Gain": 0.0
       }
     },
@@ -53,17 +53,17 @@
         258
       ],
       "Render Thresholded": false,
-      "Pix X": 533,
-      "Pix Y": 431
+      "Pix X": 531,
+      "Pix Y": 470
     },
     {
       "name": "Windows",
       "type": "REMOTE",
-      "Address": "192.168.0.4:50050",
+      "Address": "192.168.0.236:50050",
       "Node": "Labeler",
       "Probe Frequency": 10.0,
       "Probe Size": 128,
-      "Running": false
+      "Running": true
     },
     {
       "name": "Touch Screen",
@@ -174,7 +174,7 @@
     {
       "name": "Experiment",
       "type": "RUNNER2",
-      "Running": false,
+      "Running": true,
       "Targets": [
         {
           "Name": "Cam 1",
@@ -186,23 +186,23 @@
         },
         {
           "Name": "Fiducial",
-          "Address": "192.168.0.4:50050"
+          "Address": "192.168.0.236:50050"
         },
         {
           "Name": "Fiducial Out",
-          "Address": "192.168.0.4:50050"
+          "Address": "192.168.0.236:50050"
         },
         {
           "Name": "Reward In",
-          "Address": "192.168.0.4:50050"
+          "Address": "192.168.0.236:50050"
         },
         {
           "Name": "Reward Out",
-          "Address": "192.168.0.4:50050"
+          "Address": "192.168.0.236:50050"
         },
         {
           "Name": "NIDAQ",
-          "Address": "192.168.0.4:50050"
+          "Address": "192.168.0.236:50050"
         },
         {
           "Name": "Cam 3",
@@ -234,7 +234,7 @@
         },
         {
           "Name": "Storage",
-          "Address": "192.168.0.4:50050"
+          "Address": "192.168.0.236:50050"
         },
         {
           "Name": "Node 1",
@@ -245,12 +245,12 @@
           "Address": ""
         }
       ],
-      "tab": 1
+      "tab": 0
     },
     {
       "name": "Cam 3",
       "type": "GENICAM",
-      "Running": false,
+      "Running": true,
       "View": true,
       "Camera": "FLIR_GenTL:21083320",
       "WidthMax": 1280,
@@ -276,14 +276,14 @@
         "OffsetX": 0,
         "OffsetY": 0,
         "ExposureTime": 16570.210456848145,
-        "AcquisitionFrameRate": 60.24267578125,
+        "AcquisitionFrameRate": 60.0,
         "Gain": 0.0
       }
     },
     {
       "name": "Cam 2",
       "type": "GENICAM",
-      "Running": false,
+      "Running": true,
       "View": true,
       "Camera": "FLIR_GenTL:21286437",
       "WidthMax": 1280,
@@ -309,14 +309,14 @@
         "OffsetX": 0,
         "OffsetY": 0,
         "ExposureTime": 16570.210456848145,
-        "AcquisitionFrameRate": 60.24267578125,
+        "AcquisitionFrameRate": 60.0,
         "Gain": 0.0
       }
     },
     {
       "name": "Cam 4",
       "type": "GENICAM",
-      "Running": false,
+      "Running": true,
       "View": true,
       "Camera": "FLIR_GenTL:21289076",
       "WidthMax": 1280,
@@ -342,7 +342,7 @@
         "OffsetX": 0,
         "OffsetY": 0,
         "ExposureTime": 16570.210456848145,
-        "AcquisitionFrameRate": 60.24267578125,
+        "AcquisitionFrameRate": 60.0,
         "Gain": 0.0
       }
     },
@@ -364,7 +364,7 @@
       "name": "Storage",
       "type": "STORAGE2",
       "Running": false,
-      "Output File": "/mnt/sraidBowser_Behavior_Behave1/%y%m%d/behave",
+      "Output File": "/mnt/sraid/Troopa_Behavior_GA_Ephys_Behave1/%y%m%d/behave",
       "Compress Analog": false,
       "Compress Video": true,
       "Sources": [
@@ -425,16 +425,12 @@
     {
       "name": "experiment",
       "type": "STORAGE2",
-      "Running": false,
+      "Running": true,
       "Output File": "/mnt/sraid/Troopa_Behavior_Behave1/%y%m%d/behave",
       "Compress Analog": false,
       "Compress Video": false,
       "Sources": [],
-      "Files": [
-        {
-          "Path": "/mnt/pesaranlab/experiment_defn_files/Troopa_Behavior_Behave1"
-        }
-      ],
+      "Files": [],
       "rec": 2,
       "start": 72345.267282851,
       "Metadata": [
@@ -460,7 +456,7 @@
   "thalamus_view_geometry": [
     100,
     100,
-    756,
+    634,
     768
   ],
   "data_views": [
@@ -589,12 +585,12 @@
   ],
   "node_widgets": [
     {
-      "node": "Storage",
+      "node": "experiment",
       "dock_area": "right",
       "view_geometry": [
-        434,
+        321,
         22,
-        322,
+        313,
         746
       ]
     }
@@ -4119,8 +4115,8 @@
             }
           ],
           "baseline_timeout": {
-            "min": 0.5,
-            "max": 0.7
+            "min": 0.1,
+            "max": 0.1
           },
           "cue_timeout": {
             "min": 0.5,

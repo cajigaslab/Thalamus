@@ -17,7 +17,7 @@ import random
 import stl
 
 from ..qt import *
-from PyQt6.QtGui import QMovie
+from PyQt5.QtGui import QMovie
 
 from . import task_context
 from .widgets import Form, ListAsTabsWidget
@@ -427,7 +427,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
         context.widget.movie.frameChanged.connect(context.widget.update)
         context.widget.movie.jumpToFrame(0)
         context.widget.movie.setSpeed(200)
-        context.widget.movie.setScaledSize(context.widget.movie.currentPixmap().size() * 0.25)
+        context.widget.movie.setScaledSize(context.widget.movie.currentPixmap().size() * 0.5)
         context.widget.movie.start()
         new_gif = False
       currentFrame = context.widget.movie.currentPixmap()
