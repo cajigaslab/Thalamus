@@ -11,7 +11,7 @@ import pathlib
 import datetime
 import itertools
 import collections
-import pkg_resources
+from ..resources import read_text
 from ..config import *
 import functools
 import h5py
@@ -729,8 +729,8 @@ class XsensView(QOpenGLWidget):
     self.program = OpenGL.GL.glCreateProgram()
     self.vertex = OpenGL.GL.glCreateShader(OpenGL.GL.GL_VERTEX_SHADER)
     self.fragment = OpenGL.GL.glCreateShader(OpenGL.GL.GL_FRAGMENT_SHADER)
-    self.vertex_code = pkg_resources.resource_string(__name__, 'shaders/xsens.vert')
-    self.fragment_code = pkg_resources.resource_string(__name__, 'shaders/xsens.frag')
+    self.vertex_code = read_text(__name__, 'shaders/xsens.vert')
+    self.fragment_code = read_text(__name__, 'shaders/xsens.frag')
 
     OpenGL.GL.glEnable(OpenGL.GL.GL_DEPTH_TEST)
 
