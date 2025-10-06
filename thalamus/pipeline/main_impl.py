@@ -136,7 +136,7 @@ async def async_main() -> None:
 
   channel = grpc.aio.insecure_channel(f'localhost:{arguments.port}')
   await channel.channel_ready()
-  stub = thalamus_stub.ThalamusStub(thalamus_pb2_grpc.ThalamusStub(channel))
+  stub = thalamus_pb2_grpc.ThalamusStub(channel)
 
   screen_geometry = qt_screen_geometry()
 
