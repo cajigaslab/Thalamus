@@ -35,6 +35,7 @@ from .util import create_task_with_exc_handling
 import grpc
 #from .. import recorder2_pb2
 #from .. import recorder2_pb2_grpc
+from ..resources import read_text
 
 LOGGER = logging.getLogger(__name__)
 
@@ -184,7 +185,7 @@ class BrowserReflectingPainter(QPainter):
       rect = args[0]
       image = args[1]
     else:
-      assert(False, 'Unsupport drawImage call signature ' + str(args))
+      raise NotImplementedError('Unsupport drawImage call signature ' + str(args))
 
     super().drawImage(rect, image)
     self.send({
@@ -719,7 +720,7 @@ class Canvas(QOpenGLWidget):
         path = '/index.html' if path == '/' else path
         mime_type = MIME_TYPES[os.path.splitext(path)[1]]
         try:
-          stream = resource_string(__name__, f'browser{path}')
+          stream = read_text(__name__, f'browser{path}')
         except FileNotFoundError:
           writer.write(b'HTTP/1.1 404 Not Found\r\n')
           writer.write(b'\r\n')

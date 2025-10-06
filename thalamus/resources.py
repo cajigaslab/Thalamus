@@ -24,7 +24,7 @@ except ImportError:
   #Old resource import
   import pkg_resources
 
-  def read_text(arg1: typing.Any, arg2: str = None) -> str:
+  def get_path(arg1: typing.Any, arg2: str = None) -> str:
     if arg2 is None:
       arg2 = arg1
       arg1 = __name__
