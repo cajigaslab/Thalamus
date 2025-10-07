@@ -15,15 +15,15 @@ async def main():
       node="Node 1",
       json=json.dumps({
         'type': 'setup',
-        "amp_uA": 1,
-        "pw_us": 2,
-        "freq_hz": 3,
-        "ipd_ms": 4,
-        "num_pulses": 5,
-        "stim_dur_s": 6,
+        "amp_uA": 100,
+        "pw_us": 200,
+        "freq_hz": 200,
+        "ipd_ms": 0,
+        "num_pulses": 1,
+        "stim_dur_s": .5,
         "is_biphasic": True,
-        "polarity": 7,
-        "dis_dur_s": 8
+        "polarity": 1,
+        "dis_dur_s": .5
       })
     )
     response = await stub.node_request(request)

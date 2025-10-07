@@ -441,7 +441,10 @@ FACTORIES = {
   ]),
   'HEXASCOPE': Factory(HexascopeWidget, []),
   'WALLCLOCK': Factory(None, []),
-  'CECI': Factory(None, []),
+  'CECI': Factory(None, [
+    UserData(UserDataType.DEFAULT, 'Device 0', 'PXI1Slot4', []),
+    UserData(UserDataType.DEFAULT, 'Device 1', 'PXI1Slot5', []),
+  ]),
 }
 
 FACTORY_NAMES = {}
@@ -470,7 +473,7 @@ class FilePicker(QWidget):
 
     button.clicked.connect(on_click)
 
-class Delegate(QItemDelegate):
+class Delegate(QStyledItemDelegate):
   def __init__(self, tree):
     super().__init__()
     self.tree = tree

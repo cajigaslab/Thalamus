@@ -22,7 +22,7 @@ using namespace thalamus;
 #define BUFFER_SIZE (SAMPS_PER_CHAN*TOTAL_CHANS)
 
 typedef struct {
-    const char *devName;
+    std::string devName;
     TaskHandle aiHandle;
     TaskHandle aoHandle;
     TaskHandle doHandle;
@@ -57,31 +57,6 @@ static double* createStimWave(const StimParams *stim, double sampleRate, const c
 
 static int32 setupDOTask(DAQmxAPI* api, DeviceConfig *dev, const char physicalChannels[], int32 sampsPerChan, bool32 autoStart, uInt32 *data, int32 *sampsWritten, float64 sampleRate, bool isStimTask);
 
-static DeviceConfig devices[2] = {
-    { .devName = "PXI1Slot4", .ao_enable = {1, 1, 1, 1}, .mux_addr = {0, 0, 0, 0},
-    .aiHandle = nullptr,
-    .aoHandle = nullptr,
-    .doHandle = nullptr,
-    .stimDOHandle = nullptr,
-    .stimData = nullptr,
-    .doStimData = nullptr,
-    .stimSamps = 0,
-    .doEnableMask = 0,
-    .doStimMask = 0
-   },  // list primary device first
-    { .devName = "PXI1Slot5", .ao_enable = {1, 1, 1, 1}, .mux_addr = {0, 0, 0, 0},
-    .aiHandle = nullptr,
-    .aoHandle = nullptr,
-    .doHandle = nullptr,
-    .stimDOHandle = nullptr,
-    .stimData = nullptr,
-    .doStimData = nullptr,
-    .stimSamps = 0,
-    .doEnableMask = 0,
-    .doStimMask = 0 }
-};
-static size_t num_devices = sizeof(devices) / sizeof(devices[0]);
-
 static char	    AItrigName[256],AOtrigName[256],AOSampClkName[256];
 static char        errBuff[2048]={'\0'};
 
@@ -112,6 +87,32 @@ struct CeciNode::Impl {
   std::vector<std::span<const double>> spans;
   std::chrono::nanoseconds time;
   int firstStim = 1;
+
+  DeviceConfig devices[2] = {
+      { .devName = "PXI1Slot4",
+      .aiHandle = nullptr,
+      .aoHandle = nullptr,
+      .doHandle = nullptr,
+      .stimDOHandle = nullptr, .ao_enable = {1, 1, 1, 1}, .mux_addr = {0, 0, 0, 0},
+      .stimData = nullptr,
+      .doStimData = nullptr,
+      .stimSamps = 0,
+      .doEnableMask = 0,
+      .doStimMask = 0
+    },  // list primary device first
+      { .devName = "PXI1Slot5",
+      .aiHandle = nullptr,
+      .aoHandle = nullptr,
+      .doHandle = nullptr,
+      .stimDOHandle = nullptr, .ao_enable = {1, 1, 1, 1}, .mux_addr = {0, 0, 0, 0},
+      .stimData = nullptr,
+      .doStimData = nullptr,
+      .stimSamps = 0,
+      .doEnableMask = 0,
+      .doStimMask = 0 }
+  };
+  size_t num_devices = sizeof(devices) / sizeof(devices[0]);
+
 public:
   Impl(ObservableDictPtr _state, boost::asio::io_context& _ioc, NodeGraph *_graph,
        CeciNode *_outer)
@@ -124,9 +125,14 @@ public:
 
   void on_change(ObservableCollection::Action,
                  const ObservableCollection::Key &k,
-                 const ObservableCollection::Value &) {
+                 const ObservableCollection::Value &v) {
     auto key_str = std::get<std::string>(k);
-    if (key_str == "Running") {
+    if (key_str == "Device 0") {
+      auto val_str = std::get<std::string>(v);
+      devices[0].devName = val_str;
+    } else if (key_str == "Device 1") {
+      auto val_str = std::get<std::string>(v);
+      devices[1].devName = val_str;
     }
   }
 
@@ -164,9 +170,9 @@ public:
                 data[i] = new_data[i];
                 sampsRead[i] = new_sampsRead[i];
                 spans.push_back(std::span<const double>(new_data[i] + offset, new_data[i] + offset + sampsRead[i]));
-                outer->ready(outer);
             }
         }
+        outer->ready(outer);
     });
 
     //printf("\r");
@@ -215,7 +221,7 @@ Error:
     names.clear();
 
     for (size_t i = 0; i < num_devices; i++) {
-        printf("Setting up device %s...\n", devices[i].devName);
+        printf("Setting up device %s...\n", devices[i].devName.c_str());
         // Add MUX address to DO enable mask
         devices[i].doEnableMask = do_enable; // baseline: enable power
         if (devices[i].mux_addr[0]) devices[i].doEnableMask |= do_mux0; // MUX address line 0
@@ -226,9 +232,9 @@ Error:
         char ai_channels[256], ao_channels[64], do_channels[64];
         snprintf(ai_channels, sizeof(ai_channels),
                  "%s/ai17,%s/ai16,%s/ai7,%s/ai6",
-                 devices[i].devName, devices[i].devName, devices[i].devName, devices[i].devName);
-        snprintf(ao_channels, sizeof(ao_channels),"%s/ao0:3", devices[i].devName);
-        snprintf(do_channels, sizeof(do_channels),"%s/port0/line0:31", devices[i].devName);
+                 devices[i].devName.c_str(), devices[i].devName.c_str(), devices[i].devName.c_str(), devices[i].devName.c_str());
+        snprintf(ao_channels, sizeof(ao_channels),"%s/ao0:3", devices[i].devName.c_str());
+        snprintf(do_channels, sizeof(do_channels),"%s/port0/line0:31", devices[i].devName.c_str());
 
         auto channel_tokens = absl::StrSplit(ai_channels, ',');
         names.insert(names.end(), channel_tokens.begin(), channel_tokens.end());
@@ -241,11 +247,11 @@ Error:
                                                         SAMPS_PER_CHAN,
                                                         0,
                                                         EveryNCallback,
-                                                        nullptr));
+                                                        this));
             DAQmxErrChk (api->DAQmxRegisterDoneEvent(devices[i].aiHandle,
                                                 0,
                                                 DoneCallback,
-                                                nullptr));
+                                                this));
             // Configure AI Start Trigger
             DAQmxErrChk (GetTerminalNameWithDevPrefix(api, devices[i].aiHandle,"ai/StartTrigger",AItrigName));
         } else {  // use AI trigger from primary device for other devices
@@ -419,7 +425,7 @@ Error:
         // Force DO lines low before exiting
         int32 doSampsWritten;
         char do_channels[64];
-        snprintf(do_channels, sizeof(do_channels),"%s/port0/line0:31", devices[i].devName);
+        snprintf(do_channels, sizeof(do_channels),"%s/port0/line0:31", devices[i].devName.c_str());
         DAQmxErrChk (setupDOTask(api, &devices[i], do_channels, 1, 1, &do_disable, &doSampsWritten, SAMPLE_RATE, false));
         DAQmxErrChk (api->DAQmxStopTask(devices[i].doHandle)); // Stop task
         DAQmxErrChk (api->DAQmxClearTask(devices[i].doHandle)); // Clear task to release lines
