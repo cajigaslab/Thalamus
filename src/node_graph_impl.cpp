@@ -33,6 +33,7 @@
 #include <video_node.hpp>
 #include <test_pulse_node.hpp>
 #include <wallclock_node.hpp>
+#include <ceci_node.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -154,6 +155,7 @@ public:
         {"STIM_PRINTER", new NodeFactory<StimPrinterNode>()},
         {"TEST_PULSE_NODE", new NodeFactory<TestPulseNode>()},
         {"WALLCLOCK", new NodeFactory<WallClockNode>()},
+        {"CECI", new NodeFactory<CeciNode>()},
         //{"HEXASCOPE", new NodeFactory<HexascopeNode>()},
         {"ARUCO", new NodeFactory<ArucoNode>()}};
 

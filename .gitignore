@@ -19,3 +19,4 @@ __pycache__
 thalamus/native
 *.dist-info
 .vs
+test.tha.*

@@ -439,6 +439,7 @@ FACTORIES = {
   ]),
   'HEXASCOPE': Factory(HexascopeWidget, []),
   'WALLCLOCK': Factory(None, []),
+  'CECI': Factory(None, []),
 }
 
 FACTORY_NAMES = {}
