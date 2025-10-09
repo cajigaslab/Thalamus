@@ -50,7 +50,6 @@ namespace Thalamus
         private Task stopTask = Task.CompletedTask;
         private Task collectionComplete = Task.CompletedTask;
         private TaskCompletionSource collectionCompleteSource = new TaskCompletionSource();
-        private bool ready = false;
 
         private Task QueueTask(Action action)
         {
@@ -64,12 +63,9 @@ namespace Thalamus
             ChannelsChanged = new AnalogNode.OnChannelsChanged(n => { });
             this.state = state;
             this.graph = graph;
-            state["Connected"] = true;
             state["Location"] = graph.GetAddress();
             state.Subscriptions += OnChange;
             state.Recap(OnChange);
-            ready = true;
-            //CreateDataSource();
         }
 
         public void Dispose()
@@ -89,64 +85,80 @@ namespace Thalamus
                 return;
             }
 
-            if (this.key != null && this.key != "" && license != null && license != "")
+            var abort = false;
+            if(this.key == null || this.key == "")
             {
-                try
+                EmitText("Missing Key");
+                abort = true;
+            }
+
+            if (license == null || license == "")
+            {
+                EmitText("Missing License");
+                abort = true;
+            }
+
+            if(abort)
+            {
+                return;
+            }
+
+            try
+            {
+                deviceSourceCreator = new DeviceSourcePortable(this.key, license);
+                deviceSourceCreator.SetDebugOutputStream((str, args) =>
                 {
-                    deviceSourceCreator = new DeviceSourcePortable(this.key, license);
-                    deviceSourceCreator.SetDebugOutputStream((str, args) =>
+                    var text = string.Format(str, args);
+                    graph.Run(() =>
                     {
-                        var text = string.Format(str, args);
-                        graph.Run(() =>
-                        {
-                            EmitText(text);
-                            Console.WriteLine(text);
-                            return Task.CompletedTask;
-                        });
+                        EmitText(text);
+                        Console.WriteLine(text);
+                        return Task.CompletedTask;
                     });
-                    deviceSource = deviceSourceCreator.GetDataSource(SourceType.TRIGNO_RF);
-                    deviceSource.Key = this.key;
-                    deviceSource.License = license;
+                });
+                deviceSource = deviceSourceCreator.GetDataSource(SourceType.TRIGNO_RF);
+                deviceSource.Key = this.key;
+                deviceSource.License = license;
 
-                    //try
-                    //{
-                    PipelineController.Instance.AddPipeline(deviceSource);
-                    //}
-                    //catch
-                    pipeline = PipelineController.Instance.PipelineIds[0];
-                    pipeline.TrignoRfManager.ComponentAdded += Log<DelsysAPI.Events.ComponentAddedEventArgs>;
-                    pipeline.TrignoRfManager.ComponentLost += Log<DelsysAPI.Events.ComponentLostEventArgs>;
-                    pipeline.TrignoRfManager.ComponentRemoved += Log<DelsysAPI.Events.ComponentRemovedEventArgs>;
-                    pipeline.TrignoRfManager.ComponentScanComplete += Log<DelsysAPI.Events.ComponentScanCompletedEventArgs>;
+                //try
+                //{
+                PipelineController.Instance.AddPipeline(deviceSource);
+                //}
+                //catch
+                pipeline = PipelineController.Instance.PipelineIds[0];
+                pipeline.TrignoRfManager.ComponentAdded += Log<DelsysAPI.Events.ComponentAddedEventArgs>;
+                pipeline.TrignoRfManager.ComponentLost += Log<DelsysAPI.Events.ComponentLostEventArgs>;
+                pipeline.TrignoRfManager.ComponentRemoved += Log<DelsysAPI.Events.ComponentRemovedEventArgs>;
+                pipeline.TrignoRfManager.ComponentScanComplete += Log<DelsysAPI.Events.ComponentScanCompletedEventArgs>;
 
-                    pipeline.CollectionStarted += Log<DelsysAPI.Events.CollectionStartedEvent>;
-                    pipeline.CollectionDataReady += OnData;
-                    pipeline.CollectionComplete += Log<DelsysAPI.Events.CollectionCompleteEvent>;
-                    EventHandler<DelsysAPI.Events.CollectionCompleteEvent>? collectionCompleteHandler = null;
-                    collectionCompleteHandler = (object? sender, DelsysAPI.Events.CollectionCompleteEvent e) =>
-                    {
-                        collectionCompleteSource.SetResult();
-                        //pipeline.CollectionComplete -= collectionCompleteHandler;
-                    };
-                    pipeline.CollectionComplete += collectionCompleteHandler;
-                    state["Connected"] = true;
-                    EmitText("Connected");
-                }
-                catch (DelsysAPI.Exceptions.PipelineException ex)
+                pipeline.CollectionStarted += Log<DelsysAPI.Events.CollectionStartedEvent>;
+                pipeline.CollectionDataReady += OnData;
+                pipeline.CollectionComplete += Log<DelsysAPI.Events.CollectionCompleteEvent>;
+                EventHandler<DelsysAPI.Events.CollectionCompleteEvent>? collectionCompleteHandler = null;
+                collectionCompleteHandler = (object? sender, DelsysAPI.Events.CollectionCompleteEvent e) =>
                 {
-                    deviceSourceCreator = null;
-                    state["Connected"] = false;
+                    collectionCompleteSource.SetResult();
+                    //pipeline.CollectionComplete -= collectionCompleteHandler;
+                };
+                pipeline.CollectionComplete += collectionCompleteHandler;
+                EmitText("Connected");
+            }
+            catch (DelsysAPI.Exceptions.PipelineException ex)
+            {
+                deviceSourceCreator = null;
+                if(PipelineController.Instance.PipelineIds.Count != 0)
+                {
                     PipelineController.Instance.RemovePipeline(0);
-                    pipeline = null;
-                    deviceSource = null;
-                    deviceSourceCreator = null;
-                    graph.Dialog(new Dialog
-                    {
-                        Message = ex.Message,
-                        Title = "Delsys Error",
-                        Type = Dialog.Types.Type.Error
-                    });
                 }
+                pipeline = null;
+                deviceSource = null;
+                deviceSourceCreator = null;
+                graph.Dialog(new Dialog
+                {
+                    Message = ex.Message,
+                    Title = "Delsys Error",
+                    Type = Dialog.Types.Type.Error
+                });
             }
         }
 
@@ -160,7 +172,7 @@ namespace Thalamus
             {
                 if (key is string str_key)
                 {
-                    if (str_key == "Running" && ready)
+                    if (str_key == "Running")
                     {
                         ChannelsChanged(this);
                         CreateDataSource();
@@ -352,17 +364,6 @@ namespace Thalamus
                         else
                         {
                             throw new InvalidDataException();
-                        }
-                    }
-                    else if (str_key == "Connected")
-                    {
-                        if (value is bool vbool)
-                        {
-                            if (!lastConnected && vbool && deviceSourceCreator == null)
-                            {
-                                CreateDataSource();
-                            }
-                            lastConnected = vbool;
                         }
                     }
 

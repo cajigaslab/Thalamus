@@ -139,7 +139,7 @@ class DelsysWidget(QWidget):
     scan_button = QPushButton('Scan')
     scan_button.clicked.connect(lambda: request({'type': 'scan'}))
 
-    connect_button = QPushButton('Connect')
+    connect_button = QPushButton('Connect to Base')
     connect_button.clicked.connect(lambda: request({'type': 'connect'}))
 
     clear_button = QPushButton('Clear')
@@ -156,11 +156,13 @@ class DelsysWidget(QWidget):
     #tabs.addTab(components_widget, 'Components')
 
     layout = QVBoxLayout()
-    layout.addWidget(scan_button)
-    layout.addWidget(pair_component_button)
+    layout2 = QHBoxLayout()
+    layout2.addWidget(connect_button)
+    layout2.addWidget(scan_button)
+    layout2.addWidget(pair_component_button)
+    layout.addLayout(layout2)
     layout.addWidget(components_widget)
     layout.addWidget(log_widget)
-    #layout.addWidget(connect_button)
     #layout.addWidget(tabs)
 
     self.setLayout(layout)
