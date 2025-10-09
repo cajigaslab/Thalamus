@@ -148,7 +148,7 @@ async def async_main() -> None:
       logging.error(f'{name} process terminated, shutting down UI')
       done_future.set_result(None)
   
-  bmbi_native_filename = get_path('thalamus', 'native' + ('.exe' if sys.platform == 'win32' else ''))
+  bmbi_native_filename = get_path('native' + ('.exe' if sys.platform == 'win32' else ''))
   dotnet_filename = pathlib.Path(get_path('thalamus.dotnet', 'dotnet' + ('.exe' if sys.platform == 'win32' else '')))
   bmbi_native_proc = None
   pypipeline_servicer = None
@@ -163,6 +163,7 @@ async def async_main() -> None:
     await pypipeline_server.start()
 
   else:
+    print(bmbi_native_filename)
     bmbi_native_proc = await asyncio.create_subprocess_exec(
       bmbi_native_filename, 'thalamus', '--port', str(arguments.port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else []))
     create_task_with_exc_handling(proc_watcher('native.exe', bmbi_native_proc))
@@ -227,11 +228,7 @@ async def async_main() -> None:
   thalamus.move(100, 100)
   thalamus.show()
 
-  native_watch_task = None
-  if bmbi_native_proc:
-    await bmbi_native_proc.wait()
-  if dotnet_proc:
-    await dotnet_proc.wait()
+  #native_watch_task = None
 
   try:
     while not done_future.done() and not UNHANDLED_EXCEPTION:
@@ -256,7 +253,11 @@ async def async_main() -> None:
 
   await channel.close()
   if bmbi_native_proc:
-    await native_watch_task
+    await bmbi_native_proc.wait()
+  if dotnet_proc:
+    await dotnet_proc.wait()
+  #if bmbi_native_proc:
+  #  await native_watch_task
   print('DONE')
 
 def main() -> None:

@@ -19,6 +19,8 @@ from ..qt import *
 
 from ..task_controller.util import create_task_with_exc_handling
 
+from matplotlib import pyplot
+
 class DataWidget(QMainWindow):
   def __init__(self, config, root_config, stub):
     super().__init__()
@@ -111,6 +113,13 @@ class PlotCanvas(QWidget):
     self.stub = stub
     self.task = None
     self.config = config
+    self.color_scheme = QGuiApplication.styleHints().colorScheme()
+
+    if self.color_scheme == Qt.ColorScheme.Dark:
+      c = pyplot.get_cmap('Pastel1').colors[0]
+    else:
+      c = pyplot.get_cmap('tab10').colors[0]
+    self.color = QColor(int(c[0]*255), int(c[1]*255), int(c[2]*255))
 
     if 'draw_value' not in self.config:
       config['draw_value'] = False
@@ -233,7 +242,7 @@ class PlotCanvas(QWidget):
     offset = -self.current_ns
     painter.save()
     painter.setClipRect(QRectF(0, range[0], self.duration_ns, range_size))
-    for path, color in zip(self.paths, [Qt.GlobalColor.blue, Qt.GlobalColor.blue, Qt.GlobalColor.blue]):
+    for path, color in zip(self.paths, [self.color, self.color, self.color]):
       pen.setColor(color)
       painter.setPen(pen)
       painter.save()
@@ -243,7 +252,10 @@ class PlotCanvas(QWidget):
       offset += self.duration_ns
     painter.restore()
 
-    pen.setColor(Qt.GlobalColor.black)
+    if self.color_scheme == Qt.ColorScheme.Dark:
+      pen.setColor(Qt.GlobalColor.white)
+    else:
+      pen.setColor(Qt.GlobalColor.black)
     painter.setPen(pen)
     bounds = QRectF(0, range[0], self.duration_ns, range_size)
     device_bounds = painter.transform().mapRect(bounds)
@@ -265,6 +277,8 @@ class PlotCanvas(QWidget):
       painter.drawText(device_bounds, Qt.AlignmentFlag.AlignRight, text)
       painter.restore()
 
+    if self.color_scheme == Qt.ColorScheme.Dark:
+      painter.setPen(Qt.GlobalColor.white)
     painter.drawText(0, metrics.height(), str(self.range[1]))
     painter.drawText(0, self.height(), str(self.range[0]))
 
@@ -275,7 +289,10 @@ class PlotCanvas(QWidget):
     painter.scale((self.width() - 2*metrics.height()), metrics.height())
     pen = painter.pen()
     pen.setCosmetic(True)
-    pen.setColor(Qt.GlobalColor.black)
+    if self.color_scheme == Qt.ColorScheme.Dark:
+      pen.setColor(Qt.GlobalColor.white)
+    else:
+      pen.setColor(Qt.GlobalColor.black)
     painter.setPen(pen)
     painter.drawPath(self.ruler_path)
 
