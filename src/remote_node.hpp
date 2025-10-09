@@ -47,5 +47,8 @@ public:
 
   static std::string type_name();
   size_t modalities() const override;
+
+
+  void process(const boost::json::value& request, std::function<void(const boost::json::value&)> callback) override;
 };
 } // namespace thalamus
