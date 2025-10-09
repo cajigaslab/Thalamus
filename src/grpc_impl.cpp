@@ -15,6 +15,7 @@
 #include <modalities_util.hpp>
 #include <text_node.hpp>
 #include <thalamus/thread.hpp>
+#include <thalamus/grpc.hpp>
 
 namespace thalamus {
 using namespace std::chrono_literals;
@@ -478,43 +479,54 @@ Service::node_request(::grpc::ServerContext *,
   }
 
   auto parsed = boost::json::parse(request->json());
-  auto json_response = node->process(parsed);
+  std::promise<boost::json::value> promise;
+  boost::asio::post(impl->io_context, [&] {
+    node->process(parsed, [&] (auto& result) {
+      promise.set_value(result);
+    });
+  });
+  auto json_response = promise.get_future().get();
   auto serialized_response = boost::json::serialize(json_response);
   response->set_json(serialized_response);
 
   return ::grpc::Status::OK;
 }
 
-::grpc::Status Service::node_request_stream(
-    ::grpc::ServerContext *,
-    ::grpc::ServerReaderWriter<::thalamus_grpc::NodeResponse,
-                               ::thalamus_grpc::NodeRequest> *stream) {
-
-  std::weak_ptr<Node> weak;
-  ::thalamus_grpc::NodeRequest request;
-  ::thalamus_grpc::NodeResponse response;
-  while (stream->Read(&request)) {
+::grpc::ServerBidiReactor< ::thalamus_grpc::NodeRequest, ::thalamus_grpc::NodeResponse>* Service::node_request_stream(
+    ::grpc::CallbackServerContext* context) {
+  auto stream
+    = new ServerBidiReactor<::thalamus_grpc::NodeRequest, ::thalamus_grpc::NodeResponse>(*context, impl->io_context);
+  stream->callback = [
+   this,
+   weak=std::weak_ptr<Node>(),
+   stream
+  ](auto&& request) mutable {
     if (!request.node().empty()) {
       weak = impl->node_graph.get_node(request.node());
     }
     auto node = weak.lock();
-    response.set_id(request.id());
     if (!node) {
+      ::thalamus_grpc::NodeResponse response;
+      response.set_id(request.id());
       response.clear_json();
       response.set_status(
           thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
-      continue;
+      return;
     }
 
     auto parsed = boost::json::parse(request.json());
-    auto json_response = node->process(parsed);
-    auto serialized_response = boost::json::serialize(json_response);
-    response.set_json(serialized_response);
-    response.set_status(
-        thalamus_grpc::NodeResponse::Status::NodeResponse_Status_OK);
-    stream->Write(response);
-  }
-  return ::grpc::Status::OK;
+    node->process(parsed, [request_id=request.id(),stream](const boost::json::value& json_response) {
+      auto serialized_response = boost::json::serialize(json_response);
+      ::thalamus_grpc::NodeResponse response;
+      response.set_id(request_id);
+      response.set_json(serialized_response);
+      response.set_status(
+          thalamus_grpc::NodeResponse::Status::NodeResponse_Status_OK);
+      stream->send(std::move(response));
+    });
+  };
+  stream->start();
+  return stream;
 }
 
 ::grpc::Status

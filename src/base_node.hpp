@@ -37,6 +37,9 @@ public:
   virtual boost::json::value process(const boost::json::value &) {
     return boost::json::value();
   }
+  virtual void process(const boost::json::value & request, std::function<void(const boost::json::value &)> callback) {
+    callback(process(request));
+  }
 };
 
 class NodeGraph {
