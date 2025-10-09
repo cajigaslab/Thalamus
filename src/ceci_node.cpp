@@ -8,7 +8,10 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
 #endif
+
 #include <boost/spirit/include/qi.hpp>
+#include <absl/strings/ascii.h>
+
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
@@ -23,6 +26,7 @@ using namespace thalamus;
 
 typedef struct {
     std::string devName;
+    bool enabled;
     TaskHandle aiHandle;
     TaskHandle aoHandle;
     TaskHandle doHandle;
@@ -89,7 +93,7 @@ struct CeciNode::Impl {
   int firstStim = 1;
 
   DeviceConfig devices[2] = {
-      { .devName = "PXI1Slot4",
+      { .devName = "PXI1Slot4", .enabled = false,
       .aiHandle = nullptr,
       .aoHandle = nullptr,
       .doHandle = nullptr,
@@ -100,7 +104,7 @@ struct CeciNode::Impl {
       .doEnableMask = 0,
       .doStimMask = 0
     },  // list primary device first
-      { .devName = "PXI1Slot5",
+      { .devName = "PXI1Slot5", .enabled = false,
       .aiHandle = nullptr,
       .aoHandle = nullptr,
       .doHandle = nullptr,
@@ -147,13 +151,16 @@ public:
     float64* new_data[MAX_DEVICES] = {nullptr};
 
     for (size_t i = 0; i < num_devices; i++) {
+        if (!devices[i].enabled) {
+            continue;
+        }
         new_data[i] = new float64[BUFFER_SIZE];
         new_sampsRead[i] = 0;
 
         DAQmxErrChk (api->DAQmxReadAnalogF64(devices[i].aiHandle,
                                         SAMPS_PER_CHAN,
                                         10.0,
-                                        DAQmx_Val_GroupByScanNumber,
+                                        DAQmx_Val_GroupByChannel,
                                         new_data[i],
                                         BUFFER_SIZE,
                                         &new_sampsRead[i],
@@ -164,12 +171,17 @@ public:
         time = now.time_since_epoch();
         spans.clear();
         for (size_t i = 0; i < num_devices; i++) {
-            auto offset = 0;
-            if(data[i] != nullptr) {
+            if (!devices[i].enabled) {
+                continue;
+            }
+            if (data[i] != nullptr) {
                 delete data[i];
-                data[i] = new_data[i];
-                sampsRead[i] = new_sampsRead[i];
-                spans.push_back(std::span<const double>(new_data[i] + offset, new_data[i] + offset + sampsRead[i]));
+            }
+            data[i] = new_data[i];
+            sampsRead[i] = new_sampsRead[i];
+
+            for (auto j = 0;j < TOTAL_CHANS;++j) {
+                spans.push_back(std::span<const double>(data[i] + j * sampsRead[i], data[i] + (j+1)*sampsRead[i]));
             }
         }
         outer->ready(outer);
@@ -221,6 +233,12 @@ Error:
     names.clear();
 
     for (size_t i = 0; i < num_devices; i++) {
+        auto trimmed = absl::StripAsciiWhitespace(devices[i].devName);
+        devices[i].enabled = !trimmed.empty();
+        if (!devices[i].enabled) {
+            continue;
+        }
+
         printf("Setting up device %s...\n", devices[i].devName.c_str());
         // Add MUX address to DO enable mask
         devices[i].doEnableMask = do_enable; // baseline: enable power
@@ -236,12 +254,12 @@ Error:
         snprintf(ao_channels, sizeof(ao_channels),"%s/ao0:3", devices[i].devName.c_str());
         snprintf(do_channels, sizeof(do_channels),"%s/port0/line0:31", devices[i].devName.c_str());
 
-        auto channel_tokens = absl::StrSplit(ai_channels, ',');
-        names.insert(names.end(), channel_tokens.begin(), channel_tokens.end());
-
         // Setup AI Task
         DAQmxErrChk (setupAITask(api, &devices[i], ai_channels, sampleRate, input_range, SAMPS_PER_CHAN));
         if (i == 0) { // only set callbacks on primary device and use get AI trigger for other devices
+            auto channel_tokens = absl::StrSplit(ai_channels, ',');
+            names.insert(names.end(), channel_tokens.begin(), channel_tokens.end());
+
             DAQmxErrChk (api->DAQmxRegisterEveryNSamplesEvent(devices[i].aiHandle,
                                                         DAQmx_Val_Acquired_Into_Buffer,
                                                         SAMPS_PER_CHAN,
@@ -352,6 +370,7 @@ Error:
             DAQmxErrChk (api->DAQmxStartTask(devices[i].aiHandle));
         }
     }
+    outer->channels_changed(outer);
     // Start primary device AI task
     DAQmxErrChk (api->DAQmxStartTask(devices[0].aiHandle));
 Error:
@@ -470,7 +489,7 @@ std::string_view CeciNode::name(int channel) const {
 }
 
 std::chrono::nanoseconds CeciNode::sample_interval(int) const {
-  return 80us;
+  return 8us;
 }
 
 void CeciNode::inject(const thalamus::vector<std::span<double const>> &,
