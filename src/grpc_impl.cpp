@@ -514,6 +514,10 @@ Service::node_request(::grpc::ServerContext *,
       return;
     }
 
+    if(request.json().empty()) {
+      return;
+    }
+
     auto parsed = boost::json::parse(request.json());
     node->process(parsed, [request_id=request.id(),stream](const boost::json::value& json_response) {
       auto serialized_response = boost::json::serialize(json_response);

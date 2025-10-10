@@ -507,9 +507,12 @@ size_t CeciNode::modalities() const {
 boost::json::value CeciNode::process(const boost::json::value & request_value) {
   auto request = request_value.as_object();
   auto type = request["type"].as_string();
+  THALAMUS_LOG(info) << request;
   if(type == "teardown") {
+    THALAMUS_LOG(info) << "teardown";
     impl->teardown_stim();
   } else if (type == "setup") {
+    THALAMUS_LOG(info) << "setup";
     StimParams stim = {
         .amp_uA = request["amp_uA"].to_number<double>(),         // current amplitude in uA
         .pw_us = request["pw_us"].to_number<double>(),          // pulse width in us
@@ -523,6 +526,7 @@ boost::json::value CeciNode::process(const boost::json::value & request_value) {
     };
     impl->setup_stim(stim);
   } else if (type == "stim") {
+    THALAMUS_LOG(info) << "stim";
     impl->deliver_stim();
   }
   return boost::json::value();
