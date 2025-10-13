@@ -271,6 +271,8 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/tracing.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/nidaqmx.hpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/nidaqmx.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/record_reader.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/record_reader.cpp"
                      "${CMAKE_SOURCE_DIR}/proto/thalamus.proto")
 target_sources(thalamus PRIVATE 
                "${CMAKE_SOURCE_DIR}/src/pupil_node.hpp"
