@@ -3,6 +3,7 @@
 #include <thalamus/nidaqmx.hpp>
 #include <modalities_util.hpp>
 #include <vector>
+#include <thread_pool.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -116,11 +117,17 @@ struct CeciNode::Impl {
       .doStimMask = 0 }
   };
   size_t num_devices = sizeof(devices) / sizeof(devices[0]);
+  ThreadPool &pool;
+  std::promise<void> setup_promise;
+  std::future<void> setup_future;
+  bool setup_called = false;
 
 public:
   Impl(ObservableDictPtr _state, boost::asio::io_context& _ioc, NodeGraph *_graph,
        CeciNode *_outer)
-      : state(_state), ioc(_ioc), outer(_outer), graph(_graph), api(DAQmxAPI::get_singleton()) {
+      : state(_state), ioc(_ioc), outer(_outer), graph(_graph), api(DAQmxAPI::get_singleton()), pool(graph->get_thread_pool()) {
+        setup_future = setup_promise.get_future();
+        setup_promise.set_value();
 
     state_connection =
         state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
@@ -224,6 +231,19 @@ Error:
   }
 
   void setup_stim(const StimParams& stim) {
+    if(setup_called) {
+        teardown_stim();
+    }
+    setup_future.wait();
+    setup_promise = std::promise<void>();
+    setup_future = setup_promise.get_future();
+    setup_called = true;
+    
+    pool.push([this,stim,weak=outer->weak_from_this()] {
+    auto lock = weak.lock();
+    if(!lock) {
+      return;
+    }
     const char  *ao_chan_names[TOTAL_CHANS] = {"AO0", "AO1", "AO2", "AO3"};
     static float64	    sampleRate = 125000.0; // SPS
     static float64	    input_range = 10.0; // +/- input range in V
@@ -231,14 +251,14 @@ Error:
     firstStim = 1;
 	  int32           error=0;
     names.clear();
-
+  
     for (size_t i = 0; i < num_devices; i++) {
         auto trimmed = absl::StripAsciiWhitespace(devices[i].devName);
         devices[i].enabled = !trimmed.empty();
         if (!devices[i].enabled) {
             continue;
         }
-
+  
         printf("Setting up device %s...\n", devices[i].devName.c_str());
         // Add MUX address to DO enable mask
         devices[i].doEnableMask = do_enable; // baseline: enable power
@@ -246,20 +266,20 @@ Error:
         if (devices[i].mux_addr[1]) devices[i].doEnableMask |= do_mux1; // MUX address line 1
         if (devices[i].mux_addr[2]) devices[i].doEnableMask |= do_mux2; // MUX address line 2
         if (devices[i].mux_addr[3]) devices[i].doEnableMask |= do_mux3; // MUX address line 3
-
+  
         char ai_channels[256], ao_channels[64], do_channels[64];
         snprintf(ai_channels, sizeof(ai_channels),
                  "%s/ai17,%s/ai16,%s/ai7,%s/ai6",
                  devices[i].devName.c_str(), devices[i].devName.c_str(), devices[i].devName.c_str(), devices[i].devName.c_str());
         snprintf(ao_channels, sizeof(ao_channels),"%s/ao0:3", devices[i].devName.c_str());
         snprintf(do_channels, sizeof(do_channels),"%s/port0/line0:31", devices[i].devName.c_str());
-
+  
         // Setup AI Task
         DAQmxErrChk (setupAITask(api, &devices[i], ai_channels, sampleRate, input_range, SAMPS_PER_CHAN));
         if (i == 0) { // only set callbacks on primary device and use get AI trigger for other devices
             auto channel_tokens = absl::StrSplit(ai_channels, ',');
             names.insert(names.end(), channel_tokens.begin(), channel_tokens.end());
-
+  
             DAQmxErrChk (api->DAQmxRegisterEveryNSamplesEvent(devices[i].aiHandle,
                                                         DAQmx_Val_Acquired_Into_Buffer,
                                                         SAMPS_PER_CHAN,
@@ -277,7 +297,7 @@ Error:
                                                   AItrigName,
                                                   DAQmx_Val_Rising));
         }
-
+  
         // Setup AO Task
         DAQmxErrChk (setupAOTask(api, &devices[i], ao_channels, sampleRate, input_range, uInt64(stim_samps_per_chan)));
         if (i == 0) { // only get AO trigger and sample clock names from primary device
@@ -290,7 +310,7 @@ Error:
                                                   AOtrigName,
                                                   DAQmx_Val_Rising));
         }
-
+  
         // Generate AO stim data
         float64 *stim_data = static_cast<float64*>(calloc(size_t(TOTAL_CHANS * stim_samps_per_chan), sizeof(float64)));  // allocate and fill stim_data array
         if (!stim_data) {
@@ -320,7 +340,7 @@ Error:
         }
         devices[i].stimData = stim_data;
         devices[i].stimSamps = stim_samps_per_chan;
-
+  
         // Generate DO stim data
         devices[i].doStimMask = devices[i].doEnableMask; // start with DO enable mask
         // Add stim DO lines depending on AO enable flags
@@ -344,16 +364,16 @@ Error:
         }
         free(ref_stim_wave); // free reference waveform after creating DO stim data
         devices[i].doStimData = do_stim_data;
-
+  
         // Setup and write baseline DO Task
         int32 doSampsWritten;
         DAQmxErrChk (setupDOTask(api, &devices[i], do_channels, 1, 1, &devices[i].doEnableMask, &doSampsWritten, sampleRate, false));
         DAQmxErrChk (api->DAQmxStopTask(devices[i].doHandle)); // Stop task 
         DAQmxErrChk (api->DAQmxClearTask(devices[i].doHandle)); // Clear task to release lines
-
+  
         // Setup stim DO Task
         DAQmxErrChk (setupDOTask(api, &devices[i], do_channels, devices[i].stimSamps, 0, devices[i].doStimData, &doSampsWritten, sampleRate, true));
-
+  
         // Write AO waveform to buffer
         int32 aoSampsWritten;
         DAQmxErrChk (api->DAQmxWriteAnalogF64(devices[i].aoHandle,
@@ -364,7 +384,7 @@ Error:
                                          devices[i].stimData,
                                          &aoSampsWritten,
                                          nullptr));
-
+  
         // Start dependent AI tasks
         if (i != 0) { // start secondary device AI task first
             DAQmxErrChk (api->DAQmxStartTask(devices[i].aiHandle));
@@ -378,13 +398,23 @@ Error:
       api->DAQmxGetExtendedErrorInfo(errBuff,2048);
       THALAMUS_ASSERT(false, "DAQmx Error in setup_stim: %s", errBuff);
     }
+    setup_promise.set_value();
+    });
   }
 
   void deliver_stim() {
+    if(!setup_called) {
+        return;
+    }
+    setup_future.wait();
+    
 	  int32           error=0;
       if(!firstStim) {
           // Reset DO stim tasks for next stimulation
           for (size_t i = 0; i < num_devices; i++) {
+              if (!devices[i].enabled) {
+                  continue;
+              }
               DAQmxErrChk (api->DAQmxStopTask(devices[i].stimDOHandle));
               DAQmxErrChk (api->DAQmxStopTask(devices[i].aoHandle));
 
@@ -404,6 +434,9 @@ Error:
       }
       // Start AO tasks
       for (int i = int(num_devices) - 1; i >= 0; i--) { // start secondary device AO task first
+          if (!devices[i].enabled) {
+              continue;
+          }
           DAQmxErrChk (api->DAQmxStartTask(devices[i].stimDOHandle));
           DAQmxErrChk (api->DAQmxStartTask(devices[i].aoHandle));
       }
@@ -415,8 +448,17 @@ Error:
   }
 
   void teardown_stim() {
+    if(!setup_called) {
+        return;
+    }
+    setup_future.wait();
+    setup_called = false;
+
 	  int32           error=0;
     for (size_t i = 0; i < num_devices; i++) {
+        if (!devices[i].enabled) {
+            continue;
+        }
         // Stop and clear AI tasks
         if(devices[i].aiHandle) {
             api->DAQmxStopTask(devices[i].aiHandle);
@@ -677,6 +719,7 @@ static int32 setupAOTask(DAQmxAPI* api, DeviceConfig *dev, const char physicalCh
                                       DAQmx_Val_FiniteSamps,
                                       sampsPerChan));
     DAQmxErrChk(api->DAQmxSetWriteRegenMode(dev->aoHandle, DAQmx_Val_AllowRegen));
+    DAQmxErrChk (api->DAQmxTaskControl(dev->aoHandle, DAQmx_Val_Task_Commit));
 Error:
     return error;
 }
@@ -717,6 +760,7 @@ static int32 setupDOTask(DAQmxAPI* api, DeviceConfig *dev,
                                      data,
                                      sampsWritten,
                                      nullptr));
+    DAQmxErrChk (api->DAQmxTaskControl(*taskHandle, DAQmx_Val_Task_Commit));
 Error:
     return error;
 }

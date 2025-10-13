@@ -29,4 +29,17 @@ async def main():
     response = await stub.node_request(request)
     print(response)
 
+    #await asyncio.sleep(2)
+    while True:
+      input()
+
+      request = thalamus_pb2.NodeRequest(
+        node="Node 1",
+        json=json.dumps({
+          'type': 'stim'
+        })
+      )
+      response = await stub.node_request(request)
+      print(response)
+
 asyncio.run(main())
