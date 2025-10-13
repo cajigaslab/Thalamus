@@ -40,6 +40,9 @@ public:
   virtual void process(const boost::json::value & request, std::function<void(const boost::json::value &)> callback) {
     callback(process(request));
   }
+  virtual std::string_view redirect() const {
+    return "";
+  }
 };
 
 class NodeGraph {
