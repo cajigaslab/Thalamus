@@ -21,3 +21,5 @@ thalamus/native
 .vs
 dotnet/dotnet/bin
 dotnet/dotnet/obj
+test.tha.*
+*.perfetto-trace

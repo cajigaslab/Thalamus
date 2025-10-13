@@ -273,6 +273,11 @@ class TrialSummaryData:
     return (f'TrialSummaryData(used_values={str(self.used_values)},'
             f'behav_result={str(self.behav_result)},trial_history={str(self.trial_history)})')
 
+class NodeRequestStream(typing.NamedTuple):
+  requests: IterableQueue
+  responses: typing.AsyncIterable[thalamus_pb2.NodeResponse]
+  response_listeners: typing.Dict[int, typing.List[typing.Callable[[typing.Any], None]]] = collections.defaultdict(list)
+
 class TaskContext(TaskContextProtocol):
   """
   Defines the TaskContext class which is responsible for selecting, running, and providing the tasks an interface for
@@ -290,6 +295,8 @@ class TaskContext(TaskContextProtocol):
     self.log_queue = IterableQueue()
     self.log_stream = stub.log(self.log_queue)
     self.inject_analog_streams: typing.Dict[str, IterableQueue] = {}
+    self.node_request_streams: typing.Dict[str, NodeRequestStream] = {}
+    self.next_node_request_id = 1
     self.stim_streams: typing.Dict[str, IterableQueue] = {}
     self.task_config = ObservableDict({})
     self.channels: typing.Mapping[str, grpc.aio.Channel] = {}
@@ -331,6 +338,54 @@ class TaskContext(TaskContextProtocol):
   async def inject_analog(self, name: str, payload: thalamus_pb2.AnalogResponse):
     queue = await self.get_inject_stream(name)
     await queue.put(thalamus_pb2.InjectAnalogRequest(signal=payload))
+
+  async def __response_processor(self, stream: NodeRequestStream):
+    try:
+      async for response in stream.responses:
+        if response.status != thalamus_pb2.NodeResponse.Status.OK:
+          LOGGER.warning('Node Response Status: %s', thalamus_pb2.NodeResponse.Status.Name(response.status))
+          continue
+
+        deserialized = json.loads(response.json)
+        for listener in stream.response_listeners[response.id]:
+          listener(deserialized)
+        del stream.response_listeners[response.id]
+    except asyncio.CancelledError:
+      pass
+
+  async def get_node_request_stream(self, name: str) -> NodeRequestStream:
+    result = self.node_request_streams.get(name, None)
+    if result is None:
+      queue = IterableQueue()
+      responses = self.stub.node_request_stream(queue)
+      await queue.put(thalamus_pb2.NodeRequest(node=name))
+      result = NodeRequestStream(queue, responses)
+      self.node_request_streams[name] = result
+      create_task_with_exc_handling(self.__response_processor(result))
+
+    return result
+  
+  async def refresh_streams(self):
+    for node, stream in self.node_request_streams.items():
+      await stream.requests.put(thalamus_pb2.NodeRequest(node=node))
+    for node, stream in self.stim_streams.items():
+      await stream.put(thalamus_pb2.StimRequest(node=thalamus_pb2.NodeSelector(name=node)))
+    for node, stream in self.inject_analog_streams.items():
+      await stream.put(thalamus_pb2.InjectAnalogRequest(node=node))
+
+  async def node_request(self, name: str, request: typing.Any):
+    stream = await self.get_node_request_stream(name)
+    request_id = self.next_node_request_id
+    self.next_node_request_id += 1
+
+    future = asyncio.get_event_loop().create_future()
+    def on_response(response: typing.Any):
+      future.set_result(response)
+    stream.response_listeners[request_id].append(on_response)
+
+    await stream.requests.put(thalamus_pb2.NodeRequest(json=json.dumps(request), id=request_id))
+
+    return await future
 
   async def get_stim_stream(self, name: str):
     queue = self.stim_streams.get(name, None)
@@ -637,6 +692,7 @@ class TaskContext(TaskContextProtocol):
       if self.widget:
         task = self.task_descriptions_map[self.task_config['task_type']]
         try:
+          await self.refresh_streams()
           LOGGER.info('TRIAL START')
           await self.log('TRIAL START ' + self.task_config["type"] + ' ' + self.task_config["name"])
           result = await task.run(self)

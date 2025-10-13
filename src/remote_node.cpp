@@ -2,6 +2,7 @@
 #include <modalities_util.hpp>
 #include <remote_node.hpp>
 #include <thalamus/thread.hpp>
+#include <thalamus/grpc.hpp>
 #include <util.hpp>
 
 #ifdef __clang__
@@ -154,6 +155,10 @@ struct RemoteNode::Impl {
     }
   }
 
+  bool node_request_did_select = false;
+  std::unique_ptr<BidiReactor<thalamus_grpc::NodeRequest, thalamus_grpc::NodeResponse>> node_request_reactor;
+  std::map<size_t, std::function<void(const boost::json::value&)>> node_request_callbacks;
+
   void grpc_target(std::shared_ptr<grpc::Channel> channel, std::string node,
                    std::chrono::milliseconds ping_interval, size_t probe_size) {
     set_current_thread_name("Remote Node GRPC");
@@ -203,6 +208,8 @@ struct RemoteNode::Impl {
       selector.set_name(node);
       thalamus_grpc::ImageRequest image_request;
       *image_request.mutable_node() = selector;
+      thalamus_grpc::NodeRequest node_request;
+      node_request.set_node(node);
       //image_request.set_framerate(10.0);
 
       thalamus_grpc::AnalogRequest analog_request;
@@ -220,6 +227,24 @@ struct RemoteNode::Impl {
       reinterpret_cast<void*>(STIM_CONNECT));
       auto ping_stream = stub->Asyncping(
           &ping_context, queue.get(), reinterpret_cast<void *>(PING_CONNECT));
+
+      std::promise<void> node_request_reactor_promise;
+      boost::asio::post(io_context, [&] {
+          node_request_did_select = false;
+          node_request_reactor = std::make_unique<BidiReactor<thalamus_grpc::NodeRequest, thalamus_grpc::NodeResponse>>(io_context, [&](thalamus_grpc::NodeResponse&& response) {
+              auto i = node_request_callbacks.find(response.id());
+              if (i == node_request_callbacks.end()) {
+                  THALAMUS_LOG(error) << "Remote response could not be paired with original sender";
+              }
+              auto parsed = boost::json::parse(response.json());
+              i->second(parsed);
+              node_request_callbacks.erase(i);
+          });
+          stub->async()->node_request_stream(&node_request_reactor->context, node_request_reactor.get());
+          node_request_reactor->start();
+          node_request_reactor_promise.set_value();
+      });
+      node_request_reactor_promise.get_future().wait();
 
       thalamus_grpc::AnalogResponse analog_response;
       thalamus_grpc::XsensResponse xsens_response;
@@ -479,14 +504,14 @@ struct RemoteNode::Impl {
           }
 
           time = std::chrono::steady_clock::now().time_since_epoch();
-          for(auto i = 0;i < image_response.data_size();++i) {
-            const auto& data = image_response.data(i);
+          for(auto i = 0ull;i < size_t(image_response.data_size());++i) {
+            const auto& image_data = image_response.data(int(i));
             while(i >= planes.size()) {
               planes.emplace_back();
             }
-            planes[i].insert(planes[i].end(), data.begin(), data.end());
+            planes[i].insert(planes[i].end(), image_data.begin(), image_data.end());
           }
-          num_planes = image_response.data_size();
+          num_planes = size_t(image_response.data_size());
           //auto protobuf_format = image_response.format();
           switch(image_response.format()) {
             case thalamus_grpc::Image::Gray:
@@ -504,6 +529,13 @@ struct RemoteNode::Impl {
             case thalamus_grpc::Image::YUVJ420P:
               format = ImageNode::Format::YUVJ420P;
               break;
+            case thalamus_grpc::Image_Format_Gray16:
+            case thalamus_grpc::Image_Format_RGB16:
+            case thalamus_grpc::Image_Format_MPEG1:
+            case thalamus_grpc::Image_Format_MPEG4:
+            case thalamus_grpc::Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
+            case thalamus_grpc::Image_Format_Image_Format_INT_MAX_SENTINEL_DO_NOT_USE_:
+              THALAMUS_ASSERT(false, "Unsupported image format");
           }
           width = image_response.width();
           height = image_response.height();
@@ -530,6 +562,12 @@ struct RemoteNode::Impl {
         }
         }
       }
+      std::promise<void> stop_promise;
+      boost::asio::post(io_context, [&] {
+          node_request_reactor.reset();
+          stop_promise.set_value();
+      });
+      stop_promise.get_future().wait();
       analog_context.TryCancel();
       xsens_context.TryCancel();
       image_context.TryCancel();
@@ -694,7 +732,7 @@ RemoteNode::stim(thalamus_grpc::StimRequest &&request) {
 }
 
 ImageNode::Plane RemoteNode::plane(int i) const {
-  return Plane(impl->planes[i].begin(), impl->planes[i].end());
+  return Plane(impl->planes[size_t(i)].begin(), impl->planes[size_t(i)].end());
 }
 size_t RemoteNode::num_planes() const  {
   return impl->num_planes;
@@ -716,6 +754,27 @@ void RemoteNode::inject(const thalamus_grpc::Image &) {
 }
 bool RemoteNode::has_image_data() const {
   return impl->has_image_data;
+}
+
+void RemoteNode::process(const boost::json::value& request, std::function<void(const boost::json::value&)> callback) {
+    static size_t next_id = 1;
+    if (!impl->node_request_reactor) {
+        callback(boost::json::value());
+        return;
+    }
+    impl->node_request_callbacks[next_id] = callback;
+
+    thalamus_grpc::NodeRequest forward_request;
+    if (!impl->node_request_did_select) {
+        forward_request.set_node(impl->remote_node_name);
+        impl->node_request_did_select = true;
+    }
+    auto serialized_request = boost::json::serialize(request);
+    forward_request.set_json(std::move(serialized_request));
+    forward_request.set_id(next_id);
+
+    ++next_id;
+    impl->node_request_reactor->send(std::move(forward_request));
 }
 
 size_t RemoteNode::modalities() const { return infer_modalities<RemoteNode>(); }

@@ -23,7 +23,7 @@
 #endif
 
 namespace thalamus {
-class Service : public thalamus_grpc::Thalamus::Service {
+class Service : public thalamus_grpc::Thalamus::WithCallbackMethod_node_request_stream<thalamus_grpc::Thalamus::Service> {
   struct Impl;
   std::unique_ptr<Impl> impl;
 
@@ -45,11 +45,8 @@ public:
   ::grpc::Status node_request(::grpc::ServerContext *context,
                               const ::thalamus_grpc::NodeRequest *request,
                               ::thalamus_grpc::NodeResponse *response) override;
-  ::grpc::Status
-  node_request_stream(::grpc::ServerContext *context,
-                      ::grpc::ServerReaderWriter<::thalamus_grpc::NodeResponse,
-                                                 ::thalamus_grpc::NodeRequest>
-                          *stream) override;
+  ::grpc::ServerBidiReactor< ::thalamus_grpc::NodeRequest, ::thalamus_grpc::NodeResponse>* node_request_stream(
+      ::grpc::CallbackServerContext* /*context*/) override;
   ::grpc::Status events(::grpc::ServerContext *context,
                         ::grpc::ServerReader<::thalamus_grpc::Event> *reader,
                         ::thalamus_grpc::Empty *) override;

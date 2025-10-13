@@ -257,6 +257,8 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/wallclock_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/delsys_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/delsys_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/ceci_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/ceci_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/test_pulse_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/test_pulse_node.cpp"
                      #"${CMAKE_SOURCE_DIR}/src/hexascope_node.hpp"
@@ -267,6 +269,8 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/thread.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/tracing.hpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/tracing.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/nidaqmx.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/nidaqmx.cpp"
                      "${CMAKE_SOURCE_DIR}/proto/thalamus.proto")
 target_sources(thalamus PRIVATE 
                "${CMAKE_SOURCE_DIR}/src/pupil_node.hpp"
@@ -370,3 +374,6 @@ if(WIN32 AND BUILD_DOTNET)
     "${CMAKE_SOURCE_DIR}/thalamus/dotnet")
   add_dependencies(native dotnet)
 endif()
+add_executable(Rec_Stim Rec_Stim.cpp)
+target_link_libraries(Rec_Stim PRIVATE hdf5-static thalamus)
+target_include_directories(Rec_Stim PRIVATE "${CMAKE_SOURCE_DIR}/src")

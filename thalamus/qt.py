@@ -14,7 +14,7 @@ if HAS_QT6:
                                QSpinBox, QLabel, QVBoxLayout, QHBoxLayout, QComboBox, QSpinBox, QCheckBox,
                                QPushButton, QDialog, QRadioButton, QTextEdit, QMainWindow, QFileDialog, QMenu,
                                QInputDialog, QLineEdit, QGroupBox, QFormLayout, QMessageBox, QTabWidget,
-                               QDoubleSpinBox, QDockWidget, QApplication, QMenuBar, QItemDelegate, QSplitter,
+                               QDoubleSpinBox, QDockWidget, QApplication, QMenuBar, QItemDelegate, QStyledItemDelegate, QSplitter,
                                QTreeWidget, QTreeWidgetItem, QListWidget, QTreeView, QTableView, QListView,
                                QTableWidget, QTableWidgetItem, QWizard, QWizardPage, QProgressBar, QAbstractItemView,
                                QStyleOptionViewItem, QScrollArea, QColorDialog, QFrame, QHeaderView, QButtonGroup)
