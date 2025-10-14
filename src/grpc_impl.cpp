@@ -305,7 +305,7 @@ struct Service::Impl {
 
       using signal_type = decltype(raw_node->ready);
       auto connection =
-          raw_node->ready.connect(signal_type::slot_type([&](const Node *) {
+          raw_node->ready.connect(signal_type::slot_type([&](const Node * base_node) {
             if (!node->has_analog_data()) {
               return;
             }
@@ -313,7 +313,7 @@ struct Service::Impl {
             TRACE_EVENT("thalamus", "Service::analog(on ready)");
             std::lock_guard<std::mutex> lock(connection_mutex);
             ::thalamus_grpc::AnalogResponse response;
-            auto new_redirect = raw_node->redirect();
+            auto new_redirect = base_node->redirect();
             if(!new_redirect.empty()) {
               response.set_redirect(new_redirect);
               writer(response, ::grpc::WriteOptions());
@@ -459,7 +459,7 @@ struct Service::Impl {
 
       using signal_type = decltype(raw_node->ready);
       auto connection =
-          raw_node->ready.connect(signal_type::slot_type([&](const Node *) {
+          raw_node->ready.connect(signal_type::slot_type([&](const Node * base_node) {
             if (!node->has_text_data()) {
               return;
             }
@@ -467,7 +467,7 @@ struct Service::Impl {
             TRACE_EVENT("thalamus", "Service::text(on ready)");
             std::lock_guard<std::mutex> lock(connection_mutex);
             ::thalamus_grpc::Text response;
-            auto new_redirect = raw_node->redirect();
+            auto new_redirect = base_node->redirect();
             if(!new_redirect.empty()) {
               response.set_redirect(new_redirect);
               writer(response, ::grpc::WriteOptions());
@@ -1177,7 +1177,7 @@ Service::graph(::grpc::ServerContext *context,
 
     using signal_type = decltype(raw_node->ready);
     auto connection =
-        raw_node->ready.connect(signal_type::slot_type([&](const Node *) {
+        raw_node->ready.connect(signal_type::slot_type([&](const Node * base_node) {
           if (!node->has_analog_data()) {
             return;
           }
@@ -1185,7 +1185,7 @@ Service::graph(::grpc::ServerContext *context,
           std::lock_guard<std::mutex> lock(connection_mutex);
           ::thalamus_grpc::GraphResponse response;
 
-          auto new_redirect = raw_node->redirect();
+          auto new_redirect = base_node->redirect();
           if(!new_redirect.empty()) {
             response.set_redirect(new_redirect);
             writer->Write(response);
@@ -1392,7 +1392,7 @@ Service::graph(::grpc::ServerContext *context,
       }
 
       boost::signals2::scoped_connection connection =
-          raw_node->ready.connect(signal_type::slot_type([&](const Node *) {
+          raw_node->ready.connect(signal_type::slot_type([&](const Node * base_node) {
             if (!connection_mutex.try_lock()) {
               return;
             }
@@ -1400,7 +1400,7 @@ Service::graph(::grpc::ServerContext *context,
                                              std::adopt_lock_t());
             ::thalamus_grpc::AnalogResponse response;
 
-            auto new_redirect = raw_node->redirect();
+            auto new_redirect = base_node->redirect();
             if(new_redirect.empty()) {
               for (auto c = 0; c < node->num_channels(); ++c) {
                 auto span = response.add_spans();

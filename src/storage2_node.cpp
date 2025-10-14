@@ -465,7 +465,7 @@ struct Storage2Node::Impl {
 
     output_stream = std::ofstream(rendered, std::ios::trunc | std::ios::binary);
     this->outer->record(output_stream, record);
-    return rendered;
+    return std::string(std::move(rendered));
   }
 
   void close_file() { output_stream.close(); }
@@ -626,7 +626,7 @@ struct Storage2Node::Impl {
     void work() override {
       for (auto &record : in_queue) {
         auto image = record.image();
-
+ 
         thalamus_grpc::StorageRecord compressed_record;
         compressed_record.set_node(node);
         compressed_record.set_time(record.time());

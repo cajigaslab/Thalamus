@@ -440,7 +440,7 @@ struct RecordReader::Impl {
       if (!pulled) {
         return std::nullopt;
       }
-      return pulled;
+      return std::optional<thalamus_grpc::StorageRecord>(std::move(pulled));
     } else {
       return record;
     }

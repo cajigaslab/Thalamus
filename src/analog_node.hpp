@@ -4,6 +4,7 @@
 #include <span>
 #include <string>
 #include <util.hpp>
+#include <text_node.hpp>
 
 namespace thalamus {
 template <typename T> double interval_to_frequency(T interval) {
@@ -94,7 +95,7 @@ public:
   size_t modalities() const override;
 };
 
-class WaveGeneratorNode : public AnalogNode, public Node {
+class WaveGeneratorNode : public AnalogNode, public TextNode, public Node {
   struct Impl;
   std::unique_ptr<Impl> impl;
 
@@ -120,6 +121,10 @@ public:
   std::string_view name(int channel) const override;
   std::span<const std::string> get_recommended_channels() const override;
   size_t modalities() const override;
+  
+  std::string_view text() const override;
+  bool has_text_data() const override;
+  bool has_analog_data() const override;
 };
 
 class ToggleNode : public AnalogNode, public Node {
