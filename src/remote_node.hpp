@@ -1,12 +1,14 @@
 #include <base_node.hpp>
 #include <stim_node.hpp>
 #include <xsens_node.hpp>
+#include <image_node.hpp>
 
 namespace thalamus {
 
 class RemoteNode : public Node,
                    public AnalogNode,
                    public MotionCaptureNode,
+                   public ImageNode,
                    public StimNode {
   struct Impl;
   std::unique_ptr<Impl> impl;
@@ -31,10 +33,22 @@ public:
   void inject(const std::span<Segment const> &segments) override;
   bool has_motion_data() const override;
 
+  Plane plane(int) const override;
+  size_t num_planes() const override;
+  Format format() const override;
+  size_t width() const override;
+  size_t height() const override;
+  std::chrono::nanoseconds frame_interval() const override;
+  void inject(const thalamus_grpc::Image &) override;
+  bool has_image_data() const override;
+
   std::future<thalamus_grpc::StimResponse>
   stim(thalamus_grpc::StimRequest &&) override;
 
   static std::string type_name();
   size_t modalities() const override;
+
+
+  void process(const boost::json::value& request, std::function<void(const boost::json::value&)> callback) override;
 };
 } // namespace thalamus

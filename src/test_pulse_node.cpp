@@ -30,16 +30,17 @@ struct TestPulseNode::Impl {
     if(!lock) {
       return;
     }
-    if(source->num_channels() < 2) {
+    if(source->num_channels() < 1) {
       return;
     }
-    auto data = source->data(1);
+    auto data = source->data(0);
     if(data.empty()) {
       return;
     }
     auto now = source->time();
     for(auto current_value : data) {
-      if(current_value > 40000 && current_value - last_value > 1000 && now - last_time > 500ms) {
+      if(current_value > 3 && current_value - last_value > 2 && now - last_time > 500ms) {
+        graph->log("PULSE");
         thalamus_grpc::StimRequest request;
         request.set_trigger(0);
         stim_node->stim(std::move(request));
@@ -85,7 +86,7 @@ struct TestPulseNode::Impl {
         auto span = data->add_spans();
         span->set_begin(0);
         span->set_end(2);
-        span->set_name("Dev1/ao0");
+        span->set_name("Dev3/ao0");
         data->add_sample_intervals(300000000);
         maybe_stim_node->stim(std::move(request));
 

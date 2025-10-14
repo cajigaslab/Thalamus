@@ -13,8 +13,6 @@ import datetime
 import threading
 import contextlib
 
-import nidaqmx
-
 from ..qt import *
 
 LOGGER = logging.getLogger(__name__)
@@ -603,87 +601,6 @@ def movella_decorator(port: int):
     async def wrapper(task_context: TaskContextProtocol, *args, **kwargs) -> TaskResult:
       async with movella_context(task_context, port) as protocol:
         return await func(task_context, *(args + (protocol,)), **kwargs)
-    
-    return wrapper
-
-  return decorator
-
-class NidaqmxTaskWrapper:
-  def __init__(self, task: nidaqmx.Task, task_context: TaskContextProtocol):
-    self.task_context = task_context
-    self.task = task
-    self.last_read = None
-    self.running = True
-    self.callback = lambda arg: None
-    self.queue = queue.Queue()
-    self.loop = asyncio.get_running_loop()
-
-  def start(self):
-    self.thread = threading.Thread(target=self.__target)
-    self.thread.start()
-
-  def join(self):
-    self.running = False
-    self.queue.put(lambda: None)
-    self.thread.join()
-
-  def write(self, value):
-    def write():
-      self.task.write(value)
-    self.queue.put(write)
-
-  def queue_read(self):
-    def read():
-      self.last_read = self.task.read()
-      self.loop.call_soon_threadsafe(lambda: self.callback(self.last_read))
-    self.queue.put(read)
-
-  def __target(self):
-    while self.running:
-      job = self.queue.get()
-      job()
-
-#@contextlib.asynccontextmanager
-#async def nidaq_context(task_context: TaskContextProtocol,
-#                        frequency: float = 60, 
-#                        ai_voltage_chan: typing.Optional[str] = None,
-#                        di_chan: typing.Optional[str] = None,
-#                        ao_voltage_chan: typing.Optional[str] = None) -> typing.AsyncIterator[nidaqmx.Task]:
-#  with nidaqmx.Task() as task:
-#    if ai_voltage_chan:
-#      task.ai_channels.add_ai_voltage_chan(ai_voltage_chan)
-#    if di_chan:
-#      task.di_channels.add_di_chan(di_chan)
-#    if ao_voltage_chan:
-#      task.ao_channels.add_ao_voltage_chan(ao_voltage_chan)
-#
-#    wrapper = NidaqmxTaskWrapper(task, task_context)
-#    wrapper.start()
-#
-#    async def reader():
-#      interval = 1/frequency
-#      try:
-#        while True:
-#          wrapper.queue_read()
-#          await asyncio.sleep(interval)
-#      except asyncio.CancelledError:
-#        return
-#
-#    reader_task = create_task_with_exc_handling(reader())
-#    try:
-#      yield wrapper
-#    finally:
-#      reader_task.cancel()
-#      wrapper.join()
-
-def nidaq_decorator(frequency: float = 60, 
-                    ai_voltage_chan: typing.Optional[str] = None,
-                    di_chan: typing.Optional[str] = None,
-                    ao_voltage_chan: typing.Optional[str] = None):
-  def decorator(func):
-    async def wrapper(task_context: TaskContextProtocol, *args, **kwargs) -> TaskResult:
-      async with nidaq_context(task_context, frequency, ai_voltage_chan, di_chan, ao_voltage_chan) as nidaq:
-        return await func(task_context, *(args + (nidaq,)), **kwargs)
     
     return wrapper
 

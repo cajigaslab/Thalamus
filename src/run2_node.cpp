@@ -151,22 +151,22 @@ size_t Run2Node::modalities() const {
 std::chrono::nanoseconds Run2Node::time() const {
   return impl->time;
 }
-std::span<const double> Run2Node::data(int channel) const {
+std::span<const double> Run2Node::data(int) const {
   return std::span<const double>(&impl->running_signal, &impl->running_signal+1);
 }
 int Run2Node::num_channels() const {
   return 1;
 }
-std::string_view Run2Node::name(int channel) const {
+std::string_view Run2Node::name(int) const {
   return "Running";
 }
-std::chrono::nanoseconds Run2Node::sample_interval(int i) const {
+std::chrono::nanoseconds Run2Node::sample_interval(int) const {
   return 0ns;
 }
 
 void
-Run2Node::inject(const thalamus::vector<std::span<double const>> &spans,
-       const thalamus::vector<std::chrono::nanoseconds> &sample_intervals,
+Run2Node::inject(const thalamus::vector<std::span<double const>> &,
+       const thalamus::vector<std::chrono::nanoseconds> &,
        const thalamus::vector<std::string_view> &) {
   THALAMUS_ASSERT(false, "Unimplemented");
 }

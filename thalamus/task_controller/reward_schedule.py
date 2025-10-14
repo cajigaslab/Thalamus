@@ -8,13 +8,9 @@ import functools
 from ..qt import *
 
 import matplotlib
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg # type: ignore
-from matplotlib.figure import Figure # type: ignore
 from matplotlib import pyplot
 
 from ..config import ObservableCollection
-
-matplotlib.use('Qt5Agg')
 
 COLORS = [
   QColor(int(c[0]*255), int(c[1]*255), int(c[2]*255)) for c in pyplot.get_cmap('tab10').colors

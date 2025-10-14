@@ -46,6 +46,9 @@ struct WaveGeneratorNode::Impl {
   double offset;
   double duty_cycle;
   std::function<double(std::chrono::nanoseconds)> wave;
+  std::string text;
+  bool has_analog = false;
+  bool has_text = false;
   struct Wave {
     enum class Shape { SINE, SQUARE, TRIANGLE, RANDOM };
     Shape shape = Shape::SINE;
@@ -170,6 +173,8 @@ struct WaveGeneratorNode::Impl {
     }
     name_views.assign(names.begin(), names.end());
 
+    has_analog = true;
+    has_text = false;
     analog_impl.inject(spans, sample_intervals, name_views,
                        now.time_since_epoch());
     _time = new_time;
@@ -266,10 +271,19 @@ struct WaveGeneratorNode::Impl {
         w.last_switch = 0ns;
       }
       if (is_running) {
+        has_analog = false;
+        has_text = true;
+        text = "Starting";
+        outer->ready(outer);
         last_time = std::chrono::steady_clock::now();
         _start_time = last_time;
         _time = 0ns;
         on_timer(boost::system::error_code());
+      } else {
+        has_analog = false;
+        has_text = true;
+        text = "Stopping";
+        outer->ready(outer);
       }
     }
   }
@@ -530,4 +544,14 @@ size_t WaveGeneratorNode::modalities() const {
 }
 size_t AnalogNodeImpl::modalities() const {
   return infer_modalities<AnalogNodeImpl>();
+}
+
+std::string_view WaveGeneratorNode::text() const {
+  return impl->text;
+}
+bool WaveGeneratorNode::has_text_data() const {
+  return impl->has_text;
+}
+bool WaveGeneratorNode::has_analog_data() const {
+  return impl->has_analog;
 }

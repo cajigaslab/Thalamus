@@ -11,7 +11,7 @@ import pathlib
 import datetime
 import itertools
 import collections
-import pkg_resources
+from ..resources import read_text
 from ..config import *
 import functools
 import h5py
@@ -44,6 +44,7 @@ from .storage_widget import StorageWidget
 from .storage2_widget import Storage2Widget
 from .persistence_widget import PersistenceWidget
 from .run2_widget import Run2Widget
+from .delsys_widget import DelsysWidget
 from ..util import NodeSelector
 from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
@@ -72,6 +73,8 @@ class UserDataType(enum.Enum):
   CHECK_BOX = enum.auto()
   SPINBOX = enum.auto()
   DOUBLE_SPINBOX = enum.auto()
+  OPEN_FILE = enum.auto()
+  SAVE_FILE = enum.auto()
 
 class UserData(typing.NamedTuple):
   type: UserDataType
@@ -206,6 +209,9 @@ def create_alpha_omega_widget(node: ObservableDict, stub: thalamus_pb2_grpc.Thal
 FACTORIES = {
   'NONE': Factory(None, []),
   'STIM_PRINTER': Factory(None, []),
+  'BRAINPRODUCTS': Factory(None, [
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+  ]),
   'NIDAQ': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.DOUBLE_SPINBOX, 'Sample Rate', 1000.0, []),
@@ -287,7 +293,7 @@ FACTORIES = {
   ]),
   'STORAGE2': Factory(Storage2Widget, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
-    UserData(UserDataType.DEFAULT, 'Output File', 'test.tha', []),
+    UserData(UserDataType.SAVE_FILE, 'Output File', 'test.tha', []),
     UserData(UserDataType.CHECK_BOX, 'Compress Analog', False, []),
     UserData(UserDataType.CHECK_BOX, 'Compress Video', False, []),
     UserData(UserDataType.CHECK_BOX, 'Simple Copy', False, []),
@@ -379,6 +385,7 @@ FACTORIES = {
     UserData(UserDataType.DEFAULT, 'Node', '', []),
     UserData(UserDataType.DOUBLE_SPINBOX, 'Probe Frequency', 10.0, []),
     UserData(UserDataType.SPINBOX, 'Probe Size', 128, []),
+    UserData(UserDataType.CHECK_BOX, 'View', False, []),
     UserData(UserDataType.CHECK_BOX, 'Running', False, [])]),
   'REMOTE_LOG': Factory(None, [
     UserData(UserDataType.DEFAULT, 'Address', '', []),
@@ -438,11 +445,48 @@ FACTORIES = {
   ]),
   'HEXASCOPE': Factory(HexascopeWidget, []),
   'WALLCLOCK': Factory(None, []),
+  'DELSYS': Factory(DelsysWidget, [
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+    UserData(UserDataType.OPEN_FILE, 'Key File', '', []),
+    UserData(UserDataType.OPEN_FILE, 'License File', '', []),
+  ]),
+  'CECI': Factory(None, [
+    UserData(UserDataType.DEFAULT, 'Device 0', 'PXI1Slot4', []),
+    UserData(UserDataType.DEFAULT, 'Device 1', 'PXI1Slot5', []),
+  ]),
 }
 
 FACTORY_NAMES = {}
 
-class Delegate(QItemDelegate):
+class FilePicker(QWidget):
+  def __init__(self, tree: QTreeView, data_type: UserDataType, parent: QWidget):
+    super().__init__(parent)
+    self.edit = QLineEdit()
+    button = QPushButton('...')
+    layout = QHBoxLayout()
+    layout.addWidget(self.edit)
+    layout.addWidget(button)
+    self.setLayout(layout)
+
+    def on_click():
+      if data_type == UserDataType.OPEN_FILE:
+        name, filter = QFileDialog.getOpenFileName(self, 'Select File', self.edit.text())
+      else:
+        name, filter = QFileDialog.getSaveFileName(self, 'Select File', self.edit.text(), options=QFileDialog.Option.DontConfirmOverwrite)
+      if not name:
+        tree.setCurrentIndex(QModelIndex())
+        return
+      
+      self.edit.setText(name)
+      tree.setCurrentIndex(QModelIndex())
+
+    button.clicked.connect(on_click)
+
+class Delegate(QStyledItemDelegate):
+  def __init__(self, tree):
+    super().__init__()
+    self.tree = tree
+
   def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
     user_data = typing.cast(UserData, index.data(Qt.ItemDataRole.UserRole))
     if index.column() == 0 and index.parent() == QModelIndex():
@@ -460,6 +504,9 @@ class Delegate(QItemDelegate):
     elif user_data.type == UserDataType.DOUBLE_SPINBOX:
       result = QDoubleSpinBox(parent)
       result.setRange(-1000000.0, 1000000.0)
+      return result
+    elif user_data.type in (UserDataType.OPEN_FILE, UserDataType.SAVE_FILE):
+      result = FilePicker(self.tree, user_data.type, parent)
       return result
     else:
       return super().createEditor(parent, option, index)
@@ -487,6 +534,9 @@ class Delegate(QItemDelegate):
     elif user_data.type == UserDataType.DOUBLE_SPINBOX:
       double_spin_box = typing.cast(QDoubleSpinBox, editor)
       double_spin_box.setValue(index.data())
+    elif user_data.type in (UserDataType.OPEN_FILE, UserDataType.SAVE_FILE):
+      file_widget = typing.cast(FilePicker, editor)
+      file_widget.edit.setText(index.data())
     else:
       return super().setEditorData(editor, index)
     
@@ -510,8 +560,27 @@ class Delegate(QItemDelegate):
     elif user_data.type == UserDataType.DOUBLE_SPINBOX:
       double_spin_box = typing.cast(QDoubleSpinBox, editor)
       model.setData(index, double_spin_box.value())
+    elif user_data.type in (UserDataType.OPEN_FILE, UserDataType.SAVE_FILE):
+      file_widget = typing.cast(FilePicker, editor)
+      model.setData(index, file_widget.edit.text())
     else:
       return super().setModelData(editor, model, index)
+
+  def sizeHint(self, option, index: QModelIndex):
+    user_data = index.data(Qt.ItemDataRole.UserRole)
+    if not isinstance(user_data, UserData):
+      return super().sizeHint(option, index)
+    
+    if user_data.type in (UserDataType.OPEN_FILE, UserDataType.SAVE_FILE):
+      return FilePicker(None, '', None).sizeHint()
+    else:
+      return super().sizeHint(option, index)
+
+  def updateEditorGeometry(self, editor, option: QStyleOptionViewItem, index):
+    if isinstance(editor, FilePicker):
+      editor.setGeometry(option.rect)
+    else:
+      super().updateEditorGeometry(editor, option, index)
     
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg # type: ignore
 from matplotlib.figure import Figure # type: ignore
@@ -728,8 +797,8 @@ class XsensView(QOpenGLWidget):
     self.program = OpenGL.GL.glCreateProgram()
     self.vertex = OpenGL.GL.glCreateShader(OpenGL.GL.GL_VERTEX_SHADER)
     self.fragment = OpenGL.GL.glCreateShader(OpenGL.GL.GL_FRAGMENT_SHADER)
-    self.vertex_code = pkg_resources.resource_string(__name__, 'shaders/xsens.vert')
-    self.fragment_code = pkg_resources.resource_string(__name__, 'shaders/xsens.frag')
+    self.vertex_code = read_text(__name__, 'shaders/xsens.vert')
+    self.fragment_code = read_text(__name__, 'shaders/xsens.frag')
 
     OpenGL.GL.glEnable(OpenGL.GL.GL_DEPTH_TEST)
 
@@ -1519,7 +1588,7 @@ class ThalamusWindow(QMainWindow):
     remove_button = QPushButton('Remove')
     remove_button.clicked.connect(self.on_remove)
     self.view = QTreeView()
-    self.view.setItemDelegate(Delegate())
+    self.view.setItemDelegate(Delegate(self.view))
 
     self.model = ItemModel(self.state['nodes'], self.stub, self.address)
     self.view.setModel(self.model)

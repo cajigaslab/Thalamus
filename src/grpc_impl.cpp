@@ -15,6 +15,7 @@
 #include <modalities_util.hpp>
 #include <text_node.hpp>
 #include <thalamus/thread.hpp>
+#include <thalamus/grpc.hpp>
 
 namespace thalamus {
 using namespace std::chrono_literals;
@@ -275,6 +276,9 @@ struct Service::Impl {
       auto has_channels = !channels.empty() || !channel_names.empty();
 
       std::mutex connection_mutex;
+      std::mutex response_mutex;
+      std::condition_variable cond;
+      ::thalamus_grpc::AnalogResponse out_response;
 
       bool channels_changed = true;
       using channels_changed_signal_type = decltype(node->channels_changed);
@@ -285,9 +289,23 @@ struct Service::Impl {
                 channels_changed = true;
               }));
 
+      std::promise<std::string> redirect_promise;
+      auto redirect_future = redirect_promise.get_future();
+      boost::asio::post(io_context, [&] {
+        redirect_promise.set_value(std::string(raw_node->redirect()));
+      });
+      auto redirect = redirect_future.get();
+
+      if(!redirect.empty()) {
+        ::thalamus_grpc::AnalogResponse response;
+        response.set_redirect(redirect);
+        writer(response, ::grpc::WriteOptions());
+        return ::grpc::Status::OK;
+      }
+
       using signal_type = decltype(raw_node->ready);
       auto connection =
-          raw_node->ready.connect(signal_type::slot_type([&](const Node *) {
+          raw_node->ready.connect(signal_type::slot_type([&](const Node * base_node) {
             if (!node->has_analog_data()) {
               return;
             }
@@ -295,6 +313,12 @@ struct Service::Impl {
             TRACE_EVENT("thalamus", "Service::analog(on ready)");
             std::lock_guard<std::mutex> lock(connection_mutex);
             ::thalamus_grpc::AnalogResponse response;
+            auto new_redirect = base_node->redirect();
+            if(!new_redirect.empty()) {
+              response.set_redirect(new_redirect);
+              writer(response, ::grpc::WriteOptions());
+              return;
+            }
 
             size_t num_channels = size_t(node->num_channels());
             if (!has_channels && channels.size() != num_channels) {
@@ -347,7 +371,11 @@ struct Service::Impl {
 
               span->set_end(uint32_t(response.data_size()));
             }
-            writer(response, ::grpc::WriteOptions());
+
+            std::lock_guard<std::mutex> lock3(response_mutex);
+            std::swap(response, out_response);
+            cond.notify_one();
+            //writer(response, ::grpc::WriteOptions());
           }));
       raw_node.reset();
 
@@ -359,9 +387,109 @@ struct Service::Impl {
           writer(response, options);
           return ::grpc::Status::OK;
         }
-        std::this_thread::sleep_for(1s);
+        thalamus_grpc::AnalogResponse local_response;
+        {
+          std::unique_lock<std::mutex> lock2(response_mutex);
+          cond.wait_for(lock2, 1s);
+          std::swap(local_response, out_response);
+        }
+        writer(local_response, ::grpc::WriteOptions());
       }
       channels_connection.disconnect();
+      connection.disconnect();
+      std::lock_guard<std::mutex> lock(connection_mutex);
+      std::this_thread::sleep_for(1s);
+    }
+
+    return ::grpc::Status::OK;
+  }
+
+  ::grpc::Status text(::grpc::ServerContext *context,
+                        const ::thalamus_grpc::TextRequest *request,
+                        std::function<bool(::thalamus_grpc::Text &msg,
+                                           ::grpc::WriteOptions options)>
+                            writer) {
+
+    Impl::ContextGuard guard(outer, context);
+    while (!context->IsCancelled()) {
+      std::promise<void> promise;
+      auto future = promise.get_future();
+      std::shared_ptr<Node> raw_node;
+      {
+        TRACE_EVENT("thalamus", "Service::text(get node)");
+        boost::asio::post(io_context, [&] {
+          node_graph.get_node(request->node(), [&](auto ptr) {
+            raw_node = ptr.lock();
+            promise.set_value();
+          });
+        });
+        while (future.wait_for(1s) == std::future_status::timeout &&
+               !context->IsCancelled()) {
+          if (io_context.stopped()) {
+            ::thalamus_grpc::Text response;
+            ::grpc::WriteOptions options;
+            options.set_last_message();
+            writer(response, options);
+            return ::grpc::Status::OK;
+          }
+        }
+        if (!node_cast<TextNode *>(raw_node.get())) {
+          std::this_thread::sleep_for(1s);
+          continue;
+        }
+      }
+
+      TextNode *node = node_cast<TextNode *>(raw_node.get());
+
+      std::mutex connection_mutex;
+
+      std::promise<std::string> redirect_promise;
+      auto redirect_future = redirect_promise.get_future();
+      boost::asio::post(io_context, [&] {
+        redirect_promise.set_value(std::string(raw_node->redirect()));
+      });
+      auto redirect = redirect_future.get();
+
+      if(!redirect.empty()) {
+        ::thalamus_grpc::Text response;
+        response.set_redirect(redirect);
+        writer(response, ::grpc::WriteOptions());
+        return ::grpc::Status::OK;
+      }
+
+      using signal_type = decltype(raw_node->ready);
+      auto connection =
+          raw_node->ready.connect(signal_type::slot_type([&](const Node * base_node) {
+            if (!node->has_text_data()) {
+              return;
+            }
+            
+            TRACE_EVENT("thalamus", "Service::text(on ready)");
+            std::lock_guard<std::mutex> lock(connection_mutex);
+            ::thalamus_grpc::Text response;
+            auto new_redirect = base_node->redirect();
+            if(!new_redirect.empty()) {
+              response.set_redirect(new_redirect);
+              writer(response, ::grpc::WriteOptions());
+              return;
+            }
+
+            response.set_text(node->text());
+            response.set_time(size_t(node->time().count()));
+            writer(response, ::grpc::WriteOptions());
+          }));
+      raw_node.reset();
+
+      while (!context->IsCancelled() && connection.connected()) {
+        if (io_context.stopped()) {
+          ::grpc::WriteOptions options;
+          options.set_last_message();
+          ::thalamus_grpc::Text response;
+          writer(response, options);
+          return ::grpc::Status::OK;
+        }
+        std::this_thread::sleep_for(1s);
+      }
       connection.disconnect();
       std::lock_guard<std::mutex> lock(connection_mutex);
       std::this_thread::sleep_for(1s);
@@ -465,43 +593,58 @@ Service::node_request(::grpc::ServerContext *,
   }
 
   auto parsed = boost::json::parse(request->json());
-  auto json_response = node->process(parsed);
+  std::promise<boost::json::value> promise;
+  boost::asio::post(impl->io_context, [&] {
+    node->process(parsed, [&] (auto& result) {
+      promise.set_value(result);
+    });
+  });
+  auto json_response = promise.get_future().get();
   auto serialized_response = boost::json::serialize(json_response);
   response->set_json(serialized_response);
 
   return ::grpc::Status::OK;
 }
 
-::grpc::Status Service::node_request_stream(
-    ::grpc::ServerContext *,
-    ::grpc::ServerReaderWriter<::thalamus_grpc::NodeResponse,
-                               ::thalamus_grpc::NodeRequest> *stream) {
-
-  std::weak_ptr<Node> weak;
-  ::thalamus_grpc::NodeRequest request;
-  ::thalamus_grpc::NodeResponse response;
-  while (stream->Read(&request)) {
+::grpc::ServerBidiReactor< ::thalamus_grpc::NodeRequest, ::thalamus_grpc::NodeResponse>* Service::node_request_stream(
+    ::grpc::CallbackServerContext* context) {
+  auto stream
+    = new ServerBidiReactor<::thalamus_grpc::NodeRequest, ::thalamus_grpc::NodeResponse>(*context, impl->io_context);
+  stream->callback = [
+   this,
+   weak=std::weak_ptr<Node>(),
+   stream
+  ](auto&& request) mutable {
     if (!request.node().empty()) {
       weak = impl->node_graph.get_node(request.node());
     }
     auto node = weak.lock();
-    response.set_id(request.id());
     if (!node) {
+      ::thalamus_grpc::NodeResponse response;
+      response.set_id(request.id());
       response.clear_json();
       response.set_status(
           thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
-      continue;
+      return;
+    }
+
+    if(request.json().empty()) {
+      return;
     }
 
     auto parsed = boost::json::parse(request.json());
-    auto json_response = node->process(parsed);
-    auto serialized_response = boost::json::serialize(json_response);
-    response.set_json(serialized_response);
-    response.set_status(
-        thalamus_grpc::NodeResponse::Status::NodeResponse_Status_OK);
-    stream->Write(response);
-  }
-  return ::grpc::Status::OK;
+    node->process(parsed, [request_id=request.id(),stream](const boost::json::value& json_response) {
+      auto serialized_response = boost::json::serialize(json_response);
+      ::thalamus_grpc::NodeResponse response;
+      response.set_id(request_id);
+      response.set_json(serialized_response);
+      response.set_status(
+          thalamus_grpc::NodeResponse::Status::NodeResponse_Status_OK);
+      stream->send(std::move(response));
+    });
+  };
+  stream->start();
+  return stream;
 }
 
 ::grpc::Status
@@ -1016,14 +1159,39 @@ Service::graph(::grpc::ServerContext *context,
               channels_changed = true;
             }));
 
+    
+
+    std::promise<std::string> redirect_promise;
+    auto redirect_future = redirect_promise.get_future();
+    boost::asio::post(impl->io_context, [&] {
+      redirect_promise.set_value(std::string(raw_node->redirect()));
+    });
+    auto redirect = redirect_future.get();
+
+    if(!redirect.empty()) {
+      ::thalamus_grpc::GraphResponse response;
+      response.set_redirect(redirect);
+      writer->Write(response);
+      return ::grpc::Status::OK;
+    }
+
     using signal_type = decltype(raw_node->ready);
     auto connection =
-        raw_node->ready.connect(signal_type::slot_type([&](const Node *) {
+        raw_node->ready.connect(signal_type::slot_type([&](const Node * base_node) {
           if (!node->has_analog_data()) {
             return;
           }
+          
           std::lock_guard<std::mutex> lock(connection_mutex);
           ::thalamus_grpc::GraphResponse response;
+
+          auto new_redirect = base_node->redirect();
+          if(!new_redirect.empty()) {
+            response.set_redirect(new_redirect);
+            writer->Write(response);
+            return;
+          }
+
           auto num_channels = size_t(node->num_channels());
           if (!has_channels && channels.size() != num_channels) {
             for (auto i = channels.size(); i < num_channels; ++i) {
@@ -1174,6 +1342,20 @@ Service::graph(::grpc::ServerContext *context,
     using channels_changed_signal_type = decltype(node->channels_changed);
     using signal_type = decltype(raw_node->ready);
 
+    std::promise<std::string> redirect_promise;
+    auto redirect_future = redirect_promise.get_future();
+    boost::asio::post(impl->io_context, [&] {
+      redirect_promise.set_value(std::string(raw_node->redirect()));
+    });
+    auto redirect = redirect_future.get();
+
+    if(!redirect.empty()) {
+      ::thalamus_grpc::AnalogResponse response;
+      response.set_redirect(redirect);
+      writer->Write(response, ::grpc::WriteOptions());
+      return ::grpc::Status::OK;
+    }
+
     boost::signals2::scoped_connection channels_connection =
         node->channels_changed.connect(
             channels_changed_signal_type::slot_type([&](const AnalogNode *) {
@@ -1210,7 +1392,7 @@ Service::graph(::grpc::ServerContext *context,
       }
 
       boost::signals2::scoped_connection connection =
-          raw_node->ready.connect(signal_type::slot_type([&](const Node *) {
+          raw_node->ready.connect(signal_type::slot_type([&](const Node * base_node) {
             if (!connection_mutex.try_lock()) {
               return;
             }
@@ -1218,12 +1400,17 @@ Service::graph(::grpc::ServerContext *context,
                                              std::adopt_lock_t());
             ::thalamus_grpc::AnalogResponse response;
 
-            for (auto c = 0; c < node->num_channels(); ++c) {
-              auto span = response.add_spans();
-              auto name = node->name(c);
-              span->set_name(name.data(), name.size());
-              response.add_sample_intervals(
-                  uint64_t(node->sample_interval(c).count()));
+            auto new_redirect = base_node->redirect();
+            if(new_redirect.empty()) {
+              for (auto c = 0; c < node->num_channels(); ++c) {
+                auto span = response.add_spans();
+                auto name = node->name(c);
+                span->set_name(name.data(), name.size());
+                response.add_sample_intervals(
+                    uint64_t(node->sample_interval(c).count()));
+              }
+            } else {
+              response.set_redirect(new_redirect);
             }
             writer->Write(response, ::grpc::WriteOptions());
 
@@ -1478,6 +1665,17 @@ Service::analog(::grpc::ServerContext *context,
                       });
 }
 
+::grpc::Status
+Service::text(::grpc::ServerContext *context,
+                const ::thalamus_grpc::TextRequest *request,
+                ::grpc::ServerWriter<::thalamus_grpc::Text> *writer) {
+  return impl->text(context, request,
+                      [&](const ::thalamus_grpc::Text &msg,
+                          const ::grpc::WriteOptions &options) {
+                        return writer->Write(msg, options);
+                      });
+}
+
 ::grpc::Status Service::remote_node(
     ::grpc::ServerContext *context,
     ::grpc::ServerReaderWriter<::thalamus_grpc::RemoteNodeMessage,
@@ -1635,6 +1833,10 @@ Service::image(::grpc::ServerContext *context,
     using signal_type = decltype(raw_node->ready);
     auto connection = raw_node->ready.connect(
         signal_type::slot_type([&](const Node *) {
+          if (!node->has_image_data()) {
+              return;
+          }
+
           TRACE_EVENT("thalamus", "Service::image(on ready)");
           std::lock_guard<std::mutex> lock(connection_mutex);
           std::vector<::thalamus_grpc::Image> responses;

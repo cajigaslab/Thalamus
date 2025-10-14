@@ -137,7 +137,9 @@ set(PROTO_SOURCES
   proto/util.proto
   proto/task_controller.proto
   proto/ophanim.proto
-  proto/thalamus.proto)
+  proto/thalamus.proto
+  #proto/delsys.proto
+  )
 apply_protoc_grpc(PROTO_GENERATED_SOURCES ${PROTO_SOURCES})
 
 add_library(protoc_generated OBJECT ${PROTO_GENERATED_SOURCES} ${PROTO_SOURCES})
@@ -253,6 +255,10 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/stim_printer_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/wallclock_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/wallclock_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/delsys_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/delsys_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/ceci_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/ceci_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/test_pulse_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/test_pulse_node.cpp"
                      #"${CMAKE_SOURCE_DIR}/src/hexascope_node.hpp"
@@ -263,6 +269,10 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/thread.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/tracing.hpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/tracing.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/nidaqmx.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/nidaqmx.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/record_reader.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/record_reader.cpp"
                      "${CMAKE_SOURCE_DIR}/proto/thalamus.proto")
 target_sources(thalamus PRIVATE 
                "${CMAKE_SOURCE_DIR}/src/pupil_node.hpp"
@@ -276,12 +286,15 @@ if(WIN32)
   if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
     target_compile_options(thalamus PRIVATE /bigobj)
   endif()
-  target_sources(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src/nidaq_node_windows.cpp")
+  target_sources(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src/nidaq_node_windows.cpp"
+                                  "${CMAKE_SOURCE_DIR}/src/brainproducts_node.hpp"
+                                  "${CMAKE_SOURCE_DIR}/src/brainproducts_node.cpp")
+  target_include_directories(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src/brain_products")
 elseif(APPLE)
   target_sources(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src/nidaq_node_mac.cpp")
   target_compile_definitions(thalamus PRIVATE _GNU_SOURCE)
 else()
-  target_sources(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src/nidaq_node_linux.cpp"
+  target_sources(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src/nidaq_node_windows.cpp"
                                   "${CMAKE_SOURCE_DIR}/src/ros2_node.hpp"
                                   "${CMAKE_SOURCE_DIR}/src/ros2_node.cpp")
   target_link_libraries(thalamus comedi m)
@@ -348,3 +361,21 @@ endif()
 if(NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
   target_link_options(test PRIVATE -g)
 endif()
+
+if(WIN32 AND BUILD_DOTNET)
+  #Install nuget packages during configure
+  execute_process(COMMAND msbuild -t:restore "/p:Platform=Any CPU"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/dotnet")
+
+  add_custom_target(dotnet
+    COMMAND msbuild dotnet.sln /p:Configuration=${CMAKE_BUILD_TYPE} "/p:Platform=Any CPU"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/dotnet")
+  
+  add_custom_command(TARGET dotnet POST_BUILD COMMAND 
+    cmake -E copy_directory "${CMAKE_SOURCE_DIR}/dotnet/dotnet/bin/${CMAKE_BUILD_TYPE}/net8.0"
+    "${CMAKE_SOURCE_DIR}/thalamus/dotnet")
+  add_dependencies(native dotnet)
+endif()
+add_executable(Rec_Stim Rec_Stim.cpp)
+target_link_libraries(Rec_Stim PRIVATE hdf5-static thalamus)
+target_include_directories(Rec_Stim PRIVATE "${CMAKE_SOURCE_DIR}/src")
