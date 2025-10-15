@@ -287,7 +287,6 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   center_acquired = False #on center start
   target_acquired = False #on peripheral target
   i_selected_target = None #target touched
-  last_selected_target = None #last peripheral target successfully touched
   touch_pos = QPoint() #cursor position
   #display state variables
   center_brightness = 255
@@ -299,24 +298,24 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       nonlocal center_acquired
       nonlocal target_acquired
       nonlocal i_selected_target
-      nonlocal last_selected_target
       nonlocal touch_pos
       
       #check acquisition of center target - is it within window of target?
       center_acquired = distance(all_target_rects[i_center_target].center(), cursor) < all_target_windows[i_center_target]
 
       #check peripheral targets
-      if current_target_to_highlight is not None:
-         target_acquired = distance(all_target_rects[current_target_to_highlight].center(),cursor) < all_target_windows[current_target_to_highlight]
-         i_selected_target = current_target_to_highlight if target_acquired else None
-      else:
-        target_acquired = False
-        i_selected_target = None
+      target_acquired = False
+      i_selected_target = None
+
+      for i in i_periph_targs:
+         if distance(all_target_rects[i].center(), cursor) < all_target_windows[i]:
+            target_acquired = True
+            i_selected_target = i
+            break
 
       touch_pos = cursor
 
   context.widget.touch_listener = touch_handler
-  show_presented_target = False
   state_brightness = 0
 
 
@@ -337,7 +336,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
           if i == current_target_to_highlight:
               color = all_target_colors[i]  #highlighted
           else:
-              color = QColor(128, 128, 128)  #gray
+              color = QColor(50, 50, 50)  #gray
           
           stl_mesh = all_target_stls[i]
           if stl_mesh:
@@ -349,7 +348,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
           path = QPainterPath()
           for rect in all_target_rects:
               path.addEllipse(QPointF(rect.center()), window, window)
-          painter.fillPath(path, QColor(255, 255, 255, 128))
+          painter.fillPath(path, QColor(255, 255, 255, 50))
       #state indicator    
       state_color = QColor(state_brightness, state_brightness, state_brightness)
       state_width = 40
@@ -379,21 +378,29 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   context.widget.renderer = renderer
 
   async def fail_trial(reason: str):
-    nonlocal center_brightness, current_target_to_highlight, state_brightness
-    await context.log('BehavState=fail_{reason}')
+    nonlocal center_brightness, current_target_to_highlight, state_brightness, show_all_targets
+    await context.log(f'BehavState=fail_{reason}')
     context.behav_result = behav_result
-    show_presented_target = False
+    center_brightness = 0
+    show_all_targets = False
+    current_target_to_highlight = None
     state_brightness = 0
     fail_sound.play()
     context.widget.update()
+    await context.sleep(config.fail_timeout) #wait for fail timeout
  
   #ITI
   await context.log('BehavState=intertrial')
   state_brightness = 0
-  center_brightness = 255
+  center_brightness = 0
   current_target_to_highlight = None
+  show_all_targets = False #hide all peripheral targets
   context.widget.update()
   await context.sleep(config.intertrial_timeout)
+
+  show_all_targets = True
+  center_brightness = 255
+  context.widget.update()
 
   # state: startacq
   for step_idx, target_idx in enumerate(sequence):
@@ -402,6 +409,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     center_brightness = 255 #white = ready
     current_target_to_highlight = None
     state_brightness = 255
+    show_all_targets = True
     context.widget.update()
     acquired = await wait_for(context, lambda: center_acquired, config.reach_timeout)
     if not acquired:
@@ -415,17 +423,12 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       return task_context.TaskResult(False)
     #go cue - center dimmed
     await context.log(f'BehavState=step_{step_idx}_go_cue')
-    center_brightness = 128 #gray - aka go cue
+    center_brightness = 50 #gray - aka go cue
     context.widget.update()
     #cue delay
-    if not config.is_random_sequence:
-      await context.sleep(config.cue_delay)
-      current_target_to_highlight = target_idx
-      context.widget.update()
-    else:
-      #random - show immediately
-      current_target_to_highlight = target_idx
-      context.widget.update()
+    await context.sleep(config.cue_delay)
+    current_target_to_highlight = target_idx
+    context.widget.update()
     #wait for peripheral target
     await context.log(f'BehavState=step_{step_idx}_reach')
     acquired = await wait_for(context, lambda: target_acquired, config.reach_timeout)
@@ -433,12 +436,12 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       await fail_trial('no_target_touch')
       return task_context.TaskResult(False)
     #check target
-    if i_selected_target != target_idx:
-      await fail_trial('wrong_target')
-      behav_result['selected_targets'].append(int(i_selected_target))
+    if i_selected_target != target_idx: #is the targ diff from correct target
+      await fail_trial('wrong_target') #calls failure
+      if i_selected_target is not None: #if target touched
+        behav_result['selected_targets'].append(int(i_selected_target))
       return task_context.TaskResult(False)
     #correct target
-    success_sound.play()
     behav_result['selected_targets'].append(i_selected_target)
     #hold at target
     await context.log(f'BehavState=step_{step_idx}_target_hold')
@@ -459,12 +462,12 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   The trial's outcome (success or failure) at this point is decided, and now
   we can wait (optionally) by success_timeout or fail_timeout.
   """
-  show_presented_target = False
   context.widget.update()
 
   await context.log('BehavState=success')
   state_brightness = 0 
-  center_brightness = 255
+  center_brightness = 0
+  show_all_targets = False
   current_target_to_highlight = None
   context.widget.update()
   final_target = int(sequence[-1])
@@ -484,4 +487,3 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   context.behav_result = behav_result
   return task_context.TaskResult(True)
     
-
