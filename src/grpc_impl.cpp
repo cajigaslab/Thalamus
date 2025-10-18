@@ -304,6 +304,7 @@ struct Service::Impl {
       }
 
       using signal_type = decltype(raw_node->ready);
+      std::vector<double> workspace;
       auto connection =
           raw_node->ready.connect(signal_type::slot_type([&](const Node * base_node) {
             if (!node->has_analog_data()) {
@@ -351,6 +352,7 @@ struct Service::Impl {
             response.set_time(size_t(node->time().count()));
             response.set_remote_time(size_t(node->remote_time().count()));
             channels_changed = false;
+            auto is_transformed = node->is_transformed();
             for (auto c = 0u; c < channels.size(); ++c) {
               auto channel = channels[c];
               if (channel >= num_channels) {
@@ -364,9 +366,13 @@ struct Service::Impl {
               response.add_sample_intervals(
                   uint64_t(node->sample_interval(int(channel)).count()));
 
+              auto scale = is_transformed ? node->scale(int(channel)) : 1.0;
+              auto offset = is_transformed ? node->offset(int(channel)) : 0.0;
               visit_node(node, [&](auto wrapper) {
                 auto data = wrapper->data(int(channel));
-                response.mutable_data()->Add(data.begin(), data.end());
+                workspace.assign(data.begin(), data.end());
+                std::transform(workspace.begin(), workspace.end(), workspace.begin(), [&](auto s) { return s*scale + offset; });
+                response.mutable_data()->Add(workspace.begin(), workspace.end());
               });
 
               span->set_end(uint32_t(response.data_size()));
@@ -1238,6 +1244,7 @@ Service::graph(::grpc::ServerContext *context,
           if (!first_time) {
             first_time = node->time();
           }
+          auto is_transformed = node->is_transformed();
           for (auto c = 0u; c < channels.size(); ++c) {
             auto channel = channels[c];
             auto &min = mins[c];
@@ -1254,9 +1261,12 @@ Service::graph(::grpc::ServerContext *context,
             if (interval == 0ns) {
               current_time = node->time() - *first_time;
             }
+            auto scale = is_transformed ? node->scale(int(channel)) : 1.0;
+            auto offset = is_transformed ? node->offset(int(channel)) : 0.0;
             visit_node(node, [&](auto wrapper) {
               auto data = wrapper->data(int(channel));
-              for (double sample : data) {
+              for (double sample_raw : data) {
+                double sample = sample_raw * scale + offset;
                 auto wrote = current_time >= bin_end;
                 while (current_time >= bin_end) {
                   response.add_bins(min);

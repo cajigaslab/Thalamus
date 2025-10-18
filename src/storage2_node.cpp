@@ -184,6 +184,8 @@ struct Storage2Node::Impl {
       record.set_node(name);
       body->set_time(uint64_t(locked_analog->time().count()));
       body->set_remote_time(uint64_t(locked_analog->remote_time().count()));
+      auto is_transformed = locked_analog->is_transformed();
+      body->set_is_transformed(is_transformed);
       visit_node(locked_analog, [&]<typename T>(T *wrapper) {
         for (auto i = 0; i < wrapper->num_channels(); ++i) {
           auto data = wrapper->data(i);
@@ -208,9 +210,14 @@ struct Storage2Node::Impl {
                            [&] { return name + "(" + channel_name + ")"; });
           }
           auto span = body->add_spans();
+          if(is_transformed) {
+            span->set_offset(wrapper->offset(i));
+            span->set_scale(wrapper->scale(i));
+          }
 
-          if constexpr (std::is_same<typename decltype(data)::value_type,
-                                     short>::value) {
+          constexpr auto is_short = std::is_same<typename decltype(data)::value_type, short>::value;
+          constexpr auto is_int = std::is_same<typename decltype(data)::value_type, int>::value;
+          if constexpr (is_short || is_int) {
             span->set_begin(uint32_t(body->mutable_int_data()->size()));
             body->mutable_int_data()->Add(data.begin(), data.end());
             span->set_end(uint32_t(body->mutable_int_data()->size()));

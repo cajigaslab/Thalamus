@@ -4,6 +4,7 @@
 #include <modalities_util.hpp>
 #include <random>
 #include <thalamus/async.hpp>
+#include <thalamus/thread.hpp>
 
 #include <AmplifierSDK.h>
 
@@ -149,6 +150,68 @@ static bool prepare_amplifier() {
 }
 
 struct BrainProductsNode::Impl {
+  struct Channel {
+    double resolution;
+    int datatype;
+  };
+
+  template <typename T> void extract(std::vector<T>& output_data, std::vector<std::span<const T>>& spans, size_t num_samples, std::vector<Channel>& channels,
+                                            unsigned char* buffer_bytes, int read_count) {
+    auto i = 0ull;
+    auto offset = 0;
+    output_data.resize(channels.size() * num_samples);
+    while(offset < read_count) {
+      offset += 8;
+      auto j = 0ull;
+      for(auto& channel : channels) {
+        switch (channel.datatype)
+        {
+        case DT_INT16:
+          output_data[j*num_samples + i] = T(*reinterpret_cast<short*>(buffer_bytes + offset));
+          offset += 2;
+          break;
+        case DT_UINT16:
+          output_data[j*num_samples + i] = T(*reinterpret_cast<unsigned short*>(buffer_bytes + offset));
+          offset += 2;
+          break;
+        case DT_INT32:
+          output_data[j*num_samples + i] = T(*reinterpret_cast<int*>(buffer_bytes + offset));
+          offset += 4;
+          break;
+        case DT_UINT32:
+          output_data[j*num_samples + i] = T(*reinterpret_cast<unsigned int*>(buffer_bytes + offset));
+          offset += 4;
+          break;
+        case DT_FLOAT32:
+          output_data[j*num_samples + i] = T(*reinterpret_cast<float*>(buffer_bytes + offset));
+          offset += 4;
+          break;
+        case DT_INT64:
+          output_data[j*num_samples + i] = T(*reinterpret_cast<long long*>(buffer_bytes + offset));
+          offset += 8;
+          break;
+        case DT_UINT64:
+          output_data[j*num_samples + i] = T(*reinterpret_cast<unsigned long long*>(buffer_bytes + offset));
+          offset += 8;
+          break;
+        case DT_FLOAT64:
+          output_data[j*num_samples + i] = T(*reinterpret_cast<double*>(buffer_bytes + offset));
+          offset += 8;
+          break;
+        default:
+          on_error("BrainVision Amplifier Error", "Unexpected channel data type");
+          return;
+        }
+        ++j;
+      }
+      ++i;
+    }
+
+    for(i = 0;i < channels.size();++i) {
+      spans[i] = std::span<const T>(output_data.begin() + int64_t(i*num_samples), output_data.begin() + int64_t((i+1)*num_samples));
+    }
+  }
+
   ObservableDictPtr state;
   ObservableList *nodes;
   boost::signals2::scoped_connection state_connection;
@@ -178,8 +241,8 @@ struct BrainProductsNode::Impl {
   std::chrono::nanoseconds _time;
   std::chrono::steady_clock::time_point last_time;
   std::chrono::steady_clock::time_point _start_time;
-  AnalogNodeImpl analog_impl;
   BrainProductsNode *outer;
+  std::optional<bool> is_int_data;
 
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
        NodeGraph *_graph, BrainProductsNode *_outer)
@@ -187,11 +250,8 @@ struct BrainProductsNode::Impl {
         graph(_graph), io_context(_io_context), timer(io_context),
         recommended_names(1, "0"), random_range(random_device()),
         random_distribution(0, 1), outer(_outer) {
-    analog_impl.inject({std::span<double const>()}, {0ns}, {""});
     state_connection = state->recursive_changed.connect(
         std::bind(&Impl::on_change, this, _1, _2, _3, _4));
-
-    analog_impl.ready.connect([_outer](Node *) { _outer->ready(_outer); });
 
     this->state->recap(
         std::bind(&Impl::on_change, this, state.get(), _1, _2, _3));
@@ -215,11 +275,6 @@ struct BrainProductsNode::Impl {
       });
   }
 
-  struct Channel {
-    double resolution;
-    int datatype;
-  };
-
   int datatype_to_bytes(int nDataType) {
     switch (nDataType)
     {
@@ -239,7 +294,19 @@ struct BrainProductsNode::Impl {
     }
   }
 
+  std::mutex mutex;
+  std::vector<std::string> channel_names;
+  std::vector<std::chrono::nanoseconds> sample_intervals;
+  std::vector<std::span<const double>> spans;
+  std::vector<double> output_data;
+  std::vector<std::span<const int>> int_spans;
+  std::vector<int> int_output_data;
+  std::vector<double> scales;
+  bool busy = false;
+  std::condition_variable cond;
+
   void acquisition_target(std::stop_token stop_token) {
+    set_current_thread_name("Brain Products");
     auto status = amplifier_sdk->SetAmplifierFamily(AmplifierFamily::eActiChampFamily);
     if (status != AMP_OK) {
       on_error("BrainVision Amplifier Error", "Failed to set amplifier family");
@@ -362,14 +429,19 @@ struct BrainProductsNode::Impl {
     auto buffer_bytes = reinterpret_cast<unsigned char*>(buffer.data());
     auto buffer_bytes_count = buffer.size() * sizeof(std::uint64_t);
 
-    thalamus::vector<std::string> channel_names(channels.size(), "");
-    for (auto i = 0ull; i < channels.size(); ++i) {
-      channel_names[i] = std::to_string(i);
+    {
+      std::lock_guard<std::mutex> lock(mutex);
+      channel_names.assign(channels.size(), "");
+      for (auto i = 0ull; i < channels.size(); ++i) {
+        channel_names[i] = std::to_string(i);
+      }
+      sample_intervals.assign(channels.size(), sample_interval);
+      spans.assign(channels.size(), std::span<const double>());
+      output_data.clear();
+      int_spans.assign(channels.size(), std::span<const int>());
+      int_output_data.clear();
+      scales.assign(channels.size(), 0.0);
     }
-    thalamus::vector<std::string_view> channel_names_views(channel_names.begin(), channel_names.end());
-    thalamus::vector<std::chrono::nanoseconds> sample_intervals(channels.size(), sample_interval);
-    thalamus::vector<std::span<const double>> spans(channels.size());
-    std::vector<double> output_data;
 
     status = amplifier_sdk->StartAcquisition(amplifier, RM_NORMAL);
     if (status != AMP_OK) {
@@ -389,6 +461,7 @@ struct BrainProductsNode::Impl {
     //auto accum_samples = 0;
     //auto get_data_count = 0;
     //auto sample_mod = 0;
+    busy = false;
     while(!stop_token.stop_requested()) {
       auto read_count = amplifier_sdk->GetData(amplifier, buffer_bytes, int32_t(buffer_bytes_count), int32_t(buffer_bytes_count/uint64_t(sampleBytes)));
       if(read_count < 0) {
@@ -400,7 +473,7 @@ struct BrainProductsNode::Impl {
         continue;
       }
       //++get_data_count;
-      //auto now = std::chrono::steady_clock::now();
+      auto now = std::chrono::steady_clock::now();
       //if (now - last_log >= 1s) {
       //  THALAMUS_LOG(info) << sample_mod << " " << accum_samples << " " << get_data_count;
       //  accum_samples = 0;
@@ -412,61 +485,42 @@ struct BrainProductsNode::Impl {
       auto num_samples = size_t(read_count) / size_t(sampleBytes);
       //sample_mod += read_count % sampleBytes;
       //accum_samples += num_samples;
-      auto i = 0ull;
-      auto offset = 0;
-      output_data.resize(channels.size() * num_samples);
-      while(offset < read_count) {
-        offset += 8;
-        auto j = 0ull;
-        for(auto& channel : channels) {
-          switch (channel.datatype)
-          {
-          case DT_INT16:
-            output_data[j*num_samples + i] = double(*reinterpret_cast<short*>(buffer_bytes + offset))*channel.resolution;
-            offset += 2;
-            break;
-          case DT_UINT16:
-            output_data[j*num_samples + i] = double(*reinterpret_cast<unsigned short*>(buffer_bytes + offset))*channel.resolution;
-            offset += 2;
-            break;
-          case DT_INT32:
-            output_data[j*num_samples + i] = double(*reinterpret_cast<int*>(buffer_bytes + offset))*channel.resolution;
-            offset += 4;
-            break;
-          case DT_UINT32:
-            output_data[j*num_samples + i] = double(*reinterpret_cast<unsigned int*>(buffer_bytes + offset))*channel.resolution;
-            offset += 4;
-            break;
-          case DT_FLOAT32:
-            output_data[j*num_samples + i] = double(*reinterpret_cast<float*>(buffer_bytes + offset))*channel.resolution;
-            offset += 4;
-            break;
-          case DT_INT64:
-            output_data[j*num_samples + i] = double(*reinterpret_cast<long long*>(buffer_bytes + offset))*channel.resolution;
-            offset += 8;
-            break;
-          case DT_UINT64:
-            output_data[j*num_samples + i] = double(*reinterpret_cast<unsigned long long*>(buffer_bytes + offset))*channel.resolution;
-            offset += 8;
-            break;
-          case DT_FLOAT64:
-            output_data[j*num_samples + i] = double(*reinterpret_cast<double*>(buffer_bytes + offset))*channel.resolution;
-            offset += 8;
-            break;
-          default:
-            on_error("BrainVision Amplifier Error", "Unexpected channel data type");
-            return;
+      {
+        std::unique_lock<std::mutex> lock(mutex);
+        if(!is_int_data.has_value()) {
+          is_int_data = true;
+          for(auto& channel : channels) {
+            switch (channel.datatype)
+            {
+            case DT_FLOAT32:
+            case DT_FLOAT64:
+              is_int_data = false;
+              break;
+            default:
+              break;
+            }
           }
-          ++j;
         }
-        ++i;
-      }
 
-      for(i = 0;i < channels.size();++i) {
-        spans[i] = std::span<const double>(output_data.begin() + int64_t(i*num_samples), output_data.begin() + int64_t((i+1)*num_samples));
-      }
+        _time = now.time_since_epoch();
+        if(*is_int_data) {
+          extract(int_output_data, int_spans, num_samples, channels, buffer_bytes, read_count);
+        } else {
+          extract(output_data, spans, num_samples, channels, buffer_bytes, read_count);
+        }
+        std::transform(channels.begin(), channels.end(), scales.begin(), [](auto& c) {
+          return c.resolution;
+        });
+        busy = true;
+        boost::asio::post(io_context, [this,node=outer->shared_from_this()] {
+          std::lock_guard<std::mutex> lock2(mutex);
+          outer->ready(outer);
+          busy = false;
+          cond.notify_all();
+        });
 
-      analog_impl.inject(spans, sample_intervals, channel_names_views);
+        cond.wait(lock, [&] { return !busy; });
+      }
     }
   }
 
@@ -486,6 +540,11 @@ struct BrainProductsNode::Impl {
           acquisition_target(stop_token);
         });
       } else if(acquisition_thread.joinable()) {
+        {
+          std::lock_guard<std::mutex> lock(mutex);
+          busy = false;
+          cond.notify_all();
+        }
         acquisition_thread.request_stop();
         acquisition_thread.join();
       }
@@ -505,7 +564,7 @@ BrainProductsNode::~BrainProductsNode() {
 std::string BrainProductsNode::type_name() { return "BRAINPRODUCTS"; }
 
 std::string_view BrainProductsNode::name(int channel) const {
-  return impl->analog_impl.name(channel);
+  return impl->channel_names[channel];
 }
 std::span<const std::string>
 BrainProductsNode::get_recommended_channels() const {
@@ -514,25 +573,29 @@ BrainProductsNode::get_recommended_channels() const {
 }
 
 std::span<const double> BrainProductsNode::data(int index) const {
-  return impl->analog_impl.data(index);
+  return impl->spans[index];
+}
+
+std::span<const int> BrainProductsNode::int_data(int index) const {
+  return impl->int_spans[index];
 }
 
 int BrainProductsNode::num_channels() const {
-  return impl->analog_impl.num_channels();
+  return impl->channel_names.size();
 }
 
 void BrainProductsNode::inject(
     const thalamus::vector<std::span<double const>> &data,
     const thalamus::vector<std::chrono::nanoseconds> &sample_intervals,
     const thalamus::vector<std::string_view> &names) {
-  impl->analog_impl.inject(data, sample_intervals, names);
+  THALAMUS_ABORT("BrainProductsNode::inject not implemented");
 }
 
 std::chrono::nanoseconds BrainProductsNode::sample_interval(int channel) const {
-  return impl->analog_impl.sample_interval(channel);
+  return impl->sample_intervals[channel];
 }
 std::chrono::nanoseconds BrainProductsNode::time() const {
-  return impl->analog_impl.time();
+  return impl->_time;
 }
 
 size_t BrainProductsNode::modalities() const {
@@ -541,4 +604,18 @@ size_t BrainProductsNode::modalities() const {
 
 bool BrainProductsNode::prepare() {
   return prepare_amplifier();
+}
+
+bool BrainProductsNode::is_int_data() const {
+  return *impl->is_int_data;
+}
+
+bool BrainProductsNode::is_transformed() const {
+  return true;
+}
+double BrainProductsNode::scale(int i) const {
+  return impl->scales[i];
+}
+double BrainProductsNode::offset(int) const {
+  return 0.0;
 }

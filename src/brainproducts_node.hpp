@@ -21,6 +21,7 @@ public:
   static std::string type_name();
 
   std::span<const double> data(int index) const override;
+  std::span<const int> int_data(int) const override;
 
   int num_channels() const override;
 
@@ -36,6 +37,12 @@ public:
   size_t modalities() const override;
 
   static bool prepare();
+
+  bool is_int_data() const override;
+
+  bool is_transformed() const override;
+  double scale(int) const override;
+  double offset(int) const override;
 };
 
 }; // namespace thalamus

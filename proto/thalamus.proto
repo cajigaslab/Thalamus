@@ -315,6 +315,7 @@ message AnalogResponse {
   repeated uint64 ulong_data = 10;
   bool is_ulong_data = 11;
   string redirect = 12;
+  bool is_transformed = 13;
 }
  
 message GraphRequest {
@@ -328,6 +329,8 @@ message Span {
   uint32 begin = 1;
   uint32 end = 2;
   string name = 3;
+  double scale = 4;
+  double offset = 5;
 }
  
 message GraphResponse {
