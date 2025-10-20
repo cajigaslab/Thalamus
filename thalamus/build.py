@@ -87,6 +87,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   generator = config_settings.get('generator', 'Ninja')
   sanitizer = config_settings.get('sanitizer', None)
   target = config_settings.get('target', None)
+  dotnet = 'dotnet' in config_settings
 
   def get_build_path():
     legacy_path = pathlib.Path.cwd() / 'build' / f'{platform.python_implementation()}-{platform.python_version()}-{"release" if is_release else "debug"}'
@@ -144,14 +145,27 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
 
   write_metadata(metadata, f'thalamus-{version}.dist-info/METADATA')
 
+  version_output = subprocess.check_output(['cmake', '--version'])
+  try:
+    lines = [l.strip() for l in version.split("\n")]
+    version_line = lines[0]
+    version_text = tokens.split(' ')[-1]
+    cmake_version = packaging.version.Version(version_text)
+    #grpc cares dependency requires cmake >= 3.5
+    assert cmake_version < packaging.version.Version('3.5')
+  except:
+    #If cmake version check fails give the benefit of the doubt
+    pass
+
   cmake_command = [
     'cmake',
     '-S', pathlib.Path.cwd(),
     '-B', build_path,
     f'-DCMAKE_BUILD_TYPE={"Release" if is_release else "Debug"}',
     '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
+    '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
     f'-DCMAKE_OSX_DEPLOYMENT_TARGET={osx_target}',
-    '-DCMAKE_POLICY_VERSION_MINIMUM=3.16'
+    f'-DBUILD_DOTNET={"ON" if dotnet else "OFF"}'
   ]
   cmake_command += ['-G', generator]
 
@@ -209,8 +223,16 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   files = []
   with open(f'thalamus-{version}.dist-info/RECORD', 'w') as record_file:
     for path in itertools.chain(pathlib.Path('thalamus').rglob('*'), pathlib.Path('cortex').rglob('*')):
-      if not path.is_file() or path.name != 'native' and path.suffix not in ('.py', '.pyi', '.vert', '.proto', '.comp', '.frag', '.exe', '.h'):
+      parents = [p.name for p in path.parents]
+      is_dir = not path.is_file()
+      in_ignored_dir = any(d in ("__pycache__", '.vs') for d in parents)
+      has_ignored_suffix = path.suffix not in ('.py', '.pyi', '.vert', '.proto', '.comp', '.frag', '.exe', '.h')
+      is_native_executable = path.stem == 'native'
+      is_dotnet_file = "dotnet" in parents
+      if is_dir or in_ignored_dir or has_ignored_suffix and not is_native_executable and not is_dotnet_file:
+        print(path, 'DROP')
         continue
+      print(path, 'TAKE')
       files.append(path)
       digest = hashlib.sha256()
       with open(str(path), 'rb') as pack_file:

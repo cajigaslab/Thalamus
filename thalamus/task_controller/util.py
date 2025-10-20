@@ -13,7 +13,6 @@ import datetime
 import threading
 import contextlib
 
-
 from ..qt import *
 
 LOGGER = logging.getLogger(__name__)

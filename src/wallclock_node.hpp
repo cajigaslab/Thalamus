@@ -13,6 +13,8 @@ public:
   static std::string type_name();
 
   std::span<const double> data(int index) const override;
+  std::span<const uint64_t> uint64_data(int index) const override;
+  bool is_uint64_data() const override;
 
   int num_channels() const override;
 

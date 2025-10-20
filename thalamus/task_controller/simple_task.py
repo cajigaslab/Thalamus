@@ -189,6 +189,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       break
 
   # state: startacq
+  await context.log('BehavState=startacq')
   success = await wait_for_hold(context, lambda: target_acquired, config.hold_timeout, config.blink_timeout)
 
   """

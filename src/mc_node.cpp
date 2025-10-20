@@ -157,7 +157,7 @@ struct McNode::Impl {
   std::chrono::nanoseconds _sample_interval = 32ms;
   size_t counter = 0;
   std::chrono::nanoseconds _time = 0ns;
-  std::atomic_bool busy;
+  bool busy;
   NodeGraph *graph;
   McNode *outer;
   bool is_running;
@@ -199,6 +199,9 @@ struct McNode::Impl {
     return true;
   }
 
+  std::mutex mutex;
+  std::condition_variable cond;
+
   void loop(std::stop_token stoken) {
     auto handle_error = [this] (int status,std::string_view function) {
       if(status != NOERROR) {
@@ -216,72 +219,79 @@ struct McNode::Impl {
     if(handle_error(status, "cbDConfigPort(FIRSTPORTA, DIGITALIN)")) {
       return;
     }
-    status = cbwapi->cbDConfigPort(0, FIRSTPORTB, DIGITALOUT);
-    if(handle_error(status, "cbDConfigPort(FIRSTPORTB, DIGITALOUT)")) {
-      return;
-    }
+    //status = cbwapi->cbDConfigPort(0, FIRSTPORTB,  );
+    //if(handle_error(status, "cbDConfigPort(FIRSTPORTB, DIGITALOUT)")) {
+    //  return;
+    //}
 
-    auto pub_count = 32/ std::chrono::duration_cast<std::chrono::milliseconds>(_sample_interval).count();
-    std::vector<uint16_t> samples;
-    samples.reserve(pub_count);
-    auto next_sample = std::chrono::steady_clock::now();
-    auto high = false;
-    auto last_log = std::chrono::steady_clock::now();
-    auto read_time = 0ns;
+    //auto pub_count = 32/ std::chrono::duration_cast<std::chrono::milliseconds>(_sample_interval).count();
+    //std::vector<uint16_t> samples;
+    //samples.reserve(pub_count);
+    //auto next_sample = std::chrono::steady_clock::now();
+    //auto high = false;
+    //auto last_log = std::chrono::steady_clock::now();
+    //auto read_time = 0ns;
     while(!stoken.stop_requested()) {
       uint16_t value;
-      auto read_start = std::chrono::steady_clock::now();
+      //auto read_start = std::chrono::steady_clock::now();
       status = cbwapi->cbDIn(0, FIRSTPORTA, &value);
-      auto read_end = std::chrono::steady_clock::now();
-      read_time += read_end - read_start;
-      if (read_end - last_log >= 1s) {
-          auto read_milli = std::chrono::duration_cast<std::chrono::milliseconds>(read_time).count();
-          auto log_milli = std::chrono::duration_cast<std::chrono::milliseconds>(read_end - last_log).count();
-
-          THALAMUS_LOG(info) << "cbDIn " << log_milli << " " << read_milli << " " << double(read_milli)/double(log_milli);
-          read_time = 0ns;
-          last_log = read_end;
-      }
+      //auto read_end = std::chrono::steady_clock::now();
+      //read_time += read_end - read_start;
+      //if (read_end - last_log >= 1s) {
+      //    auto read_milli = std::chrono::duration_cast<std::chrono::milliseconds>(read_time).count();
+      //    auto log_milli = std::chrono::duration_cast<std::chrono::milliseconds>(read_end - last_log).count();
+//
+      //    THALAMUS_LOG(info) << "cbDIn " << log_milli << " " << read_milli << " " << double(read_milli)/double(log_milli);
+      //    read_time = 0ns;
+      //    last_log = read_end;
+      //}
       if(handle_error(status, "cbDIn")) {
         return;
       }
-      samples.push_back(value);
-      std::chrono::milliseconds sample_epoch = std::chrono::duration_cast<std::chrono::milliseconds>(next_sample.time_since_epoch());
-      auto new_high = ((sample_epoch.count () % 1000) < 300) ? true : false;
-      if(new_high != high) {
-        high = new_high;
-        status = cbwapi->cbDOut(0, FIRSTPORTB, high ? 255 : 0);
-        if(handle_error(status, "cbDOut")) {
-          return;
-        }
-      }
+      //samples.push_back(value);
+      //std::chrono::milliseconds sample_epoch = std::chrono::duration_cast<std::chrono::milliseconds>(next_sample.time_since_epoch());
+      //auto new_high = ((sample_epoch.count () % 1000) < 300) ? true : false;
+      //if(new_high != high) {
+      //  high = new_high;
+      //  status = cbwapi->cbDOut(0, FIRSTPORTB, high ? 255 : 0);
+      //  if(handle_error(status, "cbDOut")) {
+      //    return;
+      //  }
+      //}
 
       auto now = std::chrono::steady_clock::now();
-      if(samples.size() >= pub_count) {
-        boost::asio::post(io_context, [this,samples,now] {
+      //{
+      //  std::unique_lock<std::mutex> lock(mutex);
+      //  cond.wait(lock, [&] { return !busy; });
+      //}
+      //busy = true;
+      //if(samples.size() >= pub_count) {
+        boost::asio::post(io_context, [this,now,value] {
           output_buffer.clear();
           spans.clear();
           for(auto i = 0;i < 8;++i) {
             auto mask = 1 << i;
-            for(auto sample : samples) {
-              output_buffer.push_back((sample & mask) ? 5 : 0);
-            }
+            output_buffer.push_back((value & mask) ? 5 : 0);
           }
           for(auto i = 0;i < 8;++i) {
-            spans.emplace_back(output_buffer.begin() + i*int64_t(samples.size()),
-                               output_buffer.begin() + (i+1)*int64_t(samples.size()));
+            spans.emplace_back(output_buffer.begin() + i,
+                               output_buffer.begin() + (i+1));
           }
           _time = now.time_since_epoch();
           outer->ready(outer);
-        });
-        samples.clear();
-      }
 
-      next_sample += _sample_interval;
-      auto duration = next_sample - now;
-      if(duration > 0s) {
-        std::this_thread::sleep_for(duration);
-      }
+          //std::lock_guard<std::mutex> lock(mutex);
+          //busy = false;
+          //cond.notify_all();
+        });
+        //samples.clear();
+      //}
+
+      //next_sample += _sample_interval;
+      //auto duration = next_sample - now;
+      //if(duration > 0s) {
+      //  std::this_thread::sleep_for(duration);
+      //}
     }
   }
 
@@ -303,6 +313,11 @@ struct McNode::Impl {
       auto current_is_running = std::get<bool>(v);
       if(poll_thread.joinable()) {
         poll_thread.request_stop();
+        {
+          std::lock_guard<std::mutex> lock(mutex);
+          busy = false;
+          cond.notify_all();
+        }
         poll_thread.join();
       }
       if (current_is_running) {

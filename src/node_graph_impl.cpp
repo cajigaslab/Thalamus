@@ -22,6 +22,9 @@
 #else
 #include <mc_node.hpp>
 #endif
+#ifdef _WIN32
+#include <brainproducts_node.hpp>
+#endif
 #include <run_node.hpp>
 #include <run2_node.hpp>
 #include <spikeglx_node.hpp>
@@ -35,6 +38,8 @@
 #include <video_node.hpp>
 #include <test_pulse_node.hpp>
 #include <wallclock_node.hpp>
+#include <delsys_node.hpp>
+#include <ceci_node.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -146,6 +151,9 @@ public:
 #else
         {"MC", new NodeFactory<McNode>()},
 #endif
+#ifdef _WIN32
+        {"BRAINPRODUCTS", new NodeFactory<BrainProductsNode>()},
+#endif
         {"REMOTE", new NodeFactory<RemoteNode>()},
         {"REMOTE_LOG", new NodeFactory<RemoteLogNode>()},
         {"CHESSBOARD", new NodeFactory<ChessBoardNode>()},
@@ -158,7 +166,9 @@ public:
         {"STIM_PRINTER", new NodeFactory<StimPrinterNode>()},
         {"TEST_PULSE_NODE", new NodeFactory<TestPulseNode>()},
         {"WALLCLOCK", new NodeFactory<WallClockNode>()},
+        {"CECI", new NodeFactory<CeciNode>()},
         //{"HEXASCOPE", new NodeFactory<HexascopeNode>()},
+        {"DELSYS", new NodeFactory<DelsysNode>()},
         {"ARUCO", new NodeFactory<ArucoNode>()}};
 
     using namespace std::placeholders;
@@ -419,5 +429,9 @@ void NodeGraphImpl::dialog(const thalamus_grpc::Dialog &dialog) {
         [moved_context=context,moved_request=request,moved_response=response](grpc::Status s) {
           THALAMUS_LOG(info) << "Dialog complete " << s.error_message();
         });
+}
+
+void NodeGraphImpl::log(const thalamus_grpc::Text & text) {
+  (*impl->service)->log_signal(text);
 }
 } // namespace thalamus

@@ -25,7 +25,12 @@ class SaveConfig(enum.Enum):
 
 class CacheManager:
   def __init__(self, config):
-    connection = sqlite3.connect('thalamus.db')
+    try:
+      connection = sqlite3.connect('thalamus.db')
+    except sqlite3.OperationalError:
+      LOGGER.warning('Failed to create thalamus.db, cache management disabled.')
+      return
+    
     exists = connection.execute('SELECT * from sqlite_master WHERE name =\'cache\'').fetchone()
     if not exists:
       connection.execute('CREATE TABLE cache (address, value)')

@@ -21,7 +21,6 @@ from multiprocessing.pool import ThreadPool
 import yaml
 import numpy
 import scipy.io
-import pkg_resources
 
 from thalamus.thalamus_pb2 import StorageRecord, Image, Compressed
 import google.protobuf.message

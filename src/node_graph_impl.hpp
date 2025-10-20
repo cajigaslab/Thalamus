@@ -54,5 +54,6 @@ public:
   std::chrono::steady_clock::time_point get_steady_clock_at_start() override;
   ThreadPool &get_thread_pool() override;
   void dialog(const thalamus_grpc::Dialog &) override;
+  void log(const thalamus_grpc::Text &) override;
 };
 } // namespace thalamus
