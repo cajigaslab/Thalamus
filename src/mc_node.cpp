@@ -313,11 +313,6 @@ struct McNode::Impl {
       auto current_is_running = std::get<bool>(v);
       if(poll_thread.joinable()) {
         poll_thread.request_stop();
-        {
-          std::lock_guard<std::mutex> lock(mutex);
-          busy = false;
-          cond.notify_all();
-        }
         poll_thread.join();
       }
       if (current_is_running) {
@@ -347,7 +342,8 @@ std::span<const double> McNode::data(int channel) const {
 int McNode::num_channels() const { return 8; }
 
 std::chrono::nanoseconds McNode::sample_interval(int) const {
-  return impl->_sample_interval;
+  return 0s;
+  //return impl->_sample_interval;
 }
 
 std::chrono::nanoseconds McNode::time() const { return impl->_time; }

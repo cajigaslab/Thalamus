@@ -444,7 +444,9 @@ FACTORIES = {
       "DICT_ARUCO_MIP_36h12"])
   ]),
   'HEXASCOPE': Factory(HexascopeWidget, []),
-  'WALLCLOCK': Factory(None, []),
+  'WALLCLOCK': Factory(None, [
+    UserData(UserDataType.CHECK_BOX, 'Integer Data', False, []),
+  ]),
   'MC': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
   ]),

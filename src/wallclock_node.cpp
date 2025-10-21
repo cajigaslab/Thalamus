@@ -32,7 +32,7 @@ struct WallClockNode::Impl {
                  const ObservableCollection::Key &key,
                  const ObservableCollection::Value &value) {
     auto str_key = std::get<std::string>(key);
-    if(str_key == "Generate Integers") {
+    if(str_key == "Integer Data") {
       is_uint64 = std::get<bool>(value);
     }
   }
