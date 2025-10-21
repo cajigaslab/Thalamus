@@ -28,6 +28,7 @@ LOGGER = logging.getLogger(__name__)
 
 Config = typing.NamedTuple('Config', [
   ('intertrial_timeout', datetime.timedelta),
+  ('start_timeout', datetime.timedelta),
   ('center_hold_timeout', datetime.timedelta),     #hold at center
   ('reach_timeout', datetime.timedelta),           #time to reach target
   ('target_hold_timeout', datetime.timedelta),     #hold at peripheral
@@ -117,6 +118,7 @@ def create_widget(task_config: config.ObservableCollection) -> QWidget:
   """ #need to come back and fix
   form = Form.build(task_config, ["Name:", "Min:", "Max:"],
     Form.Uniform('Intertrial Interval', 'intertrial_timeout', 1, 1, 's'),
+    Form.Uniform('Start Interval', 'start_timeout', 5, 5, 's'),
     Form.Uniform('Center Hold Interval', 'center_hold_timeout', 1, 1, 's'),    
     Form.Uniform('Reach Timeout', 'reach_timeout', 2, 2, 's'),
     Form.Uniform('Target Hold Interval', 'target_hold_timeout', 0.3, 0.3, 's'),
@@ -209,6 +211,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   """
   config = Config(
     datetime.timedelta(seconds=context.get_value('intertrial_timeout', 1.0)),
+    datetime.timedelta(seconds=context.get_value('start_timeout', 5.0)),
     datetime.timedelta(seconds=context.get_value('center_hold_timeout', 1.0)),
     datetime.timedelta(seconds=context.get_value('reach_timeout', 2.0)),
     datetime.timedelta(seconds=context.get_value('target_hold_timeout', 0.3)),
@@ -387,7 +390,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     state_brightness = 0
     fail_sound.play()
     context.widget.update()
-    await context.sleep(config.fail_timeout) #wait for fail timeout
+    await context.sleep(config.intertrial_timeout) #wait for fail timeout
  
   #ITI
   await context.log('BehavState=intertrial')
@@ -404,17 +407,40 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
   # state: startacq
   for step_idx, target_idx in enumerate(sequence):
-    #wait for center touch
-    await context.log(f'BehavState=step_{step_idx}_wait_center')
-    center_brightness = 255 #white = ready
-    current_target_to_highlight = None
-    state_brightness = 255
-    show_all_targets = True
-    context.widget.update()
-    acquired = await wait_for(context, lambda: center_acquired, config.reach_timeout)
-    if not acquired:
-      await fail_trial('no_center_touch')
-      return task_context.TaskResult(False)
+    if step_idx == 0: #first step only
+       while True: #keep retrying until center touch
+          await context.log(f'BehavState=step_{step_idx}_wait_center')
+          center_brightness = 255
+          current_target_to_highlight = None
+          state_brightness = 255
+          show_all_targets = True
+          context.widget.update()
+          acquired = await wait_for(context, lambda: center_acquired, config.start_timeout)
+
+          if acquired:
+             break
+          else:
+             #no initiation
+             await context.log('BehavState=no_initiation')
+             center_brightness = 0
+             show_all_targets = False
+             current_target_to_highlight = None
+             state_brightness = 0
+             context.widget.update()
+             await context.sleep(config.fail_timeout) #no return statement
+    else:
+       #wait for center touch
+       await context.log(f'BehavState=step_{step_idx}_wait_center')
+       center_brightness = 255 #white
+       current_target_to_highlight = None
+       state_brightness = 255
+       show_all_targets = True
+       context.widget.update()
+       acquired = await wait_for(context, lambda: center_acquired, config.start_timeout)
+       if not acquired:
+          await fail_trial('no_center_touch')
+          return task_context.TaskResult(False) #this is a failure           
+
     #hold at center
     await context.log(f'BehavState=step_{step_idx}_center_hold')
     success = await wait_for_hold(context, lambda: center_acquired, config.center_hold_timeout, config.blink_timeout)
