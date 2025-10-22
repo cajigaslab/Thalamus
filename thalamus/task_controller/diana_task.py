@@ -406,6 +406,9 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
   #startacq loop
   for step_idx, target_idx in enumerate(sequence):
+    #reset touch state at start of loop
+    target_acquired = False
+    i_selected_target = None
     if step_idx == 0: #only for first center touch 
        while True: #keep retrying until initiation of center touch
           await context.log(f'BehavState=step_{step_idx}_wait_center')
@@ -443,7 +446,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
              context.widget.update()
              await context.sleep(config.fail_timeout)
     else:
-          #subsequenct steps where return-to-center
+          #subsequent steps where return-to-center
           await context.log(f'BehavState=step_{step_idx}_wait_center')
           center_brightness = 255
           current_target_to_highlight = None
