@@ -558,25 +558,26 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   #print(mux_signal)
   #await context.inject_analog('Mux', mux_signal)
 
-  if IS_SETUP:
-    await context.node_request('Node 1', {
-      'type': 'teardown',
-    })
-    IS_SETUP = False
+  #if IS_SETUP:
+  #  await context.node_request('Node 1', {
+  #    'type': 'teardown',
+  #  })
+  #  IS_SETUP = False
 
-  await context.node_request('Node 1', {
-    'type': 'setup',
-    "amp_uA": context.task_config['Amplitude (uA)'],
-    "pw_us": context.task_config['Pulse Width (us)'],
-    "freq_hz": context.task_config['Frequency (Hz)'],
-    "ipd_ms": context.task_config['Interphase Delay (ms)'],
-    "num_pulses": context.task_config['Number of Pulses'],
-    "stim_dur_s": context.task_config['Stimulation Duration (s)'],
-    "is_biphasic": context.task_config['Phase'] == 'Biphasic',
-    "polarity": 1 if context.task_config['Lead'] == 'Cathode-leading' else -1,
-    "dis_dur_s": context.task_config['Discharge Duration (s)']
-  })
-  IS_SETUP = True
+  if not IS_SETUP:
+    await context.node_request('Node 1', {
+      'type': 'setup',
+      "amp_uA": context.task_config['Amplitude (uA)'],
+      "pw_us": context.task_config['Pulse Width (us)'],
+      "freq_hz": context.task_config['Frequency (Hz)'],
+      "ipd_ms": context.task_config['Interphase Delay (ms)'],
+      "num_pulses": context.task_config['Number of Pulses'],
+      "stim_dur_s": context.task_config['Stimulation Duration (s)'],
+      "is_biphasic": context.task_config['Phase'] == 'Biphasic',
+      "polarity": 1 if context.task_config['Lead'] == 'Cathode-leading' else -1,
+      "dis_dur_s": context.task_config['Discharge Duration (s)']
+    })
+    IS_SETUP = True
 
   display_indicator = False
   state = State.NONE
