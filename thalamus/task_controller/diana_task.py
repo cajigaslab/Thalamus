@@ -462,7 +462,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
                 return True
              return center_acquired
 
-          acquired = await wait_for(context, lambda: check_touch, config.start_timeout)
+          acquired = await wait_for(context, check_touch, config.start_timeout)
 
           if wrong_touch_occurred:
              await fail_trial('wrong_touch_return')
