@@ -409,6 +409,8 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     #reset touch state at start of loop
     target_acquired = False
     i_selected_target = None
+    center_acquired = False
+    
     if step_idx == 0: #only for first center touch 
        while True: #keep retrying until initiation of center touch
           await context.log(f'BehavState=step_{step_idx}_wait_center')
@@ -437,7 +439,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
           elif acquired:
              break #success - center touched
           else:
-             #no initiation - enter fail timeout but not fail
+             #no initiation - enter fail timeout but not
              await context.log('BehavState=no_initiation')
              center_brightness = 0
              show_all_targets = False
@@ -454,27 +456,23 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
           show_all_targets = True
           context.widget.update()
 
-          correct_touch_occurred = True
           wrong_touch_occurred = False
 
           def check_touch():
-             nonlocal correct_touch_occurred, wrong_touch_occurred
-             if center_acquired:
-                correct_touch_occurred = True
-                return True
-             elif target_acquired:
+             nonlocal wrong_touch_occurred
+             if target_acquired:
                 wrong_touch_occurred = True
                 return True
-             return False
-    
+             return center_acquired
+
           acquired = await wait_for(context, check_touch, config.start_timeout)
 
           if wrong_touch_occurred:
-             await fail_trial('wrong_touch_return') #touched something else wrong
+             await fail_trial('wrong_touch_return')
              if i_selected_target is not None:
                 behav_result['selected_targets'].append(int(i_selected_target))
              return task_context.TaskResult(False)
-          elif not acquired: #no touch at all
+          elif not acquired:
              await fail_trial('no_center_touch')
              return task_context.TaskResult(False)
 
