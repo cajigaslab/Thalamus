@@ -400,46 +400,78 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   show_all_targets = False #hide all peripheral targets
   context.widget.update()
   await context.sleep(config.intertrial_timeout)
-
+  #reilluminate to start next trial
   show_all_targets = True
   center_brightness = 255
   context.widget.update()
 
-  # state: startacq
+  #startacq loop
   for step_idx, target_idx in enumerate(sequence):
-    if step_idx == 0: #first step only
-       while True: #keep retrying until center touch
+    if step_idx == 0: #only for first center touch 
+       while True: #keep retrying until initiation of center touch
           await context.log(f'BehavState=step_{step_idx}_wait_center')
           center_brightness = 255
           current_target_to_highlight = None
           state_brightness = 255
           show_all_targets = True
           context.widget.update()
-          acquired = await wait_for(context, lambda: center_acquired, config.start_timeout)
 
-          if acquired:
-             break
+          #wait for any touch
+          wrong_touch_occurred = False
+          def check_touch():
+             nonlocal wrong_touch_occurred
+             #wrong touch if peripheral target or touch outside center
+             if target_acquired or (touch_pos.x() > 0 and not center_acquired):
+                wrong_touch_occurred = True
+                return True
+             return center_acquired
+          acquired = await wait_for(context, check_touch, config.start_timeout)
+
+          if wrong_touch_occurred:
+             await fail_trial('wrong_touch_initiation')
+             if i_selected_target is not None:
+                behav_result['selected_targets'].append(int(i_selected_target))
+             return task_context.TaskResult(False)
+          elif acquired:
+             break #success - center touched
           else:
-             #no initiation
+             #no initiation - enter fail timeout
              await context.log('BehavState=no_initiation')
              center_brightness = 0
              show_all_targets = False
              current_target_to_highlight = None
              state_brightness = 0
              context.widget.update()
-             await context.sleep(config.fail_timeout) 
+             await context.sleep(config.fail_timeout)
     else:
-       #wait for center touch
-       await context.log(f'BehavState=step_{step_idx}_wait_center')
-       center_brightness = 255 #white
-       current_target_to_highlight = None
-       state_brightness = 255
-       show_all_targets = True
-       context.widget.update()
-       acquired = await wait_for(context, lambda: center_acquired, config.start_timeout)
-       if not acquired:
-          await fail_trial('no_center_touch')
-          return task_context.TaskResult(False) #this is a failure           
+          #subsequenct steps where return-to-center
+          await context.log(f'BehavState=step_{step_idx}_wait_center')
+          center_brightness = 255
+          current_target_to_highlight = None
+          state_brightness = 255
+          show_all_targets = True
+          context.widget.update()
+
+          #wait for any touch
+          wrong_touch_occurred = False
+          def check_touch():
+             nonlocal wrong_touch_occurred
+             if target_acquired or (touch_pos.x() > 0 and not center_acquired):
+                wrong_touch_occurred = True       
+                return True
+             return center_acquired
+          acquired = await wait_for(context, check_touch, config.start_timeout)
+
+          if wrong_touch_occurred:
+             await fail_trial('wrong_touch_return')
+             if i_selected_target is not None:
+                behav_result['selected_targets'].append(int(i_selected_target))
+             return task_context.TaskResult(False)
+          elif not acquired:
+             #no touch at all - fail
+             await fail_trial('no_center_touch')
+             return task_context.TaskResult(False)
+       
 
     #hold at center
     await context.log(f'BehavState=step_{step_idx}_center_hold')
