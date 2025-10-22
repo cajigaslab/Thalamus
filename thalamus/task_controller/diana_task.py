@@ -423,9 +423,6 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
              if target_acquired: 
                 wrong_touch_occurred = True
                 return True
-             elif touch_pos.x() > 0 and not center_acquired: #touched blank space not center
-                wrong_touch_occurred = True
-                return True
              return center_acquired #center touch is good - return true when center acquired
           acquired = await wait_for(context, check_touch, config.start_timeout)
 
@@ -460,9 +457,6 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
              nonlocal wrong_touch_occurred
              if target_acquired:
                 wrong_touch_occurred = True       
-                return True
-             elif touch_pos.x() > 0 and not center_acquired:
-                wrong_touch_occurred = True
                 return True
              return center_acquired
           acquired = await wait_for(context, check_touch, config.start_timeout)
