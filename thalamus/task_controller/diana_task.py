@@ -22,7 +22,6 @@ from .util import wait_for, wait_for_hold, RenderOutput, animate
 from .. import thalamus_pb2
 from .. import task_controller_pb2
 from .. import config
-from . import task_context
 
 LOGGER = logging.getLogger(__name__)
 
@@ -421,10 +420,13 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
           def check_touch():
              nonlocal wrong_touch_occurred
              #wrong touch if peripheral target or touch outside center
-             if target_acquired or (touch_pos.x() > 0 and not center_acquired):
+             if target_acquired: 
                 wrong_touch_occurred = True
                 return True
-             return center_acquired
+             elif touch_pos.x() > 0 and not center_acquired: #touched blank space not center
+                wrong_touch_occurred = True
+                return True
+             return center_acquired #center touch is good - return true when center acquired
           acquired = await wait_for(context, check_touch, config.start_timeout)
 
           if wrong_touch_occurred:
@@ -456,8 +458,11 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
           wrong_touch_occurred = False
           def check_touch():
              nonlocal wrong_touch_occurred
-             if target_acquired or (touch_pos.x() > 0 and not center_acquired):
+             if target_acquired:
                 wrong_touch_occurred = True       
+                return True
+             elif touch_pos.x() > 0 and not center_acquired:
+                wrong_touch_occurred = True
                 return True
              return center_acquired
           acquired = await wait_for(context, check_touch, config.start_timeout)
@@ -471,7 +476,6 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
              #no touch at all - fail
              await fail_trial('no_center_touch')
              return task_context.TaskResult(False)
-       
 
     #hold at center
     await context.log(f'BehavState=step_{step_idx}_center_hold')
