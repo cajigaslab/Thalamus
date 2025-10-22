@@ -22,7 +22,6 @@ from .util import wait_for, wait_for_hold, RenderOutput, animate
 from .. import thalamus_pb2
 from .. import task_controller_pb2
 from .. import config
-from . import task_context
 
 LOGGER = logging.getLogger(__name__)
 
