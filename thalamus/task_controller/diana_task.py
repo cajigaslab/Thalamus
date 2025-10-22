@@ -437,7 +437,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
           elif acquired:
              break #success - center touched
           else:
-             #no initiation - enter fail timeout
+             #no initiation - enter fail timeout but not fail
              await context.log('BehavState=no_initiation')
              center_brightness = 0
              show_all_targets = False
@@ -454,22 +454,27 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
           show_all_targets = True
           context.widget.update()
 
+          correct_touch_occurred = True
           wrong_touch_occurred = False
+
           def check_touch():
-             nonlocal wrong_touch_occurred
-             if target_acquired:
+             nonlocal correct_touch_occurred, wrong_touch_occurred
+             if center_acquired:
+                correct_touch_occurred = True
+                return True
+             elif target_acquired:
                 wrong_touch_occurred = True
                 return True
-             return center_acquired
-
-          acquired = await wait_for(context, lambda: check_touch, config.start_timeout)
+             return False
+    
+          acquired = await wait_for(context, check_touch, config.start_timeout)
 
           if wrong_touch_occurred:
-             await fail_trial('wrong_touch_return')
+             await fail_trial('wrong_touch_return') #touched something else wrong
              if i_selected_target is not None:
                 behav_result['selected_targets'].append(int(i_selected_target))
              return task_context.TaskResult(False)
-          elif not acquired:
+          elif not acquired: #no touch at all
              await fail_trial('no_center_touch')
              return task_context.TaskResult(False)
 
