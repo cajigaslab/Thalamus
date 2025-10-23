@@ -456,20 +456,12 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
           show_all_targets = True
           context.widget.update()
 
-          wrong_touch_occurred = False
-
           def center_check():
-             nonlocal wrong_touch_occurred
-             if target_acquired:
-                wrong_touch_occurred = True
-                return True #fail
-             return center_acquired
+             #must be touching center and not touching peripheral
+             return center_acquired and not target_acquired
           acquired = await wait_for(context, center_check, config.reach_timeout)
-          if wrong_touch_occurred:
+          if not acquired:
              #no center touch at all
-             await fail_trial('wrong_touch_return')
-             return task_context.TaskResult(False)
-          elif not acquired:
              await fail_trial('no_center_return')
              return task_context.TaskResult(False)
 
