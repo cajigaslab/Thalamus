@@ -26,15 +26,15 @@ from .. import config
 LOGGER = logging.getLogger(__name__)
 
 Config = typing.NamedTuple('Config', [
-  ('intertrial_timeout', datetime.timedelta),
-  ('start_timeout', datetime.timedelta),
+  ('intertrial_timeout', datetime.timedelta), #time between trials - black screen
+  ('start_timeout', datetime.timedelta), #time to initiate trial
   ('center_hold_timeout', datetime.timedelta),     #hold at center
   ('reach_timeout', datetime.timedelta),           #time to reach target
   ('target_hold_timeout', datetime.timedelta),     #hold at peripheral
-  ('blink_timeout', datetime.timedelta),
+  ('blink_timeout', datetime.timedelta), #time allowed to break hold
   ('cue_delay', datetime.timedelta),               #delay before target lights
-  ('fail_timeout', datetime.timedelta),
-  ('success_timeout', datetime.timedelta),
+  ('fail_timeout', datetime.timedelta), #time after fail
+  ('success_timeout', datetime.timedelta), #time after success
   ('sequence_length', int),                        #how many reaches
   ('is_random_sequence', bool),                    #random vs fixed
 ])
@@ -461,12 +461,17 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
              return center_acquired and not target_acquired
           acquired = await wait_for(context, center_check, config.reach_timeout)
           if not acquired:
+             #no center touch at all
              await fail_trial('no_center_return')
              return task_context.TaskResult(False)
 
     #hold at center
     await context.log(f'BehavState=step_{step_idx}_center_hold')
-    success = await wait_for_hold(context, lambda: center_acquired, config.center_hold_timeout, config.blink_timeout)
+    if step_idx == 0:
+       center_hold_duration = config.center_hold_timeout 
+    else:
+       center_hold_duration = config.target_hold_timeout
+    success = await wait_for_hold(context, lambda: center_acquired, center_hold_duration, config.blink_timeout)
     if not success:
       await fail_trial('center_hold_break')
       return task_context.TaskResult(False)
