@@ -439,7 +439,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
           elif acquired:
              break #success - center touched
           else:
-             #no initiation - enter fail timeout but not
+             #no initiation - enter fail timeout but not considered failure
              await context.log('BehavState=no_initiation')
              center_brightness = 0
              show_all_targets = False
@@ -449,31 +449,19 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
              await context.sleep(config.fail_timeout)
     else:
           #subsequent steps where return-to-center
-          await context.log(f'BehavState=step_{step_idx}_wait_center')
+          await context.log(f'BehavState=step_{step_idx}_wait_center_return')
           center_brightness = 255
           current_target_to_highlight = None
           state_brightness = 255
           show_all_targets = True
           context.widget.update()
 
-          wrong_touch_occurred = False
-
-          def check_touch():
-             nonlocal wrong_touch_occurred
-             if target_acquired:
-                wrong_touch_occurred = True
-                return True
-             return center_acquired
-
-          acquired = await wait_for(context, check_touch, config.start_timeout)
-
-          if wrong_touch_occurred:
-             await fail_trial('wrong_touch_return')
-             if i_selected_target is not None:
-                behav_result['selected_targets'].append(int(i_selected_target))
-             return task_context.TaskResult(False)
-          elif not acquired:
-             await fail_trial('no_center_touch')
+          def center_check():
+             #must be touching center and not touching peripheral
+             return center_acquired and not target_acquired
+          acquired = await wait_for(context, center_check, config.reach_timeout)
+          if not acquired:
+             await fail_trial('no_center_return')
              return task_context.TaskResult(False)
 
     #hold at center
