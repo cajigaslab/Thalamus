@@ -450,20 +450,43 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     else:
           #subsequent steps where return-to-center
           await context.log(f'BehavState=step_{step_idx}_wait_center_return')
+          target_acquired = False
+          center_acquired = False
+          i_selected_target = False
+
           center_brightness = 255
           current_target_to_highlight = None
           state_brightness = 255
           show_all_targets = True
           context.widget.update()
+          
+          #wait for touch
+          def check_touch():
+             if target_acquired:
+                return "wrong"
+             elif center_acquired:
+                return "center"
+             return None
+          result = await wait_for(context, check_touch,config.reach_timeout)
 
-          def center_check():
-             #must be touching center and not touching peripheral
-             return center_acquired and not target_acquired
-          acquired = await wait_for(context, center_check, config.reach_timeout)
-          if not acquired:
-             #no center touch at all
+          if result == "wrong":
+             await fail_trial('wrong_touch_return')
+             if i_selected_target is not None:
+                behav_result['selected_targets'].append(int(i_selected_target))
+             return task_context.TaskResult(False)
+          
+          elif result != "center":
              await fail_trial('no_center_return')
              return task_context.TaskResult(False)
+
+         # def center_check():
+             #must be touching center and not touching peripheral
+           #  return center_acquired and not target_acquired
+          #acquired = await wait_for(context, center_check, config.reach_timeout)
+          #if not acquired:
+             #no center touch at all
+            # await fail_trial('no_center_return')
+             #return task_context.TaskResult(False)
 
     #hold at center
     await context.log(f'BehavState=step_{step_idx}_center_hold')
