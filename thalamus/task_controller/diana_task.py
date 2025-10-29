@@ -475,13 +475,19 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     if not success:
       await fail_trial('center_hold_break')
       return task_context.TaskResult(False)
-    #go cue - center dimmed
-    await context.log(f'BehavState=step_{step_idx}_go_cue')
-    center_brightness = 50 #gray - aka go cue
+    #cue delay phase for paced trials
+    await context.log(f'BehavState=step_{step_idx}_cue_delay')
+    center_brightness = 255 #keep center target on
+    current_target_to_highlight = target_idx #peripheral target is also on
     context.widget.update()
-    #cue delay
-    await context.sleep(config.cue_delay)
-    current_target_to_highlight = target_idx
+    #cue delay - must hold center, failed if break hold
+    success = await wait_for_hold(context, lambda: center_acquired, config.cue_delay, config.blink_timeout)
+    if not success:
+      await fail_trial ('center_hold_break_during_delay')
+      return task_context.TaskResult(False)
+    #go cue aka dimmed center
+    await context.log(f'BehavState=step_{step_idx}_go_cue')
+    center_brightness = 50
     context.widget.update()
     #wait for peripheral target
     await context.log(f'BehavState=step_{step_idx}_reach')
