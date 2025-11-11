@@ -78,6 +78,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   if 'generate' in config_settings:
     return
 
+  no_native = 'no-native' in config_settings
   is_android = 'android' in config_settings
   is_release = 'release' in config_settings
   code_coverage = 'code-coverage' in config_settings
@@ -203,22 +204,23 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     cmake_command += [f'-DANDROID_NDK={ndk}']
     cmake_command += [f'-DCMAKE_TOOLCHAIN_FILE={toolchain}']
 
-  cmake_command = [str(c) for c in cmake_command]
-  print(cmake_command)
-  if not (build_path / 'CMakeCache.txt').exists() or do_config:
-    subprocess.check_call(cmake_command)
-  shutil.copy(build_path / 'compile_commands.json', 'compile_commands.json')
+  if not no_native:
+    cmake_command = [str(c) for c in cmake_command]
+    print(cmake_command)
+    if not (build_path / 'CMakeCache.txt').exists() or do_config:
+      subprocess.check_call(cmake_command)
+    shutil.copy(build_path / 'compile_commands.json', 'compile_commands.json')
 
-  command = ['cmake', '--build', build_path, '--config', "Release" if is_release else "Debug", '--parallel', str(os.cpu_count())]
-  if target:
-    command += ['--target', target]
-  else:
-    command += ['--target', 'native']
+    command = ['cmake', '--build', build_path, '--config', "Release" if is_release else "Debug", '--parallel', str(os.cpu_count())]
+    if target:
+      command += ['--target', target]
+    else:
+      command += ['--target', 'native']
 
-  command = [str(c) for c in command]
-  print(command)
-  subprocess.check_call(command)
-  shutil.copy('src/plugin.h', 'thalamus/plugin.h')
+    command = [str(c) for c in command]
+    print(command)
+    subprocess.check_call(command)
+    shutil.copy('src/plugin.h', 'thalamus/plugin.h')
 
   files = []
   with open(f'thalamus-{version}.dist-info/RECORD', 'w') as record_file:
