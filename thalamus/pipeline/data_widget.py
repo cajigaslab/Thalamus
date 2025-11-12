@@ -113,9 +113,9 @@ class PlotCanvas(QWidget):
     self.stub = stub
     self.task = None
     self.config = config
-    self.color_scheme = QGuiApplication.styleHints().colorScheme()
+    self.is_dark_mode = qt_is_dark_mode()
 
-    if self.color_scheme == Qt.ColorScheme.Dark:
+    if self.is_dark_mode:
       c = pyplot.get_cmap('Pastel1').colors[0]
     else:
       c = pyplot.get_cmap('tab10').colors[0]
@@ -252,7 +252,7 @@ class PlotCanvas(QWidget):
       offset += self.duration_ns
     painter.restore()
 
-    if self.color_scheme == Qt.ColorScheme.Dark:
+    if self.is_dark_mode:
       pen.setColor(Qt.GlobalColor.white)
     else:
       pen.setColor(Qt.GlobalColor.black)
@@ -277,7 +277,7 @@ class PlotCanvas(QWidget):
       painter.drawText(device_bounds, Qt.AlignmentFlag.AlignRight, text)
       painter.restore()
 
-    if self.color_scheme == Qt.ColorScheme.Dark:
+    if self.is_dark_mode:
       painter.setPen(Qt.GlobalColor.white)
     painter.drawText(0, metrics.height(), str(self.range[1]))
     painter.drawText(0, self.height(), str(self.range[0]))
@@ -289,7 +289,7 @@ class PlotCanvas(QWidget):
     painter.scale((self.width() - 2*metrics.height()), metrics.height())
     pen = painter.pen()
     pen.setCosmetic(True)
-    if self.color_scheme == Qt.ColorScheme.Dark:
+    if self.is_dark_mode:
       pen.setColor(Qt.GlobalColor.white)
     else:
       pen.setColor(Qt.GlobalColor.black)

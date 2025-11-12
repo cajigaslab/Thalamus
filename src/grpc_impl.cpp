@@ -278,6 +278,7 @@ struct Service::Impl {
       std::mutex connection_mutex;
       std::mutex response_mutex;
       std::condition_variable cond;
+      auto response_ready = false;
       ::thalamus_grpc::AnalogResponse out_response;
 
       bool channels_changed = true;
@@ -379,6 +380,7 @@ struct Service::Impl {
             }
 
             std::lock_guard<std::mutex> lock3(response_mutex);
+            response_ready = true;
             std::swap(response, out_response);
             cond.notify_one();
             //writer(response, ::grpc::WriteOptions());
@@ -396,7 +398,8 @@ struct Service::Impl {
         thalamus_grpc::AnalogResponse local_response;
         {
           std::unique_lock<std::mutex> lock2(response_mutex);
-          cond.wait_for(lock2, 1s);
+          cond.wait_for(lock2, 1s, [&]{ return response_ready; });
+          response_ready = false;
           std::swap(local_response, out_response);
         }
         writer(local_response, ::grpc::WriteOptions());
