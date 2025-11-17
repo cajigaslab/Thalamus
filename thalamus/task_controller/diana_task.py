@@ -310,7 +310,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       i_selected_target = None
 
       for i in i_periph_targs:
-         if distance(all_target_rects[i].center(), cursor) < all_target_windows[i]:
+         if i == current_target_to_highlight and distance(all_target_rects[i].center(), cursor) < all_target_windows[i]:
             target_acquired = True
             i_selected_target = i
             break
