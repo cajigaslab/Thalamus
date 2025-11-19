@@ -43,6 +43,10 @@ namespace thalamus {
     decltype(&::DAQmxSetRefClkSrc) DAQmxSetRefClkSrc;
     decltype(&::DAQmxSetRefClkRate) DAQmxSetRefClkRate;
     decltype(&::DAQmxSetWriteRegenMode) DAQmxSetWriteRegenMode;
+    decltype(&::DAQmxCreateDIChan) DAQmxCreateDIChan;
+    decltype(&::DAQmxCfgChangeDetectionTiming) DAQmxCfgChangeDetectionTiming;
+    decltype(&::DAQmxRegisterSignalEvent) DAQmxRegisterSignalEvent;
+    decltype(&::DAQmxGetTaskNumChans) DAQmxGetTaskNumChans;
 
     static DAQmxAPI* get_singleton();
   private:

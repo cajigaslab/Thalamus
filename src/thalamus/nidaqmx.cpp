@@ -128,6 +128,10 @@ DAQmxAPI* DAQmxAPI::get_singleton() {
   LOAD_FUNC(DAQmxSetRefClkSrc);
   LOAD_FUNC(DAQmxSetRefClkRate);
   LOAD_FUNC(DAQmxSetWriteRegenMode);
+  LOAD_FUNC(DAQmxCreateDIChan);
+  LOAD_FUNC(DAQmxCfgChangeDetectionTiming);
+  LOAD_FUNC(DAQmxRegisterSignalEvent);
+  LOAD_FUNC(DAQmxGetTaskNumChans);
 
   singleton = new DAQmxAPI(local);
 

@@ -16,7 +16,7 @@ FetchContent_MakeAvailable(boost_content)
 
 if(WIN32)
   add_custom_command(OUTPUT "${boost_content_SOURCE_DIR}/b2.exe"
-    COMMAND cmd /c call bootstrap.bat
+    COMMAND cmd /c call bootstrap.bat clang-win
     WORKING_DIRECTORY ${boost_content_SOURCE_DIR})
 else()
   add_custom_command(OUTPUT "${boost_content_SOURCE_DIR}/b2"
