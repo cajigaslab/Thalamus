@@ -78,7 +78,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   if 'generate' in config_settings:
     return
 
-  no_native = 'no-native' in config_settings
+  no_native = True
   is_android = 'android' in config_settings
   is_release = 'release' in config_settings
   code_coverage = 'code-coverage' in config_settings
