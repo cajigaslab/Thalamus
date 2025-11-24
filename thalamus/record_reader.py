@@ -57,7 +57,7 @@ class ZQueue:
     with self.lock:
       while not self.output_messages and not self.done:
         self.lock.release()
-        time.sleep(1)
+        time.sleep(.1)
         self.lock.acquire()
       if self.done:
         return None
@@ -249,7 +249,7 @@ class RecordReader:
       while not self.records:
         self.lock.release()
         #print('get_record', 'sleep')
-        time.sleep(1)
+        time.sleep(.1)
         self.lock.acquire()
       position, record = self.records.popleft()
       if isinstance(record, PendingMessage):
