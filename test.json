@@ -24,12 +24,12 @@
       "Camera Values": {
         "WidthMax": 1280,
         "HeightMax": 1024,
-        "Width": 896,
-        "Height": 518,
-        "OffsetX": 84,
-        "OffsetY": 32,
-        "ExposureTime": 4994.571208953857,
-        "AcquisitionFrameRate": 115.6659164428711,
+        "Width": 816,
+        "Height": 610,
+        "OffsetX": 182,
+        "OffsetY": 300,
+        "ExposureTime": 16570.210456848145,
+        "AcquisitionFrameRate": 60.24267578125,
         "Gain": 0.0
       }
     },
@@ -263,10 +263,10 @@
       "AcquisitionFrameRate": 60.0,
       "Gain": 0.0,
       "view_geometry": [
-        1299,
-        337,
-        471,
-        337
+        103,
+        535,
+        542,
+        587
       ],
       "Camera Values": {
         "WidthMax": 1280,
@@ -276,7 +276,7 @@
         "OffsetX": 0,
         "OffsetY": 0,
         "ExposureTime": 16570.210456848145,
-        "AcquisitionFrameRate": 60.0,
+        "AcquisitionFrameRate": 60.24267578125,
         "Gain": 0.0
       }
     },
@@ -296,8 +296,8 @@
       "AcquisitionFrameRate": 60.0,
       "Gain": 0.0,
       "view_geometry": [
-        1458,
-        32,
+        1465,
+        57,
         455,
         387
       ],
@@ -309,7 +309,7 @@
         "OffsetX": 0,
         "OffsetY": 0,
         "ExposureTime": 16570.210456848145,
-        "AcquisitionFrameRate": 60.0,
+        "AcquisitionFrameRate": 60.24267578125,
         "Gain": 0.0
       }
     },
@@ -329,8 +329,8 @@
       "AcquisitionFrameRate": 60.0,
       "Gain": 0.0,
       "view_geometry": [
-        1435,
-        630,
+        1479,
+        592,
         388,
         434
       ],
@@ -342,7 +342,7 @@
         "OffsetX": 0,
         "OffsetY": 0,
         "ExposureTime": 16570.210456848145,
-        "AcquisitionFrameRate": 60.0,
+        "AcquisitionFrameRate": 60.24267578125,
         "Gain": 0.0
       }
     },
@@ -460,7 +460,7 @@
   "thalamus_view_geometry": [
     100,
     100,
-    473,
+    503,
     768
   ],
   "data_views": [
@@ -592,7 +592,7 @@
       "node": "Experiment",
       "dock_area": "right",
       "view_geometry": [
-        279,
+        309,
         22,
         194,
         746
@@ -3698,7 +3698,7 @@
               "width": 1.6,
               "height": 1.6,
               "orientation": 0,
-              "window_size": 4.8,
+              "window_size": 4.5,
               "reward_channel": 0.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
@@ -3751,7 +3751,7 @@
               "width": 1.6,
               "height": 1.6,
               "orientation": 0,
-              "window_size": 4.8,
+              "window_size": 4.5,
               "reward_channel": 1.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
@@ -3804,7 +3804,7 @@
               "width": 1.6,
               "height": 1.6,
               "orientation": 0,
-              "window_size": 4.8,
+              "window_size": 4.5,
               "reward_channel": 1.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
@@ -3857,7 +3857,7 @@
               "width": 1.6,
               "height": 1.6,
               "orientation": 0,
-              "window_size": 4.8,
+              "window_size": 4.5,
               "reward_channel": 1.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
@@ -3910,7 +3910,7 @@
               "width": 1.6,
               "height": 1.6,
               "orientation": 0,
-              "window_size": 4.8,
+              "window_size": 4.5,
               "reward_channel": 1.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
@@ -3963,7 +3963,7 @@
               "width": 1.6,
               "height": 1.6,
               "orientation": 0,
-              "window_size": 4.8,
+              "window_size": 4.5,
               "reward_channel": 1.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
@@ -4016,7 +4016,7 @@
               "width": 1.6,
               "height": 1.6,
               "orientation": 0,
-              "window_size": 4.8,
+              "window_size": 4.5,
               "reward_channel": 1.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
@@ -4069,7 +4069,7 @@
               "width": 1.6,
               "height": 1.6,
               "orientation": 0,
-              "window_size": 4.8,
+              "window_size": 4.5,
               "reward_channel": 1.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
@@ -4123,7 +4123,7 @@
             "max": 0.8
           },
           "cue_timeout": {
-            "min": 0.3,
+            "min": 0.15,
             "max": 0.65
           },
           "reach_timeout": {

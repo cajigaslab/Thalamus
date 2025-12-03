@@ -565,7 +565,8 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
   dim_start_target = True
   await context.log(f'BehavState=go')
-  if config.cue_timeout >= datetime.timedelta(0.05): # if the cue timeout is too short, the display change for go *and* targs_on will not be detected
+  cue_timeout=config.cue_timeout.total_seconds()
+  if cue_timeout >= 0.05:# if the cue timeout is too short, the display change for go *and* targs_on will not be detected
     state_brightness = toggle_brightness(state_brightness)
   context.widget.update()
 
