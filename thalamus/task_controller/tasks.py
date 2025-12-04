@@ -28,6 +28,7 @@ from . import imagined_task
 from . import feedback_task
 from . import psychopy_task
 from . import gaussian_task
+from . import aaron_task
 from .task_context import TaskDescription
 
 DESCRIPTIONS = [
@@ -108,7 +109,10 @@ DESCRIPTIONS = [
     psychopy_task.run),
   TaskDescription('gaussian', 'Gaussian',
     gaussian_task.create_widget,
-    gaussian_task.run)
+    gaussian_task.run),
+  TaskDescription('aaron', 'Aaron',
+    aaron_task.create_widget,
+    aaron_task.run),
 ]
 
 DESCRIPTIONS_MAP = dict((description.code, description) for description in DESCRIPTIONS)
