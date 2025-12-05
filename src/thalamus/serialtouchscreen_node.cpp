@@ -24,14 +24,20 @@ struct SerialTouchScreenNode::Impl {
   unsigned char buffer[32];
   double x;
   double y;
+  double status;
   std::chrono::nanoseconds time;
+
+  enum class State {
+    PENDING,
+    READING
+  };
+  State read_state = State::PENDING;
 
 public:
   Impl(ObservableDictPtr _state, boost::asio::io_context & _io_context, NodeGraph *_graph,
        SerialTouchScreenNode *_outer)
       : state(_state), io_context(_io_context), outer(_outer), graph(_graph), port(io_context) {
 
-    //serial_port.set_option(boost::asio::serial_port_base::baud_rate(9600));
     //serial_port.set_option(boost::asio::serial_port_base::character_size(8));
     //serial_port.set_option(boost::asio::serial_port_base::parity(boost::asio::serial_port_base::parity::none));
     //serial_port.set_option(boost::asio::serial_port_base::stop_bits(boost::asio::serial_port_base::stop_bits::one));
@@ -42,7 +48,7 @@ public:
     state->recap(std::bind(&Impl::on_change, this, state.get(), _1, _2, _3));
   }
 
-  void on_read(const boost::system::error_code& error, size_t) {
+  void on_read(const boost::system::error_code& error, size_t bytes_transferred) {
     if (error.value() == boost::asio::error::operation_aborted) {
       return;
     }
@@ -50,6 +56,48 @@ public:
 
     if(!running) {
       return;
+    }
+
+    THALAMUS_LOG(info) << bytes_transferred;
+
+    position += bytes_transferred;
+
+    auto working = true;
+    while(working) {
+      working = false;
+      if (read_state == State::PENDING) {
+        if(position >= 2 && buffer[0] == 0x55 && buffer[1] == 0x54) {
+          read_state = State::READING;
+          position -= 2;
+          std::copy_n(buffer + 2, position, buffer);
+          working = true;
+        }
+      }
+
+      if(read_state == State::READING && position >= 8) {
+        auto status = buffer[0];
+        auto xl = buffer[1];
+        auto xh = buffer[2];
+        auto yl = buffer[3];
+        auto yh = buffer[4];
+        auto tid = buffer[5];
+        auto res = buffer[6];
+        auto chk = buffer[7];
+
+        //THALAMUS_LOG(info) << int(bytes_transferred) << " " << int(status) << " " << int(xh) << " " << int(xl) << " " << int(yh) << " " << int(yl) << " " << int(tid) << " " << int(res) << " " << int(chk) << " " ;
+
+        x = (xh << 8) | xl;
+        y = (yh << 8) | yl;
+        this->status = (status & 0x01) ? 1 : 0;
+        time = std::chrono::steady_clock::now().time_since_epoch();
+        //THALAMUS_LOG(info) << x << " " << y << " " << status;
+        outer->ready(outer);
+
+        read_state = State::PENDING;
+        position -= 8;
+        std::copy_n(buffer + 8, position, buffer);
+        working = true;
+      }
     }
 
     port.async_read_some(boost::asio::buffer(buffer + position, sizeof(buffer) - position),
@@ -67,9 +115,12 @@ public:
       if(port.is_open()) {
         port.close();
       }
-      port.open(port_name);
-      port.async_read_some(boost::asio::buffer(buffer + position, sizeof(buffer) - position),
-                           std::bind(&Impl::on_read, this, _1, _2));
+      if(running) {
+        port.open(port_name);
+        port.set_option(boost::asio::serial_port_base::baud_rate(19200));
+        port.async_read_some(boost::asio::buffer(buffer + position, sizeof(buffer) - position),
+                            std::bind(&Impl::on_read, this, _1, _2));
+      }
     }
   }
 };

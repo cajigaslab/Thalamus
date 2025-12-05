@@ -456,6 +456,7 @@ FACTORIES = {
   ]),
   'SERIAL_TOUCH_SCREEN': Factory(None, [
     UserData(UserDataType.OPEN_FILE, 'Port', '/dev/ttyUSB0', []),
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
   ]),
 }
 
