@@ -37,7 +37,7 @@ home_pc = 'COM3'
 
 SERIAL_PORT = rig_port
 BAUD_RATE = 115200
-DEAD_ZONE = 10
+DEAD_ZONE = 20
 MID = 512.0
 # ────────────────────────────────
 pattern = re.compile(r"x\s*=\s*(\d+)\s*,\s*y\s*=\s*(\d+)")
