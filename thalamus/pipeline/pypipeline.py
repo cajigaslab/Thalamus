@@ -26,4 +26,5 @@ class PipelineServicer(thalamus_pb2_grpc.ThalamusServicer):
 
   async def inject_analog(self, stream: typing.AsyncIterable[thalamus_pb2.Text], context: grpc.ServicerContext):
     async for text in stream:
+      print(text)
       pass

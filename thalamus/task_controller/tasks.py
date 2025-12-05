@@ -28,6 +28,10 @@ from . import imagined_task
 from . import feedback_task
 from . import psychopy_task
 from . import gaussian_task
+from . import delayed_reach_task_joystick
+from . import delayed_reach_task_joystick2
+from . import delayed_reach_task_joystick3  # regular cursor
+from . import delayed_reach_task_joystick4  # velocity cursor
 from .task_context import TaskDescription
 
 DESCRIPTIONS = [
@@ -108,7 +112,19 @@ DESCRIPTIONS = [
     psychopy_task.run),
   TaskDescription('gaussian', 'Gaussian',
     gaussian_task.create_widget,
-    gaussian_task.run)
+    gaussian_task.run),
+  TaskDescription('joystick', 'Joystick',
+    delayed_reach_task_joystick.create_widget,
+    delayed_reach_task_joystick.run),
+  TaskDescription('joystick2', 'Joystick2',
+    delayed_reach_task_joystick2.create_widget,
+    delayed_reach_task_joystick2.run),
+  TaskDescription('joystick3', 'Joystick3',
+    delayed_reach_task_joystick3.create_widget,
+    delayed_reach_task_joystick3.run),
+  TaskDescription('joystick4', 'Joystick4',
+    delayed_reach_task_joystick4.create_widget,
+    delayed_reach_task_joystick4.run)
 ]
 
 DESCRIPTIONS_MAP = dict((description.code, description) for description in DESCRIPTIONS)
