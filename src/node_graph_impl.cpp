@@ -38,6 +38,7 @@
 #include <wallclock_node.hpp>
 #include <delsys_node.hpp>
 #include <ceci_node.hpp>
+#include <thalamus/serialtouchscreen_node.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -165,6 +166,7 @@ public:
         {"CECI", new NodeFactory<CeciNode>()},
         //{"HEXASCOPE", new NodeFactory<HexascopeNode>()},
         {"DELSYS", new NodeFactory<DelsysNode>()},
+        {"SERIAL_TOUCH_SCREEN", new NodeFactory<SerialTouchScreenNode>()},
         {"ARUCO", new NodeFactory<ArucoNode>()}};
 
     using namespace std::placeholders;

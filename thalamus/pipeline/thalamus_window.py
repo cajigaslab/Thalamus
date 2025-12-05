@@ -454,6 +454,9 @@ FACTORIES = {
     UserData(UserDataType.DEFAULT, 'Device 0', 'PXI1Slot4', []),
     UserData(UserDataType.DEFAULT, 'Device 1', 'PXI1Slot5', []),
   ]),
+  'SERIAL_TOUCH_SCREEN': Factory(None, [
+    UserData(UserDataType.OPEN_FILE, 'Port', '/dev/ttyUSB0', []),
+  ]),
 }
 
 FACTORY_NAMES = {}
