@@ -17,7 +17,7 @@ import random
 import stl
 
 from ..qt import *
-from PyQt5.QtGui import QMovie
+from PyQt6.QtGui import QMovie
 
 from . import task_context
 from .widgets import Form, ListAsTabsWidget
