@@ -21,3 +21,4 @@ thalamus/native
 .vs
 .DS_Store
 
+thalamus_env/
