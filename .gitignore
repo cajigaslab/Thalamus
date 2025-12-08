@@ -19,3 +19,5 @@ __pycache__
 thalamus/native
 *.dist-info
 .vs
+.DS_Store
+
