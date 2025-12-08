@@ -368,6 +368,7 @@ class InputConfig():
     '''
     Updates the UI in response to gaze scaling changes
     '''
+    
     if quadrant == 'I':
       transform = self.gaze_transforms[0]
       points = self.points[0]

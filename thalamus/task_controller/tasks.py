@@ -7,12 +7,17 @@ from . import simple_touch_task
 from . import simple_touch_and_look_task
 from . import suppressed_reach_task
 from . import delayed_reach_task
+from . import delayed_reach_task_animated
 from . import delayed_saccade_task
+from . import delayed_saccade_touch_task
 from . import delayed_reach_and_saccade_task
 from . import double_step_reach
-from . import double_step_saccade_and_touch
+from . import doublestep_saccade_and_touch
+from . import doublestep_saccade_and_touch_fast
+from . import doublestep_saccade_and_touch_sequence
 from . import distractor_suppression_reach
 from . import gaze_anchoring
+from . import gaze_anchoring_fast
 from . import context_dependent_reach
 from . import context_dependent_delay_reach
 from . import null_task
@@ -21,6 +26,7 @@ from . import stim_task
 from . import ceci_stim_task
 from . import delayed_reach_stim_task
 from . import doublestep_saccade
+from . import doublestep_saccade_fast
 from . import motion_capture_task
 from . import luminance_reward_selection
 from . import avatar_task
@@ -28,10 +34,9 @@ from . import imagined_task
 from . import feedback_task
 from . import psychopy_task
 from . import gaussian_task
-from . import delayed_reach_task_joystick
-from . import delayed_reach_task_joystick2
-from . import delayed_reach_task_joystick3  # regular cursor
 from . import delayed_reach_task_joystick4  # velocity cursor
+from . import calibrate_eye_reach
+from . import calibrate_eye_saccade
 from .task_context import TaskDescription
 
 DESCRIPTIONS = [
@@ -50,9 +55,15 @@ DESCRIPTIONS = [
   TaskDescription('delayed_reach', 'Delayed Reach',
     delayed_reach_task.create_widget, # type: ignore
     delayed_reach_task.run), # type: ignore
+  TaskDescription('delayed_reach_gif', 'Delayed Reach gif',
+    delayed_reach_task_animated.create_widget, # type: ignore
+    delayed_reach_task_animated.run), # type: ignore
   TaskDescription('delayed_saccade', 'Delayed Saccade',
     delayed_saccade_task.create_widget, # type: ignore
     delayed_saccade_task.run), # type: ignore
+  TaskDescription('delayed_saccade_touch', 'Delayed Saccade Touch',
+    delayed_saccade_touch_task.create_widget, # type: ignore
+    delayed_saccade_touch_task.run), # type: ignore
   TaskDescription('delayed_reach_and_saccade', 'Delayed Reach and Saccade', 
     delayed_reach_and_saccade_task.create_widget, 
     delayed_reach_and_saccade_task.run),
@@ -62,9 +73,18 @@ DESCRIPTIONS = [
   TaskDescription('gaze_anchoring', 'Gaze Anchoring', 
     gaze_anchoring.create_widget, # type: ignore
     gaze_anchoring.run), # type: ignore
-  TaskDescription('double_step_saccade_and_touch', 'Double Step Saccade and Touch', 
-    double_step_saccade_and_touch.create_widget, # type: ignore
-    double_step_saccade_and_touch.run), # type: ignore  
+  TaskDescription('gaze_anchoring_fast', 'Gaze Anchoring fast', 
+    gaze_anchoring_fast.create_widget, # type: ignore
+    gaze_anchoring_fast.run), # type: ignore
+  TaskDescription('doublestep_saccade_and_touch', 'Double Step Saccade and Touch', 
+    doublestep_saccade_and_touch.create_widget, # type: ignore
+    doublestep_saccade_and_touch.run), # type: ignore  
+  TaskDescription('doublestep_saccade_and_touch_fast', 'Double Step Saccade and Touch fast', 
+    doublestep_saccade_and_touch_fast.create_widget, # type: ignore
+    doublestep_saccade_and_touch_fast.run), # type: ignore 
+  TaskDescription('doublestep_saccade_and_touch_sequence', 'Double Step Saccade and Touch Sequence', 
+    doublestep_saccade_and_touch_sequence.create_widget, # type: ignore
+    doublestep_saccade_and_touch_sequence.run), # type: ignore 
   TaskDescription('context_dependent_reach', 'Context Dependent Reach',
     context_dependent_reach.create_widget, # type: ignore
     context_dependent_reach.run), # type: ignore 
@@ -92,6 +112,9 @@ DESCRIPTIONS = [
   TaskDescription('doublestep_saccade', 'Doublestep saccade',
     doublestep_saccade.create_widget,
     doublestep_saccade.run),
+  TaskDescription('doublestep_saccade_fast', 'Doublestep saccade fast',
+    doublestep_saccade_fast.create_widget,
+    doublestep_saccade_fast.run),
   TaskDescription('luminance_reward_selection', 'Luminance Reward Selection',
     luminance_reward_selection.create_widget,
     luminance_reward_selection.run),
@@ -113,18 +136,15 @@ DESCRIPTIONS = [
   TaskDescription('gaussian', 'Gaussian',
     gaussian_task.create_widget,
     gaussian_task.run),
-  TaskDescription('joystick', 'Joystick',
-    delayed_reach_task_joystick.create_widget,
-    delayed_reach_task_joystick.run),
-  TaskDescription('joystick2', 'Joystick2',
-    delayed_reach_task_joystick2.create_widget,
-    delayed_reach_task_joystick2.run),
-  TaskDescription('joystick3', 'Joystick3',
-    delayed_reach_task_joystick3.create_widget,
-    delayed_reach_task_joystick3.run),
   TaskDescription('joystick4', 'Joystick4',
     delayed_reach_task_joystick4.create_widget,
     delayed_reach_task_joystick4.run)
+  TaskDescription('calibrate_eye_reach', 'Calibrate eye reach',
+    calibrate_eye_reach.create_widget,
+    calibrate_eye_reach.run),
+  TaskDescription('calibrate_eye_saccade', 'Calibrate eye saccade',
+    calibrate_eye_saccade.create_widget,
+    calibrate_eye_saccade.run)
 ]
 
 DESCRIPTIONS_MAP = dict((description.code, description) for description in DESCRIPTIONS)

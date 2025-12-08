@@ -177,7 +177,7 @@ def ecc_to_px(ecc, dpi):
   x_px = x_inch*dpi
   return x_px
 
-def get_target_rectangles(context):
+def get_target_rectangles(context, dpi):
   all_target_rects = []
 
   ntargets = len(context.task_config['targets'])
@@ -291,8 +291,10 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   i_periph_targs = [x for x in range(ntargets) if x is not i_start_targ]
   n_periph_targs = len(i_periph_targs)
 
-  all_target_rects = get_target_rectangles(context)
-  all_target_windows = [ecc_to_px(context.get_target_value(itarg, 'window_size'), context.widget.logicalDpiX())
+  dpi = context.config.get('dpi', None) or context.widget.logicalDpiX()
+
+  all_target_rects = get_target_rectangles(context, dpi)
+  all_target_windows = [ecc_to_px(context.get_target_value(itarg, 'window_size'), dpi)
                         for itarg in range(ntargets)]
   all_target_colors = [context.get_target_color(itarg, 'color', COLOR_DEFAULT) for itarg in range(ntargets)]
   all_target_on_luminance = [context.get_target_value(i, 'on_luminance', COLOR_DEFAULT) for i in range(ntargets)]
@@ -400,7 +402,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
           painter.render_stl(stl_mesh)
         else:
           color, scale = all_target_colors[i_presented_targ], all_target_on_luminance[i_presented_targ]
-          color = QColor(scale*color.red(), scale*color.green(), scale*color.blue())
+          color = QColor(int(scale*color.red()), int(scale*color.green()), int(scale*color.blue()))
           painter.fillRect(all_target_rects[i_presented_targ], color)
 
     with painter.masked(RenderOutput.OPERATOR):
@@ -483,7 +485,9 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
   dim_start_target = True
   with await next_state(context, State.GO, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
-    state_brightness = toggle_brightness(state_brightness)
+    cue_timeout=config.cue_timeout.total_seconds()
+    if cue_timeout >= 0.05: # if the cue timeout is too short, the display change for go *and* targs_on will not be detected
+      state_brightness = toggle_brightness(state_brightness)
     context.widget.update()
     acquired = await wait_for(context, lambda: presented_targ_acquired or touched, config.saccade_timeout)
 

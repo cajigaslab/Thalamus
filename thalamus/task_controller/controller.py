@@ -119,6 +119,7 @@ class TaskWidget(QWidget):
       self.current_widget.deleteLater()
 
     task_description = None
+    #print(task_type)
     index, desc = [(i, desc) for i, desc in enumerate(self.task_descriptions) if desc.code == task_type][0]
     task_description = desc
     self.combo_box.setCurrentIndex(index)
@@ -383,6 +384,23 @@ class ControlWindow(QMainWindow):
     dock.setWidget(queue_widget)
     self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
 
+    status_layout = QVBoxLayout()
+    self.status_list = QListWidget()
+    self.status_list.setObjectName('status_list')
+    status_layout.addWidget(self.status_list)
+    button = QPushButton("Reset History")
+    button.setObjectName('reset_history')
+    button.clicked.connect(self.on_reset_trial_history)
+    status_layout.addWidget(button)
+
+    status_widget = QWidget()
+    status_widget.setLayout(status_layout)
+
+    dock = QDockWidget('Trial History', self)
+    dock.setWidget(status_widget)
+    self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock)
+
+
     plot = RewardSchedule(self.task_context.config['reward_schedule'])
     dock = QDockWidget('Reward Schedule', self)
     dock.setWidget(plot)
@@ -398,14 +416,17 @@ class ControlWindow(QMainWindow):
   def __prepare_status(self) -> None:
     if 'status' not in self.task_context.config:
       self.task_context.config['status'] = ''
-    status_widget = QLabel()
-    self.statusBar().addWidget(status_widget)
-    self.task_context.config.add_observer(functools.partial(self.__on_status_change, status_widget))
+    # status_widget = QLabel()
+    # self.statusBar().addWidget(status_widget)
+    self.task_context.config.add_observer(functools.partial(self.__on_status_change))
 
-  def __on_status_change(self, widget: QLabel,
-                         _: ObservableCollection.Action, key: typing.Any, value: typing.Any) -> None:
+  def __on_status_change(self, _: ObservableCollection.Action, key: typing.Any, value: typing.Any) -> None:
     if key == 'status':
-      widget.setText(value)
+      self.status_list.clear()
+      
+      items = sorted(self.task_context.trial_summary_data.trial_history.items())
+      for b in items:
+        self.status_list.addItem(f'{b[0]} = {b[1]["success"]}/{b[1]["failure"]}')
 
   def on_queue_item_selected(self, index: QModelIndex) -> None:
     '''
@@ -474,6 +495,7 @@ class ControlWindow(QMainWindow):
     '''
     Resets the trial history
     '''
+    self.task_context.reset_trial_history()
 
   def on_load_reward_schedule(self) -> None:
     '''
@@ -558,7 +580,7 @@ class ControlWindow(QMainWindow):
     if self.config_data.file_name is None:
       self.on_save_as_config()
       return
-
+    self.task_context.config['eye_scaling_init']=self.task_context.config['eye_scaling']
     save(self.config_data.file_name, self.task_context.config)
 
   def on_save_as_config(self) -> None:

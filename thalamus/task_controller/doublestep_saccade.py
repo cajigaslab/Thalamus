@@ -565,7 +565,9 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
   dim_start_target = True
   await context.log(f'BehavState=go')
-  state_brightness = toggle_brightness(state_brightness)
+  cue_timeout=config.cue_timeout.total_seconds()
+  if cue_timeout >= 0.05:# if the cue timeout is too short, the display change for go *and* targs_on will not be detected
+    state_brightness = toggle_brightness(state_brightness)
   context.widget.update()
 
   start_targ_released = await wait_for(context, lambda: not start_target_acquired or touched, config.saccade_timeout)
@@ -575,7 +577,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     await fail_trial()
     await context.sleep(config.fail_timeout)
     return task_context.TaskResult(False)
-  await context.log(f'BehavState=saccde_start')
+  await context.log(f'BehavState=saccade_start')
 
   acquired = await wait_for(context, lambda: presented_targ_acquired or touched, config.saccade_timeout)
   if not acquired or touched:
