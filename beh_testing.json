@@ -1,0 +1,122 @@
+{
+  "touch_channels": [
+    0,
+    1
+  ],
+  "task_clusters": [],
+  "queue": [],
+  "reward_schedule": {
+    "schedules": [
+      [
+        0
+      ]
+    ],
+    "index": 0
+  },
+  "Orchestration": {
+    "Remote Executor": false,
+    "Processes": []
+  },
+  "nodes": [
+    {
+      "name": "fiducial",
+      "type": "WAVE",
+      "Running": false,
+      "Sample Rate": 1000.0,
+      "Poll Interval": 16,
+      "View": false,
+      "Waves": [
+        {
+          "Frequency": 0.3,
+          "Amplitude": 5.0,
+          "Shape": "Square",
+          "Offset": 0.0,
+          "Duty Cycle": 0.5,
+          "Phase": 0.0
+        }
+      ],
+      "Frequency": 0.3,
+      "Amplitude": 5.0,
+      "Shape": "Square"
+    },
+    {
+      "name": "Node 1",
+      "type": "NIDAQ",
+      "Running": false,
+      "Sample Rate": 1000.0,
+      "Poll Interval": 16,
+      "Zero Latency": false,
+      "Channel": "Dev1/ai0",
+      "Terminal Config": "Default",
+      "Channel Type": "Voltage",
+      "Shunt Resistor Location": "Default",
+      "Shunt Resistor Ohms": 1000.0,
+      "View": false
+    }
+  ],
+  "Persistence": {
+    "Cached": []
+  },
+  "eye_scaling": {
+    "I": {
+      "x": 1,
+      "y": 1
+    },
+    "II": {
+      "x": 1,
+      "y": 1
+    },
+    "III": {
+      "x": 1,
+      "y": 1
+    },
+    "IV": {
+      "x": 1,
+      "y": 1
+    }
+  },
+  "status": "",
+  "thalamus_view_geometry": [
+    82,
+    215,
+    1271,
+    768
+  ],
+  "data_views": [
+    {
+      "view_geometry": [
+        1368,
+        45,
+        404,
+        400
+      ],
+      "rows": 1,
+      "columns": 1,
+      "views": [
+        {
+          "row": 0,
+          "column": 0,
+          "selected_node": "fiducial",
+          "selected_channel": "",
+          "view_type": "Time Series",
+          "draw_value": false,
+          "static_range": false,
+          "range_min": 0,
+          "range_max": 10
+        }
+      ]
+    }
+  ],
+  "node_widgets": [
+    {
+      "node": "fiducial",
+      "dock_area": "right",
+      "view_geometry": [
+        522,
+        23,
+        749,
+        745
+      ]
+    }
+  ]
+}
