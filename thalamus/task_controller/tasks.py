@@ -138,7 +138,7 @@ DESCRIPTIONS = [
     gaussian_task.run),
   TaskDescription('joystick4', 'Joystick4',
     delayed_reach_task_joystick4.create_widget,
-    delayed_reach_task_joystick4.run)
+    delayed_reach_task_joystick4.run),
   TaskDescription('calibrate_eye_reach', 'Calibrate eye reach',
     calibrate_eye_reach.create_widget,
     calibrate_eye_reach.run),
