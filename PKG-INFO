@@ -1,0 +1,38 @@
+Metadata-Version: 2.1
+Name: thalamus
+Version: 0.3.23
+Summary: TODO: Package description
+Maintainer: jarl
+Maintainer-email: Jarl.Haggerty@Pennmedicine.penn.edu
+License: TODO: License declaration
+Requires-Dist: grpcio-tools>=1.66.1; python_version >= "3.7"
+Requires-Dist: grpcio-reflection>=1.66.1; python_version >= "3.7"
+Requires-Dist: grpcio-tools>=1.48.2; python_version < "3.7"
+Requires-Dist: grpcio-reflection>=1.48.2; python_version < "3.7"
+Requires-Dist: pyyaml
+Requires-Dist: numpy>=1.24.0; python_version >= "3.8"
+Requires-Dist: numpy>=1.19.5; python_version < "3.8"
+Requires-Dist: PyOpenGL>=3.1.6
+Requires-Dist: PyQt5; python_version < "3.7"
+Requires-Dist: PyQt6; python_version >= "3.7"
+Requires-Dist: matplotlib
+Requires-Dist: dataclasses
+Requires-Dist: jinja2
+Requires-Dist: h5py>=3.1.0
+Requires-Dist: scipy
+Requires-Dist: typing_extensions>=4.4.0; python_version >= "3.8"
+Requires-Dist: typing_extensions; python_version < "3.8"
+Requires-Dist: opencv-contrib-python
+Requires-Dist: numpy-stl
+Requires-Dist: scikit-learn
+Requires-Dist: Pillow
+Requires-Dist: lark
+Requires-Dist: jsonpath_ng
+Requires-Dist: nidaqmx
+Requires-Dist: wheel
+Requires-Dist: toml
+Requires-Dist: build
+Requires-Dist: meson
+Requires-Dist: ninja
+Requires-Dist: oslex
+Requires-Dist: psutil

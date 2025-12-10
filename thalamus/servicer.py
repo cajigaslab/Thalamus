@@ -227,6 +227,9 @@ class ThalamusServicer(thalamus_pb2_grpc.ThalamusServicer):
         del self.peer_name_to_queue[request.peer_name]
         self.condition.notify_all()
 
+  def get_redirect(self, request, context):
+    return thalamus_pb2.Redirect(redirect='')
+
   async def observable_bridge_write(self, request, context):
     for change in request.changes:
       value = json.loads(change.value)

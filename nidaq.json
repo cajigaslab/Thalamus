@@ -1,0 +1,83 @@
+{
+  "nodes": [
+    {
+      "name": "Node 1",
+      "type": "NIDAQ",
+      "Running": true,
+      "Sample Rate": 1000.0,
+      "Poll Interval": 16,
+      "Zero Latency": false,
+      "Channel": "Dev1/ai0",
+      "Terminal Config": "Default",
+      "Channel Type": "Voltage",
+      "Shunt Resistor Location": "Default",
+      "Shunt Resistor Ohms": 1000.0,
+      "View": false
+    },
+    {
+      "name": "Node 2",
+      "type": "WAVE",
+      "Running": true,
+      "Sample Rate": 1000.0,
+      "Poll Interval": 16,
+      "View": false,
+      "Waves": []
+    },
+    {
+      "name": "Node 3",
+      "type": "NIDAQ_OUT",
+      "Running": false,
+      "Source": "Node 2",
+      "Fast Foward": false,
+      "Channel": "Dev1/ao0",
+      "View": false,
+      "Stims": []
+    }
+  ],
+  "Persistence": {
+    "Cached": []
+  },
+  "thalamus_view_geometry": [
+    100,
+    100,
+    755,
+    768
+  ],
+  "data_views": [
+    {
+      "view_geometry": [
+        1394,
+        370,
+        401,
+        400
+      ],
+      "rows": 1,
+      "columns": 1,
+      "views": [
+        {
+          "row": 0,
+          "column": 0,
+          "selected_node": "Node 1",
+          "selected_channel": "Dev1/ai0",
+          "view_type": "Time Series",
+          "draw_value": false,
+          "static_range": false,
+          "range_min": 0,
+          "range_max": 10
+        }
+      ]
+    }
+  ],
+  "node_widgets": [
+    {
+      "node": "Node 3",
+      "dock_area": "right",
+      "view_geometry": [
+        354,
+        23,
+        401,
+        745
+      ]
+    }
+  ]
+}

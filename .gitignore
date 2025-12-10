@@ -22,3 +22,8 @@ thalamus/native
 .DS_Store
 
 thalamus_env/
+dotnet/dotnet/bin
+dotnet/dotnet/obj
+test.tha.*
+*.perfetto-trace
+/build-old

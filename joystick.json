@@ -1,0 +1,112 @@
+{
+  "nodes": [
+    {
+      "name": "Cam 1",
+      "type": "GENICAM",
+      "Running": false,
+      "View": true,
+      "Camera Values": {
+        "WidthMax": 1280,
+        "HeightMax": 1024,
+        "Width": 1280,
+        "Height": 1024,
+        "OffsetX": 0,
+        "OffsetY": 0,
+        "ExposureTime": 6611.883640289307,
+        "AcquisitionFrameRate": 150.0,
+        "Gain": 17.7340087890625
+      },
+      "Camera": "Spinnaker_GenTL:18299726",
+      "WidthMax": 1280,
+      "HeightMax": 1024,
+      "Width": 1280,
+      "Height": 1024,
+      "OffsetX": 0,
+      "OffsetY": 0,
+      "ExposureTime": 6611.883640289307,
+      "AcquisitionFrameRate": 150.0,
+      "Gain": 17.7340087890625,
+      "view_geometry": [
+        1137,
+        122,
+        400,
+        400
+      ]
+    },
+    {
+      "name": "Run",
+      "type": "RUNNER2",
+      "Running": false,
+      "Targets": [
+        {
+          "Name": "Cam 1",
+          "Address": ""
+        }
+      ],
+      "tab": 1
+    },
+    {
+      "name": "Storage",
+      "type": "STORAGE2",
+      "Running": false,
+      "Output File": "test.tha",
+      "Compress Analog": false,
+      "Compress Video": false,
+      "Simple Copy": false,
+      "Sources": [
+        {
+          "Node": "Cam 1",
+          "Time Series": true,
+          "Image": true,
+          "Motion": true,
+          "Text": true
+        }
+      ],
+      "Files": [],
+      "Metadata": [],
+      "rec": 0,
+      "start": 391.691270571
+    }
+  ],
+  "Persistence": {
+    "Cached": []
+  },
+  "thalamus_view_geometry": [
+    100,
+    100,
+    576,
+    665
+  ],
+  "data_views": [],
+  "node_widgets": [
+    {
+      "node": "Run",
+      "dock_area": "",
+      "view_geometry": [
+        116,
+        847,
+        316,
+        208
+      ]
+    },
+    {
+      "node": "Storage",
+      "dock_area": "right",
+      "view_geometry": [
+        302,
+        23,
+        274,
+        642
+      ]
+    }
+  ],
+  "queue": [],
+  "reward_schedule": {
+    "schedules": [
+      [
+        0
+      ]
+    ],
+    "index": 0
+  }
+}

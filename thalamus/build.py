@@ -78,6 +78,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   if 'generate' in config_settings:
     return
 
+  no_native = 'no-native' in config_settings
   is_android = 'android' in config_settings
   is_release = 'release' in config_settings
   code_coverage = 'code-coverage' in config_settings
@@ -87,6 +88,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   generator = config_settings.get('generator', 'Ninja')
   sanitizer = config_settings.get('sanitizer', None)
   target = config_settings.get('target', None)
+  dotnet = 'dotnet' in config_settings
 
   def get_build_path():
     legacy_path = pathlib.Path.cwd() / 'build' / f'{platform.python_implementation()}-{platform.python_version()}-{"release" if is_release else "debug"}'
@@ -150,7 +152,9 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     '-B', build_path,
     f'-DCMAKE_BUILD_TYPE={"Release" if is_release else "Debug"}',
     '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
-    f'-DCMAKE_OSX_DEPLOYMENT_TARGET={osx_target}'
+    '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
+    f'-DCMAKE_OSX_DEPLOYMENT_TARGET={osx_target}',
+    f'-DBUILD_DOTNET={"ON" if dotnet else "OFF"}'
   ]
   cmake_command += ['-G', generator]
 
@@ -188,28 +192,37 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     cmake_command += [f'-DANDROID_NDK={ndk}']
     cmake_command += [f'-DCMAKE_TOOLCHAIN_FILE={toolchain}']
 
-  cmake_command = [str(c) for c in cmake_command]
-  print(cmake_command)
-  if not (build_path / 'CMakeCache.txt').exists() or do_config:
-    subprocess.check_call(cmake_command)
-  shutil.copy(build_path / 'compile_commands.json', 'compile_commands.json')
+  if not no_native:
+    cmake_command = [str(c) for c in cmake_command]
+    print(cmake_command)
+    if not (build_path / 'CMakeCache.txt').exists() or do_config:
+      subprocess.check_call(cmake_command)
+    shutil.copy(build_path / 'compile_commands.json', 'compile_commands.json')
 
-  command = ['cmake', '--build', build_path, '--config', "Release" if is_release else "Debug", '--parallel', str(os.cpu_count())]
-  if target:
-    command += ['--target', target]
-  else:
-    command += ['--target', 'native']
+    command = ['cmake', '--build', build_path, '--config', "Release" if is_release else "Debug", '--parallel', str(os.cpu_count())]
+    if target:
+      command += ['--target', target]
+    else:
+      command += ['--target', 'native']
 
-  command = [str(c) for c in command]
-  print(command)
-  subprocess.check_call(command)
-  shutil.copy('src/plugin.h', 'thalamus/plugin.h')
+    command = [str(c) for c in command]
+    print(command)
+    subprocess.check_call(command)
+    shutil.copy('src/plugin.h', 'thalamus/plugin.h')
 
   files = []
   with open(f'thalamus-{version}.dist-info/RECORD', 'w') as record_file:
     for path in itertools.chain(pathlib.Path('thalamus').rglob('*'), pathlib.Path('cortex').rglob('*')):
-      if not path.is_file() or path.name != 'native' and path.suffix not in ('.py', '.pyi', '.vert', '.proto', '.comp', '.frag', '.exe', '.h'):
+      parents = [p.name for p in path.parents]
+      is_dir = not path.is_file()
+      in_ignored_dir = any(d in ("__pycache__", '.vs') for d in parents)
+      has_ignored_suffix = path.suffix not in ('.py', '.pyi', '.vert', '.proto', '.comp', '.frag', '.exe', '.h')
+      is_native_executable = path.stem == 'native'
+      is_dotnet_file = "dotnet" in parents
+      if is_dir or in_ignored_dir or has_ignored_suffix and not is_native_executable and not is_dotnet_file:
+        print(path, 'DROP')
         continue
+      print(path, 'TAKE')
       files.append(path)
       digest = hashlib.sha256()
       with open(str(path), 'rb') as pack_file:

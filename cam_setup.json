@@ -1,0 +1,347 @@
+{
+  "touch_channels": [
+    0,
+    1
+  ],
+  "task_clusters": [],
+  "queue": [],
+  "reward_schedule": {
+    "schedules": [
+      [
+        0
+      ]
+    ],
+    "index": 0
+  },
+  "Orchestration": {
+    "Remote Executor": false,
+    "Processes": []
+  },
+  "nodes": [
+    {
+      "name": "CamL",
+      "type": "GENICAM",
+      "Running": false,
+      "View": true,
+      "Camera Values": {
+        "WidthMax": 1280,
+        "HeightMax": 1024,
+        "Width": 1280,
+        "Height": 1024,
+        "OffsetX": 0,
+        "OffsetY": 0,
+        "ExposureTime": 6611.883640289307,
+        "AcquisitionFrameRate": 150.0,
+        "Gain": 0.0
+      },
+      "Camera": "Spinnaker_GenTL:18299726",
+      "WidthMax": 1280,
+      "HeightMax": 1024,
+      "Width": 1280,
+      "Height": 1024,
+      "OffsetX": 0,
+      "OffsetY": 0,
+      "ExposureTime": 6611.883640289307,
+      "AcquisitionFrameRate": 150.0,
+      "Gain": 0.0,
+      "view_geometry": [
+        814,
+        96,
+        588,
+        498
+      ]
+    },
+    {
+      "name": "CamT",
+      "type": "GENICAM",
+      "Running": false,
+      "View": true,
+      "Camera Values": {
+        "WidthMax": 1280,
+        "HeightMax": 1024,
+        "Width": 1280,
+        "Height": 1024,
+        "OffsetX": 0,
+        "OffsetY": 0,
+        "ExposureTime": 6611.889,
+        "AcquisitionFrameRate": 148.0,
+        "Gain": 0.0
+      },
+      "view_geometry": [
+        363,
+        523,
+        546,
+        474
+      ],
+      "Camera": "VimbaUSBTL:DEV_1AB228000429",
+      "WidthMax": 1280,
+      "HeightMax": 1024,
+      "Width": 1280,
+      "Height": 1024,
+      "OffsetX": 0,
+      "OffsetY": 0,
+      "ExposureTime": 6611.883640289307,
+      "AcquisitionFrameRate": 150.0,
+      "Gain": 0.0
+    },
+    {
+      "name": "CamEye",
+      "type": "GENICAM",
+      "Running": false,
+      "View": true,
+      "Camera Values": {
+        "WidthMax": 1280,
+        "HeightMax": 1024,
+        "Width": 1280,
+        "Height": 1024,
+        "OffsetX": 0,
+        "OffsetY": 0,
+        "ExposureTime": 6611.889,
+        "AcquisitionFrameRate": 148.0,
+        "Gain": 0.0
+      },
+      "Camera": "VimbaUSBTL:DEV_1AB228001040",
+      "WidthMax": 1280,
+      "HeightMax": 1024,
+      "Width": 1280,
+      "Height": 1024,
+      "OffsetX": 0,
+      "OffsetY": 0,
+      "ExposureTime": 6611.883640289307,
+      "AcquisitionFrameRate": 150.0,
+      "Gain": 0.0,
+      "view_geometry": [
+        874,
+        203,
+        561,
+        541
+      ]
+    },
+    {
+      "name": "Runner",
+      "type": "RUNNER2",
+      "Running": false,
+      "Targets": [
+        {
+          "Name": "CamEye",
+          "Address": ""
+        },
+        {
+          "Name": "CamT",
+          "Address": ""
+        },
+        {
+          "Name": "CamL",
+          "Address": ""
+        },
+        {
+          "Name": "CamR",
+          "Address": ""
+        },
+        {
+          "Name": "nidaq",
+          "Address": ""
+        }
+      ],
+      "tab": 1
+    },
+    {
+      "name": "CamR",
+      "type": "GENICAM",
+      "Running": false,
+      "View": true,
+      "Camera Values": {
+        "WidthMax": 1280,
+        "HeightMax": 1024,
+        "Width": 1280,
+        "Height": 1024,
+        "OffsetX": 0,
+        "OffsetY": 0,
+        "ExposureTime": 6611.883640289307,
+        "AcquisitionFrameRate": 150.0,
+        "Gain": 0.0
+      },
+      "Camera": "Spinnaker_GenTL:17278772",
+      "WidthMax": 1280,
+      "HeightMax": 1024,
+      "Width": 1280,
+      "Height": 1024,
+      "OffsetX": 0,
+      "OffsetY": 0,
+      "ExposureTime": 6611.883640289307,
+      "AcquisitionFrameRate": 150.0,
+      "Gain": 0.0,
+      "view_geometry": [
+        145,
+        105,
+        641,
+        479
+      ]
+    },
+    {
+      "name": "nidaq",
+      "type": "NIDAQ",
+      "Running": false,
+      "Sample Rate": 1000.0,
+      "Poll Interval": 16,
+      "Zero Latency": false,
+      "Channel": "Dev1/ai0:3",
+      "Terminal Config": "Default",
+      "Channel Type": "Voltage",
+      "Shunt Resistor Location": "Default",
+      "Shunt Resistor Ohms": 1000.0,
+      "View": false,
+      "view_geometry": [
+        435,
+        126,
+        526,
+        200
+      ]
+    },
+    {
+      "name": "Touch",
+      "type": "TOUCH_SCREEN",
+      "Source": "Node 1",
+      "Transform": [
+        [
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "Monitor": 0,
+      "Method": "Matrix Multiplication (3-point)"
+    },
+    {
+      "name": "Node 1",
+      "type": "CHANNEL_PICKER",
+      "Sources": {
+        "nidaq": [
+          {
+            "Name": "Dev1/ai0",
+            "Out Channel": 2,
+            "Out Name": "nidaq: Dev1/ai0"
+          },
+          {
+            "Name": "Dev1/ai1",
+            "Out Channel": 3,
+            "Out Name": "nidaq: Dev1/ai1"
+          },
+          {
+            "Name": "Dev1/ai2",
+            "Out Channel": 0,
+            "Out Name": "nidaq: Dev1/ai2"
+          },
+          {
+            "Name": "Dev1/ai3",
+            "Out Channel": 1,
+            "Out Name": "nidaq: Dev1/ai3"
+          }
+        ],
+        "CamEye": [
+          {
+            "Name": "Framerate",
+            "Out Channel": 4,
+            "Out Name": "CamEye: Framerate"
+          }
+        ]
+      }
+    }
+  ],
+  "Persistence": {
+    "Cached": []
+  },
+  "eye_scaling": {
+    "I": {
+      "x": 1,
+      "y": 1
+    },
+    "II": {
+      "x": 1,
+      "y": 1
+    },
+    "III": {
+      "x": 1,
+      "y": 1
+    },
+    "IV": {
+      "x": 1,
+      "y": 1
+    }
+  },
+  "status": "",
+  "thalamus_view_geometry": [
+    100,
+    100,
+    951,
+    768
+  ],
+  "data_views": [
+    {
+      "view_geometry": [
+        915,
+        653,
+        808,
+        301
+      ],
+      "rows": 1,
+      "columns": 2,
+      "views": [
+        {
+          "row": 0,
+          "column": 0,
+          "selected_node": "Touch",
+          "selected_channel": "X",
+          "view_type": "Time Series",
+          "draw_value": false,
+          "static_range": false,
+          "range_min": 0,
+          "range_max": 10
+        },
+        {
+          "row": 0,
+          "column": 1,
+          "selected_node": "Touch",
+          "selected_channel": "Y",
+          "view_type": "Time Series",
+          "draw_value": false,
+          "static_range": false,
+          "range_min": 0,
+          "range_max": 10
+        }
+      ]
+    }
+  ],
+  "node_widgets": [
+    {
+      "node": "Runner",
+      "dock_area": "",
+      "view_geometry": [
+        1625,
+        110,
+        278,
+        417
+      ]
+    },
+    {
+      "node": "CamR",
+      "dock_area": "right",
+      "view_geometry": [
+        452,
+        23,
+        499,
+        745
+      ]
+    }
+  ]
+}
