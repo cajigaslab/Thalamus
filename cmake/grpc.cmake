@@ -1,7 +1,7 @@
 FetchContent_Declare(
   gRPC
   GIT_REPOSITORY https://github.com/grpc/grpc
-  GIT_TAG        v1.66.1
+  GIT_TAG        v1.76.0
 )
 set(BUILD_SHARED_LIBS OFF)
 set(BUILD_TESTING OFF)

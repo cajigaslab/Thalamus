@@ -1,7 +1,7 @@
 FetchContent_Declare(
   opencv
   GIT_REPOSITORY https://github.com/opencv/opencv.git
-  GIT_TAG 4.8.1
+  GIT_TAG 4.12.0
   SOURCE_SUBDIR thalamus-nonexistant)
 FetchContent_MakeAvailable(opencv)
 file(MAKE_DIRECTORY ${opencv_BINARY_DIR}/Debug)
