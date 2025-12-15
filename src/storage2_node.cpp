@@ -215,9 +215,15 @@ struct Storage2Node::Impl {
             span->set_scale(wrapper->scale(i));
           }
 
+          constexpr auto is_ulong = std::is_same<typename decltype(data)::value_type, uint64_t>::value;
           constexpr auto is_short = std::is_same<typename decltype(data)::value_type, short>::value;
           constexpr auto is_int = std::is_same<typename decltype(data)::value_type, int>::value;
-          if constexpr (is_short || is_int) {
+          if constexpr (is_ulong) {
+            span->set_begin(uint32_t(body->mutable_ulong_data()->size()));
+            body->mutable_ulong_data()->Add(data.begin(), data.end());
+            span->set_end(uint32_t(body->mutable_ulong_data()->size()));
+            body->set_is_ulong_data(true);
+          }  else if constexpr (is_short || is_int) {
             span->set_begin(uint32_t(body->mutable_int_data()->size()));
             body->mutable_int_data()->Add(data.begin(), data.end());
             span->set_end(uint32_t(body->mutable_int_data()->size()));

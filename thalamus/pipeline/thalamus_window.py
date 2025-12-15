@@ -444,7 +444,13 @@ FACTORIES = {
       "DICT_ARUCO_MIP_36h12"])
   ]),
   'HEXASCOPE': Factory(HexascopeWidget, []),
-  'WALLCLOCK': Factory(None, []),
+  'WALLCLOCK': Factory(None, [
+    UserData(UserDataType.CHECK_BOX, 'Integer Values', False, []),
+    UserData(UserDataType.COMBO_BOX, 'Type',  "System", [
+      "System",
+      "NTP",
+      "PTP"])
+  ]),
   'DELSYS': Factory(DelsysWidget, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.OPEN_FILE, 'Key File', '', []),

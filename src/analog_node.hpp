@@ -26,6 +26,10 @@ public:
     THALAMUS_ASSERT(false, "AnalogNode::int_data unimplemented");
     return std::span<const int>();
   }
+  virtual std::span<const uint64_t> ulong_data(int) const {
+    THALAMUS_ASSERT(false, "AnalogNode::ulong_data unimplemented");
+    return std::span<const uint64_t>();
+  }
   virtual int num_channels() const = 0;
   virtual std::chrono::nanoseconds sample_interval(int channel) const = 0;
   virtual std::chrono::nanoseconds time() const = 0;
@@ -40,6 +44,7 @@ public:
   virtual bool has_analog_data() const { return true; }
   virtual bool is_short_data() const { return false; }
   virtual bool is_int_data() const { return false; }
+  virtual bool is_ulong_data() const { return false; }
 
   virtual bool is_transformed() const { return false; }
   virtual double scale(int) const { return 1.0; }
@@ -58,6 +63,8 @@ public:
       return underlying->short_data(channel);
     } else if constexpr (std::is_same<T, int>::value) {
       return underlying->int_data(channel);
+    } else if constexpr (std::is_same<T, uint64_t>::value) {
+      return underlying->ulong_data(channel);
     } else {
       return underlying->data(channel);
     }
@@ -80,6 +87,9 @@ template <typename T> void visit_node(AnalogNode *node, T callable) {
     callable(&wrapper);
   } else if (node->is_int_data()) {
     AnalogNodeWrapper<int> wrapper(node);
+    callable(&wrapper);
+  } else if (node->is_ulong_data()) {
+    AnalogNodeWrapper<uint64_t> wrapper(node);
     callable(&wrapper);
   } else {
     AnalogNodeWrapper<double> wrapper(node);
