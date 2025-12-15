@@ -2,6 +2,7 @@
 #include <modalities_util.hpp>
 #include <thalamus/async.hpp>
 #include <fcntl.h>
+#include <sys/timex.h>
 
 using namespace thalamus;
 
@@ -29,6 +30,7 @@ struct WallClockNode::Impl {
   };
   Type type = Type::System;
   bool integer_values = false;
+  boost::signals2::scoped_connection state_connection;
 
   Impl(ObservableDictPtr _state, boost::asio::io_context &io_context,
        NodeGraph *, WallClockNode *_outer)
@@ -99,14 +101,16 @@ struct WallClockNode::Impl {
       }
       case Type::PTP: {
         clock_gettime(clkid, &ts);
-        system_time = std::chrono::seconds(ts.tv_sec) + std::chrono::nanoseconds(ts.tv_nsec);
+        system_time = std::chrono::duration_cast<std::chrono::system_clock::duration>(
+          std::chrono::seconds(ts.tv_sec) + std::chrono::nanoseconds(ts.tv_nsec));
         break;
       }
-#endif
+#else
       default:
-        system_time = 0ns;
+        system_time = std::chrono::system_clock::duration(0);
+#endif
     }
-    system_time_ulong = std::chrono::duration_cast<std::chrono::nanoseconds>(system_time).count();
+    system_time_ulong = uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(system_time).count());
     system_time_double = double(system_time_ulong);
     outer->ready(outer);
     timer.expires_after(1s);
@@ -130,7 +134,7 @@ std::span<const double> WallClockNode::data(int) const {
 }
   
 std::span<const uint64_t> WallClockNode::ulong_data(int) const {
-  return std::span<const double>(&impl->system_time_ulong, &impl->system_time_ulong+1);
+  return std::span<uint64_t>(&impl->system_time_ulong, &impl->system_time_ulong+1);
 }
 
 bool WallClockNode::is_ulong_data() const {
