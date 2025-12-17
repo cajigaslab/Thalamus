@@ -460,6 +460,15 @@ FACTORIES = {
     UserData(UserDataType.DEFAULT, 'Device 0', 'PXI1Slot4', []),
     UserData(UserDataType.DEFAULT, 'Device 1', 'PXI1Slot5', []),
   ]),
+  'FREQUENCY': Factory(None, [
+    UserData(UserDataType.SPINBOX, 'Channel Number', 0, []),
+    UserData(UserDataType.CHECK_BOX, 'Alert', False, []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Expected Frequency', -1.0, []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Expected Frequency Std', -1.0, []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Allowed Error (%)', -1.0, []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Threshold', 2.5, []),
+    UserData(UserDataType.DEFAULT, 'Source', '', []),
+  ]),
 }
 
 FACTORY_NAMES = {}

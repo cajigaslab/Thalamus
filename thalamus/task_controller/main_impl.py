@@ -216,6 +216,7 @@ async def async_main() -> None:
     window.set_task_context(task_context)
 
   controller = ControlWindow(window, task_context, ConfigData(user_config, arguments.config), done_future)
+  servicer.window = controller
   controller.resize(1024, 768)
   controller.move(
     (screen_geometry.width()-controller.width()) // 2 + 50,

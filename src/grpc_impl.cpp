@@ -1268,8 +1268,8 @@ Service::graph(::grpc::ServerContext *context,
             auto offset = is_transformed ? node->offset(int(channel)) : 0.0;
             visit_node(node, [&](auto wrapper) {
               auto data = wrapper->data(int(channel));
-              for (double sample_raw : data) {
-                double sample = sample_raw * scale + offset;
+              for (auto sample_raw : data) {
+                double sample = double(sample_raw) * scale + offset;
                 auto wrote = current_time >= bin_end;
                 while (current_time >= bin_end) {
                   response.add_bins(min);
