@@ -39,6 +39,7 @@
 #include <delsys_node.hpp>
 #include <ceci_node.hpp>
 #include <thalamus/frequency_node.hpp>
+#include <thalamus/samplemonitor_node.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -167,6 +168,7 @@ public:
         //{"HEXASCOPE", new NodeFactory<HexascopeNode>()},
         {"DELSYS", new NodeFactory<DelsysNode>()},
         {"FREQUENCY", new NodeFactory<FrequencyNode>()},
+        {"SAMPLE_MONITOR", new NodeFactory<SampleMonitorNode>()},
         {"ARUCO", new NodeFactory<ArucoNode>()}};
 
     using namespace std::placeholders;
