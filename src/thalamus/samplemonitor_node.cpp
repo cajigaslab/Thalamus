@@ -30,8 +30,8 @@ struct SampleMonitorNode::Impl {
     std::vector<int> counts;
     std::vector<std::chrono::nanoseconds> sample_intervals;
     std::string node_name;
-    std::vector<std::chrono::nanoseconds> last_poll;
-    std::vector<std::chrono::nanoseconds> last_sample;
+    std::vector<std::chrono::nanoseconds> start_time;
+    std::vector<std::chrono::nanoseconds> end_time;
     
     Connection(NodeGraph *_graph) : graph(_graph) {}
 
@@ -55,28 +55,28 @@ struct SampleMonitorNode::Impl {
             return;
           }
 
-          auto num_channels = analog_node->num_channels();
-          counts.resize(size_t(num_channels), 0);
-          sample_intervals.resize(size_t(num_channels), 0ns);
-          names.resize(size_t(num_channels), "");
-          last_poll.resize(size_t(num_channels), 0ns);
-          last_sample.resize(size_t(num_channels), 0ns);
-          auto time = analog_node->time();
+          auto num_channels = size_t(analog_node->num_channels());
+          counts.resize(num_channels, 0);
+          sample_intervals.resize(num_channels, 0ns);
+          names.resize(num_channels, "");
+          start_time.resize(num_channels, -1ns);
+          end_time.resize(num_channels, -1ns);
+          auto now = analog_node->time();
 
           visit_node(analog_node, [&](auto wrap_node) {
-            for(auto i = 0;i < num_channels;++i) {
-              auto sample_interval = analog_node->sample_interval(i);
-              if(sample_interval == 0ns) {
+            for(size_t i = 0;i < num_channels;++i) {
+              auto ii = int(i);
+              if(start_time[i] < 0ns) {
+                start_time[i] = now;
                 continue;
               }
+              end_time[i] = now;
 
-              auto num_samples = wrap_node->data(i).size();
-              counts[size_t(i)] += num_samples;
-              sample_intervals[size_t(i)] = sample_interval;
-              last_sample[size_t(i)] = 
+              counts[i] += wrap_node->data(ii).size();
+              sample_intervals[i] = analog_node->sample_interval(ii);
 
-              if(names[size_t(i)].empty()) {
-                names[size_t(i)] = node_name + " " + std::string(wrap_node->name(i));
+              if(names[i].empty()) {
+                names[i] = node_name + " " + std::string(wrap_node->name(ii));
               }
             }
           });
@@ -103,7 +103,8 @@ public:
   std::vector<double> measured;
   std::vector<double> expected;
   std::vector<double> difference;
-  std::vector<std::string_view> names;
+  std::vector<std::string> names;
+  std::chrono::nanoseconds last_alert = 0ns;
 
   void on_timer(const boost::system::error_code& error) {
     if (error.value() == boost::asio::error::operation_aborted) {
@@ -112,29 +113,59 @@ public:
     THALAMUS_ASSERT(!error, "Unexpected error");
 
     time = MovableSteadyClock::now().time_since_epoch();
-    auto elapsed = time - last_publish;
-    auto elapsed_seconds = double(elapsed.count())/1e9;
 
     size_t num_channels = 0;
     for(auto& connection : connections) {
       changed = changed || connection.changed;
+      connection.changed = false;
       num_channels += connection.counts.size();
+    }
+    if(changed) {
+      outer->channels_changed(outer);
+      changed = false;
     }
 
     measured.assign(num_channels, 0.0);
     expected.assign(num_channels, 0.0);
     difference.assign(num_channels, 0.0);
-    names.assign(num_channels, "");
+    names.assign(3*num_channels, "");
 
     size_t i = 0;
     for(auto& connection : connections) {
       for(size_t j = 0;j < connection.counts.size();++j) {
         auto sample_interval_ns = connection.sample_intervals[j].count();
-        expected[i] = sample_interval_ns ? 1e9/double(connection.sample_intervals[j].count()) : 0.0;
-        measured[i] = connection.counts[j]/elapsed_seconds;
-        connection.counts[j] = 0;
+        auto start_time = connection.start_time[j];
+        auto end_time = connection.end_time[j];
+        if(sample_interval_ns == 0 || start_time < 0ns || end_time < 0ns) {
+          continue;
+        }
+        auto duration = end_time - start_time;
+        auto duration_s = double(duration.count())/1e9;
+
+        auto expected_val = sample_interval_ns ? 1e9/double(connection.sample_intervals[j].count()) : 0.0;
+        auto measured_val = connection.counts[j]/duration_s;
+        if(time - last_alert > 10s && allowed_error > 0.0 && std::abs(measured_val - expected_val) > allowed_error*expected_val) {
+          std::string_view message = "Sample rate is outside expected parameters";
+          graph->log(message);
+          if(alert) {
+            thalamus_grpc::Dialog dialog;
+            dialog.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_ERROR);
+            dialog.set_title("SAMPLE_MONITOR");
+            dialog.set_message(message);
+            graph->dialog(dialog);
+          }
+          last_alert = time;
+        }
+        expected[i] = expected_val;
+        measured[i] = measured_val;
         difference[i] = measured[i] - expected[i];
-        names[i] = connection.names[j];
+        names[3*i] = connection.names[j] + " Measured";
+        names[3*i+1] = connection.names[j] + " Expected";
+        names[3*i+2] = connection.names[j] + " Difference";
+
+        connection.counts[j] = 0;
+        connection.start_time[j] = -1ns;
+        connection.end_time[j] = -1ns;
         ++i;
       }
     }
@@ -146,6 +177,9 @@ public:
     timer.async_wait(std::bind(&Impl::on_timer, this, _1));
   }
 
+  bool alert = false;
+  double allowed_error = -1.0;
+
   void on_change(ObservableCollection* source,
                  ObservableCollection::Action a,
                  const ObservableCollection::Key &k,
@@ -156,6 +190,10 @@ public:
       if(key_str == "Nodes") {
         nodes = std::get<ObservableListPtr>(v);
         nodes->recap(std::bind(&Impl::on_change, this, nodes.get(), _1, _2, _3));
+      } else if (key_str == "Alert") {
+        alert = std::get<bool>(v);
+      } else if (key_str == "Allowed Error (%)") {
+        allowed_error = std::get<double>(v)/100.0;
       }
     }
 
@@ -196,10 +234,24 @@ std::string SampleMonitorNode::type_name() { return "SAMPLE_MONITOR"; }
 std::chrono::nanoseconds SampleMonitorNode::time() const { return impl->time; }
 
 std::span<const double> SampleMonitorNode::data(int channel) const {
-  return std::span<const double>(impl->difference.begin() + channel, impl->difference.begin() + channel + 1);
+  if (size_t(channel) < impl->measured.size()) {
+    return std::span<const double>(impl->measured.begin() + channel,
+                                   impl->measured.begin() + channel + 1);
+  }
+  channel -= impl->measured.size();
+  if (size_t(channel) < impl->expected.size()) {
+    return std::span<const double>(impl->expected.begin() + channel,
+                                   impl->expected.begin() + channel + 1);
+  }
+  channel -= impl->expected.size();
+  if (size_t(channel) < impl->difference.size()) {
+    return std::span<const double>(impl->difference.begin() + channel,
+                                   impl->difference.begin() + channel + 1);
+  }
+  return std::span<const double>(); 
 }
 
-int SampleMonitorNode::num_channels() const { return int(impl->difference.size()); }
+int SampleMonitorNode::num_channels() const { return int(impl->measured.size() + impl->expected.size() + impl->difference.size()); }
 
 std::string_view SampleMonitorNode::name(int channel) const {
   return impl->names[size_t(channel)];
@@ -210,7 +262,7 @@ std::span<const std::string> SampleMonitorNode::get_recommended_channels() const
 }
 
 std::chrono::nanoseconds SampleMonitorNode::sample_interval(int) const {
-  return 0ns;
+  return 0s;
 }
 
 void SampleMonitorNode::inject(const thalamus::vector<std::span<double const>> &,

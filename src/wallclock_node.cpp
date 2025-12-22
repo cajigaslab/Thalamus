@@ -2,13 +2,16 @@
 #include <modalities_util.hpp>
 #include <thalamus/async.hpp>
 #include <fcntl.h>
+#ifndef _WIN32
 #include <sys/timex.h>
+#endif
 
 using namespace thalamus;
 
 struct WallClockNode::Impl {
   ObservableDictPtr state;
   MovableSteadyTimer timer;
+  NodeGraph* graph;
   WallClockNode* outer;
 
   std::chrono::steady_clock::duration steady_time;
@@ -33,8 +36,8 @@ struct WallClockNode::Impl {
   boost::signals2::scoped_connection state_connection;
 
   Impl(ObservableDictPtr _state, boost::asio::io_context &io_context,
-       NodeGraph *, WallClockNode *_outer)
-      : state(_state), timer(io_context), outer(_outer) {
+       NodeGraph * _graph, WallClockNode *_outer)
+      : state(_state), timer(io_context), graph(_graph), outer(_outer) {
 
     state_connection =
         state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
@@ -51,10 +54,12 @@ struct WallClockNode::Impl {
     outer->channels_changed(outer);
     if (key_str == "Type") {
       auto val_str = std::get<std::string>(v);
+#ifndef _WIN32
       if(fd >= 0) {
         close(fd);
         fd = -1;
       }
+#endif
 
       if(val_str == "System") {
         type = Type::System;
@@ -106,7 +111,8 @@ struct WallClockNode::Impl {
         break;
       }
 #else
-      default:
+      case Type::NTP:
+      case Type::PTP:
         system_time = std::chrono::system_clock::duration(0);
 #endif
     }
