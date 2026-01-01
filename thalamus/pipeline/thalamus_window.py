@@ -477,6 +477,7 @@ FACTORIES = {
   'SAMPLE_MONITOR': Factory(SampleMonitorWidget, [
     UserData(UserDataType.CHECK_BOX, 'Alert', False, []),
     UserData(UserDataType.DOUBLE_SPINBOX, 'Allowed Error (%)', -1.0, []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Interval (s)', 1.0, []),
   ]),
 }
 

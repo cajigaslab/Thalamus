@@ -2,7 +2,7 @@
 
 #include <thalamus/samplemonitor_node.hpp>
 #include <thalamus/async.hpp>
-#include <modalities_util.hpp>
+#include <thalamus/modalities_util.hpp>
 #include <vector>
 
 #include <chrono>
@@ -105,6 +105,7 @@ public:
   std::vector<double> difference;
   std::vector<std::string> names;
   std::chrono::nanoseconds last_alert = 0ns;
+  std::chrono::milliseconds interval = 1s;
 
   void on_timer(const boost::system::error_code& error) {
     if (error.value() == boost::asio::error::operation_aborted) {
@@ -173,7 +174,7 @@ public:
     outer->ready(outer);
 
     last_publish = time;
-    timer.expires_after(1s);
+    timer.expires_after(interval);
     timer.async_wait(std::bind(&Impl::on_timer, this, _1));
   }
 
@@ -194,6 +195,8 @@ public:
         alert = std::get<bool>(v);
       } else if (key_str == "Allowed Error (%)") {
         allowed_error = std::get<double>(v)/100.0;
+      } else if (key_str == "Interval (s)") {
+        interval = std::chrono::milliseconds(int(std::get<double>(v)*1000.0));
       }
     }
 

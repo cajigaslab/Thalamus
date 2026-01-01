@@ -1,8 +1,8 @@
 #pragma once
 
-#include <analog_node.hpp>
-#include <base_node.hpp>
-#include <state.hpp>
+#include <thalamus/analog_node.hpp>
+#include <thalamus/base_node.hpp>
+#include <thalamus/state.hpp>
 #include <string>
 
 #ifdef __clang__

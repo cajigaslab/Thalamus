@@ -1,6 +1,6 @@
 #include <thalamus/tracing.hpp>
-#include "node_graph_impl.hpp"
-#include <state.hpp>
+#include "thalamus/node_graph_impl.hpp"
+#include <thalamus/state.hpp>
 #include <thalamus.hpp>
 #ifdef _WIN32
 #include <timeapi.h>
@@ -8,8 +8,8 @@
 #include <chrono>
 #include <thalamus_config.h>
 
-#include "grpc_impl.hpp"
-#include <state_manager.hpp>
+#include "thalamus/grpc_impl.hpp"
+#include <thalamus/state_manager.hpp>
 #include <thalamus/file.hpp>
 #include <thalamus/thread.hpp>
 #include <thalamus/async.hpp>
