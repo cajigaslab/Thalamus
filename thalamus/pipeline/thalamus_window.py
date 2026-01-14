@@ -45,6 +45,7 @@ from .storage2_widget import Storage2Widget
 from .persistence_widget import PersistenceWidget
 from .run2_widget import Run2Widget
 from .delsys_widget import DelsysWidget
+from .samplemonitor_widget import SampleMonitorWidget
 from ..util import NodeSelector
 from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
@@ -80,7 +81,7 @@ class UserData(typing.NamedTuple):
   type: UserDataType
   key: str
   value: typing.Any
-  options: typing.List[str]
+  options: typing.Union[typing.List[str], typing.Callable[[ObservableDict], typing.List[str]]]
 
 class Factory(typing.NamedTuple):
   create_widget: typing.Optional[typing.Callable[[ObservableDict, thalamus_pb2_grpc.ThalamusStub], QWidget]]
@@ -206,6 +207,10 @@ def create_alpha_omega_widget(node: ObservableDict, stub: thalamus_pb2_grpc.Thal
 
   return result
 
+def get_node_names(config):
+  nodes = config.get('nodes', [])
+  return [''] + [n['name'] for n in nodes]
+
 FACTORIES = {
   'NONE': Factory(None, []),
   'STIM_PRINTER': Factory(None, []),
@@ -226,7 +231,7 @@ FACTORIES = {
   ]),
   'NIDAQ_OUT': Factory(StimWidget, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
-    UserData(UserDataType.DEFAULT, 'Source', '', []),
+    UserData(UserDataType.COMBO_BOX, 'Source', '', get_node_names),
     UserData(UserDataType.CHECK_BOX, 'Fast Foward', False, []),
     UserData(UserDataType.DEFAULT, 'Channel', 'Dev1/ao0', []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
@@ -343,7 +348,7 @@ FACTORIES = {
     UserData(UserDataType.DOUBLE_SPINBOX, 'Y Gain', 0.0, []),
     UserData(UserDataType.CHECK_BOX, 'Invert X', False, []),
     UserData(UserDataType.CHECK_BOX, 'Invert Y', False, []),
-    UserData(UserDataType.DEFAULT, 'Source', '', []),
+    UserData(UserDataType.COMBO_BOX, 'Source', '', get_node_names),
     UserData(UserDataType.CHECK_BOX, 'Computing', False, []),
     UserData(UserDataType.CHECK_BOX, 'Render Thresholded', False, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
@@ -379,7 +384,7 @@ FACTORIES = {
   'LUA': Factory(lambda c, s: LuaWidget(c, s), [
     UserData(UserDataType.DEFAULT, 'Source', '', [])]),
   'TOUCH_SCREEN': Factory(TouchScreenWidget, [
-    UserData(UserDataType.DEFAULT, 'Source', '', [])]),
+    UserData(UserDataType.COMBO_BOX, 'Source', '', get_node_names)]),
   'REMOTE': Factory(None, [
     UserData(UserDataType.DEFAULT, 'Address', '', []),
     UserData(UserDataType.DEFAULT, 'Node', '', []),
@@ -444,7 +449,13 @@ FACTORIES = {
       "DICT_ARUCO_MIP_36h12"])
   ]),
   'HEXASCOPE': Factory(HexascopeWidget, []),
-  'WALLCLOCK': Factory(None, []),
+  'WALLCLOCK': Factory(None, [
+    UserData(UserDataType.CHECK_BOX, 'Integer Values', False, []),
+    UserData(UserDataType.COMBO_BOX, 'Type',  "System", [
+      "System",
+      "NTP",
+      "PTP"])
+  ]),
   'DELSYS': Factory(DelsysWidget, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.OPEN_FILE, 'Key File', '', []),
@@ -453,6 +464,20 @@ FACTORIES = {
   'CECI': Factory(None, [
     UserData(UserDataType.DEFAULT, 'Device 0', 'PXI1Slot4', []),
     UserData(UserDataType.DEFAULT, 'Device 1', 'PXI1Slot5', []),
+  ]),
+  'FREQUENCY': Factory(None, [
+    UserData(UserDataType.SPINBOX, 'Channel Number', 0, []),
+    UserData(UserDataType.CHECK_BOX, 'Alert', False, []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Expected Frequency', -1.0, []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Expected Frequency Std', -1.0, []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Allowed Error (%)', -1.0, []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Threshold', 2.5, []),
+    UserData(UserDataType.DEFAULT, 'Source', '', []),
+  ]),
+  'SAMPLE_MONITOR': Factory(SampleMonitorWidget, [
+    UserData(UserDataType.CHECK_BOX, 'Alert', False, []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Allowed Error (%)', -1.0, []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Interval (s)', 1.0, []),
   ]),
 }
 
@@ -483,9 +508,10 @@ class FilePicker(QWidget):
     button.clicked.connect(on_click)
 
 class Delegate(QStyledItemDelegate):
-  def __init__(self, tree):
+  def __init__(self, tree, config):
     super().__init__()
     self.tree = tree
+    self.config = config
 
   def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
     user_data = typing.cast(UserData, index.data(Qt.ItemDataRole.UserRole))
@@ -517,9 +543,13 @@ class Delegate(QStyledItemDelegate):
       return super().setEditorData(editor, index)
     elif user_data.type == UserDataType.COMBO_BOX:
       combo_box = typing.cast(QComboBox, editor)
-      for value in user_data.options:
+      if callable(user_data.options):
+        options = user_data.options(self.config)
+      else:
+        options = user_data.options
+      for value in options:
         combo_box.addItem(FACTORY_NAMES[value] if index.column() == 0 else value, value)
-      for i, value in enumerate(user_data.options):
+      for i, value in enumerate(options):
         if value == index.data():
           combo_box.setCurrentIndex(i)
     elif user_data.type == UserDataType.CHECK_BOX:
@@ -1588,7 +1618,7 @@ class ThalamusWindow(QMainWindow):
     remove_button = QPushButton('Remove')
     remove_button.clicked.connect(self.on_remove)
     self.view = QTreeView()
-    self.view.setItemDelegate(Delegate(self.view))
+    self.view.setItemDelegate(Delegate(self.view, self.state))
 
     self.model = ItemModel(self.state['nodes'], self.stub, self.address)
     self.view.setModel(self.model)

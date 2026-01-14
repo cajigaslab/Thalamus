@@ -1,5 +1,5 @@
 #include <chrono>
-#include <modalities.h>
+#include <thalamus/modalities.h>
 
 #ifdef __clang__
 #pragma clang diagnostic push

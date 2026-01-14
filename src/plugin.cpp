@@ -4,7 +4,7 @@
 #include <boost/asio.hpp>
 #include <boost/program_options.hpp>
 #include <future>
-#include <state.hpp>
+#include <thalamus/state.hpp>
 #ifdef _WIN32
 #include <timeapi.h>
 #endif

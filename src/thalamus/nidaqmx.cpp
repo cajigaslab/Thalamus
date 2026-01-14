@@ -1,7 +1,7 @@
 #include <thalamus/nidaqmx.hpp>
 #include <mutex>
 #include <string>
-#include <util.hpp>
+#include <thalamus/util.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -51,6 +51,9 @@ using namespace thalamus;
 #endif
 
 DAQmxAPI* DAQmxAPI::get_singleton() {
+#ifndef _WIN32
+  return nullptr;
+#endif
   static std::mutex mutex;
   std::lock_guard<std::mutex> lock(mutex);
 
