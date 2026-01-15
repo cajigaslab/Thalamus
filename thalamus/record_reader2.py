@@ -386,7 +386,7 @@ def read_record(stream) -> typing.Optional[StorageRecord]:
     return
 
   size, = struct.unpack(LONG, data)
-  if size > MAX_SIZE:
+  if size > MAX_SIZE or size == 0:
     return
 
   data = stream.read(size)
