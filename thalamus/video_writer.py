@@ -104,6 +104,12 @@ class MultiVideoWriter:
   def __init__(self, pattern: str = '%s.mp4'):
     self.pattern = pattern
     self.writers: typing.Dict[str, VideoWriter] = {}
+  
+  def get_paths(self) -> typing.Generator[pathlib.Path, None, None]:
+    for w in self.writers.values():
+      filename = w.filename
+      assert filename is not None
+      yield filename
 
   def write(self, record: StorageRecord):
     body = record.WhichOneof('body')
