@@ -27,6 +27,9 @@ if HAS_QT6:
                             QTimer, QSortFilterProxyModel, PYQT_VERSION_STR)
   from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 
+  def qt_is_dark_mode():
+    return QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark
+
   def qt_to_polygonf(polygon):
     return polygon.toPolygonF()
 
@@ -67,13 +70,13 @@ else:
                            QOpenGLFramebufferObject, QPen, QStandardItem, QTextCursor, QFontMetrics, QCloseEvent,
                            QMoveEvent, QResizeEvent, QMatrix4x4, QVector3D, QPaintEvent, QQuaternion, QWheelEvent,
                            QOpenGLBuffer, QOpenGLShaderProgram, QOpenGLShader, QIcon, QFontDatabase, QRadialGradient,
-                           QWheelEvent)
+                           QWheelEvent, QGuiApplication)
   from PyQt5.QtWidgets import (QWidget, QProgressDialog, QSizePolicy, QAbstractScrollArea, QGridLayout, QSlider, 
                                QSpinBox, QLabel, QVBoxLayout, QHBoxLayout, QComboBox, QSpinBox, QCheckBox, QPushButton,
                                QDialog, QRadioButton, QTextEdit, QMainWindow, QFileDialog, QMenu, QInputDialog, 
                                QLineEdit, QGroupBox, QFormLayout, QMessageBox, QTabWidget, QDoubleSpinBox, QDockWidget, 
                                QApplication, QOpenGLWidget, QAction, QAbstractItemView, QTreeView, QTableView,
-                               QListView, QMenuBar, QItemDelegate, QSplitter, QTreeWidget, QTreeWidgetItem,
+                               QListView, QMenuBar, QItemDelegate, QSplitter, QTreeWidget, QTreeWidgetItem, QStyledItemDelegate,
                                QListWidget, QTableWidget, QTableWidgetItem, QWizard, QWizardPage, QProgressBar,
                                QStyleOptionViewItem, QScrollArea, QColorDialog, QFrame, QHeaderView, QButtonGroup)
   from PyQt5.QtCore import (QPoint, QRect, QPointF, Qt, QSize, QSizeF, QDir, QItemSelectionModel, QModelIndex, QTimer,
@@ -81,6 +84,9 @@ else:
                             QItemSelection, QVariant, QUrl, QSortFilterProxyModel, PYQT_VERSION_STR)
   from PyQt5.QtMultimedia import QSound, QMediaPlayer, QAbstractVideoSurface, QVideoFrame, QMediaContent
   from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+
+  def qt_is_dark_mode():
+    return False
 
   def qt_to_polygonf(polygon) -> QPolygonF:
     return QPolygonF(polygon)

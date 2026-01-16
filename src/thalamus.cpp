@@ -1,6 +1,6 @@
 #include <thalamus/tracing.hpp>
-#include "node_graph_impl.hpp"
-#include <state.hpp>
+#include "thalamus/node_graph_impl.hpp"
+#include <thalamus/state.hpp>
 #include <thalamus.hpp>
 #ifdef _WIN32
 #include <timeapi.h>
@@ -8,8 +8,8 @@
 #include <chrono>
 #include <thalamus_config.h>
 
-#include "grpc_impl.hpp"
-#include <state_manager.hpp>
+#include "thalamus/grpc_impl.hpp"
+#include <thalamus/state_manager.hpp>
 #include <thalamus/file.hpp>
 #include <thalamus/thread.hpp>
 #include <thalamus/async.hpp>
@@ -123,6 +123,14 @@ int main(int argc, char **argv) {
       "GRPC Port")("state-url,s", boost::program_options::value<std::string>(),
                    "Address of Thalamus instance that manages state");
 
+#ifndef _WIN32
+  desc.add_options()
+    ("main-sched-policy", boost::program_options::value<std::string>()->default_value(""), "pthreads schduling policy for the main thread")
+    ("main-sched-priority", boost::program_options::value<int>()->default_value(-1), "pthreads schduling priority for the main thread")
+    ("pool-sched-policy", boost::program_options::value<std::string>()->default_value(""), "pthreads schduling policy for the default thread pool")
+    ("pool-sched-priority", boost::program_options::value<int>()->default_value(-1), "pthreads schduling priority for the default thread pool");
+#endif
+
   boost::program_options::variables_map vm;
   boost::program_options::store(
       boost::program_options::command_line_parser(argc, argv)
@@ -135,6 +143,43 @@ int main(int argc, char **argv) {
     std::cout << desc << std::endl;
     return 0;
   }
+
+#ifndef _WIN32
+  std::map<std::string, int> sched_policies = {
+    {"SCHED_OTHER", SCHED_OTHER},
+    {"SCHED_IDLE", SCHED_IDLE},
+    {"SCHED_BATCH", SCHED_BATCH},
+    {"SCHED_FIFO", SCHED_FIFO},
+    {"SCHED_RR", SCHED_RR}
+  };
+  auto main_sched_policy_name = vm["main-sched-policy"].as<std::string>();
+  auto main_sched_priority = vm["main-sched-priority"].as<int>();
+  auto pool_sched_policy_name = vm["pool-sched-policy"].as<std::string>();
+  auto pool_sched_priority = vm["pool-sched-priority"].as<int>();
+  THALAMUS_LOG(info) << "Main thread config";
+  if(!main_sched_policy_name.empty() && main_sched_priority > -1) {
+    THALAMUS_LOG(info) << "Main thread setting priority " << main_sched_policy_name << " " << main_sched_priority;
+    auto main_sched_policy = sched_policies[main_sched_policy_name];
+
+    struct sched_param param;
+    param.sched_priority = main_sched_priority;
+
+    pthread_t thId = pthread_self();
+    pthread_setschedparam(thId, main_sched_policy, &param);
+  } else {
+    THALAMUS_LOG(info) << "Main thread using default priority";
+  }
+
+  std::optional<int> pool_sched_policy_opt;
+  if(!pool_sched_policy_name.empty()) {
+    pool_sched_policy_opt = sched_policies[pool_sched_policy_name];
+  }
+
+  std::optional<int> pool_sched_priority_opt;
+  if(pool_sched_priority > -1) {
+    pool_sched_priority_opt = pool_sched_priority;
+  }
+#endif
 
   std::string state_url;
   if (vm.count("state-url") > 0) {
@@ -192,7 +237,11 @@ int main(int argc, char **argv) {
   grpc::ServerBuilder builder;
   builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
   std::unique_ptr<NodeGraphImpl> node_graph(
-      new NodeGraphImpl(nodes, io_context, system_start, steady_start, stub.get()));
+      new NodeGraphImpl(nodes, io_context, system_start, steady_start, stub.get(),
+#ifndef _WIN32
+                        pool_sched_policy_opt, pool_sched_priority_opt
+#endif
+    ));
   Service service(state, io_context, *node_graph, state_url);
   node_graph->set_service(&service);
   builder.RegisterService(&service);

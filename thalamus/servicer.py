@@ -32,6 +32,7 @@ class ThalamusServicer(thalamus_pb2_grpc.ThalamusServicer):
   def __init__(self, config):
     super().__init__()
     self.config = config
+    self.window = None
     self.queues = []
     self.peer_name_to_queue = {}
     self.condition = asyncio.Condition()
@@ -276,12 +277,21 @@ class ThalamusServicer(thalamus_pb2_grpc.ThalamusServicer):
     return thalamus_pb2.Empty()
 
   async def dialog(self, request: thalamus_pb2.Dialog, context):
+    box = QMessageBox(self.window)
     if request.type == thalamus_pb2.Dialog.Type.INFO:
-      QMessageBox.information(None, request.title, request.message)
+      box.setIcon(QMessageBox.Icon.Information)
     elif request.type == thalamus_pb2.Dialog.Type.WARN:
-      QMessageBox.warning(None, request.title, request.message)
+      box.setIcon(QMessageBox.Icon.Warning)
     elif request.type == thalamus_pb2.Dialog.Type.ERROR:
-      QMessageBox.critical(None, request.title, request.message)
+      box.setIcon(QMessageBox.Icon.Critical)
+      
+    box.setWindowTitle(request.title)
+    box.setText(request.message)
+    box.addButton('Ok', QMessageBox.ButtonRole.AcceptRole)
+    box.setModal(False)
+
+    box.show()
+
     return thalamus_pb2.Empty()
 
 

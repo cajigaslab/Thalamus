@@ -8,19 +8,10 @@
 #ifdef _WIN32
 #include <WinSock2.h>
 #endif
-#include <base_node.hpp>
-#include <h5handle.hpp>
-#include <xsens_node.hpp>
+#include <thalamus/base_node.hpp>
+#include <thalamus/h5handle.hpp>
+#include <thalamus/xsens_node.hpp>
 #include <thalamus/record_reader.hpp>
-
-#ifdef _WIN32
-#include <WinSock2.h>
-#elif defined(__APPLE__)
-#include <arpa/inet.h>
-#else
-#include <endian.h>
-#define htonll(x) htobe64(x)
-#endif
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -351,6 +342,7 @@ static DataCount count_data(const std::string &filename,
     case thalamus_grpc::StorageRecord::BODY_NOT_SET:
     case thalamus_grpc::StorageRecord::kCompressed:
     case thalamus_grpc::StorageRecord::kMetadata:
+    case thalamus_grpc::StorageRecord::kFile:
       break;
       // std::cout << "Unhandled record type " << record->body_case() <<
       // std::endl;
@@ -774,6 +766,7 @@ int generate_csv(boost::program_options::variables_map &vm) {
     case thalamus_grpc::StorageRecord::kText:
     case thalamus_grpc::StorageRecord::kCompressed:
     case thalamus_grpc::StorageRecord::kMetadata:
+    case thalamus_grpc::StorageRecord::kFile:
     case thalamus_grpc::StorageRecord::BODY_NOT_SET:
       break;
     }
@@ -1481,6 +1474,7 @@ int main(int argc, char **argv) {
       case thalamus_grpc::StorageRecord::BODY_NOT_SET:
       case thalamus_grpc::StorageRecord::kCompressed:
       case thalamus_grpc::StorageRecord::kMetadata:
+      case thalamus_grpc::StorageRecord::kFile:
         break;
         // std::cout << "Unhandled record type " << record->body_case() <<
         // std::endl;

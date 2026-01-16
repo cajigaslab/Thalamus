@@ -852,7 +852,8 @@ class Canvas(QOpenGLWidget):
             x = message.data[span.end-1]
           elif span.name == 'Y' and span.begin < span.end:
             y = message.data[span.end-1]
-        assert x is not None and y is not None
+        if x is None or y is None:
+            continue
 
         voltage_point = QPointF(x, -y)
 

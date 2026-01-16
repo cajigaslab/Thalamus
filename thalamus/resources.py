@@ -10,8 +10,7 @@ try:
       arg2 = arg1
       arg1 = thalamus
       
-    with importlib.resources.path(arg1, arg2) as p:
-      return str(p)
+    return str(importlib.resources.files(arg1).joinpath(arg2))
         
   def read_text(arg1: typing.Any, arg2: str = None) -> str:
     if arg2 is None:

@@ -78,6 +78,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   if 'generate' in config_settings:
     return
 
+  no_native = 'no-native' in config_settings
   is_android = 'android' in config_settings
   is_release = 'release' in config_settings
   code_coverage = 'code-coverage' in config_settings
@@ -145,18 +146,6 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
 
   write_metadata(metadata, f'thalamus-{version}.dist-info/METADATA')
 
-  version_output = subprocess.check_output(['cmake', '--version'])
-  try:
-    lines = [l.strip() for l in version.split("\n")]
-    version_line = lines[0]
-    version_text = tokens.split(' ')[-1]
-    cmake_version = packaging.version.Version(version_text)
-    #grpc cares dependency requires cmake >= 3.5
-    assert cmake_version < packaging.version.Version('3.5')
-  except:
-    #If cmake version check fails give the benefit of the doubt
-    pass
-
   cmake_command = [
     'cmake',
     '-S', pathlib.Path.cwd(),
@@ -203,22 +192,23 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     cmake_command += [f'-DANDROID_NDK={ndk}']
     cmake_command += [f'-DCMAKE_TOOLCHAIN_FILE={toolchain}']
 
-  cmake_command = [str(c) for c in cmake_command]
-  print(cmake_command)
-  if not (build_path / 'CMakeCache.txt').exists() or do_config:
-    subprocess.check_call(cmake_command)
-  shutil.copy(build_path / 'compile_commands.json', 'compile_commands.json')
+  if not no_native:
+    cmake_command = [str(c) for c in cmake_command]
+    print(cmake_command)
+    if not (build_path / 'CMakeCache.txt').exists() or do_config:
+      subprocess.check_call(cmake_command)
+    shutil.copy(build_path / 'compile_commands.json', 'compile_commands.json')
 
-  command = ['cmake', '--build', build_path, '--config', "Release" if is_release else "Debug", '--parallel', str(os.cpu_count())]
-  if target:
-    command += ['--target', target]
-  else:
-    command += ['--target', 'native']
+    command = ['cmake', '--build', build_path, '--config', "Release" if is_release else "Debug", '--parallel', str(os.cpu_count())]
+    if target:
+      command += ['--target', target]
+    else:
+      command += ['--target', 'native']
 
-  command = [str(c) for c in command]
-  print(command)
-  subprocess.check_call(command)
-  shutil.copy('src/plugin.h', 'thalamus/plugin.h')
+    command = [str(c) for c in command]
+    print(command)
+    subprocess.check_call(command)
+    shutil.copy('src/plugin.h', 'thalamus/plugin.h')
 
   files = []
   with open(f'thalamus-{version}.dist-info/RECORD', 'w') as record_file:
@@ -230,9 +220,9 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
       is_native_executable = path.stem == 'native'
       is_dotnet_file = "dotnet" in parents
       if is_dir or in_ignored_dir or has_ignored_suffix and not is_native_executable and not is_dotnet_file:
-        print(path, 'DROP')
+        #print(path, 'DROP')
         continue
-      print(path, 'TAKE')
+      #print(path, 'TAKE')
       files.append(path)
       digest = hashlib.sha256()
       with open(str(path), 'rb') as pack_file:

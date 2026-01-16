@@ -167,9 +167,16 @@ message StorageRecord {
     Text text = 7;
     Compressed compressed = 8;
     Metadata metadata = 9;
+    File file = 10;
   }
   uint64 time = 4;
   string node = 5;
+}
+
+message File {
+  bytes body = 1;
+  string name = 2;
+  string mime = 3;
 }
 
 message ImageRequest {
@@ -315,6 +322,7 @@ message AnalogResponse {
   repeated uint64 ulong_data = 10;
   bool is_ulong_data = 11;
   string redirect = 12;
+  bool is_transformed = 13;
 }
  
 message GraphRequest {
@@ -328,6 +336,8 @@ message Span {
   uint32 begin = 1;
   uint32 end = 2;
   string name = 3;
+  double scale = 4;
+  double offset = 5;
 }
  
 message GraphResponse {

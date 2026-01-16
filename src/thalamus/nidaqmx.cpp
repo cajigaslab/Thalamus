@@ -1,7 +1,7 @@
 #include <thalamus/nidaqmx.hpp>
 #include <mutex>
 #include <string>
-#include <util.hpp>
+#include <thalamus/util.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
