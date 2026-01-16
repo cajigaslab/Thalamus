@@ -45,7 +45,8 @@ public:
     condition.notify_one();
   }
 
-  void start() {
+  void start(std::optional<int> thread_policy = std::nullopt,
+             std::optional<int> thread_priority = std::nullopt) {
     std::lock_guard<std::mutex> lock(mutex);
     if (running) {
       return;
@@ -53,7 +54,22 @@ public:
     running = true;
     for (auto i = 0u; i < num_threads; ++i) {
       auto thread_name = absl::StrFormat("%s[%d]", name, i);
-      threads.emplace_back([&, thread_name] { thread_target(thread_name); });
+      threads.emplace_back([&, thread_name, thread_policy, thread_priority] {
+        THALAMUS_LOG(info) << "Start Pool thread " << thread_name;
+#ifndef _WIN32
+        if(thread_policy && thread_priority) {
+          THALAMUS_LOG(info) << "Pool thread setting priority " << *thread_policy << " " << *thread_priority;
+          struct sched_param param;
+          param.sched_priority = *thread_priority;
+
+          pthread_t thId = pthread_self();
+          pthread_setschedparam(thId, *thread_policy, &param);
+        } else {
+          THALAMUS_LOG(info) << "Pool thread using default priority";
+        }
+#endif
+        thread_target(thread_name);
+      });
     }
   }
 
