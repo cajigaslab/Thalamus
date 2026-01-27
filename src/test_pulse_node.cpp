@@ -46,10 +46,10 @@ struct TestPulseNode::Impl {
     auto err = api->DAQmxCreateTask("",&taskHandle);
     THALAMUS_ASSERT(err >= 0, "");
 
-    err = api->DAQmxCreateDIChan(taskHandle, "Dev1/port0/line0", "", DAQmx_Val_ChanPerLine);
+    err = api->DAQmxCreateDIChan(taskHandle, "PXI1Slot5/port0/line0", "", DAQmx_Val_ChanPerLine);
     THALAMUS_ASSERT(err >= 0, "");
 
-    err = api->DAQmxCfgChangeDetectionTiming(taskHandle,"Dev1/port0/line0","",DAQmx_Val_ContSamps,1);
+    err = api->DAQmxCfgChangeDetectionTiming(taskHandle,"PXI1Slot5/port0/line0","",DAQmx_Val_ContSamps,1);
     THALAMUS_ASSERT(err >= 0, "");
 
     err = api->DAQmxRegisterSignalEvent(taskHandle,DAQmx_Val_ChangeDetectionEvent,0,ChangeDetectionCallback,this);
@@ -88,7 +88,7 @@ struct TestPulseNode::Impl {
         auto span = data->add_spans();
         span->set_begin(0);
         span->set_end(2);
-        span->set_name("Dev1/ao0");
+        span->set_name("PXI1Slot5/ao0");
         data->add_sample_intervals(300000000);
         maybe_stim_node->stim(std::move(request));
 
