@@ -293,10 +293,12 @@ NodeGraphImpl::NodeGraphImpl(ObservableListPtr nodes,
                              boost::asio::io_context &io_context,
                              std::chrono::system_clock::time_point system_time,
                              std::chrono::steady_clock::time_point steady_time,
-                             thalamus_grpc::Thalamus::Stub* stub)
+                             thalamus_grpc::Thalamus::Stub* stub,
+                             std::optional<int> thread_policy,
+                             std::optional<int> thread_priority)
     : impl(new Impl(nodes, io_context, this, system_time, steady_time, stub)) {
   impl->nodes->recap();
-  impl->thread_pool.start();
+  impl->thread_pool.start(thread_policy, thread_priority);
 }
 
 NodeGraphImpl::~NodeGraphImpl() {}

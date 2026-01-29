@@ -25,7 +25,9 @@ public:
   NodeGraphImpl(ObservableListPtr nodes, boost::asio::io_context &io_context,
                 std::chrono::system_clock::time_point,
                 std::chrono::steady_clock::time_point,
-                thalamus_grpc::Thalamus::Stub*);
+                thalamus_grpc::Thalamus::Stub*,
+                std::optional<int> thread_policy = std::nullopt,
+                std::optional<int> thread_priority = std::nullopt);
   ~NodeGraphImpl() override;
   std::optional<std::string> get_type_name(const std::string &type) override;
   void set_service(Service *service);

@@ -4,7 +4,7 @@
 #include <thalamus/state.hpp>
 #include <string>
 #include <thalamus_asio.hpp>
-#include <xsens_node.hpp>
+#include <thalamus/xsens_node.hpp>
 
 #include <thalamus/grpc_impl.hpp>
 #include <thalamus.pb.h>
