@@ -308,8 +308,7 @@ class RecordReader:
   def __enter__(self):
     if self.reader is None:
       assert self.filename is not None
-      self.reader = open(self.filename, 'rb')
-      self.filename = pathlib.Path(self.reader.name)
+      self.reader = self.filename.open('rb')
       self.measure()
     self.start()
     return self
