@@ -1,6 +1,6 @@
 #include <fstream>
 #include <thalamus/file.hpp>
-#include <util.hpp>
+#include <thalamus/util.hpp>
 
 namespace thalamus {
 

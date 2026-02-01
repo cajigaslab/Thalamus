@@ -1,27 +1,16 @@
-import re
 import io
 import sys
 import time
 import zlib
-import json
 import queue
-import shutil
 import typing
 import struct
-import pickle
 import pathlib
-import argparse
 import threading
 import traceback
-import itertools
-import contextlib
 import subprocess
 import collections
-from multiprocessing.pool import ThreadPool
-
-import yaml
-import numpy
-import scipy.io
+from multiprocessing.pool import ThreadPool, AsyncResult
 
 from thalamus.thalamus_pb2 import StorageRecord, Image, Compressed
 import google.protobuf.message
@@ -136,10 +125,13 @@ class RecordReader:
     self.z_queues = {}
     self.image_nodes: typing.List[str] = []
     self.records: collections.deque[typing.Tuple[int, typing.Union[StorageRecord, PendingMessage, None]]] = collections.deque()
+    self.reader_thread_result: AsyncResult | None = None
     if isinstance(file_arg, (str, pathlib.Path)):
+      self.owns_reader = True
       self.filename = pathlib.Path(file_arg)
       self.reader = None
     else:
+      self.owns_reader = False
       self.filename = None
       self.reader = file_arg
       self.measure()
@@ -301,12 +293,16 @@ class RecordReader:
     with self.lock:
       self.running = True
     self.pool.__enter__()
-    self.pool.apply_async(self.reader_thread)
+    self.reader_thread_result = self.pool.apply_async(self.reader_thread)
     #print('start')
 
   def stop(self, type = None, value = None, tb = None):
+    assert self.reader_thread_result is not None
+
     with self.lock:
       self.running = False
+    self.reader_thread_result.wait()
+    
     self.pool.__exit__(type, value, tb)
 
   def __enter__(self):
@@ -320,6 +316,8 @@ class RecordReader:
   
   def __exit__(self, type, value, tb):
     self.stop(type, value, tb)
+    if self.owns_reader:
+      self.reader.close()
   
   def measure(self):
     assert self.reader is not None
@@ -388,7 +386,7 @@ def read_record(stream) -> typing.Optional[StorageRecord]:
     return
 
   size, = struct.unpack(LONG, data)
-  if size > MAX_SIZE:
+  if size > MAX_SIZE or size == 0:
     return
 
   data = stream.read(size)

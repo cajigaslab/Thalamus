@@ -8,9 +8,9 @@
 #ifdef _WIN32
 #include <WinSock2.h>
 #endif
-#include <base_node.hpp>
-#include <h5handle.hpp>
-#include <xsens_node.hpp>
+#include <thalamus/base_node.hpp>
+#include <thalamus/h5handle.hpp>
+#include <thalamus/xsens_node.hpp>
 #include <thalamus/record_reader.hpp>
 
 #ifdef __clang__

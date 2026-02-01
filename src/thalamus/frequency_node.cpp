@@ -14,7 +14,7 @@ THALAMUS_DECLARE_TRACER(TraceOnData, "thalamus", "FrequencyNode::on_data");
 THALAMUS_DECLARE_TRACER(TraceReady, "thalamus", "FrequencyNode_ready");
 
 #include <thalamus/frequency_node.hpp>
-#include <modalities_util.hpp>
+#include <thalamus/modalities_util.hpp>
 #include <vector>
 
 #ifdef __clang__
