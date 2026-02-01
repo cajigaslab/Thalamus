@@ -308,8 +308,7 @@ class RecordReader:
   def __enter__(self):
     if self.reader is None:
       assert self.filename is not None
-      self.reader = open(self.filename, 'rb')
-      self.filename = pathlib.Path(self.reader.name)
+      self.reader = self.filename.open('rb')
       self.measure()
     self.start()
     return self
@@ -401,7 +400,7 @@ def read_record(stream) -> typing.Optional[StorageRecord]:
 def is_capturefile(f: pathlib.Path):
   if not f.is_file():
     return False
-  with open(f, 'rb') as stream:
+  with f.open('rb') as stream:
     return read_record(stream) is not None
 
 def main():
