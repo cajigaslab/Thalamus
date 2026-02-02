@@ -128,7 +128,7 @@ class RecordReader:
     self.reader_thread_result: AsyncResult | None = None
     if isinstance(file_arg, (str, pathlib.Path)):
       self.owns_reader = True
-      self.filename = pathlib.Path(file_arg)
+      self.filename = pathlib.Path(file_arg) if isinstance(file_arg, str) else file_arg
       self.reader = None
     else:
       self.owns_reader = False
