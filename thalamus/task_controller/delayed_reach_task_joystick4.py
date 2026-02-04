@@ -25,7 +25,7 @@ from ..qt import *
 from . import task_context
 from .. import thalamus_pb2
 from .widgets import Form
-from .util import create_task_with_exc_handling, TaskResult, TaskContextProtocol, CanvasPainterProtocol
+from .util import create_task_with_exc_handling, TaskResult, TaskContextProtocol, CanvasPainterProtocol, get_sound
 from ..config import *
 
 LOGGER = logging.getLogger(__name__)

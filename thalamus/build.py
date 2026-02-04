@@ -220,9 +220,9 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
       is_native_executable = path.stem == 'native'
       is_dotnet_file = "dotnet" in parents
       if is_dir or in_ignored_dir or has_ignored_suffix and not is_native_executable and not is_dotnet_file:
-        print(path, 'DROP')
+        #print(path, 'DROP')
         continue
-      print(path, 'TAKE')
+      #print(path, 'TAKE')
       files.append(path)
       digest = hashlib.sha256()
       with open(str(path), 'rb') as pack_file:

@@ -379,7 +379,8 @@ FACTORIES = {
   'LUA': Factory(lambda c, s: LuaWidget(c, s), [
     UserData(UserDataType.DEFAULT, 'Source', '', [])]),
   'TOUCH_SCREEN': Factory(TouchScreenWidget, [
-    UserData(UserDataType.DEFAULT, 'Source', '', [])]),
+    UserData(UserDataType.DEFAULT, 'Source', '', []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Null Threshold', -4.0, [])]),
   'REMOTE': Factory(None, [
     UserData(UserDataType.DEFAULT, 'Address', '', []),
     UserData(UserDataType.DEFAULT, 'Node', '', []),
@@ -456,6 +457,7 @@ FACTORIES = {
   ]),
   'SERIAL_TOUCH_SCREEN': Factory(None, [
     UserData(UserDataType.OPEN_FILE, 'Port', '/dev/ttyUSB0', []),
+    UserData(UserDataType.SPINBOX, 'No Touch Timeout (ms)', 30, []),
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
   ]),
 }

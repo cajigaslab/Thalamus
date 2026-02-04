@@ -4,6 +4,7 @@ Defines the mapping from task types to the task implementation
 
 from . import simple_task
 from . import simple_touch_task
+from . import simple_saccade_touch_task
 from . import simple_touch_and_look_task
 from . import suppressed_reach_task
 from . import delayed_reach_task
@@ -46,6 +47,9 @@ DESCRIPTIONS = [
   TaskDescription('simple_touch_task', 'Simple Touch', 
     simple_touch_task.create_widget, 
     simple_touch_task.run),
+   TaskDescription('simple_saccade_touch_task', 'Simple Saccade Touch', 
+    simple_saccade_touch_task.create_widget, 
+    simple_saccade_touch_task.run),
   TaskDescription('simple_touch_and_look_task', 'Simple Touch And Look', 
     simple_touch_and_look_task.create_widget, 
     simple_touch_and_look_task.run),

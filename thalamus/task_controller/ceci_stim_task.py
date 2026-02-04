@@ -15,7 +15,7 @@ from ..qt import *
 
 from . import task_context
 from .widgets import Form, ListAsTabsWidget
-from .util import wait_for, wait_for_hold, TaskResult, TaskContextProtocol, CanvasPainterProtocol, RenderOutput, create_task_with_exc_handling
+from .util import wait_for, wait_for_hold, TaskResult, TaskContextProtocol, CanvasPainterProtocol, RenderOutput, create_task_with_exc_handling, get_sound
 from .. import task_controller_pb2
 from ..config import *
 

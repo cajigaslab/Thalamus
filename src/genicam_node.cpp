@@ -1875,7 +1875,7 @@ struct GenicamNode::Impl {
         auto start_time = std::chrono::steady_clock::now();
         std::optional<std::chrono::steady_clock::time_point> next_temp_poll;
         std::chrono::nanoseconds temp_poll_interval = 0ns;
-        if(exists("DeviceTemperature")) {
+        if(false) {
           temp_poll_interval = 1'000'000'000ns;//polling_time("DeviceTemperature");
           next_temp_poll = start_time;
         }

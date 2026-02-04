@@ -477,7 +477,7 @@ class Canvas(QOpenGLWidget):
 
     request = thalamus_pb2.AnalogRequest(node=thalamus_pb2.NodeSelector(type='OCULOMATIC'), channel_names=['X','Y'])
     create_task_with_exc_handling(self.on_ros_gaze(thalamus.analog(request)))
-    request = thalamus_pb2.AnalogRequest(node=thalamus_pb2.NodeSelector(type='TOUCH_SCREEN'), channel_names=['X','Y'])
+    request = thalamus_pb2.AnalogRequest(node=thalamus_pb2.NodeSelector(name='Node 3'), channel_names=['X','Y'])
     create_task_with_exc_handling(self.on_ros_touch(thalamus.analog(request)))
 
     self.handles = Handles()

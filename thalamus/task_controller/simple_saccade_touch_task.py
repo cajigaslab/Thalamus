@@ -26,8 +26,6 @@ LOGGER = logging.getLogger(__name__)
 Config = typing.NamedTuple('Config', [
   ('intertrial_timeout', datetime.timedelta),
   ('start_timeout', datetime.timedelta),
-  ('baseline_timeout', datetime.timedelta),
-  ('cue_timeout', datetime.timedelta),
   ('saccade_timeout', datetime.timedelta), 
   ('hold_timeout', datetime.timedelta),
   ('hand_blink', datetime.timedelta),
@@ -78,7 +76,6 @@ class TargetWidget(QWidget):
       Form.Constant('Audio Scale Right', 'audio_scale_right', 0),
       Form.Color('Color', 'color', QColor(255, 255,255)),
       Form.Color('Dual color', 'dual_color', QColor(255, 255,255)),
-      Form.Bool('Is Fixation', 'is_fixation', False),
       Form.Choice('Shape', 'shape', [('Box', 'box'), ('Ellipsoid', 'ellipsoid')]),
       Form.File('Stl File (Overrides shape)', 'stl_file', '', 'Select Stl File', '*.stl'),
       Form.File('Audio File', 'audio_file', '', 'Select Audio File', '*.wav'),
@@ -128,8 +125,6 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   form = Form.build(task_config, ["Name:", "Min:", "Max:"],
     Form.Uniform('Intertrial Interval', 'intertrial_timeout', 2, 2, 's'),
     Form.Uniform('Start Interval', 'start_timeout', 4, 4, 's'),
-    Form.Uniform('Baseline Interval', 'baseline_timeout', 0.5, 0.5, 's'),
-    Form.Uniform('Cue Interval', 'cue_timeout', 0.05, 0.05, 's'),
     Form.Uniform('Saccade Timeout', 'saccade_timeout', 2, 2, 's'), 
     Form.Uniform('Hold Interval', 'hold_timeout', 0.5, 0.5, 's'),
     Form.Uniform('Hand Blink', 'hand_blink', 0.5, 0.5, 's'),
@@ -207,17 +202,6 @@ def get_target_rectangles(context, dpi):
 
   return all_target_rects, dual_target_rects
 
-def get_start_target_index(context):
-  all_target_configs = context.task_config['targets']
-  i_start_targ = \
-    [itarg for itarg, x in enumerate(all_target_configs) if x['is_fixation']]
-  if len(i_start_targ) == 0:
-    i_start_targ = [0]
-  else:
-    i_start_targ = i_start_targ[0]
-
-  return i_start_targ
-
 def distance(lhs, rhs):
   return ((lhs.x() - rhs.x())**2 + (lhs.y() - rhs.y())**2)**.5
 
@@ -242,9 +226,9 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   """
   Implementation of the state machine for the simple task
   """  
-  success_sound = get_sound(os.path.join(os.path.dirname(__file__), 
+  success_sound = get_sound(os.path.join(os.path.dirname(__file__),
     'success_clip.wav'))
-  fail_sound = get_sound(os.path.join(os.path.dirname(__file__), 
+  fail_sound = get_sound(os.path.join(os.path.dirname(__file__),
     'failure_clip.wav'))
   show_touch_pos_feedback = False
   show_gaze_pos_feedback = False
@@ -256,8 +240,6 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   config = Config(
     datetime.timedelta(seconds=context.get_value('intertrial_timeout', RANDOM_DEFAULT)),
     datetime.timedelta(seconds=context.get_value('start_timeout', RANDOM_DEFAULT)),
-    datetime.timedelta(seconds=context.get_value('baseline_timeout', RANDOM_DEFAULT)),
-    datetime.timedelta(seconds=context.get_value('cue_timeout', RANDOM_DEFAULT)),
     datetime.timedelta(seconds=context.get_value('saccade_timeout', RANDOM_DEFAULT)), 
     datetime.timedelta(seconds=context.get_value('hold_timeout', RANDOM_DEFAULT)),
     datetime.timedelta(seconds=context.get_value('hand_blink', RANDOM_DEFAULT)),
@@ -282,17 +264,10 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   pulse_width = datetime.timedelta(milliseconds=context.task_config['pulse_width'])
   pulse_period = datetime.timedelta(seconds=1/pulse_frequency) #interpulse period
 
-  """
-  Identifying the "start touch/gaze" targets, akin to the fixation target.
-  The behavior defined as follows. Any target that is marked "is touch/gaze fixation" is
-  the start target. If none of them are defined as the start target, then default to
-  the first target in the target list. If multiple are selected, then choose the
-  first that is selected.
-  """
+
   ntargets = len(context.task_config['targets'])
-  i_start_targ = get_start_target_index(context)
-  i_periph_targs = [x for x in range(ntargets) if x is not i_start_targ]
-  n_periph_targs = len(i_periph_targs)
+  i_targs = [x for x in range(ntargets)]
+  n_targs = len(i_targs)
 
   dpi = context.config.get('dpi', None) or context.widget.logicalDpiX()
 
@@ -317,11 +292,10 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   Defining drawing and cursor behavior.
   """
 
-  i_periph_targ_to_present = np.random.randint(n_periph_targs)
-  i_presented_targ = i_periph_targs[i_periph_targ_to_present]
+  i_targ_to_present = np.random.randint(n_targs)
+  i_presented_targ = i_targs[i_targ_to_present]
 
   blank_space_touched = False
-  start_target_touched = False
   presented_targ_touched = False
   i_touched_target = None
   last_touched_target = None
@@ -330,20 +304,18 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   touch_pos = QPoint()
   def touch_handler(cursor: QPoint) -> None:
     nonlocal blank_space_touched
-    nonlocal start_target_touched
     nonlocal presented_targ_touched
     nonlocal i_touched_target
     nonlocal last_touched_target
     nonlocal touch_pos
-    start_target_touched = distance(all_target_rects[i_start_targ].center(), cursor) < all_target_windows[i_start_targ]
     in_windows = [distance(all_target_rects[i].center(), cursor) < all_target_windows[i]
                                   for i in range(ntargets)]
     blank_space_touched = blank_space_touched or not any(in_windows) and cursor.x() >= 0
     if config.is_choice:
 
-      in_periph_windows = [distance(all_target_rects[i].center(), cursor) < all_target_windows[i]
-                                    for i in range(ntargets) if i != i_start_targ]
-      presented_targ_touched = any(in_periph_windows)
+      in_windows = [distance(all_target_rects[i].center(), cursor) < all_target_windows[i]
+                                    for i in range(ntargets)]
+      presented_targ_touched = any(in_windows)
 
       if presented_targ_touched:
         i_touched_target = [i for i in range(len(in_windows)) if in_windows[i]][0]
@@ -362,88 +334,82 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     touch_pos = cursor
   context.widget.touch_listener = touch_handler
 
-  start_target_gazed = False
   last_gazed_target = None
   presented_targ_gazed = False
   i_gazed_target = None
   gaze_pos = QPoint()
   def gaze_handler(cursor: QPoint) -> None:
-    nonlocal start_target_gazed
     nonlocal presented_targ_gazed    
     nonlocal i_gazed_target
     nonlocal last_gazed_target
     nonlocal gaze_pos
   
-    # nonlocal start_target_touched_and_gazed 
     # nonlocal presented_targ_touched_and_gazed 
-    # nonlocal targ2_touched_and_gazed 
+    
+    if config.is_choice:
 
-    start_target_gazed = distance(all_target_rects[i_start_targ].center(), cursor) < all_target_windows[i_start_targ]
-    
-    presented_targ_gazed = distance(
-      all_target_rects[i_presented_targ].center(), cursor) < all_target_windows[i_presented_targ]
-    
-    if presented_targ_gazed:
-      i_gazed_target = i_presented_targ
-      last_gazed_target = i_gazed_target
+      in_windows = [distance(all_target_rects[i].center(), cursor) < all_target_windows[i]
+                                    for i in range(ntargets)]
+      presented_targ_gazed = any(in_windows)
+
+      if presented_targ_touched:
+        i_gazed_target = [i for i in range(len(in_windows)) if in_windows[i]][0]
+        last_gazed_target = i_gazed_target
+      else:
+        i_gazed_target = None
+
     else:
-      i_gazed_target = None
+      presented_targ_gazed = distance(
+        all_target_rects[i_presented_targ].center(), cursor) < all_target_windows[i_presented_targ]
+      if presented_targ_gazed:
+        i_gazed_target = i_presented_targ
+        last_gazed_target = i_gazed_target
+      else:
+        i_gazed_target = None
     gaze_pos = cursor
 
-    # start target
-    # start_target_touched_and_gazed = start_target_touched and start_target_gazed
-    # presented_targ_touched_and_gazed = presented_targ_touched and presented_targ_gazed
-    # targ2_touched_and_gazed = targ2_touched and targ2_gazed    
+    # presented_targ_touched_and_gazed = presented_targ_touched and presented_targ_gazed 
   context.widget.gaze_listener = gaze_handler
 
-  dim_start_target = False
-  show_start_target = False
-  show_start_dual_target = False
+  show_dual_target = False
   show_presented_target = False
   state_brightness = 0
   def renderer(painter: QPainter) -> None:
-    color_base = all_target_colors[i_start_targ]
-    scale = (all_target_on_luminance[i_start_targ] if not dim_start_target
-             else all_target_off_luminance[i_start_targ])
-    color_scaled = QColor(int(scale*color_base.red()), int(scale*color_base.green()), int(scale*color_base.blue()))
-    
-    window = all_target_windows[i_start_targ]
-    stl_mesh = all_target_stls[i_start_targ]
-    if show_start_target:
-      if stl_mesh:
-        angle = (100*time.time()) % 360
-        painter.model_view.translate(0, 0, -10)
-        painter.model_view.rotate(angle, 1/math.sqrt(3), 1/math.sqrt(3), 1/math.sqrt(3))
-        painter.model_view.rotate(-90, 1, 0, 0)
-        painter.model_view.scale(.1)
-        painter.render_stl(stl_mesh)
-      else:
-        painter.fillRect(all_target_rects[i_start_targ], color_scaled)
-    if show_start_dual_target:
-      dual_color_base = dual_target_colors[i_start_targ]
-      scale = (all_target_dual_luminance[i_start_targ] if not dim_start_target
-             else all_target_off_luminance[i_start_targ])
-      dual_color_base = QColor(int(scale*dual_color_base.red()), int(scale*dual_color_base.green()), int(scale*dual_color_base.blue()))
-      painter.fillRect(dual_target_rects[i_start_targ], dual_color_base)
+    window = all_target_windows[0]
     
     if config.is_choice:
-      if show_presented_target:
+      if show_presented_target: 
         for i, value in enumerate(zip(all_target_rects, all_target_colors, all_target_stls)):
-          if i == i_start_targ:
-            continue
+          dual_color_base = dual_target_colors[i]
+          scale = (all_target_dual_luminance[i])
+          dual_color_base = QColor(int(scale*dual_color_base.red()), int(scale*dual_color_base.green()), int(scale*dual_color_base.blue()))
 
           rect, color, stl_mesh = value
           if stl_mesh:
             painter.render_stl(stl_mesh)
+            if show_dual_target:
+              painter.fillRect(dual_target_rects[i], dual_color_base)
           else:
             painter.fillRect(rect, color)
+            if show_dual_target:
+              painter.fillRect(dual_target_rects[i], dual_color_base)
+  
+            
     else:
       if show_presented_target:
         stl_mesh = all_target_stls[i_presented_targ]
+        dual_color_base = dual_target_colors[i_presented_targ]
+        scale = (all_target_dual_luminance[i_presented_targ])
+        dual_color_base = QColor(int(scale*dual_color_base.red()), int(scale*dual_color_base.green()), int(scale*dual_color_base.blue()))
+
         if stl_mesh:
           painter.render_stl(stl_mesh)
+          if show_dual_target:
+            painter.fillRect(dual_target_rects[i_presented_targ], dual_color_base)
         else:
           painter.fillRect(all_target_rects[i_presented_targ], all_target_colors[i_presented_targ])
+          if show_dual_target:
+            painter.fillRect(dual_target_rects[i_presented_targ], dual_color_base)
 
     with painter.masked(RenderOutput.OPERATOR):
       path = QPainterPath()
@@ -474,19 +440,17 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   behav_result = {}
   behav_result['failure_mode'] = []
   if config.is_choice:
-    behav_result['presented_target_ids'] = i_periph_targs
+    behav_result['presented_target_ids'] = i_targs
   else:
     behav_result['presented_target_ids'] = [i_presented_targ]
 
   def fail_trial():    
     nonlocal show_presented_target
-    nonlocal show_start_target
-    nonlocal show_start_dual_target
+    nonlocal show_dual_target
     nonlocal state_brightness
     context.behav_result = behav_result
     show_presented_target = False
-    show_start_target = False
-    show_start_dual_target = False
+    show_dual_target = False
     state_brightness = toggle_brightness(state_brightness)
     context.widget.update() 
     fail_sound.play()
@@ -495,8 +459,6 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
           
   while True: 
     state_brightness = 0
-    show_start_target = False
-    show_start_dual_target = False
     context.widget.update()
     with await next_state(context, State.INTERTRIAL, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
       await wait_for(context, lambda: touch_pos.x() > 0, config.intertrial_timeout)
@@ -509,14 +471,15 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
     blank_space_touched = False
     state_brightness = toggle_brightness(state_brightness)
-    show_start_target = True
-    show_start_dual_target = True
+    show_presented_target = True
+    show_dual_target = True
     context.widget.update()
+    # use start on label for proc
     with await next_state(context, State.START_ON, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
-      acquired = await wait_for(context, lambda: start_target_touched and start_target_gazed or blank_space_touched, config.start_timeout)
+      acquired = await wait_for(context, lambda: presented_targ_touched and presented_targ_gazed or blank_space_touched, config.start_timeout)
 
     if blank_space_touched:
-      print("Status: Start on; Fail: Blank space touched")
+      print("Status: Target on; Fail: Blank space touched")
       behav_result['failure_mode'].append(2)
       with await fail_trial():
         await context.sleep(config.fail_timeout)
@@ -525,98 +488,36 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     if acquired:
       break
     else:
-      show_start_target = False
-      show_start_dual_target = False
+      show_presented_target = False
+      show_dual_target = False
       context.widget.update
 
-  # state: startacq 
+  # use startaq label for proc 
   with await next_state(context, State.START_ACQ, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
-    #success = await wait_for_hold(context, lambda: start_target_touched, config.baseline_timeout, config.blink_timeout)
-    success = await wait_for_dual_hold(context, config.baseline_timeout,
-      lambda: start_target_touched, lambda: start_target_gazed,
+    success = await wait_for_dual_hold(context, config.hold_timeout,
+      lambda: presented_targ_touched, lambda: presented_targ_gazed,
       config.hand_blink, config.eye_blink)
   if not success:
-    if not start_target_touched:
-      print("Status: Start Acquired; Fail: Hand left start during baseline interval")
+    if not presented_targ_touched:
+      print("Status: Targ Acquired; Fail: Hand left targ during hold")
       behav_result['failure_mode'].append(3)
-    if not start_target_gazed:
-      print("Status: Start Acquired; Fail: Gaze left start during baseline interval")
+    if not presented_targ_gazed:
+      print("Status: Targ Acquired; Fail: Gaze left targ during hold")
       behav_result['failure_mode'].append(4)
     with await fail_trial():
       await context.sleep(config.fail_timeout)
       return task_context.TaskResult(False)
 
-  state_brightness = toggle_brightness(state_brightness)
-  show_presented_target = True
-  context.widget.update()
-  with await next_state(context, State.TARGS_ON, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
-    #success = await wait_for_hold(context, lambda: start_target_touched, config.cue_timeout, config.blink_timeout)
-    success = await wait_for_dual_hold(context, config.cue_timeout, 
-      lambda: start_target_touched, lambda: start_target_gazed, 
-      config.hand_blink, config.eye_blink)
-  if not success:
-    if not start_target_touched:
-      print("Status: Targets on; Fail: Hand left start during cue interval")
-      behav_result['failure_mode'].append(5)
-    if not start_target_gazed:
-      print("Status: Targets on; Fail: Gaze left start during cue interval")
-      behav_result['failure_mode'].append(6)
-    with await fail_trial():
-      await context.sleep(config.fail_timeout)
-      return task_context.TaskResult(False)
-
-  blank_space_touched = False
-  show_start_dual_target = False
-  #dim_start_gaze_target = True
-  cue_timeout=config.cue_timeout.total_seconds()
-  if cue_timeout >= 0.05: # if the cue timeout is too short, the display change for go *and* targs_on will not be detected
-    state_brightness = toggle_brightness(state_brightness)
-  context.widget.update()
-  with await next_state(context, State.GO, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
-    acquired = await wait_for(context, lambda: presented_targ_gazed or not start_target_touched, config.saccade_timeout) 
-
-  if not acquired or not start_target_touched:
-    if not start_target_touched:
-      print("Status: GO; Fail: Hand left start target before targ acquired")
-      behav_result['failure_mode'].append(7)
-    if not acquired:
-      print("Status: GO; Fail: Target not acquired")
-      behav_result['failure_mode'].append(8)
-    with await fail_trial():
-      await context.sleep(config.fail_timeout)
-      return task_context.TaskResult(False)
-  final_i_selected_target = last_gazed_target
-  behav_result['selected_target_id'] = final_i_selected_target
-
-  with await next_state(context, State.TARGS_ACQ, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
-    #success = await wait_for_hold(context, lambda: presented_targ_touched, config.hold_timeout, config.blink_timeout)
-    success = await wait_for_dual_hold(context, config.hold_timeout, 
-      lambda: start_target_touched, lambda: presented_targ_gazed,
-      config.hand_blink, config.eye_blink)  
-  if not presented_targ_gazed or not start_target_touched: 
-    if not presented_targ_gazed:
-      print("Status: Targs acquired; Fail: Gaze left window during hold")
-      behav_result['failure_mode'].append(9)
-    if not start_target_touched:
-      print("Status: Targs acquired; Fail: Hand left start target during hold")
-      behav_result['failure_mode'].append(10)
-    context.behav_result = behav_result
-    with await fail_trial():
-      await context.sleep(config.fail_timeout)
-      return task_context.TaskResult(False)
-  if not success: # IG: not sure if/when this is reached
-    print("Status: Targs acquired; Fail: Incomplete target hold")
-    behav_result['failure_mode'].append(11)
-    with await fail_trial():
-      await context.sleep(config.fail_timeout)
-      return task_context.TaskResult(False)
-  
   """
   The trial's outcome (success or failure) at this point is decided, and now
   we can wait (optionally) by success_timeout or fail_timeout.
   """
+
+  final_i_selected_target = last_touched_target
+  behav_result['selected_target_id'] = final_i_selected_target
+
   show_presented_target = False
-  show_start_target = False
+  show_dual_target = False
 
   with await next_state(context, State.SUCCESS, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
     state_brightness = toggle_brightness(state_brightness)

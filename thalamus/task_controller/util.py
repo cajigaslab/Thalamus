@@ -9,7 +9,9 @@ import struct
 import typing
 import logging
 import asyncio
+import pathlib
 import datetime
+import functools
 import threading
 import contextlib
 
@@ -606,3 +608,6 @@ def movella_decorator(port: int):
 
   return decorator
   
+@functools.lru_cache
+def get_sound(path: typing.Union[str, pathlib.Path]) -> QSound:
+  return QSound(str(path))

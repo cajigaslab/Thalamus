@@ -13,7 +13,7 @@ from ..qt import *
 
 from . import task_context
 from .widgets import Form, ListAsTabsWidget
-from .util import wait_for, wait_for_hold, TaskResult, TaskContextProtocol, CanvasPainterProtocol, animate, CanvasProtocol, create_task_with_exc_handling, RenderOutput
+from .util import wait_for, wait_for_hold, TaskResult, TaskContextProtocol, CanvasPainterProtocol, animate, CanvasProtocol, create_task_with_exc_handling, RenderOutput, get_sound
 from .. import task_controller_pb2
 from ..thalamus_pb2 import AnalogResponse, Span
 from ..config import *

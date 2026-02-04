@@ -3,7 +3,7 @@
     {
       "name": "Cam Rear",
       "type": "GENICAM",
-      "Running": false,
+      "Running": true,
       "View": true,
       "Camera": "Spinnaker_GenTL:17278772",
       "WidthMax": 1280,
@@ -16,10 +16,10 @@
       "AcquisitionFrameRate": 150.0,
       "Gain": 0.0,
       "view_geometry": [
-        765,
-        1685,
-        690,
-        552
+        66,
+        32,
+        927,
+        487
       ],
       "Camera Values": {
         "WidthMax": 1280,
@@ -36,25 +36,25 @@
     {
       "name": "Oculomatic",
       "type": "OCULOMATIC",
-      "Threshold": 60,
+      "Threshold": 34,
       "Min Area": 0,
       "Max Area": 98,
       "X Gain": 0.0,
       "Y Gain": 0.0,
-      "Invert X": false,
-      "Invert Y": false,
+      "Invert X": true,
+      "Invert Y": true,
       "Source": "Cam Eye",
       "Computing": true,
-      "View": true,
+      "View": false,
       "view_geometry": [
-        799,
-        626,
-        405,
-        339
+        936,
+        396,
+        357,
+        258
       ],
       "Render Thresholded": false,
-      "Pix X": 367,
-      "Pix Y": 135
+      "Pix X": 533,
+      "Pix Y": 431
     },
     {
       "name": "Windows",
@@ -176,7 +176,7 @@
     {
       "name": "Experiment",
       "type": "RUNNER2",
-      "Running": false,
+      "Running": true,
       "Targets": [
         {
           "Name": "Cam Rear",
@@ -209,10 +209,6 @@
         {
           "Name": "Photodiode",
           "Address": ""
-        },
-        {
-          "Name": "Analog in",
-          "Address": ""
         }
       ],
       "tab": 1
@@ -244,7 +240,7 @@
     {
       "name": "Cam Left",
       "type": "GENICAM",
-      "Running": false,
+      "Running": true,
       "View": true,
       "Camera": "Spinnaker_GenTL:18299726",
       "WidthMax": 1280,
@@ -257,10 +253,10 @@
       "AcquisitionFrameRate": 60.0,
       "Gain": 0.0,
       "view_geometry": [
-        66,
-        1692,
-        688,
-        551
+        993,
+        556,
+        927,
+        487
       ],
       "Camera Values": {
         "WidthMax": 1280,
@@ -277,7 +273,7 @@
     {
       "name": "Cam Top",
       "type": "GENICAM",
-      "Running": false,
+      "Running": true,
       "View": true,
       "Camera": "VimbaUSBTL:DEV_1AB228000429",
       "WidthMax": 1280,
@@ -291,9 +287,9 @@
       "Gain": 0.0,
       "view_geometry": [
         66,
-        1115,
-        687,
-        549
+        556,
+        927,
+        487
       ],
       "Camera Values": {
         "WidthMax": 1280,
@@ -310,33 +306,33 @@
     {
       "name": "Cam Eye",
       "type": "GENICAM",
-      "Running": false,
+      "Running": true,
       "View": true,
       "Camera": "VimbaUSBTL:DEV_1AB228001040",
       "WidthMax": 1280,
       "HeightMax": 1024,
-      "Width": 638,
-      "Height": 315,
-      "OffsetX": 269,
-      "OffsetY": 453,
-      "ExposureTime": 6000.0,
-      "AcquisitionFrameRate": 150.0,
+      "Width": 1280,
+      "Height": 1024,
+      "OffsetX": 0,
+      "OffsetY": 0,
+      "ExposureTime": 16570.210456848145,
+      "AcquisitionFrameRate": 60.0,
       "Gain": 0.0,
       "view_geometry": [
-        949,
-        1347,
-        632,
-        542
+        993,
+        32,
+        927,
+        487
       ],
       "Camera Values": {
         "WidthMax": 1280,
         "HeightMax": 1024,
-        "Width": 632,
-        "Height": 314,
-        "OffsetX": 264,
-        "OffsetY": 452,
-        "ExposureTime": 6000.005,
-        "AcquisitionFrameRate": 149.9999250000375,
+        "Width": 1280,
+        "Height": 1024,
+        "OffsetX": 0,
+        "OffsetY": 0,
+        "ExposureTime": 16570.215,
+        "AcquisitionFrameRate": 60.0000240000096,
         "Gain": 0.0
       }
     },
@@ -358,33 +354,33 @@
       "name": "Storage",
       "type": "STORAGE2",
       "Running": false,
-      "Output File": "/mnt/sraid/Bowser_Behavior_AlexRig/%y%m%d/behave",
+      "Output File": "/mnt/sraid/Bowser_Behavior_Behave1/%y%m%d/behave",
       "Compress Analog": false,
       "Compress Video": true,
       "Sources": [
         {
-          "Node": "Cam Rear",
+          "Node": "Cam 1",
           "Time Series": true,
           "Image": true,
           "Motion": true,
           "Text": true
         },
         {
-          "Node": "Cam Left",
+          "Node": "Cam 2",
           "Time Series": true,
           "Image": true,
           "Motion": true,
           "Text": true
         },
         {
-          "Node": "Cam Top",
+          "Node": "Cam 3",
           "Time Series": true,
           "Image": true,
           "Motion": true,
           "Text": true
         },
         {
-          "Node": "Cam Eye",
+          "Node": "Cam 4",
           "Time Series": true,
           "Image": true,
           "Motion": true,
@@ -400,25 +396,18 @@
         {
           "Node": "Wall Clock",
           "Time Series": true,
-          "Image": false,
-          "Motion": true,
-          "Text": true
-        },
-        {
-          "Node": "Analog in",
-          "Time Series": true,
-          "Image": false,
+          "Image": true,
           "Motion": true,
           "Text": true
         }
       ],
-      "rec": 4,
+      "rec": 2,
       "start": 706288.714916912,
       "Files": [],
       "Metadata": [
         {
           "Key": "Rec",
-          "Value": 4
+          "Value": 2
         }
       ],
       "Simple Copy": false
@@ -460,7 +449,7 @@
     {
       "name": "Reward out",
       "type": "NIDAQ_OUT",
-      "Running": false,
+      "Running": true,
       "Source": "Reward",
       "Fast Foward": false,
       "Channel": "Dev1/ao0",
@@ -468,9 +457,37 @@
       "Stims": []
     },
     {
-      "name": "Analog in",
-      "type": "NIDAQ",
+      "name": "Test output wave",
+      "type": "WAVE",
+      "Widget is Touchpad": false,
       "Running": false,
+      "Sample Rate": 1000.0,
+      "Poll Interval": 16,
+      "View": true,
+      "Waves": [
+        {
+          "Frequency": 0.5,
+          "Amplitude": 2.5,
+          "Shape": "Square",
+          "Offset": 2.5,
+          "Duty Cycle": 0.1,
+          "Phase": 0.0
+        }
+      ],
+      "Amplitude": 2.5,
+      "Shape": "Square",
+      "Offset": 2.5,
+      "view_geometry": [
+        1205,
+        316,
+        400,
+        100
+      ]
+    },
+    {
+      "name": "Photodiode",
+      "type": "NIDAQ",
+      "Running": true,
       "Sample Rate": 1000.0,
       "Poll Interval": 16,
       "Zero Latency": false,
@@ -484,10 +501,10 @@
       "Equation": "",
       "Parser Error": true,
       "view_geometry": [
-        1447,
-        1693,
-        473,
-        550
+        1301,
+        715,
+        619,
+        320
       ]
     },
     {
@@ -505,7 +522,7 @@
       "type": "SERIAL_TOUCH_SCREEN",
       "Port": "/dev/ttyUSB0",
       "No Touch Timeout (ms)": 1000,
-      "Running": false
+      "Running": true
     },
     {
       "name": "Node 3",
@@ -514,19 +531,19 @@
       "Null Threshold": 100.0,
       "Transform": [
         [
-          -0.24339936458482483,
-          0.0020643279290510352,
-          3426.5848784892314
+          -0.23954772674368408,
+          -0.038152656243858385,
+          3497.84793265553
         ],
         [
-          -0.002629950247844792,
-          0.19421049466135346,
-          1056.7994318482145
+          0.004968861026000135,
+          0.21056451959658481,
+          -72.59086148627122
         ],
         [
-          -2.1175823681357508e-20,
-          1.0842021724855044e-19,
-          1.0
+          6.776263578034403e-21,
+          0.0,
+          1.0000000000000002
         ]
       ],
       "Monitor": 1,
@@ -539,52 +556,151 @@
     {
       "name": "Fiducial Out",
       "type": "NIDAQ_OUT",
-      "Running": false,
+      "Running": true,
       "Source": "Fiducial",
       "Fast Foward": false,
       "Channel": "Dev1/port0/line1",
       "View": false,
       "Stims": []
-    },
-    {
-      "name": "Node 5",
-      "type": "CHANNEL_PICKER",
-      "Sources": {
-        "Analog in": [
-          {
-            "Name": "Dev1/ai0",
-            "Out Channel": 0,
-            "Out Name": "Fiducial In"
-          },
-          {
-            "Name": "Dev1/ai1",
-            "Out Channel": 1,
-            "Out Name": "Photodiode"
-          },
-          {
-            "Name": "Dev1/ai2",
-            "Out Channel": 2,
-            "Out Name": "Reward In"
-          }
-        ]
-      }
     }
   ],
   "thalamus_view_geometry": [
     100,
     100,
-    502,
+    1056,
     768
   ],
   "data_views": [
     {
       "view_geometry": [
-        755,
-        1112,
-        531,
-        543
+        1197,
+        32,
+        549,
+        1011
       ],
-      "rows": 3,
+      "rows": 10,
+      "columns": 1,
+      "views": [
+        {
+          "row": 0,
+          "column": 0,
+          "selected_node": "Fiducial",
+          "selected_channel": "",
+          "view_type": "Time Series",
+          "draw_value": false,
+          "static_range": false,
+          "range_min": 0,
+          "range_max": 10
+        },
+        {
+          "row": 1,
+          "column": 0,
+          "selected_node": "Windows",
+          "selected_channel": "NIDAQ: Dev1/ai1",
+          "view_type": "Time Series",
+          "draw_value": false,
+          "static_range": false,
+          "range_min": 0,
+          "range_max": 10
+        },
+        {
+          "row": 2,
+          "column": 0,
+          "selected_node": "Windows",
+          "selected_channel": "Touch X",
+          "view_type": "Time Series",
+          "draw_value": false,
+          "static_range": false,
+          "range_min": 0,
+          "range_max": 10
+        },
+        {
+          "row": 3,
+          "column": 0,
+          "selected_node": "Windows",
+          "selected_channel": "Touch Y",
+          "view_type": "Time Series",
+          "draw_value": false,
+          "static_range": false,
+          "range_min": 0,
+          "range_max": 10
+        },
+        {
+          "row": 4,
+          "column": 0,
+          "selected_node": "Windows",
+          "selected_channel": "Display",
+          "view_type": "Time Series",
+          "draw_value": false,
+          "static_range": false,
+          "range_min": 0,
+          "range_max": 10
+        },
+        {
+          "row": 5,
+          "column": 0,
+          "selected_node": "Windows",
+          "selected_channel": "NIDAQ: Dev1/ai5",
+          "view_type": "Time Series",
+          "draw_value": false,
+          "static_range": false,
+          "range_min": 0,
+          "range_max": 10
+        },
+        {
+          "row": 6,
+          "column": 0,
+          "selected_node": "Windows",
+          "selected_channel": "NIDAQ: Dev1/ai6",
+          "view_type": "Time Series",
+          "draw_value": false,
+          "static_range": false,
+          "range_min": 0,
+          "range_max": 10
+        },
+        {
+          "row": 7,
+          "column": 0,
+          "selected_node": "Windows",
+          "selected_channel": "Fiducial",
+          "view_type": "Time Series",
+          "draw_value": false,
+          "static_range": false,
+          "range_min": 0,
+          "range_max": 10
+        },
+        {
+          "row": 8,
+          "column": 0,
+          "selected_node": "Windows",
+          "selected_channel": "Bytes Per Second",
+          "view_type": "Time Series",
+          "draw_value": false,
+          "static_range": false,
+          "range_min": 0,
+          "range_max": 10
+        },
+        {
+          "row": 9,
+          "column": 0,
+          "selected_node": "Storage",
+          "selected_channel": "Output Queue Count",
+          "view_type": "Time Series",
+          "draw_value": true,
+          "static_range": false,
+          "range_min": 0,
+          "range_max": 10
+        }
+      ]
+    },
+    {
+      "view_geometry": [
+        992,
+        219,
+        531,
+        576
+      ],
+      "rows": 2,
       "columns": 1,
       "views": [
         {
@@ -608,11 +724,80 @@
           "static_range": true,
           "range_min": -1000.0,
           "range_max": 4000.0
-        },
+        }
+      ]
+    },
+    {
+      "view_geometry": [
+        1120,
+        141,
+        473,
+        400
+      ],
+      "rows": 1,
+      "columns": 1,
+      "views": [
         {
-          "row": 2,
+          "row": 0,
           "column": 0,
           "selected_node": "Fiducial",
+          "selected_channel": "",
+          "view_type": "Time Series",
+          "draw_value": false,
+          "static_range": false,
+          "range_min": 0,
+          "range_max": 10
+        }
+      ]
+    },
+    {
+      "view_geometry": [
+        182,
+        167,
+        473,
+        400
+      ],
+      "rows": 1,
+      "columns": 1,
+      "views": [
+        {
+          "row": 0,
+          "column": 0,
+          "selected_node": "Cam Rear",
+          "selected_channel": "",
+          "view_type": "Time Series",
+          "draw_value": false,
+          "static_range": false,
+          "range_min": 0,
+          "range_max": 10
+        }
+      ]
+    },
+    {
+      "view_geometry": [
+        1243,
+        491,
+        473,
+        400
+      ],
+      "rows": 2,
+      "columns": 1,
+      "views": [
+        {
+          "row": 0,
+          "column": 0,
+          "selected_node": "Photodiode",
+          "selected_channel": "",
+          "view_type": "Time Series",
+          "draw_value": false,
+          "static_range": false,
+          "range_min": 0,
+          "range_max": 10
+        },
+        {
+          "row": 1,
+          "column": 0,
+          "selected_node": "Photodiode",
           "selected_channel": "",
           "view_type": "Time Series",
           "draw_value": false,
@@ -628,29 +813,29 @@
       "node": "Experiment",
       "dock_area": "",
       "view_geometry": [
-        1529,
-        0,
-        390,
-        264
+        1450,
+        80,
+        448,
+        339
       ]
     },
     {
-      "node": "Cam Eye",
+      "node": "Node 3",
       "dock_area": "right",
       "view_geometry": [
-        190,
+        700,
         23,
-        312,
+        356,
         745
       ]
     }
   ],
   "queue": [
     {
-      "task_type": "simple_saccade_touch_task",
+      "task_type": "simple_touch_task",
       "type": "task",
-      "goal": 96,
-      "name": "simple saccade touch",
+      "goal": 97,
+      "name": "simple touch",
       "intertrial_timeout": {
         "min": 1.0,
         "max": 1.5
@@ -660,8 +845,8 @@
         "max": 5.0
       },
       "hold_timeout": {
-        "min": 1.1,
-        "max": 1.1
+        "min": 0.1,
+        "max": 0.1
       },
       "blink_timeout": {
         "min": 0.5,
@@ -703,7 +888,7 @@
           "height": 2.0,
           "orientation": 0,
           "window_size": 5.0,
-          "reward_channel": 2.0,
+          "reward_channel": 3.0,
           "audio_scale_left": 0,
           "audio_scale_right": 0,
           "color": [
@@ -748,15 +933,6 @@
           "off_luminance": {
             "min": 0,
             "max": 0
-          },
-          "dual_color": [
-            246,
-            97,
-            81
-          ],
-          "dual_luminance": {
-            "min": 0.0,
-            "max": 0.0
           }
         },
         {
@@ -765,7 +941,7 @@
           "height": 2.0,
           "orientation": 0,
           "window_size": 8.0,
-          "reward_channel": 2.0,
+          "reward_channel": 3.0,
           "audio_scale_left": 0,
           "audio_scale_right": 0,
           "color": [
@@ -810,15 +986,6 @@
           "off_luminance": {
             "min": 0,
             "max": 0
-          },
-          "dual_color": [
-            246,
-            97,
-            81
-          ],
-          "dual_luminance": {
-            "min": 0.0,
-            "max": 0.0
           }
         },
         {
@@ -827,7 +994,7 @@
           "height": 2.0,
           "orientation": 0,
           "window_size": 8.0,
-          "reward_channel": 2.0,
+          "reward_channel": 3.0,
           "audio_scale_left": 0,
           "audio_scale_right": 0,
           "color": [
@@ -872,15 +1039,6 @@
           "off_luminance": {
             "min": 0,
             "max": 0
-          },
-          "dual_color": [
-            246,
-            97,
-            81
-          ],
-          "dual_luminance": {
-            "min": 0.0,
-            "max": 0.0
           }
         },
         {
@@ -889,7 +1047,7 @@
           "height": 2.0,
           "orientation": 0,
           "window_size": 8.0,
-          "reward_channel": 2.0,
+          "reward_channel": 3.0,
           "audio_scale_left": 0,
           "audio_scale_right": 0,
           "color": [
@@ -934,15 +1092,6 @@
           "off_luminance": {
             "min": 0,
             "max": 0
-          },
-          "dual_color": [
-            246,
-            97,
-            81
-          ],
-          "dual_luminance": {
-            "min": 0.0,
-            "max": 0.0
           }
         },
         {
@@ -951,7 +1100,7 @@
           "height": 2.0,
           "orientation": 0,
           "window_size": 8.0,
-          "reward_channel": 2.0,
+          "reward_channel": 3.0,
           "audio_scale_left": 0,
           "audio_scale_right": 0,
           "color": [
@@ -996,15 +1145,6 @@
           "off_luminance": {
             "min": 0,
             "max": 0
-          },
-          "dual_color": [
-            246,
-            97,
-            81
-          ],
-          "dual_luminance": {
-            "min": 0.0,
-            "max": 0.0
           }
         },
         {
@@ -1013,7 +1153,7 @@
           "height": 2.0,
           "orientation": 0,
           "window_size": 8.0,
-          "reward_channel": 2.0,
+          "reward_channel": 3.0,
           "audio_scale_left": 0,
           "audio_scale_right": 0,
           "color": [
@@ -1058,41 +1198,602 @@
           "off_luminance": {
             "min": 0,
             "max": 0
-          },
-          "dual_color": [
-            246,
-            97,
-            81
+          }
+        },
+        {
+          "name": "Fix",
+          "width": 2.0,
+          "height": 2.0,
+          "orientation": 0,
+          "window_size": 8.0,
+          "reward_channel": 3.0,
+          "audio_scale_left": 0,
+          "audio_scale_right": 0,
+          "color": [
+            138,
+            226,
+            52
           ],
-          "dual_luminance": {
-            "min": 0.0,
-            "max": 0.0
+          "is_fixation": false,
+          "shape": "box",
+          "stl_file": "",
+          "audio_file": "",
+          "audio_only_if_high": false,
+          "play_in_ear": false,
+          "radius": {
+            "min": 10.0,
+            "max": 10.0
+          },
+          "angle": {
+            "min": 225.0,
+            "max": 225.0
+          },
+          "volume": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_temporal_jitter": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset_around_fixation": {
+            "min": 0,
+            "max": 0
+          },
+          "on_luminance": {
+            "min": 1,
+            "max": 1
+          },
+          "off_luminance": {
+            "min": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "Fix",
+          "width": 2.0,
+          "height": 2.0,
+          "orientation": 0,
+          "window_size": 8.0,
+          "reward_channel": 3.0,
+          "audio_scale_left": 0,
+          "audio_scale_right": 0,
+          "color": [
+            138,
+            226,
+            52
+          ],
+          "is_fixation": false,
+          "shape": "box",
+          "stl_file": "",
+          "audio_file": "",
+          "audio_only_if_high": false,
+          "play_in_ear": false,
+          "radius": {
+            "min": 10.0,
+            "max": 10.0
+          },
+          "angle": {
+            "min": 315.0,
+            "max": 315.0
+          },
+          "volume": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_temporal_jitter": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset_around_fixation": {
+            "min": 0,
+            "max": 0
+          },
+          "on_luminance": {
+            "min": 1,
+            "max": 1
+          },
+          "off_luminance": {
+            "min": 0,
+            "max": 0
           }
         }
       ],
       "is_choice": false,
       "state_indicator_x": 1800.0,
       "state_indicator_y": 950.0,
-      "saccade_timeout": {
-        "min": 2,
-        "max": 2
+      "task_cluster_name": "Bowser",
+      "queue_index": 0
+    },
+    {
+      "task_type": "simple_touch_task",
+      "type": "task",
+      "goal": 99,
+      "name": "simple touch",
+      "intertrial_timeout": {
+        "min": 1.0,
+        "max": 1.5
       },
-      "hand_blink": {
+      "start_timeout": {
+        "min": 5.0,
+        "max": 5.0
+      },
+      "hold_timeout": {
+        "min": 0.1,
+        "max": 0.1
+      },
+      "blink_timeout": {
         "min": 0.5,
         "max": 0.5
       },
-      "eye_blink": {
-        "min": 0.25,
-        "max": 0.25
+      "fail_timeout": {
+        "min": 1.0,
+        "max": 1.5
       },
-      "stim_phase": "FAIL",
-      "stim_start": 1,
-      "intan_cfg": 2,
-      "pulse_count": 1,
-      "pulse_frequency": 1,
-      "pulse_width": 0,
+      "success_timeout": {
+        "min": 1.0,
+        "max": 1.5
+      },
+      "target_x": {
+        "min": 1,
+        "max": 1
+      },
+      "target_y": {
+        "min": 1,
+        "max": 1
+      },
+      "target_width": {
+        "min": 1,
+        "max": 1
+      },
+      "target_height": {
+        "min": 1,
+        "max": 1
+      },
+      "target_color": [
+        255,
+        255,
+        255
+      ],
+      "targets": [
+        {
+          "name": "Fix",
+          "width": 2.0,
+          "height": 2.0,
+          "orientation": 0,
+          "window_size": 5.0,
+          "reward_channel": 3.0,
+          "audio_scale_left": 0,
+          "audio_scale_right": 0,
+          "color": [
+            138,
+            226,
+            52
+          ],
+          "is_fixation": false,
+          "shape": "box",
+          "stl_file": "",
+          "audio_file": "",
+          "audio_only_if_high": false,
+          "play_in_ear": false,
+          "radius": {
+            "min": 0.0,
+            "max": 0.0
+          },
+          "angle": {
+            "min": 0.0,
+            "max": 0.0
+          },
+          "volume": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_temporal_jitter": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset_around_fixation": {
+            "min": 0,
+            "max": 0
+          },
+          "on_luminance": {
+            "min": 1,
+            "max": 1
+          },
+          "off_luminance": {
+            "min": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "Fix",
+          "width": 2.0,
+          "height": 2.0,
+          "orientation": 0,
+          "window_size": 8.0,
+          "reward_channel": 3.0,
+          "audio_scale_left": 0,
+          "audio_scale_right": 0,
+          "color": [
+            138,
+            226,
+            52
+          ],
+          "is_fixation": false,
+          "shape": "box",
+          "stl_file": "",
+          "audio_file": "",
+          "audio_only_if_high": false,
+          "play_in_ear": false,
+          "radius": {
+            "min": 10.0,
+            "max": 10.0
+          },
+          "angle": {
+            "min": 0.0,
+            "max": 0.0
+          },
+          "volume": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_temporal_jitter": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset_around_fixation": {
+            "min": 0,
+            "max": 0
+          },
+          "on_luminance": {
+            "min": 1,
+            "max": 1
+          },
+          "off_luminance": {
+            "min": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "Fix",
+          "width": 2.0,
+          "height": 2.0,
+          "orientation": 0,
+          "window_size": 8.0,
+          "reward_channel": 3.0,
+          "audio_scale_left": 0,
+          "audio_scale_right": 0,
+          "color": [
+            138,
+            226,
+            52
+          ],
+          "is_fixation": false,
+          "shape": "box",
+          "stl_file": "",
+          "audio_file": "",
+          "audio_only_if_high": false,
+          "play_in_ear": false,
+          "radius": {
+            "min": 10.0,
+            "max": 10.0
+          },
+          "angle": {
+            "min": 45.0,
+            "max": 45.0
+          },
+          "volume": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_temporal_jitter": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset_around_fixation": {
+            "min": 0,
+            "max": 0
+          },
+          "on_luminance": {
+            "min": 1,
+            "max": 1
+          },
+          "off_luminance": {
+            "min": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "Fix",
+          "width": 2.0,
+          "height": 2.0,
+          "orientation": 0,
+          "window_size": 8.0,
+          "reward_channel": 3.0,
+          "audio_scale_left": 0,
+          "audio_scale_right": 0,
+          "color": [
+            138,
+            226,
+            52
+          ],
+          "is_fixation": false,
+          "shape": "box",
+          "stl_file": "",
+          "audio_file": "",
+          "audio_only_if_high": false,
+          "play_in_ear": false,
+          "radius": {
+            "min": 10.0,
+            "max": 10.0
+          },
+          "angle": {
+            "min": 90.0,
+            "max": 90.0
+          },
+          "volume": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_temporal_jitter": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset_around_fixation": {
+            "min": 0,
+            "max": 0
+          },
+          "on_luminance": {
+            "min": 1,
+            "max": 1
+          },
+          "off_luminance": {
+            "min": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "Fix",
+          "width": 2.0,
+          "height": 2.0,
+          "orientation": 0,
+          "window_size": 8.0,
+          "reward_channel": 3.0,
+          "audio_scale_left": 0,
+          "audio_scale_right": 0,
+          "color": [
+            138,
+            226,
+            52
+          ],
+          "is_fixation": false,
+          "shape": "box",
+          "stl_file": "",
+          "audio_file": "",
+          "audio_only_if_high": false,
+          "play_in_ear": false,
+          "radius": {
+            "min": 10.0,
+            "max": 10.0
+          },
+          "angle": {
+            "min": 135.0,
+            "max": 135.0
+          },
+          "volume": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_temporal_jitter": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset_around_fixation": {
+            "min": 0,
+            "max": 0
+          },
+          "on_luminance": {
+            "min": 1,
+            "max": 1
+          },
+          "off_luminance": {
+            "min": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "Fix",
+          "width": 2.0,
+          "height": 2.0,
+          "orientation": 0,
+          "window_size": 8.0,
+          "reward_channel": 3.0,
+          "audio_scale_left": 0,
+          "audio_scale_right": 0,
+          "color": [
+            138,
+            226,
+            52
+          ],
+          "is_fixation": false,
+          "shape": "box",
+          "stl_file": "",
+          "audio_file": "",
+          "audio_only_if_high": false,
+          "play_in_ear": false,
+          "radius": {
+            "min": 10.0,
+            "max": 10.0
+          },
+          "angle": {
+            "min": 180.0,
+            "max": 180.0
+          },
+          "volume": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_temporal_jitter": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset_around_fixation": {
+            "min": 0,
+            "max": 0
+          },
+          "on_luminance": {
+            "min": 1,
+            "max": 1
+          },
+          "off_luminance": {
+            "min": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "Fix",
+          "width": 2.0,
+          "height": 2.0,
+          "orientation": 0,
+          "window_size": 8.0,
+          "reward_channel": 3.0,
+          "audio_scale_left": 0,
+          "audio_scale_right": 0,
+          "color": [
+            138,
+            226,
+            52
+          ],
+          "is_fixation": false,
+          "shape": "box",
+          "stl_file": "",
+          "audio_file": "",
+          "audio_only_if_high": false,
+          "play_in_ear": false,
+          "radius": {
+            "min": 10.0,
+            "max": 10.0
+          },
+          "angle": {
+            "min": 225.0,
+            "max": 225.0
+          },
+          "volume": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_temporal_jitter": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset_around_fixation": {
+            "min": 0,
+            "max": 0
+          },
+          "on_luminance": {
+            "min": 1,
+            "max": 1
+          },
+          "off_luminance": {
+            "min": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "Fix",
+          "width": 2.0,
+          "height": 2.0,
+          "orientation": 0,
+          "window_size": 8.0,
+          "reward_channel": 3.0,
+          "audio_scale_left": 0,
+          "audio_scale_right": 0,
+          "color": [
+            138,
+            226,
+            52
+          ],
+          "is_fixation": false,
+          "shape": "box",
+          "stl_file": "",
+          "audio_file": "",
+          "audio_only_if_high": false,
+          "play_in_ear": false,
+          "radius": {
+            "min": 10.0,
+            "max": 10.0
+          },
+          "angle": {
+            "min": 315.0,
+            "max": 315.0
+          },
+          "volume": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_temporal_jitter": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset": {
+            "min": 0,
+            "max": 0
+          },
+          "auditory_spatial_offset_around_fixation": {
+            "min": 0,
+            "max": 0
+          },
+          "on_luminance": {
+            "min": 1,
+            "max": 1
+          },
+          "off_luminance": {
+            "min": 0,
+            "max": 0
+          }
+        }
+      ],
+      "is_choice": false,
+      "state_indicator_x": 1800.0,
+      "state_indicator_y": 950.0,
       "task_cluster_name": "Bowser",
-      "queue_index": 0
+      "queue_index": 1
     }
   ],
   "reward_schedule": {
@@ -1102,20 +1803,20 @@
         0.0
       ],
       [
-        800.0,
-        800.0
-      ],
-      [
-        600.0,
-        600.0
-      ],
-      [
         400.0,
         400.0
       ],
       [
-        200.0,
-        200.0
+        350.0,
+        350.0
+      ],
+      [
+        300.0,
+        300.0
+      ],
+      [
+        250.0,
+        250.0
       ],
       [
         200.0,
@@ -1134,7 +1835,7 @@
         50.0
       ]
     ],
-    "index": 0
+    "index": 1
   },
   "touch_channels": [
     0,
@@ -1187,7 +1888,7 @@
     },
     "Auto Clear": true
   },
-  "status": "Bowser/simple saccade touch = 3/1",
+  "status": "Bowser/simple touch = 2/0",
   "Persistence": {
     "Cached": []
   },
@@ -3216,7 +3917,7 @@
               "height": 2.0,
               "orientation": 0,
               "window_size": 5.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -3269,7 +3970,7 @@
               "height": 2.0,
               "orientation": 0,
               "window_size": 8.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -3322,7 +4023,7 @@
               "height": 2.0,
               "orientation": 0,
               "window_size": 8.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -3375,7 +4076,7 @@
               "height": 2.0,
               "orientation": 0,
               "window_size": 8.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -3428,7 +4129,7 @@
               "height": 2.0,
               "orientation": 0,
               "window_size": 8.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -3481,7 +4182,7 @@
               "height": 2.0,
               "orientation": 0,
               "window_size": 8.0,
-              "reward_channel": 2.0,
+              "reward_channel": 3.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -3502,6 +4203,112 @@
               "angle": {
                 "min": 180.0,
                 "max": 180.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "Fix",
+              "width": 2.0,
+              "height": 2.0,
+              "orientation": 0,
+              "window_size": 8.0,
+              "reward_channel": 3.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 225.0,
+                "max": 225.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "Fix",
+              "width": 2.0,
+              "height": 2.0,
+              "orientation": 0,
+              "window_size": 8.0,
+              "reward_channel": 3.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 315.0,
+                "max": 315.0
               },
               "volume": {
                 "min": 0,
@@ -4053,12 +4860,12 @@
             "max": 0.25
           },
           "fail_timeout": {
-            "min": 0.5,
-            "max": 0.5
+            "min": 1.5,
+            "max": 1.5
           },
           "success_timeout": {
-            "min": 0.5,
-            "max": 0.5
+            "min": 1.5,
+            "max": 1.5
           },
           "target_x": {
             "min": 1,
@@ -4087,7 +4894,7 @@
               "width": 1.6,
               "height": 1.6,
               "orientation": 0,
-              "window_size": 8.5,
+              "window_size": 4.5,
               "reward_channel": 0.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
@@ -4140,8 +4947,8 @@
               "width": 1.6,
               "height": 1.6,
               "orientation": 0,
-              "window_size": 5.5,
-              "reward_channel": 2.0,
+              "window_size": 4.5,
+              "reward_channel": 1.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -4193,8 +5000,8 @@
               "width": 1.6,
               "height": 1.6,
               "orientation": 0,
-              "window_size": 5.5,
-              "reward_channel": 2.0,
+              "window_size": 4.5,
+              "reward_channel": 1.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -4246,8 +5053,8 @@
               "width": 1.6,
               "height": 1.6,
               "orientation": 0,
-              "window_size": 5.5,
-              "reward_channel": 2.0,
+              "window_size": 4.5,
+              "reward_channel": 1.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -4299,8 +5106,8 @@
               "width": 1.6,
               "height": 1.6,
               "orientation": 0,
-              "window_size": 5.5,
-              "reward_channel": 2.0,
+              "window_size": 4.5,
+              "reward_channel": 1.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -4352,8 +5159,8 @@
               "width": 1.6,
               "height": 1.6,
               "orientation": 0,
-              "window_size": 5.5,
-              "reward_channel": 2.0,
+              "window_size": 4.5,
+              "reward_channel": 1.0,
               "audio_scale_left": 0,
               "audio_scale_right": 0,
               "color": [
@@ -4374,6 +5181,112 @@
               "angle": {
                 "min": 135.0,
                 "max": 135.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "bottomleft",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 4.5,
+              "reward_channel": 1.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 225.0,
+                "max": 225.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "bottomright",
+              "width": 1.6,
+              "height": 1.6,
+              "orientation": 0,
+              "window_size": 4.5,
+              "reward_channel": 1.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 315.0,
+                "max": 315.0
               },
               "volume": {
                 "min": 0,
@@ -4416,452 +5329,6 @@
           "is_choice": false,
           "state_indicator_x": 1800.0,
           "state_indicator_y": 950.0,
-          "stim_phase": "FAIL",
-          "stim_start": 1,
-          "intan_cfg": 2,
-          "pulse_count": 1,
-          "pulse_frequency": 1,
-          "pulse_width": 0
-        },
-        {
-          "task_type": "simple_saccade_touch_task",
-          "type": "task",
-          "goal": 99,
-          "name": "simple saccade touch",
-          "intertrial_timeout": {
-            "min": 1.0,
-            "max": 1.5
-          },
-          "start_timeout": {
-            "min": 5.0,
-            "max": 5.0
-          },
-          "hold_timeout": {
-            "min": 0.1,
-            "max": 0.1
-          },
-          "blink_timeout": {
-            "min": 0.5,
-            "max": 0.5
-          },
-          "fail_timeout": {
-            "min": 1.0,
-            "max": 1.5
-          },
-          "success_timeout": {
-            "min": 1.0,
-            "max": 1.5
-          },
-          "target_x": {
-            "min": 1,
-            "max": 1
-          },
-          "target_y": {
-            "min": 1,
-            "max": 1
-          },
-          "target_width": {
-            "min": 1,
-            "max": 1
-          },
-          "target_height": {
-            "min": 1,
-            "max": 1
-          },
-          "target_color": [
-            255,
-            255,
-            255
-          ],
-          "targets": [
-            {
-              "name": "Fix",
-              "width": 2.0,
-              "height": 2.0,
-              "orientation": 0,
-              "window_size": 5.0,
-              "reward_channel": 2.0,
-              "audio_scale_left": 0,
-              "audio_scale_right": 0,
-              "color": [
-                138,
-                226,
-                52
-              ],
-              "is_fixation": false,
-              "shape": "box",
-              "stl_file": "",
-              "audio_file": "",
-              "audio_only_if_high": false,
-              "play_in_ear": false,
-              "radius": {
-                "min": 0.0,
-                "max": 0.0
-              },
-              "angle": {
-                "min": 0.0,
-                "max": 0.0
-              },
-              "volume": {
-                "min": 0,
-                "max": 0
-              },
-              "auditory_temporal_jitter": {
-                "min": 0,
-                "max": 0
-              },
-              "auditory_spatial_offset": {
-                "min": 0,
-                "max": 0
-              },
-              "auditory_spatial_offset_around_fixation": {
-                "min": 0,
-                "max": 0
-              },
-              "on_luminance": {
-                "min": 1,
-                "max": 1
-              },
-              "off_luminance": {
-                "min": 0,
-                "max": 0
-              },
-              "dual_color": [
-                246,
-                97,
-                81
-              ],
-              "dual_luminance": {
-                "min": 1.0,
-                "max": 1.0
-              }
-            },
-            {
-              "name": "Fix",
-              "width": 2.0,
-              "height": 2.0,
-              "orientation": 0,
-              "window_size": 8.0,
-              "reward_channel": 2.0,
-              "audio_scale_left": 0,
-              "audio_scale_right": 0,
-              "color": [
-                138,
-                226,
-                52
-              ],
-              "is_fixation": false,
-              "shape": "box",
-              "stl_file": "",
-              "audio_file": "",
-              "audio_only_if_high": false,
-              "play_in_ear": false,
-              "radius": {
-                "min": 10.0,
-                "max": 10.0
-              },
-              "angle": {
-                "min": 0.0,
-                "max": 0.0
-              },
-              "volume": {
-                "min": 0,
-                "max": 0
-              },
-              "auditory_temporal_jitter": {
-                "min": 0,
-                "max": 0
-              },
-              "auditory_spatial_offset": {
-                "min": 0,
-                "max": 0
-              },
-              "auditory_spatial_offset_around_fixation": {
-                "min": 0,
-                "max": 0
-              },
-              "on_luminance": {
-                "min": 1,
-                "max": 1
-              },
-              "off_luminance": {
-                "min": 0,
-                "max": 0
-              },
-              "dual_color": [
-                246,
-                97,
-                81
-              ],
-              "dual_luminance": {
-                "min": 1.0,
-                "max": 1.0
-              }
-            },
-            {
-              "name": "Fix",
-              "width": 2.0,
-              "height": 2.0,
-              "orientation": 0,
-              "window_size": 8.0,
-              "reward_channel": 2.0,
-              "audio_scale_left": 0,
-              "audio_scale_right": 0,
-              "color": [
-                138,
-                226,
-                52
-              ],
-              "is_fixation": false,
-              "shape": "box",
-              "stl_file": "",
-              "audio_file": "",
-              "audio_only_if_high": false,
-              "play_in_ear": false,
-              "radius": {
-                "min": 10.0,
-                "max": 10.0
-              },
-              "angle": {
-                "min": 45.0,
-                "max": 45.0
-              },
-              "volume": {
-                "min": 0,
-                "max": 0
-              },
-              "auditory_temporal_jitter": {
-                "min": 0,
-                "max": 0
-              },
-              "auditory_spatial_offset": {
-                "min": 0,
-                "max": 0
-              },
-              "auditory_spatial_offset_around_fixation": {
-                "min": 0,
-                "max": 0
-              },
-              "on_luminance": {
-                "min": 1,
-                "max": 1
-              },
-              "off_luminance": {
-                "min": 0,
-                "max": 0
-              },
-              "dual_color": [
-                246,
-                97,
-                81
-              ],
-              "dual_luminance": {
-                "min": 1.0,
-                "max": 1.0
-              }
-            },
-            {
-              "name": "Fix",
-              "width": 2.0,
-              "height": 2.0,
-              "orientation": 0,
-              "window_size": 8.0,
-              "reward_channel": 2.0,
-              "audio_scale_left": 0,
-              "audio_scale_right": 0,
-              "color": [
-                138,
-                226,
-                52
-              ],
-              "is_fixation": false,
-              "shape": "box",
-              "stl_file": "",
-              "audio_file": "",
-              "audio_only_if_high": false,
-              "play_in_ear": false,
-              "radius": {
-                "min": 10.0,
-                "max": 10.0
-              },
-              "angle": {
-                "min": 90.0,
-                "max": 90.0
-              },
-              "volume": {
-                "min": 0,
-                "max": 0
-              },
-              "auditory_temporal_jitter": {
-                "min": 0,
-                "max": 0
-              },
-              "auditory_spatial_offset": {
-                "min": 0,
-                "max": 0
-              },
-              "auditory_spatial_offset_around_fixation": {
-                "min": 0,
-                "max": 0
-              },
-              "on_luminance": {
-                "min": 1,
-                "max": 1
-              },
-              "off_luminance": {
-                "min": 0,
-                "max": 0
-              },
-              "dual_color": [
-                246,
-                97,
-                81
-              ],
-              "dual_luminance": {
-                "min": 1.0,
-                "max": 1.0
-              }
-            },
-            {
-              "name": "Fix",
-              "width": 2.0,
-              "height": 2.0,
-              "orientation": 0,
-              "window_size": 8.0,
-              "reward_channel": 2.0,
-              "audio_scale_left": 0,
-              "audio_scale_right": 0,
-              "color": [
-                138,
-                226,
-                52
-              ],
-              "is_fixation": false,
-              "shape": "box",
-              "stl_file": "",
-              "audio_file": "",
-              "audio_only_if_high": false,
-              "play_in_ear": false,
-              "radius": {
-                "min": 10.0,
-                "max": 10.0
-              },
-              "angle": {
-                "min": 135.0,
-                "max": 135.0
-              },
-              "volume": {
-                "min": 0,
-                "max": 0
-              },
-              "auditory_temporal_jitter": {
-                "min": 0,
-                "max": 0
-              },
-              "auditory_spatial_offset": {
-                "min": 0,
-                "max": 0
-              },
-              "auditory_spatial_offset_around_fixation": {
-                "min": 0,
-                "max": 0
-              },
-              "on_luminance": {
-                "min": 1,
-                "max": 1
-              },
-              "off_luminance": {
-                "min": 0,
-                "max": 0
-              },
-              "dual_color": [
-                246,
-                97,
-                81
-              ],
-              "dual_luminance": {
-                "min": 1.0,
-                "max": 1.0
-              }
-            },
-            {
-              "name": "Fix",
-              "width": 2.0,
-              "height": 2.0,
-              "orientation": 0,
-              "window_size": 8.0,
-              "reward_channel": 2.0,
-              "audio_scale_left": 0,
-              "audio_scale_right": 0,
-              "color": [
-                138,
-                226,
-                52
-              ],
-              "is_fixation": false,
-              "shape": "box",
-              "stl_file": "",
-              "audio_file": "",
-              "audio_only_if_high": false,
-              "play_in_ear": false,
-              "radius": {
-                "min": 10.0,
-                "max": 10.0
-              },
-              "angle": {
-                "min": 180.0,
-                "max": 180.0
-              },
-              "volume": {
-                "min": 0,
-                "max": 0
-              },
-              "auditory_temporal_jitter": {
-                "min": 0,
-                "max": 0
-              },
-              "auditory_spatial_offset": {
-                "min": 0,
-                "max": 0
-              },
-              "auditory_spatial_offset_around_fixation": {
-                "min": 0,
-                "max": 0
-              },
-              "on_luminance": {
-                "min": 1,
-                "max": 1
-              },
-              "off_luminance": {
-                "min": 0,
-                "max": 0
-              },
-              "dual_color": [
-                246,
-                97,
-                81
-              ],
-              "dual_luminance": {
-                "min": 1.0,
-                "max": 1.0
-              }
-            }
-          ],
-          "is_choice": false,
-          "state_indicator_x": 1800.0,
-          "state_indicator_y": 950.0,
-          "saccade_timeout": {
-            "min": 2,
-            "max": 2
-          },
-          "hand_blink": {
-            "min": 0.5,
-            "max": 0.5
-          },
-          "eye_blink": {
-            "min": 0.25,
-            "max": 0.25
-          },
           "stim_phase": "FAIL",
           "stim_start": 1,
           "intan_cfg": 2,

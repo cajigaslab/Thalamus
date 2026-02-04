@@ -23,7 +23,7 @@ from task_controller_interfaces.msg import BehavState
 
 from . import task_context
 from .widgets import Form, ListAsTabsWidget
-from .util import wait_for, wait_for_hold, wait_for_dual_hold, RenderOutput, animate, create_task_with_exc_handling
+from .util import wait_for, wait_for_hold, wait_for_dual_hold, RenderOutput, animate, create_task_with_exc_handling, get_sound
 
 LOGGER = logging.getLogger(__name__)
 

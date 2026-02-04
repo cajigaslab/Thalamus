@@ -1,5 +1,7 @@
 #pylint: skip-file
 #type: ignore
+# this task is designed to have different touch and look targets. 
+# It is NOT the analog to delayed_reach_and_saccade, where every reach target must also be gazed
 """
 Implementation of the simple touch and look task. 
 """
@@ -18,7 +20,7 @@ from ..qt import *
 
 from . import task_context
 from .widgets import Form, ListAsTabsWidget
-from .util import wait_for, wait_for_dual_hold, RenderOutput, animate
+from .util import wait_for, wait_for_dual_hold, RenderOutput, animate, get_sound
 from .. import task_controller_pb2
 from ..config import ObservableCollection
 from .. import thalamus_pb2
@@ -213,10 +215,10 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   """
   Implementation of the state machine for the simple task
   """  
-  success_sound = QSound(os.path.join(os.path.dirname(__file__), 
-      'success_clip.wav'))
-  fail_sound = QSound(os.path.join(os.path.dirname(__file__), 
-      'failure_clip.wav'))
+  success_sound = get_sound(os.path.join(os.path.dirname(__file__), 
+    'success_clip.wav'))
+  fail_sound = get_sound(os.path.join(os.path.dirname(__file__), 
+    'failure_clip.wav'))
   show_touch_pos_feedback = False
   show_gaze_pos_feedback = False
   """
@@ -323,7 +325,8 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   state_brightness = 0
   def renderer(painter: QPainter) -> None:
     
-        
+    print(i_start_gaze_targ)
+    print(i_start_touch_targ)   
     if show_start_target:      
       painter.fillRect(all_target_rects[i_start_touch_targ], all_target_colors[i_start_touch_targ])
       painter.fillRect(all_target_rects[i_start_gaze_targ], all_target_colors[i_start_gaze_targ])

@@ -16,7 +16,7 @@ import stl
 
 from . import task_context
 from .widgets import Form, ListAsTabsWidget
-from .util import wait_for, wait_for_hold, RenderOutput, animate
+from .util import wait_for, wait_for_hold, RenderOutput, animate, get_sound
 from .. import task_controller_pb2
 from ..config import ObservableCollection
 from ..qt import *
@@ -249,10 +249,10 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   """
   Implementation of the state machine for the simple task
   """  
-  success_sound = QSound(os.path.join(os.path.dirname(__file__), 
-      'success_clip_g5.wav'))
-  fail_sound = QSound(os.path.join(os.path.dirname(__file__), 
-      'failure_clip_g10.wav'))
+  success_sound = get_sound(os.path.join(os.path.dirname(__file__), 
+    'success_clip.wav'))
+  fail_sound = get_sound(os.path.join(os.path.dirname(__file__), 
+    'failure_clip.wav'))
 
   show_touch_pos_feedback = False
   """

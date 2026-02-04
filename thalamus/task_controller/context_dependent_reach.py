@@ -16,7 +16,7 @@ import stl
 
 from . import task_context
 from .widgets import Form, ListAsTabsWidget
-from .util import wait_for, wait_for_hold, RenderOutput, animate
+from .util import wait_for, wait_for_hold, RenderOutput, animate, get_sound
 from .. import task_controller_pb2
 from ..config import ObservableCollection
 from ..qt import *

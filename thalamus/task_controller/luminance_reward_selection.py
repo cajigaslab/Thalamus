@@ -14,7 +14,7 @@ from . import task_context
 from .widgets import Form, ListAsTabsWidget
 from .util import (
   wait_for, wait_for_hold, TaskResult, TaskContextProtocol, CanvasPainterProtocol, nullcontext, stimulator,
-  assert_behav_result_has, RenderOutput
+  assert_behav_result_has, RenderOutput, get_sound
 )
 from .. import task_controller_pb2
 from .. import thalamus_pb2

@@ -22,7 +22,7 @@ from .. import thalamus_pb2_grpc
 from .widgets import Form
 from .util import (
   TaskContextProtocol, CanvasPainterProtocol, TaskResult,
-  create_task_with_exc_handling)
+  create_task_with_exc_handling, get_sound)
 from ..util import IterableQueue
 
 from ..qt import *
