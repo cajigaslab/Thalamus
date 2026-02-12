@@ -1,0 +1,30 @@
+name: Sync Devel to Devel-No-Native
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - devel
+    
+permissions:
+  contents: write
+
+jobs:
+  merge-branches:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetches all history for all branches
+
+      - name: Setup Git
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: Merge devel into devel-no-native
+        run: |
+          git checkout devel-no-native
+          git merge origin/devel --no-ff -m "Auto-merge devel into devel-no-native"
+          git push origin devel-no-native
