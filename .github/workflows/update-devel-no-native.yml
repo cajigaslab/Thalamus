@@ -17,5 +17,6 @@ jobs:
       with:
         ref: devel-no-native
     - run: |
+        git config pull.rebase false
         git pull origin devel
         git push origin devel-no-native
