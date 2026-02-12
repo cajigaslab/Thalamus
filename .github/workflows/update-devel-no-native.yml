@@ -13,6 +13,7 @@ jobs:
   merge:
     runs-on: ubuntu-latest
     steps:
+    - uses: actions/checkout@v4
     - run: git config pull.rebase false
     - run: git checkout devel-no-native
     - run: git pull origin devel
