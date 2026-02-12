@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import io
 import sys
 import typing
@@ -43,6 +45,7 @@ class VideoWriter:
 
     if isinstance(file_arg, (str, pathlib.Path)):
       self.filename = pathlib.Path(file_arg)
+      self.format = self.filename.suffix[1:] if self.format is None else self.format
       self.writer = None
     else:
       self.filename = None
