@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     - run: git config pull.rebase false
     - run: git fetch origin devel-no-native
     - run: git checkout devel-no-native
