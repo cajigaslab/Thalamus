@@ -1,0 +1,21 @@
+name: Update devel-no-native
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - devel
+    
+permissions:
+  contents: write
+  
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: devel-no-native
+    - run: |
+        git pull origin devel
+        git push origin devel-no-native
