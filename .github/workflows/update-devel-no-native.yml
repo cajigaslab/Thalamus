@@ -16,7 +16,6 @@ jobs:
     - uses: actions/checkout@v4
       with:
         ref: devel-no-native
-    - run: |
-        git config pull.rebase false
-        git pull origin devel
-        git push origin devel-no-native
+    - run: git config pull.rebase false
+    - run: git pull origin devel
+    - run: git push origin devel-no-native
