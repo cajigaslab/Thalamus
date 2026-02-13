@@ -214,7 +214,11 @@ def main():
     #depot_tools
     if not shutil.which('gclient'):
       destination = home_path / 'depot_tools'
-      subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
+      if not destination.exists():
+        subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
+      subprocess.check_call([destination / 'gclient'])
+      with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
+        bashrc.write(f'\nexport PATH={destination}:$PATH\n')
 
     #nasm
     if not shutil.which('nasm'):
@@ -225,7 +229,9 @@ def main():
 
     #cmake
     if not shutil.which('cmake'):
-      subprocess.check_call(['curl', '-L', '-o', f'cmake-{CMAKE_VERSION}-macos-universal.tar.gz', 'https://github.com/Kitware/CMake/releases/download/v{CMAKE_VERSION}/cmake-{CMAKE_VERSION}-macos-universal.tar.gz'])
+      command = ['curl', '-L', '-o', f'cmake-{CMAKE_VERSION}-macos-universal.tar.gz', f'https://github.com/Kitware/CMake/releases/download/v{CMAKE_VERSION}/cmake-{CMAKE_VERSION}-macos-universal.tar.gz']
+      print(' '.join(command))
+      subprocess.check_call(command)
       subprocess.check_call(['tar', '-xvzf', f'cmake-{CMAKE_VERSION}-macos-universal.tar.gz', '-C', os.environ['HOME']])
       with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
         bashrc.write(f'\nexport PATH={home_str}/cmake-{CMAKE_VERSION}-macos-universal/CMake.app/Contents/bin:$PATH\n')
@@ -233,12 +239,22 @@ def main():
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-U', 'setuptools'], cwd=home_str)
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-r', str(pathlib.Path.cwd()/'requirements.txt')], cwd=home_str)
 
-    with open(str(home_path / '.bash_profile'), 'r') as bash_profile:
-      bash_profile_content = bash_profile.read()
-    if "source ~/.thalamusrc" not in bash_profile_content:
-      with open(str(home_path / '.bash_profile'), 'a') as bash_profile:
-        bash_profile.write(f'\nsource ~/.thalamusrc\n')
+    if 'zsh' in os.environ['SHELL']:
+      bash_profile_path = home_path / '.zshenv'
+    else:
+      bash_profile_path = home_path / '.bash_profile'
 
+    print('source profile path', bash_profile_path)
+
+    if bash_profile_path.exists():
+      with open(str(bash_profile_path), 'r') as bash_profile:
+        bash_profile_content = bash_profile.read()
+    else:
+      bash_profile_content = ''
+
+    if "source ~/.thalamusrc" not in bash_profile_content:
+      with open(str(bash_profile_path), 'a') as bash_profile:
+        bash_profile.write(f'\nsource ~/.thalamusrc\n')
 
   else:
     (home_path / '.thalamusrc').touch()
