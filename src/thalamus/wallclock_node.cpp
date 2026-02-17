@@ -101,7 +101,11 @@ struct WallClockNode::Impl {
 #ifndef _WIN32
       case Type::NTP: {
         ntp_gettime(&ntv);
+#ifndef __APPLE__
         system_time = std::chrono::seconds(ntv.time.tv_sec) + std::chrono::microseconds(ntv.time.tv_usec);
+#else
+        system_time = std::chrono::seconds(ntv.time.tv_sec) + std::chrono::microseconds(ntv.time.tv_nsec);
+#endif
         break;
       }
       case Type::PTP: {

@@ -147,8 +147,10 @@ int main(int argc, char **argv) {
 #ifndef _WIN32
   std::map<std::string, int> sched_policies = {
     {"SCHED_OTHER", SCHED_OTHER},
+#ifndef __APPLE__
     {"SCHED_IDLE", SCHED_IDLE},
     {"SCHED_BATCH", SCHED_BATCH},
+#endif
     {"SCHED_FIFO", SCHED_FIFO},
     {"SCHED_RR", SCHED_RR}
   };
