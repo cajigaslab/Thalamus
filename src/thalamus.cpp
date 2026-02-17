@@ -237,9 +237,9 @@ int main(int argc, char **argv) {
   grpc::ServerBuilder builder;
   builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
   std::unique_ptr<NodeGraphImpl> node_graph(
-      new NodeGraphImpl(nodes, io_context, system_start, steady_start, stub.get(),
+      new NodeGraphImpl(nodes, io_context, system_start, steady_start, stub.get()
 #ifndef _WIN32
-                        pool_sched_policy_opt, pool_sched_priority_opt
+                        ,pool_sched_policy_opt, pool_sched_priority_opt
 #endif
     ));
   Service service(state, io_context, *node_graph, state_url);

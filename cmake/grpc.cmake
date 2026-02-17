@@ -1,17 +1,23 @@
 FetchContent_Declare(
   gRPC
   GIT_REPOSITORY https://github.com/grpc/grpc
-  GIT_TAG        v1.66.1
+  GIT_TAG        v1.76.0
 )
 set(BUILD_SHARED_LIBS OFF)
 set(BUILD_TESTING OFF)
 set(FETCHCONTENT_QUIET OFF)
 set(gRPC_MSVC_STATIC_RUNTIME ON)
-set(protobuf_MSVC_STATIC_RUNTIME ON CACHE BOOL "Protobuf: Link static runtime libraries")
+set(ABSL_MSVC_STATIC_RUNTIME ON)
+set(protobuf_MSVC_STATIC_RUNTIME ON CACHE BOOL "")
 set(ABSL_ENABLE_INSTALL ON)
 #add_definitions(-DBORINGSSL_NO_CXX)
 set(gRPC_BUILD_TESTS ON)
+
 FetchContent_MakeAvailable(gRPC)
+#Disable constinit for debug builds, https://github.com/protocolbuffers/protobuf/issues/21957
+execute_process(COMMAND git apply "${CMAKE_SOURCE_DIR}/patches/protobuf"
+                WORKING_DIRECTORY "${grpc_SOURCE_DIR}/third_party/protobuf")
+
 #file(READ "${grpc_SOURCE_DIR}/third_party/zlib/CMakeLists.txt" FILE_CONTENTS)
 #string(REPLACE "cmake_minimum_required(VERSION 2.4.4)" "cmake_minimum_required(VERSION 3.12)" FILE_CONTENTS "${FILE_CONTENTS}")
 #file(WRITE "${grpc_SOURCE_DIR}/third_party/zlib/CMakeLists.txt" "${FILE_CONTENTS}")
