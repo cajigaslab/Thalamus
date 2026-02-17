@@ -90,6 +90,9 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   target = config_settings.get('target', None)
   dotnet = 'dotnet' in config_settings
 
+  default_parallel = str(os.cpu_count())
+  parallel = int(config_settings.get('job', default_parallel))
+
   def get_build_path():
     legacy_path = pathlib.Path.cwd() / 'build' / f'{platform.python_implementation()}-{platform.python_version()}-{"release" if is_release else "debug"}'
     build_path = pathlib.Path.cwd() / 'build' / f'{"android-" if is_android else ""}{"clang-" if clang else ""}{"release" if is_release else "debug"}'
@@ -199,7 +202,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
       subprocess.check_call(cmake_command)
     shutil.copy(build_path / 'compile_commands.json', 'compile_commands.json')
 
-    command = ['cmake', '--build', build_path, '--config', "Release" if is_release else "Debug", '--parallel', str(os.cpu_count())]
+    command = ['cmake', '--build', build_path, '--config', "Release" if is_release else "Debug", '--parallel', str(parallel)]
     if target:
       command += ['--target', target]
     else:

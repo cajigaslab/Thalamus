@@ -303,11 +303,12 @@ def main():
     else:
       subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-r', str(pathlib.Path.cwd()/'requirements.txt')], cwd=home_str)
                           
-    _, clang_is_current = is_up_to_date('clang++', r'clang version (\d+).(\d+).(\d+)', (10, 0, 0))
+    _, clang_is_current = is_up_to_date('clang++', r'clang version (\d+).(\d+).(\d+)', (18, 0, 0))
     if not clang_is_current:
-      subprocess.check_call(['sudo', 'apt', 'install', '-y', 'clang'])
-    clang_version, _ = is_up_to_date('clang++', r'clang version (\d+).(\d+).(\d+)', (10, 0, 0))
-    subprocess.check_call(['sudo', 'apt', 'install', '-y', f'libclang-{clang_version[0]}-dev', ])
+      download('https://github.com/llvm/llvm-project/releases/download/llvmorg-18.1.8/clang+llvm-18.1.8-x86_64-linux-gnu-ubuntu-18.04.tar.xz')
+      subprocess.check_call(['tar', '-xvf', f'clang+llvm-18.1.8-x86_64-linux-gnu-ubuntu-18.04.tar.xz', '-C', f'{home_str}/.local'])
+      with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
+        bashrc.write(f'\nexport PATH={home_str}/.local/clang+llvm-18.1.8-x86_64-linux-gnu-ubuntu-18.04/bin:$PATH\n')
 
     _, cmake_is_current = is_up_to_date('cmake', r'cmake version (\d+).(\d+).(\d+)', (3, 16, 0))
     if not cmake_is_current:
