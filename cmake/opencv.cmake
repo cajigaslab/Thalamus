@@ -1,7 +1,10 @@
+set(OPENCV_VERSION 4.12.0)
+string(REPLACE . "" OPENCV_VERSION_NO_DOT ${OPENCV_VERSION})
+
 FetchContent_Declare(
   opencv
   GIT_REPOSITORY https://github.com/opencv/opencv.git
-  GIT_TAG 4.8.1
+  GIT_TAG ${OPENCV_VERSION}
   SOURCE_SUBDIR thalamus-nonexistant)
 FetchContent_MakeAvailable(opencv)
 file(MAKE_DIRECTORY ${opencv_BINARY_DIR}/Debug)
@@ -16,6 +19,7 @@ endif()
 set(OPENCV_LIB_FILES)
 if(WIN32)
   set(OPENCV_LIBS "IlmImf$<$<CONFIG:Debug>:d>"
+                  "ipphal"
                   "ippicvmt"
                   "ippiw$<$<CONFIG:Debug>:d>"
                   "ittnotify$<$<CONFIG:Debug>:d>"
@@ -23,16 +27,16 @@ if(WIN32)
                   "libopenjp2$<$<CONFIG:Debug>:d>"
                   "libpng$<$<CONFIG:Debug>:d>"
                   "libtiff$<$<CONFIG:Debug>:d>"
-                  "opencv_stitching481$<$<CONFIG:Debug>:d>"
-                  "opencv_calib3d481$<$<CONFIG:Debug>:d>"
-                  "opencv_flann481$<$<CONFIG:Debug>:d>"
-                  "opencv_features2d481$<$<CONFIG:Debug>:d>"
-                  "opencv_core481$<$<CONFIG:Debug>:d>"
-                  "opencv_imgcodecs481$<$<CONFIG:Debug>:d>"
-                  "opencv_imgproc481$<$<CONFIG:Debug>:d>"
-                  "opencv_highgui481$<$<CONFIG:Debug>:d>"
-                  "opencv_objdetect481$<$<CONFIG:Debug>:d>"
-                  "opencv_videoio481$<$<CONFIG:Debug>:d>")
+                  "opencv_stitching${OPENCV_VERSION_NO_DOT}$<$<CONFIG:Debug>:d>"
+                  "opencv_calib3d${OPENCV_VERSION_NO_DOT}$<$<CONFIG:Debug>:d>"
+                  "opencv_flann${OPENCV_VERSION_NO_DOT}$<$<CONFIG:Debug>:d>"
+                  "opencv_features2d${OPENCV_VERSION_NO_DOT}$<$<CONFIG:Debug>:d>"
+                  "opencv_core${OPENCV_VERSION_NO_DOT}$<$<CONFIG:Debug>:d>"
+                  "opencv_imgcodecs${OPENCV_VERSION_NO_DOT}$<$<CONFIG:Debug>:d>"
+                  "opencv_imgproc${OPENCV_VERSION_NO_DOT}$<$<CONFIG:Debug>:d>"
+                  "opencv_highgui${OPENCV_VERSION_NO_DOT}$<$<CONFIG:Debug>:d>"
+                  "opencv_objdetect${OPENCV_VERSION_NO_DOT}$<$<CONFIG:Debug>:d>"
+                  "opencv_videoio${OPENCV_VERSION_NO_DOT}$<$<CONFIG:Debug>:d>")
   if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
     if("${MSVC_VERSION}" LESS "1930")
       set(OPENCV_STATICLIB_PREFIX "x64/vc16/")

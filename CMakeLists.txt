@@ -295,7 +295,6 @@ if(WIN32)
                                   "${CMAKE_SOURCE_DIR}/src/thalamus/brainproducts_node.cpp")
   target_include_directories(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src/brain_products")
 elseif(APPLE)
-  target_sources(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src/nidaq_node_mac.cpp")
   target_compile_definitions(thalamus PRIVATE _GNU_SOURCE)
 else()
   target_sources(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src/thalamus/ros2_node.hpp"
@@ -333,10 +332,6 @@ target_compile_options(native PRIVATE ${WARNING_FLAGS})
 target_include_directories(native PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(native PRIVATE hydrate thalamus opencv thalamus_ffmpeg ffmpeg sdl protoc_generated lua cairo)
 
-if(APPLE)
-  target_link_options(native PRIVATE -pagezero_size 10000 -image_base 7fff04c4a000)
-endif()
-
 if(NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
   target_link_options(native PRIVATE -g)
 endif()
@@ -357,9 +352,6 @@ target_link_libraries(test PRIVATE
 
 target_compile_options(test PRIVATE -fprofile-instr-generate -fcoverage-mapping)
 target_link_options(test PRIVATE -fprofile-instr-generate -fcoverage-mapping)
-if(APPLE)
-  target_link_options(test PRIVATE -pagezero_size 10000 -image_base 7fff04c4a000)
-endif()
 
 if(NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
   target_link_options(test PRIVATE -g)
