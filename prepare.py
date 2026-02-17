@@ -17,7 +17,7 @@ import urllib.request
 if sys.platform == 'win32':
   import winreg
 
-def is_up_to_date(command, regex, required_version):
+def is_up_to_date(command: str, regex, required_version):
   if shutil.which(command) is None:
     return '', False
 
@@ -105,24 +105,16 @@ def main():
         subprocess.check_call(['powershell', '-Command', 'Expand-Archive -DestinationPath ' + os.environ['USERPROFILE'] + ' nasm-2.15.05-win64.zip'])
 
     #clang
-    clang_which = shutil.which('clang')
-    print('Current clang:', clang_which)
-    if not clang_which:
+    _, clang_is_current = is_up_to_date('clang++', r'clang version (\d+).(\d+).(\d+)', (21, 0, 0))
+    if not clang_is_current:
       destination = 'C:\\Program Files\\LLVM\\bin'
       new_path.append(destination)
       expected_clang = pathlib.Path(destination) / 'clang.exe'
       print(f'{expected_clang} exists: {expected_clang.exists()}')
-      if not expected_clang.exists():
-        download('https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.0/LLVM-19.1.0-win64.exe')
-        subprocess.check_call(['LLVM-19.1.0-win64.exe', '/S'])
-        #waiting = True
-        #while waiting:
-        #  print('waiting for LLVM')
-        #  time.sleep(1)
-        #  waiting = False
-        #  for p in psutil.process_iter():
-        #    if 'LLVM' in p.name():
-        #      waiting = True
+      _, clang_is_current = is_up_to_date(str(expected_clang), r'clang version (\d+).(\d+).(\d+)', (21, 0, 0))
+      if not clang_is_current:
+        download('https://github.com/llvm/llvm-project/releases/download/llvmorg-21.1.8/LLVM-21.1.8-win64.exe')
+        subprocess.check_call(['LLVM-21.1.8-win64.exe', '/S'])
 
     #pkg-config
     pkg_config_which = shutil.which('pkg-config')
