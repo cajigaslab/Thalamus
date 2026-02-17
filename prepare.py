@@ -24,6 +24,7 @@ def is_up_to_date(command, regex, required_version):
   output = subprocess.check_output([command, '--version'], encoding='utf8')
   version_match = re.search(regex, output)
   version = int(version_match.group(1)), int(version_match.group(2)), int(version_match.group(3))
+  print(command, output, version_match, version)
   return version, version >= required_version
 
 UNHANDLED_EXCEPTION = None
@@ -303,6 +304,7 @@ def main():
     else:
       subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-r', str(pathlib.Path.cwd()/'requirements.txt')], cwd=home_str)
                           
+    (home_path / '.local').mkdir(exist_ok=True)
     _, clang_is_current = is_up_to_date('clang++', r'clang version (\d+).(\d+).(\d+)', (18, 0, 0))
     if not clang_is_current:
       download('https://github.com/llvm/llvm-project/releases/download/llvmorg-18.1.8/clang+llvm-18.1.8-x86_64-linux-gnu-ubuntu-18.04.tar.xz')
@@ -312,16 +314,17 @@ def main():
 
     _, cmake_is_current = is_up_to_date('cmake', r'cmake version (\d+).(\d+).(\d+)', (3, 16, 0))
     if not cmake_is_current:
-      subprocess.check_call(['wget', f'https://github.com/Kitware/CMake/releases/download/v{CMAKE_VERSION}/cmake-{CMAKE_VERSION}-linux-x86_64.sh'])
-      (home_path / '.local').mkdir(exist_ok=True)
+      download(f'https://github.com/Kitware/CMake/releases/download/v{CMAKE_VERSION}/cmake-{CMAKE_VERSION}-linux-x86_64.sh')
       subprocess.check_call(['sh', f'./cmake-{CMAKE_VERSION}-linux-x86_64.sh', f'--prefix={home_str}/.local', '--skip-license', '--include-subdir'])
       with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
         bashrc.write(f'\nexport PATH={home_str}/.local/cmake-{CMAKE_VERSION}-linux-x86_64/bin:$PATH\n')
 
     #depot_tools
-    if not shutil.which('gclient'):
-      destination = home_path / 'depot_tools'
-      subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
+    #if not shutil.which('gclient'):
+    #  destination = home_path / 'depot_tools'
+    #  subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
+    #  with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
+    #    bashrc.write(f'\nexport PATH=${destination}:$PATH\n')
 
     bashrc_path = home_path / '.bashrc'
     bashrc_path.touch()
