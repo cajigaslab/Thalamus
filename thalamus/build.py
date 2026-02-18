@@ -123,7 +123,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   maintainer = metadata['maintainer']
   maintainer_email = metadata['maintainer_email']
   license = metadata['license']
-  osx_target = '10.15'
+  osx_target = '11.0'
   osx_target_underscored = osx_target.replace('.', '_')
 
   platform_tag = None
