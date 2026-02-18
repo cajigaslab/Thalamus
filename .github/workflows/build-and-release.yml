@@ -76,6 +76,8 @@ jobs:
       run: git config --global user.email "no@email.com"
     - name: Prepare
       run: python prepare.py
+    - name: Check clang
+      run: where clang && clang --version
     - name: Version Bump
       run: python bump.py patch
     - name: Build
