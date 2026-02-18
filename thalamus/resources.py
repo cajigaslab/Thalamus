@@ -11,7 +11,11 @@ try:
       arg2 = arg1
       arg1 = thalamus
       
-    return str(importlib.resources.files(arg1) / arg2)
+    try:
+      with importlib.resources.path(arg1, arg2) as result:
+        return str(result)
+    except FileNotFoundError as e:
+      return e.filename
         
   def read_text(arg1: typing.Any, arg2: str = None) -> str:
     if arg2 is None:
