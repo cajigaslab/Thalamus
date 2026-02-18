@@ -20,7 +20,7 @@ jobs:
       with:
         ref: ghpages
         path: ghpages
-    - run: python3 -m pip install sphinx
+    - run: python3 -m pip install sphinx sphinxcontrib-video
     - run: sphinx-build -M html Thalamus/docs/source/ Thalamus/docs/build/
     - run: cp -r Thalamus/docs/build/html/* ghpages
     - run: git config --global user.email "no@email.com"
