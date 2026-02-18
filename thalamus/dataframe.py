@@ -1,11 +1,16 @@
 import re
+import sys
 import enum
+import pathlib
+import argparse
 import collections
 
 import pandas
 import numpy
 
 from pprint import pformat
+
+from .record_reader2 import RecordReader
 
 class DataFrameBuilder:
   class Type(enum.Enum):
@@ -113,3 +118,46 @@ class DataFrameBuilder:
         self.times.append(analog.time)
 
     return True
+
+class Format(enum.Enum):
+  csv = enum.auto()
+  parquet = enum.auto()
+
+def default_output(format: str, input_path: pathlib.Path):
+  if format == 'csv':
+    return input_path.with_name(input_path.name + '.csv')
+  else:
+    return input_path.with_name(input_path.name + '.parquet')
+
+def main(argv):
+  formats = sorted(t.name for t in Format)
+
+  parser = argparse.ArgumentParser('DataFrame generator')
+  parser.add_argument('-n', '--node', required=True)
+  parser.add_argument('-c', '--channels', type=re.compile)
+  parser.add_argument('-t', '--type', choices=['text', 'analog'], default='analog')
+  parser.add_argument('-i', '--input', type=pathlib.Path, required=True)
+  parser.add_argument('-o', '--output', type=pathlib.Path)
+  parser.add_argument('-f', '--format', choices=formats, default='parquet')
+  args = parser.parse_args(argv[1:])
+  
+  if args.type == 'analog':
+    data_type = DataFrameBuilder.Type.Analog
+  else:
+    data_type = DataFrameBuilder.Type.Text
+  
+  builder = DataFrameBuilder(args.node, data_type, args.channels)
+  with RecordReader(args.input) as reader:
+    for record in reader:
+      builder.update(record)
+
+  dataframe = builder.build()
+  output = args.output if args.output is not None else default_output(args.format, args.input)
+  
+  if args.format == 'csv':
+    dataframe.to_csv(output)
+  else:
+    dataframe.to_parquet(output)
+
+if __name__ == '__main__': #pragma: no cover
+  main(sys.argv)

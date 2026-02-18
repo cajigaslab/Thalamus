@@ -5,6 +5,7 @@ import unittest
 import numpy
 import pandas
 
+import thalamus.dataframe
 from thalamus.record_reader2 import RecordReader
 from thalamus.dataframe import DataFrameBuilder
 from thalamus.thalamus_pb2 import StorageRecord, AnalogResponse, Text, Span
@@ -229,3 +230,100 @@ class DataFrameTest(unittest.TestCase):
       numpy.testing.assert_array_equal(df.index.to_numpy(), numpy.array([2, 4]))
       numpy.testing.assert_array_equal(df.one.to_numpy(), numpy.array([1, 3]))
       numpy.testing.assert_array_equal(df.two.to_numpy(), numpy.array([2, 4]))
+
+  def test_main_analog(self):
+    with tempfile.NamedTemporaryFile() as temp_file:
+      record = StorageRecord(
+        node='This',
+        time=2,
+        analog=AnalogResponse(
+          data = [1, 2, 3, 4, 10, 11],
+          spans=[
+            Span(name='one', begin=0, end=2), Span(name='two', begin=2, end=4), Span(name='three', begin=10, end=11)
+          ],
+          sample_intervals=[2, 2, 2],
+          time=2
+        )
+      )
+      write_record(temp_file, record)
+      record.time += 4
+      record.analog.time += 4
+      record.analog.data[:] = [5, 6, 7, 8]
+      write_record(temp_file, record)
+      record.node='That'
+      write_record(temp_file, record)
+      write_record(temp_file, StorageRecord(node='This'))
+      write_record(temp_file, StorageRecord(node='This',text=Text()))
+
+      temp_file.seek(0, os.SEEK_SET)
+      args = [
+        'thalamus.dataframe',
+        '-i', temp_file.name,
+        '-c', 'one|two',
+        '-n', 'This'
+      ]
+      thalamus.dataframe.main(args)
+      df = pandas.read_parquet(temp_file.name + '.parquet')
+
+      numpy.testing.assert_array_equal(df.index.to_numpy(), numpy.array([0, 2, 4, 6]))
+      numpy.testing.assert_array_equal(df.one.to_numpy(), numpy.array([1, 2, 5, 6]))
+      numpy.testing.assert_array_equal(df.two.to_numpy(), numpy.array([3, 4, 7, 8]))
+
+      self.assertTrue(numpy.issubdtype(df.index.to_numpy().dtype, numpy.integer))
+      self.assertTrue(numpy.issubdtype(df.one.to_numpy().dtype, numpy.floating))
+      self.assertTrue(numpy.issubdtype(df.two.to_numpy().dtype, numpy.floating))
+
+      args = [
+        'thalamus.dataframe',
+        '-i', temp_file.name,
+        '-c', 'one|two',
+        '-n', 'This',
+        '-f', 'csv'
+      ]
+      thalamus.dataframe.main(args)
+      df = pandas.read_parquet(temp_file.name + '.parquet')
+
+      numpy.testing.assert_array_equal(df.index.to_numpy(), numpy.array([0, 2, 4, 6]))
+      numpy.testing.assert_array_equal(df.one.to_numpy(), numpy.array([1, 2, 5, 6]))
+      numpy.testing.assert_array_equal(df.two.to_numpy(), numpy.array([3, 4, 7, 8]))
+
+      self.assertTrue(numpy.issubdtype(df.index.to_numpy().dtype, numpy.integer))
+      self.assertTrue(numpy.issubdtype(df.one.to_numpy().dtype, numpy.floating))
+      self.assertTrue(numpy.issubdtype(df.two.to_numpy().dtype, numpy.floating))
+
+  def test_main_text(self):
+    with tempfile.NamedTemporaryFile() as temp_file:
+      record = StorageRecord(
+        node='This',
+        time=2,
+        text=Text(
+          text='One',
+          time=2,
+        )
+      )
+      write_record(temp_file, record)
+      record.time += 4
+      record.text.time += 4
+      record.text.text = 'Two'
+      write_record(temp_file, record)
+      record.node='That'
+      write_record(temp_file, record)
+      write_record(temp_file, StorageRecord(node='This'))
+      write_record(temp_file, StorageRecord(node='This',analog=AnalogResponse()))
+
+      temp_file.seek(0, os.SEEK_SET)
+
+      args = [
+        'thalamus.dataframe',
+        '-i', temp_file.name,
+        '-t', 'text',
+        '-n', 'This',
+      ]
+      thalamus.dataframe.main(args)
+      df = pandas.read_parquet(temp_file.name + '.parquet')
+
+      numpy.testing.assert_array_equal(df.index.to_numpy(), numpy.array([2, 6]))
+      numpy.testing.assert_array_equal(df.text.to_list(), ['One', 'Two'])
+
+      self.assertTrue(numpy.issubdtype(df.index.to_numpy().dtype, numpy.integer))
+      self.assertTrue(pandas.api.types.is_string_dtype(df.text))
