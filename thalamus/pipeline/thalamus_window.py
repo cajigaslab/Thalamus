@@ -131,7 +131,7 @@ class AlphaOmegaTableModel(QAbstractTableModel):
         return Qt.CheckState.Checked if channel['selected'] else Qt.CheckState.Unchecked
 
   def setData(self, index: QModelIndex, value: typing.Any, role: int = ...) -> bool:
-    print('setData', index, value, role)
+    LOGGER.debug('setData %s %s %s', index, value, role)
     channel = self.channels[index.row()]
     channel['selected'] = value == Qt.CheckState.Checked
     self.dataChanged.emit(index, index)
@@ -1342,7 +1342,7 @@ class ItemModel(QAbstractItemModel):
       factory = FACTORIES[type]
       fields = factory.fields
       field = fields[index.row()]
-      print(node, field, value)
+      LOGGER.debug('%s %s %s', node, field, value)
       if node[field.key] != value:
         node[field.key] = value
         self.dataChanged.emit(index, index, [role])
@@ -1695,7 +1695,7 @@ class ThalamusWindow(QMainWindow):
       del self.data_views[id(value)]
 
   def on_selection_changed(self, selected: QItemSelection, deselected: typing.Optional[QItemSelection]):
-    print('on_selection_changed')
+    LOGGER.debug('on_selection_changed')
     indexes = selected.indexes()
     index = indexes[0] if indexes and indexes[0] else None
     if not index:
@@ -1706,7 +1706,7 @@ class ThalamusWindow(QMainWindow):
       node = nodes[index.row()]
     else:
       node = nodes[index.parent().row()]
-    print(node)
+    LOGGER.debug('%s', node)
 
     node_type = node['type']
     factory = FACTORIES[node_type]
@@ -1742,19 +1742,19 @@ class ThalamusWindow(QMainWindow):
       dock_is_deleted = lambda: isdeleted(dock)
 
       def name_observer(a, k, v):
-        print('name_observer', k, v)
+        LOGGER.debug('name_observer %s %s', k, v)
         if k == 'name':
           value['node'] = v
       node.add_observer(name_observer, dock_is_deleted)
 
       def title_observer(a, k, v):
-        print('title_observer', k, v)
+        LOGGER.debug('title_observer %s %s', k, v)
         if k == 'node':
           dock.setWindowTitle(v)
       value.add_observer(title_observer, dock_is_deleted)
 
       def type_observer(a, k, v):
-        print('type_observer', k, v)
+        LOGGER.debug('type_observer %s %s', k, v)
         if k == 'type':
           previous_widget = dock.widget();
           factory = FACTORIES[v]
@@ -1791,7 +1791,7 @@ class ThalamusWindow(QMainWindow):
       self.dock_widgets.append(dock)
 
   def on_data_changed(self, top_left: QModelIndex, bottom_right: QModelIndex, roles: typing.List[int]):
-    print('on_data_changed')
+    LOGGER.debug('on_data_changed')
     if top_left.parent() == QModelIndex():
       if top_left.column() == 1:
         self.on_selection_changed(QItemSelection(top_left, bottom_right), None)

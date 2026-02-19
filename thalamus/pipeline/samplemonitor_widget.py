@@ -3,6 +3,10 @@ from ..config import ObservableDict
 from .. import thalamus_pb2_grpc
 from ..observable_item_models import FlatObservableCollectionModel, TreeObservableCollectionModel, TreeObservableCollectionDelegate
 
+import logging
+
+LOGGER = logging.getLogger(__name__)
+
 class SampleMonitorWidget(QTabWidget):
   def __init__(self, config: ObservableDict, stub: thalamus_pb2_grpc.ThalamusStub):
     super().__init__()
@@ -26,7 +30,7 @@ class SampleMonitorWidget(QTabWidget):
     self.setLayout(layout)
 
     def on_add():
-      print('on_add', self.nodes)
+      LOGGER.debug('on_add %s', self.nodes)
       if self.nodes is None:
         return
       self.nodes.append({
@@ -39,7 +43,7 @@ class SampleMonitorWidget(QTabWidget):
         return
       rows = sorted(set(i.row() for i in self.qlist.selectedIndexes()), reverse=True)
       for row in rows:
-        print(self.nodes, row)
+        LOGGER.debug('%s %s', self.nodes, row)
         del self.nodes[row]
     remove_button.clicked.connect(on_remove)
 
@@ -61,7 +65,7 @@ class SampleMonitorWidget(QTabWidget):
     self.qlist.setItemDelegate(delegate)
 
   def __on_change(self, source, action, key, value):
-    print('__on_change', source, action, key, value)
+    LOGGER.debug('__on_change %s %s %s %s', source, action, key, value)
     if source is self.config:
       if key == 'Nodes':
         self.__set_model(value)

@@ -16,6 +16,9 @@ from .. import thalamus_pb2_grpc
 
 from ..observable_item_models import FlatObservableCollectionModel, TreeObservableCollectionModel, TreeObservableCollectionDelegate
 from ..channels_item_model import ChannelsItemModel
+import logging
+
+LOGGER = logging.getLogger(__name__)
 
 class NameTracker:
   def __init__(self, nodes, namer: typing.Callable[[typing.Any], str], callback: typing.Callable[[str, typing.Optional[str]], None], depth = 1):
@@ -57,7 +60,7 @@ class Delegate(TreeObservableCollectionDelegate):
     self.channel_models: typing.Dict[str, ChannelsItemModel] = {}
 
   def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
-    print('createEditor')
+    LOGGER.debug('createEditor')
     item, key = self.model.get_location(index)
     if key == 'Channel 1':
       node = item['Node 1']
