@@ -2,6 +2,7 @@ import pdb
 import grpc
 import typing
 import bisect
+import logging
 import asyncio
 import functools
 import traceback
@@ -12,6 +13,8 @@ from .qt import *
 from .task_controller.util import create_task_with_exc_handling
 from . import thalamus_pb2
 from . import thalamus_pb2_grpc
+
+LOGGER = logging.getLogger(__name__)
 
 class ChannelsItemModel(QAbstractItemModel):
   def __init__(self, stub: thalamus_pb2_grpc.ThalamusStub, node: typing.Optional[str] = None):
@@ -68,7 +71,7 @@ class ChannelsItemModel(QAbstractItemModel):
         raise
 
   def data(self, index: QModelIndex, role: int) -> typing.Any:
-    print('data', index.row(), index.column(), role)
+    LOGGER.debug('data %s %s %s', index.row(), index.column(), role)
     if role == Qt.ItemDataRole.DisplayRole:
       return self.channels[index.row()]
     elif role == Qt.ItemDataRole.EditRole:

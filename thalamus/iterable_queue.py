@@ -2,11 +2,8 @@ import asyncio
 
 class IterableQueue:
   def __init__(self):
-    print(88)
     self.queue = asyncio.Queue()
-    print(80)
     self.sentinel = object()
-    print(81)
 
   def put(self, item):
     return self.queue.put(item)
