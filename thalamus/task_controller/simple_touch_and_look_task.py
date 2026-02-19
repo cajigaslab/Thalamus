@@ -93,7 +93,7 @@ class TargetWidget(QWidget):
     layout.addWidget(random_form, 1, 3, 1, 2)
 
 def create_widget(task_config: ObservableCollection) -> QWidget:
-  print('creating widget')
+  LOGGER.info('creating widget')
   """
   Creates a widget for configuring the simple task
   """
@@ -132,7 +132,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   target_tabs = ListAsTabsWidget(target_config_list, TargetWidget, lambda t: str(t['name']))
   layout.addWidget(target_tabs)
 
-  print('end creating widget')
+  LOGGER.info('end creating widget')
   return result
 
 
@@ -248,7 +248,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   """
   
   ntargets = len(context.task_config['targets']) # including fixation and targ2s
-  print('getting start target indices')
+  LOGGER.info('getting start target indices')
   i_start_touch_targ = get_start_touch_target_index(context)
   i_start_gaze_targ = get_start_gaze_target_index(context)
   

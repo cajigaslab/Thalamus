@@ -71,7 +71,7 @@ class ItemModel(QAbstractItemModel):
     self.dataChanged.emit(self.index(i, 0, QModelIndex()), self.index(i, 4, QModelIndex()))
 
   def data(self, index: QModelIndex, role: int) -> typing.Any:
-    #print('data', index.row(), index.column(), role)
+    #LOGGER.info('data %s %s %s', index.row(), index.column(), role)
     if not index.isValid():
       return None
 
@@ -97,7 +97,7 @@ class ItemModel(QAbstractItemModel):
         return Qt.CheckState.Checked if data['Hold'] else Qt.CheckState.Unchecked
 
   def setData(self, index: QModelIndex, value: typing.Any, role: int = Qt.ItemDataRole.EditRole) -> bool:
-    print('setData', index, value, Qt.CheckState.Checked, role)
+    LOGGER.info('setData %s %s %s %s', index, value, Qt.CheckState.Checked, role)
     data = self.config[index.row()]
     if index.column() == 0:
       data['Image'] = value
@@ -175,7 +175,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     row_set = set(item.row() for item in qlist.selectedIndexes())
     row_list = sorted(row_set, reverse=True)
     for row in row_list:
-      print('on_remove', row)
+      LOGGER.info('on_remove %s', row)
       del transitions[row]
   remove_button.clicked.connect(on_remove)
 
@@ -191,9 +191,9 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   layout.addWidget(remove_button)
 
   def on_change(action, key, value):
-    print('on_change', action, key, value)
+    LOGGER.info('on_change %s %s %s', action, key, value)
     if key == 'error':
-      print('set error')
+      LOGGER.info('set error')
       error_label.setText(value)
 
   task_config.add_observer(on_change, lambda: isdeleted(result))
@@ -252,7 +252,7 @@ async def load_video(path: pathlib.Path):
   data = await proc.stdout.read()
   text = data.decode('utf8')
   await proc.wait()
-  print(text)
+  LOGGER.info(text)
   width, height = [int(s) for s in text.split('x')]
   proc = await asyncio.create_subprocess_exec(native_exe, 'ffmpeg',
                                 '-i', str(path),

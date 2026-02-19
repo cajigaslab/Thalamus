@@ -223,7 +223,7 @@ class StimWidget(QWidget):
         config[field] = options[0] if options else ''
         
       def on_change(text: str):
-        print('on_change', text)
+        LOGGER.info('on_change %s', text)
         config[field] = text
 
       combo = QComboBox()
@@ -512,7 +512,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   stimulation_channel = context.task_config['Stimulation Channel']
   all_enabled = [False, False, False, False]
 
-  print('stimulation_channel', stimulation_channel)
+  LOGGER.info('stimulation_channel %s', stimulation_channel)
   if stimulation_channel == "AO3":
     all_enabled[3] = True
     ao = 3
@@ -555,7 +555,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   #    Span(begin=8,end=9,name='/PXI1Slot4/port0/line8'),
   #  ],
   #  sample_intervals=[0, 0, 0, 0, 0, 0, 0, 0, 0])
-  #print(mux_signal)
+  #LOGGER.info('%s', mux_signal)
   #await context.inject_analog('Mux', mux_signal)
 
   if IS_SETUP:
@@ -616,7 +616,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       painter.fillRect(rect, Qt.GlobalColor.red)
     elif state == State.SUCCESS:
       if deliver_stim and painter.output_mask == RenderOutput.SUBJECT:
-        print('STIMMING')
+        LOGGER.info('STIMMING')
 
         create_task_with_exc_handling(asyncio.gather(
           context.node_request('Node 1', {

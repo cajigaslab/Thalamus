@@ -154,7 +154,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     row_set = set(item.row() for item in qlist.selectedIndexes())
     row_list = sorted(row_set, reverse=True)
     for row in row_list:
-      print('on_remove', row)
+      LOGGER.info('on_remove %s', row)
       del transitions[row]
   remove_button.clicked.connect(on_remove)
 
@@ -171,9 +171,9 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   layout.addWidget(remove_button)
 
   def on_change(action, key, value):
-    print('on_change', action, key, value)
+    LOGGER.info('on_change %s %s %s', action, key, value)
     if key == 'error':
-      print('set error')
+      LOGGER.info('set error')
       error_label.setText(value)
 
   task_config.add_observer(on_change, lambda: isdeleted(result))
@@ -197,7 +197,7 @@ async def load_video(path: pathlib.Path):
   data = await proc.stdout.read()
   text = data.decode('utf8')
   await proc.wait()
-  print(text)
+  LOGGER.info(text)
   width, height = [int(s) for s in text.split('x')]
   proc = await asyncio.create_subprocess_exec(native_exe, 'ffmpeg',
                                 '-i', str(path),
@@ -377,7 +377,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     draw = False
     space_pressed = False
     await context.sleep(inter_interval)
-    print(sound, sound.source(), sound.status())
+    LOGGER.info('%s %s %s', sound, sound.source(), sound.status())
     #if sound is not None:
     sound.play()
     await asyncio.gather(

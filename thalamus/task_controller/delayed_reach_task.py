@@ -523,7 +523,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
     on_time_ms = int(context.get_reward(all_reward_channels[final_i_selected_target]))
 
-    print("delivering reward %d"%(on_time_ms,) )
+    LOGGER.info("delivering reward %d", on_time_ms )
     signal = thalamus_pb2.AnalogResponse(
         data=[5,0],
         spans=[thalamus_pb2.Span(begin=0,end=2,name='Reward')],

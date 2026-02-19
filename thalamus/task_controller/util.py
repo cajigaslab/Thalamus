@@ -512,18 +512,18 @@ class UdpProtocol:
 
   def connection_made(self, transport):
     self.transport = transport
-    LOGGER.info('connection_made')
+    LOGGER.debug('connection_made')
 
   def datagram_received(self, data, addr):
-    LOGGER.info('datagram_received')
+    LOGGER.debug('datagram_received')
     self.callback(data)
     self.task_context.process()
 
   def error_received(self, exc):
-    LOGGER.info('error_received %s', exc)
+    LOGGER.debug('error_received %s', exc)
 
   def connection_lost(self, exc):
-    LOGGER.info('connection_lost')
+    LOGGER.debug('connection_lost')
     self.is_closed.set_result(None)
 
 class udp_context():
