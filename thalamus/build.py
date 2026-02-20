@@ -158,6 +158,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   with open(f'{underscore_name}-{version}.dist-info/WHEEL', 'w') as wheel_file:
     wheel_file.write('Wheel-Version: 1.0\n')
     wheel_file.write('Generator: thalamus.build\n')
+    wheel_file.write(f'Root-Is-Purelib: false\n')
 
   write_metadata(metadata, f'{underscore_name}-{version}.dist-info/METADATA')
 
@@ -225,18 +226,25 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     subprocess.check_call(command)
     shutil.copy('src/plugin.h', 'thalamus/plugin.h')
 
+  license_dir = pathlib.Path(f'{underscore_name}-{version}.dist-info/licenses')
+  license_dir.mkdir(exist_ok=True)
+  shutil.copy('LICENSE', license_dir)
+
   files = []
   def add_to_archive(record_file, path):
-    files.append(path)
     digest = hashlib.sha256()
     with open(str(path), 'rb') as pack_file:
       for buffer in iter(lambda: pack_file.read(1024), b''):
         digest.update(buffer)
       digest_b64 = urlsafe_b64encode_nopad(digest.digest())
-      record_file.write(f'{pack_file.name},sha256={digest_b64},{path.stat().st_size}\n')
+      name = pack_file.name.replace('\\', '/')
+      record_file.write(f'{name},sha256={digest_b64},{path.stat().st_size}\n')
 
   with open(f'{underscore_name}-{version}.dist-info/RECORD', 'w') as record_file:
-    #add_to_archive(record_file, pathlib.Path('LICENSE'))
+    record_file.write(f'{underscore_name}-{version}.dist-info/RECORD,,\n')
+    add_to_archive(record_file, pathlib.Path(f'{underscore_name}-{version}.dist-info/WHEEL'))
+    add_to_archive(record_file, pathlib.Path(f'{underscore_name}-{version}.dist-info/METADATA'))
+    add_to_archive(record_file, pathlib.Path(f'{underscore_name}-{version}.dist-info/licenses/LICENSE'))
     for path in pathlib.Path('thalamus').rglob('*'):
       parents = [p.name for p in path.parents]
       is_dir = not path.is_file()
@@ -247,12 +255,10 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
       if is_dir or in_ignored_dir or has_ignored_suffix and not is_native_executable and not is_dotnet_file:
         #print(path, 'DROP')
         continue
+      files.append(path)
       add_to_archive(record_file, path)
       #print(path, 'TAKE')
 
-  license_dir = pathlib.Path(f'{underscore_name}-{version}.dist-info/licenses')
-  license_dir.mkdir()
-  shutil.copy('LICENSE', license_dir)
   with zipfile.ZipFile(pathlib.Path(wheel_directory) / whl_name, 'w', zipfile.ZIP_DEFLATED) as whl_file:
     whl_file.write(f'{underscore_name}-{version}.dist-info/WHEEL')
     whl_file.write(f'{underscore_name}-{version}.dist-info/RECORD')
