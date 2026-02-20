@@ -193,7 +193,7 @@ class Form(QWidget):
     max_spin_box.valueChanged.connect(functools.partial(on_change, 'max'))
 
     def on_config_change(_: ObservableCollection.Action, key: typing.Any, value: typing.Any) -> None:
-      print(config.field, 'on_config_change {} = {}'.format(key, value))
+      LOGGER.debug('%s %s', config.field, 'on_config_change {} = {}'.format(key, value))
       if key == 'min':
         min_spin_box.setValue(value)
       elif key == 'max':
@@ -459,7 +459,7 @@ class ListAsTabsWidget(QTabWidget):
     '''
     Updates the tab text in response to ObservableCollection changes
     '''
-    LOGGER.info('name_updater')
+    LOGGER.debug('name_updater')
     for i in range(self.count()):
       if self.widget(i) is widget:
         self.setTabText(i, self.label_factory(config))

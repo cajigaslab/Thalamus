@@ -114,7 +114,6 @@ class Orchestrator:
     while True:
       data = await proc.stdout.readline()
       if not data:
-        print('cleanup')
         LOGGER.info('Process stdout reached EOF: %s', command)
         await proc.wait()
         LOGGER.info('Process ended with code=%d: %s', proc.returncode, command)

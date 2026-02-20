@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import toml
+import grpc
 import shutil
 import base64
 import zipfile
@@ -52,19 +53,28 @@ def write_metadata(metadata, filename):
   maintainer = metadata['maintainer']
   maintainer_email = metadata['maintainer_email']
   license = metadata['license']
+  license_file = metadata['license-file']
 
   with open(filename, 'w') as wheel_file:
-    wheel_file.write('Metadata-Version: 2.1\n')
+    wheel_file.write('Metadata-Version: 2.4\n')
     wheel_file.write(f'Name: {name}\n')
     wheel_file.write(f'Version: {version}\n')
     wheel_file.write(f'Summary: {description}\n')
     wheel_file.write(f'Maintainer: {maintainer}\n')
     wheel_file.write(f'Maintainer-email: {maintainer_email}\n')
-    wheel_file.write(f'License: {license}\n')
+    wheel_file.write(f'License-Expression: {license}\n')
+    wheel_file.write(f'License-File: {license_file}\n')
 
     with open('requirements.txt') as requirements_file:
+      wheel_file.write(f'Requires-Dist: grpcio-tools=={grpc.__version__}\n')
+      wheel_file.write(f'Requires-Dist: grpcio-reflection=={grpc.__version__}\n')
       for line in requirements_file:
-        wheel_file.write(f'Requires-Dist: {line}')
+        if not line.startswith('grpc'):
+          wheel_file.write(f'Requires-Dist: {line}')
+
+    wheel_file.write('Description-Content-Type: text/markdown\n\n')
+    readme = pathlib.Path('README.md').read_text()
+    wheel_file.write(readme)
 
 def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   config_settings = config_settings if config_settings else {}
@@ -116,7 +126,8 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     build_path = get_build_path()
 
   config = toml.load('pyproject.toml')
-  metadata = config['project']
+  metadata = dict(config['project'])
+  metadata['name'] += '-neuro'
   version = metadata['version']
   description = metadata['description']
   name = metadata['name']
@@ -140,14 +151,15 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     platform_tag = f'manylinux_{libc_version.replace(".", "_")}_x86_64'
   assert platform_tag is not None
 
-  whl_name = f'thalamus-{version}-py3-none-{platform_tag}.whl'
-  pathlib.Path(f'thalamus-{version}.dist-info').mkdir(exist_ok=True)
+  underscore_name = name.replace('-', '_')
+  whl_name = f'{underscore_name}-{version}-py3-none-{platform_tag}.whl'
+  pathlib.Path(f'{underscore_name}-{version}.dist-info').mkdir(exist_ok=True)
 
-  with open(f'thalamus-{version}.dist-info/WHEEL', 'w') as wheel_file:
+  with open(f'{underscore_name}-{version}.dist-info/WHEEL', 'w') as wheel_file:
     wheel_file.write('Wheel-Version: 1.0\n')
     wheel_file.write('Generator: thalamus.build\n')
 
-  write_metadata(metadata, f'thalamus-{version}.dist-info/METADATA')
+  write_metadata(metadata, f'{underscore_name}-{version}.dist-info/METADATA')
 
   cmake_command = [
     'cmake',
@@ -214,8 +226,18 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     shutil.copy('src/plugin.h', 'thalamus/plugin.h')
 
   files = []
-  with open(f'thalamus-{version}.dist-info/RECORD', 'w') as record_file:
-    for path in itertools.chain(pathlib.Path('thalamus').rglob('*'), pathlib.Path('cortex').rglob('*')):
+  def add_to_archive(record_file, path):
+    files.append(path)
+    digest = hashlib.sha256()
+    with open(str(path), 'rb') as pack_file:
+      for buffer in iter(lambda: pack_file.read(1024), b''):
+        digest.update(buffer)
+      digest_b64 = urlsafe_b64encode_nopad(digest.digest())
+      record_file.write(f'{pack_file.name},sha256={digest_b64},{path.stat().st_size}\n')
+
+  with open(f'{underscore_name}-{version}.dist-info/RECORD', 'w') as record_file:
+    #add_to_archive(record_file, pathlib.Path('LICENSE'))
+    for path in pathlib.Path('thalamus').rglob('*'):
       parents = [p.name for p in path.parents]
       is_dir = not path.is_file()
       in_ignored_dir = any(d in ("__pycache__", '.vs') for d in parents)
@@ -225,19 +247,17 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
       if is_dir or in_ignored_dir or has_ignored_suffix and not is_native_executable and not is_dotnet_file:
         #print(path, 'DROP')
         continue
+      add_to_archive(record_file, path)
       #print(path, 'TAKE')
-      files.append(path)
-      digest = hashlib.sha256()
-      with open(str(path), 'rb') as pack_file:
-        for buffer in iter(lambda: pack_file.read(1024), b''):
-          digest.update(buffer)
-        digest_b64 = urlsafe_b64encode_nopad(digest.digest())
-        record_file.write(f'{pack_file},sha256={digest_b64},{path.stat().st_size}\n')
 
+  license_dir = pathlib.Path(f'{underscore_name}-{version}.dist-info/licenses')
+  license_dir.mkdir()
+  shutil.copy('LICENSE', license_dir)
   with zipfile.ZipFile(pathlib.Path(wheel_directory) / whl_name, 'w', zipfile.ZIP_DEFLATED) as whl_file:
-    whl_file.write(f'thalamus-{version}.dist-info/WHEEL')
-    whl_file.write(f'thalamus-{version}.dist-info/RECORD')
-    whl_file.write(f'thalamus-{version}.dist-info/METADATA')
+    whl_file.write(f'{underscore_name}-{version}.dist-info/WHEEL')
+    whl_file.write(f'{underscore_name}-{version}.dist-info/RECORD')
+    whl_file.write(f'{underscore_name}-{version}.dist-info/METADATA')
+    whl_file.write(f'{underscore_name}-{version}.dist-info/licenses/LICENSE')
     for f in files:
       whl_file.write(f)
 

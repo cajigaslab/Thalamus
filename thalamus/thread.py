@@ -131,7 +131,6 @@ class ThalamusThread:
     except grpc.aio.AioRpcError:
       pass
     except:
-      print('============================================')
       traceback.print_exc()
     finally:
       self.running = False

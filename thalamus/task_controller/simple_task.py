@@ -173,6 +173,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       painter.fillRect(config.target_rectangle, config.target_color)
 
   context.widget.renderer = renderer
+  LOGGER.info('Start')
 
   while True:
     await context.log('BehavState=intertrial')

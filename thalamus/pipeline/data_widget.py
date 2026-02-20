@@ -9,6 +9,7 @@ import datetime
 import itertools
 import traceback
 import matplotlib
+import logging
 from ..config import *
 
 from ..util import open_preferred_app
@@ -20,6 +21,8 @@ from ..qt import *
 from ..task_controller.util import create_task_with_exc_handling
 
 from matplotlib import pyplot
+
+LOGGER = logging.getLogger(__name__)
 
 class DataWidget(QMainWindow):
   def __init__(self, config, root_config, stub):
@@ -176,13 +179,13 @@ class PlotCanvas(QWidget):
       self.toggle()
 
   def stop(self):
-    print('stop', self.task)
+    LOGGER.debug('stop %s', self.task)
     if self.task is not None:
       self.toggle()
 
   def toggle(self):
     if self.task is not None:
-      print('Will Cancel')
+      LOGGER.debug('Will Cancel')
       self.stream.cancel()
       self.task.cancel()
       self.task = None
@@ -326,9 +329,9 @@ class PlotCanvas(QWidget):
     except asyncio.CancelledError:
       pass
     finally:
-      print('Cancelling')
+      LOGGER.debug('Cancelling')
       stream.cancel()
-      print('Cancelled')
+      LOGGER.debug('Cancelled')
 
 
 class SpectrogramCanvas(QWidget):
@@ -439,9 +442,9 @@ class SpectrogramCanvas(QWidget):
     except asyncio.CancelledError:
       pass
     finally:
-      print('Cancelling')
+      LOGGER.debug('Cancelling')
       stream.cancel()
-      print('Cancelled')
+      LOGGER.debug('Cancelled')
 
 class NodesModel(QAbstractListModel):
   def __init__(self, nodes_list):
@@ -452,7 +455,7 @@ class NodesModel(QAbstractListModel):
       self.on_change(ObservableCollection.Action.SET, i, n)
 
   def on_change(self, action, key, value):
-    print('NodesModel.on_change', action, key, value)
+    LOGGER.debug('NodesModel.on_change %s %s %s', action, key, value)
           
     if action == ObservableCollection.Action.SET:
       self.beginInsertRows(QModelIndex(), key, key)
@@ -487,7 +490,7 @@ class ChannelComboBox(QComboBox):
       self.__on_change(None, k, v)
 
   def __on_change(self, action, key, value):
-    print('ChannelComboBox.__on_change', action, key, value)
+    LOGGER.debug('ChannelComboBox.__on_change %s %s %s', action, key, value)
     if key == 'selected_node':
       if self.task is not None:
         self.task.cancel()
@@ -637,16 +640,16 @@ class Plot(QWidget):
 
     assert self.root_config is not None
     self.nodes = self.root_config['nodes']
-    print('__init__', self.config)
+    LOGGER.debug('__init__ %s', self.config)
 
     def on_node_combobox_change(selected_node: str):
-      print('on_node_combobox_change', selected_node, self.config['selected_node'])
+      LOGGER.debug('on_node_combobox_change %s %s', selected_node, self.config['selected_node'])
       if selected_node == self.config['selected_node']:
         return
       self.config['selected_node'] = selected_node
 
     def on_channel_combobox_change(selected_channel: str):
-      print('on_channel_combobox_change', selected_channel, self.config['selected_channel'])
+      LOGGER.debug('on_channel_combobox_change %s %s', selected_channel, self.config['selected_channel'])
       if selected_channel == self.config['selected_channel']:
         return
       self.config['selected_channel'] = selected_channel
@@ -661,7 +664,7 @@ class Plot(QWidget):
     self.channel_combobox.currentTextChanged.connect(on_channel_combobox_change)
 
   def on_config_changed(self, action, key, value):
-    print(action, key, value)
+    LOGGER.debug('%s %s %s', action, key, value)
     if key == 'selected_node':
       self.node_combobox.setCurrentText(value)
       self.canvas.restart()
