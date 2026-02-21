@@ -104,7 +104,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
 
   new_time_node = context.task_config['time_node']
   if time_node != new_time_node:
-    print('new time node', new_time_node)
+    LOGGER.info('new time node %s', new_time_node)
     time_node = new_time_node
     if analog_task:
       analog_task.cancel()
@@ -122,7 +122,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     data = await proc.stdout.read()
     text = data.decode('utf8')
     await proc.wait();
-    print(text)
+    LOGGER.info(text)
     width, height = [int(s) for s in text.split('x')]
     #await context.sleep(datetime.timedelta(seconds=1))
     #return TaskResult(False)
@@ -137,9 +137,9 @@ async def run(context: TaskContextProtocol) -> TaskResult:
         images.append(image)
     except asyncio.IncompleteReadError:
       pass
-    print('len(images)', len(images))
+    LOGGER.info('len(images) %s', len(images))
     await proc.wait()
-    print('proc.wait')
+    LOGGER.info('proc.wait')
   last_range = time_range_ints
   last_video_file = video_file
    
@@ -147,7 +147,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
 
   state = State.QUEUE
   def renderer(painter: CanvasPainterProtocol) -> None:
-    #print('renderer')
+    #LOGGER.info('renderer')
     if not images:
       return
 

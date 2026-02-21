@@ -9,6 +9,7 @@ import json
 import numpy
 import typing
 import asyncio
+import logging
 import argparse
 import datetime
 import traceback
@@ -182,6 +183,8 @@ QTKEY_TO_CODE = {
   Qt.Key.Key_Up: "ArrowUp",
 }
 
+LOGGER = logging.getLogger(__name__)
+
 class ImageWidget(QWidget):
   def __init__(self, node: ObservableDict, stream: typing.AsyncIterable[thalamus_pb2.Image], control_queue: IterableQueue, stub: thalamus_pb2_grpc.ThalamusStub, done_future):
     self.node = node
@@ -195,7 +198,7 @@ class ImageWidget(QWidget):
 
     self.view_geometry_updater = None
     def on_view_geometry():
-      print(node)
+      LOGGER.debug('%s', node)
       self.view_geometry_updater = MeteredUpdater(node['view_geometry'], datetime.timedelta(seconds=1), lambda: isdeleted(self))
       
     if 'view_geometry' not in node:
@@ -251,7 +254,7 @@ class ImageWidget(QWidget):
       node = self.node['name'],
       json = json.dumps(event)
     )
-    print(request)
+    LOGGER.debug('%s', request)
     create_task_with_exc_handling(self.control_queue.put(request))
 
   def keyReleaseEvent(self, a0: QKeyEvent):
@@ -399,7 +402,7 @@ async def main():
     try:
 
       def on_change(source, action, key, value):
-        print(source, action, key, value)
+        LOGGER.debug('%s %s %s %s', source, action, key, value)
 
       node: typing.Optional[ObservableDict] = None
       for n in thread.config['nodes']:
@@ -418,7 +421,7 @@ async def main():
       async def control_consumer():
         try:
           async for v in control_stream:
-            print(v)
+            LOGGER.debug('%s', v)
         except asyncio.CancelledError:
           pass
         except grpc.aio.AioRpcError as e:
