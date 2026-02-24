@@ -1,9 +1,11 @@
 #pragma once
 
+#include "boost/dll/shared_library.hpp"
 #include <thalamus/base_node.hpp>
 #include <thalamus/grpc_impl.hpp>
 #include <memory>
 #include <thalamus/state.hpp>
+#include <boost/dll.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -26,6 +28,7 @@ public:
                 std::chrono::system_clock::time_point,
                 std::chrono::steady_clock::time_point,
                 thalamus_grpc::Thalamus::Stub*,
+                std::optional<boost::dll::shared_library> extension,
                 std::optional<int> thread_policy = std::nullopt,
                 std::optional<int> thread_priority = std::nullopt);
   ~NodeGraphImpl() override;

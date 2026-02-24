@@ -44,6 +44,7 @@
 #include <thalamus/ceci_node.hpp>
 #include <thalamus/frequency_node.hpp>
 #include <thalamus/samplemonitor_node.hpp>
+#include <thalamus/plugin.h>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -91,6 +92,177 @@ template <typename T> struct NodeFactory : public INodeFactory {
   std::string type_name() override { return T::type_name(); }
 };
 
+struct ExtNode : public Node, public AnalogNode, public ImageNode, public MotionCaptureNode, public TextNode {
+  ThalamusNode* node;
+
+  ExtNode(ThalamusNode* _node) : node(_node) {}
+
+  size_t modalities() const override {
+    size_t result = 0;
+    result |= node->analog != nullptr ? THALAMUS_MODALITY_ANALOG : 0;
+    result |= node->mocap != nullptr ? THALAMUS_MODALITY_MOCAP : 0;
+    result |= node->image != nullptr ? THALAMUS_MODALITY_IMAGE : 0;
+    result |= node->text != nullptr ? THALAMUS_MODALITY_TEXT : 0;
+    return result;
+  }
+
+  static std::string type_name() {
+    THALAMUS_ABORT("Unimplemented");
+  }
+
+  std::span<const double> data(int channel) const override {
+    auto temp = node->analog->data(node, channel);
+    return std::span<const double>(temp.data, temp.data+temp.size);
+  }
+  std::span<const short> short_data(int channel) const override {
+    auto temp = node->analog->short_data(node, channel);
+    return std::span<const short>(temp.data, temp.data+temp.size);
+  }
+  std::span<const int> int_data(int channel) const override {
+    auto temp = node->analog->int_data(node, channel);
+    return std::span<const int>(temp.data, temp.data+temp.size);
+  }
+  std::span<const uint64_t> ulong_data(int channel) const override {
+    auto temp = node->analog->ulong_data(node, channel);
+    return std::span<const uint64_t>(temp.data, temp.data+temp.size);
+  }
+  int num_channels() const override {
+    return node->analog->num_channels(node);
+  }
+  std::chrono::nanoseconds sample_interval(int channel) const override {
+    return std::chrono::nanoseconds(node->analog->sample_interval_ns(node, channel));
+  }
+  std::chrono::nanoseconds time() const override {
+    return std::chrono::nanoseconds(node->time_ns(node));
+  }
+  std::chrono::nanoseconds remote_time() const override {
+    THALAMUS_ABORT("Unimplemented");
+  }
+  std::string_view name(int channel) const override {
+    return node->analog->name(node, channel);
+  }
+  void inject(const thalamus::vector<std::span<double const>> &,
+                      const thalamus::vector<std::chrono::nanoseconds> &,
+                      const thalamus::vector<std::string_view> &) override {
+    THALAMUS_ABORT("Unimplemented");
+  }
+  bool has_analog_data() const override {
+    return node->analog->has_analog_data(node);
+  }
+  bool is_short_data() const override {
+    return node->analog->is_short_data(node);
+  }
+  bool is_int_data() const override {
+    return node->analog->is_int_data(node);
+  }
+  bool is_ulong_data() const override {
+    return node->analog->is_ulong_data(node);
+  }
+
+  bool is_transformed() const override {
+    return node->analog->is_transformed(node);
+  }
+  double scale(int channel) const override {
+    return node->analog->scale(node, channel);
+  }
+  double offset(int channel) const override {
+    return node->analog->offset(node, channel);
+  }
+
+  Plane plane(int i) const override {
+    auto temp = node->image->plane(node, i);
+    return std::span<const uint8_t>(temp.data, temp.data+temp.size);
+  }
+  size_t num_planes() const override {
+    return node->image->num_planes(node);
+  }
+  Format format() const override {
+    auto format = node->image->format(node);
+    switch(format) {
+    case ThalamusImageFormat::Gray:
+      return ImageNode::Format::Gray;
+    case ThalamusImageFormat::RGB:
+      return ImageNode::Format::RGB;
+    case ThalamusImageFormat::YUV420P:
+      return ImageNode::Format::YUV420P;
+    case ThalamusImageFormat::YUYV422:
+      return ImageNode::Format::YUYV422;
+    case ThalamusImageFormat::YUVJ420P:
+      return ImageNode::Format::YUVJ420P;
+    }
+  }
+  size_t width() const override {
+    return node->image->width(node);
+  }
+  size_t height() const override {
+    return node->image->height(node);
+  }
+  std::chrono::nanoseconds frame_interval() const override {
+    return std::chrono::nanoseconds(node->image->frame_interval_ns(node));
+  }
+  void inject(const thalamus_grpc::Image &) override {
+    THALAMUS_ABORT("Unimplemented");
+  }
+  bool has_image_data() const override {
+    return node->image->has_image_data(node);
+  }
+
+  mutable std::vector<MotionCaptureNode::Segment> _segments;
+  std::span<MotionCaptureNode::Segment const> segments() const override {
+    auto temp = node->mocap->segments(node);
+    _segments.resize(temp.size);
+    std::transform(temp.data, temp.data+temp.size, _segments.begin(), [](auto& v) {
+      return MotionCaptureNode::Segment {
+        v.frame, v.segment_id, v.time, boost::qvm::vec<float, 3>{v.position[0], v.position[1], v.position[2]},
+        boost::qvm::quat<float>{v.rotation[0], v.rotation[1], v.rotation[2], v.rotation[3]},
+        v.actor
+      };
+    });
+
+    return _segments;
+  }
+  const std::string_view pose_name() const override {
+    return node->mocap->pose_name(node);
+  }
+  void inject(const std::span<MotionCaptureNode::Segment const> &) override {
+    THALAMUS_ABORT("Unimplemented");
+  }
+  bool has_motion_data() const override {
+    return node->mocap->has_motion_data(node);
+  }
+
+  std::string_view text() const override {
+    return node->text->text(node);
+  }
+  bool has_text_data() const override {
+    return node->text->has_text_data(node);
+  }
+};
+
+struct ExtNodeFactory : public INodeFactory {
+  ThalamusNodeFactory underlying;
+
+  Node *create(ObservableDictPtr state, boost::asio::io_context &io_context,
+               NodeGraph *graph) override {
+    auto node = underlying.create(ThalamusState{state.get()}, ThalamusIoContext{&io_context}, ThalamusNodeGraph{graph});
+    return new ExtNode(node);
+  }
+
+  bool prepare() override {
+    if(underlying.prepare != nullptr) {
+      return underlying.prepare();
+    } else {
+      return true;
+    }
+  }
+  void cleanup() override {
+    if(underlying.cleanup != nullptr) {
+      return underlying.cleanup();
+    }
+  }
+  std::string type_name() override { return underlying.type; }
+};
+
 struct NodeGraphImpl::Impl {
   ObservableListPtr nodes;
   std::vector<std::shared_ptr<Node>> node_impls;
@@ -111,6 +283,7 @@ struct NodeGraphImpl::Impl {
   std::chrono::steady_clock::time_point steady_time;
   ThreadPool thread_pool;
   thalamus_grpc::Thalamus::Stub* stub;
+  std::optional<boost::dll::shared_library> extension;
 
   std::map<std::string, INodeFactory *> node_factories;
 
@@ -119,10 +292,11 @@ public:
        NodeGraphImpl *_outer,
        std::chrono::system_clock::time_point _system_time,
        std::chrono::steady_clock::time_point _steady_time,
-       thalamus_grpc::Thalamus::Stub* _stub)
+       thalamus_grpc::Thalamus::Stub* _stub,
+       std::optional<boost::dll::shared_library> _extension)
       : nodes(_nodes), num_nodes(nodes->size()), io_context(_io_context),
         outer(_outer), system_time(_system_time), steady_time(_steady_time),
-        thread_pool("ThreadPool"), stub(_stub) {
+        thread_pool("ThreadPool"), stub(_stub), extension(_extension) {
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},
@@ -175,6 +349,18 @@ public:
         {"SAMPLE_MONITOR", new NodeFactory<SampleMonitorNode>()},
         {"ARUCO", new NodeFactory<ArucoNode>()}};
 
+    if(extension) {
+      auto get_node_factories = extension->get<ThalamusNodeFactory*(ThalamusAPI*)>("get_node_factories");
+      if(get_node_factories != nullptr) {
+        auto factories = get_node_factories(nullptr);
+        auto factory = factories;
+        while(factory != nullptr) {
+          node_factories[factory->type] = new ExtNodeFactory{*factory};
+          ++factory;
+        }
+      }
+    }
+
     using namespace std::placeholders;
     auto i = node_factories.begin();
     while (i != node_factories.end()) {
@@ -184,6 +370,7 @@ public:
         ++i;
       }
     }
+    
     nodes->changed.connect(std::bind(&Impl::on_nodes, this, _1, _2, _3));
   }
 
@@ -294,9 +481,10 @@ NodeGraphImpl::NodeGraphImpl(ObservableListPtr nodes,
                              std::chrono::system_clock::time_point system_time,
                              std::chrono::steady_clock::time_point steady_time,
                              thalamus_grpc::Thalamus::Stub* stub,
+                             std::optional<boost::dll::shared_library> extension,
                              std::optional<int> thread_policy,
                              std::optional<int> thread_priority)
-    : impl(new Impl(nodes, io_context, this, system_time, steady_time, stub)) {
+    : impl(new Impl(nodes, io_context, this, system_time, steady_time, stub, extension)) {
   impl->nodes->recap();
   impl->thread_pool.start(thread_policy, thread_priority);
 }
