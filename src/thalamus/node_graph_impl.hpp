@@ -1,11 +1,9 @@
 #pragma once
 
-#include "boost/dll/shared_library.hpp"
 #include <thalamus/base_node.hpp>
 #include <thalamus/grpc_impl.hpp>
 #include <memory>
 #include <thalamus/state.hpp>
-#include <boost/dll.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -13,6 +11,7 @@
 #endif
 
 #include <boost/asio.hpp>
+#include <boost/dll.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic pop

@@ -207,19 +207,9 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
     return node->image->has_image_data(node);
   }
 
-  mutable std::vector<MotionCaptureNode::Segment> _segments;
   std::span<MotionCaptureNode::Segment const> segments() const override {
     auto temp = node->mocap->segments(node);
-    _segments.resize(temp.size);
-    std::transform(temp.data, temp.data+temp.size, _segments.begin(), [](auto& v) {
-      return MotionCaptureNode::Segment {
-        v.frame, v.segment_id, v.time, boost::qvm::vec<float, 3>{v.position[0], v.position[1], v.position[2]},
-        boost::qvm::quat<float>{v.rotation[0], v.rotation[1], v.rotation[2], v.rotation[3]},
-        v.actor
-      };
-    });
-
-    return _segments;
+    return std::span<MotionCaptureNode::Segment const>(temp.data, temp.data+temp.size);
   }
   const std::string_view pose_name() const override {
     return node->mocap->pose_name(node);
@@ -241,6 +231,8 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
 
 struct ExtNodeFactory : public INodeFactory {
   ThalamusNodeFactory underlying;
+
+  ExtNodeFactory(ThalamusNodeFactory _underlying) : underlying(_underlying) {}
 
   Node *create(ObservableDictPtr state, boost::asio::io_context &io_context,
                NodeGraph *graph) override {
@@ -355,7 +347,7 @@ public:
         auto factories = get_node_factories(nullptr);
         auto factory = factories;
         while(factory != nullptr) {
-          node_factories[factory->type] = new ExtNodeFactory{*factory};
+          node_factories[factory->type] = new ExtNodeFactory(*factory);
           ++factory;
         }
       }

@@ -1,4 +1,3 @@
-#include <absl/strings/str_format.h>
 #include <absl/time/time.h>
 #include <thalamus/distortion_node.hpp>
 #include <thalamus/image_node.hpp>
@@ -12,6 +11,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
 #endif
+#include <absl/strings/str_format.h>
 #include <boost/qvm/quat_access.hpp>
 #include <boost/qvm/quat_operations.hpp>
 #include <boost/qvm/quat_vec_operations.hpp>
@@ -187,24 +187,35 @@ struct Ros2Node::Impl {
         // hack, hexascope control expects camera1 to be a child of the
         // microscope objective marker.
         if (i->starts_with("microscope")) {
-          auto inverse_rotation = boost::qvm::conjugate(segment.rotation);
-          auto inverse_position = -(inverse_rotation * segment.position);
+          boost::qvm::quat<float> segment_rotation{
+            segment.rotation[0],
+            segment.rotation[1],
+            segment.rotation[2],
+            segment.rotation[3]
+          };
+          boost::qvm::vec<float, 3> segment_position{
+            segment.position[0],
+            segment.position[1],
+            segment.position[2]
+          };
+          auto inverse_rotation = boost::qvm::conjugate(segment_rotation);
+          auto inverse_position = -(inverse_rotation * segment_position);
           double translation[] = {double(boost::qvm::X(inverse_position)),
                                   double(boost::qvm::Y(inverse_position)),
                                   double(boost::qvm::Z(inverse_position))};
           double rotation[] = {
               double(boost::qvm::X(inverse_rotation)), double(boost::qvm::Y(inverse_rotation)),
-              double(boost::qvm::Z(inverse_rotation)), double(boost::qvm::S(segment.rotation))};
+              double(boost::qvm::Z(inverse_rotation)), double(boost::qvm::S(segment_rotation))};
           thalamus_ros2_bridge_broadcast_transform(
               size_t(nanosecs.count()), child_frame.c_str(), info->parent_frame.c_str(),
               translation, rotation);
         } else {
-          double translation[] = {double(boost::qvm::X(segment.position)),
-                                  double(boost::qvm::Y(segment.position)),
-                                  double(boost::qvm::Z(segment.position))};
+          double translation[] = {double(segment.position[0]),
+                                  double(segment.position[1]),
+                                  double(segment.position[2])};
           double rotation[] = {
-              double(boost::qvm::X(segment.rotation)), double(boost::qvm::Y(segment.rotation)),
-              double(boost::qvm::Z(segment.rotation)), double(boost::qvm::S(segment.rotation))};
+              double(segment.rotation[1]), double(segment.rotation[2]),
+              double(segment.rotation[3]), double(segment.rotation[0])};
           thalamus_ros2_bridge_broadcast_transform(
               size_t(nanosecs.count()), info->parent_frame.c_str(), child_frame.c_str(),
               translation, rotation);

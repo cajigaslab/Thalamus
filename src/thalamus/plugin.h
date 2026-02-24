@@ -1,3 +1,5 @@
+#pragma once
+
 #include <stdint.h>
 
 #ifdef _WIN32
@@ -68,7 +70,7 @@ extern "C" {
     ThalamusULongSpan (*ulong_data)(ThalamusNode* node, int channel);
     int (*num_channels)(ThalamusNode* node);
     uint64_t (*sample_interval_ns)(ThalamusNode* node, int channel);
-    char* (*name)(ThalamusNode* node, int channel);
+    const char* (*name)(ThalamusNode* node, int channel);
     char (*has_analog_data)(ThalamusNode* node);
     char (*is_short_data)(ThalamusNode* node);
     char (*is_int_data)(ThalamusNode* node);
@@ -117,14 +119,14 @@ extern "C" {
     char (*has_motion_data)(ThalamusNode*);
   };
   struct ThalamusText {
-    char* text(ThalamusNode*);
+    const char* (*text)(ThalamusNode*);
     char (*has_text_data)(ThalamusNode*);
   };
 
   ThalamusNode* create_node(ThalamusState*, ThalamusIoContext*, ThalamusNodeGraph*);
 
   struct ThalamusNodeFactory {
-    char* type;
+    const char* type;
     ThalamusNode* (*create)(ThalamusState, ThalamusIoContext, ThalamusNodeGraph);
     char (*prepare)();
     void (*cleanup)();

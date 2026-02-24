@@ -473,13 +473,13 @@ struct RemoteNode::Impl {
             segment.frame = s.frame();
             segment.segment_id = s.id();
             segment.time = s.time();
-            boost::qvm::X(segment.position) = s.x();
-            boost::qvm::Y(segment.position) = s.y();
-            boost::qvm::Z(segment.position) = s.z();
-            boost::qvm::S(segment.rotation) = s.q0();
-            boost::qvm::X(segment.rotation) = s.q1();
-            boost::qvm::Y(segment.rotation) = s.q2();
-            boost::qvm::Z(segment.rotation) = s.q3();
+            segment.position[0] = s.x();
+            segment.position[1] = s.y();
+            segment.position[2] = s.z();
+            segment.rotation[0] = s.q0();
+            segment.rotation[1] = s.q1();
+            segment.rotation[2] = s.q2();
+            segment.rotation[3] = s.q3();
           }
           pose_name = xsens_response.pose_name();
           boost::asio::post(io_context, [&] {

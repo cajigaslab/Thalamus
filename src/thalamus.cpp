@@ -1,5 +1,4 @@
 #include <thalamus/tracing.hpp>
-#include "boost/dll/shared_library.hpp"
 #include "thalamus/node_graph_impl.hpp"
 #include <thalamus/state.hpp>
 #include <thalamus.hpp>
@@ -35,6 +34,7 @@
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
+#include <boost/dll/shared_library.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic pop
@@ -195,8 +195,8 @@ int main(int argc, char **argv) {
   std::optional<boost::dll::shared_library> extension;
   if (vm.count("ext") > 0) {
     std::filesystem::path ext_path = vm["ext"].as<std::string>();
-    if(boost::filesystem::exists(ext_path)) {
-      extension = boost::dll::shared_library(ext_path.string())
+    if(std::filesystem::exists(ext_path)) {
+      extension = boost::dll::shared_library(ext_path.string());
     }
   }
 
