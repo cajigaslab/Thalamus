@@ -1906,6 +1906,7 @@ Service::image(::grpc::ServerContext *context,
             piece.set_width(uint32_t(width));
             piece.set_height(uint32_t(height));
             piece.set_format(format);
+            piece.set_frame_interval(size_t(node->frame_interval().count()));
 
             size_t plane_offset = 0;
             size_t remaining_chunk = IMAGE_CHUNK_SIZE;

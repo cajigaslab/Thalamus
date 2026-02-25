@@ -14,6 +14,7 @@
 #include <thalamus/thread.hpp>
 #include <thalamus/async.hpp>
 #include <thalamus/plugin.h>
+#include <thalamus/shared_library.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -192,11 +193,11 @@ int main(int argc, char **argv) {
   }
   auto port = vm["port"].as<size_t>();
 
-  std::optional<boost::dll::shared_library> extension;
+  std::optional<SharedLibrary> extension;
   if (vm.count("ext") > 0) {
     std::filesystem::path ext_path = vm["ext"].as<std::string>();
     if(std::filesystem::exists(ext_path)) {
-      extension = boost::dll::shared_library(ext_path.string());
+      extension.emplace(ext_path.string());
     }
   }
 

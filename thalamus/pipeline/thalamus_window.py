@@ -1566,8 +1566,9 @@ class PlaybackDialog(QDialog):
     return selected
 
 class ThalamusWindow(QMainWindow):
-  def __init__(self, address, state: ObservableDict, stub: thalamus_pb2_grpc.ThalamusStub, done_future: asyncio.Future):
+  def __init__(self, address, state: ObservableDict, stub: thalamus_pb2_grpc.ThalamusStub, done_future: asyncio.Future, ext_widgets: typing.Dict[str, Factory]):
     super().__init__()
+    FACTORIES.update(ext_widgets)
     self.model: typing.Optional[ItemModel] = None
     self.state = state
     self.stub = stub

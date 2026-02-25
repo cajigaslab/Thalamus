@@ -8,8 +8,10 @@
 #define IMPORT
 #endif
 
+#define THALAMUS_OPERATION_ABORTED 995
+
 extern "C" {
-  enum Thalamus_State_Type {
+  enum ThalamusStateType {
     Dict,
     List,
     String,
@@ -18,15 +20,21 @@ extern "C" {
     Null
   };
 
-  struct ThalamusState {
-    void* impl;
+  enum ThalamusStateAction {
+    Set,
+    Delete
   };
-  struct ThalamusIoContext {
-    void* impl;
-  };
-  struct ThalamusNodeGraph {
-    void* impl;
-  };
+
+  struct ThalamusNode;
+  struct ThalamusStateConnection;
+
+  struct ThalamusState;
+  typedef void (*ThalamusStateRecursiveCallback)(ThalamusState* source, ThalamusStateAction action,
+                                                 ThalamusState* key, ThalamusState* value, void* data);
+
+
+  struct ThalamusIoContext;
+  struct ThalamusNodeGraph;
 
   struct ThalamusDoubleSpan {
     double* data;
@@ -49,21 +57,21 @@ extern "C" {
     uint64_t size;
   };
 
-  struct ThalamusAnalog;
-  struct ThalamusImage;
-  struct ThalamusMocap;
-  struct ThalamusText;
+  struct ThalamusAnalogNode;
+  struct ThalamusImageNode;
+  struct ThalamusMocapNode;
+  struct ThalamusTextNode;
 
   struct ThalamusNode {
     void* impl;
     uint64_t (*time_ns)(ThalamusNode*);
-    ThalamusAnalog* analog;
-    ThalamusMocap* mocap;
-    ThalamusImage* image;
-    ThalamusText* text;
+    ThalamusAnalogNode* analog;
+    ThalamusMocapNode* mocap;
+    ThalamusImageNode* image;
+    ThalamusTextNode* text;
   };
 
-  struct ThalamusAnalog {
+  struct ThalamusAnalogNode {
     ThalamusDoubleSpan (*data)(ThalamusNode* node, int channel);
     ThalamusShortSpan (*short_data)(ThalamusNode* node, int channel);
     ThalamusIntSpan (*int_data)(ThalamusNode* node, int channel);
@@ -88,7 +96,7 @@ extern "C" {
     YUVJ420P,
   };
 
-  struct ThalamusImage {
+  struct ThalamusImageNode {
     ThalamusByteSpan (*plane)(ThalamusNode*, int channel);
     size_t (*num_planes)(ThalamusNode*);
     ThalamusImageFormat (*format)(ThalamusNode*);
@@ -112,32 +120,62 @@ extern "C" {
     uint64_t size;
   };
 
-  struct ThalamusMocap {
+  struct ThalamusMocapNode {
     const ThalamusMocapSegmentSpan (*segments)(ThalamusNode*);
     const char* (*pose_name)(ThalamusNode*);
     //void (*inject)(ThalamusNode*, const ThalamusMocapSegmentSpan);
     char (*has_motion_data)(ThalamusNode*);
   };
-  struct ThalamusText {
+  struct ThalamusTextNode {
     const char* (*text)(ThalamusNode*);
     char (*has_text_data)(ThalamusNode*);
   };
 
-  ThalamusNode* create_node(ThalamusState*, ThalamusIoContext*, ThalamusNodeGraph*);
-
   struct ThalamusNodeFactory {
     const char* type;
-    ThalamusNode* (*create)(ThalamusState, ThalamusIoContext, ThalamusNodeGraph);
+    ThalamusNode* (*create)(ThalamusState*, ThalamusIoContext*, ThalamusNodeGraph*);
+    void (*destroy)(ThalamusNode*);
     char (*prepare)();
     void (*cleanup)();
   };
 
+  struct ThalamusTimer;
+  struct ThalamusErrorCode;
+  typedef void (*ThalamusTimerCallback)(ThalamusErrorCode*, void* data);
+
   struct ThalamusAPI {
-    Thalamus_State_Type state_get_type(ThalamusState*);
-    uint64_t node_get_modalities(ThalamusNode*);
+    char (*state_is_dict)(ThalamusState*);
+    char (*state_is_list)(ThalamusState*);
+    char (*state_is_string)(ThalamusState*);
+    char (*state_is_int)(ThalamusState*);
+    char (*state_is_float)(ThalamusState*);
+    char (*state_is_null)(ThalamusState*);
+    char (*state_is_bool)(ThalamusState*);
+
+    const char* (*state_get_string)(ThalamusState*);
+    int64_t (*state_get_int)(ThalamusState*);
+    double (*state_get_float)(ThalamusState*);
+    char (*state_get_bool)(ThalamusState*);
+
+    ThalamusState* (*state_get_at_name)(ThalamusState*, const char*);
+    ThalamusState* (*state_get_at_index)(ThalamusState*, size_t);
+
+    void (*state_dec_ref)(ThalamusState*);
+    void (*state_inc_ref)(ThalamusState*);
+    ThalamusStateConnection* (*state_recursive_change_connect)(ThalamusState* state, ThalamusStateRecursiveCallback callback, void* data);
+    void (*state_recursive_change_disconnect)(ThalamusStateConnection* state);
+
+    ThalamusTimer* (*timer_create)();
+    void (*timer_destroy)(ThalamusTimer*);
+    void (*timer_expire_after_ns)(ThalamusTimer*, size_t);
+    void (*timer_async_wait)(ThalamusTimer*, ThalamusTimerCallback, void*);
+
+    int (*error_code_value)(ThalamusErrorCode*);
+
+    void (*node_ready)(ThalamusNode*);
   };
 
-  ThalamusNodeFactory* get_node_factories(ThalamusAPI*);
+  typedef ThalamusNodeFactory** (*thalamus_get_node_factories)(ThalamusAPI*);
 }
 
 IMPORT int thalamus_start(const char *config_filename, const char *target_node,
