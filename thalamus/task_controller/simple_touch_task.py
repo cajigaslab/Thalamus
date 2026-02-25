@@ -34,6 +34,7 @@ Config = typing.NamedTuple('Config', [
   ('fail_timeout', datetime.timedelta),
   ('success_timeout', datetime.timedelta),
   ('is_choice', bool),
+  ('no_start_fail', bool),
 ])
 
 RANDOM_DEFAULT = {'min': 1, 'max':1}
@@ -120,6 +121,7 @@ def create_widget(task_config: config.ObservableCollection) -> QWidget:
     Form.Uniform('Fail Interval', 'fail_timeout', 1, 1, 's'),
     Form.Uniform('Success Interval', 'success_timeout', 1, 1, 's'),
     Form.Bool('Is Choice', 'is_choice', False),
+    Form.Bool('No start = fail?', 'no_start_fail', False),
     Form.Constant('State Indicator X', 'state_indicator_x', 180),
     Form.Constant('State Indicator Y', 'state_indicator_y', 0),
   )
@@ -211,6 +213,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     datetime.timedelta(seconds=context.get_value('fail_timeout', RANDOM_DEFAULT)),
     datetime.timedelta(seconds=context.get_value('success_timeout', RANDOM_DEFAULT)),
     context.get_value('is_choice'),
+    context.get_value('no_start_fail'),
   )
   
   custom_display_state_x = int(context.task_config['state_indicator_x'])
@@ -378,8 +381,15 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     if acquired and not blank_space_touched:
       break
     else:
-      show_presented_target = False
-      context.widget.update()
+      if config.no_start_fail: 
+        # this setting will count a no-start as a fail, resulting in randomization of params (e.g. iti)
+        await fail_trial()
+        await context.sleep(config.fail_timeout)
+        return task_context.TaskResult(False)
+      else:
+        show_presented_target = False
+        context.widget.update()
+      
 
   # state: startacq
   final_i_selected_target = last_selected_target
@@ -403,6 +413,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
   on_time_ms = int(context.get_reward(all_reward_channels[final_i_selected_target]))
 
+  print("delivering reward %d"%(on_time_ms,) )
   signal = thalamus_pb2.AnalogResponse(
       data=[5,0],
       spans=[thalamus_pb2.Span(begin=0,end=2,name='Reward')],

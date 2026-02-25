@@ -37,6 +37,7 @@ Config = typing.NamedTuple('Config', [
   ('fail_timeout', datetime.timedelta),
   ('success_timeout', datetime.timedelta),
   ('is_choice', bool),
+  ('no_start_fail', bool),
 ])
 
 RANDOM_DEFAULT = {'min': 1, 'max':1}
@@ -136,6 +137,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Uniform('Fail Interval', 'fail_timeout', 1, 1, 's'),
     Form.Uniform('Success Interval', 'success_timeout', 1, 1, 's'),
     Form.Bool('Is Choice', 'is_choice', False),
+    Form.Bool('No start = fail?', 'no_start_fail', False),
     Form.Constant('State Indicator X', 'state_indicator_x', 180),
     Form.Constant('State Indicator Y', 'state_indicator_y', 0),
     Form.Choice('Stim Phase', 'stim_phase', [(e.name, e.name) for e in State]),
@@ -251,6 +253,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     datetime.timedelta(seconds=context.get_value('fail_timeout', RANDOM_DEFAULT)),
     datetime.timedelta(seconds=context.get_value('success_timeout', RANDOM_DEFAULT)),
     context.get_value('is_choice'),
+    context.get_value('no_start_fail'),
   )
   
   custom_display_state_x = int(context.task_config['state_indicator_x'])
@@ -312,6 +315,8 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   blank_space_touched = False
 
   touch_pos = QPoint()
+
+ 
   def touch_handler(cursor: QPoint) -> None:
     nonlocal blank_space_touched
     nonlocal start_target_acquired
@@ -345,6 +350,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       else:
         i_selected_target = None
     touch_pos = cursor
+    
   context.widget.touch_listener = touch_handler
 
   dim_start_target = False
@@ -460,8 +466,14 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     if acquired:
       break
     else:
-      show_start_target = False
-      context.widget.update()
+      if config.no_start_fail: 
+        # this setting will count a no-start as a fail, resulting in randomization of params (e.g. iti)
+        with await fail_trial():
+          await context.sleep(config.fail_timeout)
+          return task_context.TaskResult(False)
+      else:
+        show_start_target = False
+        context.widget.update()
 
   # state: startacq
   with await next_state(context, State.START_ACQ, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):

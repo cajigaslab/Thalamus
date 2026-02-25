@@ -34,7 +34,8 @@ Config = typing.NamedTuple('Config', [
   ('hand_blink', datetime.timedelta),
   ('eye_blink', datetime.timedelta),
   ('fail_timeout', datetime.timedelta),
-  ('success_timeout', datetime.timedelta)
+  ('success_timeout', datetime.timedelta),
+  ('no_start_fail', bool),
 ])
 
 RANDOM_DEFAULT = {'min': 1, 'max':1}
@@ -88,7 +89,9 @@ class TargetWidget(QWidget):
 
     random_form = Form.build(config, ['Name:', 'Min:', 'Max:'],
       Form.Uniform('Radius', 'radius', 0, 5, '\u00B0'),
-      Form.Uniform('Angle', 'angle', 0, 360, '\u00B0'),      
+      Form.Uniform('Angle', 'angle', 0, 360, '\u00B0'),  
+      Form.Uniform('On Luminance', 'on_luminance', 1, 1),
+      Form.Uniform('Off Luminance', 'off_luminance', 0, 0)    
     )
     layout.addWidget(random_form, 1, 3, 1, 2)
 
@@ -118,6 +121,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Uniform('Success Interval', 'success_timeout', 1, 1, 's'),  
     Form.Constant('State Indicator X', 'state_indicator_x', 180),
     Form.Constant('State Indicator Y', 'state_indicator_y', 0),  
+    Form.Bool('No start = fail?', 'no_start_fail', False),
   )
   layout.addWidget(form)
 
@@ -233,7 +237,8 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     datetime.timedelta(seconds=context.get_value('hand_blink', RANDOM_DEFAULT)),
     datetime.timedelta(seconds=context.get_value('eye_blink', RANDOM_DEFAULT)),
     datetime.timedelta(seconds=context.get_value('fail_timeout', RANDOM_DEFAULT)),
-    datetime.timedelta(seconds=context.get_value('success_timeout', RANDOM_DEFAULT)),        
+    datetime.timedelta(seconds=context.get_value('success_timeout', RANDOM_DEFAULT)), 
+    context.get_value('no_start_fail'),      
   )
 
   custom_display_state_x = int(context.task_config['state_indicator_x'])
@@ -258,6 +263,8 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   all_target_windows = [ecc_to_px(context.get_target_value(itarg, 'window_size'), dpi)
                         for itarg in range(ntargets)]
   all_target_colors = [context.get_target_color(itarg, 'color', COLOR_DEFAULT) for itarg in range(ntargets)]
+  all_target_on_luminance = [context.get_target_value(i, 'on_luminance', COLOR_DEFAULT) for i in range(ntargets)]
+  all_target_off_luminance = [context.get_target_value(i, 'off_luminance', COLOR_DEFAULT) for i in range(ntargets)]
   all_target_names = [context.get_target_value(i, 'name', None) for i in range(ntargets)]
   all_reward_channels = [context.get_target_value(i, 'reward_channel', None) for i in range(ntargets)]
   
@@ -270,12 +277,14 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   last_touched_target = None    
   i_touched_target = None
   touch_pos = QPoint()  
+  bad_touch = False
   def touch_handler(cursor: QPoint) -> None:
     nonlocal start_target_touched    
     nonlocal i_touched_target
     nonlocal last_touched_target
     nonlocal touch_pos
-    nonlocal start_target_gazed        
+    nonlocal start_target_gazed 
+    nonlocal bad_touch       
 
     # nonlocal start_target_touched_and_gazed 
     # nonlocal presented_targ_touched_and_gazed 
@@ -289,6 +298,8 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     else:
       i_touched_target = None
     touch_pos = cursor
+    if touch_pos.x() > 0 and not start_target_touched:
+      bad_touch = True
 
     # start_target_touched_and_gazed = start_target_touched and start_target_gazed
     # presented_targ_touched_and_gazed = presented_targ_touched and presented_targ_gazed
@@ -321,15 +332,20 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   context.widget.gaze_listener = gaze_handler
   
   show_start_target = False
-  show_presented_target = False  
   state_brightness = 0
   def renderer(painter: QPainter) -> None:
+     
+    color_touch = all_target_colors[i_start_touch_targ]
+    scale = all_target_on_luminance[i_start_touch_targ] 
+    color_touch = QColor(int(scale*color_touch.red()), int(scale*color_touch.green()), int(scale*color_touch.blue()))
     
-    print(i_start_gaze_targ)
-    print(i_start_touch_targ)   
+    color_gaze = all_target_colors[i_start_gaze_targ]
+    scale = all_target_on_luminance[i_start_gaze_targ] 
+    color_gaze = QColor(int(scale*color_gaze.red()), int(scale*color_gaze.green()), int(scale*color_gaze.blue()))
+    
     if show_start_target:      
-      painter.fillRect(all_target_rects[i_start_touch_targ], all_target_colors[i_start_touch_targ])
-      painter.fillRect(all_target_rects[i_start_gaze_targ], all_target_colors[i_start_gaze_targ])
+      painter.fillRect(all_target_rects[i_start_touch_targ], color_touch)
+      painter.fillRect(all_target_rects[i_start_gaze_targ], color_gaze)
 
     with painter.masked(RenderOutput.OPERATOR):
       path = QPainterPath()
@@ -379,19 +395,27 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     state_brightness = 0
     show_start_target = False
     context.widget.update()
+    bad_touch = False
     await context.sleep(config.intertrial_timeout)
 
     await context.log('BehavState=start_on')
     state_brightness = toggle_brightness(state_brightness)
     show_start_target = True
     context.widget.update()
-    acquired = await wait_for(context, lambda: start_target_touched and start_target_gazed, config.start_timeout)
+    acquired = await wait_for(context, lambda: bad_touch or (start_target_touched and start_target_gazed), config.start_timeout)
 
-    if acquired:
+    #if acquired and not blank_space_touched:
+    if acquired and start_target_touched and start_target_gazed:
       break
     else:
-      show_start_target = False
-      context.widget.update
+      if config.no_start_fail: 
+        # this setting will count a no-start as a fail, resulting in randomization of params (e.g. iti)
+        await fail_trial()
+        await context.sleep(config.fail_timeout)
+        return task_context.TaskResult(False)
+      else:
+        show_start_target = False
+        context.widget.update()
 
   # state: startacq
   await context.log('BehavState=start_acq')
