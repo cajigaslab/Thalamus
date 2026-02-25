@@ -389,7 +389,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
           if stl_mesh:
             painter.render_stl(stl_mesh)
           else:
-            painter.fillRect(rect, color)
+            painter.fillRect(rect, color) # currently not set up to vary luminance
     else:
       if show_presented_target_delay:
         stl_mesh = all_target_stls[i_presented_targ]
@@ -411,7 +411,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
           if stl_mesh:
             painter.render_stl(stl_mesh)
           else:
-            painter.fillRect(rect, color)
+            painter.fillRect(rect, color) # currently not set up to vary luminance
     else:
       if show_presented_target:
         stl_mesh = all_target_stls[i_presented_targ]
@@ -525,8 +525,8 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   blank_space_touched = False
   dim_start_target = True
   # Switch from delay luminance to target luminance
-  show_presented_target_delay = False
   show_presented_target = True
+  show_presented_target_delay = False
   cue_timeout=config.cue_timeout.total_seconds()
   if cue_timeout >= 0.05: # if the cue timeout is too short, the display change for go *and* targs_on will not be detected
     state_brightness = toggle_brightness(state_brightness)

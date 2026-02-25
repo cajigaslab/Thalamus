@@ -21,7 +21,7 @@ async def main():
         if elapsed < 3:
           await asyncio.sleep(3 - elapsed)
         start = time.perf_counter()
-        print('Fiducial')
+        #print('Fiducial')
         await analog_queue.put(thalamus_pb2.InjectAnalogRequest(signal=thalamus_pb2.AnalogResponse(
             data=[5, 0],
             spans=[thalamus_pb2.Span(begin=0,end=2)],

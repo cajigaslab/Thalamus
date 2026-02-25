@@ -98,6 +98,7 @@ class TargetWidget(QWidget):
       Form.Uniform('Auditory Spatial Offset', 'auditory_spatial_offset', 0, 0),
       Form.Uniform('Auditory Spatial Offset Around Fixation', 'auditory_spatial_offset_around_fixation', 0, 0),
       Form.Uniform('On Luminance', 'on_luminance', 1, 1),
+      Form.Uniform('Delay Luminance', 'delay_luminance', 1, 1),
       Form.Uniform('Off Luminance', 'off_luminance', 0, 0),
       Form.Uniform('Dual Luminance', 'dual_luminance', 0, 0)
     )
@@ -296,6 +297,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   all_target_colors = [context.get_target_color(itarg, 'color', COLOR_DEFAULT) for itarg in range(ntargets)]
   dual_target_colors = [context.get_target_color(itarg, 'dual_color', COLOR_DEFAULT) for itarg in range(ntargets)]
   all_target_on_luminance = [context.get_target_value(i, 'on_luminance', COLOR_DEFAULT) for i in range(ntargets)]
+  all_target_delay_luminance = [context.get_target_value(i, 'delay_luminance', COLOR_DEFAULT) for i in range(ntargets)]
   all_target_off_luminance = [context.get_target_value(i, 'off_luminance', COLOR_DEFAULT) for i in range(ntargets)]
   all_target_dual_luminance = [context.get_target_value(i, 'dual_luminance', COLOR_DEFAULT) for i in range(ntargets)]
   all_target_names = [context.get_target_value(i, 'name', None) for i in range(ntargets)]
@@ -394,6 +396,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   show_start_target = False
   show_start_dual_target = False
   show_presented_target = False
+  show_presented_target_delay = False
   show_presented_dual_target = False
   state_brightness = 0
   def renderer(painter: QPainter) -> None:
@@ -422,6 +425,37 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       painter.fillRect(dual_target_rects[i_start_targ], dual_color_base)
 
     if config.is_choice:
+      if show_presented_target_delay: # currently not set up to handle luminance
+        for i, value in enumerate(zip(all_target_rects, all_target_colors, all_target_stls)):
+          if i == i_start_targ:
+            continue
+
+          rect, color, stl_mesh = value
+          if stl_mesh:
+            painter.render_stl(stl_mesh)
+          else:
+            painter.fillRect(rect, color)
+          if show_presented_dual_target:
+            dual_color_base = dual_target_colors[i]
+            scale = all_target_dual_luminance[i] 
+            dual_color_base = QColor(int(scale*dual_color_base.red()), int(scale*dual_color_base.green()), int(scale*dual_color_base.blue()))
+            painter.fillRect(dual_target_rects[i], dual_color_base)
+    else:
+      if show_presented_target_delay:
+        stl_mesh = all_target_stls[i_presented_targ]
+        if stl_mesh:
+          painter.render_stl(stl_mesh)
+        else:
+          color, scale = all_target_colors[i_presented_targ], all_target_delay_luminance[i_presented_targ]
+          color = QColor(int(scale*color.red()), int(scale*color.green()), int(scale*color.blue()))
+          painter.fillRect(all_target_rects[i_presented_targ], color)
+        if show_presented_dual_target:
+          dual_color_base = dual_target_colors[i_presented_targ]
+          scale = all_target_dual_luminance[i_presented_targ]*all_target_delay_luminance[i_presented_targ]
+          dual_color_base = QColor(int(scale*dual_color_base.red()), int(scale*dual_color_base.green()), int(scale*dual_color_base.blue()))
+          painter.fillRect(dual_target_rects[i_presented_targ], dual_color_base)
+
+    if config.is_choice:
       if show_presented_target:
         for i, value in enumerate(zip(all_target_rects, all_target_colors, all_target_stls)):
           if i == i_start_targ:
@@ -444,11 +478,11 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
           painter.render_stl(stl_mesh)
         else:
           painter.fillRect(all_target_rects[i_presented_targ], all_target_colors[i_presented_targ])
-      if show_presented_dual_target:
-        dual_color_base = dual_target_colors[i_presented_targ]
-        scale = all_target_dual_luminance[i_presented_targ] 
-        dual_color_base = QColor(int(scale*dual_color_base.red()), int(scale*dual_color_base.green()), int(scale*dual_color_base.blue()))
-        painter.fillRect(dual_target_rects[i_presented_targ], dual_color_base)
+        if show_presented_dual_target:
+          dual_color_base = dual_target_colors[i_presented_targ]
+          scale = all_target_dual_luminance[i_presented_targ] 
+          dual_color_base = QColor(int(scale*dual_color_base.red()), int(scale*dual_color_base.green()), int(scale*dual_color_base.blue()))
+          painter.fillRect(dual_target_rects[i_presented_targ], dual_color_base)
 
     with painter.masked(RenderOutput.OPERATOR):
       path = QPainterPath()
@@ -483,12 +517,14 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
   def fail_trial():    
     nonlocal show_presented_target
+    nonlocal show_presented_target_delay
     nonlocal show_presented_dual_target
     nonlocal show_start_target
     nonlocal show_start_dual_target
     nonlocal state_brightness
     context.behav_result = behav_result
     show_presented_target = False
+    show_presented_target_delay = False
     show_presented_dual_target = False
     show_start_target = False
     show_start_dual_target = False
@@ -541,7 +577,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       return task_context.TaskResult(False)
 
   state_brightness = toggle_brightness(state_brightness)
-  show_presented_target = True
+  show_presented_target_delay = True
   show_presented_dual_target = True
   context.widget.update()
   with await next_state(context, State.TARGS_ON, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
@@ -556,6 +592,8 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
   blank_space_touched = False
   dim_start_target = True
+  show_presented_target = True
+  show_presented_target_delay = False
   state_brightness = toggle_brightness(state_brightness)
   context.widget.update()
   with await next_state(context, State.GO, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):

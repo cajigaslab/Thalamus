@@ -945,7 +945,7 @@ struct JConnection : public boost::signals2::scoped_connection {
         promise.set_value();
       });
     });
-    THALAMUS_LOG(info) << "Waiting for node";
+    THALAMUS_LOG(trace) << "Waiting for node";
     while (future.wait_for(1s) == std::future_status::timeout &&
            !context->IsCancelled()) {
       if (impl->io_context.stopped()) {
@@ -955,7 +955,7 @@ struct JConnection : public boost::signals2::scoped_connection {
     if (context->IsCancelled()) {
       continue;
     }
-    THALAMUS_LOG(info) << "Got node";
+    THALAMUS_LOG(trace) << "Got node";
 
     MotionCaptureNode *node = node_cast<MotionCaptureNode *>(raw_node.get());
     if (!node) {
@@ -1036,7 +1036,7 @@ struct JConnection : public boost::signals2::scoped_connection {
         promise.set_value();
       });
     });
-    THALAMUS_LOG(info) << "Waiting for node";
+    THALAMUS_LOG(trace) << "Waiting for node";
     while (future.wait_for(1s) == std::future_status::timeout &&
            !context->IsCancelled()) {
       if (impl->io_context.stopped()) {
@@ -1046,7 +1046,7 @@ struct JConnection : public boost::signals2::scoped_connection {
     if (context->IsCancelled()) {
       continue;
     }
-    THALAMUS_LOG(info) << "Got node";
+    THALAMUS_LOG(trace) << "Got node";
 
     AnalogNode *node = node_cast<AnalogNode *>(raw_node.get());
     if (!node) {
@@ -1099,9 +1099,9 @@ struct Counter {
   static std::atomic_size_t count;
   std::string label;
   Counter(const std::string &_label) : label(_label) {
-    THALAMUS_LOG(info) << label << " add " << ++count;
+    THALAMUS_LOG(trace) << label << " add " << ++count;
   }
-  ~Counter() { THALAMUS_LOG(info) << label << " remove " << --count; }
+  ~Counter() { THALAMUS_LOG(trace) << label << " remove " << --count; }
 };
 std::atomic_size_t Counter::count = 0;
 
