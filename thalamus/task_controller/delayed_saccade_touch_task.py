@@ -504,7 +504,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     with await next_state(context, State.INTERTRIAL, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
       await wait_for(context, lambda: touch_pos.x() > 0, config.intertrial_timeout)
       if touch_pos.x() > 0: # touching the screen during ITI = failure
-        print("Fail: Touched during iti")
+        LOGGER.info("Fail: Touched during iti")
         behav_result['failure_mode'].append(1)
         with await fail_trial():
           await context.sleep(config.fail_timeout)
@@ -519,7 +519,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       acquired = await wait_for(context, lambda: start_target_touched and start_target_gazed or blank_space_touched, config.start_timeout)
 
     if blank_space_touched:
-      print("Status: Start on; Fail: Blank space touched")
+      LOGGER.info("Status: Start on; Fail: Blank space touched")
       behav_result['failure_mode'].append(2)
       with await fail_trial():
         await context.sleep(config.fail_timeout)
@@ -546,10 +546,10 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       config.hand_blink, config.eye_blink)
   if not success:
     if not start_target_touched:
-      print("Status: Start Acquired; Fail: Hand left start during baseline interval")
+      LOGGER.info("Status: Start Acquired; Fail: Hand left start during baseline interval")
       behav_result['failure_mode'].append(3)
     if not start_target_gazed:
-      print("Status: Start Acquired; Fail: Gaze left start during baseline interval")
+      LOGGER.info("Status: Start Acquired; Fail: Gaze left start during baseline interval")
       behav_result['failure_mode'].append(4)
     with await fail_trial():
       await context.sleep(config.fail_timeout)
@@ -565,10 +565,10 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       config.hand_blink, config.eye_blink)
   if not success:
     if not start_target_touched:
-      print("Status: Targets on; Fail: Hand left start during cue interval")
+      LOGGER.info("Status: Targets on; Fail: Hand left start during cue interval")
       behav_result['failure_mode'].append(5)
     if not start_target_gazed:
-      print("Status: Targets on; Fail: Gaze left start during cue interval")
+      LOGGER.info("Status: Targets on; Fail: Gaze left start during cue interval")
       behav_result['failure_mode'].append(6)
     with await fail_trial():
       await context.sleep(config.fail_timeout)
@@ -586,10 +586,10 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
   if not acquired or not start_target_touched:
     if not start_target_touched:
-      print("Status: GO; Fail: Hand left start target before targ acquired")
+      LOGGER.info("Status: GO; Fail: Hand left start target before targ acquired")
       behav_result['failure_mode'].append(7)
     if not acquired:
-      print("Status: GO; Fail: Target not acquired")
+      LOGGER.info("Status: GO; Fail: Target not acquired")
       behav_result['failure_mode'].append(8)
     with await fail_trial():
       await context.sleep(config.fail_timeout)
@@ -604,17 +604,17 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       config.hand_blink, config.eye_blink)  
   if not presented_targ_gazed or not start_target_touched: 
     if not presented_targ_gazed:
-      print("Status: Targs acquired; Fail: Gaze left window during hold")
+      LOGGER.info("Status: Targs acquired; Fail: Gaze left window during hold")
       behav_result['failure_mode'].append(9)
     if not start_target_touched:
-      print("Status: Targs acquired; Fail: Hand left start target during hold")
+      LOGGER.info("Status: Targs acquired; Fail: Hand left start target during hold")
       behav_result['failure_mode'].append(10)
     context.behav_result = behav_result
     with await fail_trial():
       await context.sleep(config.fail_timeout)
       return task_context.TaskResult(False)
   if not success: # IG: not sure if/when this is reached
-    print("Status: Targs acquired; Fail: Incomplete target hold")
+    LOGGER.info("Status: Targs acquired; Fail: Incomplete target hold")
     behav_result['failure_mode'].append(11)
     with await fail_trial():
       await context.sleep(config.fail_timeout)
@@ -633,7 +633,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
     on_time_ms = int(context.get_reward(all_reward_channels[final_i_selected_target]))
 
-    print("Delivering reward %d"%(on_time_ms,) )
+    LOGGER.info("Delivering reward %d"%(on_time_ms,))
     signal = thalamus_pb2.AnalogResponse(
         data=[5,0],
         spans=[thalamus_pb2.Span(begin=0,end=2,name='Reward')],
