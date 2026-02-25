@@ -45,7 +45,7 @@ COLOR_DEFAULT = [255, 255, 255]
 
 class TargetWidget(QWidget):
   '''
-  Widget for managing a target config
+  Widget for managing a target config. Note delay_luminance allows you to dim the peripheral target during the cue interval for training purposes
   '''
   def __init__(self, config: ObservableCollection) -> None:
     super().__init__()
@@ -97,6 +97,7 @@ class TargetWidget(QWidget):
       Form.Uniform('Auditory Spatial Offset', 'auditory_spatial_offset', 0, 0),
       Form.Uniform('Auditory Spatial Offset Around Fixation', 'auditory_spatial_offset_around_fixation', 0, 0),
       Form.Uniform('On Luminance', 'on_luminance', 1, 1),
+      Form.Uniform('Delay Luminance', 'delay_luminance', 1, 1),
       Form.Uniform('Off Luminance', 'off_luminance', 0, 0)
     )
     layout.addWidget(random_form, 1, 3, 1, 2)
@@ -290,6 +291,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
                         for itarg in range(ntargets)]
   all_target_colors = [context.get_target_color(itarg, 'color', COLOR_DEFAULT) for itarg in range(ntargets)]
   all_target_on_luminance = [context.get_target_value(i, 'on_luminance', COLOR_DEFAULT) for i in range(ntargets)]
+  all_target_delay_luminance = [context.get_target_value(i, 'delay_luminance', COLOR_DEFAULT) for i in range(ntargets)]
   all_target_off_luminance = [context.get_target_value(i, 'off_luminance', COLOR_DEFAULT) for i in range(ntargets)]
   all_target_names = [context.get_target_value(i, 'name', None) for i in range(ntargets)]
   all_reward_channels = [context.get_target_value(i, 'reward_channel', None) for i in range(ntargets)]
@@ -356,6 +358,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   dim_start_target = False
   show_start_target = False
   show_presented_target = False
+  show_presented_target_delay = False
   state_brightness = 0
   def renderer(painter: QPainter) -> None:
     color_base = all_target_colors[i_start_targ]
@@ -377,6 +380,28 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
         painter.fillRect(all_target_rects[i_start_targ], color_base)
 
     if config.is_choice:
+      if show_presented_target_delay:
+        for i, value in enumerate(zip(all_target_rects, all_target_colors, all_target_stls)):
+          if i == i_start_targ:
+            continue
+
+          rect, color, stl_mesh = value
+          if stl_mesh:
+            painter.render_stl(stl_mesh)
+          else:
+            painter.fillRect(rect, color)
+    else:
+      if show_presented_target_delay:
+        stl_mesh = all_target_stls[i_presented_targ]
+        if stl_mesh:
+          painter.render_stl(stl_mesh)
+        else:
+          color, scale = all_target_colors[i_presented_targ], all_target_delay_luminance[i_presented_targ]
+          color = QColor(int(scale*color.red()), int(scale*color.green()), int(scale*color.blue()))
+          painter.fillRect(all_target_rects[i_presented_targ], color)
+
+
+    if config.is_choice:
       if show_presented_target:
         for i, value in enumerate(zip(all_target_rects, all_target_colors, all_target_stls)):
           if i == i_start_targ:
@@ -393,7 +418,9 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
         if stl_mesh:
           painter.render_stl(stl_mesh)
         else:
-          painter.fillRect(all_target_rects[i_presented_targ], all_target_colors[i_presented_targ])
+          color, scale = all_target_colors[i_presented_targ], all_target_on_luminance[i_presented_targ]
+          color = QColor(int(scale*color.red()), int(scale*color.green()), int(scale*color.blue()))
+          painter.fillRect(all_target_rects[i_presented_targ], color)
 
     with painter.masked(RenderOutput.OPERATOR):
       path = QPainterPath()
@@ -429,10 +456,12 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
   def fail_trial():
     nonlocal show_presented_target
+    nonlocal show_presented_target_delay
     nonlocal show_start_target
     nonlocal state_brightness
     context.behav_result = behav_result
     show_presented_target = False
+    show_presented_target_delay = False
     show_start_target = False
     state_brightness = toggle_brightness(state_brightness)
     context.widget.update() 
@@ -484,7 +513,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       return task_context.TaskResult(False)
 
   state_brightness = toggle_brightness(state_brightness)
-  show_presented_target = True
+  show_presented_target_delay = True
   context.widget.update()
   with await next_state(context, State.TARGS_ON, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
     success = await wait_for_hold(context, lambda: start_target_acquired, config.cue_timeout, config.blink_timeout)
@@ -495,6 +524,9 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
   blank_space_touched = False
   dim_start_target = True
+  # Switch from delay luminance to target luminance
+  show_presented_target_delay = False
+  show_presented_target = True
   cue_timeout=config.cue_timeout.total_seconds()
   if cue_timeout >= 0.05: # if the cue timeout is too short, the display change for go *and* targs_on will not be detected
     state_brightness = toggle_brightness(state_brightness)

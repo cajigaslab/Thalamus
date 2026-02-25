@@ -523,6 +523,8 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
   dim_start_target = True
   with await next_state(context, State.GO, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
+    # Switch from delay luminance to target luminance
+    show_presented_target_delay = False
     show_presented_target = True
     cue_timeout=config.cue_timeout.total_seconds()
     if cue_timeout >= 0.05: # if the cue timeout is too short, the display change for go *and* targs_on will not be detected
@@ -547,7 +549,6 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   we can wait (optionally) by success_timeout or fail_timeout.
   """
   show_presented_target = False
-  show_presented_target_delay = False
 
   with await next_state(context, State.SUCCESS, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
     state_brightness = toggle_brightness(state_brightness)
