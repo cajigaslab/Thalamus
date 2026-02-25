@@ -48,6 +48,8 @@ from ..resources import get_path
 
 UNHANDLED_EXCEPTION: typing.List[Exception] = []
 
+LOGGER = logging.getLogger(__name__)
+
 def exception_handler(loop: asyncio.AbstractEventLoop, context: typing.Mapping[str, typing.Any]) -> None:
   """
   Logs unhandled exceptions and terminates program
@@ -99,7 +101,7 @@ async def async_main() -> None:
   done_future = asyncio.get_event_loop().create_future()
 
   asyncio.get_event_loop().set_exception_handler(exception_handler)
-  logging.basicConfig(level=logging.DEBUG, format='%(levelname)s %(asctime)s %(name)s:%(lineno)s %(message)s')
+  logging.basicConfig(level=logging.INFO, format='%(levelname)s %(asctime)s %(name)s:%(lineno)s %(message)s')
   logging.getLogger('matplotlib.font_manager').setLevel(logging.INFO)
 
   arguments = parse_args()
@@ -163,7 +165,7 @@ async def async_main() -> None:
     await pypipeline_server.start()
 
   else:
-    print(bmbi_native_filename)
+    logging.debug('%s', bmbi_native_filename)
     bmbi_native_proc = await asyncio.create_subprocess_exec(
       bmbi_native_filename, 'thalamus', '--port', str(arguments.port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else []))
     create_task_with_exc_handling(proc_watcher('native.exe', bmbi_native_proc))
@@ -258,7 +260,7 @@ async def async_main() -> None:
     await dotnet_proc.wait()
   #if bmbi_native_proc:
   #  await native_watch_task
-  print('DONE')
+  LOGGER.debug('DONE')
 
 def main() -> None:
   '''

@@ -2,9 +2,12 @@ import functools
 import typing
 import bisect
 import pdb
+import logging
 
 from ..qt import *
 from ..config import *
+
+LOGGER = logging.getLogger(__name__)
 
 class Delegate(QItemDelegate):
   def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
@@ -44,7 +47,7 @@ class SourcesModel(QAbstractItemModel):
       i = bisect.bisect_left(self.sorted_keys, key)
       self.beginInsertRows(QModelIndex(), i, i)
       self.sorted_keys.insert(i, key)
-      print('on_sources_change', self.sorted_keys)
+      LOGGER.debug('on_sources_change %s', self.sorted_keys)
       self.endInsertRows()
       value.add_observer(lambda *args: self.on_source_change(key, *args), functools.partial(isdeleted, self))
       for k, v in enumerate(value):
@@ -61,7 +64,7 @@ class SourcesModel(QAbstractItemModel):
           node.add_observer(on_name_change, functools.partial(isdeleted, self))
           self.monitored_nodes.add(id(node))
     else:
-      print('on_sources_change, remove')
+      LOGGER.debug('on_sources_change, remove')
       i = bisect.bisect_left(self.sorted_keys, key)
       self.beginRemoveRows(QModelIndex(), i, i)
       del self.sorted_keys[i]

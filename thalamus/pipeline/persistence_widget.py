@@ -9,7 +9,7 @@ LOGGER = logging.getLogger(__name__)
 class PersistenceWidget(QWidget):
   def __init__(self, config: ObservableDict):
     super().__init__()
-    print(config)
+    LOGGER.debug('%s', config)
 
     if 'Cached' not in config:
       config['Cached'] = []
@@ -24,7 +24,7 @@ class PersistenceWidget(QWidget):
     remove_button = QPushButton('Remove')
 
     def on_add():
-      print(cached)
+      LOGGER.debug('%s', cached)
       cached.append({
         'Address': '',
       })
