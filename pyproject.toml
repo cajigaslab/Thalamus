@@ -1,6 +1,6 @@
 [project]
 name = "thalamus"
-version = "0.3.42"
+version = "0.3.43"
 description = "Data Acquisition and Behavioral Experiment Platform"
 license = "GPL-3.0-only"
 license-file = "LICENSE"
