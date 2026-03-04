@@ -1,0 +1,835 @@
+{
+  "touch_channels": [
+    0,
+    1
+  ],
+  "task_clusters": [
+    {
+      "type": "task_cluster",
+      "name": "Intro to joy",
+      "weight": 0,
+      "tasks": [
+        {
+          "task_type": "joystick_intro",
+          "type": "task",
+          "goal": 0,
+          "name": "Cursor only",
+          "intertrial_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "start_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "hold_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "blink_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "fail_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "success_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 1
+          },
+          "target_height": {
+            "min": 1,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [
+            {
+              "enabled": true,
+              "x_norm": 0.75,
+              "y_norm": 0.5,
+              "radius_ratio": 0.08,
+              "hold_time": 0.4,
+              "target_color": [
+                0,
+                220,
+                60
+              ]
+            }
+          ],
+          "serial_port": "COM3",
+          "invert_x": true,
+          "invert_y": false,
+          "control_mode": "direct",
+          "cursor_only_mode": true,
+          "free_play_end_key": "space",
+          "cumulative_speed": 0.7,
+          "zero_drift_mode": true,
+          "zero_drift_buffer": 0.05,
+          "direct_range": 0.45,
+          "cursor_diameter_ratio": 0.03,
+          "cursor_color": [
+            255,
+            70,
+            70
+          ],
+          "trial_timeout": 10.0,
+          "intertrial_interval": 1.0,
+          "disable_up": false,
+          "disable_down": false,
+          "disable_left": false,
+          "disable_right": false
+        },
+        {
+          "task_type": "joystick_intro",
+          "type": "task",
+          "goal": 1,
+          "name": "Up",
+          "intertrial_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "start_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "hold_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "blink_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "fail_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "success_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 1
+          },
+          "target_height": {
+            "min": 1,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [
+            {
+              "enabled": true,
+              "x_norm": 0.5,
+              "y_norm": 0.95,
+              "radius_ratio": 0.25,
+              "hold_time": 0.4,
+              "target_color": [
+                139,
+                139,
+                209
+              ]
+            }
+          ],
+          "serial_port": "COM3",
+          "invert_x": true,
+          "invert_y": false,
+          "control_mode": "direct",
+          "cursor_only_mode": false,
+          "free_play_end_key": "space",
+          "cumulative_speed": 0.7,
+          "zero_drift_mode": true,
+          "zero_drift_buffer": 0.05,
+          "direct_range": 0.45,
+          "cursor_diameter_ratio": 0.03,
+          "cursor_color": [
+            255,
+            70,
+            70
+          ],
+          "trial_timeout": 10.0,
+          "intertrial_interval": 1.0,
+          "disable_up": false,
+          "disable_down": true,
+          "disable_left": true,
+          "disable_right": true
+        },
+        {
+          "task_type": "joystick_intro",
+          "type": "task",
+          "goal": 1,
+          "name": "Down",
+          "intertrial_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "start_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "hold_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "blink_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "fail_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "success_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 1
+          },
+          "target_height": {
+            "min": 1,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [
+            {
+              "enabled": true,
+              "x_norm": 0.5,
+              "y_norm": 0.05,
+              "radius_ratio": 0.25,
+              "hold_time": 0.4,
+              "target_color": [
+                139,
+                139,
+                209
+              ]
+            }
+          ],
+          "serial_port": "COM3",
+          "invert_x": true,
+          "invert_y": false,
+          "control_mode": "direct",
+          "cursor_only_mode": false,
+          "free_play_end_key": "space",
+          "cumulative_speed": 0.7,
+          "zero_drift_mode": true,
+          "zero_drift_buffer": 0.05,
+          "direct_range": 0.45,
+          "cursor_diameter_ratio": 0.03,
+          "cursor_color": [
+            255,
+            70,
+            70
+          ],
+          "trial_timeout": 10.0,
+          "intertrial_interval": 1.0,
+          "disable_up": true,
+          "disable_down": false,
+          "disable_left": true,
+          "disable_right": true
+        },
+        {
+          "task_type": "joystick_intro",
+          "type": "task",
+          "goal": 1,
+          "name": "R",
+          "intertrial_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "start_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "hold_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "blink_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "fail_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "success_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 1
+          },
+          "target_height": {
+            "min": 1,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [
+            {
+              "enabled": true,
+              "x_norm": 0.95,
+              "y_norm": 0.5,
+              "radius_ratio": 0.25,
+              "hold_time": 0.4,
+              "target_color": [
+                139,
+                139,
+                209
+              ]
+            }
+          ],
+          "serial_port": "COM3",
+          "invert_x": true,
+          "invert_y": false,
+          "control_mode": "direct",
+          "cursor_only_mode": false,
+          "free_play_end_key": "space",
+          "cumulative_speed": 0.7,
+          "zero_drift_mode": true,
+          "zero_drift_buffer": 0.05,
+          "direct_range": 0.45,
+          "cursor_diameter_ratio": 0.03,
+          "cursor_color": [
+            255,
+            70,
+            70
+          ],
+          "trial_timeout": 10.0,
+          "intertrial_interval": 1.0,
+          "disable_up": true,
+          "disable_down": true,
+          "disable_left": true,
+          "disable_right": false
+        },
+        {
+          "task_type": "joystick_intro",
+          "type": "task",
+          "goal": 5,
+          "name": "UpDown",
+          "intertrial_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "start_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "hold_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "blink_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "fail_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "success_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 1
+          },
+          "target_height": {
+            "min": 1,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [
+            {
+              "enabled": true,
+              "x_norm": 0.5,
+              "y_norm": 0.95,
+              "radius_ratio": 0.25,
+              "hold_time": 0.4,
+              "target_color": [
+                139,
+                139,
+                209
+              ]
+            },
+            {
+              "enabled": true,
+              "x_norm": 0.5,
+              "y_norm": 0.05,
+              "radius_ratio": 0.25,
+              "hold_time": 0.4,
+              "target_color": [
+                149,
+                149,
+                223
+              ]
+            }
+          ],
+          "serial_port": "COM3",
+          "invert_x": true,
+          "invert_y": false,
+          "control_mode": "direct",
+          "cursor_only_mode": false,
+          "free_play_end_key": "space",
+          "cumulative_speed": 0.7,
+          "zero_drift_mode": true,
+          "zero_drift_buffer": 0.05,
+          "direct_range": 0.45,
+          "cursor_diameter_ratio": 0.03,
+          "cursor_color": [
+            255,
+            70,
+            70
+          ],
+          "trial_timeout": 10.0,
+          "intertrial_interval": 1.0,
+          "disable_up": false,
+          "disable_down": false,
+          "disable_left": true,
+          "disable_right": true
+        },
+        {
+          "task_type": "joystick_intro",
+          "type": "task",
+          "goal": 1,
+          "name": "L",
+          "intertrial_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "start_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "hold_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "blink_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "fail_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "success_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 1
+          },
+          "target_height": {
+            "min": 1,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [
+            {
+              "enabled": true,
+              "x_norm": 0.05,
+              "y_norm": 0.5,
+              "radius_ratio": 0.25,
+              "hold_time": 0.4,
+              "target_color": [
+                139,
+                139,
+                209
+              ]
+            }
+          ],
+          "serial_port": "COM3",
+          "invert_x": true,
+          "invert_y": false,
+          "control_mode": "direct",
+          "cursor_only_mode": false,
+          "free_play_end_key": "space",
+          "cumulative_speed": 0.7,
+          "zero_drift_mode": true,
+          "zero_drift_buffer": 0.05,
+          "direct_range": 0.45,
+          "cursor_diameter_ratio": 0.03,
+          "cursor_color": [
+            255,
+            70,
+            70
+          ],
+          "trial_timeout": 10.0,
+          "intertrial_interval": 1.0,
+          "disable_up": true,
+          "disable_down": true,
+          "disable_left": false,
+          "disable_right": true
+        },
+        {
+          "task_type": "joystick_intro",
+          "type": "task",
+          "goal": 5,
+          "name": "LR",
+          "intertrial_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "start_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "hold_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "blink_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "fail_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "success_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 1
+          },
+          "target_height": {
+            "min": 1,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [
+            {
+              "enabled": true,
+              "x_norm": 0.05,
+              "y_norm": 0.5,
+              "radius_ratio": 0.25,
+              "hold_time": 0.4,
+              "target_color": [
+                139,
+                139,
+                209
+              ]
+            },
+            {
+              "enabled": true,
+              "x_norm": 0.95,
+              "y_norm": 0.5,
+              "radius_ratio": 0.25,
+              "hold_time": 0.4,
+              "target_color": [
+                149,
+                149,
+                223
+              ]
+            }
+          ],
+          "serial_port": "COM3",
+          "invert_x": true,
+          "invert_y": false,
+          "control_mode": "direct",
+          "cursor_only_mode": false,
+          "free_play_end_key": "space",
+          "cumulative_speed": 0.7,
+          "zero_drift_mode": true,
+          "zero_drift_buffer": 0.05,
+          "direct_range": 0.45,
+          "cursor_diameter_ratio": 0.03,
+          "cursor_color": [
+            255,
+            70,
+            70
+          ],
+          "trial_timeout": 10.0,
+          "intertrial_interval": 1.0,
+          "disable_up": true,
+          "disable_down": true,
+          "disable_left": false,
+          "disable_right": false
+        },
+        {
+          "task_type": "joystick_intro",
+          "type": "task",
+          "goal": 10,
+          "name": "All",
+          "intertrial_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "start_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "hold_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "blink_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "fail_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "success_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 1
+          },
+          "target_height": {
+            "min": 1,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [
+            {
+              "enabled": true,
+              "x_norm": 0.05,
+              "y_norm": 0.5,
+              "radius_ratio": 0.25,
+              "hold_time": 0.4,
+              "target_color": [
+                170,
+                170,
+                255
+              ]
+            },
+            {
+              "enabled": true,
+              "x_norm": 0.95,
+              "y_norm": 0.5,
+              "radius_ratio": 0.25,
+              "hold_time": 0.4,
+              "target_color": [
+                170,
+                170,
+                255
+              ]
+            },
+            {
+              "enabled": true,
+              "x_norm": 0.5,
+              "y_norm": 0.95,
+              "radius_ratio": 0.25,
+              "hold_time": 0.4,
+              "target_color": [
+                170,
+                170,
+                255
+              ]
+            },
+            {
+              "enabled": true,
+              "x_norm": 0.5,
+              "y_norm": 0.05,
+              "radius_ratio": 0.25,
+              "hold_time": 0.4,
+              "target_color": [
+                170,
+                170,
+                255
+              ]
+            }
+          ],
+          "serial_port": "COM3",
+          "invert_x": true,
+          "invert_y": false,
+          "control_mode": "direct",
+          "cursor_only_mode": false,
+          "free_play_end_key": "space",
+          "cumulative_speed": 0.7,
+          "zero_drift_mode": true,
+          "zero_drift_buffer": 0.05,
+          "direct_range": 0.45,
+          "cursor_diameter_ratio": 0.03,
+          "cursor_color": [
+            255,
+            70,
+            70
+          ],
+          "trial_timeout": 10.0,
+          "intertrial_interval": 1.0,
+          "disable_up": false,
+          "disable_down": false,
+          "disable_left": false,
+          "disable_right": false
+        }
+      ]
+    }
+  ],
+  "queue": [],
+  "reward_schedule": {
+    "schedules": [
+      [
+        0
+      ]
+    ],
+    "index": 0
+  },
+  "Orchestration": {
+    "Remote Executor": false,
+    "Processes": []
+  },
+  "nodes": [],
+  "Persistence": {
+    "Cached": []
+  },
+  "eye_scaling": {
+    "I": {
+      "x": 1,
+      "y": 1
+    },
+    "II": {
+      "x": 1,
+      "y": 1
+    },
+    "III": {
+      "x": 1,
+      "y": 1
+    },
+    "IV": {
+      "x": 1,
+      "y": 1
+    },
+    "Auto Clear": true
+  },
+  "status": "Day 1/Learn_Top = 18/2 Intro to joy/All = 2/0 Intro to joy/LR = 1/0 Intro to joy/Learn_All = 10/0 Intro to joy/Learn_Bot = 4/4 Intro to joy/Learn_LR = 5/1 Intro to joy/Learn_Left = 2/3 Intro to joy/Learn_Right = 1/0 Intro to joy/Learn_Top = 17/2 Intro to joy/Learn_TopDown = 10/0 Untitled/Untitled = 4/0",
+  "thalamus_view_geometry": [
+    108,
+    119,
+    384,
+    768
+  ],
+  "data_views": [],
+  "node_widgets": [],
+  "eye_scaling_init": {
+    "I": {
+      "x": 1,
+      "y": 1
+    },
+    "II": {
+      "x": 1,
+      "y": 1
+    },
+    "III": {
+      "x": 1,
+      "y": 1
+    },
+    "IV": {
+      "x": 1,
+      "y": 1
+    },
+    "Auto Clear": true
+  }
+}

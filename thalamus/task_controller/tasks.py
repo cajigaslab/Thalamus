@@ -36,6 +36,7 @@ from . import feedback_task
 from . import psychopy_task
 from . import gaussian_task
 from . import delayed_reach_task_joystick4  # velocity cursor
+from . import joystick_intro
 from . import calibrate_eye_reach
 from . import calibrate_eye_saccade
 from .task_context import TaskDescription
@@ -143,6 +144,9 @@ DESCRIPTIONS = [
   TaskDescription('joystick4', 'Joystick4',
     delayed_reach_task_joystick4.create_widget,
     delayed_reach_task_joystick4.run),
+  TaskDescription('joystick_intro', 'Joystick Intro',
+    joystick_intro.create_widget,
+    joystick_intro.run),
   TaskDescription('calibrate_eye_reach', 'Calibrate eye reach',
     calibrate_eye_reach.create_widget,
     calibrate_eye_reach.run),
