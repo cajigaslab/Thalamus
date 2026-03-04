@@ -25,6 +25,7 @@ except Exception: # pragma: no cover - environment-dependent import
   serial = None # type: ignore
 
 from ..qt import *
+from .. import thalamus_pb2
 from .widgets import Form
 from .util import create_task_with_exc_handling, CanvasPainterProtocol, TaskContextProtocol, TaskResult
 from ..config import *
@@ -105,6 +106,11 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Constant("Direct Range", "direct_range", 0.45, precision=3),
     Form.Constant("Cursor Diameter Ratio", "cursor_diameter_ratio", 0.03, precision=3),
     Form.Color("Cursor Color", "cursor_color", QColor(255, 70, 70)),
+    Form.Constant("Task Region Center X", "task_region_x", 0.5, precision=3),
+    Form.Constant("Task Region Center Y", "task_region_y", 0.5, precision=3),
+    Form.Constant("Task Region Width", "task_region_width", 1.0, precision=3),
+    Form.Constant("Task Region Height", "task_region_height", 1.0, precision=3),
+    Form.Constant("Reward Channel", "reward_channel", 0, precision=0),
     Form.Constant("Trial Timeout (s)", "trial_timeout", 10.0, "s", precision=3),
     Form.Constant("Intertrial Interval (s)", "intertrial_interval", 1.0, "s", precision=3),
   )
@@ -357,6 +363,11 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   direct_range = float(task_config.get("direct_range", 0.45))
   cursor_diameter_ratio = float(task_config.get("cursor_diameter_ratio", 0.03))
   cursor_color = QColor(*task_config.get("cursor_color", [255, 70, 70]))
+  task_region_x = float(task_config.get("task_region_x", 0.5))
+  task_region_y = float(task_config.get("task_region_y", 0.5))
+  task_region_width = float(task_config.get("task_region_width", 1.0))
+  task_region_height = float(task_config.get("task_region_height", 1.0))
+  reward_channel = int(task_config.get("reward_channel", 0))
   target_radius_ratio = DEFAULT_TARGET_RADIUS_RATIO
   target_color = QColor(*DEFAULT_TARGET_COLOR)
   hold_time = DEFAULT_TARGET_HOLD_TIME
@@ -379,6 +390,28 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   current_target_color = target_color
   free_play_end_requested = False
 
+  task_region_width = max(0.05, min(1.0, task_region_width))
+  task_region_height = max(0.05, min(1.0, task_region_height))
+  task_region_x = max(0.0, min(1.0, task_region_x))
+  task_region_y = max(0.0, min(1.0, task_region_y))
+
+  def region_bounds_ratios() -> typing.Tuple[float, float, float, float]:
+    left = task_region_x - (task_region_width / 2.0)
+    top = task_region_y - (task_region_height / 2.0)
+    left = max(0.0, min(1.0 - task_region_width, left))
+    top = max(0.0, min(1.0 - task_region_height, top))
+    return left, top, task_region_width, task_region_height
+
+  def to_region_pixels(local_x: float, local_y: float, width_px: int, height_px: int) -> typing.Tuple[int, int]:
+    region_left, region_top, region_w, region_h = region_bounds_ratios()
+    left_px = int(region_left * width_px)
+    top_px = int(region_top * height_px)
+    region_w_px = max(1, int(region_w * width_px))
+    region_h_px = max(1, int(region_h * height_px))
+    px = int(left_px + local_x * region_w_px)
+    py = int(top_px + (1.0 - local_y) * region_h_px)
+    return px, py
+
   def on_key_release(event: typing.Any) -> None:
     nonlocal free_play_end_requested
     key = event.key()
@@ -388,6 +421,19 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       free_play_end_requested = (key == Qt.Key.Key_Return or key == Qt.Key.Key_Enter)
     else:
       free_play_end_requested = (key == Qt.Key.Key_Space)
+
+  async def deliver_reward() -> None:
+    on_time_ms = int(context.get_reward(reward_channel))
+    if on_time_ms <= 0:
+      LOGGER.info("Reward skipped: channel=%d returned %d ms", reward_channel, on_time_ms)
+      return
+    signal = thalamus_pb2.AnalogResponse(
+      data=[5, 0],
+      spans=[thalamus_pb2.Span(begin=0, end=2, name='Reward')],
+      sample_intervals=[1_000_000 * on_time_ms],
+    )
+    LOGGER.info("Delivering reward channel=%d duration_ms=%d", reward_channel, on_time_ms)
+    await context.inject_analog('Reward', signal)
 
   def place_target() -> typing.Tuple[float, float, float, float, QColor]:
     enabled_targets = []
@@ -417,14 +463,21 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   def renderer(painter: CanvasPainterProtocol) -> None:
     w = context.widget.width()
     h = context.widget.height()
-    min_dim = min(w, h)
+    region_left, region_top, region_w, region_h = region_bounds_ratios()
+    left_px = int(region_left * w)
+    top_px = int(region_top * h)
+    region_w_px = max(1, int(region_w * w))
+    region_h_px = max(1, int(region_h * h))
+    min_dim = min(region_w_px, region_h_px)
 
     cursor_diameter_px = int(cursor_diameter_ratio * min_dim)
     target_radius_px = int(current_target_radius_ratio * min_dim)
-    cx = int(cursor_x * w)
-    cy = int((1.0 - cursor_y) * h)
-    tx = int(target_x * w)
-    ty = int((1.0 - target_y) * h)
+    cx, cy = to_region_pixels(cursor_x, cursor_y, w, h)
+    tx, ty = to_region_pixels(target_x, target_y, w, h)
+
+    painter.setPen(QPen(QColor(120, 120, 120), 1))
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.drawRect(left_px, top_px, region_w_px, region_h_px)
 
     if (not cursor_only_mode) and state == "active":
       painter.setPen(QPen(current_target_color, 1))
@@ -532,12 +585,13 @@ async def run(context: TaskContextProtocol) -> TaskResult:
 
     w = context.widget.width()
     h = context.widget.height()
-    min_dim = min(w, h)
+    _, _, region_w, region_h = region_bounds_ratios()
+    region_w_px = max(1, int(region_w * w))
+    region_h_px = max(1, int(region_h * h))
+    min_dim = min(region_w_px, region_h_px)
     target_radius_px = int(current_target_radius_ratio * min_dim)
-    cursor_px_x = int(cursor_x * w)
-    cursor_px_y = int((1.0 - cursor_y) * h)
-    target_px_x = int(target_x * w)
-    target_px_y = int((1.0 - target_y) * h)
+    cursor_px_x, cursor_px_y = to_region_pixels(cursor_x, cursor_y, w, h)
+    target_px_x, target_px_y = to_region_pixels(target_x, target_y, w, h)
 
     if cursor_only_mode:
       if free_play_end_requested:
@@ -556,6 +610,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
         if hold_start is None:
           hold_start = now
         elif now - hold_start >= current_hold_time:
+          await deliver_reward()
           await context.log("BehavState=success")
           return TaskResult(success=True)
       else:
