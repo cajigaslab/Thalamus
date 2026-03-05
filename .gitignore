@@ -27,3 +27,4 @@ dotnet/dotnet/obj
 test.tha.*
 *.perfetto-trace
 /build-old
+.venv/
