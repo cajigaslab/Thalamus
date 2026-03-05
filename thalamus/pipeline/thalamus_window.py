@@ -460,6 +460,15 @@ FACTORIES = {
     UserData(UserDataType.SPINBOX, 'No Touch Timeout (ms)', 30, []),
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
   ]),
+  'JOYSTICK': Factory(None, [
+    UserData(UserDataType.OPEN_FILE, 'Port', '/dev/ttyACM0', []),
+    UserData(UserDataType.CHECK_BOX, 'Invert X', True, []),
+    UserData(UserDataType.CHECK_BOX, 'Invert Y', False, []),
+    UserData(UserDataType.SPINBOX, 'X Center', 516, []),
+    UserData(UserDataType.SPINBOX, 'Y Center', 514, []),
+    UserData(UserDataType.SPINBOX, 'Dead Zone', 3, []),
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+  ]),
 }
 
 FACTORY_NAMES = {}

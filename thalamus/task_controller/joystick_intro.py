@@ -11,64 +11,24 @@ Two control modes:
 """
 
 import asyncio
-import datetime
 import logging
 import math
 import random
-import re
 import time
 import typing
 
-try:
-  import serial
-except Exception: # pragma: no cover - environment-dependent import
-  serial = None # type: ignore
-
 from ..qt import *
 from .. import thalamus_pb2
+from .. import thalamus_pb2_grpc
 from .widgets import Form
 from .util import create_task_with_exc_handling, CanvasPainterProtocol, TaskContextProtocol, TaskResult
 from ..config import *
 
 LOGGER = logging.getLogger(__name__)
 
-CSV_PATTERN = re.compile(r"^\s*(\d+)\s*,\s*(\d+)\s*$")
-LABELED_PATTERN = re.compile(r"x\s*=\s*(\d+)\s*,\s*y\s*=\s*(\d+)", flags=re.IGNORECASE)
-DEFAULT_BAUD_RATE = 115200
-DEFAULT_X_CENTER = 516.0
-DEFAULT_Y_CENTER = 514.0
-DEFAULT_DEAD_ZONE = 3
 DEFAULT_TARGET_RADIUS_RATIO = 0.08
 DEFAULT_TARGET_COLOR = [0, 220, 60]
 DEFAULT_TARGET_HOLD_TIME = 0.40
-
-# Shared joystick state (kept global so repeated trial runs do not constantly reopen serial).
-READING_JOYSTICK = False
-SERIAL_CONNECTION: typing.Optional[typing.Any] = None
-SERIAL_PORT = ""
-SERIAL_BAUD = 0
-JOYSTICK_X = 0.0
-JOYSTICK_Y = 0.0
-
-
-def _parse_xy_line(line: str) -> typing.Optional[typing.Tuple[int, int]]:
-  csv_match = CSV_PATTERN.match(line)
-  if csv_match:
-    return int(csv_match.group(1)), int(csv_match.group(2))
-
-  labeled_match = LABELED_PATTERN.search(line)
-  if labeled_match:
-    return int(labeled_match.group(1)), int(labeled_match.group(2))
-
-  return None
-
-
-def _normalize(value: int, center: float, dead_zone: int) -> float:
-  if abs(value - center) <= dead_zone:
-    value = int(center)
-  value = max(0, min(1023, value))
-  return (value - center) / 512.0
-
 
 def create_widget(task_config: ObservableCollection) -> QWidget:
   class NoWheelChangeFilter(QWidget):
@@ -87,9 +47,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
 
   form = Form.build(
     task_config, ["Parameter", "Value"],
-    Form.String("Serial Port", "serial_port", "COM3"),
-    Form.Bool("Invert X", "invert_x", True),
-    Form.Bool("Invert Y", "invert_y", False),
+    Form.String("Joystick Node", "joystick_node", "Joystick"),
     Form.Choice("Control Mode", "control_mode", [
       ("Cumulative", "cumulative"),
       ("Direct", "direct"),
@@ -340,16 +298,9 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
 
 async def run(context: TaskContextProtocol) -> TaskResult:
   assert context.widget, "Widget is None; cannot render."
-  global READING_JOYSTICK, SERIAL_CONNECTION, SERIAL_PORT, SERIAL_BAUD, JOYSTICK_X, JOYSTICK_Y
 
   task_config = context.config["queue"][0]
-  serial_port = str(task_config.get("serial_port", "COM3"))
-  baud_rate = DEFAULT_BAUD_RATE
-  x_center = DEFAULT_X_CENTER
-  y_center = DEFAULT_Y_CENTER
-  dead_zone = DEFAULT_DEAD_ZONE
-  invert_x = bool(task_config.get("invert_x", True))
-  invert_y = bool(task_config.get("invert_y", False))
+  joystick_node = str(task_config.get("joystick_node", "Joystick"))
   disable_up = bool(task_config.get("disable_up", False))
   disable_down = bool(task_config.get("disable_down", False))
   disable_left = bool(task_config.get("disable_left", False))
@@ -389,6 +340,8 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   current_hold_time = hold_time
   current_target_color = target_color
   free_play_end_requested = False
+  joystick_x = 0.0
+  joystick_y = 0.0
 
   task_region_width = max(0.05, min(1.0, task_region_width))
   task_region_height = max(0.05, min(1.0, task_region_height))
@@ -421,6 +374,16 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       free_play_end_requested = (key == Qt.Key.Key_Return or key == Qt.Key.Key_Enter)
     else:
       free_play_end_requested = (key == Qt.Key.Key_Space)
+
+  async def analog_processor(stream: typing.Any) -> None:
+    nonlocal joystick_x, joystick_y
+    try:
+      async for message in stream:
+        if len(message.data) >= 2:
+          joystick_x = float(message.data[0])
+          joystick_y = float(message.data[1])
+    finally:
+      stream.cancel()
 
   async def deliver_reward() -> None:
     on_time_ms = int(context.get_reward(reward_channel))
@@ -498,127 +461,102 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   context.widget.renderer = renderer
   context.widget.key_release_handler = on_key_release
 
-  async def poll_joystick_from_serial() -> None:
-    global READING_JOYSTICK, JOYSTICK_X, JOYSTICK_Y
-    while SERIAL_CONNECTION and SERIAL_CONNECTION.is_open:
-      raw_bytes = SERIAL_CONNECTION.readline()
-      if raw_bytes:
-        line = raw_bytes.decode("utf-8", errors="ignore").strip()
-        parsed = _parse_xy_line(line)
-        if parsed:
-          raw_x, raw_y = parsed
-          JOYSTICK_X = _normalize(raw_x, x_center, dead_zone) * (-1.0 if invert_x else 1.0)
-          JOYSTICK_Y = _normalize(raw_y, y_center, dead_zone) * (-1.0 if invert_y else 1.0)
-      await asyncio.sleep(0)
-    READING_JOYSTICK = False
-
-  # Open or re-open serial if needed.
-  needs_reopen = (
-    SERIAL_CONNECTION is None
-    or not SERIAL_CONNECTION.is_open
-    or SERIAL_PORT != serial_port
-    or SERIAL_BAUD != baud_rate
+  channel = context.get_channel('localhost:50050')
+  stub = thalamus_pb2_grpc.ThalamusStub(channel)
+  request = thalamus_pb2.AnalogRequest(
+    node=thalamus_pb2.NodeSelector(name=joystick_node),
+    channel_names=['X', 'Y'],
   )
-  if needs_reopen:
-    serial_ctor = getattr(serial, "Serial", None) if serial is not None else None
-    if serial_ctor is None:
-      raise RuntimeError(
-        "Serial backend unavailable. Ensure 'pyserial' is installed and that no conflicting "
-        "'serial' package shadows it."
-      )
-    if SERIAL_CONNECTION and SERIAL_CONNECTION.is_open:
-      SERIAL_CONNECTION.close()
-    SERIAL_CONNECTION = serial_ctor(serial_port, baud_rate, timeout=0.02)
-    SERIAL_PORT = serial_port
-    SERIAL_BAUD = baud_rate
-    await context.sleep(datetime.timedelta(milliseconds=200))
-    SERIAL_CONNECTION.reset_input_buffer()
-    LOGGER.info("Opened serial port %s @ %d", serial_port, baud_rate)
+  stream = stub.analog(request)
+  analog_task = create_task_with_exc_handling(analog_processor(stream))
 
-  if not READING_JOYSTICK:
-    READING_JOYSTICK = True
-    create_task_with_exc_handling(poll_joystick_from_serial())
-
-  if cursor_only_mode:
-    await context.log("BehavState=free_play")
-  else:
-    await context.log(f"BehavState={state}")
-  while True:
-    now = time.perf_counter()
-    dt = max(0.0, min(0.05, now - last_tick))
-    last_tick = now
-
-    if control_mode == "direct":
-      jx = JOYSTICK_X
-      jy = JOYSTICK_Y
-      if disable_right and jx > 0.0:
-        jx = 0.0
-      if disable_left and jx < 0.0:
-        jx = 0.0
-      if disable_up and jy > 0.0:
-        jy = 0.0
-      if disable_down and jy < 0.0:
-        jy = 0.0
-      cursor_x = 0.5 + jx * direct_range
-      cursor_y = 0.5 + jy * direct_range
-    else:
-      jx = JOYSTICK_X
-      jy = JOYSTICK_Y
-      if disable_right and jx > 0.0:
-        jx = 0.0
-      if disable_left and jx < 0.0:
-        jx = 0.0
-      if disable_up and jy > 0.0:
-        jy = 0.0
-      if disable_down and jy < 0.0:
-        jy = 0.0
-      if zero_drift_mode:
-        # Radial deadband to suppress small spring-back offsets near center.
-        if math.hypot(jx, jy) < zero_drift_buffer:
-          jx = 0.0
-          jy = 0.0
-      cursor_x += jx * cumulative_speed * dt
-      cursor_y += jy * cumulative_speed * dt
-
-    cursor_x = max(0.0, min(1.0, cursor_x))
-    cursor_y = max(0.0, min(1.0, cursor_y))
-
-    w = context.widget.width()
-    h = context.widget.height()
-    _, _, region_w, region_h = region_bounds_ratios()
-    region_w_px = max(1, int(region_w * w))
-    region_h_px = max(1, int(region_h * h))
-    min_dim = min(region_w_px, region_h_px)
-    target_radius_px = int(current_target_radius_ratio * min_dim)
-    cursor_px_x, cursor_px_y = to_region_pixels(cursor_x, cursor_y, w, h)
-    target_px_x, target_px_y = to_region_pixels(target_x, target_y, w, h)
-
+  try:
     if cursor_only_mode:
-      if free_play_end_requested:
-        await context.log("BehavState=success")
-        return TaskResult(success=True)
-    elif state == "iti":
-      if now >= iti_end:
-        target_x, target_y, current_target_radius_ratio, current_hold_time, current_target_color = place_target()
-        hold_start = None
-        trial_start = now
-        state = "active"
-        await context.log("BehavState=active")
+      await context.log("BehavState=free_play")
     else:
-      dist_to_target = math.hypot(cursor_px_x - target_px_x, cursor_px_y - target_px_y)
-      if dist_to_target <= target_radius_px:
-        if hold_start is None:
-          hold_start = now
-        elif now - hold_start >= current_hold_time:
-          await deliver_reward()
+      await context.log(f"BehavState={state}")
+    while True:
+      now = time.perf_counter()
+      dt = max(0.0, min(0.05, now - last_tick))
+      last_tick = now
+
+      if control_mode == "direct":
+        jx = joystick_x
+        jy = joystick_y
+        if disable_right and jx > 0.0:
+          jx = 0.0
+        if disable_left and jx < 0.0:
+          jx = 0.0
+        if disable_up and jy > 0.0:
+          jy = 0.0
+        if disable_down and jy < 0.0:
+          jy = 0.0
+        cursor_x = 0.5 + jx * direct_range
+        cursor_y = 0.5 + jy * direct_range
+      else:
+        jx = joystick_x
+        jy = joystick_y
+        if disable_right and jx > 0.0:
+          jx = 0.0
+        if disable_left and jx < 0.0:
+          jx = 0.0
+        if disable_up and jy > 0.0:
+          jy = 0.0
+        if disable_down and jy < 0.0:
+          jy = 0.0
+        if zero_drift_mode:
+          # Radial deadband to suppress small spring-back offsets near center.
+          if math.hypot(jx, jy) < zero_drift_buffer:
+            jx = 0.0
+            jy = 0.0
+        cursor_x += jx * cumulative_speed * dt
+        cursor_y += jy * cumulative_speed * dt
+
+      cursor_x = max(0.0, min(1.0, cursor_x))
+      cursor_y = max(0.0, min(1.0, cursor_y))
+
+      w = context.widget.width()
+      h = context.widget.height()
+      _, _, region_w, region_h = region_bounds_ratios()
+      region_w_px = max(1, int(region_w * w))
+      region_h_px = max(1, int(region_h * h))
+      min_dim = min(region_w_px, region_h_px)
+      target_radius_px = int(current_target_radius_ratio * min_dim)
+      cursor_px_x, cursor_px_y = to_region_pixels(cursor_x, cursor_y, w, h)
+      target_px_x, target_px_y = to_region_pixels(target_x, target_y, w, h)
+
+      if cursor_only_mode:
+        if free_play_end_requested:
           await context.log("BehavState=success")
           return TaskResult(success=True)
+      elif state == "iti":
+        if now >= iti_end:
+          target_x, target_y, current_target_radius_ratio, current_hold_time, current_target_color = place_target()
+          hold_start = None
+          trial_start = now
+          state = "active"
+          await context.log("BehavState=active")
       else:
-        hold_start = None
+        dist_to_target = math.hypot(cursor_px_x - target_px_x, cursor_px_y - target_px_y)
+        if dist_to_target <= target_radius_px:
+          if hold_start is None:
+            hold_start = now
+          elif now - hold_start >= current_hold_time:
+            await deliver_reward()
+            await context.log("BehavState=success")
+            return TaskResult(success=True)
+        else:
+          hold_start = None
 
-      if now - trial_start >= trial_timeout:
-        await context.log("BehavState=fail")
-        return TaskResult(success=False)
+        if now - trial_start >= trial_timeout:
+          await context.log("BehavState=fail")
+          return TaskResult(success=False)
 
-    context.widget.update()
-    await asyncio.sleep(0.01)
+      context.widget.update()
+      await asyncio.sleep(0.01)
+  finally:
+    analog_task.cancel()
+    try:
+      await analog_task
+    except Exception:
+      pass
