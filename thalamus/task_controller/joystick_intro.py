@@ -558,5 +558,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     analog_task.cancel()
     try:
       await analog_task
+    except asyncio.CancelledError:
+      pass
     except Exception:
       pass
