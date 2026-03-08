@@ -20,7 +20,6 @@ numpy-stl
 scikit-learn
 Pillow
 lark
-jsonpath_ng
 nidaqmx
 wheel
 toml
@@ -29,3 +28,4 @@ meson
 ninja
 oslex
 psutil
+jsonpath-ng==1.7.0
