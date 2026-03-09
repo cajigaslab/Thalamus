@@ -972,4 +972,41 @@ size_t XsensNode::modalities() const { return infer_modalities<XsensNode>(); }
 size_t HandEngineNode::modalities() const {
   return infer_modalities<HandEngineNode>();
 }
+
+struct MotionCaptureNodeImpl::Impl {
+  std::chrono::nanoseconds now;
+  std::span<Segment const> segments;
+};
+
+MotionCaptureNodeImpl::MotionCaptureNodeImpl(ObservableDictPtr, boost::asio::io_context &,
+                                             NodeGraph *) : impl(new Impl()) {}
+MotionCaptureNodeImpl::~MotionCaptureNodeImpl() {}
+
+std::span<MotionCaptureNode::Segment const> MotionCaptureNodeImpl::segments() const {
+  return impl->segments;
+}
+
+const std::string_view MotionCaptureNodeImpl::pose_name() const {
+  return "";
+}
+
+std::chrono::nanoseconds MotionCaptureNodeImpl::time() const {
+  return impl->now;
+}
+
+void MotionCaptureNodeImpl::inject(const std::span<Segment const> &segments) {
+  impl->now = std::chrono::steady_clock::now().time_since_epoch();
+  impl->segments = segments;
+  ready(this);
+}
+
+bool MotionCaptureNodeImpl::has_motion_data() const {
+  return true;
+}
+
+std::string MotionCaptureNodeImpl::type_name() { return "MOCAP"; }
+size_t MotionCaptureNodeImpl::modalities() const {
+  return infer_modalities<MotionCaptureNodeImpl>();
+}
+
 } // namespace thalamus

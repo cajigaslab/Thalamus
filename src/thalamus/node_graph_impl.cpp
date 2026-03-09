@@ -129,9 +129,7 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
   ThalamusNodeFactory* factory;
 
   ExtNode(ThalamusNode* _node, ThalamusNodeFactory* _factory) : node(_node), factory(_factory) {}
-  ~ExtNode() override {
-    factory->destroy(node);
-  }
+  ~ExtNode() override;
 
   size_t modalities() const override {
     size_t result = 0;
@@ -265,8 +263,12 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
   }
 };
 
-struct ThalamusAPIImpl {
 
+ExtNode::~ExtNode() {
+  factory->destroy(node);
+}
+
+struct ThalamusAPIImpl {
     static std::map<ObservableCollection::Value, ThalamusState*>* cpp_to_c;
     static std::map<ThalamusState*, ObservableCollection::Value>* c_to_cpp;
     static std::map<ObservableCollection::Value, ThalamusStateConnection*>* cpp_to_c_conns;
@@ -276,8 +278,8 @@ struct ThalamusAPIImpl {
     static ThalamusState* get_state_ref(ObservableCollection::Key key) {
       if(std::holds_alternative<std::monostate>(key)) {
         return get_state_ref(ObservableCollection::Value(std::get<std::monostate>(key)));
-      } else if (std::holds_alternative<int64_t>(key)) {
-        return get_state_ref(ObservableCollection::Value(std::get<int64_t>(key)));
+      } else if (std::holds_alternative<long long>(key)) {
+        return get_state_ref(ObservableCollection::Value(std::get<long long>(key)));
       } else if (std::holds_alternative<bool>(key)) {
         return get_state_ref(ObservableCollection::Value(std::get<bool>(key)));
       } else if (std::holds_alternative<std::string>(key)) {
@@ -285,6 +287,7 @@ struct ThalamusAPIImpl {
       }
       THALAMUS_ABORT("Unexpected type");
     }
+
     static ThalamusState* get_state_ref(ObservableCollection::Value val) {
       auto i = cpp_to_c->find(val);
       if(i == cpp_to_c->end()) {
@@ -318,7 +321,7 @@ struct ThalamusAPIImpl {
       return std::holds_alternative<std::string>(value->value) ? 1 : 0;
     }
     static char state_is_int(ThalamusState* value) {
-      return std::holds_alternative<int64_t>(value->value) ? 1 : 0;
+      return std::holds_alternative<long long>(value->value) ? 1 : 0;
     }
     static char state_is_float(ThalamusState* value) {
       return std::holds_alternative<double>(value->value) ? 1 : 0;
@@ -334,7 +337,7 @@ struct ThalamusAPIImpl {
       return std::get<std::string>(state->value).c_str();
     }
     static int64_t state_get_int(ThalamusState* state) {
-      return std::get<int64_t>(state->value);
+      return std::get<long long>(state->value);
     }
     static double state_get_float(ThalamusState* state) {
       return std::get<double>(state->value);
@@ -459,8 +462,11 @@ struct ExtNodeFactory : public INodeFactory {
       return underlying->cleanup();
     }
   }
-  std::string type_name() override { return underlying->type; }
+  std::string type_name() override;
 };
+
+std::string ExtNodeFactory::type_name() { return underlying->type; }
+
 
 struct NodeGraphImpl::Impl {
   ObservableListPtr nodes;
@@ -542,6 +548,7 @@ public:
         {"ALPHA_OMEGA", new NodeFactory<AlphaOmegaNode>()},
         {"TOGGLE", new NodeFactory<ToggleNode>()},
         {"XSENS", new NodeFactory<XsensNode>()},
+        {"MOCAP", new NodeFactory<MotionCaptureNodeImpl>()},
         {"HAND_ENGINE", new NodeFactory<HandEngineNode>()},
         {"WAVE", new NodeFactory<WaveGeneratorNode>()},
         {"STORAGE", new NodeFactory<StorageNode>()},

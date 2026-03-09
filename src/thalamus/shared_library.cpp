@@ -46,8 +46,8 @@ FARPROC SharedLibrary::load_address(const std::string& name) {
   return result;
 }
 #else
-void SharedLibrary::load_address(const std::string& name) {
-  auto result = dlsym(library_handle, name.c_str());
+void* SharedLibrary::load_address(const std::string& name) {
+  auto result = dlsym(impl->library_handle, name.c_str());
   if (!result) {
     THALAMUS_LOG(info) << "Failed to load " << name << ".  "
                        << impl->name << " disabled";
