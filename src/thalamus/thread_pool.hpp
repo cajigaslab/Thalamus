@@ -67,6 +67,9 @@ public:
         } else {
           THALAMUS_LOG(info) << "Pool thread using default priority";
         }
+#else
+        (void)thread_policy;
+        (void)thread_priority;
 #endif
         thread_target(thread_name);
       });
