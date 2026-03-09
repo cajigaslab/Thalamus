@@ -18,6 +18,7 @@ import asyncio
 import logging
 import argparse
 import itertools
+import importlib
 
 import yaml
 
@@ -74,6 +75,7 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument('-p', '--port', type=int, default=50050, help='GRPC port')
   parser.add_argument('-u', '--ui-port', type=int, default=50051, help='UI GRPC port')
   parser.add_argument('-d', '--dotnet-port', type=int, default=50052, help='dotnet GRPC port')
+  parser.add_argument('--ext', help='Extension Module')
   return parser.parse_args(self_args[1:])
 
 async def async_main() -> None:
@@ -91,6 +93,17 @@ async def async_main() -> None:
   logging.getLogger('matplotlib.font_manager').setLevel(logging.INFO)
 
   arguments = parse_args()
+  
+  ext_widgets = {}
+  ext_library = None
+  if arguments.ext is not None:
+    ext_module = importlib.__import__(arguments.ext)
+    if hasattr(ext_module, 'widgets'):
+      ext_widgets.update(ext_module.widgets())
+    if hasattr(ext_module, 'library'):
+      ext_library = ext_module.library()
+      ext_library = [ext_library] if isinstance(ext_library, (str, pathlib.Path)) else ext_library
+      ext_library = tuple(str(e) for e in ext_library)
 
   _ = QApplication(sys.argv)
 
@@ -125,7 +138,9 @@ async def async_main() -> None:
   dotnet_filename = pathlib.Path(get_path('thalamus.dotnet', 'dotnet' + ('.exe' if sys.platform == 'win32' else '')))
   bmbi_native_proc = None
   command = bmbi_native_filename, 'thalamus', '--port', str(arguments.port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else [])
-  LOGGER.debug('COMMAND %s', ' '.join(command))
+  if ext_library is not None:
+    command = command + ('--ext',) + ext_library
+  LOGGER.info('COMMAND %s', ' '.join(command))
   bmbi_native_proc = await asyncio.create_subprocess_exec(*command)
   create_task_with_exc_handling(proc_watcher('native.exe', bmbi_native_proc))
 
@@ -142,7 +157,7 @@ async def async_main() -> None:
 
   screen_geometry = qt_screen_geometry()
 
-  thalamus = ThalamusWindow(f'localhost:{arguments.port}', config, stub, done_future)
+  thalamus = ThalamusWindow(f'localhost:{arguments.port}', config, stub, done_future, ext_widgets)
   servicer.window = thalamus
   thalamus.enable_config_menu(arguments.config)
   await thalamus.load()

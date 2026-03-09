@@ -182,6 +182,4 @@ jobs:
         python3 -m venv venv
         source venv/bin/activate
         pip install twine
-        echo $TWINE_USERNAME
-        echo $TWINE_PASSWORD
         twine upload *.whl

@@ -6,12 +6,12 @@
 #endif
 #include <grpcpp/create_channel.h>
 #include <thalamus.grpc.pb.h>
+#include <absl/strings/escaping.h>
+#include <absl/strings/str_replace.h>
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
 
-#include <absl/strings/escaping.h>
-#include <absl/strings/str_replace.h>
 #include <thalamus/modalities_util.hpp>
 
 using namespace thalamus;

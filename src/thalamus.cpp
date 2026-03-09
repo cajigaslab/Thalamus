@@ -13,6 +13,8 @@
 #include <thalamus/file.hpp>
 #include <thalamus/thread.hpp>
 #include <thalamus/async.hpp>
+#include <thalamus/plugin.h>
+#include <thalamus/shared_library.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -33,6 +35,7 @@
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
+#include <boost/dll/shared_library.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic pop
@@ -121,7 +124,8 @@ int main(int argc, char **argv) {
                                                        "Enable tracing")(
       "port,p", boost::program_options::value<size_t>()->default_value(50050),
       "GRPC Port")("state-url,s", boost::program_options::value<std::string>(),
-                   "Address of Thalamus instance that manages state");
+                   "Address of Thalamus instance that manages state")
+                   ("ext,e", boost::program_options::value<std::vector<std::string>>()->multitoken(), "Shared libraries to extend thalamus");
 
 #ifndef _WIN32
   desc.add_options()
@@ -189,6 +193,16 @@ int main(int argc, char **argv) {
   }
   auto port = vm["port"].as<size_t>();
 
+  std::vector<SharedLibrary> extensions;
+  if (vm.count("ext") > 0) {
+    auto exts = vm["ext"].as<std::vector<std::string>>();
+    for(std::filesystem::path ext_path : exts) {
+      if(std::filesystem::exists(ext_path)) {
+        extensions.emplace_back(ext_path.string());
+      }
+    }
+  }
+
   boost::asio::io_context io_context;
 
   // QApplication app (argc, argv);
@@ -239,7 +253,7 @@ int main(int argc, char **argv) {
   grpc::ServerBuilder builder;
   builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
   std::unique_ptr<NodeGraphImpl> node_graph(
-      new NodeGraphImpl(nodes, io_context, system_start, steady_start, stub.get()
+      new NodeGraphImpl(nodes, io_context, system_start, steady_start, stub.get(), extensions
 #ifndef _WIN32
                         ,pool_sched_policy_opt, pool_sched_priority_opt
 #endif

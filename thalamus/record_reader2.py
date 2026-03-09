@@ -331,7 +331,7 @@ class RecordReader:
   def __read_record(self) -> typing.Optional[typing.Tuple[StorageRecord, int]]:
     assert self.reader is not None
     data = self.reader.read(LONG_SIZE)
-    if not data:
+    if len(data) < LONG_SIZE:
       return
 
     size, = struct.unpack(LONG, data)
@@ -381,7 +381,7 @@ class Timer:
 
 def read_record(stream) -> typing.Optional[StorageRecord]:
   data = stream.read(LONG_SIZE)
-  if not data:
+  if len(data) < LONG_SIZE:
     return
 
   size, = struct.unpack(LONG, data)

@@ -979,17 +979,13 @@ struct JConnection : public boost::signals2::scoped_connection {
         epi_segment.segment_id = proto_segment.id();
         epi_segment.time = proto_segment.time();
         epi_segment.actor = uint8_t(proto_segment.actor());
-        epi_segment.rotation = {
-          proto_segment.q0(),
-          proto_segment.q1(),
-          proto_segment.q2(),
-          proto_segment.q3(),
-        };
-        epi_segment.position = {
-          proto_segment.x(),
-          proto_segment.y(),
-          proto_segment.z()
-        };
+        epi_segment.rotation[0] = proto_segment.q0();
+        epi_segment.rotation[1] = proto_segment.q1();
+        epi_segment.rotation[2] = proto_segment.q2();
+        epi_segment.rotation[3] = proto_segment.q3();
+        epi_segment.position[0] = proto_segment.x();
+        epi_segment.position[1] = proto_segment.y();
+        epi_segment.position[2] = proto_segment.z();
       }
 
       std::promise<void> inject_promise;
@@ -1775,13 +1771,13 @@ Service::xsens(::grpc::ServerContext *context,
           for (auto &segment : data) {
             auto response_segment = response.add_segments();
             response_segment->set_id(segment.segment_id);
-            response_segment->set_x(boost::qvm::X(segment.position));
-            response_segment->set_y(boost::qvm::Y(segment.position));
-            response_segment->set_z(boost::qvm::Z(segment.position));
-            response_segment->set_q0(boost::qvm::S(segment.rotation));
-            response_segment->set_q1(boost::qvm::X(segment.rotation));
-            response_segment->set_q2(boost::qvm::Y(segment.rotation));
-            response_segment->set_q3(boost::qvm::Z(segment.rotation));
+            response_segment->set_x(segment.position[0]);
+            response_segment->set_y(segment.position[1]);
+            response_segment->set_z(segment.position[2]);
+            response_segment->set_q0(segment.rotation[0]);
+            response_segment->set_q1(segment.rotation[1]);
+            response_segment->set_q2(segment.rotation[2]);
+            response_segment->set_q3(segment.rotation[3]);
           }
           writer->Write(response);
         }).track_foreign(raw_node));
@@ -1910,6 +1906,7 @@ Service::image(::grpc::ServerContext *context,
             piece.set_width(uint32_t(width));
             piece.set_height(uint32_t(height));
             piece.set_format(format);
+            piece.set_frame_interval(size_t(node->frame_interval().count()));
 
             size_t plane_offset = 0;
             size_t remaining_chunk = IMAGE_CHUNK_SIZE;

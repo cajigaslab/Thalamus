@@ -278,6 +278,8 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/frequency_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/samplemonitor_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/samplemonitor_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/shared_library.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/shared_library.cpp"
                      "${CMAKE_SOURCE_DIR}/proto/thalamus.proto")
 target_sources(thalamus PRIVATE 
                "${CMAKE_SOURCE_DIR}/src/thalamus/pupil_node.hpp"
