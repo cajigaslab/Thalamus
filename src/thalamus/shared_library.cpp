@@ -33,6 +33,7 @@ struct SharedLibrary::Impl {
 };
 
 SharedLibrary::SharedLibrary(const std::string& name) : impl(new Impl(name)) {}
+SharedLibrary::SharedLibrary(SharedLibrary&& that) : impl(std::move(that.impl)) {}
 SharedLibrary::~SharedLibrary() {}
 
 #ifdef _WIN32

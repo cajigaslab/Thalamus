@@ -18,6 +18,7 @@ namespace thalamus {
 #endif
   public:
     SharedLibrary(const std::string&);
+    SharedLibrary(SharedLibrary&&);
     ~SharedLibrary();
     template <typename T> T load(const std::string &name) {
       auto address = load_address(name);

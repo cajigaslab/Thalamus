@@ -224,7 +224,8 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     command = [str(c) for c in command]
     print(command)
     subprocess.check_call(command)
-    shutil.copy('src/thalamus/plugin.h', 'thalamus/plugin.h')
+    pathlib.Path('thalamus/thalamus').mkdir(exist_ok=True)
+    shutil.copy('src/thalamus/plugin.h', 'thalamus/thalamus/plugin.h')
 
   license_dir = pathlib.Path(f'{underscore_name}-{version}.dist-info/licenses')
   license_dir.mkdir(exist_ok=True)

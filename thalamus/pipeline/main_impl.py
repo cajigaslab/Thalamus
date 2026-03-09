@@ -75,7 +75,7 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument('-p', '--port', type=int, default=50050, help='GRPC port')
   parser.add_argument('-u', '--ui-port', type=int, default=50051, help='UI GRPC port')
   parser.add_argument('-d', '--dotnet-port', type=int, default=50052, help='dotnet GRPC port')
-  parser.add_argument('-e', '--ext', help='Extension Module')
+  parser.add_argument('--ext', help='Extension Module')
   return parser.parse_args(self_args[1:])
 
 async def async_main() -> None:
@@ -98,8 +98,12 @@ async def async_main() -> None:
   ext_library = None
   if arguments.ext is not None:
     ext_module = importlib.__import__(arguments.ext)
-    ext_widgets.update(ext_module.widgets())
-    ext_library = ext_module.library()
+    if hasattr(ext_module, 'widgets'):
+      ext_widgets.update(ext_module.widgets())
+    if hasattr(ext_module, 'library'):
+      ext_library = ext_module.library()
+      ext_library = [ext_library] if isinstance(ext_library, (str, pathlib.Path)) else ext_library
+      ext_library = tuple(str(e) for e in ext_library)
 
   _ = QApplication(sys.argv)
 
@@ -135,10 +139,10 @@ async def async_main() -> None:
   bmbi_native_proc = None
   command = bmbi_native_filename, 'thalamus', '--port', str(arguments.port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else [])
   if ext_library is not None:
-    command = command + ('--ext', str(ext_library))
+    command = command + ('--ext',) + ext_library
   LOGGER.info('COMMAND %s', ' '.join(command))
-  #bmbi_native_proc = await asyncio.create_subprocess_exec(*command)
-  #create_task_with_exc_handling(proc_watcher('native.exe', bmbi_native_proc))
+  bmbi_native_proc = await asyncio.create_subprocess_exec(*command)
+  create_task_with_exc_handling(proc_watcher('native.exe', bmbi_native_proc))
 
   dotnet_proc = None
   #if False:

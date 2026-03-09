@@ -28,7 +28,7 @@ public:
                 std::chrono::system_clock::time_point,
                 std::chrono::steady_clock::time_point,
                 thalamus_grpc::Thalamus::Stub*,
-                std::optional<SharedLibrary>& extension,
+                std::vector<SharedLibrary>& extensions,
                 std::optional<int> thread_policy = std::nullopt,
                 std::optional<int> thread_priority = std::nullopt);
   ~NodeGraphImpl() override;

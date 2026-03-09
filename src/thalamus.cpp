@@ -125,7 +125,7 @@ int main(int argc, char **argv) {
       "port,p", boost::program_options::value<size_t>()->default_value(50050),
       "GRPC Port")("state-url,s", boost::program_options::value<std::string>(),
                    "Address of Thalamus instance that manages state")
-                   ("ext,e", boost::program_options::value<std::string>(), "Share library to extend thalamus");
+                   ("ext,e", boost::program_options::value<std::vector<std::string>>()->multitoken(), "Shared libraries to extend thalamus");
 
 #ifndef _WIN32
   desc.add_options()
@@ -193,11 +193,13 @@ int main(int argc, char **argv) {
   }
   auto port = vm["port"].as<size_t>();
 
-  std::optional<SharedLibrary> extension;
+  std::vector<SharedLibrary> extensions;
   if (vm.count("ext") > 0) {
-    std::filesystem::path ext_path = vm["ext"].as<std::string>();
-    if(std::filesystem::exists(ext_path)) {
-      extension.emplace(ext_path.string());
+    auto exts = vm["ext"].as<std::vector<std::string>>();
+    for(std::filesystem::path ext_path : exts) {
+      if(std::filesystem::exists(ext_path)) {
+        extensions.emplace_back(ext_path.string());
+      }
     }
   }
 
@@ -251,7 +253,7 @@ int main(int argc, char **argv) {
   grpc::ServerBuilder builder;
   builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
   std::unique_ptr<NodeGraphImpl> node_graph(
-      new NodeGraphImpl(nodes, io_context, system_start, steady_start, stub.get(), extension
+      new NodeGraphImpl(nodes, io_context, system_start, steady_start, stub.get(), extensions
 #ifndef _WIN32
                         ,pool_sched_policy_opt, pool_sched_priority_opt
 #endif

@@ -482,7 +482,7 @@ struct NodeGraphImpl::Impl {
   std::chrono::steady_clock::time_point steady_time;
   ThreadPool thread_pool;
   thalamus_grpc::Thalamus::Stub* stub;
-  std::optional<SharedLibrary>& extension;
+  std::vector<SharedLibrary>& extension;
 
   std::map<std::string, INodeFactory *> node_factories;
 
@@ -495,7 +495,7 @@ public:
        std::chrono::system_clock::time_point _system_time,
        std::chrono::steady_clock::time_point _steady_time,
        thalamus_grpc::Thalamus::Stub* _stub,
-       std::optional<SharedLibrary>& _extension)
+       std::vector<SharedLibrary>& _extension)
       : nodes(_nodes), num_nodes(nodes->size()), io_context(_io_context),
         outer(_outer), system_time(_system_time), steady_time(_steady_time),
         thread_pool("ThreadPool"), stub(_stub), extension(_extension) {
@@ -586,13 +586,13 @@ public:
         {"SAMPLE_MONITOR", new NodeFactory<SampleMonitorNode>()},
         {"ARUCO", new NodeFactory<ArucoNode>()}};
 
-    if(extension) {
+    for(auto& ext : extension) {
       //auto library_handle = LoadLibrary("C:\\Thalamus\\ext.dll");
 
       //auto get_node_factories = reinterpret_cast<get_node_factories_fun>(
       //    ::GetProcAddress(library_handle, "get_node_factories"));
 
-      auto get_node_factories = extension->load<thalamus_get_node_factories>("get_node_factories");
+      auto get_node_factories = ext.load<thalamus_get_node_factories>("get_node_factories");
       THALAMUS_ASSERT(get_node_factories, "get_node_factories not found in extension");
       auto factory = get_node_factories(&thalamus_api);
       while(*factory != nullptr) {
@@ -724,7 +724,7 @@ NodeGraphImpl::NodeGraphImpl(ObservableListPtr nodes,
                              std::chrono::system_clock::time_point system_time,
                              std::chrono::steady_clock::time_point steady_time,
                              thalamus_grpc::Thalamus::Stub* stub,
-                             std::optional<SharedLibrary>& extension,
+                             std::vector<SharedLibrary>& extension,
                              std::optional<int> thread_policy,
                              std::optional<int> thread_priority)
     : impl(new Impl(nodes, io_context, this, system_time, steady_time, stub, extension)) {
