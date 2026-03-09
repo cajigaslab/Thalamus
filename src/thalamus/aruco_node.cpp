@@ -403,10 +403,10 @@ struct ArucoNode::Impl {
                   cv::Quat<float>::createFromRvec(board.rotation);
               auto total_quaternion = quaternion * boardQuaterion;
 
-              boost::qvm::S(_segments.back().rotation) = total_quaternion.w;
-              boost::qvm::X(_segments.back().rotation) = total_quaternion.x;
-              boost::qvm::Y(_segments.back().rotation) = total_quaternion.y;
-              boost::qvm::Z(_segments.back().rotation) = total_quaternion.z;
+              _segments.back().rotation[0] = total_quaternion.w;
+              _segments.back().rotation[1] = total_quaternion.x;
+              _segments.back().rotation[2] = total_quaternion.y;
+              _segments.back().rotation[3] = total_quaternion.z;
 
               auto boardTvecX = board.translation_x * rvecMat.at<double>(0, 0) +
                                 board.translation_y * rvecMat.at<double>(0, 1) +
@@ -419,11 +419,11 @@ struct ArucoNode::Impl {
                                 board.translation_z * rvecMat.at<double>(2, 2);
               cv::Vec3d boardTvec(boardTvecX, boardTvecY, boardTvecZ);
 
-              boost::qvm::X(_segments.back().position) =
+              _segments.back().position[0] =
                   float(tvec[0] + boardTvecX);
-              boost::qvm::Y(_segments.back().position) =
+              _segments.back().position[1] =
                   float(tvec[1] + boardTvecY);
-              boost::qvm::Z(_segments.back().position) =
+              _segments.back().position[2] =
                   float(tvec[2] + boardTvecZ);
             } catch (cv::Exception &e) {
               THALAMUS_LOG(error) << e.what();

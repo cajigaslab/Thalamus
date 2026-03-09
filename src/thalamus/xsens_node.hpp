@@ -6,22 +6,14 @@
 #include <boost/qvm/vec.hpp>
 #include <thalamus/state.hpp>
 #include <string>
+#include <thalamus/plugin.h>
 
 namespace thalamus {
 using namespace std::chrono_literals;
 
 class MotionCaptureNode {
 public:
-  struct Segment {
-    unsigned int frame;
-    unsigned int segment_id;
-    unsigned int time;
-    boost::qvm::vec<float, 3> position;
-    boost::qvm::quat<float> rotation;
-    unsigned char actor;
-    static const size_t serialized_size;
-    static Segment parse(unsigned char *data);
-  };
+  using Segment = ThalamusMocapSegment;
   virtual ~MotionCaptureNode();
   virtual std::span<Segment const> segments() const = 0;
   virtual const std::string_view pose_name() const = 0;

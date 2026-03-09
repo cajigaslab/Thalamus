@@ -353,13 +353,13 @@ struct StorageNode::Impl {
         protobuf_segment->set_frame(segment.frame);
         protobuf_segment->set_time(segment.time);
         protobuf_segment->set_actor(segment.actor);
-        protobuf_segment->set_x(boost::qvm::X(segment.position));
-        protobuf_segment->set_y(boost::qvm::Y(segment.position));
-        protobuf_segment->set_z(boost::qvm::Z(segment.position));
-        protobuf_segment->set_q0(boost::qvm::S(segment.rotation));
-        protobuf_segment->set_q1(boost::qvm::X(segment.rotation));
-        protobuf_segment->set_q2(boost::qvm::Y(segment.rotation));
-        protobuf_segment->set_q3(boost::qvm::Z(segment.rotation));
+        protobuf_segment->set_x(segment.position[0]);
+        protobuf_segment->set_y(segment.position[1]);
+        protobuf_segment->set_z(segment.position[2]);
+        protobuf_segment->set_q0(segment.rotation[0]);
+        protobuf_segment->set_q1(segment.rotation[1]);
+        protobuf_segment->set_q2(segment.rotation[2]);
+        protobuf_segment->set_q3(segment.rotation[3]);
       }
       record.set_time(uint64_t(locked_xsens->time().count()));
       record.set_node(name);
