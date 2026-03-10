@@ -422,8 +422,8 @@ struct Storage2Node::Impl {
             proto_pair->set_text(std::get<std::string>(value));
           } else if (std::holds_alternative<double>(value)) {
             proto_pair->set_decimal(std::get<double>(value));
-          } else if (std::holds_alternative<long long>(value)) {
-            proto_pair->set_integral(std::get<long long>(value));
+          } else if (std::holds_alternative<int64_t>(value)) {
+            proto_pair->set_integral(std::get<int64_t>(value));
           }
         }
         if(!rec_found) {
@@ -493,7 +493,7 @@ struct Storage2Node::Impl {
   std::atomic_ullong written_bytes = 0;
   std::atomic_ullong queue_max_bytes = 0;
   std::atomic_ullong currently_queued_bytes = 0;
-  long long sweep_count = 0;
+  int64_t sweep_count = 0;
   std::chrono::steady_clock::duration total_sweep_time = 0ns;
 
   const size_t zbuffer_size = 1024;

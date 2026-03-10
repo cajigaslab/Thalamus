@@ -378,11 +378,11 @@ struct OculomaticNode::Impl {
     } else if (key_str == "Render Thresholded") {
       render_thresholded = std::get<bool>(v);
     } else if (key_str == "Threshold") {
-      threshold = size_t(std::get<long long int>(v));
+      threshold = size_t(std::get<int64_t>(v));
     } else if (key_str == "Min Area") {
-      min_area = size_t(std::get<long long int>(v));
+      min_area = size_t(std::get<int64_t>(v));
     } else if (key_str == "Max Area") {
-      max_area = size_t(std::get<long long int>(v));
+      max_area = size_t(std::get<int64_t>(v));
     } else if (key_str == "X Gain") {
       x_gain = std::get<double>(v);
     } else if (key_str == "Y Gain") {
@@ -392,9 +392,9 @@ struct OculomaticNode::Impl {
     } else if (key_str == "Invert Y") {
       invert_y = std::get<bool>(v);
     } else if (key_str == "Pix X") {
-      centering_pix.first = int(std::get<long long>(v));
+      centering_pix.first = int(std::get<int64_t>(v));
     } else if (key_str == "Pix Y") {
-      centering_pix.second = int(std::get<long long>(v));
+      centering_pix.second = int(std::get<int64_t>(v));
     } else if (key_str == "Source") {
       std::string source_str = state->at("Source");
       auto token = std::string(absl::StripAsciiWhitespace(source_str));

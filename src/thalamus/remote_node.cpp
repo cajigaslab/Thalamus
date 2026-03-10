@@ -52,7 +52,7 @@ struct RemoteNode::Impl {
   std::chrono::nanoseconds remote_time;
   std::chrono::milliseconds configured_ping_interval = 200ms;
   double ping_ms = 0;
-  long long configured_probe_size;
+  int64_t configured_probe_size;
   std::unique_ptr<grpc::CompletionQueue> queue;
   std::string pose_name;
   double bps = 0;
@@ -646,7 +646,7 @@ struct RemoteNode::Impl {
       configured_ping_interval = std::chrono::milliseconds(
           std::max(size_t(1000 / std::get<double>(v)), size_t(1)));
     } else if (key_str == "Probe Size") {
-      configured_probe_size = std::get<long long>(v);
+      configured_probe_size = std::get<int64_t>(v);
     } else if (key_str == "Running") {
       auto new_running = std::get<bool>(v);
       if (new_running == running) {

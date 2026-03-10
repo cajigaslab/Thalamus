@@ -38,17 +38,17 @@ typedef int (*thalamus_ros2_bridge_create_camera_info_publisher_t)(
     const char *topic);
 typedef int (*thalamus_ros2_bridge_create_gaze_publisher_t)(const char *topic);
 typedef int (*thalamus_ros2_bridge_publish_image_t)(
-    int publisher, unsigned long long timestamp_ns, int width, int height,
+    int publisher, uint64_t timestamp_ns, int width, int height,
     const char *encoding, bool is_bigendian, int step,
     const unsigned char *data);
 typedef int (*thalamus_ros2_bridge_publish_camera_info_t)(
-    int publisher, unsigned long long timestamp_ns, int width, int height,
+    int publisher, uint64_t timestamp_ns, int width, int height,
     const char *model, const double *d, int num_d, const double *k);
 typedef int (*thalamus_ros2_bridge_publish_gaze_t)(
-    int publisher, unsigned long long timestamp_ns, float x, float y, int width,
+    int publisher, uint64_t timestamp_ns, float x, float y, int width,
     int height, int diameter, int i);
 typedef int (*thalamus_ros2_bridge_broadcast_transform_t)(
-    unsigned long long timestamp_ns, const char *parent_frame,
+    uint64_t timestamp_ns, const char *parent_frame,
     const char *child_frame, const double *translation, const double *rotation);
 }
 
@@ -265,7 +265,7 @@ struct Ros2Node::Impl {
       info->camera_info_publisher =
           thalamus_ros2_bridge_create_camera_info_publisher(v_str.c_str());
     } else if (k_str == "Eye") {
-      info->eye = int(std::get<long long>(v));
+      info->eye = int(std::get<int64_t>(v));
     } else if (k_str == "Parent Frame") {
       info->parent_frame = std::get<std::string>(v);
     } else if (k_str == "Child Frame") {

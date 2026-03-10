@@ -212,9 +212,71 @@ namespace thalamus {
         return;
       }
       sending = true;
-      current_response = responses.front();
+      current_response = std::move(responses.front());
       responses.pop();
       grpc::ServerBidiReactor<REQUEST, RESPONSE>::StartWrite(&current_response);
+    }
+
+    void send(RESPONSE&& result) {
+      std::lock_guard<std::mutex> lock(mutex);
+      responses.push(std::move(result));
+      do_send();
+    }
+  };
+
+
+  template<typename RESPONSE>
+  class ServerWriteReactor : public grpc::ServerWriteReactor<RESPONSE> {
+  public:
+    std::mutex mutex;
+    std::condition_variable condition;
+    RESPONSE current_response;
+    std::queue<RESPONSE> responses;
+    grpc::CallbackServerContext& context;
+    bool done = false;
+    bool sending = false;
+
+    ServerWriteReactor(grpc::CallbackServerContext& _context)
+     : context(_context) {}
+
+    ~ServerWriteReactor() override {
+      //grpc::ClientBidiReactor<task_controller_grpc::TaskResult, task_controller_grpc::TaskConfig>::StartWritesDone();
+      context.TryCancel();
+      std::unique_lock<std::mutex> lock(mutex);
+      condition.wait(lock, [&] { return done; });
+    }
+    
+    void signal_done() {
+      {
+        std::lock_guard<std::mutex> lock(mutex);
+        done = true;
+      }
+      condition.notify_all();
+    }
+
+    void OnWriteDone(bool ok) override {
+      if(!ok) {
+        signal_done();
+        return;
+      }
+      std::lock_guard<std::mutex> lock(mutex);
+      sending = false;
+      do_send();
+    }
+
+    void OnDone() override {
+      //std::cout << "OnDone" << std::endl;
+      signal_done();
+    }
+
+    void do_send() {
+      if(sending || responses.empty()) {
+        return;
+      }
+      sending = true;
+      current_response = std::move(responses.front());
+      responses.pop();
+      grpc::ServerWriteReactor<RESPONSE>::StartWrite(&current_response);
     }
 
     void send(RESPONSE&& result) {
