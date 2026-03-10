@@ -30,7 +30,7 @@ struct StateManager::Impl {
   std::vector<thalamus_grpc::ObservableTransaction> outbox;
   std::mutex mutex;
   ::grpc::ClientContext context;
-  std::map<unsigned long long, std::function<void()>> pending_changes;
+  std::map<uint64_t, std::function<void()>> pending_changes;
   std::thread grpc_thread;
   boost::signals2::signal<void(ObservableCollection::Action action,
                                const std::string &address,

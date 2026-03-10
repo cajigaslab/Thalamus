@@ -201,7 +201,7 @@ public:
     }
 
     if(source == nodes.get()) {
-      auto key_int = std::get<long long>(k);
+      auto key_int = std::get<int64_t>(k);
       if(a == ObservableCollection::Action::Set) {
         connections.insert(connections.begin() + key_int, Connection(graph));
         auto node = std::get<ObservableDictPtr>(v);
@@ -218,7 +218,7 @@ public:
         auto val_str = std::get<std::string>(v);
         auto index_opt = nodes->key_of(*source);
         THALAMUS_ASSERT(index_opt, "Failed to lookup node");
-        auto index = std::get<long long>(*index_opt);
+        auto index = std::get<int64_t>(*index_opt);
 
         connections[size_t(index)].set_name(val_str);
       }

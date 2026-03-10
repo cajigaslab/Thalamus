@@ -24,8 +24,8 @@ struct HexascopeNode::Impl {
   ThreadPool &pool;
   boost::asio::steady_timer timer;
   boost::asio::steady_timer orient_timer;
-  long long objective_pose = 0;
-  long long field_pose = 1;
+  int64_t objective_pose = 0;
+  int64_t field_pose = 1;
   bool running = false;
   std::vector<std::pair<std::chrono::nanoseconds, boost::qvm::quat<float>>>
       objective_rotations;
@@ -78,7 +78,7 @@ struct HexascopeNode::Impl {
   bool working = false;
 
   struct Accumulator {
-    long long pose = 0;
+    int64_t pose = 0;
     bool accumulating = false;
     std::vector<boost::qvm::vec<float, 3>> position;
     std::vector<boost::qvm::quat<float>> rotation;
@@ -762,7 +762,7 @@ struct HexascopeNode::Impl {
     }
 
     if (source == hexa_to_camera_state.get()) {
-      auto key_int = std::get<long long>(k);
+      auto key_int = std::get<int64_t>(k);
       auto value_float = std::get<double>(v);
       mat_accessors[key_int](hexa_to_camera) = value_float;
     }
@@ -804,9 +804,9 @@ struct HexascopeNode::Impl {
       // timer.expires_after(16ms);
       // timer.async_wait(std::bind(&Impl::on_timer, this, _1));
     } else if (key_str == "Objective Pose") {
-      objective_accumulator.pose = std::get<long long>(v);
+      objective_accumulator.pose = std::get<int64_t>(v);
     } else if (key_str == "Field Pose") {
-      field_accumulator.pose = std::get<long long>(v);
+      field_accumulator.pose = std::get<int64_t>(v);
     } else if (key_str == "hexa_to_camera") {
       hexa_to_camera_state = std::get<ObservableListPtr>(v);
       hexa_to_camera_state->recap(std::bind(

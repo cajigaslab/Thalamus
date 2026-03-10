@@ -160,7 +160,7 @@ struct XsensNode::Impl {
   std::chrono::nanoseconds start_time = 0ns;
   std::vector<std::string> channel_names;
   size_t num_base_channel_names = 0;
-  long long actor = 0;
+  int64_t actor = 0;
 
   enum class SendType { Current, Min, Max };
   SendType send_type = SendType::Current;
@@ -313,7 +313,7 @@ struct XsensNode::Impl {
       auto min_distance = std::numeric_limits<double>::max();
       for (size_t i = 0; i < poses->size(); ++i) {
         ObservableListPtr pose = poses->at(i);
-        long long pose_mask = pose->at(0);
+        int64_t pose_mask = pose->at(0);
         auto distance = 0.0;
         for (auto d : mask) {
           distance += std::abs(d - (pose_mask & 0x01));
@@ -358,7 +358,7 @@ struct XsensNode::Impl {
       pose_with_left_hand = std::get<std::string>(value) == "Left";
       return;
     } else if (key_str == "Actor") {
-      actor = std::get<long long>(value);
+      actor = std::get<int64_t>(value);
       return;
     } else if (key_str == "Send Type") {
       auto value_str = std::get<std::string>(value);
@@ -682,11 +682,11 @@ public:
         THALAMUS_ASSERT(!ec, "%s", ec.what());
       }
     } else if (key_str == "Num Props") {
-      num_props = 0; // std::get<long long int>(k);
+      num_props = 0; // std::get<int64_t>(k);
     } else if (key_str == "Amplitude") {
       amplitude = std::get<double>(v);
     } else if (key_str == "Duration (ms)") {
-      duration = std::chrono::milliseconds(std::get<long long int>(v));
+      duration = std::chrono::milliseconds(std::get<int64_t>(v));
     }
   }
 

@@ -95,7 +95,7 @@ public:
               if (std::holds_alternative<double>(result)) {
                 transformed.at(j) = std::get<double>(result);
               } else {
-                transformed.at(j) = double(std::get<long long>(result));
+                transformed.at(j) = double(std::get<int64_t>(result));
               }
             }
           }

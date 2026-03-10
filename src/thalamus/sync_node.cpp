@@ -152,8 +152,8 @@ public:
           publish = true;
         }
       } else {
-        long long data1_size = int64_t(p.data1.size());
-        long long data2_size = int64_t(p.data2.size());
+        int64_t data1_size = int64_t(p.data1.size());
+        int64_t data2_size = int64_t(p.data2.size());
         auto window1_size = p.sample_interval1 > 0ns
                                 ? p.sample_interval1 * data1_size
                                 : (analog->time() - p.start_time1);
@@ -261,7 +261,7 @@ public:
         list->recap(std::bind(&Impl::on_change, this, pairs_state, _1, _2, _3));
       }
     } else if (source == pairs_state) {
-      auto key_int = std::get<long long>(k);
+      auto key_int = std::get<int64_t>(k);
       if (action == ObservableCollection::Action::Delete) {
         pairs.erase(pairs.begin() + key_int);
         return;

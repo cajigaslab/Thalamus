@@ -52,14 +52,14 @@ public:
   AnalogNode *current_node;
 
   void on_source_mapping_change(std::weak_ptr<AnalogNode> node,
-                                long long in_channel,
+                                int64_t in_channel,
                                 ObservableDictPtr mapping_dict,
                                 ObservableCollection::Action,
                                 const ObservableCollection::Key &k,
                                 const ObservableCollection::Value &v) {
     auto k_str = std::get<std::string>(k);
     if (k_str == "Out Channel") {
-      auto v_int = size_t(std::get<long long>(v));
+      auto v_int = size_t(std::get<int64_t>(v));
       if (mappings.size() < v_int + 1) {
         mappings.resize(v_int + 1);
       }
@@ -89,7 +89,7 @@ public:
                                  ObservableCollection::Action a,
                                  const ObservableCollection::Key &k,
                                  const ObservableCollection::Value &v) {
-    auto k_int = std::get<long long>(k);
+    auto k_int = std::get<int64_t>(k);
     if (a == ObservableCollection::Action::Set) {
       auto v_dict = std::get<ObservableDictPtr>(v);
 
@@ -144,7 +144,7 @@ public:
                       auto new_row = std::make_shared<ObservableDict>();
                       (*new_row)["Name"].assign(channel_name);
                       (*new_row)["Out Channel"].assign(
-                          static_cast<long long>(mappings.size()));
+                          static_cast<int64_t>(mappings.size()));
                       (*new_row)["Out Name"].assign(node_name + ": " +
                                                     channel_name);
                       v_list->at(size_t(i)).assign(new_row);
@@ -154,7 +154,7 @@ public:
                     } else {
                       ObservableDictPtr current_row = v_list->at(size_t(i));
                       (*current_row)["Name"].assign(channel_name);
-                      long long out_channel = current_row->at("Out Channel");
+                      int64_t out_channel = current_row->at("Out Channel");
                       auto &mapping = mappings.at(size_t(out_channel));
                       std::get<std::chrono::nanoseconds>(mapping) =
                           sample_interval;
@@ -190,7 +190,7 @@ public:
       sources_dict->recap(
           std::bind(&Impl::on_sources_change, this, _1, _2, _3));
     } else if (key_str == "Max Channels") {
-      _max_channels = size_t(std::get<long long>(v));
+      _max_channels = size_t(std::get<int64_t>(v));
     }
   }
 };

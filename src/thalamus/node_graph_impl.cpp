@@ -278,8 +278,8 @@ struct ThalamusAPIImpl {
     static ThalamusState* get_state_ref(ObservableCollection::Key key) {
       if(std::holds_alternative<std::monostate>(key)) {
         return get_state_ref(ObservableCollection::Value(std::get<std::monostate>(key)));
-      } else if (std::holds_alternative<long long>(key)) {
-        return get_state_ref(ObservableCollection::Value(std::get<long long>(key)));
+      } else if (std::holds_alternative<int64_t>(key)) {
+        return get_state_ref(ObservableCollection::Value(std::get<int64_t>(key)));
       } else if (std::holds_alternative<bool>(key)) {
         return get_state_ref(ObservableCollection::Value(std::get<bool>(key)));
       } else if (std::holds_alternative<std::string>(key)) {
@@ -321,7 +321,7 @@ struct ThalamusAPIImpl {
       return std::holds_alternative<std::string>(value->value) ? 1 : 0;
     }
     static char state_is_int(ThalamusState* value) {
-      return std::holds_alternative<long long>(value->value) ? 1 : 0;
+      return std::holds_alternative<int64_t>(value->value) ? 1 : 0;
     }
     static char state_is_float(ThalamusState* value) {
       return std::holds_alternative<double>(value->value) ? 1 : 0;
@@ -337,7 +337,7 @@ struct ThalamusAPIImpl {
       return std::get<std::string>(state->value).c_str();
     }
     static int64_t state_get_int(ThalamusState* state) {
-      return std::get<long long>(state->value);
+      return std::get<int64_t>(state->value);
     }
     static double state_get_float(ThalamusState* state) {
       return std::get<double>(state->value);
@@ -649,7 +649,7 @@ public:
                 const ObservableCollection::Value &v) {
     using namespace std::placeholders;
     if (a == ObservableCollection::Action::Set) {
-      auto index = std::get<long long>(k);
+      auto index = std::get<int64_t>(k);
       ObservableDictPtr node = std::get<ObservableDictPtr>(v);
       node->changed.connect(
           std::bind(&Impl::on_node, this, node.get(), _1, _2, _3));

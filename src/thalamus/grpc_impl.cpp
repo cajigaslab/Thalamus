@@ -125,8 +125,8 @@ struct Service::Impl {
       graph_stream;
   std::atomic<::grpc::ServerWriter<::thalamus_grpc::Notification> *>
       notification_writer;
-  std::map<unsigned long long, std::function<void()>> pending_changes;
-  std::map<unsigned long long, std::promise<ObservableCollection::Value>>
+  std::map<uint64_t, std::function<void()>> pending_changes;
+  std::map<uint64_t, std::promise<ObservableCollection::Value>>
       eval_promises;
   std::mutex mutex;
   std::set<::grpc::ServerContext *> contexts;
@@ -201,7 +201,7 @@ struct Service::Impl {
     std::string address = self->address();
     if (std::holds_alternative<std::string>(k)) {
       address += "['" + std::get<std::string>(k) + "']";
-    } else if (std::holds_alternative<long long>(k)) {
+    } else if (std::holds_alternative<int64_t>(k)) {
       address = "[" + std::get<std::string>(k) + "]";
     }
     thalamus_grpc::ObservableTransaction transaction;
