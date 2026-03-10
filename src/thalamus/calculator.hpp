@@ -320,7 +320,7 @@ namespace ascii = boost::spirit::ascii;
 template <typename Iterator>
 struct parser : qi::grammar<Iterator, program(), ascii::space_type> {
   parser() : parser::base_type(expression1) {
-    qi::ulong_long_type ulong_;
+    std::conditional<sizeof(unsigned long) >= 8, qi::ulong_type, qi::ulong_long_type>::type ulong_;
     qi::real_parser<double, qi::strict_real_policies<double>> double_;
     qi::uint_parser<uint64_t, 16> hex_;
     qi::hex_type hex2_;

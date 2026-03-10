@@ -225,14 +225,14 @@ namespace thalamus {
   };
 
 
-  template<typename T>
-  class ServerWriteReactor : public grpc::ServerWriteReactor<T> {
+  template<typename RESPONSE>
+  class ServerWriteReactor : public grpc::ServerWriteReactor<RESPONSE> {
   public:
     std::mutex mutex;
     std::condition_variable condition;
     RESPONSE current_response;
     std::queue<RESPONSE> responses;
-    grpc::CallbackServerContext context;
+    grpc::CallbackServerContext& context;
     bool done = false;
     bool sending = false;
 
@@ -265,7 +265,7 @@ namespace thalamus {
     }
 
     void OnDone() override {
-      std::cout << "OnDone" << std::endl;
+      //std::cout << "OnDone" << std::endl;
       signal_done();
     }
 
@@ -276,7 +276,7 @@ namespace thalamus {
       sending = true;
       current_response = std::move(responses.front());
       responses.pop();
-      grpc::ServerWriteReactor<REQUEST, RESPONSE>::StartWrite(&current_response);
+      grpc::ServerWriteReactor<RESPONSE>::StartWrite(&current_response);
     }
 
     void send(RESPONSE&& result) {

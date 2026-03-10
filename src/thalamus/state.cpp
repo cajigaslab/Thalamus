@@ -54,17 +54,6 @@ ObservableCollection::ValueWrapper::operator uint64_t() {
     return 0;
   }
 }
-ObservableCollection::ValueWrapper::operator unsigned long() {
-  auto value = get_value();
-  if (std::holds_alternative<int64_t>(value)) {
-    return uint32_t(thalamus::get<int64_t>(value));
-  } else if (std::holds_alternative<double>(value)) {
-    return uint32_t(thalamus::get<double>(value));
-  } else {
-    THALAMUS_ASSERT(false, "Value is not a number");
-    return 0;
-  }
-}
 ObservableCollection::ValueWrapper::operator double() {
   auto value = get_value();
   if (std::holds_alternative<int64_t>(value)) {

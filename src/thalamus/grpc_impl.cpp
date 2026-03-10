@@ -6,6 +6,7 @@
 #endif
 #include <boost/qvm/quat_access.hpp>
 #include <boost/qvm/vec_access.hpp>
+#include <grpcpp/support/status.h>
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
@@ -129,7 +130,7 @@ struct Service::Impl {
   std::map<uint64_t, std::promise<ObservableCollection::Value>>
       eval_promises;
   std::mutex mutex;
-  std::set<::grpc::ServerContext *> contexts;
+  std::set<::grpc::ServerContextBase *> contexts;
   std::set<std::promise<void> *> promises;
   std::condition_variable condition;
   NodeGraph &node_graph;
@@ -221,8 +222,8 @@ struct Service::Impl {
   class ContextGuard {
   public:
     Service *service;
-    ::grpc::ServerContext *context;
-    ContextGuard(Service *_service, ::grpc::ServerContext *_context)
+    ::grpc::ServerContextBase *context;
+    ContextGuard(Service *_service, ::grpc::ServerContextBase *_context)
         : service(_service), context(_context) {
       std::lock_guard<std::mutex> lock(service->impl->mutex);
       service->impl->contexts.insert(context);
@@ -237,15 +238,20 @@ struct Service::Impl {
     struct State {
       std::mutex mutex;
       bool joining = false;
+      ~State() {
+        THALAMUS_LOG(trace) << "Delete State";
+      }
     };
     std::shared_ptr<State> state = std::make_shared<State>();
 
+    NodeGraph& node_graph;
     boost::asio::io_context& io_context;
     boost::asio::steady_timer timer;
-    boost:;signals2::scoped_connection get_node_connection;
-    boost:;signals2::scoped_connection channels_changed_connection;
-    boost:;signals2::scoped_connection ready_connection;
+    boost::signals2::scoped_connection get_node_connection;
+    boost::signals2::scoped_connection channels_changed_connection;
+    boost::signals2::scoped_connection ready_connection;
     const ::thalamus_grpc::AnalogRequest request;
+    std::weak_ptr<Node> weak_raw_node;
     std::shared_ptr<Node> raw_node;
     AnalogNode* analog_node;
     std::vector<size_t> channels;
@@ -254,35 +260,59 @@ struct Service::Impl {
     bool channels_specified;
     bool channels_changed = true;
     std::vector<double> workspace;
+    ContextGuard context_guard;
 
-    AnalogSession(boost::asio::io_context& _io_context, ::grpc::CallbackServerContext *server_context, const ::thalamus_grpc::AnalogRequest* request)
+    AnalogSession(NodeGraph& _node_graph, boost::asio::io_context& _io_context,
+                  ::grpc::CallbackServerContext& server_context, const ::thalamus_grpc::AnalogRequest* _request,
+                  Service *_service)
     : ServerWriteReactor<::thalamus_grpc::AnalogResponse>(server_context)
+    , node_graph(_node_graph)
     , io_context(_io_context)
     , timer(_io_context)
-    , request(*request)
-    , channel_ids
-    , channels_specified(!request->channels().empty() || !request->channel_names().empty()) {
+    , request(*_request)
+    , specified_channel_ids(_request->channels().begin(), _request->channels().end())
+    , specified_channel_names(_request->channel_names().begin(), _request->channel_names().end())
+    , channels_specified(!_request->channels().empty() || !_request->channel_names().empty())
+    , context_guard(_service, &server_context) {
+      THALAMUS_LOG(trace) << "Create AnalogSession";
+
       get_node();
     }
 
-    ~AnalogSession() {
-      std::lock_guard<std::mutex> lock(c_state->mutex);
+    ~AnalogSession() override {
+      THALAMUS_LOG(trace) << "Delete AnalogSession";
+      std::lock_guard<std::mutex> lock(state->mutex);
       state->joining = true;
+    }
+        
+    void OnDone() override {
+      THALAMUS_LOG(trace) << "OnDone" << std::endl;
+      ServerWriteReactor<::thalamus_grpc::AnalogResponse>::OnDone();
+      delete this;
+    }
+
+    void OnCancel() override {
+      THALAMUS_LOG(trace) << "OnCancel" << std::endl;
+      Finish(grpc::Status::OK);
+      //delete this;
     }
 
     void get_node() {
+      //THALAMUS_LOG(trace) << "getting node";
       boost::asio::post(io_context, [&] {
-        get_node_connection = node_graph.get_node(request.node(), [&,c_state=state](auto ptr) {
+        get_node_connection = node_graph.get_node_scoped(request.node(), [&,c_state=state](auto ptr) {
           std::lock_guard<std::mutex> lock(c_state->mutex);
           if(c_state->joining) {
+            THALAMUS_LOG(trace) << "get_node_connection joined";
             return;
           }
 
+          weak_raw_node = ptr;
           raw_node = ptr.lock();
           analog_node = node_cast<AnalogNode *>(raw_node.get());
           if (!analog_node) {
             timer.expires_after(1s);
-            timer.async_wait(std::bind(&AnalogSession::on_timer, this, _1));
+            timer.async_wait(std::bind(&AnalogSession::on_timer_get_node, this, _1));
             return;
           }
           on_node();
@@ -291,10 +321,12 @@ struct Service::Impl {
     }
 
     void on_node() {
-      using channels_changed_signal_type = decltype(node->channels_changed);
-      channels_changed_connection = analog_node->channels_changed.connect(channels_changed_signal_type::slot_type([&](const AnalogNode *) {
+      THALAMUS_LOG(trace) << "got node";
+      using channels_changed_signal_type = decltype(analog_node->channels_changed);
+      channels_changed_connection = analog_node->channels_changed.connect(channels_changed_signal_type::slot_type([&,c_state=state](const AnalogNode *) {
         std::lock_guard<std::mutex> lock(c_state->mutex);
         if(c_state->joining) {
+          THALAMUS_LOG(trace) << "channels_changed_connection joined";
           return;
         }
         
@@ -302,9 +334,10 @@ struct Service::Impl {
       }));
 
       using signal_type = decltype(raw_node->ready);
-      ready_connection = raw_node->ready.connect(signal_type::slot_type([&](const Node * base_node) {
+      ready_connection = raw_node->ready.connect(signal_type::slot_type([&,c_state=state](const Node *) {
         std::lock_guard<std::mutex> lock(c_state->mutex);
         if(c_state->joining) {
+          THALAMUS_LOG(trace) << "ready_connection joined";
           return;
         }
 
@@ -315,15 +348,17 @@ struct Service::Impl {
         TRACE_EVENT("thalamus", "Service::analog(on ready)");
         ::thalamus_grpc::AnalogResponse response;
 
-        response.set_channels_changed(true);
-        response.set_time(size_t(node->time().count()));
-        response.set_remote_time(size_t(node->remote_time().count()));
+        response.set_channels_changed(channels_changed);
+        response.set_time(size_t(analog_node->time().count()));
+        response.set_remote_time(size_t(analog_node->remote_time().count()));
         size_t num_channels = size_t(analog_node->num_channels());
         if(channels_changed) {
           channels.clear();
           if(channels_specified) {
             for (auto i = channels.size(); i < num_channels; ++i) {
-              if(specified_channel_ids.contains(i) || specified_channel_names.contains(analog_node->name(i))) {
+              auto name_view = analog_node->name(int(i));
+              std::string name_str(name_view.begin(), name_view.end());
+              if(specified_channel_ids.contains(i) || specified_channel_names.contains(name_str)) {
                 channels.push_back(i);
               }
             }
@@ -335,7 +370,7 @@ struct Service::Impl {
           channels_changed = false;
         }
 
-        auto is_transformed = node->is_transformed();
+        auto is_transformed = analog_node->is_transformed();
         for (auto c = 0u; c < channels.size(); ++c) {
           auto channel = channels[c];
           if (channel >= num_channels) {
@@ -343,40 +378,63 @@ struct Service::Impl {
           }
           auto span = response.add_spans();
           span->set_begin(uint32_t(response.data_size()));
-          auto name = node->name(int(channel));
+          auto name = analog_node->name(int(channel));
           span->set_name(name.data(), name.size());
 
           response.add_sample_intervals(
-              uint64_t(node->sample_interval(int(channel)).count()));
+              uint64_t(analog_node->sample_interval(int(channel)).count()));
 
-          auto scale = is_transformed ? node->scale(int(channel)) : 1.0;
-          auto offset = is_transformed ? node->offset(int(channel)) : 0.0;
-          visit_node(node, [&](auto wrapper) {
+          visit_node(analog_node, [&](auto wrapper) {
             auto data = wrapper->data(int(channel));
             workspace.assign(data.begin(), data.end());
-            std::transform(workspace.begin(), workspace.end(), workspace.begin(), [&](auto s) { return s*scale + offset; });
+            if(is_transformed) {
+              auto scale = analog_node->scale(int(channel));
+              auto offset = analog_node->offset(int(channel));
+              std::transform(workspace.begin(), workspace.end(), workspace.begin(), [&](auto s) { return s*scale + offset; });
+            }
             response.mutable_data()->Add(workspace.begin(), workspace.end());
           });
 
           span->set_end(uint32_t(response.data_size()));
         }
 
-        ServerWriteReactor<::thalamus_grpc::AnalogResponse>::send(response);
-      }));
+        ServerWriteReactor<::thalamus_grpc::AnalogResponse>::send(std::move(response));
+      }).track_foreign(raw_node));
+      raw_node.reset();
+
+      timer.expires_after(1s);
+      timer.async_wait(std::bind(&AnalogSession::on_timer_check_expired, this, _1));
     }
 
-    void on_timer(const boost::system::error_code &error) {
+    void on_timer_get_node(const boost::system::error_code &error) {
       if (error.value() == boost::asio::error::operation_aborted) {
         return;
       }
       THALAMUS_ASSERT(!error, "Unexpected error");
+
       get_node();
+    }
+
+    void on_timer_check_expired(const boost::system::error_code &error) {
+      if (error.value() == boost::asio::error::operation_aborted) {
+        return;
+      }
+      THALAMUS_ASSERT(!error, "Unexpected error");
+
+      if(weak_raw_node.lock() == nullptr) {
+        THALAMUS_LOG(trace) << "node expired";
+        timer.expires_after(1s);
+        timer.async_wait(std::bind(&AnalogSession::on_timer_get_node, this, _1));
+      } else {
+        timer.expires_after(1s);
+        timer.async_wait(std::bind(&AnalogSession::on_timer_check_expired, this, _1));
+      }
     }
   };
 
-  ::grpc::ServerWriteReactor<::thalamus_grpc::AnalogResponse>* analog(::grpc::CallbackServerContext *context,
+  ::grpc::ServerWriteReactor<::thalamus_grpc::AnalogResponse>* analog(::grpc::CallbackServerContext* context,
                         const ::thalamus_grpc::AnalogRequest *request) {
-    return new AnalogSession(io_context, context, request);
+    return new AnalogSession(node_graph, io_context, *context, request, this->outer);
   }
 
   ::grpc::Status text(::grpc::ServerContext *context,
@@ -1647,36 +1705,10 @@ Service::text(::grpc::ServerContext *context,
 }
 
 ::grpc::Status Service::remote_node(
-    ::grpc::ServerContext *context,
+    ::grpc::ServerContext *,
     ::grpc::ServerReaderWriter<::thalamus_grpc::RemoteNodeMessage,
-                               ::thalamus_grpc::RemoteNodeMessage> *stream) {
-  ::thalamus_grpc::RemoteNodeMessage message;
-  stream->Read(&message);
-  auto request = message.release_request();
-
-  std::thread ping_thread([&] {
-    while (stream->Read(&message)) {
-      THALAMUS_ASSERT(message.has_ping(), "Expected ping message");
-      auto ping = message.ping();
-
-      ::thalamus_grpc::RemoteNodeMessage response;
-      auto pong = response.mutable_pong();
-      pong->set_id(ping.id());
-
-      stream->Write(response);
-    }
-  });
-
-  auto result = impl->analog(context, request,
-                             [&](::thalamus_grpc::AnalogResponse &msg,
-                                 const ::grpc::WriteOptions &options) {
-                               ::thalamus_grpc::RemoteNodeMessage response;
-                               response.mutable_data()->Swap(&msg);
-                               return stream->Write(response, options);
-                             });
-
-  ping_thread.join();
-  return result;
+                               ::thalamus_grpc::RemoteNodeMessage>*) {
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "Unimplemented");
 }
 
 ::grpc::Status

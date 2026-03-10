@@ -253,6 +253,9 @@ FACTORIES = {
     UserData(UserDataType.SPINBOX, 'Port', 9763, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
   ]),
+  'MOCAP': Factory(None, [
+    UserData(UserDataType.CHECK_BOX, 'View', False, []),
+  ]),
   'HAND_ENGINE': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.DEFAULT, 'Address', "localhost:9000", []),

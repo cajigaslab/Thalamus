@@ -77,7 +77,6 @@ public:
     operator ObservableListPtr();
     operator int64_t();
     operator uint64_t();
-    operator unsigned long();
     operator double();
     operator bool();
     operator std::string();
