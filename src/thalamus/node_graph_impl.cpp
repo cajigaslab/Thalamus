@@ -3,6 +3,7 @@
 #include <thalamus/nidaq_node.hpp>
 #include <thalamus/storage_node.hpp>
 #include <thalamus/xsens_node.hpp>
+#include <thalamus/zed_node.hpp>
 #include <thalamus/analog_node.hpp>
 #include <thalamus/aruco_node.hpp>
 #include <thalamus/alpha_omega_node.hpp>
@@ -542,6 +543,7 @@ public:
         {"ALPHA_OMEGA", new NodeFactory<AlphaOmegaNode>()},
         {"TOGGLE", new NodeFactory<ToggleNode>()},
         {"XSENS", new NodeFactory<XsensNode>()},
+        {"ZED", new NodeFactory<ZedNode>()},
         {"HAND_ENGINE", new NodeFactory<HandEngineNode>()},
         {"WAVE", new NodeFactory<WaveGeneratorNode>()},
         {"STORAGE", new NodeFactory<StorageNode>()},

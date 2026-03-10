@@ -253,6 +253,12 @@ FACTORIES = {
     UserData(UserDataType.SPINBOX, 'Port', 9763, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
   ]),
+  'ZED': Factory(XsensEditorWidget, [
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+    UserData(UserDataType.SPINBOX, 'Port', 5005, []),
+    UserData(UserDataType.SPINBOX, 'Actor', 0, []),
+    UserData(UserDataType.CHECK_BOX, 'View', False, []),
+  ]),
   'HAND_ENGINE': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.DEFAULT, 'Address', "localhost:9000", []),
@@ -929,6 +935,369 @@ class XsensView(QOpenGLWidget):
     OpenGL.GL.glDrawElements(OpenGL.GL.GL_TRIANGLES, self.triangle_indices.shape[0], OpenGL.GL.GL_UNSIGNED_SHORT, None)
     assert_gl()
 
+# ---------------------------------------------------------------------------
+# ZED skeleton bone connectivity (0-indexed joint pairs)
+# ---------------------------------------------------------------------------
+
+# BODY_18
+ZED_BODY18_BONES = [
+  (0, 1), (1, 2), (2, 3),          # spine: PELVIS→NAVAL→CHEST→NECK
+  (3, 4), (4, 5), (5, 6), (6, 7),  # left arm: NECK→L_CLAV→L_SHOULDER→L_ELBOW→L_WRIST
+  (3, 8), (8, 9), (9, 10), (10, 11),  # right arm
+  (0, 12), (12, 13), (13, 14),     # left leg: PELVIS→L_HIP→L_KNEE→L_ANKLE
+  (0, 15), (15, 16), (16, 17),     # right leg
+]
+
+# BODY_34
+ZED_BODY34_BONES = [
+  (0, 1), (1, 2), (2, 3),          # spine
+  (3, 4), (4, 5), (5, 6), (6, 7), (7, 8), (8, 9), (8, 10),   # left arm + hand
+  (3, 11), (11, 12), (12, 13), (13, 14), (14, 15), (15, 16), (15, 17),  # right arm + hand
+  (0, 18), (18, 19), (19, 20), (20, 21), (20, 32),  # left leg + foot + heel
+  (0, 22), (22, 23), (23, 24), (24, 25), (24, 33),  # right leg + foot + heel
+  (3, 26), (26, 27),               # neck → head → nose
+  (26, 28), (28, 29),              # head → left eye → left ear
+  (26, 30), (30, 31),              # head → right eye → right ear
+]
+
+ZED_BODY18_JOINT_NAMES = [
+  "PELVIS", "NAVAL_SPINE", "CHEST_SPINE", "NECK",
+  "LEFT_CLAVICLE", "LEFT_SHOULDER", "LEFT_ELBOW", "LEFT_WRIST",
+  "RIGHT_CLAVICLE", "RIGHT_SHOULDER", "RIGHT_ELBOW", "RIGHT_WRIST",
+  "LEFT_HIP", "LEFT_KNEE", "LEFT_ANKLE",
+  "RIGHT_HIP", "RIGHT_KNEE", "RIGHT_ANKLE",
+]
+
+ZED_BODY34_JOINT_NAMES = [
+  "PELVIS", "NAVAL_SPINE", "CHEST_SPINE", "NECK",
+  "LEFT_CLAVICLE", "LEFT_SHOULDER", "LEFT_ELBOW", "LEFT_WRIST",
+  "LEFT_HAND", "LEFT_HANDTIP", "LEFT_THUMB",
+  "RIGHT_CLAVICLE", "RIGHT_SHOULDER", "RIGHT_ELBOW", "RIGHT_WRIST",
+  "RIGHT_HAND", "RIGHT_HANDTIP", "RIGHT_THUMB",
+  "LEFT_HIP", "LEFT_KNEE", "LEFT_ANKLE", "LEFT_FOOT",
+  "RIGHT_HIP", "RIGHT_KNEE", "RIGHT_ANKLE", "RIGHT_FOOT",
+  "HEAD", "NOSE", "LEFT_EYE", "LEFT_EAR", "RIGHT_EYE", "RIGHT_EAR",
+  "LEFT_HEEL", "RIGHT_HEEL",
+]
+
+
+def _zed_joint_names(num_joints: int) -> typing.List[str]:
+  if num_joints == 34:
+    return ZED_BODY34_JOINT_NAMES
+  if num_joints == 18:
+    return ZED_BODY18_JOINT_NAMES
+  return [f"JOINT_{i}" for i in range(num_joints)]
+
+
+class ZedView(QWidget):
+  """Simple 2D QPainter widget that draws the ZED skeleton as a stick figure
+  projected onto the chosen plane (Front=XY, Side=ZY, Top=XZ)."""
+
+  VIEWS = {
+    'Front (XY)': (0, 1),
+    'Side (ZY)':  (2, 1),
+    'Top (XZ)':   (0, 2),
+  }
+
+  def __init__(self, node: ObservableDict):
+    super().__init__()
+    self.node = node
+    # positions[j] = (x, y, z) for joint j; grows as joints arrive
+    self.positions: typing.List[typing.Tuple[float, float, float]] = []
+    self.bones: typing.List[typing.Tuple[int, int]] = []
+    self.view_axes = (0, 1)  # default Front
+    self.setMinimumSize(300, 300)
+
+  def set_bones(self, num_joints: int) -> None:
+    if num_joints == 34:
+      self.bones = ZED_BODY34_BONES
+    else:
+      self.bones = ZED_BODY18_BONES
+
+  def paintEvent(self, event) -> None:
+    painter = QPainter(self)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.fillRect(self.rect(), QColor(30, 30, 30))
+
+    if len(self.positions) < 2:
+      painter.end()
+      return
+
+    ax, ay = self.view_axes
+    coords = [(p[ax], p[ay]) for p in self.positions]
+
+    xs = [c[0] for c in coords]
+    ys = [c[1] for c in coords]
+    x_min, x_max = min(xs), max(xs)
+    y_min, y_max = min(ys), max(ys)
+
+    span = max(x_max - x_min, y_max - y_min, 0.001)
+    margin = 20
+    draw_w = self.width()  - 2 * margin
+    draw_h = self.height() - 2 * margin
+
+    def to_screen(cx, cy):
+      sx = margin + (cx - x_min) / span * draw_w
+      # flip Y so "up" is up in the display
+      sy = margin + (1.0 - (cy - y_min) / span) * draw_h
+      return int(sx), int(sy)
+
+    pen_bone = QPen(QColor(100, 200, 100), 2)
+    pen_joint = QPen(QColor(255, 200, 0), 1)
+    brush_joint = QBrush(QColor(255, 200, 0))
+
+    painter.setPen(pen_bone)
+    for (a, b) in self.bones:
+      if a < len(coords) and b < len(coords):
+        ax1, ay1 = to_screen(*coords[a])
+        bx1, by1 = to_screen(*coords[b])
+        painter.drawLine(ax1, ay1, bx1, by1)
+
+    painter.setPen(pen_joint)
+    painter.setBrush(brush_joint)
+    for cx, cy in coords:
+      sx, sy = to_screen(cx, cy)
+      painter.drawEllipse(sx - 3, sy - 3, 6, 6)
+
+    painter.end()
+
+
+class ZedNormView(QWidget):
+  """Scrolling time-series plot of Euclidean norm (sqrt(x²+y²+z²)) for one joint."""
+
+  HISTORY = 300  # number of samples to keep
+
+  def __init__(self):
+    super().__init__()
+    self.history: collections.deque = collections.deque(maxlen=self.HISTORY)
+    self.joint_name = ''
+    self.setMinimumSize(300, 200)
+
+  def push(self, x: float, y: float, z: float) -> None:
+    self.history.append(math.sqrt(x*x + y*y + z*z))
+
+  def paintEvent(self, event) -> None:
+    painter = QPainter(self)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.fillRect(self.rect(), QColor(20, 20, 30))
+
+    if len(self.history) < 2:
+      painter.end()
+      return
+
+    margin_l, margin_r, margin_t, margin_b = 50, 10, 10, 30
+    draw_w = self.width()  - margin_l - margin_r
+    draw_h = self.height() - margin_t - margin_b
+
+    vals = list(self.history)
+    v_min = min(vals)
+    v_max = max(vals)
+    v_span = max(v_max - v_min, 0.001)
+
+    def to_screen(i, v):
+      sx = margin_l + i / (self.HISTORY - 1) * draw_w
+      sy = margin_t + (1.0 - (v - v_min) / v_span) * draw_h
+      return int(sx), int(sy)
+
+    # grid lines + y-axis labels
+    pen_grid = QPen(QColor(60, 60, 80), 1, Qt.PenStyle.DotLine)
+    painter.setPen(pen_grid)
+    font = painter.font()
+    font.setPointSize(8)
+    painter.setFont(font)
+    painter.setPen(QColor(140, 140, 160))
+    for frac in (0.0, 0.25, 0.5, 0.75, 1.0):
+      v = v_min + frac * v_span
+      sy = margin_t + (1.0 - frac) * draw_h
+      painter.drawLine(margin_l, int(sy), margin_l + draw_w, int(sy))
+      painter.drawText(2, int(sy) + 4, f'{v:.3f}')
+
+    # signal line
+    pen_line = QPen(QColor(80, 200, 255), 2)
+    painter.setPen(pen_line)
+    offset = self.HISTORY - len(vals)
+    for i in range(1, len(vals)):
+      x1, y1 = to_screen(offset + i - 1, vals[i - 1])
+      x2, y2 = to_screen(offset + i,     vals[i])
+      painter.drawLine(x1, y1, x2, y2)
+
+    # x-axis label
+    painter.setPen(QColor(180, 180, 180))
+    painter.drawText(margin_l, self.height() - 4,
+                     f'← {self.HISTORY} frames  |  joint: {self.joint_name}  |  norm (m)')
+
+    painter.end()
+
+
+class ZedWidget(QWidget):
+  """Viewer for ZED motion capture data.
+  Full-body mode: 2D stick figure with selectable projection plane.
+  Joint-focus mode: scrolling Euclidean-norm time series for one joint."""
+
+  def __init__(self, node: ObservableDict, stream: typing.AsyncIterable[thalamus_pb2.XsensResponse]):
+    self.node = node
+    self.stream = stream
+
+    if 'view_geometry' not in node:
+      node['view_geometry'] = [100, 100, 480, 540]
+    x, y, w, h = node['view_geometry']
+    self.view_geometry_updater = MeteredUpdater(
+      node['view_geometry'], datetime.timedelta(seconds=1), lambda: isdeleted(self))
+
+    super().__init__()
+
+    # ---- shared position store (updated by stream task) ----
+    self._positions: typing.List[typing.Tuple[float, float, float]] = []
+    self._joint_names: typing.List[str] = []
+
+    # ---- full-body view ----
+    self.zed_view = ZedView(node)
+
+    # ---- joint-focus view ----
+    self.norm_view = ZedNormView()
+
+    # ---- stacked widget to switch between modes ----
+    self.stack = QStackedWidget()
+    self.stack.addWidget(self.zed_view)   # index 0
+    self.stack.addWidget(self.norm_view)  # index 1
+
+    layout = QVBoxLayout()
+
+    # Mode toggle row
+    mode_row = QHBoxLayout()
+    mode_row.addWidget(QLabel('Mode:'))
+    self.mode_group = QButtonGroup(self)
+    self._btn_fullbody = QRadioButton('Full Body')
+    self._btn_focus    = QRadioButton('Joint Focus')
+    self._btn_fullbody.setChecked(True)
+    self.mode_group.addButton(self._btn_fullbody, 0)
+    self.mode_group.addButton(self._btn_focus,    1)
+    mode_row.addWidget(self._btn_fullbody)
+    mode_row.addWidget(self._btn_focus)
+    mode_row.addStretch()
+    layout.addLayout(mode_row)
+
+    # Projection view row (shown in Full Body mode)
+    self._view_row_widget = QWidget()
+    view_row = QHBoxLayout(self._view_row_widget)
+    view_row.setContentsMargins(0, 0, 0, 0)
+    view_row.addWidget(QLabel('Projection:'))
+    self.view_group = QButtonGroup(self)
+    for i, label in enumerate(ZedView.VIEWS):
+      btn = QRadioButton(label)
+      if i == 0:
+        btn.setChecked(True)
+      self.view_group.addButton(btn, i)
+      view_row.addWidget(btn)
+    layout.addWidget(self._view_row_widget)
+
+    # Joint selector row (shown in Joint Focus mode)
+    self._joint_row_widget = QWidget()
+    joint_row = QHBoxLayout(self._joint_row_widget)
+    joint_row.setContentsMargins(0, 0, 0, 0)
+    joint_row.addWidget(QLabel('Joint:'))
+    self._joint_combo = QComboBox()
+    self._joint_combo.setEnabled(False)
+    joint_row.addWidget(self._joint_combo)
+    self._joint_row_widget.setVisible(False)
+    layout.addWidget(self._joint_row_widget)
+
+    layout.addWidget(self.stack, stretch=1)
+    self.setLayout(layout)
+    self.setWindowTitle(node['name'])
+
+    # ---- connect signals ----
+    def on_mode_toggle(btn_id, checked):
+      if not checked:
+        return
+      self.stack.setCurrentIndex(btn_id)
+      self._view_row_widget.setVisible(btn_id == 0)
+      self._joint_row_widget.setVisible(btn_id == 1)
+
+    self.mode_group.idToggled.connect(on_mode_toggle)
+
+    def on_view_toggle(btn_id, checked):
+      if not checked:
+        return
+      label = list(ZedView.VIEWS.keys())[btn_id]
+      self.zed_view.view_axes = ZedView.VIEWS[label]
+      self.zed_view.update()
+
+    self.view_group.idToggled.connect(on_view_toggle)
+
+    def on_joint_changed(idx):
+      if 0 <= idx < len(self._joint_names):
+        self.norm_view.joint_name = self._joint_names[idx]
+        self.norm_view.history.clear()
+
+    self._joint_combo.currentIndexChanged.connect(on_joint_changed)
+
+    self.move(x, y)
+    self.resize(w, h)
+
+    node.add_observer(self.on_change, functools.partial(isdeleted, self))
+    create_task_with_exc_handling(self.__stream_task(stream))
+    self.show()
+
+  def _setup_joints(self, num_joints: int) -> None:
+    self._positions = [(0.0, 0.0, 0.0)] * num_joints
+    self._joint_names = _zed_joint_names(num_joints)
+    self.zed_view.positions = self._positions
+    self.zed_view.set_bones(num_joints)
+    # repopulate joint combo
+    prev = self._joint_combo.currentIndex()
+    self._joint_combo.blockSignals(True)
+    self._joint_combo.clear()
+    for name in self._joint_names:
+      self._joint_combo.addItem(name)
+    self._joint_combo.setEnabled(True)
+    idx = prev if 0 <= prev < num_joints else 0
+    self._joint_combo.setCurrentIndex(idx)
+    self._joint_combo.blockSignals(False)
+    self.norm_view.joint_name = self._joint_names[idx]
+
+  async def __stream_task(self, stream: typing.AsyncIterable[thalamus_pb2.XsensResponse]):
+    async for response in stream:
+      if not response.segments:
+        continue
+      max_id = max(s.id for s in response.segments)
+      if max_id != len(self._positions):
+        self._setup_joints(max_id)
+      for seg in response.segments:
+        idx = seg.id - 1
+        if 0 <= idx < len(self._positions):
+          self._positions[idx] = (seg.x, seg.y, seg.z)
+      # update full-body view
+      self.zed_view.positions = self._positions
+      self.zed_view.update()
+      # update norm view for the selected joint
+      j = self._joint_combo.currentIndex()
+      if 0 <= j < len(self._positions):
+        x, y, z = self._positions[j]
+        self.norm_view.push(x, y, z)
+        self.norm_view.update()
+
+  def on_change(self, action, key, value):
+    if key == 'View' and not value:
+      self.close()
+
+  def moveEvent(self, a0: QMoveEvent) -> None:
+    offset = self.frameGeometry().size() - self.geometry().size()
+    position = a0.pos() - QPoint(offset.width(), offset.height())
+    position = QPoint(max(0, position.x()), max(0, position.y()))
+    self.view_geometry_updater[:2] = position.x(), position.y()
+    return super().moveEvent(a0)
+
+  def resizeEvent(self, a0: QResizeEvent) -> None:
+    self.view_geometry_updater[2:] = a0.size().width(), a0.size().height()
+    return super().resizeEvent(a0)
+
+  def closeEvent(self, a0: QCloseEvent) -> None:
+    self.node['View'] = False
+    self.stream.cancel()
+    return super().closeEvent(a0)
+
+
 class XsensWidget(QWidget):
   def __init__(self, node: ObservableDict, stream: typing.AsyncIterable[thalamus_pb2.XsensResponse]):
     self.node = node
@@ -1473,7 +1842,10 @@ class ItemModel(QAbstractItemModel):
               request = thalamus_pb2.NodeSelector(
                 name = node["name"]
               )
-              self.plots[id(node)] = XsensWidget(node, self.stub.xsens(request))
+              if node.get('type') == 'ZED':
+                self.plots[id(node)] = ZedWidget(node, self.stub.xsens(request))
+              else:
+                self.plots[id(node)] = XsensWidget(node, self.stub.xsens(request))
             elif thalamus_pb2.Modalities.AnalogModality in modalities.values:
               bin_ns = int(10e9/1920)
               request = thalamus_pb2.GraphRequest(
