@@ -57,8 +57,8 @@ struct ArucoNode::Impl {
   struct Board {
     double translation_x = 0, translation_y = 0, translation_z = 0;
     cv::Vec3d rotation;
-    long long rows;
-    long long columns;
+    int64_t rows;
+    int64_t columns;
     double markerSize;
     double markerSeparation;
     std::vector<int> ids;
@@ -86,8 +86,8 @@ struct ArucoNode::Impl {
                      const ObservableCollection::Key &key,
                      const ObservableCollection::Value &value) {
     TRACE_EVENT("thalamus", "ArucoNode::on_ids_change");
-    auto key_int = size_t(std::get<long long>(key));
-    auto value_int = std::get<long long>(value);
+    auto key_int = size_t(std::get<int64_t>(key));
+    auto value_int = std::get<int64_t>(value);
 
     auto &board = boards[self];
     if (action == ObservableCollection::Action::Set) {
@@ -107,9 +107,9 @@ struct ArucoNode::Impl {
     auto key_str = std::get<std::string>(key);
     auto &board = boards[self];
     if (key_str == "Rows") {
-      board.rows = std::get<long long>(value);
+      board.rows = std::get<int64_t>(value);
     } else if (key_str == "Columns") {
-      board.columns = std::get<long long>(value);
+      board.columns = std::get<int64_t>(value);
     } else if (key_str == "Marker Size") {
       board.markerSize = std::get<double>(value);
     } else if (key_str == "Marker Separation") {

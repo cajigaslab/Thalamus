@@ -22,6 +22,22 @@ public:
   virtual bool has_motion_data() const;
 };
 
+class MotionCaptureNodeImpl : public Node, public MotionCaptureNode {
+  struct Impl;
+  std::unique_ptr<Impl> impl;
+public:
+  MotionCaptureNodeImpl(ObservableDictPtr state, boost::asio::io_context &io_context,
+                        NodeGraph *);
+  ~MotionCaptureNodeImpl() override;
+  std::span<Segment const> segments() const override;
+  const std::string_view pose_name() const override;
+  std::chrono::nanoseconds time() const override;
+  void inject(const std::span<Segment const> &segments) override;
+  bool has_motion_data() const override;
+  static std::string type_name();
+  size_t modalities() const override;
+};
+
 class XsensNode : public Node, public MotionCaptureNode, public AnalogNode {
   struct Impl;
   std::unique_ptr<Impl> impl;

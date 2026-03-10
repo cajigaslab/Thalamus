@@ -24,5 +24,5 @@ PERFETTO_DEFINE_CATEGORIES(
 #endif
 
 namespace thalamus {
-  unsigned long long get_unique_id();
+  uint64_t get_unique_id();
 }

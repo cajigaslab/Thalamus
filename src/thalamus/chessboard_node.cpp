@@ -162,11 +162,11 @@ struct ChessBoardNode::Impl {
       timer.expires_after(16ms);
       timer.async_wait(std::bind(&Impl::on_timer, this, _1));
     } else if (key_str == "Height") {
-      height = int(std::get<long long>(v));
+      height = int(std::get<int64_t>(v));
     } else if (key_str == "Rows") {
-      rows = int(std::get<long long>(v));
+      rows = int(std::get<int64_t>(v));
     } else if (key_str == "Columns") {
-      columns = int(std::get<long long>(v));
+      columns = int(std::get<int64_t>(v));
     }
   }
 };

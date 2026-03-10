@@ -187,11 +187,11 @@ struct BrainProductsNode::Impl {
           offset += 4;
           break;
         case DT_INT64:
-          output_data_ref[j*num_samples + i] = T(*reinterpret_cast<long long*>(buffer_bytes + offset));
+          output_data_ref[j*num_samples + i] = T(*reinterpret_cast<int64_t*>(buffer_bytes + offset));
           offset += 8;
           break;
         case DT_UINT64:
-          output_data_ref[j*num_samples + i] = T(*reinterpret_cast<unsigned long long*>(buffer_bytes + offset));
+          output_data_ref[j*num_samples + i] = T(*reinterpret_cast<uint64_t*>(buffer_bytes + offset));
           offset += 8;
           break;
         case DT_FLOAT64:

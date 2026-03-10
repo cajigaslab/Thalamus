@@ -33,9 +33,9 @@ struct nil {};
 struct signed_;
 struct function_;
 struct program;
-using number = std::variant<long long int, double>;
+using number = std::variant<int64_t, double>;
 
-typedef boost::variant<nil, std::string, unsigned long long int, double,
+typedef boost::variant<nil, std::string, uint64_t, double,
                        boost::recursive_wrapper<signed_>,
                        boost::recursive_wrapper<function_>,
                        boost::recursive_wrapper<program>>
@@ -94,7 +94,7 @@ BOOST_FUSION_ADAPT_STRUCT(thalamus::calculator::program,
 namespace thalamus {
 namespace calculator {
 struct bool_visitor {
-  bool operator()(long long int rhs) { return rhs; }
+  bool operator()(int64_t rhs) { return rhs; }
   bool operator()(double rhs) {
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -106,16 +106,16 @@ struct bool_visitor {
 #endif
   }
 
-  bool operator()(const std::variant<long long int, double> &rhs) {
+  bool operator()(const std::variant<int64_t, double> &rhs) {
     return std::visit(*this, rhs);
   }
 };
 
-inline bool to_bool(const std::variant<long long int, double> &rhs) {
+inline bool to_bool(const std::variant<int64_t, double> &rhs) {
   return std::visit(bool_visitor{}, rhs);
 }
 
-inline bool to_common_type(const std::variant<long long int, double> &rhs) {
+inline bool to_common_type(const std::variant<int64_t, double> &rhs) {
   return std::visit(bool_visitor{}, rhs);
 }
 
@@ -128,7 +128,7 @@ struct eval {
     return 0;
   }
   number operator()(double n) const { return n; }
-  number operator()(unsigned long long int n) const { return int64_t(n); }
+  number operator()(uint64_t n) const { return int64_t(n); }
   number operator()(std::string n) const { return symbols.at(n); }
 
   template <typename LHS, typename RHS>
@@ -139,7 +139,7 @@ struct eval {
 #endif
     using t = typename std::conditional<std::is_integral<LHS>::value &&
                                             std::is_integral<RHS>::value,
-                                        long long, double>::type;
+                                        int64_t, double>::type;
     if (x.operator_ == "+") {
       return t(lhs) + t(rhs);
     } else if (x.operator_ == "-") {
@@ -195,17 +195,17 @@ struct eval {
   }
 
   number eval_binary_var(operation const &x, number lhs, number rhs) const {
-    auto lhs_int = std::holds_alternative<long long int>(lhs);
-    auto rhs_int = std::holds_alternative<long long int>(rhs);
+    auto lhs_int = std::holds_alternative<int64_t>(lhs);
+    auto rhs_int = std::holds_alternative<int64_t>(rhs);
     if (lhs_int && rhs_int) {
-      return eval_binary(x, std::get<long long int>(lhs),
-                         std::get<long long int>(rhs));
+      return eval_binary(x, std::get<int64_t>(lhs),
+                         std::get<int64_t>(rhs));
     } else if (lhs_int) {
-      return eval_binary(x, std::get<long long int>(lhs),
+      return eval_binary(x, std::get<int64_t>(lhs),
                          std::get<double>(rhs));
     } else if (rhs_int) {
       return eval_binary(x, std::get<double>(lhs),
-                         std::get<long long int>(rhs));
+                         std::get<int64_t>(rhs));
     }
     return eval_binary(x, std::get<double>(lhs), std::get<double>(rhs));
   }
@@ -227,25 +227,25 @@ struct eval {
   number operator()(signed_ const &x) const {
     number rhs = boost::apply_visitor(*this, x.operand_);
     if (x.sign == "+") {
-      if (std::holds_alternative<long long int>(rhs)) {
-        return +std::get<long long int>(rhs);
+      if (std::holds_alternative<int64_t>(rhs)) {
+        return +std::get<int64_t>(rhs);
       }
       return +std::get<double>(rhs);
     } else if (x.sign == "-") {
-      if (std::holds_alternative<long long int>(rhs)) {
-        return -std::get<long long int>(rhs);
+      if (std::holds_alternative<int64_t>(rhs)) {
+        return -std::get<int64_t>(rhs);
       }
       return -std::get<double>(rhs);
     } else if (x.sign == "~") {
-      if (std::holds_alternative<long long int>(rhs)) {
-        return ~std::get<long long int>(rhs) & 0xFFFFFFFF;
+      if (std::holds_alternative<int64_t>(rhs)) {
+        return ~std::get<int64_t>(rhs) & 0xFFFFFFFF;
       }
     }
     BOOST_ASSERT(0);
     return 0ll;
   }
 
-  template <typename T> static long long sgn(T arg) {
+  template <typename T> static int64_t sgn(T arg) {
     if (arg < 0) {
       return -1;
     } else if (arg > 0) {
@@ -257,8 +257,8 @@ struct eval {
   template <typename T> static T neg(T arg) { return -arg; }
 
 #define APPLY_FUNCTION(func, rhs)                                              \
-  std::holds_alternative<long long int>(rhs)                                   \
-      ? number(func(std::get<long long int>(rhs)))                             \
+  std::holds_alternative<int64_t>(rhs)                                   \
+      ? number(func(std::get<int64_t>(rhs)))                             \
       : number(func(std::get<double>(rhs)))
 
   number operator()(function_ const &x) const {
@@ -320,9 +320,9 @@ namespace ascii = boost::spirit::ascii;
 template <typename Iterator>
 struct parser : qi::grammar<Iterator, program(), ascii::space_type> {
   parser() : parser::base_type(expression1) {
-    qi::ulong_long_type ulong_;
+    std::conditional<sizeof(unsigned long) >= 8, qi::ulong_type, qi::ulong_long_type>::type ulong_;
     qi::real_parser<double, qi::strict_real_policies<double>> double_;
-    qi::uint_parser<unsigned long long int, 16> hex_;
+    qi::uint_parser<uint64_t, 16> hex_;
     qi::hex_type hex2_;
     qi::string_type char_;
     qi::char_type one_char_;

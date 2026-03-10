@@ -577,7 +577,7 @@ struct AlphaOmegaNode::Impl {
     for (auto i = all_channels->begin(); i != all_channels->end(); ++i) {
       ObservableDictPtr value = i->second;
       bool is_selected = value->at(SELECTED);
-      long long int id = value->at(ID);
+      int64_t id = value->at(ID);
       std::string name = value->at(NAME);
       if (is_selected) {
         channels.emplace_back(int(id), name);

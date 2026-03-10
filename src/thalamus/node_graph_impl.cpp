@@ -129,9 +129,7 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
   ThalamusNodeFactory* factory;
 
   ExtNode(ThalamusNode* _node, ThalamusNodeFactory* _factory) : node(_node), factory(_factory) {}
-  ~ExtNode() override {
-    factory->destroy(node);
-  }
+  ~ExtNode() override;
 
   size_t modalities() const override {
     size_t result = 0;
@@ -265,8 +263,12 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
   }
 };
 
-struct ThalamusAPIImpl {
 
+ExtNode::~ExtNode() {
+  factory->destroy(node);
+}
+
+struct ThalamusAPIImpl {
     static std::map<ObservableCollection::Value, ThalamusState*>* cpp_to_c;
     static std::map<ThalamusState*, ObservableCollection::Value>* c_to_cpp;
     static std::map<ObservableCollection::Value, ThalamusStateConnection*>* cpp_to_c_conns;
@@ -285,6 +287,7 @@ struct ThalamusAPIImpl {
       }
       THALAMUS_ABORT("Unexpected type");
     }
+
     static ThalamusState* get_state_ref(ObservableCollection::Value val) {
       auto i = cpp_to_c->find(val);
       if(i == cpp_to_c->end()) {
@@ -459,8 +462,11 @@ struct ExtNodeFactory : public INodeFactory {
       return underlying->cleanup();
     }
   }
-  std::string type_name() override { return underlying->type; }
+  std::string type_name() override;
 };
+
+std::string ExtNodeFactory::type_name() { return underlying->type; }
+
 
 struct NodeGraphImpl::Impl {
   ObservableListPtr nodes;
@@ -542,6 +548,7 @@ public:
         {"ALPHA_OMEGA", new NodeFactory<AlphaOmegaNode>()},
         {"TOGGLE", new NodeFactory<ToggleNode>()},
         {"XSENS", new NodeFactory<XsensNode>()},
+        {"MOCAP", new NodeFactory<MotionCaptureNodeImpl>()},
         {"HAND_ENGINE", new NodeFactory<HandEngineNode>()},
         {"WAVE", new NodeFactory<WaveGeneratorNode>()},
         {"STORAGE", new NodeFactory<StorageNode>()},
@@ -642,7 +649,7 @@ public:
                 const ObservableCollection::Value &v) {
     using namespace std::placeholders;
     if (a == ObservableCollection::Action::Set) {
-      auto index = std::get<long long>(k);
+      auto index = std::get<int64_t>(k);
       ObservableDictPtr node = std::get<ObservableDictPtr>(v);
       node->changed.connect(
           std::bind(&Impl::on_node, this, node.get(), _1, _2, _3));

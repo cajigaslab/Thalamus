@@ -65,7 +65,7 @@ struct SpikeGlxNode::Impl {
   int nsamples;
   int next_channel = 0;
   size_t samples_read;
-  unsigned long long from_count;
+  uint64_t from_count;
   size_t position = 0;
   size_t complete_samples;
   std::chrono::nanoseconds time;
@@ -96,7 +96,7 @@ struct SpikeGlxNode::Impl {
   Device current_js;
   int current_ip;
   bool constructed = false;
-  // static unsigned long long io_track;
+  // static uint64_t io_track;
 
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
        NodeGraph *_graph, SpikeGlxNode *_outer)
@@ -441,7 +441,7 @@ struct SpikeGlxNode::Impl {
       if(ec) {
         co_return;
       }
-      imec_count = parse_number<long long>(text);
+      imec_count = parse_number<int64_t>(text);
       imec_data.resize(size_t(imec_count));
       imec_names.resize(size_t(imec_count));
 
@@ -501,7 +501,7 @@ struct SpikeGlxNode::Impl {
     }
   }
 
-  long long imec_count = 0;
+  int64_t imec_count = 0;
 
   std::vector<std::string> imec_subsets;
   bool streaming = false;
@@ -1015,7 +1015,7 @@ struct SpikeGlxNode::Impl {
         boost::asio::co_spawn(io_context, stop_stream(), boost::asio::detached);
       }
     } else if (key_str == "Poll Interval (ms)") {
-      poll_interval = std::chrono::milliseconds(std::get<long long>(v));
+      poll_interval = std::chrono::milliseconds(std::get<int64_t>(v));
     }
   }
 
@@ -1150,4 +1150,4 @@ boost::json::value SpikeGlxNode::process(const boost::json::value &) {
   // });
 }
 
-// unsigned long long SpikeGlxNode::Impl::io_track = get_unique_id();
+// uint64_t SpikeGlxNode::Impl::io_track = get_unique_id();

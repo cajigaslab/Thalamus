@@ -54,10 +54,10 @@ struct WaveGeneratorNode::Impl {
     Shape shape = Shape::SINE;
     double frequency = 1;
     double amplitude = 1;
-    long long phase = 0;
-    long long interval = 1e9;
+    int64_t phase = 0;
+    int64_t interval = 1e9;
     double duty_cycle = .5;
-    long long duty_interval = .5e9;
+    int64_t duty_interval = .5e9;
     double offset = 0;
     double current = 0;
     std::chrono::nanoseconds last_switch;
@@ -213,7 +213,7 @@ struct WaveGeneratorNode::Impl {
         wave_state->recap(
             std::bind(&Impl::on_change, this, wave_state.get(), _1, _2, _3));
       } else {
-        auto i = std::get<long long>(k);
+        auto i = std::get<int64_t>(k);
         waves.erase(waves.begin() + i);
       }
       return;
@@ -221,7 +221,7 @@ struct WaveGeneratorNode::Impl {
       key_str = std::get<std::string>(k);
       auto temp = waves_state->key_of(*source_collection);
       THALAMUS_ASSERT(temp.has_value(), "Failed to find index of wave");
-      auto index = size_t(std::get<long long>(*temp));
+      auto index = size_t(std::get<int64_t>(*temp));
       if (waves.size() <= index) {
         waves.resize(index + 1, Wave(this));
       }
@@ -259,7 +259,7 @@ struct WaveGeneratorNode::Impl {
     } else if (key_str == "Phase") {
       selected_wave->phase = int64_t(1e9 * std::get<double>(v));
     } else if (key_str == "Poll Interval") {
-      poll_interval = size_t(std::get<long long int>(v));
+      poll_interval = size_t(std::get<int64_t>(v));
     } else if (key_str == "Sample Rate") {
       auto sample_rate = std::get<double>(v);
       _sample_interval = std::chrono::nanoseconds(
@@ -423,7 +423,7 @@ struct ToggleNode::Impl {
     }
     for (auto i = previous_buffers.rbegin(); i != previous_buffers.rend();
          ++i) {
-      long long prev_index = int64_t(i->size()) + index;
+      int64_t prev_index = int64_t(i->size()) + index;
       if (prev_index >= 0) {
         return i->at(size_t(prev_index));
       }
