@@ -77,6 +77,15 @@ public:
     operator ObservableListPtr();
     operator int64_t();
     operator uint64_t();
+    template<typename T>
+    requires std::is_integral<T>::value
+    operator T() {
+      if constexpr (std::is_unsigned<T>::value) {
+        return uint64_t(*this);
+      } else {
+        return int64_t(*this);
+      }
+    }
     operator double();
     operator bool();
     operator std::string();
