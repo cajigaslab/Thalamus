@@ -279,11 +279,7 @@ struct Service::Impl {
       get_node();
     }
 
-    ~AnalogSession() override {
-      THALAMUS_LOG(trace) << "Delete AnalogSession";
-      std::lock_guard<std::mutex> lock(state->mutex);
-      state->joining = true;
-    }
+    ~AnalogSession() override;
         
     void OnDone() override {
       THALAMUS_LOG(trace) << "OnDone" << std::endl;
@@ -2149,5 +2145,11 @@ void Service::wait() {
     std::this_thread::sleep_for(1s);
   }
   // std::cout << "State service arrived" << std::endl;
+}
+
+Service::Impl::AnalogSession::~AnalogSession() {
+  THALAMUS_LOG(trace) << "Delete AnalogSession";
+  std::lock_guard<std::mutex> lock(state->mutex);
+  state->joining = true;
 }
 } // namespace thalamus
