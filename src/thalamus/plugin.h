@@ -136,10 +136,10 @@ extern "C" {
 
   struct ThalamusNodeFactory {
     const char* type;
-    struct ThalamusNode* (*create)(struct ThalamusState*, struct ThalamusIoContext*, struct ThalamusNodeGraph*);
-    void (*destroy)(struct ThalamusNode*);
-    char (*prepare)();
-    void (*cleanup)();
+    struct ThalamusNode* (*create)(struct ThalamusNodeFactory*, struct ThalamusState*, struct ThalamusIoContext*, struct ThalamusNodeGraph*);
+    void (*destroy)(struct ThalamusNodeFactory*, struct ThalamusNode*);
+    char (*prepare)(struct ThalamusNodeFactory*);
+    void (*cleanup)(struct ThalamusNodeFactory*);
   };
 
   struct ThalamusTimer;
@@ -176,6 +176,8 @@ extern "C" {
     int (*error_code_value)(struct ThalamusErrorCode*);
 
     void (*node_ready)(struct ThalamusNode*);
+
+    uint64_t (*time_ns)();
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories)(struct ThalamusAPI*);

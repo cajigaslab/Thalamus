@@ -265,7 +265,7 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
 
 
 ExtNode::~ExtNode() {
-  factory->destroy(node);
+  factory->destroy(factory, node);
 }
 
 struct ThalamusAPIImpl {
@@ -421,6 +421,11 @@ struct ThalamusAPIImpl {
       auto ext_node = reinterpret_cast<ExtNode*>(node->impl);
       ext_node->ready(ext_node);
     }
+
+    static uint64_t time_ns() {
+      std::chrono::nanoseconds ns = std::chrono::steady_clock::now().time_since_epoch();
+      return uint64_t(ns.count());
+    }
 };
 
 std::map<ObservableCollection::Value, ThalamusState*>* ThalamusAPIImpl::cpp_to_c = nullptr;
@@ -442,7 +447,7 @@ struct ExtNodeFactory : public INodeFactory {
                NodeGraph *) override {
     auto state_wrapper = ThalamusAPIImpl::get_state_ref(state);
 
-    auto node = underlying->create(state_wrapper, &io_context, &node_graph);
+    auto node = underlying->create(underlying, state_wrapper, &io_context, &node_graph);
 
     ThalamusAPIImpl::state_dec_ref(state_wrapper);
     auto result = new ExtNode(node, underlying);
@@ -452,14 +457,14 @@ struct ExtNodeFactory : public INodeFactory {
 
   bool prepare() override {
     if(underlying->prepare != nullptr) {
-      return underlying->prepare();
+      return underlying->prepare(underlying);
     } else {
       return true;
     }
   }
   void cleanup() override {
     if(underlying->cleanup != nullptr) {
-      return underlying->cleanup();
+      return underlying->cleanup(underlying);
     }
   }
   std::string type_name() override;
@@ -540,6 +545,7 @@ public:
     thalamus_api.timer_async_wait = ThalamusAPIImpl::timer_async_wait;
     thalamus_api.error_code_value = ThalamusAPIImpl::error_code_value;
     thalamus_api.node_ready = ThalamusAPIImpl::node_ready;
+    thalamus_api.time_ns = ThalamusAPIImpl::time_ns;
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},

@@ -19,7 +19,7 @@ def widgets():
 
 def library():
   #return [pathlib.Path.cwd() / 'ext.dll', pathlib.Path.cwd() / 'ext2.dll']
-  return pathlib.Path.cwd() / 'ext_rust/target/debug/ext.dll'
+  return pathlib.Path.cwd() / 'rust/target/debug/thalamus_rs.dll'
 
 def tasks():
   return [
