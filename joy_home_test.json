@@ -12,7 +12,7 @@
         {
           "task_type": "joystick_intro",
           "type": "task",
-          "goal": 0,
+          "goal": 6,
           "name": "Untitled",
           "intertrial_timeout": {
             "min": 1,
@@ -65,8 +65,8 @@
               "enabled": true,
               "x_norm": 0.75,
               "y_norm": 0.5,
-              "radius_ratio": 0.3,
-              "hold_time": 0.3,
+              "radius_ratio": 0.1,
+              "hold_time": 0.5,
               "target_color": [
                 255,
                 255,
@@ -78,8 +78,8 @@
               "enabled": true,
               "x_norm": 0.5,
               "y_norm": 0.5,
-              "radius_ratio": 0.3,
-              "hold_time": 0.3,
+              "radius_ratio": 0.1,
+              "hold_time": 0.5,
               "target_color": [
                 255,
                 255,
@@ -88,11 +88,11 @@
             },
             {
               "name": "Target 3",
-              "enabled": true,
+              "enabled": false,
               "x_norm": 0.5,
               "y_norm": 0.5,
-              "radius_ratio": 0.3,
-              "hold_time": 0.3,
+              "radius_ratio": 0.1,
+              "hold_time": 0.5,
               "target_color": [
                 255,
                 255,
@@ -106,7 +106,7 @@
           "task_region_y": 0.27,
           "task_region_width": 0.5,
           "task_region_height": 0.67,
-          "trial_timeout": 0.5,
+          "trial_timeout": 5.0,
           "joystick_node": "Joystick",
           "cursor_only_mode": false,
           "free_play_end_key": "space",
@@ -124,12 +124,163 @@
           "disable_up": false,
           "disable_down": false,
           "disable_left": false,
-          "disable_right": false
+          "disable_right": false,
+          "animations_enabled": true,
+          "task_animation_enabled": true,
+          "target_animation_enabled": true,
+          "show_streak_hud": true,
+          "streak_bonus_threshold": 0,
+          "streak_bonus_reward_count": 1,
+          "streak_reset_on_bonus": true,
+          "inside_tint_strength_pct": 20,
+          "show_hold_progress_ring": true,
+          "show_success_pop": true,
+          "success_pop_duration_s": 0.12,
+          "up_influence_pct": 100,
+          "down_influence_pct": 100,
+          "left_influence_pct": 100,
+          "right_influence_pct": 100
         }
       ]
     }
   ],
-  "queue": [],
+  "queue": [
+    {
+      "task_type": "joystick_intro",
+      "type": "task",
+      "goal": 3,
+      "name": "Untitled",
+      "intertrial_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "start_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "hold_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "blink_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "fail_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "success_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "target_x": {
+        "min": 1,
+        "max": 1
+      },
+      "target_y": {
+        "min": 1,
+        "max": 1
+      },
+      "target_width": {
+        "min": 1,
+        "max": 1
+      },
+      "target_height": {
+        "min": 1,
+        "max": 1
+      },
+      "target_color": [
+        255,
+        255,
+        255
+      ],
+      "targets": [
+        {
+          "name": "Target 1",
+          "enabled": true,
+          "x_norm": 0.75,
+          "y_norm": 0.5,
+          "radius_ratio": 0.1,
+          "hold_time": 0.5,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "name": "Target 2",
+          "enabled": true,
+          "x_norm": 0.5,
+          "y_norm": 0.5,
+          "radius_ratio": 0.1,
+          "hold_time": 0.5,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "name": "Target 3",
+          "enabled": false,
+          "x_norm": 0.5,
+          "y_norm": 0.5,
+          "radius_ratio": 0.1,
+          "hold_time": 0.5,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        }
+      ],
+      "control_mode": "direct",
+      "cursor_diameter_ratio": 0.1,
+      "task_region_x": 0.5,
+      "task_region_y": 0.27,
+      "task_region_width": 0.5,
+      "task_region_height": 0.67,
+      "trial_timeout": 0.5,
+      "joystick_node": "Joystick",
+      "cursor_only_mode": false,
+      "free_play_end_key": "space",
+      "cumulative_speed": 0.7,
+      "zero_drift_mode": true,
+      "zero_drift_buffer": 0.05,
+      "direct_range": 0.45,
+      "cursor_color": [
+        255,
+        70,
+        70
+      ],
+      "reward_channel": 0,
+      "intertrial_interval": 1.0,
+      "disable_up": false,
+      "disable_down": false,
+      "disable_left": false,
+      "disable_right": false,
+      "animations_enabled": true,
+      "task_animation_enabled": true,
+      "target_animation_enabled": true,
+      "show_streak_hud": true,
+      "streak_bonus_threshold": 0,
+      "streak_bonus_reward_count": 1,
+      "streak_reset_on_bonus": true,
+      "inside_tint_strength_pct": 20,
+      "show_hold_progress_ring": true,
+      "show_success_pop": true,
+      "success_pop_duration_s": 0.12,
+      "up_influence_pct": 100,
+      "down_influence_pct": 100,
+      "left_influence_pct": 100,
+      "right_influence_pct": 100,
+      "task_cluster_name": "Untitled",
+      "queue_index": 0,
+      "_streak_count": 0
+    }
+  ],
   "reward_schedule": {
     "schedules": [
       [
@@ -164,7 +315,7 @@
       "y": 1
     }
   },
-  "status": "",
+  "status": "Untitled/Untitled = 9/23",
   "thalamus_view_geometry": [
     100,
     100,
@@ -172,5 +323,23 @@
     768
   ],
   "data_views": [],
-  "node_widgets": []
+  "node_widgets": [],
+  "eye_scaling_init": {
+    "I": {
+      "x": 1,
+      "y": 1
+    },
+    "II": {
+      "x": 1,
+      "y": 1
+    },
+    "III": {
+      "x": 1,
+      "y": 1
+    },
+    "IV": {
+      "x": 1,
+      "y": 1
+    }
+  }
 }

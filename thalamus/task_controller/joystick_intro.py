@@ -59,6 +59,28 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     task_config["task_region_height"] = 0.67
   if "trial_timeout" not in task_config:
     task_config["trial_timeout"] = 0.5
+  if "animations_enabled" not in task_config:
+    task_config["animations_enabled"] = False
+  if "task_animation_enabled" not in task_config:
+    task_config["task_animation_enabled"] = True
+  if "target_animation_enabled" not in task_config:
+    task_config["target_animation_enabled"] = True
+  if "show_streak_hud" not in task_config:
+    task_config["show_streak_hud"] = True
+  if "streak_bonus_threshold" not in task_config:
+    task_config["streak_bonus_threshold"] = 0
+  if "streak_bonus_reward_count" not in task_config:
+    task_config["streak_bonus_reward_count"] = 1
+  if "streak_reset_on_bonus" not in task_config:
+    task_config["streak_reset_on_bonus"] = False
+  if "inside_tint_strength_pct" not in task_config:
+    task_config["inside_tint_strength_pct"] = 20
+  if "show_hold_progress_ring" not in task_config:
+    task_config["show_hold_progress_ring"] = True
+  if "show_success_pop" not in task_config:
+    task_config["show_success_pop"] = True
+  if "success_pop_duration_s" not in task_config:
+    task_config["success_pop_duration_s"] = 0.12
 
   form = Form.build(
     task_config, ["Parameter", "Value"],
@@ -387,6 +409,60 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   layout.addWidget(QLabel("Targets (rows = targets):"))
   layout.addWidget(target_table)
   layout.addWidget(controls)
+
+  animation_group = QGroupBox("Animation Settings")
+  animation_layout = QGridLayout(animation_group)
+
+  def add_anim_checkbox(row: int, label: str, key: str) -> None:
+    box = QCheckBox(label)
+    box.setChecked(bool(task_config.get(key, False)))
+    box.toggled.connect(lambda v, k=key: task_config.update({k: bool(v)}))
+    animation_layout.addWidget(box, row, 0, 1, 2)
+
+  add_anim_checkbox(0, "Enable Animations (Master)", "animations_enabled")
+  add_anim_checkbox(1, "Enable Task Animations", "task_animation_enabled")
+  add_anim_checkbox(2, "Show Streak HUD", "show_streak_hud")
+
+  animation_layout.addWidget(QLabel("Streak Bonus Threshold"), 3, 0)
+  streak_threshold_spin = QSpinBox()
+  streak_threshold_spin.setRange(0, 1000)
+  streak_threshold_spin.setValue(int(max(0, int(task_config.get("streak_bonus_threshold", 0)))))
+  streak_threshold_spin.valueChanged.connect(lambda v: task_config.update({"streak_bonus_threshold": int(v)}))
+  animation_layout.addWidget(streak_threshold_spin, 3, 1)
+
+  animation_layout.addWidget(QLabel("Bonus Reward Count"), 4, 0)
+  bonus_count_spin = QSpinBox()
+  bonus_count_spin.setRange(1, 20)
+  bonus_count_spin.setValue(int(max(1, int(task_config.get("streak_bonus_reward_count", 1)))))
+  bonus_count_spin.valueChanged.connect(lambda v: task_config.update({"streak_bonus_reward_count": int(v)}))
+  animation_layout.addWidget(bonus_count_spin, 4, 1)
+
+  add_anim_checkbox(5, "Reset Streak After Bonus", "streak_reset_on_bonus")
+  add_anim_checkbox(6, "Enable Target Animations", "target_animation_enabled")
+
+  animation_layout.addWidget(QLabel("Inside Tint Strength (%)"), 7, 0)
+  inside_tint_spin = QSpinBox()
+  inside_tint_spin.setRange(0, 100)
+  inside_tint_spin.setValue(int(max(0, min(100, int(task_config.get("inside_tint_strength_pct", 20))))))
+  inside_tint_spin.valueChanged.connect(lambda v: task_config.update({"inside_tint_strength_pct": int(v)}))
+  animation_layout.addWidget(inside_tint_spin, 7, 1)
+
+  add_anim_checkbox(8, "Show Hold Progress Ring", "show_hold_progress_ring")
+  add_anim_checkbox(9, "Show Success Pop", "show_success_pop")
+
+  animation_layout.addWidget(QLabel("Success Pop Duration (s)"), 10, 0)
+  success_pop_spin = QDoubleSpinBox()
+  success_pop_spin.setRange(0.0, 1.0)
+  success_pop_spin.setSingleStep(0.01)
+  success_pop_spin.setDecimals(3)
+  success_pop_spin.setValue(float(max(0.0, min(1.0, float(task_config.get("success_pop_duration_s", 0.12))))))
+  success_pop_spin.valueChanged.connect(lambda v: task_config.update({"success_pop_duration_s": float(v)}))
+  animation_layout.addWidget(success_pop_spin, 10, 1)
+
+  animation_note = QLabel("Set master to OFF for animation-free behavior.")
+  animation_layout.addWidget(animation_note, 11, 0, 1, 2)
+
+  layout.addWidget(animation_group)
   sync_table_from_config()
 
   no_wheel_filter = NoWheelChangeFilter(result)
@@ -432,6 +508,18 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   trial_timeout = float(task_config.get("trial_timeout", 0.5))
   intertrial_interval = float(task_config.get("intertrial_interval", 1.0))
   configured_targets = task_config.get("targets", [])
+  animations_enabled = bool(task_config.get("animations_enabled", False))
+  task_animation_enabled = animations_enabled and bool(task_config.get("task_animation_enabled", True))
+  target_animation_enabled = animations_enabled and bool(task_config.get("target_animation_enabled", True))
+  show_streak_hud = bool(task_config.get("show_streak_hud", True))
+  streak_bonus_threshold = max(0, int(task_config.get("streak_bonus_threshold", 0)))
+  streak_bonus_reward_count = max(1, int(task_config.get("streak_bonus_reward_count", 1)))
+  streak_reset_on_bonus = bool(task_config.get("streak_reset_on_bonus", False))
+  inside_tint_strength = max(0.0, min(1.0, float(task_config.get("inside_tint_strength_pct", 20)) / 100.0))
+  show_hold_progress_ring = bool(task_config.get("show_hold_progress_ring", True))
+  show_success_pop = bool(task_config.get("show_success_pop", True))
+  success_pop_duration_s = max(0.0, min(1.0, float(task_config.get("success_pop_duration_s", 0.12))))
+  streak_count = max(0, int(task_config.get("_streak_count", 0)))
 
   cursor_x = 0.5
   cursor_y = 0.5
@@ -449,6 +537,11 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   free_play_end_requested = False
   joystick_x = 0.0
   joystick_y = 0.0
+  cursor_inside_target = False
+  hold_progress_ratio = 0.0
+  success_pop_start: typing.Optional[float] = None
+  success_pop_x = 0.5
+  success_pop_y = 0.5
 
   task_region_width = max(0.05, min(1.0, task_region_width))
   task_region_height = max(0.05, min(1.0, task_region_height))
@@ -505,6 +598,12 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     LOGGER.info("Delivering reward channel=%d duration_ms=%d", reward_channel, on_time_ms)
     await context.inject_analog('Reward', signal)
 
+  async def deliver_reward_repeats(repeats: int) -> None:
+    for i in range(max(0, repeats)):
+      await deliver_reward()
+      if i < repeats - 1:
+        await asyncio.sleep(0.05)
+
   def place_target() -> typing.Tuple[float, float, float, float, QColor]:
     enabled_targets = []
     for target in configured_targets:
@@ -544,6 +643,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     return jx, jy
 
   def renderer(painter: CanvasPainterProtocol) -> None:
+    nonlocal success_pop_start
     w = context.widget.width()
     h = context.widget.height()
     region_left, region_top, region_w, region_h = region_bounds_ratios()
@@ -563,9 +663,43 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     painter.drawRect(left_px, top_px, region_w_px, region_h_px)
 
     if (not cursor_only_mode) and state == "active":
-      painter.setPen(QPen(current_target_color, 1))
-      painter.setBrush(current_target_color)
+      draw_target_color = QColor(current_target_color)
+      if target_animation_enabled and cursor_inside_target and inside_tint_strength > 0.0:
+        r = int(draw_target_color.red() + (255 - draw_target_color.red()) * inside_tint_strength)
+        g = int(draw_target_color.green() + (255 - draw_target_color.green()) * inside_tint_strength)
+        b = int(draw_target_color.blue() + (255 - draw_target_color.blue()) * inside_tint_strength)
+        draw_target_color = QColor(r, g, b)
+      painter.setPen(QPen(draw_target_color, 1))
+      painter.setBrush(draw_target_color)
       painter.drawEllipse(tx - target_radius_px, ty - target_radius_px, 2 * target_radius_px, 2 * target_radius_px)
+      if target_animation_enabled and show_hold_progress_ring and hold_progress_ratio > 0.0:
+        ring_radius = target_radius_px + max(3, int(0.015 * min_dim))
+        ring_width = max(2, int(0.008 * min_dim))
+        painter.setPen(QPen(QColor(255, 255, 255, 220), ring_width))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        diameter = 2 * ring_radius
+        painter.drawArc(
+          tx - ring_radius,
+          ty - ring_radius,
+          diameter,
+          diameter,
+          90 * 16,
+          -int(360 * 16 * max(0.0, min(1.0, hold_progress_ratio))),
+        )
+
+    if target_animation_enabled and show_success_pop and success_pop_start is not None and success_pop_duration_s > 0.0:
+      elapsed = time.perf_counter() - success_pop_start
+      if elapsed <= success_pop_duration_s:
+        progress = max(0.0, min(1.0, elapsed / success_pop_duration_s))
+        pop_center_x, pop_center_y = to_region_pixels(success_pop_x, success_pop_y, w, h)
+        pop_radius = int(target_radius_px * (1.0 + 0.8 * progress))
+        alpha = int(255 * (1.0 - progress))
+        pop_width = max(1, int(0.006 * min_dim))
+        painter.setPen(QPen(QColor(current_target_color.red(), current_target_color.green(), current_target_color.blue(), alpha), pop_width))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawEllipse(pop_center_x - pop_radius, pop_center_y - pop_radius, 2 * pop_radius, 2 * pop_radius)
+      else:
+        success_pop_start = None
 
     r = cursor_diameter_px // 2
     painter.setPen(QPen(cursor_color, 1))
@@ -577,6 +711,25 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     if cursor_only_mode:
       status_text += f"  Free Play (press {free_play_end_key.upper()} to end)"
     painter.drawText(10, 20, status_text)
+    if task_animation_enabled and show_streak_hud and not cursor_only_mode:
+      painter.drawText(10, 40, f"Streak: {streak_count}")
+      if streak_bonus_threshold > 0:
+        progress_step = streak_count % streak_bonus_threshold
+        if progress_step == 0 and streak_count > 0:
+          progress_step = streak_bonus_threshold
+        progress_ratio = progress_step / streak_bonus_threshold
+        bar_w = 170
+        bar_h = 8
+        x0 = 10
+        y0 = 48
+        painter.setPen(QPen(QColor(180, 180, 180), 1))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRect(x0, y0, bar_w, bar_h)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(100, 210, 120))
+        painter.drawRect(x0 + 1, y0 + 1, int((bar_w - 2) * progress_ratio), bar_h - 2)
+        painter.setPen(QPen(QColor(255, 255, 255), 1))
+        painter.drawText(10, 68, f"Bonus @ {streak_bonus_threshold}")
 
   context.widget.renderer = renderer
   context.widget.key_release_handler = on_key_release
@@ -626,6 +779,8 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       target_radius_px = int(current_target_radius_ratio * min_dim)
       cursor_px_x, cursor_px_y = to_region_pixels(cursor_x, cursor_y, w, h)
       target_px_x, target_px_y = to_region_pixels(target_x, target_y, w, h)
+      cursor_inside_target = False
+      hold_progress_ratio = 0.0
 
       if cursor_only_mode:
         if free_play_end_requested:
@@ -640,17 +795,45 @@ async def run(context: TaskContextProtocol) -> TaskResult:
           await context.log("BehavState=active")
       else:
         dist_to_target = math.hypot(cursor_px_x - target_px_x, cursor_px_y - target_px_y)
-        if dist_to_target <= target_radius_px:
+        cursor_inside_target = (dist_to_target <= target_radius_px)
+        if cursor_inside_target:
           if hold_start is None:
             hold_start = now
+            hold_progress_ratio = 0.0
           elif now - hold_start >= current_hold_time:
-            await deliver_reward()
+            hold_progress_ratio = 1.0
+            await deliver_reward_repeats(1)
+            streak_count += 1
+            task_config["_streak_count"] = streak_count
+            bonus_hit = (
+              task_animation_enabled
+              and streak_bonus_threshold > 0
+              and streak_count % streak_bonus_threshold == 0
+            )
+            if bonus_hit:
+              await deliver_reward_repeats(streak_bonus_reward_count)
+              if streak_reset_on_bonus:
+                streak_count = 0
+                task_config["_streak_count"] = 0
+            if target_animation_enabled and show_success_pop and success_pop_duration_s > 0.0:
+              success_pop_x = target_x
+              success_pop_y = target_y
+              success_pop_start = time.perf_counter()
+              pop_end_time = success_pop_start + success_pop_duration_s
+              while time.perf_counter() < pop_end_time:
+                context.widget.update()
+                await asyncio.sleep(0.01)
             await context.log("BehavState=success")
             return TaskResult(success=True)
+          else:
+            hold_progress_ratio = max(0.0, min(1.0, (now - hold_start) / max(0.001, current_hold_time)))
         else:
           hold_start = None
+          hold_progress_ratio = 0.0
 
         if now - trial_start >= trial_timeout:
+          streak_count = 0
+          task_config["_streak_count"] = 0
           await context.log("BehavState=fail")
           return TaskResult(success=False)
 
