@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::ptr;
 use std::time::{Duration,Instant};
 use std::ffi::CStr;
@@ -214,73 +215,42 @@ pub type ThalamusStateRecursiveCallback = ::std::option::Option<
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct ThalamusAPI {
-    pub state_is_dict: ::std::option::Option<
-        unsafe extern "C" fn(arg1: *mut ThalamusState) -> ::std::os::raw::c_char,
-    >,
-    pub state_is_list: ::std::option::Option<
-        unsafe extern "C" fn(arg1: *mut ThalamusState) -> ::std::os::raw::c_char,
-    >,
-    pub state_is_string: ::std::option::Option<
-        unsafe extern "C" fn(arg1: *mut ThalamusState) -> ::std::os::raw::c_char,
-    >,
-    pub state_is_int: ::std::option::Option<
-        unsafe extern "C" fn(arg1: *mut ThalamusState) -> ::std::os::raw::c_char,
-    >,
-    pub state_is_float: ::std::option::Option<
-        unsafe extern "C" fn(arg1: *mut ThalamusState) -> ::std::os::raw::c_char,
-    >,
-    pub state_is_null: ::std::option::Option<
-        unsafe extern "C" fn(arg1: *mut ThalamusState) -> ::std::os::raw::c_char,
-    >,
-    pub state_is_bool: ::std::option::Option<
-        unsafe extern "C" fn(arg1: *mut ThalamusState) -> ::std::os::raw::c_char,
-    >,
-    pub state_get_string: ::std::option::Option<
-        unsafe extern "C" fn(arg1: *mut ThalamusState) -> *const ::std::os::raw::c_char,
-    >,
-    pub state_get_int: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ThalamusState) -> i64>,
-    pub state_get_float:
-        ::std::option::Option<unsafe extern "C" fn(arg1: *mut ThalamusState) -> f64>,
-    pub state_get_bool: ::std::option::Option<
-        unsafe extern "C" fn(arg1: *mut ThalamusState) -> ::std::os::raw::c_char,
-    >,
-    pub state_get_at_name: ::std::option::Option<
-        unsafe extern "C" fn(
-            arg1: *mut ThalamusState,
-            arg2: *const ::std::os::raw::c_char,
-        ) -> *mut ThalamusState,
-    >,
-    pub state_get_at_index: ::std::option::Option<
-        unsafe extern "C" fn(arg1: *mut ThalamusState, arg2: usize) -> *mut ThalamusState,
-    >,
-    pub state_dec_ref: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ThalamusState)>,
-    pub state_inc_ref: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ThalamusState)>,
-    pub state_recursive_change_connect: ::std::option::Option<
-        unsafe extern "C" fn(
-            state: *mut ThalamusState,
-            callback: ThalamusStateRecursiveCallback,
-            data: *mut ::std::os::raw::c_void,
-        ) -> *mut ThalamusStateConnection,
-    >,
-    pub state_recursive_change_disconnect:
-        ::std::option::Option<unsafe extern "C" fn(state: *mut ThalamusStateConnection)>,
-    pub timer_create: ::std::option::Option<unsafe extern "C" fn() -> *mut ThalamusTimer>,
-    pub timer_destroy: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ThalamusTimer)>,
-    pub timer_expire_after_ns:
-        ::std::option::Option<unsafe extern "C" fn(arg1: *mut ThalamusTimer, arg2: usize)>,
-    pub timer_async_wait: ::std::option::Option<
-        unsafe extern "C" fn(
-            arg1: *mut ThalamusTimer,
-            arg2: ThalamusTimerCallback,
-            arg3: *mut ::std::os::raw::c_void,
-        ),
-    >,
-    pub error_code_value: ::std::option::Option<
-        unsafe extern "C" fn(arg1: *mut ThalamusErrorCode) -> ::std::os::raw::c_int,
-    >,
-    pub node_ready: ::std::option::Option<unsafe extern "C" fn(arg1: *const ThalamusNode)>,
-    pub time_ns: ::std::option::Option<unsafe extern "C" fn() -> u64>,
+struct ThalamusAPI {
+    state_is_dict: unsafe extern "C" fn(arg1: *mut ThalamusState) -> ::std::os::raw::c_char,
+    state_is_list: unsafe extern "C" fn(arg1: *mut ThalamusState) -> ::std::os::raw::c_char,
+    state_is_string: unsafe extern "C" fn(arg1: *mut ThalamusState) -> ::std::os::raw::c_char,
+    state_is_int: unsafe extern "C" fn(arg1: *mut ThalamusState) -> ::std::os::raw::c_char,
+    state_is_float: unsafe extern "C" fn(arg1: *mut ThalamusState) -> ::std::os::raw::c_char,
+    state_is_null: unsafe extern "C" fn(arg1: *mut ThalamusState) -> ::std::os::raw::c_char,
+    state_is_bool: unsafe extern "C" fn(arg1: *mut ThalamusState) -> ::std::os::raw::c_char,
+    state_get_string: unsafe extern "C" fn(arg1: *mut ThalamusState) -> *const ::std::os::raw::c_char,
+    state_get_int: unsafe extern "C" fn(arg1: *mut ThalamusState) -> i64,
+    state_get_float: unsafe extern "C" fn(arg1: *mut ThalamusState) -> f64,
+    state_get_bool: unsafe extern "C" fn(arg1: *mut ThalamusState) -> ::std::os::raw::c_char,
+    state_get_at_name: unsafe extern "C" fn(
+        arg1: *mut ThalamusState,
+        arg2: *const ::std::os::raw::c_char,
+    ) -> *mut ThalamusState,
+    state_get_at_index: unsafe extern "C" fn(arg1: *mut ThalamusState, arg2: usize) -> *mut ThalamusState,
+    state_dec_ref: unsafe extern "C" fn(arg1: *mut ThalamusState),
+    state_inc_ref: unsafe extern "C" fn(arg1: *mut ThalamusState),
+    state_recursive_change_connect: unsafe extern "C" fn(
+        state: *mut ThalamusState,
+        callback: ThalamusStateRecursiveCallback,
+        data: *mut ::std::os::raw::c_void,
+    ) -> *mut ThalamusStateConnection,
+    state_recursive_change_disconnect: unsafe extern "C" fn(state: *mut ThalamusStateConnection),
+    timer_create: unsafe extern "C" fn() -> *mut ThalamusTimer,
+    timer_destroy: unsafe extern "C" fn(arg1: *mut ThalamusTimer),
+    timer_expire_after_ns: unsafe extern "C" fn(arg1: *mut ThalamusTimer, arg2: usize),
+    timer_async_wait:  unsafe extern "C" fn(
+        arg1: *mut ThalamusTimer,
+        arg2: ThalamusTimerCallback,
+        arg3: *mut ::std::os::raw::c_void,
+    ),
+    error_code_value: unsafe extern "C" fn(arg1: *mut ThalamusErrorCode) -> ::std::os::raw::c_int,
+    node_ready: unsafe extern "C" fn(arg1: *const ThalamusNode),
+    time_ns: unsafe extern "C" fn() -> u64,
 }
 
 #[repr(C)]
@@ -383,77 +353,296 @@ pub struct ThalamusNodeFactory {
     api: *mut ThalamusAPI
 }
 
+mod thalamus {
+  use std::os::raw::c_void;
+  use std::ptr;
+  use std::time::{Duration,Instant};
+  use std::ffi::CStr;
+  use crate::ThalamusStateConnection;
+  use crate::ThalamusAPI;
+  use crate::ThalamusState;
+  use crate::ThalamusTimer;
+  use crate::ThalamusErrorCode;
+  use crate::ThalamusNode;
+  use std::rc::Rc;
+  use std::cell::RefCell;
+
+  pub fn time(api: &ThalamusAPI) -> Duration {
+    unsafe {
+      return Duration::from_nanos((api.time_ns)());
+    }
+  }
+ 
+  //type OnStateChangedCallback = Fn(source: &State, action: i32, key: &State, value: &State);
+
+  pub struct State {
+    pub state: *mut ThalamusState,
+    pub api: &'static ThalamusAPI
+  }
+
+  unsafe extern "C" fn state_on_change(source_raw: *mut ThalamusState, action: i32, key_raw: *mut ThalamusState, value_raw: *mut ThalamusState, data: *mut ::std::os::raw::c_void) {
+    let args = &mut *(data as *mut StateConnectionCallbackArgs);
+
+    let source = State {state: source_raw, api: args.api};
+    let key = State {state: key_raw, api: args.api};
+    let value = State {state: value_raw, api: args.api};
+
+    let callback = &mut*args.callback;
+    callback.on_change(&source, action, &key, &value);
+  }
+
+  unsafe extern "C" fn timer_on_timer(error: *mut ThalamusErrorCode, data: *mut ::std::os::raw::c_void) {
+    let args = &mut *(data as *mut TimerCallbackArgs);
+
+    let error_code = (args.api.error_code_value)(error);
+
+    let callback = &mut*args.callback;
+    callback.on_timer(ErrorCode {value: error_code});
+  }
+
+  struct StateConnectionCallbackArgs {
+    pub callback: *mut dyn StateListener,
+    pub api: &'static ThalamusAPI
+  }
+
+  struct TimerCallbackArgs {
+    pub callback: *mut dyn TimerListener,
+    pub api: &'static ThalamusAPI
+  }
+
+  pub struct ErrorCode {
+    pub value: i32
+  }
+
+  pub trait StateListener {
+      fn on_change(&mut self, source: &State, action: i32, key: &State, value: &State);
+  }
+  pub trait TimerListener {
+      fn on_timer(&mut self, error: ErrorCode);
+  }
+
+  impl State {
+    pub fn get_string(&self) -> &str {
+      unsafe {
+        let ptr = (self.api.state_get_string)(self.state);
+        CStr::from_ptr(ptr).to_str().unwrap()
+      }
+    }
+    pub fn get_float(&self) -> f64 {
+      unsafe {
+        (self.api.state_get_float)(self.state)
+      }
+    }
+    pub fn get_bool(&self) -> bool {
+      unsafe {
+        (self.api.state_get_bool)(self.state) != 0
+      }
+    }
+    pub fn get_int(&self) -> i64 {
+      unsafe {
+        (self.api.state_get_int)(self.state)
+      }
+    }
+
+    pub fn is_string(&self) -> bool {
+      unsafe {
+        (self.api.state_is_string)(self.state) != 0
+      }
+    }
+    pub fn is_float(&self) -> bool {
+      unsafe {
+        (self.api.state_is_float)(self.state) != 0
+      }
+    }
+    pub fn is_bool(&self) -> bool {
+      unsafe {
+        (self.api.state_is_bool)(self.state) != 0
+      }
+    }
+    pub fn is_int(&self) -> bool {
+      unsafe {
+        (self.api.state_is_int)(self.state) != 0
+      }
+    }
+
+    pub fn connect<T>(&self, callback_raw: &T) -> StateConnection
+    where T: StateListener + 'static
+    {
+      unsafe {
+        let q = callback_raw as *const dyn StateListener;
+        let callback_ptr = q as *mut dyn StateListener;
+        //let callback_ptr = callback_raw.as_mut() as *mut dyn StateListener;
+        let callback_args = Box::new(StateConnectionCallbackArgs {
+          callback: callback_ptr,
+          api: self.api
+        });
+        let raw = Box::into_raw(callback_args);
+        let void_ptr = raw as *mut c_void;
+        let connection = (self.api.state_recursive_change_connect)(self.state, Some(state_on_change), void_ptr);
+        StateConnection { api: self.api, connection, callback: raw }
+      }
+    }
+  }
+
+  pub struct StateConnection {
+    pub api: &'static ThalamusAPI,
+    connection: *mut ThalamusStateConnection,
+    callback: *mut StateConnectionCallbackArgs
+  }
+
+  impl Drop for StateConnection {
+    fn drop(&mut self) {
+      unsafe {
+        (self.api.state_recursive_change_disconnect)(self.connection);
+        drop(Box::from_raw(self.callback));
+      }
+      println!("StateConnection::drop");
+    }
+  }
+
+  pub struct Timer {
+    pub timer: *mut ThalamusTimer,
+    pub api: &'static ThalamusAPI
+  }
+
+  impl Timer {
+    pub fn new(api: &'static ThalamusAPI) -> Timer {
+      unsafe {
+        let timer = (api.timer_create)();
+        Timer {
+          api, timer
+        }
+      }
+    }
+
+    pub fn expires_after(&self, duration: Duration) {
+      unsafe {
+        (self.api.timer_expire_after_ns)(self.timer, duration.as_nanos() as usize);
+      }
+    }
+    pub fn async_wait<T>(&self, listener: &T)
+    where T: TimerListener + 'static 
+    {
+      let const_ptr = listener as *const dyn TimerListener;
+      let mut_ptr = const_ptr as *mut dyn TimerListener;
+
+      let args = Box::new(TimerCallbackArgs {
+          callback: mut_ptr,
+          api: self.api
+        });
+      let raw = Box::into_raw(args);
+      let void_ptr = raw as *mut c_void;
+      unsafe {
+        (self.api.timer_async_wait)(self.timer, Some(timer_on_timer), void_ptr);
+      }
+    }
+  }
+
+  impl Drop for Timer {
+    fn drop(&mut self) {
+      unsafe {
+        (self.api.timer_destroy)(self.timer);
+      }
+    }
+  }
+
+  pub trait Node {
+    fn api(&self) -> &ThalamusAPI;
+    fn base(&self) -> &ThalamusNode;
+    fn ready(&self) {
+      unsafe {
+        (self.api().node_ready)(self.base());
+      }
+    }
+  }
+}
 
 #[repr(C)]
-struct DemoNode <'a>{
+struct DemoNode {
   base: ThalamusNode,
-  state: *mut ThalamusState,
-  state_connection: *mut ThalamusStateConnection,
-  timer: *mut ThalamusTimer,
+  state: thalamus::State,
+  state_connection: Option<thalamus::StateConnection>,
+  timer: thalamus::Timer,
   running: bool,
   start_time: Duration,
   last_time: Duration,
   frequency: f64,
   amplitude: f64,
   samples: Vec<f64>,
-  api: &'a ThalamusAPI
+  api: &'static ThalamusAPI
 }
 
 const THALAMUS_OPERATION_ABORTED: i32 = 995;
 
-unsafe extern "C" fn demo_node_on_timer(arg1: *mut ThalamusErrorCode, data: *mut ::std::os::raw::c_void) {
-  let node = &mut *(data as *mut DemoNode);
-  if node.api.error_code_value.expect("err")(arg1) == THALAMUS_OPERATION_ABORTED {
-    return;
+use crate::thalamus::Node;
+
+impl thalamus::Node for DemoNode {
+  fn api(&self) -> &ThalamusAPI {
+    return self.api
   }
+  fn base(&self) -> &ThalamusNode {
+    return &self.base
+  }
+}
+
+impl thalamus::TimerListener for DemoNode {
+  fn on_timer(&mut self, error: thalamus::ErrorCode) {
+    if error.value == THALAMUS_OPERATION_ABORTED {
+      return;
+    }
+    
+    let now = thalamus::time(self.api);
+    self.samples.clear();
+    while self.last_time < now {
+      let elapsed = self.last_time - self.start_time;
+      let elapsed_s = elapsed.as_secs_f64();
+      self.samples.push(self.amplitude*f64::sin(2.0*3.14*self.frequency*elapsed_s));
+      self.last_time += Duration::from_millis(1);
+    }
   
-  let now = Duration::from_nanos(node.api.time_ns.expect("err")());
-  node.samples.clear();
-  while node.last_time < now {
-    let elapsed = node.last_time - node.start_time;
-    let elapsed_s = elapsed.as_secs_f64();
-    node.samples.push(node.amplitude*f64::sin(2.0*3.14*node.frequency*elapsed_s));
-    node.last_time += Duration::from_millis(1);
-  }
-
-  node.api.node_ready.expect("err")(&node.base as *const ThalamusNode);
-
-  //println!("Tick");
-  if node.running {
-    node.api.timer_expire_after_ns.expect("err")(node.timer, 16000000);
-    node.api.timer_async_wait.expect("err")(node.timer, Some(demo_node_on_timer), data);
+    self.ready();
+  
+    //println!("Tick");
+    if self.running {
+        self.timer.expires_after(Duration::from_millis(16));
+        self.timer.async_wait(self);
+    } 
   }
 }
 
-unsafe extern "C" fn demo_node_on_change(source: *mut ThalamusState, action: i32, key: *mut ThalamusState, value: *mut ThalamusState, data: *mut ::std::os::raw::c_void) {
-  let node = &mut*(data as *mut DemoNode);
-  let raw_str = node.api.state_get_string.expect("err")(key);
-  let key_str = CStr::from_ptr(raw_str).to_str().unwrap();
+impl thalamus::StateListener for DemoNode {
+  fn on_change(&mut self, _source: &thalamus::State, _action: i32, key: &thalamus::State, value: &thalamus::State) {
+    let key_str = key.get_string();
+    println!("DemoNode::on_change {}", key_str);
 
-  if(node.api.state_is_bool.expect("err")(value) != 0) {
-    let val_bool: bool = node.api.state_get_bool.expect("err")(value) != 0;
-    node.running = val_bool;
-    println!("demo_node_on_change {} {}", key_str, val_bool);
-
-    if(val_bool) {
-      node.start_time = Duration::from_nanos(node.api.time_ns.expect("err")());
-      node.last_time = node.start_time;
-      node.api.timer_expire_after_ns.expect("err")(node.timer, 16000000);
-      node.api.timer_async_wait.expect("err")(node.timer, Some(demo_node_on_timer), data);
-    }
-  } else if(node.api.state_is_float.expect("err")(value) != 0) {
-    let val_float = node.api.state_get_float.expect("err")(value);
-    println!("demo_node_on_change {} {}", key_str, val_float);
-    if key_str == "Amplitude" {
-      node.amplitude = val_float;
-    } else {
-      node.frequency = val_float
+    match key_str {
+      "Running" => 
+      {
+        let val = value.get_bool();
+        self.running = val;
+        if self.running {
+          self.start_time = thalamus::time(self.api);
+          self.last_time = self.start_time;
+          self.timer.expires_after(Duration::from_millis(16));
+          self.timer.async_wait(self);
+        }
+      },
+      "Amplitude" => {
+        let val = value.get_float();
+        self.amplitude = val;
+      },
+      "Frequency" => {
+        let val = value.get_float();
+        self.frequency = val;
+      },
+      _ => {}
     }
   }
 }
 
-impl<'a> DemoNode<'a> {
-  fn new(api: &'a ThalamusAPI) -> DemoNode<'a> {
+impl DemoNode {
+
+  fn new(api: &'static ThalamusAPI, state: thalamus::State) -> Box<DemoNode> {
     let base = ThalamusNode {
       impl_: ptr::null_mut() as *mut ::std::os::raw::c_void,
       time_ns: None,
@@ -462,11 +651,11 @@ impl<'a> DemoNode<'a> {
       image: ptr::null_mut() as *mut ThalamusImageNode,
       text: ptr::null_mut() as *mut ThalamusTextNode,
     };
-    DemoNode {
+    let mut result = Box::new(DemoNode {
       base: base,
-      state: ptr::null_mut() as *mut ThalamusState,
-      state_connection: ptr::null_mut() as *mut ThalamusStateConnection,
-      timer: ptr::null_mut() as *mut ThalamusTimer,
+      state,
+      state_connection: None,
+      timer: thalamus::Timer::new(api),
       running: false,
       start_time: Duration::from_millis(0),
       last_time: Duration::from_millis(0),
@@ -474,16 +663,12 @@ impl<'a> DemoNode<'a> {
       amplitude: 0.0,
       samples: Vec::<f64>::new(),
       api
-    }
-  }
-}
+    });
 
-impl<'a> Drop for DemoNode<'a> {
-  fn drop(&mut self) {
-    unsafe {
-      self.api.state_recursive_change_disconnect.expect("err")(self.state_connection);
-      self.api.timer_destroy.expect("err")(self.timer);
-    }
+    let connection = Some(result.state.connect(result.as_ref()));
+    result.state_connection = connection;
+
+    result
   }
 }
 
@@ -516,29 +701,25 @@ unsafe extern "C" fn demo_node_time_ns(raw_node: *mut ThalamusNode) -> u64 {
 
 unsafe extern "C" fn create_node(factory: *mut ThalamusNodeFactory, state: *mut ThalamusState, _io_context: *mut ThalamusIoContext, _graph: *mut ThalamusNodeGraph) -> *mut ThalamusNode {
   let api = &*(*factory).api;
-  let result = Box::new(DemoNode::new(api));
-  let raw = Box::into_raw(result);
+  let mut result = DemoNode::new(api, thalamus::State{ state, api });
   
-  (*raw).base.time_ns = Some(demo_node_time_ns);
-  (*(*raw).base.analog).data = Some(demo_node_data);
-  (*(*raw).base.analog).short_data = None;
-  (*(*raw).base.analog).int_data = None;
-  (*(*raw).base.analog).ulong_data = None;
-  (*(*raw).base.analog).num_channels = Some(demo_node_num_channels);
-  (*(*raw).base.analog).sample_interval_ns = Some(demo_node_sample_interval_ns);
-  (*(*raw).base.analog).name = Some(demo_node_name);
-  (*(*raw).base.analog).has_analog_data = Some(demo_node_has_analog_data);
-  (*(*raw).base.analog).is_short_data = Some(demo_node_is_short_data);
-  (*(*raw).base.analog).is_int_data = Some(demo_node_is_short_data);
-  (*(*raw).base.analog).is_ulong_data = Some(demo_node_is_short_data);
-  (*(*raw).base.analog).is_transformed = Some(demo_node_is_short_data);
-  (*(*raw).base.analog).scale = Some(demo_node_scale);
-  (*(*raw).base.analog).offset = Some(demo_node_scale);
-  
-  (*raw).state = state;
-  (*raw).state_connection = (*api).state_recursive_change_connect.expect("err")(state, Some(demo_node_on_change), raw as *mut ::std::os::raw::c_void);
-  (*raw).timer = (*api).timer_create.expect("err")();
+  result.base.time_ns = Some(demo_node_time_ns);
+  (*result.base.analog).data = Some(demo_node_data);
+  (*result.base.analog).short_data = None;
+  (*result.base.analog).int_data = None;
+  (*result.base.analog).ulong_data = None;
+  (*result.base.analog).num_channels = Some(demo_node_num_channels);
+  (*result.base.analog).sample_interval_ns = Some(demo_node_sample_interval_ns);
+  (*result.base.analog).name = Some(demo_node_name);
+  (*result.base.analog).has_analog_data = Some(demo_node_has_analog_data);
+  (*result.base.analog).is_short_data = Some(demo_node_is_short_data);
+  (*result.base.analog).is_int_data = Some(demo_node_is_short_data);
+  (*result.base.analog).is_ulong_data = Some(demo_node_is_short_data);
+  (*result.base.analog).is_transformed = Some(demo_node_is_short_data);
+  (*result.base.analog).scale = Some(demo_node_scale);
+  (*result.base.analog).offset = Some(demo_node_scale);
 
+  let raw = Box::into_raw(result);
   raw as *mut ThalamusNode
 }
 
