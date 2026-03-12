@@ -36,7 +36,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       # Avoid direct QEvent dependency because some qt wrappers in this repo
       # do not export QEvent symbols.
       if hasattr(event, "angleDelta"):
-        if isinstance(watched, (QSpinBox, QDoubleSpinBox, QComboBox)):
+        if isinstance(watched, (QSpinBox, QDoubleSpinBox, QComboBox, QSlider)):
           event.ignore()
           return True
       return super().eventFilter(watched, event)
@@ -44,6 +44,21 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   result = QWidget()
   layout = QVBoxLayout(result)
   result.setLayout(layout)
+
+  if "control_mode" not in task_config:
+    task_config["control_mode"] = "direct"
+  if "cursor_diameter_ratio" not in task_config:
+    task_config["cursor_diameter_ratio"] = 0.1
+  if "task_region_x" not in task_config:
+    task_config["task_region_x"] = 0.5
+  if "task_region_y" not in task_config:
+    task_config["task_region_y"] = 0.270
+  if "task_region_width" not in task_config:
+    task_config["task_region_width"] = 0.5
+  if "task_region_height" not in task_config:
+    task_config["task_region_height"] = 0.67
+  if "trial_timeout" not in task_config:
+    task_config["trial_timeout"] = 0.5
 
   form = Form.build(
     task_config, ["Parameter", "Value"],
@@ -62,57 +77,68 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Bool("Zero-Drift Mode", "zero_drift_mode", True),
     Form.Constant("Zero-Drift Buffer", "zero_drift_buffer", 0.05, precision=3),
     Form.Constant("Direct Range", "direct_range", 0.45, precision=3),
-    Form.Constant("Cursor Diameter Ratio", "cursor_diameter_ratio", 0.03, precision=3),
+    Form.Constant("Cursor Diameter Ratio", "cursor_diameter_ratio", 0.1, precision=3),
     Form.Color("Cursor Color", "cursor_color", QColor(255, 70, 70)),
     Form.Constant("Task Region Center X", "task_region_x", 0.5, precision=3),
-    Form.Constant("Task Region Center Y", "task_region_y", 0.5, precision=3),
-    Form.Constant("Task Region Width", "task_region_width", 1.0, precision=3),
-    Form.Constant("Task Region Height", "task_region_height", 1.0, precision=3),
+    Form.Constant("Task Region Center Y", "task_region_y", 0.270, precision=3),
+    Form.Constant("Task Region Width", "task_region_width", 0.5, precision=3),
+    Form.Constant("Task Region Height", "task_region_height", 0.67, precision=3),
     Form.Constant("Reward Channel", "reward_channel", 0, precision=0),
-    Form.Constant("Trial Timeout (s)", "trial_timeout", 10.0, "s", precision=3),
+    Form.Constant("Trial Timeout (s)", "trial_timeout", 0.5, "s", precision=3),
     Form.Constant("Intertrial Interval (s)", "intertrial_interval", 1.0, "s", precision=3),
   )
   layout.addWidget(form)
 
-  if "disable_up" not in task_config:
-    task_config["disable_up"] = False
-  if "disable_down" not in task_config:
-    task_config["disable_down"] = False
-  if "disable_left" not in task_config:
-    task_config["disable_left"] = False
-  if "disable_right" not in task_config:
-    task_config["disable_right"] = False
+  # Direction influence (0-100%) for each cardinal direction.
+  # Backwards compatibility with legacy disable_* booleans:
+  # disabled direction => 0%, enabled direction => 100%.
+  if "up_influence_pct" not in task_config:
+    task_config["up_influence_pct"] = 0 if bool(task_config.get("disable_up", False)) else 100
+  if "down_influence_pct" not in task_config:
+    task_config["down_influence_pct"] = 0 if bool(task_config.get("disable_down", False)) else 100
+  if "left_influence_pct" not in task_config:
+    task_config["left_influence_pct"] = 0 if bool(task_config.get("disable_left", False)) else 100
+  if "right_influence_pct" not in task_config:
+    task_config["right_influence_pct"] = 0 if bool(task_config.get("disable_right", False)) else 100
 
-  direction_row = QWidget()
-  direction_layout = QHBoxLayout(direction_row)
-  direction_layout.setContentsMargins(0, 0, 0, 0)
-  direction_layout.addWidget(QLabel("Disable Directions:"))
+  def make_direction_slider_row(
+    label_text: str,
+    config_key: str,
+  ) -> QWidget:
+    row = QWidget()
+    row_layout = QHBoxLayout(row)
+    row_layout.setContentsMargins(0, 0, 0, 0)
+    row_layout.addWidget(QLabel(label_text))
+    slider = QSlider(Qt.Orientation.Horizontal)
+    slider.setRange(0, 100)
+    slider.setSingleStep(1)
+    slider.setPageStep(5)
+    slider.setValue(int(max(0, min(100, int(task_config.get(config_key, 100))))))
+    value_label = QLabel(f"{slider.value()}%")
+    value_label.setMinimumWidth(40)
 
-  disable_up_box = QCheckBox("Up")
-  disable_down_box = QCheckBox("Down")
-  disable_left_box = QCheckBox("Left")
-  disable_right_box = QCheckBox("Right")
+    def on_slider_changed(v: int) -> None:
+      clamped = int(max(0, min(100, v)))
+      task_config.update({config_key: clamped})
+      value_label.setText(f"{clamped}%")
 
-  disable_up_box.setChecked(bool(task_config["disable_up"]))
-  disable_down_box.setChecked(bool(task_config["disable_down"]))
-  disable_left_box.setChecked(bool(task_config["disable_left"]))
-  disable_right_box.setChecked(bool(task_config["disable_right"]))
+    slider.valueChanged.connect(on_slider_changed)
+    row_layout.addWidget(slider, 1)
+    row_layout.addWidget(value_label)
+    return row
 
-  disable_up_box.toggled.connect(lambda v: task_config.update({"disable_up": bool(v)}))
-  disable_down_box.toggled.connect(lambda v: task_config.update({"disable_down": bool(v)}))
-  disable_left_box.toggled.connect(lambda v: task_config.update({"disable_left": bool(v)}))
-  disable_right_box.toggled.connect(lambda v: task_config.update({"disable_right": bool(v)}))
-
-  direction_layout.addWidget(disable_up_box)
-  direction_layout.addWidget(disable_down_box)
-  direction_layout.addWidget(disable_left_box)
-  direction_layout.addWidget(disable_right_box)
-  direction_layout.addStretch(1)
-  layout.addWidget(direction_row)
+  direction_group = QGroupBox("Direction Influence")
+  direction_group_layout = QVBoxLayout(direction_group)
+  direction_group_layout.addWidget(make_direction_slider_row("Up", "up_influence_pct"))
+  direction_group_layout.addWidget(make_direction_slider_row("Down", "down_influence_pct"))
+  direction_group_layout.addWidget(make_direction_slider_row("Left", "left_influence_pct"))
+  direction_group_layout.addWidget(make_direction_slider_row("Right", "right_influence_pct"))
+  layout.addWidget(direction_group)
 
   if "targets" not in task_config or not task_config["targets"]:
     task_config["targets"] = [
       {
+        "name": "Target 1",
         "enabled": True,
         "x_norm": 0.75,
         "y_norm": 0.50,
@@ -124,8 +150,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
 
   targets = task_config["targets"]
   target_table = QTableWidget()
-  target_table.setColumnCount(6)
-  target_table.setHorizontalHeaderLabels(["Enabled", "X", "Y", "Radius", "Hold (s)", "Color"])
+  target_table.setColumnCount(7)
+  target_table.setHorizontalHeaderLabels(["Enabled", "Name", "X", "Y", "Radius", "Hold (s)", "Color"])
   target_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
   target_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
   target_table.horizontalHeader().setStretchLastSection(True)
@@ -147,6 +173,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     else:
       color = [0, 220, 60]
     return {
+      "name": str(t.get("name", "")),
       "enabled": bool(t.get("enabled", True)),
       "x_norm": clamp(float(t.get("x_norm", 0.75)), 0.0, 1.0),
       "y_norm": clamp(float(t.get("y_norm", 0.50)), 0.0, 1.0),
@@ -164,10 +191,11 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     )
     enabled_item.setCheckState(Qt.CheckState.Checked if target["enabled"] else Qt.CheckState.Unchecked)
     target_table.setItem(row, 0, enabled_item)
-    target_table.setItem(row, 1, QTableWidgetItem(f"{target['x_norm']:.3f}"))
-    target_table.setItem(row, 2, QTableWidgetItem(f"{target['y_norm']:.3f}"))
-    target_table.setItem(row, 3, QTableWidgetItem(f"{target['radius_ratio']:.3f}"))
-    target_table.setItem(row, 4, QTableWidgetItem(f"{target['hold_time']:.3f}"))
+    target_table.setItem(row, 1, QTableWidgetItem(str(target.get("name", ""))))
+    target_table.setItem(row, 2, QTableWidgetItem(f"{target['x_norm']:.3f}"))
+    target_table.setItem(row, 3, QTableWidgetItem(f"{target['y_norm']:.3f}"))
+    target_table.setItem(row, 4, QTableWidgetItem(f"{target['radius_ratio']:.3f}"))
+    target_table.setItem(row, 5, QTableWidgetItem(f"{target['hold_time']:.3f}"))
     color_button = QPushButton()
     rgb = target["target_color"]
     color_button.setStyleSheet(f"background-color: rgb({rgb[0]}, {rgb[1]}, {rgb[2]});")
@@ -184,7 +212,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         color_button.setStyleSheet(f"background-color: rgb({new_rgb[0]}, {new_rgb[1]}, {new_rgb[2]});")
 
     color_button.clicked.connect(on_pick_color)
-    target_table.setCellWidget(row, 5, color_button)
+    target_table.setCellWidget(row, 6, color_button)
 
   def sync_table_from_config() -> None:
     target_table.blockSignals(True)
@@ -200,11 +228,12 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     if row < 0 or row >= len(targets):
       return
     enabled_item = target_table.item(row, 0)
-    x_item = target_table.item(row, 1)
-    y_item = target_table.item(row, 2)
-    radius_item = target_table.item(row, 3)
-    hold_item = target_table.item(row, 4)
-    if not all((enabled_item, x_item, y_item, radius_item, hold_item)):
+    name_item = target_table.item(row, 1)
+    x_item = target_table.item(row, 2)
+    y_item = target_table.item(row, 3)
+    radius_item = target_table.item(row, 4)
+    hold_item = target_table.item(row, 5)
+    if not all((enabled_item, name_item, x_item, y_item, radius_item, hold_item)):
       return
     try:
       x_val = clamp(float(x_item.text()), 0.0, 1.0)
@@ -217,6 +246,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       target_table.blockSignals(False)
       return
     targets[row] = {
+      "name": str(name_item.text()),
       "enabled": enabled_item.checkState() == Qt.CheckState.Checked,
       "x_norm": x_val,
       "y_norm": y_val,
@@ -229,7 +259,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     target_table.blockSignals(False)
 
   def on_item_changed(item: QTableWidgetItem) -> None:
-    if item.column() == 5:
+    if item.column() == 6:
       return
     sync_row_to_config(item.row())
 
@@ -240,19 +270,45 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   controls_layout.setContentsMargins(0, 0, 0, 0)
   add_target_button = QPushButton("Add Target")
   remove_target_button = QPushButton("Remove Selected")
+  bulk_field_combo = QComboBox()
+  bulk_field_combo.addItems([
+    "Enabled",
+    "Name",
+    "X",
+    "Y",
+    "Radius",
+    "Hold (s)",
+    "Color",
+  ])
+  bulk_field_combo.setCurrentText("Radius")
+  apply_to_all_button = QPushButton("Apply Field to All")
   controls_layout.addWidget(add_target_button)
   controls_layout.addWidget(remove_target_button)
+  controls_layout.addWidget(QLabel("Field:"))
+  controls_layout.addWidget(bulk_field_combo)
+  controls_layout.addWidget(apply_to_all_button)
   controls_layout.addStretch(1)
 
   def add_target() -> None:
-    targets.append({
-      "enabled": True,
-      "x_norm": 0.50,
-      "y_norm": 0.50,
-      "radius_ratio": DEFAULT_TARGET_RADIUS_RATIO,
-      "hold_time": DEFAULT_TARGET_HOLD_TIME,
-      "target_color": DEFAULT_TARGET_COLOR.copy()
-    })
+    selected_row = -1
+    selected_rows = sorted({idx.row() for idx in target_table.selectedIndexes()})
+    if selected_rows:
+      selected_row = selected_rows[0]
+
+    if 0 <= selected_row < len(targets):
+      new_target = normalize_target(targets[selected_row])
+    else:
+      new_target = {
+        "name": f"Target {len(targets) + 1}",
+        "enabled": True,
+        "x_norm": 0.75,
+        "y_norm": 0.50,
+        "radius_ratio": DEFAULT_TARGET_RADIUS_RATIO,
+        "hold_time": DEFAULT_TARGET_HOLD_TIME,
+        "target_color": DEFAULT_TARGET_COLOR.copy()
+      }
+
+    targets.append(new_target)
     sync_table_from_config()
     new_row = target_table.rowCount() - 1
     if new_row >= 0:
@@ -267,6 +323,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         del targets[row]
     if not targets:
       targets.append({
+        "name": "Target 1",
         "enabled": True,
         "x_norm": 0.75,
         "y_norm": 0.50,
@@ -276,8 +333,56 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       })
     sync_table_from_config()
 
+  def apply_selected_field_to_all() -> None:
+    if not targets:
+      return
+    selected_rows = sorted({idx.row() for idx in target_table.selectedIndexes()})
+    if not selected_rows:
+      return
+    src_row = selected_rows[0]
+    if src_row < 0 or src_row >= len(targets):
+      return
+
+    field = bulk_field_combo.currentText()
+    source = normalize_target(targets[src_row])
+
+    if field == "Enabled":
+      for i in range(len(targets)):
+        targets[i] = normalize_target(targets[i])
+        targets[i]["enabled"] = bool(source["enabled"])
+    elif field == "Name":
+      for i in range(len(targets)):
+        targets[i] = normalize_target(targets[i])
+        targets[i]["name"] = str(source["name"])
+    elif field == "X":
+      for i in range(len(targets)):
+        targets[i] = normalize_target(targets[i])
+        targets[i]["x_norm"] = float(source["x_norm"])
+    elif field == "Y":
+      for i in range(len(targets)):
+        targets[i] = normalize_target(targets[i])
+        targets[i]["y_norm"] = float(source["y_norm"])
+    elif field == "Radius":
+      for i in range(len(targets)):
+        targets[i] = normalize_target(targets[i])
+        targets[i]["radius_ratio"] = float(source["radius_ratio"])
+    elif field == "Hold (s)":
+      for i in range(len(targets)):
+        targets[i] = normalize_target(targets[i])
+        targets[i]["hold_time"] = float(source["hold_time"])
+    elif field == "Color":
+      rgb = list(source["target_color"])
+      for i in range(len(targets)):
+        targets[i] = normalize_target(targets[i])
+        targets[i]["target_color"] = rgb.copy()
+
+    sync_table_from_config()
+    if target_table.rowCount() > 0:
+      target_table.selectRow(src_row)
+
   add_target_button.clicked.connect(add_target)
   remove_target_button.clicked.connect(remove_target)
+  apply_to_all_button.clicked.connect(apply_selected_field_to_all)
 
   layout.addWidget(QLabel("Targets (rows = targets):"))
   layout.addWidget(target_table)
@@ -292,6 +397,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     spinbox.installEventFilter(no_wheel_filter)
   for combo in result.findChildren(QComboBox):
     combo.installEventFilter(no_wheel_filter)
+  for slider in result.findChildren(QSlider):
+    slider.installEventFilter(no_wheel_filter)
 
   return result
 
@@ -301,28 +408,28 @@ async def run(context: TaskContextProtocol) -> TaskResult:
 
   task_config = context.config["queue"][0]
   joystick_node = str(task_config.get("joystick_node", "Joystick"))
-  disable_up = bool(task_config.get("disable_up", False))
-  disable_down = bool(task_config.get("disable_down", False))
-  disable_left = bool(task_config.get("disable_left", False))
-  disable_right = bool(task_config.get("disable_right", False))
-  control_mode = str(task_config.get("control_mode", "cumulative"))
+  up_influence = max(0.0, min(1.0, float(task_config.get("up_influence_pct", 100)) / 100.0))
+  down_influence = max(0.0, min(1.0, float(task_config.get("down_influence_pct", 100)) / 100.0))
+  left_influence = max(0.0, min(1.0, float(task_config.get("left_influence_pct", 100)) / 100.0))
+  right_influence = max(0.0, min(1.0, float(task_config.get("right_influence_pct", 100)) / 100.0))
+  control_mode = str(task_config.get("control_mode", "direct"))
   cursor_only_mode = bool(task_config.get("cursor_only_mode", False))
   free_play_end_key = str(task_config.get("free_play_end_key", "space"))
   cumulative_speed = float(task_config.get("cumulative_speed", 0.70))
   zero_drift_mode = bool(task_config.get("zero_drift_mode", True))
   zero_drift_buffer = float(task_config.get("zero_drift_buffer", 0.03))
   direct_range = float(task_config.get("direct_range", 0.45))
-  cursor_diameter_ratio = float(task_config.get("cursor_diameter_ratio", 0.03))
+  cursor_diameter_ratio = float(task_config.get("cursor_diameter_ratio", 0.1))
   cursor_color = QColor(*task_config.get("cursor_color", [255, 70, 70]))
   task_region_x = float(task_config.get("task_region_x", 0.5))
-  task_region_y = float(task_config.get("task_region_y", 0.5))
-  task_region_width = float(task_config.get("task_region_width", 1.0))
-  task_region_height = float(task_config.get("task_region_height", 1.0))
+  task_region_y = float(task_config.get("task_region_y", 0.270))
+  task_region_width = float(task_config.get("task_region_width", 0.5))
+  task_region_height = float(task_config.get("task_region_height", 0.67))
   reward_channel = int(task_config.get("reward_channel", 0))
   target_radius_ratio = DEFAULT_TARGET_RADIUS_RATIO
   target_color = QColor(*DEFAULT_TARGET_COLOR)
   hold_time = DEFAULT_TARGET_HOLD_TIME
-  trial_timeout = float(task_config.get("trial_timeout", 10.0))
+  trial_timeout = float(task_config.get("trial_timeout", 0.5))
   intertrial_interval = float(task_config.get("intertrial_interval", 1.0))
   configured_targets = task_config.get("targets", [])
 
@@ -423,6 +530,19 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       return random.choice(enabled_targets)
     return 0.75, 0.50, target_radius_ratio, hold_time, target_color
 
+  def apply_direction_influence(raw_jx: float, raw_jy: float) -> typing.Tuple[float, float]:
+    jx = raw_jx
+    jy = raw_jy
+    if jx > 0.0:
+      jx *= right_influence
+    elif jx < 0.0:
+      jx *= left_influence
+    if jy > 0.0:
+      jy *= up_influence
+    elif jy < 0.0:
+      jy *= down_influence
+    return jx, jy
+
   def renderer(painter: CanvasPainterProtocol) -> None:
     w = context.widget.width()
     h = context.widget.height()
@@ -481,29 +601,11 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       last_tick = now
 
       if control_mode == "direct":
-        jx = joystick_x
-        jy = joystick_y
-        if disable_right and jx > 0.0:
-          jx = 0.0
-        if disable_left and jx < 0.0:
-          jx = 0.0
-        if disable_up and jy > 0.0:
-          jy = 0.0
-        if disable_down and jy < 0.0:
-          jy = 0.0
+        jx, jy = apply_direction_influence(joystick_x, joystick_y)
         cursor_x = 0.5 + jx * direct_range
         cursor_y = 0.5 + jy * direct_range
       else:
-        jx = joystick_x
-        jy = joystick_y
-        if disable_right and jx > 0.0:
-          jx = 0.0
-        if disable_left and jx < 0.0:
-          jx = 0.0
-        if disable_up and jy > 0.0:
-          jy = 0.0
-        if disable_down and jy < 0.0:
-          jy = 0.0
+        jx, jy = apply_direction_influence(joystick_x, joystick_y)
         if zero_drift_mode:
           # Radial deadband to suppress small spring-back offsets near center.
           if math.hypot(jx, jy) < zero_drift_buffer:

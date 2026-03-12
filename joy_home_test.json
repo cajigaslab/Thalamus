@@ -1,0 +1,176 @@
+{
+  "touch_channels": [
+    0,
+    1
+  ],
+  "task_clusters": [
+    {
+      "type": "task_cluster",
+      "name": "Untitled",
+      "weight": 0,
+      "tasks": [
+        {
+          "task_type": "joystick_intro",
+          "type": "task",
+          "goal": 0,
+          "name": "Untitled",
+          "intertrial_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "start_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "hold_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "blink_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "fail_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "success_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 1
+          },
+          "target_height": {
+            "min": 1,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [
+            {
+              "name": "Target 1",
+              "enabled": true,
+              "x_norm": 0.75,
+              "y_norm": 0.5,
+              "radius_ratio": 0.3,
+              "hold_time": 0.3,
+              "target_color": [
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "name": "Target 2",
+              "enabled": true,
+              "x_norm": 0.5,
+              "y_norm": 0.5,
+              "radius_ratio": 0.3,
+              "hold_time": 0.3,
+              "target_color": [
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "name": "Target 3",
+              "enabled": true,
+              "x_norm": 0.5,
+              "y_norm": 0.5,
+              "radius_ratio": 0.3,
+              "hold_time": 0.3,
+              "target_color": [
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "control_mode": "direct",
+          "cursor_diameter_ratio": 0.1,
+          "task_region_x": 0.5,
+          "task_region_y": 0.27,
+          "task_region_width": 0.5,
+          "task_region_height": 0.67,
+          "trial_timeout": 0.5,
+          "joystick_node": "Joystick",
+          "cursor_only_mode": false,
+          "free_play_end_key": "space",
+          "cumulative_speed": 0.7,
+          "zero_drift_mode": true,
+          "zero_drift_buffer": 0.05,
+          "direct_range": 0.45,
+          "cursor_color": [
+            255,
+            70,
+            70
+          ],
+          "reward_channel": 0,
+          "intertrial_interval": 1.0,
+          "disable_up": false,
+          "disable_down": false,
+          "disable_left": false,
+          "disable_right": false
+        }
+      ]
+    }
+  ],
+  "queue": [],
+  "reward_schedule": {
+    "schedules": [
+      [
+        0
+      ]
+    ],
+    "index": 0
+  },
+  "Orchestration": {
+    "Remote Executor": false,
+    "Processes": []
+  },
+  "nodes": [],
+  "Persistence": {
+    "Cached": []
+  },
+  "eye_scaling": {
+    "I": {
+      "x": 1,
+      "y": 1
+    },
+    "II": {
+      "x": 1,
+      "y": 1
+    },
+    "III": {
+      "x": 1,
+      "y": 1
+    },
+    "IV": {
+      "x": 1,
+      "y": 1
+    }
+  },
+  "status": "",
+  "thalamus_view_geometry": [
+    100,
+    100,
+    384,
+    768
+  ],
+  "data_views": [],
+  "node_widgets": []
+}

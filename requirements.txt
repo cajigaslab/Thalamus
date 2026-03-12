@@ -29,3 +29,5 @@ ninja
 oslex
 psutil
 jsonpath-ng==1.7.0
+PyYAML
+pyserial
