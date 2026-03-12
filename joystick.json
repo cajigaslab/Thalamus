@@ -16,7 +16,7 @@
       "AcquisitionFrameRate": 150.0,
       "Gain": 0.0,
       "view_geometry": [
-        788,
+        773,
         1686,
         690,
         552
@@ -36,7 +36,7 @@
     {
       "name": "Oculomatic",
       "type": "OCULOMATIC",
-      "Threshold": 25,
+      "Threshold": 39,
       "Min Area": 0,
       "Max Area": 98,
       "X Gain": 0.0,
@@ -47,14 +47,14 @@
       "Computing": true,
       "View": true,
       "view_geometry": [
-        1397,
-        1335,
-        405,
-        339
+        1569,
+        1122,
+        341,
+        248
       ],
       "Render Thresholded": false,
-      "Pix X": 374,
-      "Pix Y": 170
+      "Pix X": 300,
+      "Pix Y": 126
     },
     {
       "name": "Windows",
@@ -215,7 +215,7 @@
           "Address": ""
         },
         {
-          "Name": "joystick",
+          "Name": "Joystick",
           "Address": ""
         }
       ],
@@ -294,8 +294,8 @@
       "AcquisitionFrameRate": 60.0,
       "Gain": 0.0,
       "view_geometry": [
-        88,
-        1122,
+        82,
+        1130,
         687,
         549
       ],
@@ -319,26 +319,26 @@
       "Camera": "VimbaUSBTL:DEV_1AB228001040",
       "WidthMax": 1280,
       "HeightMax": 1024,
-      "Width": 750,
-      "Height": 418,
-      "OffsetX": 287,
-      "OffsetY": 126,
+      "Width": 685,
+      "Height": 362,
+      "OffsetX": 47,
+      "OffsetY": 165,
       "ExposureTime": 6000.0,
       "AcquisitionFrameRate": 150.0,
       "Gain": 0.0,
       "view_geometry": [
-        1528,
-        1169,
-        353,
-        242
+        1441,
+        1142,
+        289,
+        232
       ],
       "Camera Values": {
         "WidthMax": 1280,
         "HeightMax": 1024,
-        "Width": 744,
-        "Height": 418,
-        "OffsetX": 280,
-        "OffsetY": 126,
+        "Width": 680,
+        "Height": 362,
+        "OffsetX": 40,
+        "OffsetY": 164,
         "ExposureTime": 6000.005,
         "AcquisitionFrameRate": 149.9999250000375,
         "Gain": 0.0
@@ -442,15 +442,22 @@
           "Image": false,
           "Motion": true,
           "Text": true
+        },
+        {
+          "Node": "Joystick",
+          "Time Series": true,
+          "Image": false,
+          "Motion": true,
+          "Text": true
         }
       ],
-      "rec": 2,
-      "start": 706288.714916912,
+      "rec": 6,
+      "start": 2513946.203784386,
       "Files": [],
       "Metadata": [
         {
           "Key": "Rec",
-          "Value": 2
+          "Value": 6
         }
       ],
       "Simple Copy": false
@@ -611,7 +618,7 @@
       "Collecting": false,
       "Computing": false,
       "Source": "Cam Left",
-      "View": true,
+      "View": false,
       "Show Threshold": true,
       "Camera Matrix": [
         [
@@ -638,10 +645,10 @@
         -1.36743759601621
       ],
       "view_geometry": [
-        2201,
-        1555,
+        919,
+        1710,
         400,
-        400
+        339
       ]
     },
     {
@@ -695,23 +702,23 @@
       "Invert Y": false,
       "X Center": 516,
       "Y Center": 514,
-      "Dead Zone": 3,
-      "Running": true
+      "Dead Zone": 5,
+      "Running": false
     }
   ],
   "thalamus_view_geometry": [
-    100,
-    100,
-    384,
+    27,
+    31,
+    717,
     768
   ],
   "data_views": [
     {
       "view_geometry": [
-        783,
-        1128,
-        453,
-        515
+        1465,
+        1334,
+        445,
+        306
       ],
       "rows": 2,
       "columns": 1,
@@ -723,9 +730,9 @@
           "selected_channel": "X",
           "view_type": "Time Series",
           "draw_value": false,
-          "static_range": false,
-          "range_min": 0,
-          "range_max": 10
+          "static_range": true,
+          "range_min": -1.0,
+          "range_max": 1.0
         },
         {
           "row": 1,
@@ -734,9 +741,9 @@
           "selected_channel": "Y",
           "view_type": "Time Series",
           "draw_value": false,
-          "static_range": false,
-          "range_min": 0,
-          "range_max": 10
+          "static_range": true,
+          "range_min": -1.0,
+          "range_max": 1.0
         }
       ]
     }
@@ -753,12 +760,22 @@
       ]
     },
     {
-      "node": "Node 7",
+      "node": "Recording",
+      "dock_area": "",
+      "view_geometry": [
+        1528,
+        384,
+        392,
+        232
+      ]
+    },
+    {
+      "node": "Storage",
       "dock_area": "right",
       "view_geometry": [
-        190,
+        405,
         23,
-        194,
+        312,
         745
       ]
     }
@@ -767,8 +784,8 @@
     {
       "task_type": "joystick_intro",
       "type": "task",
-      "goal": 5,
-      "name": "TopDown",
+      "goal": 84,
+      "name": "LR",
       "intertrial_timeout": {
         "min": 1,
         "max": 1
@@ -816,11 +833,12 @@
       ],
       "targets": [
         {
+          "name": "L1",
           "enabled": true,
-          "x_norm": 0.5,
-          "y_norm": 0.95,
-          "radius_ratio": 0.25,
-          "hold_time": 0.4,
+          "x_norm": 0.25,
+          "y_norm": 0.55,
+          "radius_ratio": 0.1,
+          "hold_time": 0.3,
           "target_color": [
             255,
             255,
@@ -828,11 +846,77 @@
           ]
         },
         {
+          "name": "R1",
           "enabled": true,
-          "x_norm": 0.5,
-          "y_norm": 0.05,
-          "radius_ratio": 0.25,
-          "hold_time": 0.4,
+          "x_norm": 0.75,
+          "y_norm": 0.45,
+          "radius_ratio": 0.1,
+          "hold_time": 0.3,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "name": "R2",
+          "enabled": true,
+          "x_norm": 0.65,
+          "y_norm": 0.5,
+          "radius_ratio": 0.1,
+          "hold_time": 0.3,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "name": "L2",
+          "enabled": true,
+          "x_norm": 0.4,
+          "y_norm": 0.55,
+          "radius_ratio": 0.1,
+          "hold_time": 0.3,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "name": "R3",
+          "enabled": true,
+          "x_norm": 0.85,
+          "y_norm": 0.55,
+          "radius_ratio": 0.1,
+          "hold_time": 0.3,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "name": "L3",
+          "enabled": true,
+          "x_norm": 0.1,
+          "y_norm": 0.45,
+          "radius_ratio": 0.1,
+          "hold_time": 0.3,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "name": "L4",
+          "enabled": true,
+          "x_norm": 0.25,
+          "y_norm": 0.45,
+          "radius_ratio": 0.1,
+          "hold_time": 0.3,
           "target_color": [
             255,
             255,
@@ -855,18 +939,220 @@
         241
       ],
       "task_region_x": 0.5,
-      "task_region_y": 0.5,
-      "task_region_width": 1.0,
-      "task_region_height": 1.0,
+      "task_region_y": 0.27,
+      "task_region_width": 0.5,
+      "task_region_height": 0.67,
       "reward_channel": 2.0,
       "trial_timeout": 10.0,
       "intertrial_interval": 1.0,
-      "disable_up": false,
-      "disable_down": false,
+      "disable_up": true,
+      "disable_down": true,
       "disable_left": false,
       "disable_right": false,
+      "animations_enabled": true,
+      "task_animation_enabled": true,
+      "target_animation_enabled": true,
+      "show_streak_hud": true,
+      "streak_bonus_threshold": 0,
+      "streak_bonus_reward_count": 1,
+      "streak_reset_on_bonus": false,
+      "inside_tint_strength_pct": 20,
+      "show_hold_progress_ring": true,
+      "show_success_pop": false,
+      "success_pop_duration_s": 0.12,
+      "up_influence_pct": 6,
+      "down_influence_pct": 8,
+      "left_influence_pct": 100,
+      "right_influence_pct": 100,
       "task_cluster_name": "Joy",
-      "queue_index": 0
+      "queue_index": 0,
+      "_streak_count": 0
+    },
+    {
+      "task_type": "joystick_intro",
+      "type": "task",
+      "goal": 99,
+      "name": "LR",
+      "intertrial_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "start_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "hold_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "blink_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "fail_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "success_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "target_x": {
+        "min": 1,
+        "max": 1
+      },
+      "target_y": {
+        "min": 1,
+        "max": 1
+      },
+      "target_width": {
+        "min": 1,
+        "max": 1
+      },
+      "target_height": {
+        "min": 1,
+        "max": 1
+      },
+      "target_color": [
+        255,
+        255,
+        255
+      ],
+      "targets": [
+        {
+          "name": "L1",
+          "enabled": true,
+          "x_norm": 0.25,
+          "y_norm": 0.55,
+          "radius_ratio": 0.1,
+          "hold_time": 0.3,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "name": "R1",
+          "enabled": true,
+          "x_norm": 0.75,
+          "y_norm": 0.45,
+          "radius_ratio": 0.1,
+          "hold_time": 0.3,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "name": "R2",
+          "enabled": true,
+          "x_norm": 0.65,
+          "y_norm": 0.5,
+          "radius_ratio": 0.1,
+          "hold_time": 0.3,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "name": "L2",
+          "enabled": true,
+          "x_norm": 0.4,
+          "y_norm": 0.55,
+          "radius_ratio": 0.1,
+          "hold_time": 0.3,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "name": "R3",
+          "enabled": true,
+          "x_norm": 0.85,
+          "y_norm": 0.55,
+          "radius_ratio": 0.1,
+          "hold_time": 0.3,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "name": "L3",
+          "enabled": true,
+          "x_norm": 0.1,
+          "y_norm": 0.45,
+          "radius_ratio": 0.1,
+          "hold_time": 0.3,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "name": "L4",
+          "enabled": true,
+          "x_norm": 0.25,
+          "y_norm": 0.45,
+          "radius_ratio": 0.1,
+          "hold_time": 0.3,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        }
+      ],
+      "joystick_node": "Joystick",
+      "control_mode": "direct",
+      "cursor_only_mode": false,
+      "free_play_end_key": "space",
+      "cumulative_speed": 0.7,
+      "zero_drift_mode": true,
+      "zero_drift_buffer": 0.05,
+      "direct_range": 0.45,
+      "cursor_diameter_ratio": 0.07,
+      "cursor_color": [
+        153,
+        193,
+        241
+      ],
+      "task_region_x": 0.5,
+      "task_region_y": 0.27,
+      "task_region_width": 0.5,
+      "task_region_height": 0.67,
+      "reward_channel": 2.0,
+      "trial_timeout": 10.0,
+      "intertrial_interval": 1.0,
+      "disable_up": true,
+      "disable_down": true,
+      "disable_left": false,
+      "disable_right": false,
+      "animations_enabled": true,
+      "task_animation_enabled": true,
+      "target_animation_enabled": true,
+      "show_streak_hud": true,
+      "streak_bonus_threshold": 0,
+      "streak_bonus_reward_count": 1,
+      "streak_reset_on_bonus": false,
+      "inside_tint_strength_pct": 20,
+      "show_hold_progress_ring": true,
+      "show_success_pop": false,
+      "success_pop_duration_s": 0.12,
+      "up_influence_pct": 6,
+      "down_influence_pct": 8,
+      "left_influence_pct": 100,
+      "right_influence_pct": 100,
+      "task_cluster_name": "Joy",
+      "queue_index": 1
     }
   ],
   "reward_schedule": {
@@ -961,7 +1247,7 @@
     },
     "Auto Clear": true
   },
-  "status": "",
+  "status": "Joy/LR = 425/325 Joy/TopDown = 629/661",
   "Persistence": {
     "Cached": []
   },
@@ -3005,7 +3291,7 @@
         {
           "task_type": "simple_touch_task",
           "type": "task",
-          "goal": 20,
+          "goal": 50,
           "name": "simple touch",
           "intertrial_timeout": {
             "min": 0.5,
@@ -4037,8 +4323,8 @@
               "audio_only_if_high": false,
               "play_in_ear": false,
               "radius": {
-                "min": 10.0,
-                "max": 10.0
+                "min": 15.0,
+                "max": 15.0
               },
               "angle": {
                 "min": 90.0,
@@ -4186,6 +4472,63 @@
                 "min": 1,
                 "max": 1
               }
+            },
+            {
+              "name": "bottom",
+              "width": 3.0,
+              "height": 3.0,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 3.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 10.0,
+                "max": 10.0
+              },
+              "angle": {
+                "min": 270.0,
+                "max": 270.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "delay_luminance": {
+                "min": 1,
+                "max": 1
+              }
             }
           ],
           "baseline_timeout": {
@@ -4206,7 +4549,7 @@
           "stim_phase": "FAIL",
           "stim_start": 1,
           "intan_cfg": 2,
-          "pulse_count": 1,
+          "pulse_count": 1.0,
           "pulse_frequency": 1,
           "pulse_width": 0,
           "no_start_fail": false
@@ -7395,6 +7738,252 @@
             "min": 0.5,
             "max": 0.5
           },
+          "no_start_fail": false
+        },
+        {
+          "task_type": "delayed_reach",
+          "type": "task",
+          "goal": 20,
+          "name": "COR SHIFTED",
+          "intertrial_timeout": {
+            "min": 0.5,
+            "max": 1.0
+          },
+          "start_timeout": {
+            "min": 1.0,
+            "max": 1.5
+          },
+          "hold_timeout": {
+            "min": 0.1,
+            "max": 0.1
+          },
+          "blink_timeout": {
+            "min": 0.25,
+            "max": 0.25
+          },
+          "fail_timeout": {
+            "min": 0.5,
+            "max": 0.5
+          },
+          "success_timeout": {
+            "min": 0.5,
+            "max": 0.5
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 2.0
+          },
+          "target_height": {
+            "min": 3.0,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [
+            {
+              "name": "fixation",
+              "width": 3.0,
+              "height": 3.0,
+              "orientation": 0,
+              "window_size": 8.5,
+              "reward_channel": 0.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": true,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 5.0,
+                "max": 5.0
+              },
+              "angle": {
+                "min": 90.0,
+                "max": 90.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "delay_luminance": {
+                "min": 1,
+                "max": 1
+              }
+            },
+            {
+              "name": "top",
+              "width": 3.0,
+              "height": 3.0,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 3.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 15.0,
+                "max": 15.0
+              },
+              "angle": {
+                "min": 90.0,
+                "max": 90.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "delay_luminance": {
+                "min": 1,
+                "max": 1
+              }
+            },
+            {
+              "name": "bottom",
+              "width": 3.0,
+              "height": 3.0,
+              "orientation": 0,
+              "window_size": 5.5,
+              "reward_channel": 3.0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                138,
+                226,
+                52
+              ],
+              "is_fixation": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 5.0,
+                "max": 5.0
+              },
+              "angle": {
+                "min": 270.0,
+                "max": 270.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              },
+              "delay_luminance": {
+                "min": 1,
+                "max": 1
+              }
+            }
+          ],
+          "baseline_timeout": {
+            "min": 0.3,
+            "max": 0.7
+          },
+          "cue_timeout": {
+            "min": 0.1,
+            "max": 0.1
+          },
+          "reach_timeout": {
+            "min": 1.0,
+            "max": 1.0
+          },
+          "is_choice": false,
+          "state_indicator_x": 1800.0,
+          "state_indicator_y": 950.0,
+          "stim_phase": "FAIL",
+          "stim_start": 1,
+          "intan_cfg": 2,
+          "pulse_count": 1.0,
+          "pulse_frequency": 1,
+          "pulse_width": 0,
           "no_start_fail": false
         }
       ]
@@ -13579,7 +14168,7 @@
         {
           "task_type": "joystick_intro",
           "type": "task",
-          "goal": 1,
+          "goal": 0,
           "name": "Cursor",
           "intertrial_timeout": {
             "min": 1,
@@ -13628,6 +14217,7 @@
           ],
           "targets": [
             {
+              "name": "",
               "enabled": true,
               "x_norm": 0.75,
               "y_norm": 0.5,
@@ -13664,12 +14254,27 @@
           "disable_up": false,
           "disable_down": false,
           "disable_left": false,
-          "disable_right": false
+          "disable_right": false,
+          "animations_enabled": false,
+          "task_animation_enabled": true,
+          "target_animation_enabled": true,
+          "show_streak_hud": true,
+          "streak_bonus_threshold": 0,
+          "streak_bonus_reward_count": 1,
+          "streak_reset_on_bonus": false,
+          "inside_tint_strength_pct": 20,
+          "show_hold_progress_ring": true,
+          "show_success_pop": true,
+          "success_pop_duration_s": 0.12,
+          "up_influence_pct": 100,
+          "down_influence_pct": 100,
+          "left_influence_pct": 100,
+          "right_influence_pct": 100
         },
         {
           "task_type": "joystick_intro",
           "type": "task",
-          "goal": 5,
+          "goal": 50,
           "name": "TopDown",
           "intertrial_timeout": {
             "min": 1,
@@ -13718,10 +14323,11 @@
           ],
           "targets": [
             {
-              "enabled": true,
+              "name": "",
+              "enabled": false,
               "x_norm": 0.5,
-              "y_norm": 0.95,
-              "radius_ratio": 0.25,
+              "y_norm": 0.75,
+              "radius_ratio": 0.15,
               "hold_time": 0.4,
               "target_color": [
                 255,
@@ -13730,10 +14336,115 @@
               ]
             },
             {
+              "name": "",
+              "enabled": true,
+              "x_norm": 0.53,
+              "y_norm": 0.4,
+              "radius_ratio": 0.1,
+              "hold_time": 0.4,
+              "target_color": [
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "name": "",
+              "enabled": true,
+              "x_norm": 0.53,
+              "y_norm": 0.6,
+              "radius_ratio": 0.1,
+              "hold_time": 0.4,
+              "target_color": [
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "name": "",
               "enabled": true,
               "x_norm": 0.5,
-              "y_norm": 0.05,
-              "radius_ratio": 0.25,
+              "y_norm": 0.2,
+              "radius_ratio": 0.1,
+              "hold_time": 0.4,
+              "target_color": [
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "name": "",
+              "enabled": true,
+              "x_norm": 0.4,
+              "y_norm": 0.1,
+              "radius_ratio": 0.1,
+              "hold_time": 0.4,
+              "target_color": [
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "name": "",
+              "enabled": true,
+              "x_norm": 0.5,
+              "y_norm": 0.9,
+              "radius_ratio": 0.1,
+              "hold_time": 0.4,
+              "target_color": [
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "name": "TR",
+              "enabled": true,
+              "x_norm": 0.55,
+              "y_norm": 0.9,
+              "radius_ratio": 0.1,
+              "hold_time": 0.4,
+              "target_color": [
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "name": "BL",
+              "enabled": true,
+              "x_norm": 0.45,
+              "y_norm": 0.1,
+              "radius_ratio": 0.1,
+              "hold_time": 0.4,
+              "target_color": [
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "name": "BR",
+              "enabled": true,
+              "x_norm": 0.55,
+              "y_norm": 0.1,
+              "radius_ratio": 0.1,
+              "hold_time": 0.4,
+              "target_color": [
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "name": "TR",
+              "enabled": true,
+              "x_norm": 0.55,
+              "y_norm": 0.9,
+              "radius_ratio": 0.1,
               "hold_time": 0.4,
               "target_color": [
                 255,
@@ -13757,16 +14468,215 @@
             241
           ],
           "task_region_x": 0.5,
-          "task_region_y": 0.5,
-          "task_region_width": 1.0,
-          "task_region_height": 1.0,
+          "task_region_y": 0.27,
+          "task_region_width": 0.5,
+          "task_region_height": 0.67,
           "reward_channel": 2.0,
           "trial_timeout": 10.0,
           "intertrial_interval": 1.0,
           "disable_up": false,
           "disable_down": false,
+          "disable_left": true,
+          "disable_right": true,
+          "animations_enabled": true,
+          "task_animation_enabled": true,
+          "target_animation_enabled": true,
+          "show_streak_hud": true,
+          "streak_bonus_threshold": 0,
+          "streak_bonus_reward_count": 1,
+          "streak_reset_on_bonus": false,
+          "inside_tint_strength_pct": 20,
+          "show_hold_progress_ring": true,
+          "show_success_pop": false,
+          "success_pop_duration_s": 0.12,
+          "up_influence_pct": 100,
+          "down_influence_pct": 100,
+          "left_influence_pct": 12,
+          "right_influence_pct": 40
+        },
+        {
+          "task_type": "joystick_intro",
+          "type": "task",
+          "goal": 99,
+          "name": "LR",
+          "intertrial_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "start_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "hold_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "blink_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "fail_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "success_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 1
+          },
+          "target_height": {
+            "min": 1,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [
+            {
+              "name": "L1",
+              "enabled": true,
+              "x_norm": 0.25,
+              "y_norm": 0.55,
+              "radius_ratio": 0.1,
+              "hold_time": 0.3,
+              "target_color": [
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "name": "R1",
+              "enabled": true,
+              "x_norm": 0.75,
+              "y_norm": 0.45,
+              "radius_ratio": 0.1,
+              "hold_time": 0.3,
+              "target_color": [
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "name": "R2",
+              "enabled": true,
+              "x_norm": 0.65,
+              "y_norm": 0.5,
+              "radius_ratio": 0.1,
+              "hold_time": 0.3,
+              "target_color": [
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "name": "L2",
+              "enabled": true,
+              "x_norm": 0.4,
+              "y_norm": 0.55,
+              "radius_ratio": 0.1,
+              "hold_time": 0.3,
+              "target_color": [
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "name": "R3",
+              "enabled": true,
+              "x_norm": 0.85,
+              "y_norm": 0.55,
+              "radius_ratio": 0.1,
+              "hold_time": 0.3,
+              "target_color": [
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "name": "L3",
+              "enabled": true,
+              "x_norm": 0.1,
+              "y_norm": 0.45,
+              "radius_ratio": 0.1,
+              "hold_time": 0.3,
+              "target_color": [
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "name": "L4",
+              "enabled": true,
+              "x_norm": 0.25,
+              "y_norm": 0.45,
+              "radius_ratio": 0.1,
+              "hold_time": 0.3,
+              "target_color": [
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "joystick_node": "Joystick",
+          "control_mode": "direct",
+          "cursor_only_mode": false,
+          "free_play_end_key": "space",
+          "cumulative_speed": 0.7,
+          "zero_drift_mode": true,
+          "zero_drift_buffer": 0.05,
+          "direct_range": 0.45,
+          "cursor_diameter_ratio": 0.07,
+          "cursor_color": [
+            153,
+            193,
+            241
+          ],
+          "task_region_x": 0.5,
+          "task_region_y": 0.27,
+          "task_region_width": 0.5,
+          "task_region_height": 0.67,
+          "reward_channel": 2.0,
+          "trial_timeout": 10.0,
+          "intertrial_interval": 1.0,
+          "disable_up": true,
+          "disable_down": true,
           "disable_left": false,
-          "disable_right": false
+          "disable_right": false,
+          "animations_enabled": true,
+          "task_animation_enabled": true,
+          "target_animation_enabled": true,
+          "show_streak_hud": true,
+          "streak_bonus_threshold": 0,
+          "streak_bonus_reward_count": 1,
+          "streak_reset_on_bonus": false,
+          "inside_tint_strength_pct": 20,
+          "show_hold_progress_ring": true,
+          "show_success_pop": false,
+          "success_pop_duration_s": 0.12,
+          "up_influence_pct": 9,
+          "down_influence_pct": 12,
+          "left_influence_pct": 100,
+          "right_influence_pct": 100
         }
       ]
     }
