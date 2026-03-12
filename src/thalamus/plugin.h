@@ -59,6 +59,10 @@ extern "C" {
     uint8_t* data;
     uint64_t size;
   };
+  struct ThalamusCharSpan {
+    char* data;
+    uint64_t size;
+  };
 
   struct ThalamusAnalogNode;
   struct ThalamusImageNode;
@@ -89,6 +93,7 @@ extern "C" {
     char (*is_transformed)(struct ThalamusNode* node);
     double (*scale)(struct ThalamusNode* node, int channel);
     double (*offset)(struct ThalamusNode* node, int channel);
+    struct ThalamusCharSpan (*name_span)(struct ThalamusNode* node, int channel);
   };
 
   enum ThalamusImageFormat {
@@ -136,10 +141,10 @@ extern "C" {
 
   struct ThalamusNodeFactory {
     const char* type;
-    struct ThalamusNode* (*create)(struct ThalamusState*, struct ThalamusIoContext*, struct ThalamusNodeGraph*);
-    void (*destroy)(struct ThalamusNode*);
-    char (*prepare)();
-    void (*cleanup)();
+    struct ThalamusNode* (*create)(struct ThalamusNodeFactory*, struct ThalamusState*, struct ThalamusIoContext*, struct ThalamusNodeGraph*);
+    void (*destroy)(struct ThalamusNodeFactory*, struct ThalamusNode*);
+    char (*prepare)(struct ThalamusNodeFactory*);
+    void (*cleanup)(struct ThalamusNodeFactory*);
   };
 
   struct ThalamusTimer;
@@ -176,6 +181,8 @@ extern "C" {
     int (*error_code_value)(struct ThalamusErrorCode*);
 
     void (*node_ready)(struct ThalamusNode*);
+
+    uint64_t (*time_ns)();
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories)(struct ThalamusAPI*);
