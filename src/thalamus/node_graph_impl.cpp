@@ -173,7 +173,12 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
     THALAMUS_ABORT("Unimplemented");
   }
   std::string_view name(int channel) const override {
-    return node->analog->name(node, channel);
+    auto temp = node->analog->name(node, channel);
+    if(temp == nullptr) {
+      auto temp2 = node->analog->name_span(node, channel);
+      return std::string_view(temp2.data, temp2.data + temp2.size);
+    }
+    return temp;
   }
   void inject(const thalamus::vector<std::span<double const>> &,
                       const thalamus::vector<std::chrono::nanoseconds> &,

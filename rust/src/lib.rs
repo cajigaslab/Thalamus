@@ -1,7 +1,5 @@
-use std::cell::RefCell;
 use std::ptr;
-use std::time::{Duration,Instant};
-use std::ffi::CStr;
+use std::time::Duration;
 
 //type ThalamusNodeCreate = unsafe extern "C" fn(*mut ThalamusState, *mut ThalamusIoContext, *mut ThalamusNodeGraph) -> *mut ThalamusNode;
 //type ThalamusNodeDestroy = unsafe extern "C" fn(arg1: *mut ThalamusNode);
@@ -97,26 +95,26 @@ use std::ffi::CStr;
 
 
 struct ThalamusNode {
-    pub impl_: *mut ::std::os::raw::c_void,
+    pub _impl: *mut ::std::os::raw::c_void,
     pub time_ns: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ThalamusNode) -> u64>,
     pub analog: *mut ThalamusAnalogNode,
-    pub mocap: *mut ThalamusMocapNode,
-    pub image: *mut ThalamusImageNode,
-    pub text: *mut ThalamusTextNode,
+    //pub mocap: *mut ThalamusMocapNode,
+    //pub image: *mut ThalamusImageNode,
+    //pub text: *mut ThalamusTextNode,
 }
 
-impl ThalamusNode {
-  fn new() -> ThalamusNode {
-    ThalamusNode {
-      impl_: ptr::null_mut() as *mut ::std::os::raw::c_void,
-      time_ns: None,
-      analog: ptr::null_mut() as *mut ThalamusAnalogNode,
-      mocap: ptr::null_mut() as *mut ThalamusMocapNode,
-      image: ptr::null_mut() as *mut ThalamusImageNode,
-      text: ptr::null_mut() as *mut ThalamusTextNode,
-    }
-  }
-}
+//impl ThalamusNode {
+//  fn new() -> ThalamusNode {
+//    ThalamusNode {
+//      _impl: ptr::null_mut() as *mut ::std::os::raw::c_void,
+//      time_ns: None,
+//      analog: ptr::null_mut() as *mut ThalamusAnalogNode,
+//      //mocap: ptr::null_mut() as *mut ThalamusMocapNode,
+//      //image: ptr::null_mut() as *mut ThalamusImageNode,
+//      //text: ptr::null_mut() as *mut ThalamusTextNode,
+//    }
+//  }
+//}
 
 struct ThalamusAnalogNode {
     pub data: ::std::option::Option<
@@ -176,6 +174,12 @@ struct ThalamusAnalogNode {
     pub offset: ::std::option::Option<
         unsafe extern "C" fn(node: *mut ThalamusNode, channel: ::std::os::raw::c_int) -> f64,
     >,
+    pub name_span: ::std::option::Option<
+        unsafe extern "C" fn(
+            node: *mut ThalamusNode,
+            channel: ::std::os::raw::c_int,
+        ) -> ThalamusUCharSpan,
+    >,
 }
 
 impl ThalamusAnalogNode {
@@ -195,6 +199,7 @@ impl ThalamusAnalogNode {
       is_transformed: None,
       scale: None,
       offset: None,
+      name_span: None
     }
   }
 }
@@ -215,7 +220,7 @@ pub type ThalamusStateRecursiveCallback = ::std::option::Option<
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-struct ThalamusAPI {
+pub struct ThalamusAPI {
     state_is_dict: unsafe extern "C" fn(arg1: *mut ThalamusState) -> ::std::os::raw::c_char,
     state_is_list: unsafe extern "C" fn(arg1: *mut ThalamusState) -> ::std::os::raw::c_char,
     state_is_string: unsafe extern "C" fn(arg1: *mut ThalamusState) -> ::std::os::raw::c_char,
@@ -316,6 +321,18 @@ pub struct ThalamusULongSpan {
     pub data: *const u64,
     pub size: usize,
 }
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ThalamusCharSpan {
+    pub data: *const i8,
+    pub size: usize,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ThalamusUCharSpan {
+    pub data: *const u8,
+    pub size: usize,
+}
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -355,8 +372,7 @@ pub struct ThalamusNodeFactory {
 
 mod thalamus {
   use std::os::raw::c_void;
-  use std::ptr;
-  use std::time::{Duration,Instant};
+  use std::time::Duration;
   use std::ffi::CStr;
   use crate::ThalamusStateConnection;
   use crate::ThalamusAPI;
@@ -364,8 +380,6 @@ mod thalamus {
   use crate::ThalamusTimer;
   use crate::ThalamusErrorCode;
   use crate::ThalamusNode;
-  use std::rc::Rc;
-  use std::cell::RefCell;
 
   pub fn time(api: &ThalamusAPI) -> Duration {
     unsafe {
@@ -381,23 +395,27 @@ mod thalamus {
   }
 
   unsafe extern "C" fn state_on_change(source_raw: *mut ThalamusState, action: i32, key_raw: *mut ThalamusState, value_raw: *mut ThalamusState, data: *mut ::std::os::raw::c_void) {
-    let args = &mut *(data as *mut StateConnectionCallbackArgs);
+    unsafe {
+      let args = &mut *(data as *mut StateConnectionCallbackArgs);
 
-    let source = State {state: source_raw, api: args.api};
-    let key = State {state: key_raw, api: args.api};
-    let value = State {state: value_raw, api: args.api};
+      let source = State {state: source_raw, api: args.api};
+      let key = State {state: key_raw, api: args.api};
+      let value = State {state: value_raw, api: args.api};
 
-    let callback = &mut*args.callback;
-    callback.on_change(&source, action, &key, &value);
+      let callback = &mut*args.callback;
+      callback.on_change(&source, action, &key, &value);
+    }
   }
 
   unsafe extern "C" fn timer_on_timer(error: *mut ThalamusErrorCode, data: *mut ::std::os::raw::c_void) {
-    let args = &mut *(data as *mut TimerCallbackArgs);
+    unsafe {
+      let args = &mut *(data as *mut TimerCallbackArgs);
 
-    let error_code = (args.api.error_code_value)(error);
+      let error_code = (args.api.error_code_value)(error);
 
-    let callback = &mut*args.callback;
-    callback.on_timer(ErrorCode {value: error_code});
+      let callback = &mut*args.callback;
+      callback.on_timer(ErrorCode {value: error_code});
+    }
   }
 
   struct StateConnectionCallbackArgs {
@@ -438,32 +456,32 @@ mod thalamus {
         (self.api.state_get_bool)(self.state) != 0
       }
     }
-    pub fn get_int(&self) -> i64 {
-      unsafe {
-        (self.api.state_get_int)(self.state)
-      }
-    }
-
-    pub fn is_string(&self) -> bool {
-      unsafe {
-        (self.api.state_is_string)(self.state) != 0
-      }
-    }
-    pub fn is_float(&self) -> bool {
-      unsafe {
-        (self.api.state_is_float)(self.state) != 0
-      }
-    }
-    pub fn is_bool(&self) -> bool {
-      unsafe {
-        (self.api.state_is_bool)(self.state) != 0
-      }
-    }
-    pub fn is_int(&self) -> bool {
-      unsafe {
-        (self.api.state_is_int)(self.state) != 0
-      }
-    }
+    //pub fn get_int(&self) -> i64 {
+    //  unsafe {
+    //    (self.api.state_get_int)(self.state)
+    //  }
+    //}
+//
+    //pub fn is_string(&self) -> bool {
+    //  unsafe {
+    //    (self.api.state_is_string)(self.state) != 0
+    //  }
+    //}
+    //pub fn is_float(&self) -> bool {
+    //  unsafe {
+    //    (self.api.state_is_float)(self.state) != 0
+    //  }
+    //}
+    //pub fn is_bool(&self) -> bool {
+    //  unsafe {
+    //    (self.api.state_is_bool)(self.state) != 0
+    //  }
+    //}
+    //pub fn is_int(&self) -> bool {
+    //  unsafe {
+    //    (self.api.state_is_int)(self.state) != 0
+    //  }
+    //}
 
     pub fn connect<T>(&self, callback_raw: &T) -> StateConnection
     where T: StateListener + 'static
@@ -554,6 +572,62 @@ mod thalamus {
         (self.api().node_ready)(self.base());
       }
     }
+    fn time(&self) -> Duration;
+  }
+
+  pub trait AnalogNode {
+    fn data(
+            &self,
+            channel: i32,
+        ) -> &[f64];
+
+    //fn short_data<'a>(
+    //        &self,
+    //        _channel: i32,
+    //    ) -> &'a [i16] {
+    //      panic!("Unimplemented")
+    //    }
+//
+    //fn int_data<'a>(
+    //        &self,
+    //        _channel: i32,
+    //    ) -> &'a [i32] {
+    //      panic!("Unimplemented")
+    //    }
+    //fn ulong_data<'a>(
+    //        &self,
+    //        _channel: i32,
+    //    ) -> &'a [u64] {
+    //      panic!("Unimplemented")
+    //    }
+
+    fn num_channels(&self) -> i32;
+    fn sample_interval(&self, channel: i32) -> Duration;
+    fn name<'a>(
+            &self,
+            channel: ::std::os::raw::c_int,
+        ) -> &'a str;
+    fn has_analog_data(&self) -> bool{
+          true
+        }
+    fn is_short_data(&self) -> bool{
+          false
+        }
+    fn is_int_data(&self) -> bool{
+          false
+        }
+    fn is_ulong_data(&self) -> bool{
+          false
+        }
+    fn is_transformed(&self) -> bool {
+          false
+        }
+    fn scale(&self, _channel: i32) -> f64 {
+          return 1.0
+        }
+    fn offset(&self, _channel: i32) -> f64 {
+          return 0.0
+        }
   }
 }
 
@@ -574,7 +648,7 @@ struct DemoNode {
 
 const THALAMUS_OPERATION_ABORTED: i32 = 995;
 
-use crate::thalamus::Node;
+use crate::thalamus::{AnalogNode, Node};
 
 impl thalamus::Node for DemoNode {
   fn api(&self) -> &ThalamusAPI {
@@ -583,6 +657,29 @@ impl thalamus::Node for DemoNode {
   fn base(&self) -> &ThalamusNode {
     return &self.base
   }
+  fn time(&self) -> Duration {
+    self.last_time - Duration::from_millis(1)
+  }
+}
+
+impl thalamus::AnalogNode for DemoNode {
+  fn data(
+          &self,
+          _channel: i32,
+      ) -> &[f64] {
+    &self.samples
+  }
+
+  fn num_channels(&self) -> i32 { 1 }
+  fn sample_interval(&self, _channel: i32) -> Duration {
+    Duration::from_millis(1)
+  }
+  fn name<'a>(
+          &self,
+          _channel: i32,
+      ) -> &'a str {
+        "data"
+      }
 }
 
 impl thalamus::TimerListener for DemoNode {
@@ -644,12 +741,12 @@ impl DemoNode {
 
   fn new(api: &'static ThalamusAPI, state: thalamus::State) -> Box<DemoNode> {
     let base = ThalamusNode {
-      impl_: ptr::null_mut() as *mut ::std::os::raw::c_void,
+      _impl: ptr::null_mut() as *mut ::std::os::raw::c_void,
       time_ns: None,
       analog: Box::into_raw(Box::new(ThalamusAnalogNode::new())) as *mut ThalamusAnalogNode,
-      mocap: ptr::null_mut() as *mut ThalamusMocapNode,
-      image: ptr::null_mut() as *mut ThalamusImageNode,
-      text: ptr::null_mut() as *mut ThalamusTextNode,
+      //mocap: ptr::null_mut() as *mut ThalamusMocapNode,
+      //image: ptr::null_mut() as *mut ThalamusImageNode,
+      //text: ptr::null_mut() as *mut ThalamusTextNode,
     };
     let mut result = Box::new(DemoNode {
       base: base,
@@ -672,59 +769,120 @@ impl DemoNode {
   }
 }
 
-unsafe extern "C" fn demo_node_data(raw_node: *mut ThalamusNode, _channel: ::std::os::raw::c_int) -> ThalamusDoubleSpan {
-  let node = &*(raw_node as *const DemoNode);
-  ThalamusDoubleSpan { data: node.samples.as_ptr(), size: node.samples.len() }
+use paste::paste;
+
+macro_rules! analog_extern {
+    ($type:ident) => { 
+paste! {
+#[allow(non_snake_case)]
+extern "C" fn [<$type _data>](raw_node: *mut ThalamusNode, channel: ::std::os::raw::c_int) -> ThalamusDoubleSpan {
+  let node = unsafe { &*(raw_node as *const $type) };
+  let result = node.data(channel);
+  ThalamusDoubleSpan { data: result.as_ptr(), size: result.len() }
 }
-unsafe extern "C" fn demo_node_num_channels(_raw_node: *mut ThalamusNode) -> i32 {
-  1
+#[allow(non_snake_case)]
+extern "C" fn [<$type _num_channels>](raw_node: *mut ThalamusNode) -> i32 {
+  let node = unsafe { &*(raw_node as *const $type) };
+  node.num_channels()
 }
-unsafe extern "C" fn demo_node_sample_interval_ns(_raw_node: *mut ThalamusNode, _channel: ::std::os::raw::c_int) -> u64 {
-  1000000
+#[allow(non_snake_case)]
+extern "C" fn [<$type _sample_interval_ns>](raw_node: *mut ThalamusNode, channel: ::std::os::raw::c_int) -> u64 {
+  let node = unsafe { &*(raw_node as *const $type) };
+  node.sample_interval(channel).as_nanos() as u64
 }
-unsafe extern "C" fn demo_node_name(_raw_node: *mut ThalamusNode, _channel: ::std::os::raw::c_int) -> *const i8 {
-  c"data".as_ptr()
+#[allow(non_snake_case)]
+extern "C" fn [<$type _name>](_raw_node: *mut ThalamusNode, _channel: ::std::os::raw::c_int) -> *const i8 {
+  ptr::null()
 }
-unsafe extern "C" fn demo_node_has_analog_data(_raw_node: *mut ThalamusNode) -> i8 {
-  1
+#[allow(non_snake_case)]
+extern "C" fn [<$type _name_span>](raw_node: *mut ThalamusNode, channel: ::std::os::raw::c_int) -> ThalamusUCharSpan {
+  let node = unsafe { &*(raw_node as *const $type) };
+  let result = node.name(channel);
+  ThalamusUCharSpan { data: result.as_ptr(), size: result.len() }
 }
-unsafe extern "C" fn demo_node_is_short_data(_raw_node: *mut ThalamusNode) -> i8 {
-  0
+#[allow(non_snake_case)]
+extern "C" fn [<$type _has_analog_data>](raw_node: *mut ThalamusNode) -> i8 {
+  let node = unsafe { &*(raw_node as *const $type) };
+  if node.has_analog_data() {1}else{0}
 }
-unsafe extern "C" fn demo_node_scale(_raw_node: *mut ThalamusNode, _channel: i32) -> f64 {
-  1.0
+#[allow(non_snake_case)]
+extern "C" fn [<$type _is_short_data>](raw_node: *mut ThalamusNode) -> i8 {
+  let node = unsafe { &*(raw_node as *const $type) };
+  if node.is_short_data() {1}else{0}
 }
-unsafe extern "C" fn demo_node_time_ns(raw_node: *mut ThalamusNode) -> u64 {
-  let node = &*(raw_node as *const DemoNode);
-  (node.last_time - Duration::from_millis(1)).as_nanos() as u64
+#[allow(non_snake_case)]
+extern "C" fn [<$type _is_int_data>](raw_node: *mut ThalamusNode) -> i8 {
+  let node = unsafe { &*(raw_node as *const $type) };
+  if node.is_int_data() {1}else{0}
+}
+#[allow(non_snake_case)]
+extern "C" fn [<$type _is_ulong_data>](raw_node: *mut ThalamusNode) -> i8 {
+  let node = unsafe { &*(raw_node as *const $type) };
+  if node.is_ulong_data() {1}else{0}
+}
+#[allow(non_snake_case)]
+extern "C" fn [<$type _is_transformed>](raw_node: *mut ThalamusNode) -> i8 {
+  let node = unsafe { &*(raw_node as *const $type) };
+  if node.is_transformed() {1}else{0}
+}
+#[allow(non_snake_case)]
+extern "C" fn [<$type _scale>](raw_node: *mut ThalamusNode, channel: i32) -> f64 {
+  let node = unsafe { &*(raw_node as *const $type) };
+  node.scale(channel)
+}
+#[allow(non_snake_case)]
+extern "C" fn [<$type _offset>](raw_node: *mut ThalamusNode, channel: i32) -> f64 {
+  let node = unsafe { &*(raw_node as *const $type) };
+  node.offset(channel)
+}
+#[allow(non_snake_case)]
+extern "C" fn [<$type _time_ns>](raw_node: *mut ThalamusNode) -> u64 {
+  let node = unsafe { &*(raw_node as *const $type) };
+  node.time().as_nanos() as u64
+}
+}
+}
 }
 
-unsafe extern "C" fn create_node(factory: *mut ThalamusNodeFactory, state: *mut ThalamusState, _io_context: *mut ThalamusIoContext, _graph: *mut ThalamusNodeGraph) -> *mut ThalamusNode {
-  let api = &*(*factory).api;
+macro_rules! analog_wire {
+    ($type:ident, $result:ident) => { 
+paste! {
+unsafe {
+  (*$result.base.analog).data = Some([<$type _data>]);
+  (*$result.base.analog).short_data = None;
+  (*$result.base.analog).int_data = None;
+  (*$result.base.analog).ulong_data = None;
+  (*$result.base.analog).num_channels = Some([<$type _num_channels>]);
+  (*$result.base.analog).sample_interval_ns = Some([<$type _sample_interval_ns>]);
+  (*$result.base.analog).name = Some([<$type _name>]);
+  (*$result.base.analog).name_span = Some([<$type _name_span>]);
+  (*$result.base.analog).has_analog_data = Some([<$type _has_analog_data>]);
+  (*$result.base.analog).is_short_data = Some([<$type _is_short_data>]);
+  (*$result.base.analog).is_int_data = Some([<$type _is_int_data>]);
+  (*$result.base.analog).is_ulong_data = Some([<$type _is_ulong_data>]);
+  (*$result.base.analog).is_transformed = Some([<$type _is_transformed>]);
+  (*$result.base.analog).scale = Some([<$type _scale>]);
+  (*$result.base.analog).offset = Some([<$type _offset>]);
+}
+}
+}
+}
+
+analog_extern!(DemoNode);
+extern "C" fn create_node(factory: *mut ThalamusNodeFactory, state: *mut ThalamusState, _io_context: *mut ThalamusIoContext, _graph: *mut ThalamusNodeGraph) -> *mut ThalamusNode {
+  let api = unsafe { &*(*factory).api };
   let mut result = DemoNode::new(api, thalamus::State{ state, api });
   
-  result.base.time_ns = Some(demo_node_time_ns);
-  (*result.base.analog).data = Some(demo_node_data);
-  (*result.base.analog).short_data = None;
-  (*result.base.analog).int_data = None;
-  (*result.base.analog).ulong_data = None;
-  (*result.base.analog).num_channels = Some(demo_node_num_channels);
-  (*result.base.analog).sample_interval_ns = Some(demo_node_sample_interval_ns);
-  (*result.base.analog).name = Some(demo_node_name);
-  (*result.base.analog).has_analog_data = Some(demo_node_has_analog_data);
-  (*result.base.analog).is_short_data = Some(demo_node_is_short_data);
-  (*result.base.analog).is_int_data = Some(demo_node_is_short_data);
-  (*result.base.analog).is_ulong_data = Some(demo_node_is_short_data);
-  (*result.base.analog).is_transformed = Some(demo_node_is_short_data);
-  (*result.base.analog).scale = Some(demo_node_scale);
-  (*result.base.analog).offset = Some(demo_node_scale);
+  result.base.time_ns = Some(DemoNode_time_ns);
+  analog_wire!(DemoNode, result);
 
-  let raw = Box::into_raw(result);
-  raw as *mut ThalamusNode
+  Box::into_raw(result) as *mut ThalamusNode
 }
 
-unsafe extern "C" fn destroy_node(factory: *mut ThalamusNodeFactory, node: *mut ThalamusNode) {
-  drop(Box::from_raw(node as *mut DemoNode))
+unsafe extern "C" fn destroy_node(_factory: *mut ThalamusNodeFactory, node: *mut ThalamusNode) {
+  unsafe {
+    drop(Box::from_raw(node as *mut DemoNode))
+  }
 }
 
 #[unsafe(no_mangle)]

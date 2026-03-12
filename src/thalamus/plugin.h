@@ -59,6 +59,10 @@ extern "C" {
     uint8_t* data;
     uint64_t size;
   };
+  struct ThalamusCharSpan {
+    char* data;
+    uint64_t size;
+  };
 
   struct ThalamusAnalogNode;
   struct ThalamusImageNode;
@@ -89,6 +93,7 @@ extern "C" {
     char (*is_transformed)(struct ThalamusNode* node);
     double (*scale)(struct ThalamusNode* node, int channel);
     double (*offset)(struct ThalamusNode* node, int channel);
+    struct ThalamusCharSpan (*name_span)(struct ThalamusNode* node, int channel);
   };
 
   enum ThalamusImageFormat {
