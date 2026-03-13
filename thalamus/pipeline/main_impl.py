@@ -142,6 +142,7 @@ async def async_main() -> None:
     command = command + ('--ext',) + ext_library
   LOGGER.info('COMMAND %s', ' '.join(command))
   bmbi_native_proc = await asyncio.create_subprocess_exec(*command)
+  LOGGER.info('PID %s', bmbi_native_proc.pid)
   create_task_with_exc_handling(proc_watcher('native.exe', bmbi_native_proc))
 
   dotnet_proc = None

@@ -431,6 +431,10 @@ struct ThalamusAPIImpl {
       std::chrono::nanoseconds ns = std::chrono::steady_clock::now().time_since_epoch();
       return uint64_t(ns.count());
     }
+
+    static int error_code_operation_aborted() {
+      return boost::asio::error::operation_aborted;
+    }
 };
 
 std::map<ObservableCollection::Value, ThalamusState*>* ThalamusAPIImpl::cpp_to_c = nullptr;
@@ -551,6 +555,7 @@ public:
     thalamus_api.error_code_value = ThalamusAPIImpl::error_code_value;
     thalamus_api.node_ready = ThalamusAPIImpl::node_ready;
     thalamus_api.time_ns = ThalamusAPIImpl::time_ns;
+    thalamus_api.error_code_operation_aborted = ThalamusAPIImpl::error_code_operation_aborted;
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},

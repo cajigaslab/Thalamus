@@ -183,6 +183,7 @@ extern "C" {
     void (*node_ready)(struct ThalamusNode*);
 
     uint64_t (*time_ns)();
+    int (*error_code_operation_aborted)();
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories)(struct ThalamusAPI*);
