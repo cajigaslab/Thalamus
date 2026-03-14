@@ -1,7 +1,9 @@
 
+use std::cell::RefCell;
+use std::sync::Arc;
 use std::{os::raw::c_void, sync::OnceLock};
 use std::time::Duration;
-use std::ffi::CStr;
+use std::ffi::{CStr, CString};
 
 pub use crate::ffi::{
   *
@@ -14,21 +16,18 @@ pub fn time(api: *const ThalamusAPI) -> Duration {
 }
 
 pub struct State {
-  pub state: *mut ThalamusState,
-  pub api: &'static ThalamusAPI
+  state: *mut ThalamusState,
+  api: *const ThalamusAPI
 }
 
-unsafe extern "C" fn state_on_change(source_raw: *mut ThalamusState, action: i32, key_raw: *mut ThalamusState, value_raw: *mut ThalamusState, data: *mut ::std::os::raw::c_void) {
-  unsafe {
-    let args = &mut *(data as *mut StateConnectionCallbackArgs);
+unsafe extern "C" fn state_on_change<T: FnMut(&State, i32, &State, &State)>(source_raw: *mut ThalamusState, action: i32, key_raw: *mut ThalamusState, value_raw: *mut ThalamusState, data: *mut ::std::os::raw::c_void) {
+  let args = unsafe { &mut *(data as *mut StateConnectionCallbackArgs<T>) };
 
-    let source = State {state: source_raw, api: args.api};
-    let key = State {state: key_raw, api: args.api};
-    let value = State {state: value_raw, api: args.api};
-
-    let callback = &mut*args.callback;
-    callback.on_change(&source, action, &key, &value);
-  }
+  let key = State {state: key_raw, api: args.api};
+  let value = State {state: value_raw, api: args.api};
+  let source = State {state: source_raw, api: args.api};
+  
+  (args.callback)(&source, action, &key, &value);
 }
 
 unsafe extern "C" fn timer_on_timer(error: *mut ThalamusErrorCode, data: *mut ::std::os::raw::c_void) {
@@ -40,11 +39,6 @@ unsafe extern "C" fn timer_on_timer(error: *mut ThalamusErrorCode, data: *mut ::
     let callback = &mut*args.callback;
     callback.on_timer(ErrorCode {value: error_code});
   }
-}
-
-struct StateConnectionCallbackArgs {
-  pub callback: *mut dyn StateListener,
-  pub api: &'static ThalamusAPI
 }
 
 struct TimerCallbackArgs {
@@ -62,6 +56,11 @@ impl ErrorCode {
   }
 }
 
+struct StateConnectionCallbackArgs<T: FnMut(&State, i32, &State, &State)> {
+  pub callback: T,
+  pub api: *const ThalamusAPI
+}
+
 pub trait StateListener {
     fn on_change(&mut self, source: &State, action: i32, key: &State, value: &State);
 }
@@ -69,84 +68,239 @@ pub trait TimerListener {
     fn on_timer(&mut self, error: ErrorCode);
 }
 
+pub trait DictSetter {
+  fn set_dict_state(&self, key_raw: &str, value: &State);
+  fn set_dict_str(&self, key_raw: &str, value_raw: &str);
+  fn set_dict_int(&self, key_raw: &str, value_raw: i64);
+  fn set_dict_float(&self, key_raw: &str, value_raw: f64);
+  fn set_dict_null(&self, key_raw: &str);
+  fn set_dict_bool(&self, key_raw: &str, value: bool);
+}
+
+pub trait ListSetter {
+  fn set_list_state(&self, key_raw: i64, value: &State);
+  fn set_list_str(&self, key_raw: i64, value_raw: &str);
+  fn set_list_int(&self, key_raw: i64, value_raw: i64);
+  fn set_list_float(&self, key_raw: i64, value_raw: f64);
+  fn set_list_null(&self, key_raw: i64);
+  fn set_list_bool(&self, key_raw: i64, value: bool);
+}
+
+impl DictSetter for State {
+  fn set_dict_state(&self, key_raw: &str, value: &State) {
+    let key = CString::new(key_raw).unwrap();
+    unsafe {
+      let api = &*self.api;
+      (api.state_set_at_name_state)(self.state, key.as_ptr(), value.state);
+    }
+  }
+  fn set_dict_str(&self, key_raw: &str, value_raw: &str) {
+    let key = CString::new(key_raw).unwrap();
+    let value = CString::new(value_raw).unwrap();
+    unsafe {
+      let api = &*self.api;
+      (api.state_set_at_name_string)(self.state, key.as_ptr(), value.as_ptr());
+    }
+  }
+  fn set_dict_int(&self, key_raw: &str, value_raw: i64) {
+    let key = CString::new(key_raw).unwrap();
+    unsafe {
+      let api = &*self.api;
+      (api.state_set_at_name_int)(self.state, key.as_ptr(), value_raw);
+    }
+  }
+  fn set_dict_float(&self, key_raw: &str, value_raw: f64) {
+    let key = CString::new(key_raw).unwrap();
+    unsafe {
+      let api = &*self.api;
+      (api.state_set_at_name_float)(self.state, key.as_ptr(), value_raw);
+    }
+  }
+  fn set_dict_null(&self, key_raw: &str) {
+    let key = CString::new(key_raw).unwrap();
+    unsafe {
+      let api = &*self.api;
+      (api.state_set_at_name_null)(self.state, key.as_ptr());
+    }
+  }
+  fn set_dict_bool(&self, key_raw: &str, value: bool) {
+    let key = CString::new(key_raw).unwrap();
+    unsafe {
+      let api = &*self.api;
+      (api.state_set_at_name_bool)(self.state, key.as_ptr(), if value { 1 } else { 0 });
+    }
+  }
+}
+
+impl ListSetter for State {
+  fn set_list_state(&self, key: i64, value: &State) {
+    unsafe {
+      let api = &*self.api;
+      (api.state_set_at_index_state)(self.state, key, value.state);
+    }
+  }
+  fn set_list_str(&self, key_raw: i64, value_raw: &str) {
+    let value = CString::new(value_raw).unwrap();
+    unsafe {
+      let api = &*self.api;
+      (api.state_set_at_index_string)(self.state, key_raw, value.as_ptr());
+    }
+  }
+  fn set_list_int(&self, key_raw: i64, value_raw: i64) {
+    unsafe {
+      let api = &*self.api;
+      (api.state_set_at_index_int)(self.state, key_raw, value_raw);
+    }
+  }
+  fn set_list_float(&self, key_raw: i64, value_raw: f64) {
+    unsafe {
+      let api = &*self.api;
+      (api.state_set_at_index_float)(self.state, key_raw, value_raw);
+    }
+  }
+  fn set_list_null(&self, key_raw: i64) {
+    unsafe {
+      let api = &*self.api;
+      (api.state_set_at_index_null)(self.state, key_raw);
+    }
+  }
+  fn set_list_bool(&self, key_raw: i64, value: bool) {
+    unsafe {
+      let api = &*self.api;
+      (api.state_set_at_index_bool)(self.state, key_raw, if value { 1 } else { 0 });
+    }
+  }
+}
+
 impl State {
+  pub fn new(api:*const ThalamusAPI, state:*mut ThalamusState) -> State {
+    unsafe {
+      ((&*api).state_inc_ref)(state);
+    }
+    State {
+      state: state, api: api
+    }
+  }
+
   pub fn get_string(&self) -> &str {
     unsafe {
-      let ptr = (self.api.state_get_string)(self.state);
+      let ptr = ((&*self.api).state_get_string)(self.state);
       CStr::from_ptr(ptr).to_str().unwrap()
     }
   }
   pub fn get_float(&self) -> f64 {
     unsafe {
-      (self.api.state_get_float)(self.state)
+      ((&*self.api).state_get_float)(self.state)
     }
   }
   pub fn get_bool(&self) -> bool {
     unsafe {
-      (self.api.state_get_bool)(self.state) != 0
+      ((&*self.api).state_get_bool)(self.state) != 0
     }
   }
   pub fn get_int(&self) -> i64 {
     unsafe {
-      (self.api.state_get_int)(self.state)
+      ((&*self.api).state_get_int)(self.state)
+    }
+  }
+  
+  pub fn get_dict_value(&self, key_raw:&str) -> State {
+    let key = CString::new(key_raw).unwrap();
+    let value = unsafe {
+      let api = &*self.api;
+      (api.state_get_at_name)(self.state, key.as_ptr())
+    };
+    State {
+      api: self.api,
+      state: value
+    }
+  }
+  
+  pub fn get_list_value(&self, key: usize) -> State {
+    let value = unsafe {
+      let api = &*self.api;
+      (api.state_get_at_index)(self.state, key)
+    };
+    State {
+      api: self.api,
+      state: value
     }
   }
 
   pub fn is_string(&self) -> bool {
     unsafe {
-      (self.api.state_is_string)(self.state) != 0
+      ((&*self.api).state_is_string)(self.state) != 0
     }
   }
   pub fn is_float(&self) -> bool {
     unsafe {
-      (self.api.state_is_float)(self.state) != 0
+      ((&*self.api).state_is_float)(self.state) != 0
     }
   }
   pub fn is_bool(&self) -> bool {
     unsafe {
-      (self.api.state_is_bool)(self.state) != 0
+      ((&*self.api).state_is_bool)(self.state) != 0
     }
   }
   pub fn is_int(&self) -> bool {
     unsafe {
-      (self.api.state_is_int)(self.state) != 0
+      ((&*self.api).state_is_int)(self.state) != 0
     }
   }
 
-  pub fn connect<T>(&self, callback_raw: &T) -> StateConnection
-  where T: StateListener + 'static
-  {
+  pub fn recap(&self) {
     unsafe {
-      let q = callback_raw as *const dyn StateListener;
-      let callback_ptr = q as *mut dyn StateListener;
-      //let callback_ptr = callback_raw.as_mut() as *mut dyn StateListener;
+      ((&*self.api).state_recap)(self.state);
+    }
+  }
+
+  pub fn connect<'a, T: FnMut(&State, i32, &State, &State) + 'static>(&self, callback: T) -> OnDrop
+  {
       let callback_args = Box::new(StateConnectionCallbackArgs {
-        callback: callback_ptr,
+        callback,
         api: self.api
       });
       let raw = Box::into_raw(callback_args);
-      let void_ptr = raw as *mut c_void;
-      let connection = (self.api.state_recursive_change_connect)(self.state, Some(state_on_change), void_ptr);
+      let connection = unsafe {
+        ((&*self.api).state_recursive_change_connect)(self.state, Some(state_on_change::<T>), raw as *mut c_void)
+      };
       println!("connect {:?} {:?} {:?}", self.api, connection, raw);
-      StateConnection { api: self.api, connection, callback: raw }
+
+      let cleanup_api = self.api;
+      let cleanup = move || {
+        println!("connect drop {:?} {:?}", cleanup_api, connection);
+        unsafe {
+          ((&*cleanup_api).state_recursive_change_disconnect)(connection);
+          drop(Box::from_raw(raw));
+        }
+        println!("StateConnection::drop");
+      };
+
+      OnDrop { action: Box::new(cleanup) }
+  }
+}
+
+impl Clone for State {
+  fn clone(&self) -> Self {
+    State::new(self.api, self.state)
+  }
+}
+
+impl Drop for State {
+  fn drop(&mut self) {
+    unsafe {
+      ((&*self.api).state_dec_ref)(self.state);
     }
   }
 }
 
-pub struct StateConnection {
-  pub api: &'static ThalamusAPI,
-  connection: *mut ThalamusStateConnection,
-  callback: *mut StateConnectionCallbackArgs
+pub struct OnDrop {
+  action: Box<dyn FnMut()>
 }
 
-impl Drop for StateConnection {
+impl Drop for OnDrop {
   fn drop(&mut self) {
-    println!("connect drop {:?} {:?} {:?}", self.api, self.connection, self.callback);
-    unsafe {
-      (self.api.state_recursive_change_disconnect)(self.connection);
-      drop(Box::from_raw(self.callback));
-    }
-    println!("StateConnection::drop");
+    (self.action)();
   }
 }
 
@@ -207,7 +361,7 @@ pub trait Node {
     }
   }
   fn time(&self) -> Duration;
-  fn new(base:*const ThalamusNode, api: *const ThalamusAPI, state: State) -> Box<Self>;
+  fn new(base:*const ThalamusNode, api: *const ThalamusAPI, state: State) -> Arc<RefCell<Self>>;
 }
 
 pub trait AnalogNode {
