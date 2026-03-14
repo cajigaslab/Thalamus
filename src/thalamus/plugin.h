@@ -184,6 +184,21 @@ extern "C" {
 
     uint64_t (*time_ns)();
     int (*error_code_operation_aborted)();
+    void (*state_recap)(struct ThalamusState*);
+
+    void (*state_set_at_name_state)(struct ThalamusState*, const char*, struct ThalamusState*);
+    void (*state_set_at_name_string)(struct ThalamusState*, const char*, const char*);
+    void (*state_set_at_name_int)(struct ThalamusState*, const char*, int64_t);
+    void (*state_set_at_name_float)(struct ThalamusState*, const char*, double);
+    void (*state_set_at_name_null)(struct ThalamusState*, const char*);
+    void (*state_set_at_name_bool)(struct ThalamusState*, const char*, char);
+
+    void (*state_set_at_index_state)(struct ThalamusState*, int64_t, struct ThalamusState*);
+    void (*state_set_at_index_string)(struct ThalamusState*, int64_t, const char*);
+    void (*state_set_at_index_int)(struct ThalamusState*, int64_t, int64_t);
+    void (*state_set_at_index_float)(struct ThalamusState*, int64_t, double);
+    void (*state_set_at_index_null)(struct ThalamusState*, int64_t);
+    void (*state_set_at_index_bool)(struct ThalamusState*, int64_t, char);
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories)(struct ThalamusAPI*);
