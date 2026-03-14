@@ -15,11 +15,12 @@ use api::{
   TimerListener,
   ErrorCode,
   time,
-  StateListener,
   WrappableNode,
   ThalamusNodeFactory,
-  DictSetter
+  StateValue
 };
+
+use crate::api::StateKey;
 
 struct DemoNode {
   base: *const ThalamusNode,
@@ -81,39 +82,45 @@ impl TimerListener for DemoNode {
   }
 }
 
-impl StateListener for DemoNode {
-  fn on_change(&mut self, _source: &State, _action: i32, key: &State, value: &State) {
-    let key_str = key.get_string();
-    print!("DemoNode::on_change {}", key_str);
+impl DemoNode {
+  fn on_change(&mut self, _source: &State, _action: i32, key: StateValue, value: StateValue) {
+    println!("DemoNode::on_change {:?} {:?}", key, value);
+    let StateValue::String(key_str) = key else {
+      return
+    };
 
-    match key_str {
-      "Running" => 
-      {
-        let val = value.get_bool();
-        self.running = val;
-        println!(" {}", val);
-        if self.running {
+    match key_str.as_str() {
+      "Running" => {
+        if StateValue::Bool(true) == value {
+          self.running = true;
           self.start_time = time(self.api);
           self.last_time = self.start_time;
           self.timer.expires_after(Duration::from_millis(16));
           self.timer.async_wait(self);
+        } else {
+          self.running = false;
         }
       },
       "Amplitude" => {
-        let val = value.get_float();
-        println!(" {}", val);
+        let StateValue::Float(val) = value else {
+          return
+        };
         self.amplitude = val;
       },
       "Frequency" => {
-        let val = value.get_float();
-        println!(" {}", val);
+        let StateValue::Float(val) = value else {
+          return
+        };
         self.frequency = val;
       },
-      _ => {
-        println!("")
-      }
+      _ => {}
     }
   }
+}
+
+#[allow(non_snake_case)]
+fn RUNNING() -> StateKey {
+  StateKey::String("Running".to_owned())
 }
 
 impl Node for DemoNode {
@@ -128,9 +135,9 @@ impl Node for DemoNode {
   }
 
   fn new(base: *const ThalamusNode, api: *const ThalamusAPI, state: State) -> Arc<RefCell<Self>> {
-    let a = state.get_dict_value("Running");
-    let b = a.get_bool();
-    println!("Running {}", b);
+    if let StateValue::Bool(b) = state.get(RUNNING()) {
+      println!("Running {}", b);
+    }
 
     let result = Arc::new(RefCell::new(DemoNode {
       base,
@@ -146,12 +153,12 @@ impl Node for DemoNode {
       samples: Vec::<f64>::new()
     }));
 
-    let c = result.borrow().state.get_dict_value("Running");
-    let d = c.get_bool();
-    println!("Running2 {}", d);
+    if let StateValue::Bool(d) = state.get(RUNNING()) {
+      println!("Running2 {}", d);
+    }
 
     let change_ref = Arc::downgrade(&result);
-    let callback = move |source: &State, action: i32, key: &State, value: &State| {
+    let callback = move |source: &State, action: i32, key: StateValue, value: StateValue| {
       change_ref.upgrade().map(|val| {
         val.borrow_mut().on_change(source, action, key, value);
       });
@@ -168,10 +175,10 @@ impl Node for DemoNode {
 
 impl Drop for DemoNode {
   fn drop(&mut self) {
-    let c = self.state.get_dict_value("Running");
-    let d = c.get_bool();
-    println!("Running3 {}", d);
-    self.state.set_dict_bool("Running", false);
+    if let StateValue::Bool(d) = self.state.get(RUNNING()) {
+      println!("Running3 {}", d);
+    }
+    self.state.set(RUNNING(), StateValue::Bool(false));
     println!("DemoNode drop");
   }
 }

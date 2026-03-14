@@ -15,19 +15,59 @@ pub fn time(api: *const ThalamusAPI) -> Duration {
   }
 }
 
+#[derive(Debug,PartialEq)]
 pub struct State {
   state: *mut ThalamusState,
   api: *const ThalamusAPI
 }
 
-unsafe extern "C" fn state_on_change<T: FnMut(&State, i32, &State, &State)>(source_raw: *mut ThalamusState, action: i32, key_raw: *mut ThalamusState, value_raw: *mut ThalamusState, data: *mut ::std::os::raw::c_void) {
+#[derive(Debug,PartialEq)]
+pub enum StateValue {
+  Bool(bool),
+  Dict(State),
+  Float(f64),
+  Int(i64),
+  List(State),
+  String(String),
+  Null
+}
+
+pub enum StateKey {
+  Int(i64),
+  String(String)
+}
+
+fn wrap_state(api_raw:*const ThalamusAPI, arg: *mut ThalamusState) -> StateValue {
+  unsafe {
+    let api = &*api_raw;
+    if (api.state_is_bool)(arg) != 0 {
+      StateValue::Bool((api.state_get_bool)(arg) != 0)
+    } else if (api.state_is_dict)(arg) != 0 {
+      StateValue::Dict(State::new(api, arg))
+    } else if (api.state_is_float)(arg) != 0 {
+      StateValue::Float((api.state_get_float)(arg))
+    } else if (api.state_is_int)(arg) != 0 {
+      StateValue::Int((api.state_get_int)(arg))
+    } else if (api.state_is_list)(arg) != 0 {
+      StateValue::List(State::new(api, arg))
+    } else if (api.state_is_string)(arg) != 0 {
+      let ptr = ((&*api).state_get_string)(arg);
+      let text = CStr::from_ptr(ptr).to_str().unwrap();
+      StateValue::String(text.to_string())
+    } else {
+      StateValue::Null
+    }
+  }
+}
+
+unsafe extern "C" fn state_on_change<T: FnMut(&State, i32, StateValue, StateValue)>(source_raw: *mut ThalamusState, action: i32, key_raw: *mut ThalamusState, value_raw: *mut ThalamusState, data: *mut ::std::os::raw::c_void) {
   let args = unsafe { &mut *(data as *mut StateConnectionCallbackArgs<T>) };
 
-  let key = State {state: key_raw, api: args.api};
-  let value = State {state: value_raw, api: args.api};
+  let key = wrap_state(args.api, key_raw);
+  let value = wrap_state(args.api, value_raw);
   let source = State {state: source_raw, api: args.api};
   
-  (args.callback)(&source, action, &key, &value);
+  (args.callback)(&source, action, key, value);
 }
 
 unsafe extern "C" fn timer_on_timer(error: *mut ThalamusErrorCode, data: *mut ::std::os::raw::c_void) {
@@ -56,14 +96,11 @@ impl ErrorCode {
   }
 }
 
-struct StateConnectionCallbackArgs<T: FnMut(&State, i32, &State, &State)> {
+struct StateConnectionCallbackArgs<T: FnMut(&State, i32, StateValue, StateValue)> {
   pub callback: T,
   pub api: *const ThalamusAPI
 }
 
-pub trait StateListener {
-    fn on_change(&mut self, source: &State, action: i32, key: &State, value: &State);
-}
 pub trait TimerListener {
     fn on_timer(&mut self, error: ErrorCode);
 }
@@ -86,92 +123,6 @@ pub trait ListSetter {
   fn set_list_bool(&self, key_raw: i64, value: bool);
 }
 
-impl DictSetter for State {
-  fn set_dict_state(&self, key_raw: &str, value: &State) {
-    let key = CString::new(key_raw).unwrap();
-    unsafe {
-      let api = &*self.api;
-      (api.state_set_at_name_state)(self.state, key.as_ptr(), value.state);
-    }
-  }
-  fn set_dict_str(&self, key_raw: &str, value_raw: &str) {
-    let key = CString::new(key_raw).unwrap();
-    let value = CString::new(value_raw).unwrap();
-    unsafe {
-      let api = &*self.api;
-      (api.state_set_at_name_string)(self.state, key.as_ptr(), value.as_ptr());
-    }
-  }
-  fn set_dict_int(&self, key_raw: &str, value_raw: i64) {
-    let key = CString::new(key_raw).unwrap();
-    unsafe {
-      let api = &*self.api;
-      (api.state_set_at_name_int)(self.state, key.as_ptr(), value_raw);
-    }
-  }
-  fn set_dict_float(&self, key_raw: &str, value_raw: f64) {
-    let key = CString::new(key_raw).unwrap();
-    unsafe {
-      let api = &*self.api;
-      (api.state_set_at_name_float)(self.state, key.as_ptr(), value_raw);
-    }
-  }
-  fn set_dict_null(&self, key_raw: &str) {
-    let key = CString::new(key_raw).unwrap();
-    unsafe {
-      let api = &*self.api;
-      (api.state_set_at_name_null)(self.state, key.as_ptr());
-    }
-  }
-  fn set_dict_bool(&self, key_raw: &str, value: bool) {
-    let key = CString::new(key_raw).unwrap();
-    unsafe {
-      let api = &*self.api;
-      (api.state_set_at_name_bool)(self.state, key.as_ptr(), if value { 1 } else { 0 });
-    }
-  }
-}
-
-impl ListSetter for State {
-  fn set_list_state(&self, key: i64, value: &State) {
-    unsafe {
-      let api = &*self.api;
-      (api.state_set_at_index_state)(self.state, key, value.state);
-    }
-  }
-  fn set_list_str(&self, key_raw: i64, value_raw: &str) {
-    let value = CString::new(value_raw).unwrap();
-    unsafe {
-      let api = &*self.api;
-      (api.state_set_at_index_string)(self.state, key_raw, value.as_ptr());
-    }
-  }
-  fn set_list_int(&self, key_raw: i64, value_raw: i64) {
-    unsafe {
-      let api = &*self.api;
-      (api.state_set_at_index_int)(self.state, key_raw, value_raw);
-    }
-  }
-  fn set_list_float(&self, key_raw: i64, value_raw: f64) {
-    unsafe {
-      let api = &*self.api;
-      (api.state_set_at_index_float)(self.state, key_raw, value_raw);
-    }
-  }
-  fn set_list_null(&self, key_raw: i64) {
-    unsafe {
-      let api = &*self.api;
-      (api.state_set_at_index_null)(self.state, key_raw);
-    }
-  }
-  fn set_list_bool(&self, key_raw: i64, value: bool) {
-    unsafe {
-      let api = &*self.api;
-      (api.state_set_at_index_bool)(self.state, key_raw, if value { 1 } else { 0 });
-    }
-  }
-}
-
 impl State {
   pub fn new(api:*const ThalamusAPI, state:*mut ThalamusState) -> State {
     unsafe {
@@ -182,70 +133,85 @@ impl State {
     }
   }
 
-  pub fn get_string(&self) -> &str {
-    unsafe {
-      let ptr = ((&*self.api).state_get_string)(self.state);
-      CStr::from_ptr(ptr).to_str().unwrap()
-    }
-  }
-  pub fn get_float(&self) -> f64 {
-    unsafe {
-      ((&*self.api).state_get_float)(self.state)
-    }
-  }
-  pub fn get_bool(&self) -> bool {
-    unsafe {
-      ((&*self.api).state_get_bool)(self.state) != 0
-    }
-  }
-  pub fn get_int(&self) -> i64 {
-    unsafe {
-      ((&*self.api).state_get_int)(self.state)
-    }
-  }
-  
-  pub fn get_dict_value(&self, key_raw:&str) -> State {
-    let key = CString::new(key_raw).unwrap();
-    let value = unsafe {
-      let api = &*self.api;
-      (api.state_get_at_name)(self.state, key.as_ptr())
+  pub fn get(&self, index: StateKey) -> StateValue {
+    let result = match index {
+      StateKey::Int(key) => {
+        unsafe {
+          ((&*self.api).state_get_at_index)(self.state, key as usize)
+        }
+      },
+      StateKey::String(key_raw) => {
+        let key = CString::new(key_raw).unwrap();
+        unsafe {
+          ((&*self.api).state_get_at_name)(self.state, key.as_ptr())
+        }
+      }
     };
-    State {
-      api: self.api,
-      state: value
-    }
-  }
-  
-  pub fn get_list_value(&self, key: usize) -> State {
-    let value = unsafe {
-      let api = &*self.api;
-      (api.state_get_at_index)(self.state, key)
-    };
-    State {
-      api: self.api,
-      state: value
-    }
+    wrap_state(self.api, result)
   }
 
-  pub fn is_string(&self) -> bool {
-    unsafe {
-      ((&*self.api).state_is_string)(self.state) != 0
-    }
-  }
-  pub fn is_float(&self) -> bool {
-    unsafe {
-      ((&*self.api).state_is_float)(self.state) != 0
-    }
-  }
-  pub fn is_bool(&self) -> bool {
-    unsafe {
-      ((&*self.api).state_is_bool)(self.state) != 0
-    }
-  }
-  pub fn is_int(&self) -> bool {
-    unsafe {
-      ((&*self.api).state_is_int)(self.state) != 0
-    }
+  pub fn set(&self, index: StateKey, raw_value: StateValue) {
+    let api = unsafe { &*self.api };
+    match index {
+      StateKey::Int(key) => {
+        unsafe {
+          match raw_value {
+            StateValue::Bool(value) => {
+              (api.state_set_at_index_bool)(self.state, key, if value { 1 } else { 0 });
+            },
+            StateValue::Dict(value) => {
+              (api.state_set_at_index_state)(self.state, key, value.state);
+            },
+            StateValue::Float(value) => {
+              (api.state_set_at_index_float)(self.state, key, value);
+            },
+            StateValue::Int(value) => {
+              (api.state_set_at_index_int)(self.state, key, value);
+            },
+            StateValue::List(value) => {
+              (api.state_set_at_index_state)(self.state, key, value.state);
+            },
+            StateValue::String(rust_value) => {
+              let value = CString::new(rust_value).unwrap();
+              (api.state_set_at_index_string)(self.state, key, value.as_ptr());
+            },
+            StateValue::Null => {
+              (api.state_set_at_index_null)(self.state, key);
+            },
+          };
+        }
+      },
+      StateKey::String(key_raw) => {
+        let key_str = CString::new(key_raw).unwrap();
+        let key = key_str.as_ptr();
+        unsafe {
+          match raw_value {
+            StateValue::Bool(value) => {
+              (api.state_set_at_name_bool)(self.state, key, if value { 1 } else { 0 });
+            },
+            StateValue::Dict(value) => {
+              (api.state_set_at_name_state)(self.state, key, value.state);
+            },
+            StateValue::Float(value) => {
+              (api.state_set_at_name_float)(self.state, key, value);
+            },
+            StateValue::Int(value) => {
+              (api.state_set_at_name_int)(self.state, key, value);
+            },
+            StateValue::List(value) => {
+              (api.state_set_at_name_state)(self.state, key, value.state);
+            },
+            StateValue::String(rust_value) => {
+              let value = CString::new(rust_value).unwrap();
+              (api.state_set_at_name_string)(self.state, key, value.as_ptr());
+            },
+            StateValue::Null => {
+              (api.state_set_at_name_null)(self.state, key);
+            },
+          };
+        }
+      }
+    };
   }
 
   pub fn recap(&self) {
@@ -254,7 +220,7 @@ impl State {
     }
   }
 
-  pub fn connect<'a, T: FnMut(&State, i32, &State, &State) + 'static>(&self, callback: T) -> OnDrop
+  pub fn connect<'a, T: FnMut(&State, i32, StateValue, StateValue) + 'static>(&self, callback: T) -> OnDrop
   {
       let callback_args = Box::new(StateConnectionCallbackArgs {
         callback,
