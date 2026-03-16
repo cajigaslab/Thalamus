@@ -1,39 +1,48 @@
-use std::sync::Arc;
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{Arc};
+use std::thread::{self, JoinHandle};
 use std::{cell::RefCell, ptr};
-use std::time::Duration;
+use std::time::{Duration};
 
 mod ffi;
+mod wakers;
 pub mod api;
 use api::{
   ThalamusNode,
   State,
   OnDrop,
-  Timer,
   ThalamusAPI,
   Node,
   AnalogNode,
-  TimerListener,
-  ErrorCode,
-  time,
   WrappableNode,
   ThalamusNodeFactory,
   StateValue
 };
 
-use crate::api::StateKey;
+use crate::api::{Clock, Sleeper, SleeperWaker, StateKey, run_task};
+
+enum Message {
+  Running(bool),
+  Frequency(f64),
+  Amplitude(f64),
+  Samples(Vec<f64>),
+  Time(Duration)
+}
 
 struct DemoNode {
-  base: *const ThalamusNode,
   state: State,
   state_connection: Option<OnDrop>,
-  timer: Timer,
+  thread: Option<JoinHandle<()>>,
+  node: *const ThalamusNode,
+  api: *const ThalamusAPI,
   running: bool,
-  start_time: Duration,
-  last_time: Duration,
   frequency: f64,
   amplitude: f64,
   samples: Vec<f64>,
-  api: *const ThalamusAPI
+  sleeper: Sleeper,
+  input: Option<Receiver<Message>>,
+  output: Option<Sender<Message>>,
+  time: Duration,
 }
 
 impl AnalogNode for DemoNode {
@@ -56,29 +65,61 @@ impl AnalogNode for DemoNode {
       }
 }
 
-impl TimerListener for DemoNode {
-  fn on_timer(&mut self, error: ErrorCode) {
-    //println!("error {}", error.value);
-    if error.aborted() {
-      return;
+fn gen_signal(input: mpsc::Receiver<Message>, output: mpsc::Sender<Message>, waker: SleeperWaker, clock: Clock) {
+  let mut running = true;
+  let mut amplitude_opt = None;
+  let mut frequency_opt = None;
+  let mut samples_opt = None;
+
+  let mut last = clock.now();
+  let start = last;
+  let mut now = last;
+  let interval = Duration::from_millis(16);
+
+  while running {
+    while now - last < interval {
+     let msg = input.recv_timeout(interval - (now - last));
+     match msg {
+       Ok(Message::Running(val)) => {
+         running = val;
+       }
+       Ok(Message::Amplitude(val)) => {
+         amplitude_opt = Some(val);
+       }
+       Ok(Message::Frequency(val)) => {
+         frequency_opt = Some(val);
+       }
+       Ok(Message::Samples(val)) => {
+         samples_opt = Some(val);
+       }
+       Ok(Message::Time(_)) => { }
+       Err(_) => {}
+     }
+     now = clock.now();
     }
-    
-    let now = time(self.api);
-    self.samples.clear();
-    while self.last_time < now {
-      let elapsed = self.last_time - self.start_time;
+    now = clock.now();
+
+    let Some(amplitude) = amplitude_opt.as_ref() else {
+      continue
+    };
+    let Some(frequency) = frequency_opt.as_ref() else {
+      continue
+    };
+    let Some(mut samples) = samples_opt.take() else {
+      continue
+    };
+
+    samples.clear();
+    while last < now {
+      let elapsed = last - start;
       let elapsed_s = elapsed.as_secs_f64();
-      self.samples.push(self.amplitude*f64::sin(2.0*3.14*self.frequency*elapsed_s));
-      self.last_time += Duration::from_millis(1);
+      samples.push(amplitude*f64::sin(2.0*3.14*frequency*elapsed_s));
+      last += Duration::from_millis(1);
     }
-  
-    self.ready();
-  
-    //println!("Tick");
-    if self.running {
-        self.timer.expires_after(Duration::from_millis(16));
-        self.timer.async_wait(self);
-    } 
+    output.send(Message::Time(last - Duration::from_millis(1))).unwrap();
+    output.send(Message::Samples(samples)).unwrap();
+    waker.wake();
+    samples_opt = None;
   }
 }
 
@@ -93,11 +134,21 @@ impl DemoNode {
       "Running" => {
         if StateValue::Bool(true) == value {
           self.running = true;
-          self.start_time = time(self.api);
-          self.last_time = self.start_time;
-          self.timer.expires_after(Duration::from_millis(16));
-          self.timer.async_wait(self);
+
+          let (self_output, gen_input) = mpsc::channel::<Message>();
+          let (gen_output, self_input) = mpsc::channel::<Message>();
+
+          let waker = self.sleeper.waker();
+          let clock = Clock::new(self.api);
+          self.thread = Some(thread::spawn(move || gen_signal(gen_input, gen_output, waker, clock)));
+          self_output.send(Message::Amplitude(self.amplitude)).unwrap();
+          self_output.send(Message::Frequency(self.frequency)).unwrap();
+          self_output.send(Message::Samples(std::mem::take(&mut self.samples))).unwrap();
+
+          self.input = Some(self_input);
+          self.output = Some(self_output);
         } else {
+          self.output.as_ref().map(|o| o.send(Message::Running(false)).unwrap());
           self.running = false;
         }
       },
@@ -128,10 +179,10 @@ impl Node for DemoNode {
     return self.api
   }
   fn base(&self) -> *const ThalamusNode {
-    return self.base
+    return self.node
   }
   fn time(&self) -> Duration {
-    self.last_time - Duration::from_millis(1)
+    self.time
   }
 
   fn new(base: *const ThalamusNode, api: *const ThalamusAPI, state: State) -> Arc<RefCell<Self>> {
@@ -140,17 +191,19 @@ impl Node for DemoNode {
     }
 
     let result = Arc::new(RefCell::new(DemoNode {
-      base,
+      thread: None,
       state: state.clone(),
       state_connection: None,
-      api,
-      timer: Timer::new(api),
+      sleeper: Sleeper::new(api),
+      input: None,
+      output: None,
       running: false,
-      start_time: Duration::from_millis(0),
-      last_time: Duration::from_millis(0),
       frequency: 0.0,
       amplitude: 0.0,
-      samples: Vec::<f64>::new()
+      samples: Vec::<f64>::new(),
+      time: Duration::from_millis(0),
+      node: base,
+      api
     }));
 
     if let StateValue::Bool(d) = state.get(RUNNING()) {
@@ -168,6 +221,55 @@ impl Node for DemoNode {
       temp.state_connection = Some(temp.state.connect(callback));
     }
     state.recap();
+ 
+    {
+      let loop_ref= Arc::downgrade(&result);
+      run_task(async move {
+        loop {
+          let sleep_future = {
+            let Some(lock_ref) = loop_ref.upgrade() else {
+              break
+            };
+            lock_ref.borrow_mut().sleeper.wait()
+          };
+          if !sleep_future.await {
+            break
+          }
+          let Some(lock_ref) = loop_ref.upgrade() else {
+            break
+          };
+          
+          let message = {
+            let this = lock_ref.borrow();
+            let input = this.input.as_ref().unwrap();
+            input.recv().unwrap()
+          };
+          match message {
+            Message::Samples(mut val) => {
+              {
+                let mut this = lock_ref.borrow_mut();
+                std::mem::swap(&mut val, &mut this.samples);
+              }
+              lock_ref.borrow().ready();
+              {
+                let mut this = lock_ref.borrow_mut();
+                std::mem::swap(&mut val, &mut this.samples);
+              }
+              {
+                let this = lock_ref.borrow();
+                let output = this.output.as_ref().unwrap();
+                output.send(Message::Samples(val)).unwrap();
+              }
+            },
+            Message::Time(val) => {
+              let mut this = lock_ref.borrow_mut();
+              this.time = val;
+            },
+            _ => {}
+          }
+        }
+      });
+    }
 
     result
   }

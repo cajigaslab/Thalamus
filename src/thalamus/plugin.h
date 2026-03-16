@@ -150,6 +150,7 @@ extern "C" {
   struct ThalamusTimer;
   struct ThalamusErrorCode;
   typedef void (*ThalamusTimerCallback)(struct ThalamusErrorCode*, void* data);
+  typedef void (*ThalamusPostCallback)(void* data);
 
   struct ThalamusAPI {
     char (*state_is_dict)(struct ThalamusState*);
@@ -199,6 +200,8 @@ extern "C" {
     void (*state_set_at_index_float)(struct ThalamusState*, int64_t, double);
     void (*state_set_at_index_null)(struct ThalamusState*, int64_t);
     void (*state_set_at_index_bool)(struct ThalamusState*, int64_t, char);
+
+    void (*io_context_post)(ThalamusPostCallback, void*);
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories)(struct ThalamusAPI*);

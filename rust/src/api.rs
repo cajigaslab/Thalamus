@@ -1,6 +1,10 @@
 
 use std::cell::RefCell;
-use std::sync::Arc;
+use std::collections::VecDeque;
+use std::pin::Pin;
+use std::rc::Rc;
+use std::sync::{Arc, Condvar, Mutex};
+use std::task::{Context, Poll, Waker};
 use std::{os::raw::c_void, sync::OnceLock};
 use std::time::Duration;
 use std::ffi::{CStr, CString};
@@ -8,6 +12,283 @@ use std::ffi::{CStr, CString};
 pub use crate::ffi::{
   *
 };
+use crate::wakers::{self, RcWake};
+
+//pub mod mpsc {
+//  use std::{collections::VecDeque, sync::{Arc, Mutex}, task::Waker};
+//  use crate::api::ThalamusAPI;
+//
+//  struct Shared<T> {
+//    msg: VecDeque<T>,
+//    pending: VecDeque<Arc<Mutex<PendingReceive<T>>>>
+//  }
+//
+//  struct Sender<T> {
+//    shared: Arc<Mutex<Shared<T>>>
+//  }
+//
+//  struct Receiver<T> {
+//    shared: Arc<Mutex<Shared<T>>>
+//  }
+//
+//  struct PendingReceive<T> {
+//    val: Option<T>,
+//    waker: Option<Waker>
+//  }
+//
+//  struct ReceiveFuture<T> {
+//    val: Arc<Mutex<PendingReceive<T>>>
+//  }
+//
+//  impl<T> Sender<T> {
+//    pub fn send(&self, arg: T) {
+//      let mut shared = self.shared.lock().unwrap();
+//      match shared.pending.pop_front() {
+//        Some(waiter) => {
+//          let mut locked = waiter.lock().unwrap();
+//          locked.val = Some(arg);
+//          locked.waker.take().map(|w|w.wake());
+//        }
+//        None => {
+//          shared.msg.push_back(arg);
+//        }
+//      }
+//    }
+//  }
+//
+//  impl<T> Receiver<T> {
+//    pub fn recv(&self) -> ReceiveFuture<T> {
+//      let mut shared = self.shared.lock().unwrap();
+//      match shared.msg.pop_front() {
+//        Some(val) => {
+//          ReceiveFuture { val: Arc::new(Mutex::new(PendingReceive { val: Some(val), waker: None })) }
+//        }
+//        None => {
+//          let temp = Arc::new(Mutex::new(PendingReceive { val: None, waker: None }));
+//          shared.pending.push_back(temp.clone());
+//          ReceiveFuture { val: temp }
+//        }
+//      }
+//    }
+//  }
+//
+//  impl<T> Future for ReceiveFuture<T> {
+//    type Output = T;
+//
+//    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+//      let mut val = self.val.lock().unwrap();
+//      if let Some(v) = val.val.take() {
+//        std::task::Poll::Ready(v)
+//      } else {
+//        val.waker = Some(cx.waker().clone());
+//        std::task::Poll::Pending
+//      }
+//    }
+//  }
+//
+//  pub fn channel<T>(api: *const ThalamusAPI) -> (Arc<Sender<T>>, Arc<Receiver<T>>) {
+//    let shared = Arc::new(
+//      Mutex::new(Shared {
+//        msg: VecDeque::<T>::new(), 
+//        pending: VecDeque::<PendingReceive<T>>::new()
+//      }
+//    ));
+//
+//    let receiver = Arc::new(Receiver::<T> {api, msg: VecDeque::<T>::new(), pending: VecDeque::<PendingReceive>::new()});
+//    
+//    (Arc::new(Sender::<T> {api, msg: Vec::<T>::new(), receiver: Arc::into_raw(Arc::clone(&receiver))}), receiver)
+//  }
+//}
+
+struct PostArgs<T> {
+  call: T,
+  mutex: Mutex<bool>,
+  cond: Condvar
+}
+
+unsafe extern "C" fn post_callback<T: FnMut()>(data: *mut ::std::os::raw::c_void) {
+  let args = unsafe { &mut*(data as *mut PostArgs<T>) };
+  (args.call)();
+  let mut done = args.mutex.lock().unwrap();
+  *done = true;
+  args.cond.notify_one();
+}
+
+pub fn post<T: FnMut()>(api_raw: *const ThalamusAPI, call: T) {
+  unsafe {
+    let api = &*api_raw;
+    let call_ptr = Box::into_raw(Box::new(PostArgs {
+      call, mutex: Mutex::new(false), cond: Condvar::new()
+    }));
+    let void_ptr = call_ptr as *mut std::os::raw::c_void;
+    (api.io_context_post)(Some(post_callback::<T>), void_ptr);
+
+    let call_ref =  &*call_ptr;
+    let mut done = call_ref.mutex.lock().unwrap();
+    while !*done {
+      done = call_ref.cond.wait(done).unwrap();
+    }
+
+    drop(Box::from_raw(call_ptr));
+  }
+}
+
+struct ThalamusApiPointer {
+  api: *const ThalamusAPI
+}
+unsafe impl Send for ThalamusApiPointer {}
+
+pub struct Clock {
+  api: ThalamusApiPointer
+}
+
+impl Clock {
+  pub fn new(api: *const ThalamusAPI) -> Clock {
+    Clock { api: ThalamusApiPointer { api }}
+  }
+
+  pub fn now(&self) -> Duration {
+    time(self.api.api)
+  }
+}
+
+struct SleeperState {
+  api: ThalamusApiPointer,
+  wakes: i32,
+  futures: VecDeque<Arc<Mutex<SleeperFutureState>>>
+}
+
+pub struct Sleeper {
+  state: Arc<Mutex<SleeperState>>
+}
+
+pub struct SleeperWaker {
+  state: Arc<Mutex<SleeperState>>
+}
+
+struct SleeperFutureState {
+  state: Arc<Mutex<SleeperState>>,
+  waker: Option<Waker>
+}
+
+pub struct SleeperFuture {
+  state: Arc<Mutex<SleeperFutureState>>
+}
+
+impl Future for SleeperFuture {
+  type Output = bool;
+
+  fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+    let mut future_state = self.state.lock().unwrap();
+    let mut state = future_state.state.lock().unwrap();
+    if state.wakes > 0 {
+      state.wakes -= 1;
+      std::task::Poll::Ready(true)
+    } else if state.wakes < 0 {
+      std::task::Poll::Ready(false)
+    } else {
+      drop(state);
+      match &mut future_state.waker {
+        Some(waker) => {
+          if !waker.will_wake(cx.waker()) {
+            *waker = cx.waker().clone();
+          }
+        },
+        None => {
+          future_state.waker = Some(cx.waker().clone());
+        }
+      }
+      std::task::Poll::Pending
+    }
+  }
+}
+
+impl SleeperWaker {
+  pub fn wake(&self) {
+    let mut lock = self.state.lock().unwrap();
+    post(lock.api.api, move || { 
+      if lock.wakes >= 0 {
+        lock.wakes += 1;
+      }
+      lock.futures.pop_front().map(|f| {
+        let state = f.lock().unwrap();
+        state.waker.as_ref().map(|w| w.wake_by_ref());
+      });
+    });
+  }
+}
+
+impl Sleeper {
+  pub fn new(api:*const ThalamusAPI) -> Sleeper {
+    Sleeper { state: Arc::new(Mutex::new( SleeperState { wakes: 0, api: ThalamusApiPointer { api }, futures: VecDeque::<Arc<Mutex<SleeperFutureState>>>::new() }))}
+  }
+
+  pub fn waker(&self) -> SleeperWaker {
+    SleeperWaker { state: self.state.clone() }
+  }
+
+  pub fn wait(&self) -> SleeperFuture {
+    let mut lock = self.state.lock().unwrap();
+
+    let result = SleeperFuture { state: Arc::new(Mutex::new(SleeperFutureState {state: self.state.clone(), waker: None })) };
+    lock.futures.push_back(result.state.clone());
+    result
+  }
+}
+
+impl Drop for Sleeper {
+  fn drop(&mut self) {
+      let mut state = self.state.lock().unwrap();
+      state.wakes = -1;
+      while !state.futures.is_empty() {
+        self.waker().wake();
+      }
+  }
+}
+
+struct TaskState {
+  future: Pin<Box<dyn Future<Output = ()>>>,
+  poll: Poll<()>
+}
+
+impl TaskState {
+  fn poll(&mut self, cx: &mut Context<'_>) {
+    let future = self.future.as_mut();
+    if self.poll.is_pending() {
+      self.poll = future.poll(cx);
+    }
+  }
+}
+
+struct Task {
+  state: Mutex<TaskState>
+}
+
+impl Task {
+  fn poll(self: &Rc<Self>) {
+    let waker = wakers::waker(self.clone());
+    let mut cx = Context::from_waker(&waker);
+    let mut state = self.state.lock().unwrap();
+    state.poll(&mut cx);
+  }
+}
+
+impl RcWake for Task {
+  fn wake_by_ref(arc_self: &Rc<Self>) {
+    arc_self.poll();
+  }
+}
+
+pub fn run_task<F>(future: F)
+where
+  F: Future<Output = ()> + 'static
+{
+  let task = Rc::new(Task {
+    state: Mutex::new(TaskState {future: Box::pin(future), poll: Poll::Pending})
+  });
+
+  task.poll();
+}
 
 pub fn time(api: *const ThalamusAPI) -> Duration {
   unsafe {
