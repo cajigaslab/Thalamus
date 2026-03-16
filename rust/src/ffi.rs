@@ -115,6 +115,10 @@ pub type ThalamusStateRecursiveCallback = ::std::option::Option<
     ),
 >;
 
+pub type IoContextPostCallback = ::std::option::Option<
+    unsafe extern "C" fn(data: *mut ::std::os::raw::c_void),
+>;
+
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ThalamusAPI {
@@ -169,6 +173,8 @@ pub struct ThalamusAPI {
     pub state_set_at_index_float: unsafe extern "C" fn(arg1: *mut ThalamusState, i64, arg3: f64),
     pub state_set_at_index_null: unsafe extern "C" fn(arg1: *mut ThalamusState, i64),
     pub state_set_at_index_bool: unsafe extern "C" fn(arg1: *mut ThalamusState, i64, i8),
+
+    pub io_context_post: unsafe extern "C" fn(arg1: IoContextPostCallback, data: *mut ::std::os::raw::c_void),
 }
 
 #[repr(C)]

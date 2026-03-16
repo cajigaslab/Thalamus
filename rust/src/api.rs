@@ -1,6 +1,10 @@
 
 use std::cell::RefCell;
-use std::sync::Arc;
+use std::collections::VecDeque;
+use std::pin::Pin;
+use std::rc::Rc;
+use std::sync::{Arc, Condvar, Mutex};
+use std::task::{Context, Poll, Waker};
 use std::{os::raw::c_void, sync::OnceLock};
 use std::time::Duration;
 use std::ffi::{CStr, CString};
@@ -8,6 +12,283 @@ use std::ffi::{CStr, CString};
 pub use crate::ffi::{
   *
 };
+use crate::wakers::{self, RcWake};
+
+//pub mod mpsc {
+//  use std::{collections::VecDeque, sync::{Arc, Mutex}, task::Waker};
+//  use crate::api::ThalamusAPI;
+//
+//  struct Shared<T> {
+//    msg: VecDeque<T>,
+//    pending: VecDeque<Arc<Mutex<PendingReceive<T>>>>
+//  }
+//
+//  struct Sender<T> {
+//    shared: Arc<Mutex<Shared<T>>>
+//  }
+//
+//  struct Receiver<T> {
+//    shared: Arc<Mutex<Shared<T>>>
+//  }
+//
+//  struct PendingReceive<T> {
+//    val: Option<T>,
+//    waker: Option<Waker>
+//  }
+//
+//  struct ReceiveFuture<T> {
+//    val: Arc<Mutex<PendingReceive<T>>>
+//  }
+//
+//  impl<T> Sender<T> {
+//    pub fn send(&self, arg: T) {
+//      let mut shared = self.shared.lock().unwrap();
+//      match shared.pending.pop_front() {
+//        Some(waiter) => {
+//          let mut locked = waiter.lock().unwrap();
+//          locked.val = Some(arg);
+//          locked.waker.take().map(|w|w.wake());
+//        }
+//        None => {
+//          shared.msg.push_back(arg);
+//        }
+//      }
+//    }
+//  }
+//
+//  impl<T> Receiver<T> {
+//    pub fn recv(&self) -> ReceiveFuture<T> {
+//      let mut shared = self.shared.lock().unwrap();
+//      match shared.msg.pop_front() {
+//        Some(val) => {
+//          ReceiveFuture { val: Arc::new(Mutex::new(PendingReceive { val: Some(val), waker: None })) }
+//        }
+//        None => {
+//          let temp = Arc::new(Mutex::new(PendingReceive { val: None, waker: None }));
+//          shared.pending.push_back(temp.clone());
+//          ReceiveFuture { val: temp }
+//        }
+//      }
+//    }
+//  }
+//
+//  impl<T> Future for ReceiveFuture<T> {
+//    type Output = T;
+//
+//    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+//      let mut val = self.val.lock().unwrap();
+//      if let Some(v) = val.val.take() {
+//        std::task::Poll::Ready(v)
+//      } else {
+//        val.waker = Some(cx.waker().clone());
+//        std::task::Poll::Pending
+//      }
+//    }
+//  }
+//
+//  pub fn channel<T>(api: *const ThalamusAPI) -> (Arc<Sender<T>>, Arc<Receiver<T>>) {
+//    let shared = Arc::new(
+//      Mutex::new(Shared {
+//        msg: VecDeque::<T>::new(), 
+//        pending: VecDeque::<PendingReceive<T>>::new()
+//      }
+//    ));
+//
+//    let receiver = Arc::new(Receiver::<T> {api, msg: VecDeque::<T>::new(), pending: VecDeque::<PendingReceive>::new()});
+//    
+//    (Arc::new(Sender::<T> {api, msg: Vec::<T>::new(), receiver: Arc::into_raw(Arc::clone(&receiver))}), receiver)
+//  }
+//}
+
+struct PostArgs<T> {
+  call: T,
+  mutex: Mutex<bool>,
+  cond: Condvar
+}
+
+unsafe extern "C" fn post_callback<T: FnMut()>(data: *mut ::std::os::raw::c_void) {
+  let args = unsafe { &mut*(data as *mut PostArgs<T>) };
+  (args.call)();
+  let mut done = args.mutex.lock().unwrap();
+  *done = true;
+  args.cond.notify_one();
+}
+
+pub fn post<T: FnMut()>(api_raw: *const ThalamusAPI, call: T) {
+  unsafe {
+    let api = &*api_raw;
+    let call_ptr = Box::into_raw(Box::new(PostArgs {
+      call, mutex: Mutex::new(false), cond: Condvar::new()
+    }));
+    let void_ptr = call_ptr as *mut std::os::raw::c_void;
+    (api.io_context_post)(Some(post_callback::<T>), void_ptr);
+
+    let call_ref =  &*call_ptr;
+    let mut done = call_ref.mutex.lock().unwrap();
+    while !*done {
+      done = call_ref.cond.wait(done).unwrap();
+    }
+
+    drop(Box::from_raw(call_ptr));
+  }
+}
+
+struct ThalamusApiPointer {
+  api: *const ThalamusAPI
+}
+unsafe impl Send for ThalamusApiPointer {}
+
+pub struct Clock {
+  api: ThalamusApiPointer
+}
+
+impl Clock {
+  pub fn new(api: *const ThalamusAPI) -> Clock {
+    Clock { api: ThalamusApiPointer { api }}
+  }
+
+  pub fn now(&self) -> Duration {
+    time(self.api.api)
+  }
+}
+
+struct SleeperState {
+  api: ThalamusApiPointer,
+  wakes: i32,
+  futures: VecDeque<Arc<Mutex<SleeperFutureState>>>
+}
+
+pub struct Sleeper {
+  state: Arc<Mutex<SleeperState>>
+}
+
+pub struct SleeperWaker {
+  state: Arc<Mutex<SleeperState>>
+}
+
+struct SleeperFutureState {
+  state: Arc<Mutex<SleeperState>>,
+  waker: Option<Waker>
+}
+
+pub struct SleeperFuture {
+  state: Arc<Mutex<SleeperFutureState>>
+}
+
+impl Future for SleeperFuture {
+  type Output = bool;
+
+  fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+    let mut future_state = self.state.lock().unwrap();
+    let mut state = future_state.state.lock().unwrap();
+    if state.wakes > 0 {
+      state.wakes -= 1;
+      std::task::Poll::Ready(true)
+    } else if state.wakes < 0 {
+      std::task::Poll::Ready(false)
+    } else {
+      drop(state);
+      match &mut future_state.waker {
+        Some(waker) => {
+          if !waker.will_wake(cx.waker()) {
+            *waker = cx.waker().clone();
+          }
+        },
+        None => {
+          future_state.waker = Some(cx.waker().clone());
+        }
+      }
+      std::task::Poll::Pending
+    }
+  }
+}
+
+impl SleeperWaker {
+  pub fn wake(&self) {
+    let mut lock = self.state.lock().unwrap();
+    post(lock.api.api, move || { 
+      if lock.wakes >= 0 {
+        lock.wakes += 1;
+      }
+      lock.futures.pop_front().map(|f| {
+        let state = f.lock().unwrap();
+        state.waker.as_ref().map(|w| w.wake_by_ref());
+      });
+    });
+  }
+}
+
+impl Sleeper {
+  pub fn new(api:*const ThalamusAPI) -> Sleeper {
+    Sleeper { state: Arc::new(Mutex::new( SleeperState { wakes: 0, api: ThalamusApiPointer { api }, futures: VecDeque::<Arc<Mutex<SleeperFutureState>>>::new() }))}
+  }
+
+  pub fn waker(&self) -> SleeperWaker {
+    SleeperWaker { state: self.state.clone() }
+  }
+
+  pub fn wait(&self) -> SleeperFuture {
+    let mut lock = self.state.lock().unwrap();
+
+    let result = SleeperFuture { state: Arc::new(Mutex::new(SleeperFutureState {state: self.state.clone(), waker: None })) };
+    lock.futures.push_back(result.state.clone());
+    result
+  }
+}
+
+impl Drop for Sleeper {
+  fn drop(&mut self) {
+      let mut state = self.state.lock().unwrap();
+      state.wakes = -1;
+      while !state.futures.is_empty() {
+        self.waker().wake();
+      }
+  }
+}
+
+struct TaskState {
+  future: Pin<Box<dyn Future<Output = ()>>>,
+  poll: Poll<()>
+}
+
+impl TaskState {
+  fn poll(&mut self, cx: &mut Context<'_>) {
+    let future = self.future.as_mut();
+    if self.poll.is_pending() {
+      self.poll = future.poll(cx);
+    }
+  }
+}
+
+struct Task {
+  state: Mutex<TaskState>
+}
+
+impl Task {
+  fn poll(self: &Rc<Self>) {
+    let waker = wakers::waker(self.clone());
+    let mut cx = Context::from_waker(&waker);
+    let mut state = self.state.lock().unwrap();
+    state.poll(&mut cx);
+  }
+}
+
+impl RcWake for Task {
+  fn wake_by_ref(arc_self: &Rc<Self>) {
+    arc_self.poll();
+  }
+}
+
+pub fn run_task<F>(future: F)
+where
+  F: Future<Output = ()> + 'static
+{
+  let task = Rc::new(Task {
+    state: Mutex::new(TaskState {future: Box::pin(future), poll: Poll::Pending})
+  });
+
+  task.poll();
+}
 
 pub fn time(api: *const ThalamusAPI) -> Duration {
   unsafe {
@@ -15,19 +296,59 @@ pub fn time(api: *const ThalamusAPI) -> Duration {
   }
 }
 
+#[derive(Debug,PartialEq)]
 pub struct State {
   state: *mut ThalamusState,
   api: *const ThalamusAPI
 }
 
-unsafe extern "C" fn state_on_change<T: FnMut(&State, i32, &State, &State)>(source_raw: *mut ThalamusState, action: i32, key_raw: *mut ThalamusState, value_raw: *mut ThalamusState, data: *mut ::std::os::raw::c_void) {
+#[derive(Debug,PartialEq)]
+pub enum StateValue {
+  Bool(bool),
+  Dict(State),
+  Float(f64),
+  Int(i64),
+  List(State),
+  String(String),
+  Null
+}
+
+pub enum StateKey {
+  Int(i64),
+  String(String)
+}
+
+fn wrap_state(api_raw:*const ThalamusAPI, arg: *mut ThalamusState) -> StateValue {
+  unsafe {
+    let api = &*api_raw;
+    if (api.state_is_bool)(arg) != 0 {
+      StateValue::Bool((api.state_get_bool)(arg) != 0)
+    } else if (api.state_is_dict)(arg) != 0 {
+      StateValue::Dict(State::new(api, arg))
+    } else if (api.state_is_float)(arg) != 0 {
+      StateValue::Float((api.state_get_float)(arg))
+    } else if (api.state_is_int)(arg) != 0 {
+      StateValue::Int((api.state_get_int)(arg))
+    } else if (api.state_is_list)(arg) != 0 {
+      StateValue::List(State::new(api, arg))
+    } else if (api.state_is_string)(arg) != 0 {
+      let ptr = ((&*api).state_get_string)(arg);
+      let text = CStr::from_ptr(ptr).to_str().unwrap();
+      StateValue::String(text.to_string())
+    } else {
+      StateValue::Null
+    }
+  }
+}
+
+unsafe extern "C" fn state_on_change<T: FnMut(&State, i32, StateValue, StateValue)>(source_raw: *mut ThalamusState, action: i32, key_raw: *mut ThalamusState, value_raw: *mut ThalamusState, data: *mut ::std::os::raw::c_void) {
   let args = unsafe { &mut *(data as *mut StateConnectionCallbackArgs<T>) };
 
-  let key = State {state: key_raw, api: args.api};
-  let value = State {state: value_raw, api: args.api};
+  let key = wrap_state(args.api, key_raw);
+  let value = wrap_state(args.api, value_raw);
   let source = State {state: source_raw, api: args.api};
   
-  (args.callback)(&source, action, &key, &value);
+  (args.callback)(&source, action, key, value);
 }
 
 unsafe extern "C" fn timer_on_timer(error: *mut ThalamusErrorCode, data: *mut ::std::os::raw::c_void) {
@@ -56,14 +377,11 @@ impl ErrorCode {
   }
 }
 
-struct StateConnectionCallbackArgs<T: FnMut(&State, i32, &State, &State)> {
+struct StateConnectionCallbackArgs<T: FnMut(&State, i32, StateValue, StateValue)> {
   pub callback: T,
   pub api: *const ThalamusAPI
 }
 
-pub trait StateListener {
-    fn on_change(&mut self, source: &State, action: i32, key: &State, value: &State);
-}
 pub trait TimerListener {
     fn on_timer(&mut self, error: ErrorCode);
 }
@@ -86,92 +404,6 @@ pub trait ListSetter {
   fn set_list_bool(&self, key_raw: i64, value: bool);
 }
 
-impl DictSetter for State {
-  fn set_dict_state(&self, key_raw: &str, value: &State) {
-    let key = CString::new(key_raw).unwrap();
-    unsafe {
-      let api = &*self.api;
-      (api.state_set_at_name_state)(self.state, key.as_ptr(), value.state);
-    }
-  }
-  fn set_dict_str(&self, key_raw: &str, value_raw: &str) {
-    let key = CString::new(key_raw).unwrap();
-    let value = CString::new(value_raw).unwrap();
-    unsafe {
-      let api = &*self.api;
-      (api.state_set_at_name_string)(self.state, key.as_ptr(), value.as_ptr());
-    }
-  }
-  fn set_dict_int(&self, key_raw: &str, value_raw: i64) {
-    let key = CString::new(key_raw).unwrap();
-    unsafe {
-      let api = &*self.api;
-      (api.state_set_at_name_int)(self.state, key.as_ptr(), value_raw);
-    }
-  }
-  fn set_dict_float(&self, key_raw: &str, value_raw: f64) {
-    let key = CString::new(key_raw).unwrap();
-    unsafe {
-      let api = &*self.api;
-      (api.state_set_at_name_float)(self.state, key.as_ptr(), value_raw);
-    }
-  }
-  fn set_dict_null(&self, key_raw: &str) {
-    let key = CString::new(key_raw).unwrap();
-    unsafe {
-      let api = &*self.api;
-      (api.state_set_at_name_null)(self.state, key.as_ptr());
-    }
-  }
-  fn set_dict_bool(&self, key_raw: &str, value: bool) {
-    let key = CString::new(key_raw).unwrap();
-    unsafe {
-      let api = &*self.api;
-      (api.state_set_at_name_bool)(self.state, key.as_ptr(), if value { 1 } else { 0 });
-    }
-  }
-}
-
-impl ListSetter for State {
-  fn set_list_state(&self, key: i64, value: &State) {
-    unsafe {
-      let api = &*self.api;
-      (api.state_set_at_index_state)(self.state, key, value.state);
-    }
-  }
-  fn set_list_str(&self, key_raw: i64, value_raw: &str) {
-    let value = CString::new(value_raw).unwrap();
-    unsafe {
-      let api = &*self.api;
-      (api.state_set_at_index_string)(self.state, key_raw, value.as_ptr());
-    }
-  }
-  fn set_list_int(&self, key_raw: i64, value_raw: i64) {
-    unsafe {
-      let api = &*self.api;
-      (api.state_set_at_index_int)(self.state, key_raw, value_raw);
-    }
-  }
-  fn set_list_float(&self, key_raw: i64, value_raw: f64) {
-    unsafe {
-      let api = &*self.api;
-      (api.state_set_at_index_float)(self.state, key_raw, value_raw);
-    }
-  }
-  fn set_list_null(&self, key_raw: i64) {
-    unsafe {
-      let api = &*self.api;
-      (api.state_set_at_index_null)(self.state, key_raw);
-    }
-  }
-  fn set_list_bool(&self, key_raw: i64, value: bool) {
-    unsafe {
-      let api = &*self.api;
-      (api.state_set_at_index_bool)(self.state, key_raw, if value { 1 } else { 0 });
-    }
-  }
-}
-
 impl State {
   pub fn new(api:*const ThalamusAPI, state:*mut ThalamusState) -> State {
     unsafe {
@@ -182,70 +414,85 @@ impl State {
     }
   }
 
-  pub fn get_string(&self) -> &str {
-    unsafe {
-      let ptr = ((&*self.api).state_get_string)(self.state);
-      CStr::from_ptr(ptr).to_str().unwrap()
-    }
-  }
-  pub fn get_float(&self) -> f64 {
-    unsafe {
-      ((&*self.api).state_get_float)(self.state)
-    }
-  }
-  pub fn get_bool(&self) -> bool {
-    unsafe {
-      ((&*self.api).state_get_bool)(self.state) != 0
-    }
-  }
-  pub fn get_int(&self) -> i64 {
-    unsafe {
-      ((&*self.api).state_get_int)(self.state)
-    }
-  }
-  
-  pub fn get_dict_value(&self, key_raw:&str) -> State {
-    let key = CString::new(key_raw).unwrap();
-    let value = unsafe {
-      let api = &*self.api;
-      (api.state_get_at_name)(self.state, key.as_ptr())
+  pub fn get(&self, index: StateKey) -> StateValue {
+    let result = match index {
+      StateKey::Int(key) => {
+        unsafe {
+          ((&*self.api).state_get_at_index)(self.state, key as usize)
+        }
+      },
+      StateKey::String(key_raw) => {
+        let key = CString::new(key_raw).unwrap();
+        unsafe {
+          ((&*self.api).state_get_at_name)(self.state, key.as_ptr())
+        }
+      }
     };
-    State {
-      api: self.api,
-      state: value
-    }
-  }
-  
-  pub fn get_list_value(&self, key: usize) -> State {
-    let value = unsafe {
-      let api = &*self.api;
-      (api.state_get_at_index)(self.state, key)
-    };
-    State {
-      api: self.api,
-      state: value
-    }
+    wrap_state(self.api, result)
   }
 
-  pub fn is_string(&self) -> bool {
-    unsafe {
-      ((&*self.api).state_is_string)(self.state) != 0
-    }
-  }
-  pub fn is_float(&self) -> bool {
-    unsafe {
-      ((&*self.api).state_is_float)(self.state) != 0
-    }
-  }
-  pub fn is_bool(&self) -> bool {
-    unsafe {
-      ((&*self.api).state_is_bool)(self.state) != 0
-    }
-  }
-  pub fn is_int(&self) -> bool {
-    unsafe {
-      ((&*self.api).state_is_int)(self.state) != 0
-    }
+  pub fn set(&self, index: StateKey, raw_value: StateValue) {
+    let api = unsafe { &*self.api };
+    match index {
+      StateKey::Int(key) => {
+        unsafe {
+          match raw_value {
+            StateValue::Bool(value) => {
+              (api.state_set_at_index_bool)(self.state, key, if value { 1 } else { 0 });
+            },
+            StateValue::Dict(value) => {
+              (api.state_set_at_index_state)(self.state, key, value.state);
+            },
+            StateValue::Float(value) => {
+              (api.state_set_at_index_float)(self.state, key, value);
+            },
+            StateValue::Int(value) => {
+              (api.state_set_at_index_int)(self.state, key, value);
+            },
+            StateValue::List(value) => {
+              (api.state_set_at_index_state)(self.state, key, value.state);
+            },
+            StateValue::String(rust_value) => {
+              let value = CString::new(rust_value).unwrap();
+              (api.state_set_at_index_string)(self.state, key, value.as_ptr());
+            },
+            StateValue::Null => {
+              (api.state_set_at_index_null)(self.state, key);
+            },
+          };
+        }
+      },
+      StateKey::String(key_raw) => {
+        let key_str = CString::new(key_raw).unwrap();
+        let key = key_str.as_ptr();
+        unsafe {
+          match raw_value {
+            StateValue::Bool(value) => {
+              (api.state_set_at_name_bool)(self.state, key, if value { 1 } else { 0 });
+            },
+            StateValue::Dict(value) => {
+              (api.state_set_at_name_state)(self.state, key, value.state);
+            },
+            StateValue::Float(value) => {
+              (api.state_set_at_name_float)(self.state, key, value);
+            },
+            StateValue::Int(value) => {
+              (api.state_set_at_name_int)(self.state, key, value);
+            },
+            StateValue::List(value) => {
+              (api.state_set_at_name_state)(self.state, key, value.state);
+            },
+            StateValue::String(rust_value) => {
+              let value = CString::new(rust_value).unwrap();
+              (api.state_set_at_name_string)(self.state, key, value.as_ptr());
+            },
+            StateValue::Null => {
+              (api.state_set_at_name_null)(self.state, key);
+            },
+          };
+        }
+      }
+    };
   }
 
   pub fn recap(&self) {
@@ -254,7 +501,7 @@ impl State {
     }
   }
 
-  pub fn connect<'a, T: FnMut(&State, i32, &State, &State) + 'static>(&self, callback: T) -> OnDrop
+  pub fn connect<'a, T: FnMut(&State, i32, StateValue, StateValue) + 'static>(&self, callback: T) -> OnDrop
   {
       let callback_args = Box::new(StateConnectionCallbackArgs {
         callback,

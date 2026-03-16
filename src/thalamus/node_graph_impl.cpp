@@ -514,6 +514,12 @@ struct ThalamusAPIImpl {
     static void state_set_at_index_bool(struct ThalamusState* state, int64_t key, char value) {
       assign_state(state, key, value != 0);
     }
+
+    static void io_context_post(ThalamusPostCallback callback, void* data) {
+      boost::asio::post(*io_context, [callback, data] {
+        callback(data);
+      });
+    }
 };
 
 std::map<ObservableCollection::Value, ThalamusState*>* ThalamusAPIImpl::cpp_to_c = nullptr;
@@ -651,6 +657,7 @@ public:
     thalamus_api.state_set_at_index_float = ThalamusAPIImpl::state_set_at_index_float;
     thalamus_api.state_set_at_index_null = ThalamusAPIImpl::state_set_at_index_null;
     thalamus_api.state_set_at_index_bool = ThalamusAPIImpl::state_set_at_index_bool;
+    thalamus_api.io_context_post = ThalamusAPIImpl::io_context_post;
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},
