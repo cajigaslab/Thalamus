@@ -53,8 +53,8 @@
         225
       ],
       "Render Thresholded": false,
-      "Pix X": 315,
-      "Pix Y": 153
+      "Pix X": 328,
+      "Pix Y": 116
     },
     {
       "name": "Windows",
@@ -224,7 +224,7 @@
     {
       "name": "Recording",
       "type": "RUNNER2",
-      "Running": true,
+      "Running": false,
       "Targets": [
         {
           "Name": "Storage",
@@ -261,8 +261,8 @@
       "AcquisitionFrameRate": 60.0,
       "Gain": 0.0,
       "view_geometry": [
-        86,
-        1680,
+        66,
+        1679,
         688,
         551
       ],
@@ -294,8 +294,8 @@
       "AcquisitionFrameRate": 60.0,
       "Gain": 0.0,
       "view_geometry": [
-        85,
-        1126,
+        66,
+        1122,
         687,
         549
       ],
@@ -319,10 +319,10 @@
       "Camera": "VimbaUSBTL:DEV_1AB228001040",
       "WidthMax": 1280,
       "HeightMax": 1024,
-      "Width": 636,
-      "Height": 371,
-      "OffsetX": 257,
-      "OffsetY": 217,
+      "Width": 724,
+      "Height": 301,
+      "OffsetX": 169,
+      "OffsetY": 370,
       "ExposureTime": 6000.0,
       "AcquisitionFrameRate": 150.0,
       "Gain": 0.0,
@@ -335,10 +335,10 @@
       "Camera Values": {
         "WidthMax": 1280,
         "HeightMax": 1024,
-        "Width": 632,
-        "Height": 370,
-        "OffsetX": 256,
-        "OffsetY": 216,
+        "Width": 720,
+        "Height": 300,
+        "OffsetX": 168,
+        "OffsetY": 370,
         "ExposureTime": 6000.005,
         "AcquisitionFrameRate": 149.9999250000375,
         "Gain": 0.0
@@ -361,7 +361,7 @@
     {
       "name": "Storage",
       "type": "STORAGE2",
-      "Running": true,
+      "Running": false,
       "Output File": "/mnt/sraid/Bowser_Behavior_AlexRig/%y%m%d/behave",
       "Compress Analog": false,
       "Compress Video": true,
@@ -451,13 +451,13 @@
           "Text": true
         }
       ],
-      "rec": 1,
+      "rec": 3,
       "start": 2513946.203784386,
       "Files": [],
       "Metadata": [
         {
           "Key": "Rec",
-          "Value": 1
+          "Value": 3
         }
       ],
       "Simple Copy": false
@@ -707,9 +707,9 @@
     }
   ],
   "thalamus_view_geometry": [
-    4,
-    44,
-    536,
+    9,
+    29,
+    637,
     768
   ],
   "data_views": [
@@ -773,7 +773,7 @@
       "node": "Oculomatic",
       "dock_area": "right",
       "view_geometry": [
-        224,
+        325,
         23,
         312,
         745
@@ -784,8 +784,8 @@
     {
       "task_type": "joystick_intro",
       "type": "task",
-      "goal": 50,
-      "name": "TopDown",
+      "goal": 80,
+      "name": "LR",
       "intertrial_timeout": {
         "min": 1,
         "max": 1
@@ -833,25 +833,12 @@
       ],
       "targets": [
         {
-          "name": "",
-          "enabled": false,
-          "x_norm": 0.5,
-          "y_norm": 0.75,
-          "radius_ratio": 0.15,
-          "hold_time": 0.3,
-          "target_color": [
-            255,
-            255,
-            255
-          ]
-        },
-        {
-          "name": "",
+          "name": "L1",
           "enabled": true,
-          "x_norm": 0.53,
-          "y_norm": 0.4,
-          "radius_ratio": 0.1,
-          "hold_time": 0.3,
+          "x_norm": 0.25,
+          "y_norm": 0.5,
+          "radius_ratio": 0.07,
+          "hold_time": 0.4,
           "target_color": [
             255,
             255,
@@ -859,12 +846,12 @@
           ]
         },
         {
-          "name": "",
+          "name": "R1",
           "enabled": true,
-          "x_norm": 0.53,
-          "y_norm": 0.6,
-          "radius_ratio": 0.1,
-          "hold_time": 0.3,
+          "x_norm": 0.75,
+          "y_norm": 0.5,
+          "radius_ratio": 0.07,
+          "hold_time": 0.4,
           "target_color": [
             255,
             255,
@@ -872,12 +859,12 @@
           ]
         },
         {
-          "name": "",
+          "name": "R2",
           "enabled": true,
-          "x_norm": 0.5,
-          "y_norm": 0.2,
-          "radius_ratio": 0.1,
-          "hold_time": 0.3,
+          "x_norm": 0.65,
+          "y_norm": 0.5,
+          "radius_ratio": 0.07,
+          "hold_time": 0.4,
           "target_color": [
             255,
             255,
@@ -885,12 +872,12 @@
           ]
         },
         {
-          "name": "",
-          "enabled": false,
+          "name": "L2",
+          "enabled": true,
           "x_norm": 0.4,
-          "y_norm": 0.1,
-          "radius_ratio": 0.1,
-          "hold_time": 0.3,
+          "y_norm": 0.5,
+          "radius_ratio": 0.07,
+          "hold_time": 0.4,
           "target_color": [
             255,
             255,
@@ -898,12 +885,12 @@
           ]
         },
         {
-          "name": "",
+          "name": "R3",
           "enabled": true,
-          "x_norm": 0.5,
-          "y_norm": 0.9,
-          "radius_ratio": 0.1,
-          "hold_time": 0.3,
+          "x_norm": 0.85,
+          "y_norm": 0.5,
+          "radius_ratio": 0.07,
+          "hold_time": 0.4,
           "target_color": [
             255,
             255,
@@ -911,12 +898,12 @@
           ]
         },
         {
-          "name": "TR",
-          "enabled": true,
-          "x_norm": 0.55,
-          "y_norm": 0.9,
-          "radius_ratio": 0.1,
-          "hold_time": 0.3,
+          "name": "L3",
+          "enabled": false,
+          "x_norm": 0.1,
+          "y_norm": 0.5,
+          "radius_ratio": 0.07,
+          "hold_time": 0.4,
           "target_color": [
             255,
             255,
@@ -924,38 +911,12 @@
           ]
         },
         {
-          "name": "BL",
+          "name": "L4",
           "enabled": true,
-          "x_norm": 0.45,
-          "y_norm": 0.1,
-          "radius_ratio": 0.1,
-          "hold_time": 0.3,
-          "target_color": [
-            255,
-            255,
-            255
-          ]
-        },
-        {
-          "name": "BR",
-          "enabled": true,
-          "x_norm": 0.55,
-          "y_norm": 0.1,
-          "radius_ratio": 0.1,
-          "hold_time": 0.3,
-          "target_color": [
-            255,
-            255,
-            255
-          ]
-        },
-        {
-          "name": "TR",
-          "enabled": true,
-          "x_norm": 0.55,
-          "y_norm": 0.9,
-          "radius_ratio": 0.1,
-          "hold_time": 0.3,
+          "x_norm": 0.35,
+          "y_norm": 0.5,
+          "radius_ratio": 0.07,
+          "hold_time": 0.4,
           "target_color": [
             255,
             255,
@@ -971,7 +932,7 @@
       "zero_drift_mode": true,
       "zero_drift_buffer": 0.05,
       "direct_range": 0.45,
-      "cursor_diameter_ratio": 0.07,
+      "cursor_diameter_ratio": 0.055,
       "cursor_color": [
         153,
         193,
@@ -984,10 +945,10 @@
       "reward_channel": 2.0,
       "trial_timeout": 10.0,
       "intertrial_interval": 1.0,
-      "disable_up": false,
-      "disable_down": false,
-      "disable_left": true,
-      "disable_right": true,
+      "disable_up": true,
+      "disable_down": true,
+      "disable_left": false,
+      "disable_right": false,
       "animations_enabled": true,
       "task_animation_enabled": true,
       "target_animation_enabled": true,
@@ -999,13 +960,199 @@
       "show_hold_progress_ring": true,
       "show_success_pop": false,
       "success_pop_duration_s": 0.12,
-      "up_influence_pct": 100,
-      "down_influence_pct": 100,
-      "left_influence_pct": 7,
-      "right_influence_pct": 4,
+      "up_influence_pct": 9,
+      "down_influence_pct": 12,
+      "left_influence_pct": 100,
+      "right_influence_pct": 100,
       "task_cluster_name": "Joy",
       "queue_index": 0,
       "_streak_count": 0
+    },
+    {
+      "task_type": "joystick_intro",
+      "type": "task",
+      "goal": 99,
+      "name": "LR",
+      "intertrial_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "start_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "hold_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "blink_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "fail_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "success_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "target_x": {
+        "min": 1,
+        "max": 1
+      },
+      "target_y": {
+        "min": 1,
+        "max": 1
+      },
+      "target_width": {
+        "min": 1,
+        "max": 1
+      },
+      "target_height": {
+        "min": 1,
+        "max": 1
+      },
+      "target_color": [
+        255,
+        255,
+        255
+      ],
+      "targets": [
+        {
+          "name": "L1",
+          "enabled": true,
+          "x_norm": 0.25,
+          "y_norm": 0.5,
+          "radius_ratio": 0.07,
+          "hold_time": 0.4,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "name": "R1",
+          "enabled": true,
+          "x_norm": 0.75,
+          "y_norm": 0.5,
+          "radius_ratio": 0.07,
+          "hold_time": 0.4,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "name": "R2",
+          "enabled": true,
+          "x_norm": 0.65,
+          "y_norm": 0.5,
+          "radius_ratio": 0.07,
+          "hold_time": 0.4,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "name": "L2",
+          "enabled": true,
+          "x_norm": 0.4,
+          "y_norm": 0.5,
+          "radius_ratio": 0.07,
+          "hold_time": 0.4,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "name": "R3",
+          "enabled": true,
+          "x_norm": 0.85,
+          "y_norm": 0.5,
+          "radius_ratio": 0.07,
+          "hold_time": 0.4,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "name": "L3",
+          "enabled": false,
+          "x_norm": 0.1,
+          "y_norm": 0.5,
+          "radius_ratio": 0.07,
+          "hold_time": 0.4,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "name": "L4",
+          "enabled": true,
+          "x_norm": 0.35,
+          "y_norm": 0.5,
+          "radius_ratio": 0.07,
+          "hold_time": 0.4,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        }
+      ],
+      "joystick_node": "Joystick",
+      "control_mode": "direct",
+      "cursor_only_mode": false,
+      "free_play_end_key": "space",
+      "cumulative_speed": 0.7,
+      "zero_drift_mode": true,
+      "zero_drift_buffer": 0.05,
+      "direct_range": 0.45,
+      "cursor_diameter_ratio": 0.055,
+      "cursor_color": [
+        153,
+        193,
+        241
+      ],
+      "task_region_x": 0.5,
+      "task_region_y": 0.27,
+      "task_region_width": 0.5,
+      "task_region_height": 0.67,
+      "reward_channel": 2.0,
+      "trial_timeout": 10.0,
+      "intertrial_interval": 1.0,
+      "disable_up": true,
+      "disable_down": true,
+      "disable_left": false,
+      "disable_right": false,
+      "animations_enabled": true,
+      "task_animation_enabled": true,
+      "target_animation_enabled": true,
+      "show_streak_hud": true,
+      "streak_bonus_threshold": 0,
+      "streak_bonus_reward_count": 1,
+      "streak_reset_on_bonus": false,
+      "inside_tint_strength_pct": 20,
+      "show_hold_progress_ring": true,
+      "show_success_pop": false,
+      "success_pop_duration_s": 0.12,
+      "up_influence_pct": 9,
+      "down_influence_pct": 12,
+      "left_influence_pct": 100,
+      "right_influence_pct": 100,
+      "task_cluster_name": "Joy",
+      "queue_index": 1
     }
   ],
   "reward_schedule": {
@@ -1100,7 +1247,7 @@
     },
     "Auto Clear": true
   },
-  "status": "Joy/TopDown = 45/22",
+  "status": "Joy/LR = 286/462",
   "Persistence": {
     "Cached": []
   },
@@ -14314,7 +14461,7 @@
           "zero_drift_mode": true,
           "zero_drift_buffer": 0.05,
           "direct_range": 0.45,
-          "cursor_diameter_ratio": 0.07,
+          "cursor_diameter_ratio": 0.055,
           "cursor_color": [
             153,
             193,
@@ -14402,9 +14549,9 @@
               "name": "L1",
               "enabled": true,
               "x_norm": 0.25,
-              "y_norm": 0.55,
-              "radius_ratio": 0.1,
-              "hold_time": 0.3,
+              "y_norm": 0.5,
+              "radius_ratio": 0.07,
+              "hold_time": 0.4,
               "target_color": [
                 255,
                 255,
@@ -14415,9 +14562,9 @@
               "name": "R1",
               "enabled": true,
               "x_norm": 0.75,
-              "y_norm": 0.45,
-              "radius_ratio": 0.1,
-              "hold_time": 0.3,
+              "y_norm": 0.5,
+              "radius_ratio": 0.07,
+              "hold_time": 0.4,
               "target_color": [
                 255,
                 255,
@@ -14429,8 +14576,8 @@
               "enabled": true,
               "x_norm": 0.65,
               "y_norm": 0.5,
-              "radius_ratio": 0.1,
-              "hold_time": 0.3,
+              "radius_ratio": 0.07,
+              "hold_time": 0.4,
               "target_color": [
                 255,
                 255,
@@ -14441,9 +14588,9 @@
               "name": "L2",
               "enabled": true,
               "x_norm": 0.4,
-              "y_norm": 0.55,
-              "radius_ratio": 0.1,
-              "hold_time": 0.3,
+              "y_norm": 0.5,
+              "radius_ratio": 0.07,
+              "hold_time": 0.4,
               "target_color": [
                 255,
                 255,
@@ -14454,9 +14601,9 @@
               "name": "R3",
               "enabled": true,
               "x_norm": 0.85,
-              "y_norm": 0.55,
-              "radius_ratio": 0.1,
-              "hold_time": 0.3,
+              "y_norm": 0.5,
+              "radius_ratio": 0.07,
+              "hold_time": 0.4,
               "target_color": [
                 255,
                 255,
@@ -14465,11 +14612,11 @@
             },
             {
               "name": "L3",
-              "enabled": true,
+              "enabled": false,
               "x_norm": 0.1,
-              "y_norm": 0.45,
-              "radius_ratio": 0.1,
-              "hold_time": 0.3,
+              "y_norm": 0.5,
+              "radius_ratio": 0.07,
+              "hold_time": 0.4,
               "target_color": [
                 255,
                 255,
@@ -14479,10 +14626,10 @@
             {
               "name": "L4",
               "enabled": true,
-              "x_norm": 0.25,
-              "y_norm": 0.45,
-              "radius_ratio": 0.1,
-              "hold_time": 0.3,
+              "x_norm": 0.35,
+              "y_norm": 0.5,
+              "radius_ratio": 0.07,
+              "hold_time": 0.4,
               "target_color": [
                 255,
                 255,
@@ -14498,7 +14645,7 @@
           "zero_drift_mode": true,
           "zero_drift_buffer": 0.05,
           "direct_range": 0.45,
-          "cursor_diameter_ratio": 0.07,
+          "cursor_diameter_ratio": 0.055,
           "cursor_color": [
             153,
             193,
