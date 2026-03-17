@@ -11,6 +11,7 @@ Two control modes:
 """
 
 import asyncio
+import datetime
 import logging
 import math
 import random
@@ -59,6 +60,11 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     task_config["task_region_height"] = 0.67
   if "trial_timeout" not in task_config:
     task_config["trial_timeout"] = 0.5
+  if "ignore_idle_trial_failures" not in task_config:
+    if "pause_timeout_while_idle" in task_config:
+      task_config["ignore_idle_trial_failures"] = bool(task_config["pause_timeout_while_idle"])
+    else:
+      task_config["ignore_idle_trial_failures"] = False
   if "animations_enabled" not in task_config:
     task_config["animations_enabled"] = False
   if "task_animation_enabled" not in task_config:
@@ -107,6 +113,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Constant("Task Region Height", "task_region_height", 0.67, precision=3),
     Form.Constant("Reward Channel", "reward_channel", 0, precision=0),
     Form.Constant("Trial Timeout (s)", "trial_timeout", 0.5, "s", precision=3),
+    Form.Bool("Ignore Idle Trial Failures", "ignore_idle_trial_failures", False),
     Form.Constant("Intertrial Interval (s)", "intertrial_interval", 1.0, "s", precision=3),
   )
   layout.addWidget(form)
@@ -204,6 +211,433 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       "target_color": color,
     }
 
+  def make_default_target(index: int) -> typing.Dict[str, typing.Any]:
+    return {
+      "name": f"Target {index}",
+      "enabled": True,
+      "x_norm": 0.75,
+      "y_norm": 0.50,
+      "radius_ratio": DEFAULT_TARGET_RADIUS_RATIO,
+      "hold_time": DEFAULT_TARGET_HOLD_TIME,
+      "target_color": DEFAULT_TARGET_COLOR.copy(),
+    }
+
+  class LayoutPreview(QWidget):
+    def __init__(
+      self,
+      targets_ref: typing.List[typing.Dict[str, typing.Any]],
+      cursor_radius_getter: typing.Callable[[], float],
+      select_callback: typing.Callable[[int], None],
+      update_callback: typing.Callable[[], None],
+      parent: typing.Optional[QWidget] = None,
+    ) -> None:
+      super().__init__(parent)
+      self.targets_ref = targets_ref
+      self.cursor_radius_getter = cursor_radius_getter
+      self.select_callback = select_callback
+      self.update_callback = update_callback
+      self.selected_index = -1
+      self.drag_index = -1
+      self.setMinimumSize(420, 420)
+      self.setMouseTracking(True)
+
+    def set_selected_index(self, index: int) -> None:
+      self.selected_index = index
+      self.update()
+
+    def _region_rect(self) -> QRectF:
+      w = float(max(1, self.width()))
+      h = float(max(1, self.height()))
+      margin = 18.0
+      avail_w = max(1.0, w - 2.0 * margin)
+      avail_h = max(1.0, h - 2.0 * margin)
+      cfg_w = max(0.05, min(1.0, float(task_config.get("task_region_width", 0.5))))
+      cfg_h = max(0.05, min(1.0, float(task_config.get("task_region_height", 0.67))))
+      scale = min(avail_w / cfg_w, avail_h / cfg_h)
+      region_w = cfg_w * scale
+      region_h = cfg_h * scale
+      left = (w - region_w) / 2.0
+      top = (h - region_h) / 2.0
+      return QRectF(left, top, region_w, region_h)
+
+    def _target_center(self, rect: QRectF, target: typing.Dict[str, typing.Any]) -> QPointF:
+      x_norm = max(0.0, min(1.0, float(target.get("x_norm", 0.75))))
+      y_norm = max(0.0, min(1.0, float(target.get("y_norm", 0.50))))
+      x = rect.left() + x_norm * rect.width()
+      y = rect.top() + (1.0 - y_norm) * rect.height()
+      return QPointF(x, y)
+
+    def _target_radius_px(self, rect: QRectF, target: typing.Dict[str, typing.Any]) -> float:
+      ratio = max(0.01, min(0.5, float(target.get("radius_ratio", DEFAULT_TARGET_RADIUS_RATIO))))
+      return ratio * min(rect.width(), rect.height())
+
+    def _event_pos(self, event: typing.Any) -> QPointF:
+      if hasattr(event, "position"):
+        return event.position()
+      if hasattr(event, "localPos"):
+        return event.localPos()
+      return QPointF(float(event.x()), float(event.y()))
+
+    def _hit_test(self, pos: QPointF) -> int:
+      rect = self._region_rect()
+      best_index = -1
+      best_distance = None
+      for i, target in enumerate(self.targets_ref):
+        center = self._target_center(rect, target)
+        radius = self._target_radius_px(rect, target)
+        dist = math.hypot(pos.x() - center.x(), pos.y() - center.y())
+        if dist <= radius + 6.0:
+          if best_distance is None or dist < best_distance:
+            best_index = i
+            best_distance = dist
+      return best_index
+
+    def _move_target_to_pos(self, index: int, pos: QPointF) -> None:
+      if index < 0 or index >= len(self.targets_ref):
+        return
+      rect = self._region_rect()
+      if rect.width() <= 0.0 or rect.height() <= 0.0:
+        return
+      clamped_x = max(rect.left(), min(rect.right(), pos.x()))
+      clamped_y = max(rect.top(), min(rect.bottom(), pos.y()))
+      x_norm = (clamped_x - rect.left()) / max(1.0, rect.width())
+      y_norm = 1.0 - ((clamped_y - rect.top()) / max(1.0, rect.height()))
+      self.targets_ref[index]["x_norm"] = max(0.0, min(1.0, x_norm))
+      self.targets_ref[index]["y_norm"] = max(0.0, min(1.0, y_norm))
+      self.update_callback()
+      self.update()
+
+    def mousePressEvent(self, event: typing.Any) -> None:
+      if event.button() != Qt.MouseButton.LeftButton:
+        return super().mousePressEvent(event)
+      index = self._hit_test(self._event_pos(event))
+      self.drag_index = index
+      self.selected_index = index
+      self.select_callback(index)
+      self.update()
+
+    def mouseMoveEvent(self, event: typing.Any) -> None:
+      if self.drag_index >= 0:
+        self._move_target_to_pos(self.drag_index, self._event_pos(event))
+        return
+      super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: typing.Any) -> None:
+      if event.button() == Qt.MouseButton.LeftButton:
+        self.drag_index = -1
+      super().mouseReleaseEvent(event)
+
+    def paintEvent(self, event: typing.Any) -> None:
+      painter = QPainter(self)
+      painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+      full_rect = self.rect()
+      painter.fillRect(full_rect, QColor(24, 24, 24))
+      region_rect = self._region_rect()
+      painter.setPen(QPen(QColor(90, 90, 90), 1))
+      painter.setBrush(QColor(40, 40, 40))
+      painter.drawRect(region_rect)
+
+      grid_pen = QPen(QColor(70, 70, 70), 1, Qt.PenStyle.DotLine)
+      painter.setPen(grid_pen)
+      for i in range(1, 4):
+        x = region_rect.left() + region_rect.width() * (i / 4.0)
+        y = region_rect.top() + region_rect.height() * (i / 4.0)
+        painter.drawLine(int(x), int(region_rect.top()), int(x), int(region_rect.bottom()))
+        painter.drawLine(int(region_rect.left()), int(y), int(region_rect.right()), int(y))
+
+      for i, target in enumerate(self.targets_ref):
+        center = self._target_center(region_rect, target)
+        radius = self._target_radius_px(region_rect, target)
+        rgb = target.get("target_color", DEFAULT_TARGET_COLOR)
+        color = QColor(int(rgb[0]), int(rgb[1]), int(rgb[2]))
+        if not bool(target.get("enabled", True)):
+          color.setAlpha(80)
+        painter.setPen(QPen(QColor(255, 255, 255) if i == self.selected_index else color, 2))
+        painter.setBrush(color)
+        painter.drawEllipse(center, radius, radius)
+        if i == self.selected_index:
+          painter.setPen(QPen(QColor(255, 255, 255), 2, Qt.PenStyle.DashLine))
+          painter.setBrush(Qt.BrushStyle.NoBrush)
+          painter.drawEllipse(center, radius + 6.0, radius + 6.0)
+        painter.setPen(QPen(QColor(255, 255, 255), 1))
+        label = str(target.get("name", f"T{i + 1}"))
+        painter.drawText(int(center.x() + radius + 6.0), int(center.y() - radius - 4.0), label)
+
+      cursor_center = QPointF(region_rect.center().x(), region_rect.center().y())
+      cursor_radius = max(0.005, min(0.5, float(self.cursor_radius_getter()))) * min(region_rect.width(), region_rect.height())
+      cursor_color_rgb = task_config.get("cursor_color", [255, 70, 70])
+      cursor_color = QColor(int(cursor_color_rgb[0]), int(cursor_color_rgb[1]), int(cursor_color_rgb[2]))
+      painter.setPen(QPen(QColor(255, 255, 255), 1))
+      painter.setBrush(cursor_color)
+      painter.drawEllipse(cursor_center, cursor_radius, cursor_radius)
+
+      painter.setPen(QPen(QColor(200, 200, 200), 1))
+      painter.drawText(12, 18, "Drag target centers to reposition them inside the task region.")
+
+  def open_layout_editor() -> None:
+    dialog = QDialog(result, Qt.WindowType.Window)
+    dialog.setWindowTitle("Target Layout Editor")
+    dialog.setModal(True)
+    dialog.resize(900, 560)
+
+    draft_targets = [normalize_target(target) for target in list(targets)]
+    if not draft_targets:
+      draft_targets.append(make_default_target(1))
+
+    dialog_layout = QHBoxLayout(dialog)
+    preview: typing.Optional[LayoutPreview] = None
+    selected_index = 0
+    draft_cursor_radius = max(0.005, min(0.5, float(task_config.get("cursor_diameter_ratio", 0.1)) / 2.0))
+
+    side_panel = QWidget(dialog)
+    side_layout = QVBoxLayout(side_panel)
+    side_layout.setContentsMargins(0, 0, 0, 0)
+
+    target_list = QListWidget()
+    target_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+    side_layout.addWidget(QLabel("Targets"))
+    side_layout.addWidget(target_list, 1)
+
+    form_panel = QGroupBox("Selected Target")
+    form_layout = QFormLayout(form_panel)
+    name_edit = QLineEdit()
+    enabled_box = QCheckBox("Enabled")
+    x_spin = QDoubleSpinBox()
+    y_spin = QDoubleSpinBox()
+    radius_spin = QDoubleSpinBox()
+    hold_spin = QDoubleSpinBox()
+    color_button = QPushButton("Choose Color")
+
+    for spin in (x_spin, y_spin):
+      spin.setRange(0.0, 1.0)
+      spin.setDecimals(3)
+      spin.setSingleStep(0.01)
+    radius_spin.setRange(0.01, 0.5)
+    radius_spin.setDecimals(3)
+    radius_spin.setSingleStep(0.01)
+    hold_spin.setRange(0.01, 10.0)
+    hold_spin.setDecimals(3)
+    hold_spin.setSingleStep(0.05)
+
+    form_layout.addRow("Name", name_edit)
+    form_layout.addRow("", enabled_box)
+    form_layout.addRow("X", x_spin)
+    form_layout.addRow("Y", y_spin)
+    form_layout.addRow("Radius", radius_spin)
+    form_layout.addRow("Hold (s)", hold_spin)
+    form_layout.addRow("Color", color_button)
+    side_layout.addWidget(form_panel)
+
+    cursor_panel = QGroupBox("Cursor Reference")
+    cursor_layout = QFormLayout(cursor_panel)
+    cursor_radius_spin = QDoubleSpinBox()
+    cursor_radius_spin.setRange(0.005, 0.5)
+    cursor_radius_spin.setDecimals(3)
+    cursor_radius_spin.setSingleStep(0.005)
+    cursor_radius_spin.setValue(draft_cursor_radius)
+    cursor_layout.addRow("Cursor Radius", cursor_radius_spin)
+    side_layout.addWidget(cursor_panel)
+
+    button_row = QWidget()
+    button_row_layout = QHBoxLayout(button_row)
+    button_row_layout.setContentsMargins(0, 0, 0, 0)
+    add_button = QPushButton("Add")
+    remove_button = QPushButton("Remove")
+    save_button = QPushButton("Save")
+    cancel_button = QPushButton("Cancel")
+    button_row_layout.addWidget(add_button)
+    button_row_layout.addWidget(remove_button)
+    button_row_layout.addStretch(1)
+    button_row_layout.addWidget(save_button)
+    button_row_layout.addWidget(cancel_button)
+    side_layout.addWidget(button_row)
+
+    def refresh_target_list() -> None:
+      target_list.blockSignals(True)
+      target_list.clear()
+      for i, target in enumerate(draft_targets):
+        label = str(target.get("name", "")).strip() or f"Target {i + 1}"
+        if not bool(target.get("enabled", True)):
+          label += " (disabled)"
+        target_list.addItem(label)
+      target_list.blockSignals(False)
+
+    def update_color_button() -> None:
+      if 0 <= selected_index < len(draft_targets):
+        rgb = draft_targets[selected_index].get("target_color", DEFAULT_TARGET_COLOR)
+      else:
+        rgb = DEFAULT_TARGET_COLOR
+      color_button.setStyleSheet(
+        f"background-color: rgb({int(rgb[0])}, {int(rgb[1])}, {int(rgb[2])});"
+      )
+
+    def populate_controls() -> None:
+      controls_enabled = 0 <= selected_index < len(draft_targets)
+      for widget in (name_edit, enabled_box, x_spin, y_spin, radius_spin, hold_spin, color_button, remove_button):
+        widget.setEnabled(controls_enabled)
+      if not controls_enabled:
+        target_list.blockSignals(True)
+        name_edit.blockSignals(True)
+        enabled_box.blockSignals(True)
+        x_spin.blockSignals(True)
+        y_spin.blockSignals(True)
+        radius_spin.blockSignals(True)
+        hold_spin.blockSignals(True)
+        name_edit.setText("")
+        enabled_box.setChecked(False)
+        x_spin.setValue(0.0)
+        y_spin.setValue(0.0)
+        radius_spin.setValue(DEFAULT_TARGET_RADIUS_RATIO)
+        hold_spin.setValue(DEFAULT_TARGET_HOLD_TIME)
+        hold_spin.blockSignals(False)
+        radius_spin.blockSignals(False)
+        y_spin.blockSignals(False)
+        x_spin.blockSignals(False)
+        enabled_box.blockSignals(False)
+        name_edit.blockSignals(False)
+        target_list.blockSignals(False)
+        update_color_button()
+        if preview is not None:
+          preview.set_selected_index(-1)
+        return
+
+      target = draft_targets[selected_index]
+      target_list.blockSignals(True)
+      name_edit.blockSignals(True)
+      enabled_box.blockSignals(True)
+      x_spin.blockSignals(True)
+      y_spin.blockSignals(True)
+      radius_spin.blockSignals(True)
+      hold_spin.blockSignals(True)
+      name_edit.setText(str(target.get("name", "")))
+      enabled_box.setChecked(bool(target.get("enabled", True)))
+      x_spin.setValue(float(target.get("x_norm", 0.75)))
+      y_spin.setValue(float(target.get("y_norm", 0.50)))
+      radius_spin.setValue(float(target.get("radius_ratio", DEFAULT_TARGET_RADIUS_RATIO)))
+      hold_spin.setValue(float(target.get("hold_time", DEFAULT_TARGET_HOLD_TIME)))
+      hold_spin.blockSignals(False)
+      radius_spin.blockSignals(False)
+      y_spin.blockSignals(False)
+      x_spin.blockSignals(False)
+      enabled_box.blockSignals(False)
+      name_edit.blockSignals(False)
+      update_color_button()
+      target_list.setCurrentRow(selected_index)
+      target_list.blockSignals(False)
+      if preview is not None:
+        preview.set_selected_index(selected_index)
+
+    def select_index(index: int) -> None:
+      nonlocal selected_index
+      if index < 0 or index >= len(draft_targets):
+        selected_index = -1
+      else:
+        selected_index = index
+      populate_controls()
+
+    def refresh_editor() -> None:
+      refresh_target_list()
+      populate_controls()
+      if preview is not None:
+        preview.update()
+
+    preview = LayoutPreview(draft_targets, lambda: draft_cursor_radius, select_index, refresh_editor, dialog)
+    dialog_layout.addWidget(preview, 1)
+    dialog_layout.addWidget(side_panel)
+
+    def apply_field_changes() -> None:
+      if not (0 <= selected_index < len(draft_targets)):
+        return
+      draft_targets[selected_index] = normalize_target({
+        **draft_targets[selected_index],
+        "name": name_edit.text(),
+        "enabled": enabled_box.isChecked(),
+        "x_norm": x_spin.value(),
+        "y_norm": y_spin.value(),
+        "radius_ratio": radius_spin.value(),
+        "hold_time": hold_spin.value(),
+      })
+      refresh_editor()
+
+    def choose_color() -> None:
+      if not (0 <= selected_index < len(draft_targets)):
+        return
+      current_rgb = draft_targets[selected_index].get("target_color", DEFAULT_TARGET_COLOR)
+      selected = QColorDialog.getColor(QColor(*current_rgb), dialog, "Select Target Color")
+      if not selected.isValid():
+        return
+      draft_targets[selected_index]["target_color"] = [selected.red(), selected.green(), selected.blue()]
+      refresh_editor()
+
+    name_edit.textEdited.connect(lambda _text: apply_field_changes())
+    enabled_box.toggled.connect(lambda _checked: apply_field_changes())
+    x_spin.valueChanged.connect(lambda _value: apply_field_changes())
+    y_spin.valueChanged.connect(lambda _value: apply_field_changes())
+    radius_spin.valueChanged.connect(lambda _value: apply_field_changes())
+    hold_spin.valueChanged.connect(lambda _value: apply_field_changes())
+    color_button.clicked.connect(choose_color)
+    target_list.currentRowChanged.connect(select_index)
+
+    def on_cursor_radius_changed(value: float) -> None:
+      nonlocal draft_cursor_radius
+      draft_cursor_radius = max(0.005, min(0.5, float(value)))
+      if preview is not None:
+        preview.update()
+
+    cursor_radius_spin.valueChanged.connect(on_cursor_radius_changed)
+
+    def add_layout_target() -> None:
+      nonlocal selected_index
+      if 0 <= selected_index < len(draft_targets):
+        new_target = normalize_target(draft_targets[selected_index])
+        new_target["name"] = f"{new_target.get('name', '').strip() or 'Target'} Copy"
+      else:
+        new_target = make_default_target(len(draft_targets) + 1)
+      draft_targets.append(new_target)
+      selected_index = len(draft_targets) - 1
+      refresh_editor()
+
+    def remove_layout_target() -> None:
+      nonlocal selected_index
+      if not (0 <= selected_index < len(draft_targets)):
+        return
+      del draft_targets[selected_index]
+      if not draft_targets:
+        draft_targets.append(make_default_target(1))
+      selected_index = min(selected_index, len(draft_targets) - 1)
+      refresh_editor()
+
+    def save_layout() -> None:
+      normalized_targets = [normalize_target(target) for target in draft_targets]
+      while targets:
+        del targets[-1]
+      for target in normalized_targets:
+        targets.append(target)
+      task_config["cursor_diameter_ratio"] = max(0.01, min(1.0, draft_cursor_radius * 2.0))
+      sync_table_from_config()
+      if 0 <= selected_index < target_table.rowCount():
+        target_table.selectRow(selected_index)
+      dialog.accept()
+
+    add_button.clicked.connect(add_layout_target)
+    remove_button.clicked.connect(remove_layout_target)
+    save_button.clicked.connect(save_layout)
+    cancel_button.clicked.connect(dialog.reject)
+
+    no_wheel_filter = NoWheelChangeFilter(dialog)
+    dialog._no_wheel_filter = no_wheel_filter # type: ignore[attr-defined]
+    for spinbox in dialog.findChildren(QSpinBox):
+      spinbox.installEventFilter(no_wheel_filter)
+    for spinbox in dialog.findChildren(QDoubleSpinBox):
+      spinbox.installEventFilter(no_wheel_filter)
+    for combo in dialog.findChildren(QComboBox):
+      combo.installEventFilter(no_wheel_filter)
+    for slider in dialog.findChildren(QSlider):
+      slider.installEventFilter(no_wheel_filter)
+
+    refresh_editor()
+    dialog.exec()
+
   def write_table_row(row: int, target: typing.Dict[str, typing.Any]) -> None:
     enabled_item = QTableWidgetItem("")
     enabled_item.setFlags(
@@ -292,6 +726,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   controls_layout.setContentsMargins(0, 0, 0, 0)
   add_target_button = QPushButton("Add Target")
   remove_target_button = QPushButton("Remove Selected")
+  edit_layout_button = QPushButton("Edit Layout...")
   bulk_field_combo = QComboBox()
   bulk_field_combo.addItems([
     "Enabled",
@@ -306,6 +741,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   apply_to_all_button = QPushButton("Apply Field to All")
   controls_layout.addWidget(add_target_button)
   controls_layout.addWidget(remove_target_button)
+  controls_layout.addWidget(edit_layout_button)
   controls_layout.addWidget(QLabel("Field:"))
   controls_layout.addWidget(bulk_field_combo)
   controls_layout.addWidget(apply_to_all_button)
@@ -321,13 +757,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       new_target = normalize_target(targets[selected_row])
     else:
       new_target = {
-        "name": f"Target {len(targets) + 1}",
-        "enabled": True,
-        "x_norm": 0.75,
-        "y_norm": 0.50,
-        "radius_ratio": DEFAULT_TARGET_RADIUS_RATIO,
-        "hold_time": DEFAULT_TARGET_HOLD_TIME,
-        "target_color": DEFAULT_TARGET_COLOR.copy()
+        **make_default_target(len(targets) + 1)
       }
 
     targets.append(new_target)
@@ -345,13 +775,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         del targets[row]
     if not targets:
       targets.append({
-        "name": "Target 1",
-        "enabled": True,
-        "x_norm": 0.75,
-        "y_norm": 0.50,
-        "radius_ratio": DEFAULT_TARGET_RADIUS_RATIO,
-        "hold_time": DEFAULT_TARGET_HOLD_TIME,
-        "target_color": DEFAULT_TARGET_COLOR.copy()
+        **make_default_target(1)
       })
     sync_table_from_config()
 
@@ -404,6 +828,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
 
   add_target_button.clicked.connect(add_target)
   remove_target_button.clicked.connect(remove_target)
+  edit_layout_button.clicked.connect(open_layout_editor)
   apply_to_all_button.clicked.connect(apply_selected_field_to_all)
 
   layout.addWidget(QLabel("Targets (rows = targets):"))
@@ -506,6 +931,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   target_color = QColor(*DEFAULT_TARGET_COLOR)
   hold_time = DEFAULT_TARGET_HOLD_TIME
   trial_timeout = float(task_config.get("trial_timeout", 0.5))
+  ignore_idle_trial_failures = bool(task_config.get("ignore_idle_trial_failures", False))
   intertrial_interval = float(task_config.get("intertrial_interval", 1.0))
   configured_targets = task_config.get("targets", [])
   animations_enabled = bool(task_config.get("animations_enabled", False))
@@ -537,6 +963,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   free_play_end_requested = False
   joystick_x = 0.0
   joystick_y = 0.0
+  joystick_active_this_trial = False
   cursor_inside_target = False
   hold_progress_ratio = 0.0
   success_pop_start: typing.Optional[float] = None
@@ -602,7 +1029,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     for i in range(max(0, repeats)):
       await deliver_reward()
       if i < repeats - 1:
-        await asyncio.sleep(0.05)
+        await context.sleep(datetime.timedelta(seconds=0.05))
 
   def place_target() -> typing.Tuple[float, float, float, float, QColor]:
     enabled_targets = []
@@ -767,6 +1194,9 @@ async def run(context: TaskContextProtocol) -> TaskResult:
         cursor_x += jx * cumulative_speed * dt
         cursor_y += jy * cumulative_speed * dt
 
+      joystick_motion_threshold = zero_drift_buffer if zero_drift_mode else 0.02
+      joystick_is_active = math.hypot(jx, jy) >= joystick_motion_threshold
+
       cursor_x = max(0.0, min(1.0, cursor_x))
       cursor_y = max(0.0, min(1.0, cursor_y))
 
@@ -791,9 +1221,12 @@ async def run(context: TaskContextProtocol) -> TaskResult:
           target_x, target_y, current_target_radius_ratio, current_hold_time, current_target_color = place_target()
           hold_start = None
           trial_start = now
+          joystick_active_this_trial = False
           state = "active"
           await context.log("BehavState=active")
       else:
+        if joystick_is_active:
+          joystick_active_this_trial = True
         dist_to_target = math.hypot(cursor_px_x - target_px_x, cursor_px_y - target_px_y)
         cursor_inside_target = (dist_to_target <= target_radius_px)
         if cursor_inside_target:
@@ -822,7 +1255,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
               pop_end_time = success_pop_start + success_pop_duration_s
               while time.perf_counter() < pop_end_time:
                 context.widget.update()
-                await asyncio.sleep(0.01)
+                await context.sleep(datetime.timedelta(seconds=0.01))
             await context.log("BehavState=success")
             return TaskResult(success=True)
           else:
@@ -832,13 +1265,19 @@ async def run(context: TaskContextProtocol) -> TaskResult:
           hold_progress_ratio = 0.0
 
         if now - trial_start >= trial_timeout:
+          if ignore_idle_trial_failures and not joystick_active_this_trial:
+            hold_start = None
+            state = "iti"
+            iti_end = now + intertrial_interval
+            await context.log("BehavState=iti")
+            continue
           streak_count = 0
           task_config["_streak_count"] = 0
           await context.log("BehavState=fail")
           return TaskResult(success=False)
 
       context.widget.update()
-      await asyncio.sleep(0.01)
+      await context.sleep(datetime.timedelta(seconds=0.01))
   finally:
     analog_task.cancel()
     try:

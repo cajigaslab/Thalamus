@@ -63,8 +63,8 @@
             {
               "name": "Target 1",
               "enabled": true,
-              "x_norm": 0.75,
-              "y_norm": 0.5,
+              "x_norm": 0.37187250996015936,
+              "y_norm": 0.7828685258964143,
               "radius_ratio": 0.1,
               "hold_time": 0.5,
               "target_color": [
@@ -76,8 +76,8 @@
             {
               "name": "Target 2",
               "enabled": true,
-              "x_norm": 0.5,
-              "y_norm": 0.5,
+              "x_norm": 0.27577689243027886,
+              "y_norm": 0.2543160690571049,
               "radius_ratio": 0.1,
               "hold_time": 0.5,
               "target_color": [
@@ -98,6 +98,45 @@
                 255,
                 255
               ]
+            },
+            {
+              "name": "Target 1 Copy",
+              "enabled": true,
+              "x_norm": 0.7188844621513945,
+              "y_norm": 0.7616201859229748,
+              "radius_ratio": 0.1,
+              "hold_time": 0.5,
+              "target_color": [
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "name": "Target 1 Copy Copy",
+              "enabled": true,
+              "x_norm": 0.20637450199203186,
+              "y_norm": 0.5690571049136787,
+              "radius_ratio": 0.1,
+              "hold_time": 0.5,
+              "target_color": [
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "name": "Target 1 Copy Copy Copy",
+              "enabled": true,
+              "x_norm": 0.7847277556440899,
+              "y_norm": 0.49335989375830014,
+              "radius_ratio": 0.1,
+              "hold_time": 0.5,
+              "target_color": [
+                255,
+                255,
+                255
+              ]
             }
           ],
           "control_mode": "direct",
@@ -106,7 +145,7 @@
           "task_region_y": 0.27,
           "task_region_width": 0.5,
           "task_region_height": 0.67,
-          "trial_timeout": 5.0,
+          "trial_timeout": 1.0,
           "joystick_node": "Joystick",
           "cursor_only_mode": false,
           "free_play_end_key": "space",
@@ -139,7 +178,9 @@
           "up_influence_pct": 100,
           "down_influence_pct": 100,
           "left_influence_pct": 100,
-          "right_influence_pct": 100
+          "right_influence_pct": 100,
+          "pause_timeout_while_idle": false,
+          "ignore_idle_trial_failures": true
         }
       ]
     }
@@ -148,7 +189,7 @@
     {
       "task_type": "joystick_intro",
       "type": "task",
-      "goal": 3,
+      "goal": 6,
       "name": "Untitled",
       "intertrial_timeout": {
         "min": 1,
@@ -199,8 +240,8 @@
         {
           "name": "Target 1",
           "enabled": true,
-          "x_norm": 0.75,
-          "y_norm": 0.5,
+          "x_norm": 0.37187250996015936,
+          "y_norm": 0.7828685258964143,
           "radius_ratio": 0.1,
           "hold_time": 0.5,
           "target_color": [
@@ -212,8 +253,8 @@
         {
           "name": "Target 2",
           "enabled": true,
-          "x_norm": 0.5,
-          "y_norm": 0.5,
+          "x_norm": 0.27577689243027886,
+          "y_norm": 0.2543160690571049,
           "radius_ratio": 0.1,
           "hold_time": 0.5,
           "target_color": [
@@ -234,6 +275,45 @@
             255,
             255
           ]
+        },
+        {
+          "name": "Target 1 Copy",
+          "enabled": true,
+          "x_norm": 0.7188844621513945,
+          "y_norm": 0.7616201859229748,
+          "radius_ratio": 0.1,
+          "hold_time": 0.5,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "name": "Target 1 Copy Copy",
+          "enabled": true,
+          "x_norm": 0.20637450199203186,
+          "y_norm": 0.5690571049136787,
+          "radius_ratio": 0.1,
+          "hold_time": 0.5,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "name": "Target 1 Copy Copy Copy",
+          "enabled": true,
+          "x_norm": 0.7847277556440899,
+          "y_norm": 0.49335989375830014,
+          "radius_ratio": 0.1,
+          "hold_time": 0.5,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
         }
       ],
       "control_mode": "direct",
@@ -242,7 +322,7 @@
       "task_region_y": 0.27,
       "task_region_width": 0.5,
       "task_region_height": 0.67,
-      "trial_timeout": 0.5,
+      "trial_timeout": 1.0,
       "joystick_node": "Joystick",
       "cursor_only_mode": false,
       "free_play_end_key": "space",
@@ -276,9 +356,10 @@
       "down_influence_pct": 100,
       "left_influence_pct": 100,
       "right_influence_pct": 100,
+      "pause_timeout_while_idle": false,
+      "ignore_idle_trial_failures": true,
       "task_cluster_name": "Untitled",
-      "queue_index": 0,
-      "_streak_count": 0
+      "queue_index": 0
     }
   ],
   "reward_schedule": {
@@ -315,7 +396,7 @@
       "y": 1
     }
   },
-  "status": "Untitled/Untitled = 9/23",
+  "status": "Untitled/Untitled = 0/2",
   "thalamus_view_geometry": [
     100,
     100,
