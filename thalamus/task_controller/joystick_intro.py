@@ -610,7 +610,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     def save_layout() -> None:
       normalized_targets = [normalize_target(target) for target in draft_targets]
       while targets:
-        del targets[-1]
+        del targets[len(targets) - 1]
       for target in normalized_targets:
         targets.append(target)
       task_config["cursor_diameter_ratio"] = max(0.01, min(1.0, draft_cursor_radius * 2.0))
