@@ -180,7 +180,9 @@
           "left_influence_pct": 100,
           "right_influence_pct": 100,
           "pause_timeout_while_idle": false,
-          "ignore_idle_trial_failures": true
+          "ignore_idle_trial_failures": true,
+          "state_indicator_x": 10,
+          "state_indicator_y": 100.0
         }
       ]
     }
@@ -358,6 +360,8 @@
       "right_influence_pct": 100,
       "pause_timeout_while_idle": false,
       "ignore_idle_trial_failures": true,
+      "state_indicator_x": 10,
+      "state_indicator_y": 100.0,
       "task_cluster_name": "Untitled",
       "queue_index": 0
     }
@@ -396,7 +400,7 @@
       "y": 1
     }
   },
-  "status": "Untitled/Untitled = 0/2",
+  "status": "",
   "thalamus_view_geometry": [
     100,
     100,

@@ -67,9 +67,9 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   if "trial_timeout" not in task_config:
     task_config["trial_timeout"] = 0.5
   if "state_indicator_x" not in task_config:
-    task_config["state_indicator_x"] = 180
+    task_config["state_indicator_x"] = 10
   if "state_indicator_y" not in task_config:
-    task_config["state_indicator_y"] = 0
+    task_config["state_indicator_y"] = 10
   if "ignore_idle_trial_failures" not in task_config:
     if "pause_timeout_while_idle" in task_config:
       task_config["ignore_idle_trial_failures"] = bool(task_config["pause_timeout_while_idle"])
@@ -121,8 +121,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Constant("Task Region Center Y", "task_region_y", 0.270, precision=3),
     Form.Constant("Task Region Width", "task_region_width", 0.5, precision=3),
     Form.Constant("Task Region Height", "task_region_height", 0.67, precision=3),
-    Form.Constant("State Indicator X", "state_indicator_x", 180, precision=0),
-    Form.Constant("State Indicator Y", "state_indicator_y", 0, precision=0),
+    Form.Constant("State Indicator Right Margin", "state_indicator_x", 10, precision=0),
+    Form.Constant("State Indicator Bottom Margin", "state_indicator_y", 10, precision=0),
     Form.Constant("Reward Channel", "reward_channel", 0, precision=0),
     Form.Constant("Trial Timeout (s)", "trial_timeout", 0.5, "s", precision=3),
     Form.Bool("Ignore Idle Trial Failures", "ignore_idle_trial_failures", False),
@@ -958,6 +958,8 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   show_success_pop = bool(task_config.get("show_success_pop", True))
   success_pop_duration_s = max(0.0, min(1.0, float(task_config.get("success_pop_duration_s", 0.12))))
   streak_count = max(0, int(task_config.get("_streak_count", 0)))
+  state_indicator_x = max(0, int(task_config.get("state_indicator_x", 10)))
+  state_indicator_y = max(0, int(task_config.get("state_indicator_y", 10)))
   cursor_x = 0.5
   cursor_y = 0.5
   target_x = 0.5
@@ -1172,10 +1174,9 @@ async def run(context: TaskContextProtocol) -> TaskResult:
 
     state_color = QColor(state_brightness, state_brightness, state_brightness)
     state_width = 70
-    state_margin = 10
     painter.fillRect(
-      w - state_width - state_margin,
-      h - state_width - state_margin,
+      w - state_width - state_indicator_x,
+      h - state_width - state_indicator_y,
       state_width,
       state_width,
       state_color,
