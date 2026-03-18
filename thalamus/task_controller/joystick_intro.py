@@ -8,6 +8,9 @@ Goal:
 Two control modes:
 - cumulative: joystick acts like velocity input (mouse-like accumulation).
 - direct: joystick directly maps to cursor position around center.
+
+Testing:
+ > python -m thalamus.task_controller --pypipeline -c joy_home_test.json
 """
 
 import asyncio
@@ -30,6 +33,9 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_TARGET_RADIUS_RATIO = 0.08
 DEFAULT_TARGET_COLOR = [0, 220, 60]
 DEFAULT_TARGET_HOLD_TIME = 0.40
+
+def toggle_brightness(brightness: int) -> int:
+  return 0 if brightness == 255 else 255
 
 def create_widget(task_config: ObservableCollection) -> QWidget:
   class NoWheelChangeFilter(QWidget):
@@ -60,6 +66,10 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     task_config["task_region_height"] = 0.67
   if "trial_timeout" not in task_config:
     task_config["trial_timeout"] = 0.5
+  if "state_indicator_x" not in task_config:
+    task_config["state_indicator_x"] = 180
+  if "state_indicator_y" not in task_config:
+    task_config["state_indicator_y"] = 0
   if "ignore_idle_trial_failures" not in task_config:
     if "pause_timeout_while_idle" in task_config:
       task_config["ignore_idle_trial_failures"] = bool(task_config["pause_timeout_while_idle"])
@@ -111,6 +121,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Constant("Task Region Center Y", "task_region_y", 0.270, precision=3),
     Form.Constant("Task Region Width", "task_region_width", 0.5, precision=3),
     Form.Constant("Task Region Height", "task_region_height", 0.67, precision=3),
+    Form.Constant("State Indicator X", "state_indicator_x", 180, precision=0),
+    Form.Constant("State Indicator Y", "state_indicator_y", 0, precision=0),
     Form.Constant("Reward Channel", "reward_channel", 0, precision=0),
     Form.Constant("Trial Timeout (s)", "trial_timeout", 0.5, "s", precision=3),
     Form.Bool("Ignore Idle Trial Failures", "ignore_idle_trial_failures", False),
@@ -946,7 +958,6 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   show_success_pop = bool(task_config.get("show_success_pop", True))
   success_pop_duration_s = max(0.0, min(1.0, float(task_config.get("success_pop_duration_s", 0.12))))
   streak_count = max(0, int(task_config.get("_streak_count", 0)))
-
   cursor_x = 0.5
   cursor_y = 0.5
   target_x = 0.5
@@ -969,6 +980,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   success_pop_start: typing.Optional[float] = None
   success_pop_x = 0.5
   success_pop_y = 0.5
+  state_brightness = 0
 
   task_region_width = max(0.05, min(1.0, task_region_width))
   task_region_height = max(0.05, min(1.0, task_region_height))
@@ -1158,6 +1170,17 @@ async def run(context: TaskContextProtocol) -> TaskResult:
         painter.setPen(QPen(QColor(255, 255, 255), 1))
         painter.drawText(10, 68, f"Bonus @ {streak_bonus_threshold}")
 
+    state_color = QColor(state_brightness, state_brightness, state_brightness)
+    state_width = 70
+    state_margin = 10
+    painter.fillRect(
+      w - state_width - state_margin,
+      h - state_width - state_margin,
+      state_width,
+      state_width,
+      state_color,
+    )
+
   context.widget.renderer = renderer
   context.widget.key_release_handler = on_key_release
 
@@ -1223,6 +1246,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
           trial_start = now
           joystick_active_this_trial = False
           state = "active"
+          state_brightness = toggle_brightness(state_brightness)
           await context.log("BehavState=active")
       else:
         if joystick_is_active:
@@ -1256,6 +1280,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
               while time.perf_counter() < pop_end_time:
                 context.widget.update()
                 await context.sleep(datetime.timedelta(seconds=0.01))
+            state_brightness = toggle_brightness(state_brightness)
             await context.log("BehavState=success")
             return TaskResult(success=True)
           else:
@@ -1269,10 +1294,12 @@ async def run(context: TaskContextProtocol) -> TaskResult:
             hold_start = None
             state = "iti"
             iti_end = now + intertrial_interval
+            state_brightness = 0
             await context.log("BehavState=iti")
             continue
           streak_count = 0
           task_config["_streak_count"] = 0
+          state_brightness = toggle_brightness(state_brightness)
           await context.log("BehavState=fail")
           return TaskResult(success=False)
 
