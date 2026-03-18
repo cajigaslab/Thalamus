@@ -79,6 +79,45 @@ struct CoCondition {
   }
 };
 
+
+struct CoTurnstile {
+  CoCondition condition;
+  size_t next = 0;
+  size_t current = 0;
+  CoTurnstile(boost::asio::io_context &_io_context)
+      : condition(_io_context) {}
+
+  struct Turn {
+    CoTurnstile* turnstile;
+    Turn() : turnstile(nullptr) {}
+    Turn(Turn &) = delete;
+    Turn(const Turn &) = delete;
+    Turn& operator=(Turn& t) = delete;
+    Turn& operator=(const Turn& t) = delete;
+
+    Turn(CoTurnstile* t) : turnstile(t) {}
+    Turn(Turn &&t) : turnstile(t.turnstile) { t.turnstile = nullptr; }
+    Turn& operator=(Turn&& t) { 
+      this->turnstile = t.turnstile;
+      t.turnstile = nullptr;
+      return *this;
+    }
+
+    ~Turn() {
+      if (turnstile) {
+        ++turnstile->current;
+        turnstile->condition.notify();
+      }
+    }
+  };
+
+  boost::asio::awaitable<Turn> wait() {
+    auto ticket = next++;
+    co_await condition.wait([&] { return ticket == current; });
+    co_return Turn(this);
+  }
+};
+
 template<typename T>
 struct MovableClock : public T {
   static std::atomic_int64_t offset;

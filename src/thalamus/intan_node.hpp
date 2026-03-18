@@ -33,5 +33,7 @@ public:
   std::chrono::nanoseconds time() const override;
   std::string_view name(int channel) const override;
   size_t modalities() const override;
+
+  boost::json::value process(const boost::json::value &) override;
 };
 } // namespace thalamus

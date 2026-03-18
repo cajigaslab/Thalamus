@@ -125,6 +125,7 @@ struct IntanNode::Impl {
   bool is_connected = false;
   bool getting_sample_rate = false;
   bool constructed = false;
+  CoTurnstile turnstile;
 
 public:
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
@@ -132,6 +133,7 @@ public:
       : state(_state), io_context(_io_context),
         command_socket(io_context, "command", state),
         waveform_socket(io_context), outer(_outer),
+        turnstile(io_context),
         connecting_condition(io_context),
         graph(_graph) {
     state_connection =
@@ -149,7 +151,12 @@ public:
   CoCondition connecting_condition;
   NodeGraph* graph;
 
-  boost::asio::awaitable<void> send_metadata(boost::system::error_code& ec) {
+  boost::asio::awaitable<void> send_metadata(boost::system::error_code& ec, bool lock) {
+    CoTurnstile::Turn turn;
+    if (lock) {
+      turn = co_await turnstile.wait();
+    }
+
     if(new_metadata.empty()) {
       co_return;
     }
@@ -176,9 +183,9 @@ public:
     }
     new_metadata.clear();
   }
-  boost::asio::awaitable<void> send_metadata() {
+  boost::asio::awaitable<void> send_metadata(bool lock) {
     boost::system::error_code ec;
-    co_await send_metadata(ec);
+    co_await send_metadata(ec, lock);
     if (ec) {
       throw boost::system::system_error(ec);
     }
@@ -296,7 +303,12 @@ public:
     }
   }
 
-  boost::asio::awaitable<void> do_connect() {
+  boost::asio::awaitable<void> do_connect(bool lock) {
+    CoTurnstile::Turn turn;
+    if(lock) {
+      turn = co_await turnstile.wait();
+    }
+
     if (connected) {
       co_return;
     }
@@ -356,9 +368,22 @@ public:
     connected = false;
   }
 
+  boost::asio::awaitable<void> send_command(std::string command) {
+    auto turn = co_await turnstile.wait();
+    if (!connected) {
+      THALAMUS_LOG(info) << "Failed to send command: Intan isn't connected";
+      co_return;
+    }
+
+    co_await boost::asio::async_write(
+        command_socket.socket,
+        boost::asio::const_buffer(command.data(), command.size()));
+  }
+
   boost::asio::awaitable<void> start_stream() {
     try {
-      co_await do_connect();
+      auto turn = co_await turnstile.wait();
+      co_await do_connect(false);
       if (!connected) {
         (*state)["Running"].assign(false);
         co_return;
@@ -450,7 +475,7 @@ public:
 
       std::copy(metadata_list->begin(), metadata_list->end(), std::inserter(new_metadata, new_metadata.end()));
       boost::system::error_code ec;
-      co_await send_metadata(ec);
+      co_await send_metadata(ec, false);
       if (ec) {
         throw boost::system::system_error(ec);
       }
@@ -505,14 +530,14 @@ public:
       THALAMUS_LOG(info) << "on_metadata_change(metadata_list), " << boost::json::serialize(g);
       new_metadata.insert(std::get<ObservableDictPtr>(v));
       if (streaming && metadata_ready) {
-        boost::asio::co_spawn(io_context, send_metadata(), boost::asio::detached);
+        boost::asio::co_spawn(io_context, send_metadata(true), boost::asio::detached);
       }
     } else if(source->parent == metadata_list.get()) {
       auto source_shared = static_cast<ObservableDict*>(source)->shared_from_this();
       THALAMUS_LOG(info) << "on_metadata_change(child)";
       new_metadata.insert(source_shared);
       if (streaming && metadata_ready) {
-        boost::asio::co_spawn(io_context, send_metadata(), boost::asio::detached);
+        boost::asio::co_spawn(io_context, send_metadata(true), boost::asio::detached);
       }
     }
   }
@@ -533,7 +558,7 @@ public:
       }
       auto new_is_connected = std::get<bool>(v);
       if (new_is_connected) {
-        boost::asio::co_spawn(io_context, do_connect(), boost::asio::detached);
+        boost::asio::co_spawn(io_context, do_connect(true), boost::asio::detached);
       } else {
         disconnect();
       }
@@ -601,3 +626,12 @@ void IntanNode::inject(const thalamus::vector<std::span<double const>> &,
                        const thalamus::vector<std::string_view> &) {}
 
 size_t IntanNode::modalities() const { return THALAMUS_MODALITY_ANALOG; }
+
+boost::json::value IntanNode::process(const boost::json::value & request) {
+  if(request.is_string()) {
+    std::string_view command_view = request.as_string();
+    std::string command(command_view.begin(), command_view.end());
+    boost::asio::co_spawn(impl->io_context, impl->send_command(command), boost::asio::detached);
+  }
+  return boost::json::value();
+}
