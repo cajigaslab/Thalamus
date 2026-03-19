@@ -67,9 +67,9 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   if "trial_timeout" not in task_config:
     task_config["trial_timeout"] = 0.5
   if "state_indicator_x" not in task_config:
-    task_config["state_indicator_x"] = 10
+    task_config["state_indicator_x"] = 30
   if "state_indicator_y" not in task_config:
-    task_config["state_indicator_y"] = 10
+    task_config["state_indicator_y"] = 70
   if "ignore_idle_trial_failures" not in task_config:
     if "pause_timeout_while_idle" in task_config:
       task_config["ignore_idle_trial_failures"] = bool(task_config["pause_timeout_while_idle"])
@@ -121,8 +121,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Constant("Task Region Center Y", "task_region_y", 0.270, precision=3),
     Form.Constant("Task Region Width", "task_region_width", 0.5, precision=3),
     Form.Constant("Task Region Height", "task_region_height", 0.67, precision=3),
-    Form.Constant("State Indicator Right Margin", "state_indicator_x", 10, precision=0),
-    Form.Constant("State Indicator Bottom Margin", "state_indicator_y", 10, precision=0),
+    Form.Constant("State Indicator Right Margin", "state_indicator_x", 30, precision=0),
+    Form.Constant("State Indicator Bottom Margin", "state_indicator_y", 70, precision=0),
     Form.Constant("Reward Channel", "reward_channel", 0, precision=0),
     Form.Constant("Trial Timeout (s)", "trial_timeout", 0.5, "s", precision=3),
     Form.Bool("Ignore Idle Trial Failures", "ignore_idle_trial_failures", False),
@@ -958,8 +958,9 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   show_success_pop = bool(task_config.get("show_success_pop", True))
   success_pop_duration_s = max(0.0, min(1.0, float(task_config.get("success_pop_duration_s", 0.12))))
   streak_count = max(0, int(task_config.get("_streak_count", 0)))
-  state_indicator_x = max(0, int(task_config.get("state_indicator_x", 10)))
-  state_indicator_y = max(0, int(task_config.get("state_indicator_y", 10)))
+  state_indicator_x = max(0, int(task_config.get("state_indicator_x", 30)))
+  state_indicator_y = max(0, int(task_config.get("state_indicator_y", 70)))
+  session_start = time.perf_counter()
   cursor_x = 0.5
   cursor_y = 0.5
   target_x = 0.5
@@ -983,6 +984,23 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   success_pop_x = 0.5
   success_pop_y = 0.5
   state_brightness = 0
+  current_target_index = -1
+  trial_index = 0
+  target_entry_count = 0
+  first_movement_time: typing.Optional[float] = None
+  first_target_entry_time: typing.Optional[float] = None
+  first_hold_start_time: typing.Optional[float] = None
+  previous_cursor_inside_target = False
+  current_attempt: typing.Optional[typing.Dict[str, typing.Any]] = None
+  behav_result: typing.Dict[str, typing.Any] = {
+    "task": "joystick_intro",
+    "control_mode": control_mode,
+    "cursor_only_mode": cursor_only_mode,
+    "trial_attempt_count": 0,
+    "attempts": [],
+    "session_start_perf_counter": session_start,
+    "final_outcome": None,
+  }
 
   task_region_width = max(0.05, min(1.0, task_region_width))
   task_region_height = max(0.05, min(1.0, task_region_height))
@@ -1045,9 +1063,71 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       if i < repeats - 1:
         await context.sleep(datetime.timedelta(seconds=0.05))
 
-  def place_target() -> typing.Tuple[float, float, float, float, QColor]:
+  def reset_attempt_tracking(now: float) -> None:
+    nonlocal target_entry_count
+    nonlocal first_movement_time
+    nonlocal first_target_entry_time
+    nonlocal first_hold_start_time
+    nonlocal previous_cursor_inside_target
+    nonlocal current_attempt
+    nonlocal trial_index
+
+    trial_index += 1
+    target_entry_count = 0
+    first_movement_time = None
+    first_target_entry_time = None
+    first_hold_start_time = None
+    previous_cursor_inside_target = False
+    current_attempt = {
+      "attempt_index": trial_index,
+      "start_time_perf_counter": now,
+      "control_mode": control_mode,
+      "cursor_only_mode": cursor_only_mode,
+      "target_index": None,
+      "target_position": None,
+      "target_radius_ratio": None,
+      "hold_time_s": None,
+      "target_color_rgb": None,
+      "events": [],
+      "joystick_active": False,
+      "target_entry_count": 0,
+      "outcome": None,
+      "failure_reason": None,
+    }
+
+  def append_event(name: str, event_time: float, **extra: typing.Any) -> None:
+    if current_attempt is None:
+      return
+    event = {
+      "name": name,
+      "time_perf_counter": event_time,
+      "time_since_attempt_start_s": max(0.0, event_time - float(current_attempt["start_time_perf_counter"])),
+    }
+    event.update(extra)
+    current_attempt["events"].append(event)
+
+  def finalize_attempt(outcome: str, now: float, failure_reason: typing.Optional[str] = None) -> None:
+    if current_attempt is None:
+      return
+    current_attempt["outcome"] = outcome
+    current_attempt["failure_reason"] = failure_reason
+    current_attempt["joystick_active"] = joystick_active_this_trial
+    current_attempt["target_entry_count"] = target_entry_count
+    current_attempt["end_time_perf_counter"] = now
+    current_attempt["duration_s"] = max(0.0, now - float(current_attempt["start_time_perf_counter"]))
+    current_attempt["first_movement_time_s"] = None if first_movement_time is None else max(0.0, first_movement_time - float(current_attempt["start_time_perf_counter"]))
+    current_attempt["first_target_entry_time_s"] = None if first_target_entry_time is None else max(0.0, first_target_entry_time - float(current_attempt["start_time_perf_counter"]))
+    current_attempt["first_hold_start_time_s"] = None if first_hold_start_time is None else max(0.0, first_hold_start_time - float(current_attempt["start_time_perf_counter"]))
+    current_attempt["success_time_s"] = current_attempt["duration_s"] if outcome == "success" else None
+    behav_result["attempts"].append(current_attempt)
+    behav_result["trial_attempt_count"] = len(behav_result["attempts"])
+    behav_result["final_outcome"] = outcome
+    behav_result["final_attempt"] = current_attempt
+    context.behav_result = behav_result
+
+  def place_target() -> typing.Tuple[int, float, float, float, float, QColor]:
     enabled_targets = []
-    for target in configured_targets:
+    for index, target in enumerate(configured_targets):
       if not isinstance(target, dict):
         continue
       if not bool(target.get("enabled", True)):
@@ -1065,10 +1145,10 @@ async def run(context: TaskContextProtocol) -> TaskResult:
         )
       else:
         tc = target_color
-      enabled_targets.append((tx, ty, tr, th, tc))
+      enabled_targets.append((index, tx, ty, tr, th, tc))
     if enabled_targets:
       return random.choice(enabled_targets)
-    return 0.75, 0.50, target_radius_ratio, hold_time, target_color
+    return -1, 0.75, 0.50, target_radius_ratio, hold_time, target_color
 
   def apply_direction_influence(raw_jx: float, raw_jy: float) -> typing.Tuple[float, float]:
     jx = raw_jx
@@ -1196,6 +1276,8 @@ async def run(context: TaskContextProtocol) -> TaskResult:
 
   try:
     if cursor_only_mode:
+      reset_attempt_tracking(session_start)
+      append_event("free_play_start", session_start)
       await context.log("BehavState=free_play")
     else:
       await context.log(f"BehavState={state}")
@@ -1238,29 +1320,66 @@ async def run(context: TaskContextProtocol) -> TaskResult:
 
       if cursor_only_mode:
         if free_play_end_requested:
+          append_event("free_play_end_requested", now)
+          finalize_attempt("success", now)
           await context.log("BehavState=success")
           return TaskResult(success=True)
       elif state == "iti":
         if now >= iti_end:
-          target_x, target_y, current_target_radius_ratio, current_hold_time, current_target_color = place_target()
+          current_target_index, target_x, target_y, current_target_radius_ratio, current_hold_time, current_target_color = place_target()
           hold_start = None
           trial_start = now
+          reset_attempt_tracking(now)
           joystick_active_this_trial = False
           state = "active"
           state_brightness = toggle_brightness(state_brightness)
+          if current_attempt is not None:
+            current_attempt["target_index"] = current_target_index
+            current_attempt["target_position"] = {"x_norm": target_x, "y_norm": target_y}
+            current_attempt["target_radius_ratio"] = current_target_radius_ratio
+            current_attempt["hold_time_s"] = current_hold_time
+            current_attempt["target_color_rgb"] = [
+              current_target_color.red(),
+              current_target_color.green(),
+              current_target_color.blue(),
+            ]
+          append_event(
+            "target_on",
+            now,
+            target_index=current_target_index,
+            target_x=target_x,
+            target_y=target_y,
+            target_radius_ratio=current_target_radius_ratio,
+            hold_time_s=current_hold_time,
+          )
           await context.log("BehavState=active")
       else:
+        if joystick_is_active and not joystick_active_this_trial:
+          first_movement_time = now
+          append_event("first_joystick_movement", now, joystick_x=jx, joystick_y=jy)
         if joystick_is_active:
           joystick_active_this_trial = True
+          if current_attempt is not None:
+            current_attempt["joystick_active"] = True
         dist_to_target = math.hypot(cursor_px_x - target_px_x, cursor_px_y - target_px_y)
         cursor_inside_target = (dist_to_target <= target_radius_px)
+        if cursor_inside_target and not previous_cursor_inside_target:
+          target_entry_count += 1
+          if first_target_entry_time is None:
+            first_target_entry_time = now
+          append_event("target_entry", now, cursor_x=cursor_x, cursor_y=cursor_y, entry_count=target_entry_count)
         if cursor_inside_target:
           if hold_start is None:
             hold_start = now
+            if first_hold_start_time is None:
+              first_hold_start_time = now
+            append_event("hold_start", now, cursor_x=cursor_x, cursor_y=cursor_y, entry_count=target_entry_count)
             hold_progress_ratio = 0.0
           elif now - hold_start >= current_hold_time:
             hold_progress_ratio = 1.0
+            append_event("hold_complete", now, hold_duration_s=now - hold_start)
             await deliver_reward_repeats(1)
+            append_event("reward_triggered", now, reward_count=1)
             streak_count += 1
             task_config["_streak_count"] = streak_count
             bonus_hit = (
@@ -1270,6 +1389,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
             )
             if bonus_hit:
               await deliver_reward_repeats(streak_bonus_reward_count)
+              append_event("bonus_reward_triggered", now, reward_count=streak_bonus_reward_count)
               if streak_reset_on_bonus:
                 streak_count = 0
                 task_config["_streak_count"] = 0
@@ -1282,13 +1402,20 @@ async def run(context: TaskContextProtocol) -> TaskResult:
                 context.widget.update()
                 await context.sleep(datetime.timedelta(seconds=0.01))
             state_brightness = toggle_brightness(state_brightness)
+            append_event("success", now, streak_count=streak_count)
+            finalize_attempt("success", now)
             await context.log("BehavState=success")
             return TaskResult(success=True)
           else:
             hold_progress_ratio = max(0.0, min(1.0, (now - hold_start) / max(0.001, current_hold_time)))
         else:
+          if previous_cursor_inside_target:
+            append_event("target_exit", now, cursor_x=cursor_x, cursor_y=cursor_y, entry_count=target_entry_count)
+          if hold_start is not None:
+            append_event("hold_break", now, hold_duration_s=now - hold_start)
           hold_start = None
           hold_progress_ratio = 0.0
+        previous_cursor_inside_target = cursor_inside_target
 
         if now - trial_start >= trial_timeout:
           if ignore_idle_trial_failures and not joystick_active_this_trial:
@@ -1296,11 +1423,23 @@ async def run(context: TaskContextProtocol) -> TaskResult:
             state = "iti"
             iti_end = now + intertrial_interval
             state_brightness = 0
+            append_event("ignored_idle_timeout", now)
+            finalize_attempt("ignored_idle", now, failure_reason="timeout_without_movement")
             await context.log("BehavState=iti")
             continue
           streak_count = 0
           task_config["_streak_count"] = 0
           state_brightness = toggle_brightness(state_brightness)
+          append_event(
+            "fail",
+            now,
+            failure_reason="timeout_without_movement" if not joystick_active_this_trial else "timeout_after_movement",
+          )
+          finalize_attempt(
+            "fail",
+            now,
+            failure_reason="timeout_without_movement" if not joystick_active_this_trial else "timeout_after_movement",
+          )
           await context.log("BehavState=fail")
           return TaskResult(success=False)
 

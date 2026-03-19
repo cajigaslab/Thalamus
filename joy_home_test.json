@@ -154,9 +154,9 @@
           "zero_drift_buffer": 0.05,
           "direct_range": 0.45,
           "cursor_color": [
-            255,
-            70,
-            70
+            0,
+            188,
+            188
           ],
           "reward_channel": 0,
           "intertrial_interval": 1.0,
@@ -181,8 +181,8 @@
           "right_influence_pct": 100,
           "pause_timeout_while_idle": false,
           "ignore_idle_trial_failures": true,
-          "state_indicator_x": 10,
-          "state_indicator_y": 100.0
+          "state_indicator_x": 30.0,
+          "state_indicator_y": 70.0
         }
       ]
     }
@@ -360,8 +360,8 @@
       "right_influence_pct": 100,
       "pause_timeout_while_idle": false,
       "ignore_idle_trial_failures": true,
-      "state_indicator_x": 10,
-      "state_indicator_y": 100.0,
+      "state_indicator_x": 30.0,
+      "state_indicator_y": 70.0,
       "task_cluster_name": "Untitled",
       "queue_index": 0
     }
