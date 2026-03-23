@@ -969,7 +969,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   hold_start: typing.Optional[float] = None
   trial_start = time.perf_counter()
   last_tick = trial_start
-  state = "iti"
+  state = "intertrial"
   iti_end = trial_start + intertrial_interval
   current_target_radius_ratio = target_radius_ratio
   current_hold_time = hold_time
@@ -998,9 +998,11 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     "cursor_only_mode": cursor_only_mode,
     "trial_attempt_count": 0,
     "attempts": [],
+    "joystick_samples": [],
     "session_start_perf_counter": session_start,
     "final_outcome": None,
   }
+  context.behav_result = behav_result
 
   task_region_width = max(0.05, min(1.0, task_region_width))
   task_region_height = max(0.05, min(1.0, task_region_height))
@@ -1038,9 +1040,44 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     nonlocal joystick_x, joystick_y
     try:
       async for message in stream:
-        if len(message.data) >= 2:
+        sample_received_at = time.perf_counter()
+        if len(message.spans) >= 2:
+          x_span = message.spans[0]
+          y_span = message.spans[1]
+          x_values = message.data[x_span.begin:x_span.end]
+          y_values = message.data[y_span.begin:y_span.end]
+          sample_count = min(len(x_values), len(y_values))
+          if sample_count <= 0:
+            continue
+          x_interval_s = 0.0
+          y_interval_s = 0.0
+          if len(message.sample_intervals) >= 1:
+            x_interval_s = max(0.0, float(message.sample_intervals[0]) / 1e9)
+          if len(message.sample_intervals) >= 2:
+            y_interval_s = max(0.0, float(message.sample_intervals[1]) / 1e9)
+          sample_interval_s = x_interval_s or y_interval_s
+          start_time = sample_received_at - sample_interval_s * max(0, sample_count - 1)
+          for i in range(sample_count):
+            sample_time = start_time + sample_interval_s * i if sample_interval_s > 0.0 else sample_received_at
+            sample_x = float(x_values[i])
+            sample_y = float(y_values[i])
+            behav_result["joystick_samples"].append({
+              "time_perf_counter": sample_time,
+              "time_since_session_start_s": max(0.0, sample_time - session_start),
+              "x": sample_x,
+              "y": sample_y,
+            })
+            joystick_x = sample_x
+            joystick_y = sample_y
+        elif len(message.data) >= 2:
           joystick_x = float(message.data[0])
           joystick_y = float(message.data[1])
+          behav_result["joystick_samples"].append({
+            "time_perf_counter": sample_received_at,
+            "time_since_session_start_s": max(0.0, sample_received_at - session_start),
+            "x": joystick_x,
+            "y": joystick_y,
+          })
     finally:
       stream.cancel()
 
@@ -1183,7 +1220,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     painter.setBrush(Qt.BrushStyle.NoBrush)
     painter.drawRect(left_px, top_px, region_w_px, region_h_px)
 
-    if (not cursor_only_mode) and state == "active":
+    if (not cursor_only_mode) and state == "start_on":
       draw_target_color = QColor(current_target_color)
       if target_animation_enabled and cursor_inside_target and inside_tint_strength > 0.0:
         r = int(draw_target_color.red() + (255 - draw_target_color.red()) * inside_tint_strength)
@@ -1278,9 +1315,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     if cursor_only_mode:
       reset_attempt_tracking(session_start)
       append_event("free_play_start", session_start)
-      await context.log("BehavState=free_play")
-    else:
-      await context.log(f"BehavState={state}")
+    await context.log("BehavState=intertrial")
     while True:
       now = time.perf_counter()
       dt = max(0.0, min(0.05, now - last_tick))
@@ -1324,14 +1359,14 @@ async def run(context: TaskContextProtocol) -> TaskResult:
           finalize_attempt("success", now)
           await context.log("BehavState=success")
           return TaskResult(success=True)
-      elif state == "iti":
+      elif state == "intertrial":
         if now >= iti_end:
           current_target_index, target_x, target_y, current_target_radius_ratio, current_hold_time, current_target_color = place_target()
           hold_start = None
           trial_start = now
           reset_attempt_tracking(now)
           joystick_active_this_trial = False
-          state = "active"
+          state = "start_on"
           state_brightness = toggle_brightness(state_brightness)
           if current_attempt is not None:
             current_attempt["target_index"] = current_target_index
@@ -1352,7 +1387,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
             target_radius_ratio=current_target_radius_ratio,
             hold_time_s=current_hold_time,
           )
-          await context.log("BehavState=active")
+          await context.log("BehavState=start_on")
       else:
         if joystick_is_active and not joystick_active_this_trial:
           first_movement_time = now
@@ -1401,7 +1436,6 @@ async def run(context: TaskContextProtocol) -> TaskResult:
               while time.perf_counter() < pop_end_time:
                 context.widget.update()
                 await context.sleep(datetime.timedelta(seconds=0.01))
-            state_brightness = toggle_brightness(state_brightness)
             append_event("success", now, streak_count=streak_count)
             finalize_attempt("success", now)
             await context.log("BehavState=success")
@@ -1420,16 +1454,15 @@ async def run(context: TaskContextProtocol) -> TaskResult:
         if now - trial_start >= trial_timeout:
           if ignore_idle_trial_failures and not joystick_active_this_trial:
             hold_start = None
-            state = "iti"
+            state = "intertrial"
             iti_end = now + intertrial_interval
             state_brightness = 0
             append_event("ignored_idle_timeout", now)
             finalize_attempt("ignored_idle", now, failure_reason="timeout_without_movement")
-            await context.log("BehavState=iti")
+            await context.log("BehavState=intertrial")
             continue
           streak_count = 0
           task_config["_streak_count"] = 0
-          state_brightness = toggle_brightness(state_brightness)
           append_event(
             "fail",
             now,
