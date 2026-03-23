@@ -9,6 +9,10 @@ Two control modes:
 - cumulative: joystick acts like velocity input (mouse-like accumulation).
 - direct: joystick directly maps to cursor position around center.
 
+Full task description, definitions, and overall design can be read in 
+docs/joystick_intro_task_guide.md. Any changes done to this task should be 
+reflected on the accompanying md file.
+
 Testing:
  > python -m thalamus.task_controller --pypipeline -c joy_home_test.json
 """
