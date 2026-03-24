@@ -421,6 +421,7 @@ class Listeners():
     self.touch_listener: typing.Callable[[QPoint], None] = lambda e: None
     self.gaze_listener: typing.Callable[[QPoint], None] = lambda e: None
     self.renderer: typing.Callable[[CanvasPainterProtocol], None] = lambda w: None
+    self.key_press_handler: typing.Callable[[CanvasPainterProtocol], None] = lambda w: None
     self.key_release_handler: typing.Callable[[CanvasPainterProtocol], None] = lambda w: None
     self.paint_subscribers: typing.List[typing.Callable[[], None]] = []
 
@@ -538,6 +539,17 @@ class Canvas(QOpenGLWidget):
   @key_release_handler.setter
   def key_release_handler(self, value: typing.Callable[[CanvasPainterProtocol], None]) -> None:
     self.listeners.key_release_handler = value
+
+  @property
+  def key_press_handler(self) -> typing.Callable[[CanvasPainterProtocol], None]:
+    '''
+    Get key_press_handler callback
+    '''
+    return self.listeners.key_press_handler
+
+  @key_press_handler.setter
+  def key_press_handler(self, value: typing.Callable[[CanvasPainterProtocol], None]) -> None:
+    self.listeners.key_press_handler = value
 
   @property
   def touch_listener(self) -> typing.Callable[[QPoint], None]:
@@ -896,7 +908,17 @@ class Canvas(QOpenGLWidget):
     '''
     Progresses touch calibration on key presses
     '''
+    if e.isAutoRepeat():
+      return
     self.listeners.key_release_handler(e)
+
+  def keyPressEvent(self, e: QKeyEvent) -> None: # pylint: disable=invalid-name
+    '''
+    Progresses touch calibration on key presses
+    '''
+    # if e.isAutoRepeat():
+    #   return
+    self.listeners.key_press_handler(e)
 
   def clear_accumulation(self) -> None:
     '''

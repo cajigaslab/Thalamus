@@ -1032,6 +1032,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
 
   def on_key_release(event: typing.Any) -> None:
     nonlocal free_play_end_requested
+    print('up', event.key())
     key = event.key()
     if free_play_end_key == "q":
       free_play_end_requested = (key == Qt.Key.Key_Q)
@@ -1039,6 +1040,10 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       free_play_end_requested = (key == Qt.Key.Key_Return or key == Qt.Key.Key_Enter)
     else:
       free_play_end_requested = (key == Qt.Key.Key_Space)
+
+  def on_key_press(event: QKeyEvent) -> None:
+    nonlocal free_play_end_requested
+    print('down', event.key())
 
   async def analog_processor(stream: typing.Any) -> None:
     nonlocal joystick_x, joystick_y
@@ -1305,6 +1310,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
 
   context.widget.renderer = renderer
   context.widget.key_release_handler = on_key_release
+  context.widget.key_press_handler = on_key_press
 
   channel = context.get_channel('localhost:50050')
   stub = thalamus_pb2_grpc.ThalamusStub(channel)
