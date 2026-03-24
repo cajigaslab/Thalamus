@@ -1,6 +1,6 @@
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc};
-use std::thread::{self, JoinHandle};
+use std::thread::{self, JoinHandle, sleep};
 use std::{cell::RefCell, ptr};
 use std::time::{Duration};
 
@@ -77,25 +77,28 @@ fn gen_signal(input: mpsc::Receiver<Message>, output: mpsc::Sender<Message>, wak
   let interval = Duration::from_millis(16);
 
   while running {
-    while now - last < interval {
-     let msg = input.recv_timeout(interval - (now - last));
-     match msg {
-       Ok(Message::Running(val)) => {
-         running = val;
-       }
-       Ok(Message::Amplitude(val)) => {
-         amplitude_opt = Some(val);
-       }
-       Ok(Message::Frequency(val)) => {
-         frequency_opt = Some(val);
-       }
-       Ok(Message::Samples(val)) => {
-         samples_opt = Some(val);
-       }
-       Ok(Message::Time(_)) => { }
-       Err(_) => {}
-     }
-     now = clock.now();
+    let elapsed = now - last;
+    let poll_time = if elapsed < interval { interval - elapsed } else { Duration::from_millis(0) };
+    let msg = input.recv_timeout(poll_time);
+    match msg {
+      Ok(Message::Running(val)) => {
+        running = val;
+        continue;
+      }
+      Ok(Message::Amplitude(val)) => {
+        amplitude_opt = Some(val);
+        continue;
+      }
+      Ok(Message::Frequency(val)) => {
+        frequency_opt = Some(val);
+        continue;
+      }
+      Ok(Message::Samples(val)) => {
+        samples_opt = Some(val);
+        continue;
+      }
+      Ok(Message::Time(_)) => { }
+      Err(_) => {}
     }
     now = clock.now();
 
@@ -117,9 +120,14 @@ fn gen_signal(input: mpsc::Receiver<Message>, output: mpsc::Sender<Message>, wak
       last += Duration::from_millis(1);
     }
     output.send(Message::Time(last - Duration::from_millis(1))).unwrap();
+    waker.wake();
     output.send(Message::Samples(samples)).unwrap();
     waker.wake();
-    samples_opt = None;
+
+    if now < last {
+      sleep(last - now);
+      now = clock.now();
+    }
   }
 }
 
@@ -140,15 +148,19 @@ impl DemoNode {
 
           let waker = self.sleeper.waker();
           let clock = Clock::new(self.api);
-          self.thread = Some(thread::spawn(move || gen_signal(gen_input, gen_output, waker, clock)));
+          self.thread = Some(thread::Builder::new()
+                               .name("gen_signal".into())
+                               .spawn(move || gen_signal(gen_input, gen_output, waker, clock)).expect("Failed to spawn thread"));
           self_output.send(Message::Amplitude(self.amplitude)).unwrap();
           self_output.send(Message::Frequency(self.frequency)).unwrap();
           self_output.send(Message::Samples(std::mem::take(&mut self.samples))).unwrap();
+          self.samples = Vec::new();
 
           self.input = Some(self_input);
           self.output = Some(self_output);
-        } else {
+        } else if let Some(thread) = self.thread.take() {
           self.output.as_ref().map(|o| o.send(Message::Running(false)).unwrap());
+          thread.join().expect("Thread join failed");
           self.running = false;
         }
       },
@@ -157,12 +169,18 @@ impl DemoNode {
           return
         };
         self.amplitude = val;
+        if let Some(out) = &self.output {
+          out.send(Message::Amplitude(val)).expect("Send Amplitude failed");
+        }
       },
       "Frequency" => {
         let StateValue::Float(val) = value else {
           return
         };
         self.frequency = val;
+        if let Some(out) = &self.output {
+          out.send(Message::Frequency(val)).expect("Send Frequency failed");
+        }
       },
       _ => {}
     }
@@ -281,6 +299,10 @@ impl Drop for DemoNode {
       println!("Running3 {}", d);
     }
     self.state.set(RUNNING(), StateValue::Bool(false));
+    if let Some(thread) = self.thread.take() {
+      self.output.as_ref().map(|o| o.send(Message::Running(false)).unwrap());
+      thread.join().expect("Thread join failed");
+    }
     println!("DemoNode drop");
   }
 }

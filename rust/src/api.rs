@@ -101,35 +101,33 @@ use crate::wakers::{self, RcWake};
 //}
 
 struct PostArgs<T> {
-  call: T,
-  mutex: Mutex<bool>,
-  cond: Condvar
+  call: T
 }
 
 unsafe extern "C" fn post_callback<T: FnMut()>(data: *mut ::std::os::raw::c_void) {
-  let args = unsafe { &mut*(data as *mut PostArgs<T>) };
+  let mut args = unsafe {
+    let raw_args = &mut*(data as *mut PostArgs<T>);
+    Box::from_raw(raw_args)
+  };
   (args.call)();
-  let mut done = args.mutex.lock().unwrap();
-  *done = true;
-  args.cond.notify_one();
 }
 
 pub fn post<T: FnMut()>(api_raw: *const ThalamusAPI, call: T) {
   unsafe {
     let api = &*api_raw;
     let call_ptr = Box::into_raw(Box::new(PostArgs {
-      call, mutex: Mutex::new(false), cond: Condvar::new()
+      call
     }));
     let void_ptr = call_ptr as *mut std::os::raw::c_void;
     (api.io_context_post)(Some(post_callback::<T>), void_ptr);
 
-    let call_ref =  &*call_ptr;
-    let mut done = call_ref.mutex.lock().unwrap();
-    while !*done {
-      done = call_ref.cond.wait(done).unwrap();
-    }
-
-    drop(Box::from_raw(call_ptr));
+    //let call_ref =  &*call_ptr;
+    //let mut done = call_ref.mutex.lock().unwrap();
+    //while !*done {
+    //  done = call_ref.cond.wait(done).unwrap();
+    //}
+    //
+    //drop(Box::from_raw(call_ptr));
   }
 }
 
@@ -204,17 +202,30 @@ impl Future for SleeperFuture {
 }
 
 impl SleeperWaker {
-  pub fn wake(&self) {
-    let mut lock = self.state.lock().unwrap();
-    post(lock.api.api, move || { 
-      if lock.wakes >= 0 {
-        lock.wakes += 1;
-      }
-      lock.futures.pop_front().map(|f| {
-        let state = f.lock().unwrap();
-        state.waker.as_ref().map(|w| w.wake_by_ref());
+  pub fn wake_impl(&self, immediate: bool) {
+    let api = self.state.lock().unwrap().api.api;
+    let closure = move || { 
+      let future = {
+        let mut lock = self.state.lock().unwrap();
+        if lock.wakes >= 0 {
+          lock.wakes += 1;
+        }
+        lock.futures.pop_front()
+      };
+      future.map(|f| {
+        let waker = f.lock().unwrap().waker.take();
+        waker.as_ref().map(|w| w.wake_by_ref());
       });
-    });
+    };
+    if immediate {
+      closure();
+    } else {
+      post(api, closure);
+    }
+  }
+
+  pub fn wake(&self) {
+    self.wake_impl(false);
   }
 }
 
@@ -238,11 +249,14 @@ impl Sleeper {
 
 impl Drop for Sleeper {
   fn drop(&mut self) {
-      let mut state = self.state.lock().unwrap();
-      state.wakes = -1;
-      while !state.futures.is_empty() {
-        self.waker().wake();
-      }
+    let mut state = self.state.lock().unwrap();
+    state.wakes = -1;
+    while !state.futures.is_empty() {
+      let waker = self.waker();
+      drop(state);
+      waker.wake_impl(true);
+      state = self.state.lock().unwrap();
+    }
   }
 }
 
