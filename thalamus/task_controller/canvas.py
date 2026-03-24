@@ -409,6 +409,51 @@ class CanvasOpenGLConfig(typing.NamedTuple):
   vbo_cache: typing.Dict[int, Vbos]
   proj: QMatrix4x4
 
+def create_canvas_opengl_config() -> CanvasOpenGLConfig:
+  '''
+  Create OpenGL resources for a canvas-like widget.
+  '''
+  program = QOpenGLShaderProgram()
+  program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Vertex, VERTEX_SHADER_SOURCE)
+  program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, FRAGMENT_SHADER_SOURCE)
+  program.bindAttributeLocation("vertex", 0)
+  program.bindAttributeLocation("normal", 1)
+  program.link()
+
+  program.bind()
+  proj_matrix_loc = program.uniformLocation("projMatrix")
+  mv_matrix_loc = program.uniformLocation("mvMatrix")
+  normal_matrix_loc = program.uniformLocation("normalMatrix")
+  color_loc = program.uniformLocation("color")
+
+  return CanvasOpenGLConfig(
+    program,
+    proj_matrix_loc,
+    mv_matrix_loc,
+    normal_matrix_loc,
+    color_loc,
+    {},
+    QMatrix4x4())
+
+def update_projection_matrix(opengl_config: CanvasOpenGLConfig, width: int, height: int) -> None:
+  '''
+  Updates the perspective matrix for the current target size.
+  '''
+  safe_height = max(height, 1)
+  opengl_config.proj.setToIdentity()
+  opengl_config.proj.perspective(45.0, width / safe_height, 0.01, 100.0)
+
+def create_canvas_painter(output_mask: RenderOutput, opengl_config: CanvasOpenGLConfig,
+                          *args: typing.Any) -> CanvasPainter:
+  '''
+  Create a CanvasPainter backed by the given OpenGL resources.
+  '''
+  locations = GlslLocations(0, 1, opengl_config.color_loc, opengl_config.mv_matrix_loc,
+                            opengl_config.proj_matrix_loc, opengl_config.normal_matrix_loc)
+  return CanvasPainter(output_mask,
+                       OpenGLConfig(opengl_config.proj, opengl_config.program, locations,
+                                    opengl_config.vbo_cache), *args)
+
 TOUCH_LISTENER = 0
 GAZE_LISTENER = 1
 RENDERER = 2
@@ -589,59 +634,39 @@ class Canvas(QOpenGLWidget):
     '''
     Sets up OpenGL
     '''
-    program = QOpenGLShaderProgram()
-    program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Vertex, VERTEX_SHADER_SOURCE)
-    program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, FRAGMENT_SHADER_SOURCE)
-    program.bindAttributeLocation("vertex", 0)
-    program.bindAttributeLocation("normal", 1)
-    program.link()
-
-    program.bind()
-    proj_matrix_loc = program.uniformLocation("projMatrix")
-    mv_matrix_loc = program.uniformLocation("mvMatrix")
-    normal_matrix_loc = program.uniformLocation("normalMatrix")
-    color_loc = program.uniformLocation("color")
-
-    self.opengl_config = CanvasOpenGLConfig(
-      program,
-      proj_matrix_loc,
-      mv_matrix_loc,
-      normal_matrix_loc,
-      color_loc,
-      {},
-      QMatrix4x4())
+    self.opengl_config = create_canvas_opengl_config()
 
   def resizeGL(self, width: int, height: int) -> None: # pylint: disable=invalid-name
     '''
     Updates perspective matrix as view changes
     '''
     assert self.opengl_config, 'opengl_config is None'
+    update_projection_matrix(self.opengl_config, width, height)
 
-    self.opengl_config.proj.setToIdentity()
-    self.opengl_config.proj.perspective(45.0, width / height, 0.01, 100.0)
+  def render_frame(self, painter: CanvasPainterProtocol) -> None:
+    '''
+    Render the current task scene into an active painter.
+    '''
+    painter.fillRect(QRect(0, 0, self.width(), self.height()), QColor(0, 0, 0))
+    self.listeners.renderer(painter)
+
+    with painter.masked(RenderOutput.OPERATOR):
+      painter.fillPath(self.input_config.touch_path, QColor(255, 0, 0))
+
+      painter.save()
+      painter.translate(self.width()/2, self.height()/2)
+      for path in self.input_config.gaze_paths:
+        painter.fillPath(path, QColor(0, 0, 255))
+      painter.restore()
 
   def paintGL(self) -> None: # pylint: disable=invalid-name
     '''
     Paints the task
     '''
     assert self.opengl_config, 'opengl_config is None'
-
-    locations = GlslLocations(0, 1, self.opengl_config.color_loc, self.opengl_config.mv_matrix_loc,
-                              self.opengl_config.proj_matrix_loc, self.opengl_config.normal_matrix_loc)
-    geometry = qt_screen_geometry()
-    painter = CanvasPainter(self.current_output_mask,
-                            OpenGLConfig(self.opengl_config.proj, self.opengl_config.program, locations,
-                                         self.opengl_config.vbo_cache), self)
+    painter = create_canvas_painter(self.current_output_mask, self.opengl_config, self)
     with painter:
-      painter.fillRect(QRect(0, 0, 4000, 4000), QColor(0, 0, 0))
-      self.listeners.renderer(painter)
-
-      with painter.masked(RenderOutput.OPERATOR):
-        painter.fillPath(self.input_config.touch_path, QColor(255, 0, 0))
-
-        painter.setTransform(QTransform.fromTranslate(self.width()/2, self.height()/2))
-        for path in self.input_config.gaze_paths:
-          painter.fillPath(path, QColor(0, 0, 255))
+      self.render_frame(painter)
 
     if self.current_output_mask != RenderOutput.OPERATOR:
       for subscriber in self.listeners.paint_subscribers:
