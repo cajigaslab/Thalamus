@@ -7,12 +7,16 @@ import functools
 
 from ..qt import *
 
+import packaging.version
+
+PYQT_VERSION = packaging.version.parse(PYQT_VERSION_STR)
+USINGLEGACY_QT = PYQT_VERSION < packaging.version.parse('5.11.0')
+
 from .window import Window as TaskWindow
 from .util import RenderOutput
-from .canvas import CanvasOpenGLConfig, create_canvas_opengl_config, create_canvas_painter, update_projection_matrix
 from ..config import ObservableCollection
 
-class ViewWidget(QOpenGLWidget):
+class ViewWidget(QWidget):
   """
   Central widget for the operator view
   """
@@ -20,39 +24,32 @@ class ViewWidget(QOpenGLWidget):
     super().__init__()
     self.target = target
     self.painting = False
-    self.opengl_config: typing.Optional[CanvasOpenGLConfig] = None
 
-  def initializeGL(self) -> None: # pylint: disable=invalid-name
-    '''
-    Sets up OpenGL resources for the operator preview.
-    '''
-    self.opengl_config = create_canvas_opengl_config()
-
-  def resizeGL(self, width: int, height: int) -> None: # pylint: disable=invalid-name,unused-argument
-    '''
-    Projection is updated during paint to match the target canvas dimensions.
-    '''
-
-  def paintGL(self) -> None: # pylint: disable=invalid-name
+  def paintEvent(self, _: QPaintEvent) -> None: # pylint: disable=invalid-name
     """
-    Renders the target scene directly into this view.
+    Renders the target widget into this view
     """
-    assert self.opengl_config, 'opengl_config is None'
     try:
       self.painting = True
-      update_projection_matrix(self.opengl_config, self.target.canvas.width(), self.target.canvas.height())
-      painter = create_canvas_painter(RenderOutput.OPERATOR, self.opengl_config, self)
-      render_width = self.target.canvas.width()
-      render_height = self.target.canvas.height()
-      scale_factor = min(self.width()/render_width, self.height()/render_height)
-      offset_x = (self.width() - render_width*scale_factor)/2
-      offset_y = (self.height() - render_height*scale_factor)/2
+      if USINGLEGACY_QT:
+        with self.target.canvas.masked(RenderOutput.OPERATOR):
+          image = self.target.canvas.grabFramebuffer()
+      else:
+        image = QImage(self.target.width(), self.target.height(),
+                                   QImage.Format.Format_RGB32) # type: ignore # pylint: disable=no-member
+        with self.target.canvas.masked(RenderOutput.OPERATOR):
+          self.target.canvas.render(image)
 
-      with painter:
-        painter.fillRect(self.rect(), QColor(0, 0, 0))
-        painter.translate(offset_x, offset_y)
-        painter.scale(scale_factor, scale_factor)
-        self.target.canvas.render_frame(painter)
+
+      painter = QPainter(self)
+
+      scale_factor = min(self.width()/self.target.width(), self.height()/self.target.height())
+      render_width = int(self.target.width()*scale_factor)
+      render_height = int(self.target.height()*scale_factor)
+      render_x = int((self.width() - render_width)/2)
+      render_y = int((self.height() - render_height)/2)
+      render_rect = QRect(render_x, render_y, render_width, render_height)
+      painter.drawImage(render_rect, image)
     finally:
       self.painting = False
 
@@ -69,8 +66,7 @@ class CentralWidget(QWidget):
     eye_config = config['eye_scaling']
 
     layout = QGridLayout()
-    self.view_widget = ViewWidget(target)
-    layout.addWidget(self.view_widget, 0, 0, 1, 4)
+    layout.addWidget(ViewWidget(target), 0, 0, 1, 4)
     layout.setRowStretch(0, 1)
 
     clear_button = QPushButton('Clear')
@@ -146,7 +142,7 @@ class Window(QMainWindow):
     try:
       while True:
         await asyncio.sleep(1/30)
-        self.central_widget.view_widget.update()
+        self.central_widget.update()
     except asyncio.CancelledError:
       pass
 
