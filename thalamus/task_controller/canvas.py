@@ -614,9 +614,6 @@ class Canvas(QOpenGLWidget):
     '''
     assert self.opengl_config, 'opengl_config is None'
 
-    OpenGL.GL.glClearColor(0.0, 0.0, 0.0, 1.0)
-    OpenGL.GL.glClear(OpenGL.GL.GL_COLOR_BUFFER_BIT | OpenGL.GL.GL_DEPTH_BUFFER_BIT)
-
     locations = GlslLocations(0, 1, self.opengl_config.color_loc, self.opengl_config.mv_matrix_loc,
                               self.opengl_config.proj_matrix_loc, self.opengl_config.normal_matrix_loc)
     geometry = qt_screen_geometry()

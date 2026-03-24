@@ -36,7 +36,6 @@ class ViewWidget(QWidget):
 
 
       painter = QPainter(self)
-      painter.fillRect(self.rect(), QColor(0, 0, 0))
 
       scale_factor = min(self.width()/self.target.width(), self.height()/self.target.height())
       render_width = int(self.target.width()*scale_factor)
