@@ -49,9 +49,6 @@ class ViewWidget(QOpenGLWidget):
       offset_y = (self.height() - render_height*scale_factor)/2
 
       with painter:
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
-        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, False)
-        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
         painter.fillRect(self.rect(), QColor(0, 0, 0))
         painter.translate(offset_x, offset_y)
         painter.scale(scale_factor, scale_factor)
@@ -148,7 +145,7 @@ class Window(QMainWindow):
   async def __render_loop(self):
     try:
       while True:
-        await asyncio.sleep(1/10)
+        await asyncio.sleep(1/30)
         self.central_widget.view_widget.update()
     except asyncio.CancelledError:
       pass

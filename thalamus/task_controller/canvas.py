@@ -267,9 +267,6 @@ class CanvasPainter(QPainter):
     '''
     Draw an STL mesh
     '''
-    if self.output_mask == RenderOutput.OPERATOR:
-      return
-
     if self.current_output_mask not in (RenderOutput.ANY, self.output_mask):
       return
 
