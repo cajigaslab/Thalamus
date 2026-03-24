@@ -31,21 +31,25 @@ class ViewWidget(QWidget):
     """
     try:
       self.painting = True
+      canvas_size = self.target.canvas.size()
+      device_pixel_ratio = self.target.canvas.devicePixelRatioF()
       if USINGLEGACY_QT:
         with self.target.canvas.masked(RenderOutput.OPERATOR):
           image = self.target.canvas.grabFramebuffer()
       else:
-        image = QImage(self.target.width(), self.target.height(),
-                                   QImage.Format.Format_RGB32) # type: ignore # pylint: disable=no-member
+        image = QImage(int(canvas_size.width() * device_pixel_ratio),
+                       int(canvas_size.height() * device_pixel_ratio),
+                       QImage.Format.Format_RGB32) # type: ignore # pylint: disable=no-member
+        image.setDevicePixelRatio(device_pixel_ratio)
         with self.target.canvas.masked(RenderOutput.OPERATOR):
           self.target.canvas.render(image)
 
 
       painter = QPainter(self)
 
-      scale_factor = min(self.width()/self.target.width(), self.height()/self.target.height())
-      render_width = int(self.target.width()*scale_factor)
-      render_height = int(self.target.height()*scale_factor)
+      scale_factor = min(self.width()/canvas_size.width(), self.height()/canvas_size.height())
+      render_width = int(canvas_size.width()*scale_factor)
+      render_height = int(canvas_size.height()*scale_factor)
       render_x = int((self.width() - render_width)/2)
       render_y = int((self.height() - render_height)/2)
       render_rect = QRect(render_x, render_y, render_width, render_height)
