@@ -54,7 +54,8 @@ class ViewWidget(QWidget):
     else:
       image = QImage(int(canvas_size.width() * device_pixel_ratio),
                      int(canvas_size.height() * device_pixel_ratio),
-                     QImage.Format.Format_RGB32) # type: ignore # pylint: disable=no-member
+                     QImage.Format.Format_ARGB32_Premultiplied) # type: ignore # pylint: disable=no-member
+      image.fill(QColor(0, 0, 0, 255))
       image.setDevicePixelRatio(device_pixel_ratio)
       with self.target.canvas.masked(RenderOutput.OPERATOR):
         self.target.canvas.render(image)
