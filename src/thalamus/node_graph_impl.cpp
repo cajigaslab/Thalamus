@@ -593,7 +593,7 @@ struct NodeGraphImpl::Impl {
 
   ThalamusAPIImpl thalamus_api_impl;
   ThalamusAPI thalamus_api;
-  bool creating_index = -1;
+  int creating_index = -1;
 
 public:
   Impl(ObservableListPtr _nodes, boost::asio::io_context &_io_context,
