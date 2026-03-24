@@ -4,7 +4,6 @@ Module defining the operator view
 import typing
 import asyncio
 import functools
-import time
 
 from ..qt import *
 
@@ -21,14 +20,10 @@ class ViewWidget(QWidget):
   """
   Central widget for the operator view
   """
-  CAPTURE_INTERVAL_S = 0.2
-
   def __init__(self, target: TaskWindow) -> None:
     super().__init__()
     self.target = target
     self.painting = False
-    self.cached_image: typing.Optional[QImage] = None
-    self.last_capture_time = 0.0
 
   def paintEvent(self, _: QPaintEvent) -> None: # pylint: disable=invalid-name
     """
@@ -36,11 +31,14 @@ class ViewWidget(QWidget):
     """
     try:
       self.painting = True
-      now = time.monotonic()
-      if self.cached_image is None or now - self.last_capture_time >= self.CAPTURE_INTERVAL_S:
+      if USINGLEGACY_QT:
         with self.target.canvas.masked(RenderOutput.OPERATOR):
-          self.cached_image = self.target.canvas.grabFramebuffer()
-        self.last_capture_time = now
+          image = self.target.canvas.grabFramebuffer()
+      else:
+        image = QImage(self.target.width(), self.target.height(),
+                                   QImage.Format.Format_RGB32) # type: ignore # pylint: disable=no-member
+        with self.target.canvas.masked(RenderOutput.OPERATOR):
+          self.target.canvas.render(image)
 
 
       painter = QPainter(self)
@@ -51,8 +49,7 @@ class ViewWidget(QWidget):
       render_x = int((self.width() - render_width)/2)
       render_y = int((self.height() - render_height)/2)
       render_rect = QRect(render_x, render_y, render_width, render_height)
-      if self.cached_image is not None:
-        painter.drawImage(render_rect, self.cached_image)
+      painter.drawImage(render_rect, image)
     finally:
       self.painting = False
 
