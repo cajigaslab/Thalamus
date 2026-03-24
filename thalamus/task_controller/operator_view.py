@@ -2,7 +2,6 @@
 Module defining the operator view
 """
 import typing
-import asyncio
 import functools
 
 from ..qt import *
@@ -24,28 +23,57 @@ class ViewWidget(QWidget):
     super().__init__()
     self.target = target
     self.painting = False
+    self.capture_pending = False
+    self.latest_image: typing.Optional[QImage] = None
+
+  def request_capture(self) -> None:
+    """
+    Schedule a capture after the current paint cycle completes.
+    """
+    if self.capture_pending or not self.isVisible():
+      return
+    self.capture_pending = True
+    QTimer.singleShot(0, self.capture_frame)
+
+  def capture_frame(self) -> None:
+    """
+    Capture the operator view into an off-screen image.
+    """
+    self.capture_pending = False
+    if self.painting or not self.isVisible():
+      return
+
+    canvas_size = self.target.canvas.size()
+    if canvas_size.isEmpty():
+      return
+
+    device_pixel_ratio = self.target.canvas.devicePixelRatioF()
+    if USINGLEGACY_QT:
+      with self.target.canvas.masked(RenderOutput.OPERATOR):
+        image = self.target.canvas.grabFramebuffer()
+    else:
+      image = QImage(int(canvas_size.width() * device_pixel_ratio),
+                     int(canvas_size.height() * device_pixel_ratio),
+                     QImage.Format.Format_RGB32) # type: ignore # pylint: disable=no-member
+      image.setDevicePixelRatio(device_pixel_ratio)
+      with self.target.canvas.masked(RenderOutput.OPERATOR):
+        self.target.canvas.render(image)
+
+    self.latest_image = image
+    self.update()
 
   def paintEvent(self, _: QPaintEvent) -> None: # pylint: disable=invalid-name
     """
-    Renders the target widget into this view
+    Draw the last captured operator frame.
     """
     try:
       self.painting = True
       canvas_size = self.target.canvas.size()
-      device_pixel_ratio = self.target.canvas.devicePixelRatioF()
-      if USINGLEGACY_QT:
-        with self.target.canvas.masked(RenderOutput.OPERATOR):
-          image = self.target.canvas.grabFramebuffer()
-      else:
-        image = QImage(int(canvas_size.width() * device_pixel_ratio),
-                       int(canvas_size.height() * device_pixel_ratio),
-                       QImage.Format.Format_RGB32) # type: ignore # pylint: disable=no-member
-        image.setDevicePixelRatio(device_pixel_ratio)
-        with self.target.canvas.masked(RenderOutput.OPERATOR):
-          self.target.canvas.render(image)
-
-
       painter = QPainter(self)
+      painter.fillRect(self.rect(), QColor(0, 0, 0))
+
+      if self.latest_image is None or canvas_size.isEmpty():
+        return
 
       scale_factor = min(self.width()/canvas_size.width(), self.height()/canvas_size.height())
       render_width = int(canvas_size.width()*scale_factor)
@@ -53,7 +81,7 @@ class ViewWidget(QWidget):
       render_x = int((self.width() - render_width)/2)
       render_y = int((self.height() - render_height)/2)
       render_rect = QRect(render_x, render_y, render_width, render_height)
-      painter.drawImage(render_rect, image)
+      painter.drawImage(render_rect, self.latest_image)
     finally:
       self.painting = False
 
@@ -70,7 +98,8 @@ class CentralWidget(QWidget):
     eye_config = config['eye_scaling']
 
     layout = QGridLayout()
-    layout.addWidget(ViewWidget(target), 0, 0, 1, 4)
+    self.view_widget = ViewWidget(target)
+    layout.addWidget(self.view_widget, 0, 0, 1, 4)
     layout.setRowStretch(0, 1)
 
     clear_button = QPushButton('Clear')
@@ -139,21 +168,17 @@ class Window(QMainWindow):
     self.target = target
     self.closed = False
     self.central_widget = CentralWidget(self.target, config)
-    self.render_loop = asyncio.get_event_loop().create_task(self.__render_loop())
+    self.target.canvas.listeners.paint_subscribers.append(self.central_widget.view_widget.request_capture)
     self.setCentralWidget(self.central_widget)
-
-  async def __render_loop(self):
-    try:
-      while True:
-        await asyncio.sleep(1/30)
-        self.central_widget.update()
-    except asyncio.CancelledError:
-      pass
+    self.central_widget.view_widget.request_capture()
 
   def closeEvent(self, event: QCloseEvent) -> None: # pylint: disable=invalid-name
     """
     Remove callback when window closes
     """
     self.closed = True
-    self.render_loop.cancel()
+    try:
+      self.target.canvas.listeners.paint_subscribers.remove(self.central_widget.view_widget.request_capture)
+    except ValueError:
+      pass
     super().closeEvent(event)
