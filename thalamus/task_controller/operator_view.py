@@ -31,14 +31,8 @@ class ViewWidget(QWidget):
     """
     try:
       self.painting = True
-      if USINGLEGACY_QT:
-        with self.target.canvas.masked(RenderOutput.OPERATOR):
-          image = self.target.canvas.grabFramebuffer()
-      else:
-        image = QImage(self.target.width(), self.target.height(),
-                                   QImage.Format.Format_RGB32) # type: ignore # pylint: disable=no-member
-        with self.target.canvas.masked(RenderOutput.OPERATOR):
-          self.target.canvas.render(image)
+      with self.target.canvas.masked(RenderOutput.OPERATOR):
+        image = self.target.canvas.grabFramebuffer()
 
 
       painter = QPainter(self)
