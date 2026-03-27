@@ -314,6 +314,21 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
             target_acquired = True
             i_selected_target = i
             break
+    
+      #fix for overlap
+      if current_target_to_highlight is not None:
+         if distance(all_target_rects[current_target_to_highlight].center(), cursor) < all_target_windows[current_target_to_highlight]:
+            target_acquired = True
+            i_selected_target = current_target_to_highlight
+            touch_pos = cursor
+            return
+      #if not inside correct target
+      for i in i_periph_targs: 
+         if i != current_target_to_highlight:
+            if distance(all_target_rects[i].center(), cursor) < all_target_windows[i]:
+               target_acquired = True
+               i_selected_target = i  # This is a wrong target touch
+               break
 
       touch_pos = cursor
 
