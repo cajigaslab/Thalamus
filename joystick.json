@@ -707,10 +707,10 @@
     }
   ],
   "thalamus_view_geometry": [
-    20,
-    50,
-    720,
-    850
+    70,
+    45,
+    546,
+    768
   ],
   "data_views": [
     {
@@ -773,218 +773,14 @@
       "node": "Reward out",
       "dock_area": "right",
       "view_geometry": [
-        364,
+        190,
         23,
         356,
-        827
+        745
       ]
     }
   ],
-  "queue": [
-    {
-      "task_type": "joystick_intro",
-      "type": "task",
-      "goal": 66,
-      "name": "Cardinal",
-      "intertrial_timeout": {
-        "min": 1,
-        "max": 1
-      },
-      "start_timeout": {
-        "min": 1,
-        "max": 1
-      },
-      "hold_timeout": {
-        "min": 1,
-        "max": 1
-      },
-      "blink_timeout": {
-        "min": 1,
-        "max": 1
-      },
-      "fail_timeout": {
-        "min": 1,
-        "max": 1
-      },
-      "success_timeout": {
-        "min": 1,
-        "max": 1
-      },
-      "target_x": {
-        "min": 1,
-        "max": 1
-      },
-      "target_y": {
-        "min": 1,
-        "max": 1
-      },
-      "target_width": {
-        "min": 1,
-        "max": 1
-      },
-      "target_height": {
-        "min": 1,
-        "max": 1
-      },
-      "target_color": [
-        255,
-        255,
-        255
-      ],
-      "targets": [
-        {
-          "name": "R",
-          "enabled": true,
-          "x_norm": 0.8,
-          "y_norm": 0.5,
-          "radius_ratio": 0.25,
-          "hold_time": 0.3,
-          "target_color": [
-            220,
-            138,
-            221
-          ]
-        },
-        {
-          "name": "B",
-          "enabled": true,
-          "x_norm": 0.5,
-          "y_norm": 0.25,
-          "radius_ratio": 0.12,
-          "hold_time": 0.5,
-          "target_color": [
-            255,
-            255,
-            255
-          ]
-        },
-        {
-          "name": "L",
-          "enabled": true,
-          "x_norm": 0.27,
-          "y_norm": 0.5,
-          "radius_ratio": 0.12,
-          "hold_time": 0.5,
-          "target_color": [
-            255,
-            255,
-            255
-          ]
-        },
-        {
-          "name": "T2",
-          "enabled": true,
-          "x_norm": 0.5,
-          "y_norm": 0.8,
-          "radius_ratio": 0.1,
-          "hold_time": 0.5,
-          "target_color": [
-            255,
-            255,
-            255
-          ]
-        },
-        {
-          "name": "T",
-          "enabled": true,
-          "x_norm": 0.5,
-          "y_norm": 0.67,
-          "radius_ratio": 0.1,
-          "hold_time": 0.5,
-          "target_color": [
-            255,
-            255,
-            255
-          ]
-        },
-        {
-          "name": "T3",
-          "enabled": true,
-          "x_norm": 0.503,
-          "y_norm": 0.9,
-          "radius_ratio": 0.1,
-          "hold_time": 0.5,
-          "target_color": [
-            255,
-            255,
-            255
-          ]
-        },
-        {
-          "name": "TL",
-          "enabled": true,
-          "x_norm": 0.27,
-          "y_norm": 0.75,
-          "radius_ratio": 0.12,
-          "hold_time": 0.5,
-          "target_color": [
-            255,
-            255,
-            255
-          ]
-        },
-        {
-          "name": "BL",
-          "enabled": true,
-          "x_norm": 0.27,
-          "y_norm": 0.25,
-          "radius_ratio": 0.12,
-          "hold_time": 0.5,
-          "target_color": [
-            255,
-            255,
-            255
-          ]
-        }
-      ],
-      "joystick_node": "Joystick",
-      "control_mode": "direct",
-      "cursor_only_mode": false,
-      "free_play_end_key": "space",
-      "cumulative_speed": 0.7,
-      "zero_drift_mode": true,
-      "zero_drift_buffer": 0.05,
-      "direct_range": 0.45,
-      "cursor_diameter_ratio": 0.05,
-      "cursor_color": [
-        153,
-        193,
-        241
-      ],
-      "task_region_x": 0.5,
-      "task_region_y": 0.27,
-      "task_region_width": 0.5,
-      "task_region_height": 0.67,
-      "reward_channel": 2.0,
-      "trial_timeout": 8.0,
-      "intertrial_interval": 2.0,
-      "disable_up": true,
-      "disable_down": true,
-      "disable_left": false,
-      "disable_right": false,
-      "animations_enabled": true,
-      "task_animation_enabled": true,
-      "target_animation_enabled": true,
-      "show_streak_hud": true,
-      "streak_bonus_threshold": 0,
-      "streak_bonus_reward_count": 1,
-      "streak_reset_on_bonus": false,
-      "inside_tint_strength_pct": 20,
-      "show_hold_progress_ring": true,
-      "show_success_pop": true,
-      "success_pop_duration_s": 0.12,
-      "up_influence_pct": 100,
-      "down_influence_pct": 100,
-      "left_influence_pct": 100,
-      "right_influence_pct": 100,
-      "ignore_idle_trial_failures": true,
-      "state_indicator_x": 30.0,
-      "state_indicator_y": 70.0,
-      "task_cluster_name": "Joy",
-      "queue_index": 0,
-      "_streak_count": 0
-    }
-  ],
+  "queue": [],
   "reward_schedule": {
     "schedules": [
       [
@@ -1077,7 +873,7 @@
     },
     "Auto Clear": true
   },
-  "status": "Joy/Cardinal = 579/122",
+  "status": "",
   "Persistence": {
     "Cached": []
   },
@@ -7137,6 +6933,7 @@
               "y_norm": 0.5,
               "radius_ratio": 0.08,
               "hold_time": 0.4,
+              "reward_channel": 0,
               "target_color": [
                 0,
                 220,
@@ -7246,6 +7043,7 @@
               "y_norm": 0.7669322709163346,
               "radius_ratio": 0.15,
               "hold_time": 0.3,
+              "reward_channel": 2,
               "target_color": [
                 255,
                 255,
@@ -7259,6 +7057,7 @@
               "y_norm": 0.5896414342629481,
               "radius_ratio": 0.1,
               "hold_time": 0.3,
+              "reward_channel": 2,
               "target_color": [
                 255,
                 255,
@@ -7272,6 +7071,7 @@
               "y_norm": 0.6115537848605578,
               "radius_ratio": 0.1,
               "hold_time": 0.3,
+              "reward_channel": 2,
               "target_color": [
                 255,
                 255,
@@ -7285,6 +7085,7 @@
               "y_norm": 0.3565737051792829,
               "radius_ratio": 0.1,
               "hold_time": 0.3,
+              "reward_channel": 2,
               "target_color": [
                 255,
                 255,
@@ -7298,6 +7099,7 @@
               "y_norm": 0.1,
               "radius_ratio": 0.1,
               "hold_time": 0.3,
+              "reward_channel": 2,
               "target_color": [
                 255,
                 255,
@@ -7311,6 +7113,7 @@
               "y_norm": 0.9223107569721115,
               "radius_ratio": 0.1,
               "hold_time": 0.3,
+              "reward_channel": 2,
               "target_color": [
                 255,
                 255,
@@ -7324,6 +7127,7 @@
               "y_norm": 0.7549800796812749,
               "radius_ratio": 0.1,
               "hold_time": 0.3,
+              "reward_channel": 2,
               "target_color": [
                 255,
                 255,
@@ -7337,6 +7141,7 @@
               "y_norm": 0.28486055776892427,
               "radius_ratio": 0.1,
               "hold_time": 0.3,
+              "reward_channel": 2,
               "target_color": [
                 255,
                 255,
@@ -7350,6 +7155,7 @@
               "y_norm": 0.15139442231075695,
               "radius_ratio": 0.1,
               "hold_time": 0.3,
+              "reward_channel": 2,
               "target_color": [
                 255,
                 255,
@@ -7363,6 +7169,7 @@
               "y_norm": 0.8665338645418327,
               "radius_ratio": 0.1,
               "hold_time": 0.3,
+              "reward_channel": 2,
               "target_color": [
                 255,
                 255,
@@ -7472,6 +7279,7 @@
               "y_norm": 0.5,
               "radius_ratio": 0.07,
               "hold_time": 0.4,
+              "reward_channel": 2,
               "target_color": [
                 255,
                 255,
@@ -7485,6 +7293,7 @@
               "y_norm": 0.5,
               "radius_ratio": 0.07,
               "hold_time": 0.4,
+              "reward_channel": 2,
               "target_color": [
                 255,
                 255,
@@ -7498,6 +7307,7 @@
               "y_norm": 0.5,
               "radius_ratio": 0.07,
               "hold_time": 0.4,
+              "reward_channel": 2,
               "target_color": [
                 255,
                 255,
@@ -7511,6 +7321,7 @@
               "y_norm": 0.5,
               "radius_ratio": 0.07,
               "hold_time": 0.4,
+              "reward_channel": 2,
               "target_color": [
                 255,
                 255,
@@ -7524,6 +7335,7 @@
               "y_norm": 0.5,
               "radius_ratio": 0.07,
               "hold_time": 0.4,
+              "reward_channel": 2,
               "target_color": [
                 255,
                 255,
@@ -7537,6 +7349,7 @@
               "y_norm": 0.5,
               "radius_ratio": 0.07,
               "hold_time": 0.4,
+              "reward_channel": 2,
               "target_color": [
                 255,
                 255,
@@ -7550,6 +7363,7 @@
               "y_norm": 0.5,
               "radius_ratio": 0.07,
               "hold_time": 0.4,
+              "reward_channel": 2,
               "target_color": [
                 255,
                 255,
@@ -7659,6 +7473,7 @@
               "y_norm": 0.5,
               "radius_ratio": 0.25,
               "hold_time": 0.3,
+              "reward_channel": 2,
               "target_color": [
                 220,
                 138,
@@ -7672,6 +7487,7 @@
               "y_norm": 0.25,
               "radius_ratio": 0.12,
               "hold_time": 0.5,
+              "reward_channel": 2,
               "target_color": [
                 255,
                 255,
@@ -7685,6 +7501,7 @@
               "y_norm": 0.5,
               "radius_ratio": 0.12,
               "hold_time": 0.5,
+              "reward_channel": 2,
               "target_color": [
                 255,
                 255,
@@ -7698,6 +7515,7 @@
               "y_norm": 0.8,
               "radius_ratio": 0.1,
               "hold_time": 0.5,
+              "reward_channel": 2,
               "target_color": [
                 255,
                 255,
@@ -7711,6 +7529,7 @@
               "y_norm": 0.67,
               "radius_ratio": 0.1,
               "hold_time": 0.5,
+              "reward_channel": 2,
               "target_color": [
                 255,
                 255,
@@ -7724,6 +7543,7 @@
               "y_norm": 0.9,
               "radius_ratio": 0.1,
               "hold_time": 0.5,
+              "reward_channel": 2,
               "target_color": [
                 255,
                 255,
@@ -7737,6 +7557,7 @@
               "y_norm": 0.75,
               "radius_ratio": 0.12,
               "hold_time": 0.5,
+              "reward_channel": 2,
               "target_color": [
                 255,
                 255,
@@ -7750,6 +7571,7 @@
               "y_norm": 0.25,
               "radius_ratio": 0.12,
               "hold_time": 0.5,
+              "reward_channel": 2,
               "target_color": [
                 255,
                 255,
