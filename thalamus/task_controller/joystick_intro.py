@@ -394,10 +394,26 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       painter.drawText(12, 18, "Drag target centers to reposition them inside the task region.")
 
   def open_layout_editor() -> None:
+    existing_dialog = getattr(result, "_layout_editor_dialog", None)
+    if isinstance(existing_dialog, QDialog):
+      existing_dialog.show()
+      existing_dialog.raise_()
+      existing_dialog.activateWindow()
+      return
+
     dialog = QDialog(result, Qt.WindowType.Window)
     dialog.setWindowTitle("Target Layout Editor")
-    dialog.setModal(True)
+    dialog.setModal(False)
+    dialog.setWindowModality(Qt.WindowModality.NonModal)
+    dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
     dialog.resize(900, 560)
+    result._layout_editor_dialog = dialog # type: ignore[attr-defined]
+
+    def clear_layout_editor_reference(*_args: typing.Any) -> None:
+      if getattr(result, "_layout_editor_dialog", None) is dialog:
+        result._layout_editor_dialog = None # type: ignore[attr-defined]
+
+    dialog.destroyed.connect(clear_layout_editor_reference)
 
     draft_targets = [normalize_target(target) for target in list(targets)]
     if not draft_targets:
@@ -425,6 +441,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     y_spin = QDoubleSpinBox()
     radius_spin = QDoubleSpinBox()
     hold_spin = QDoubleSpinBox()
+    reward_channel_spin = QSpinBox()
     color_button = QPushButton("Choose Color")
 
     for spin in (x_spin, y_spin):
@@ -437,6 +454,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     hold_spin.setRange(0.01, 10.0)
     hold_spin.setDecimals(3)
     hold_spin.setSingleStep(0.05)
+    reward_channel_spin.setRange(0, 255)
+    reward_channel_spin.setSingleStep(1)
 
     form_layout.addRow("Name", name_edit)
     form_layout.addRow("", enabled_box)
@@ -444,6 +463,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     form_layout.addRow("Y", y_spin)
     form_layout.addRow("Radius", radius_spin)
     form_layout.addRow("Hold (s)", hold_spin)
+    form_layout.addRow("Reward Channel", reward_channel_spin)
     form_layout.addRow("Color", color_button)
     side_layout.addWidget(form_panel)
 
@@ -492,7 +512,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
 
     def populate_controls() -> None:
       controls_enabled = 0 <= selected_index < len(draft_targets)
-      for widget in (name_edit, enabled_box, x_spin, y_spin, radius_spin, hold_spin, color_button, remove_button):
+      for widget in (name_edit, enabled_box, x_spin, y_spin, radius_spin, hold_spin, reward_channel_spin, color_button, remove_button):
         widget.setEnabled(controls_enabled)
       if not controls_enabled:
         target_list.blockSignals(True)
@@ -502,12 +522,15 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         y_spin.blockSignals(True)
         radius_spin.blockSignals(True)
         hold_spin.blockSignals(True)
+        reward_channel_spin.blockSignals(True)
         name_edit.setText("")
         enabled_box.setChecked(False)
         x_spin.setValue(0.0)
         y_spin.setValue(0.0)
         radius_spin.setValue(DEFAULT_TARGET_RADIUS_RATIO)
         hold_spin.setValue(DEFAULT_TARGET_HOLD_TIME)
+        reward_channel_spin.setValue(int(task_config.get("reward_channel", 0)))
+        reward_channel_spin.blockSignals(False)
         hold_spin.blockSignals(False)
         radius_spin.blockSignals(False)
         y_spin.blockSignals(False)
@@ -528,12 +551,15 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       y_spin.blockSignals(True)
       radius_spin.blockSignals(True)
       hold_spin.blockSignals(True)
+      reward_channel_spin.blockSignals(True)
       name_edit.setText(str(target.get("name", "")))
       enabled_box.setChecked(bool(target.get("enabled", True)))
       x_spin.setValue(float(target.get("x_norm", 0.75)))
       y_spin.setValue(float(target.get("y_norm", 0.50)))
       radius_spin.setValue(float(target.get("radius_ratio", DEFAULT_TARGET_RADIUS_RATIO)))
       hold_spin.setValue(float(target.get("hold_time", DEFAULT_TARGET_HOLD_TIME)))
+      reward_channel_spin.setValue(int(target.get("reward_channel", task_config.get("reward_channel", 0))))
+      reward_channel_spin.blockSignals(False)
       hold_spin.blockSignals(False)
       radius_spin.blockSignals(False)
       y_spin.blockSignals(False)
@@ -575,6 +601,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         "y_norm": y_spin.value(),
         "radius_ratio": radius_spin.value(),
         "hold_time": hold_spin.value(),
+        "reward_channel": reward_channel_spin.value(),
       })
       refresh_editor()
 
@@ -594,6 +621,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     y_spin.valueChanged.connect(lambda _value: apply_field_changes())
     radius_spin.valueChanged.connect(lambda _value: apply_field_changes())
     hold_spin.valueChanged.connect(lambda _value: apply_field_changes())
+    reward_channel_spin.valueChanged.connect(lambda _value: apply_field_changes())
     color_button.clicked.connect(choose_color)
     target_list.currentRowChanged.connect(select_index)
 
@@ -655,7 +683,9 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       slider.installEventFilter(no_wheel_filter)
 
     refresh_editor()
-    dialog.exec()
+    dialog.show()
+    dialog.raise_()
+    dialog.activateWindow()
 
   def write_table_row(row: int, target: typing.Dict[str, typing.Any]) -> None:
     enabled_item = QTableWidgetItem("")
