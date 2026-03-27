@@ -179,6 +179,10 @@ This is not a pixel radius.
 Required time in seconds that the cursor must remain continuously inside the target to succeed.
 Pulled from the selected target configuration at target onset.
 
+### `reward_channel`
+Reward channel selected for that target on that attempt.
+If an older target config does not provide this field, the task falls back to the top-level `reward_channel`.
+
 ### `target_color_rgb`
 The displayed target color at target onset.
 Stored as `[R, G, B]`, integer values from `0` to `255`.
@@ -262,9 +266,11 @@ This is the event that immediately precedes reward delivery and successful trial
 
 ### `reward_triggered`
 The standard reward was requested.
+The event includes the `reward_channel` used for that reward request.
 
 ### `bonus_reward_triggered`
 An additional bonus reward was requested because a configured streak threshold was reached.
+The event includes the `reward_channel` used for those reward requests.
 
 ### `ignored_idle_timeout`
 The trial timed out without meaningful movement, and the task was configured to ignore idle failures.

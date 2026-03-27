@@ -189,14 +189,15 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         "y_norm": 0.50,
         "radius_ratio": DEFAULT_TARGET_RADIUS_RATIO,
         "hold_time": DEFAULT_TARGET_HOLD_TIME,
+        "reward_channel": int(task_config.get("reward_channel", 0)),
         "target_color": DEFAULT_TARGET_COLOR.copy()
       }
     ]
 
   targets = task_config["targets"]
   target_table = QTableWidget()
-  target_table.setColumnCount(7)
-  target_table.setHorizontalHeaderLabels(["Enabled", "Name", "X", "Y", "Radius", "Hold (s)", "Color"])
+  target_table.setColumnCount(8)
+  target_table.setHorizontalHeaderLabels(["Enabled", "Name", "X", "Y", "Radius", "Hold (s)", "Reward Channel", "Color"])
   target_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
   target_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
   target_table.horizontalHeader().setStretchLastSection(True)
@@ -224,6 +225,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       "y_norm": clamp(float(t.get("y_norm", 0.50)), 0.0, 1.0),
       "radius_ratio": clamp(float(t.get("radius_ratio", DEFAULT_TARGET_RADIUS_RATIO)), 0.01, 0.5),
       "hold_time": clamp(float(t.get("hold_time", DEFAULT_TARGET_HOLD_TIME)), 0.01, 10.0),
+      "reward_channel": max(0, int(t.get("reward_channel", task_config.get("reward_channel", 0)))),
       "target_color": color,
     }
 
@@ -235,6 +237,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       "y_norm": 0.50,
       "radius_ratio": DEFAULT_TARGET_RADIUS_RATIO,
       "hold_time": DEFAULT_TARGET_HOLD_TIME,
+      "reward_channel": int(task_config.get("reward_channel", 0)),
       "target_color": DEFAULT_TARGET_COLOR.copy(),
     }
 
@@ -668,6 +671,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     target_table.setItem(row, 3, QTableWidgetItem(f"{target['y_norm']:.3f}"))
     target_table.setItem(row, 4, QTableWidgetItem(f"{target['radius_ratio']:.3f}"))
     target_table.setItem(row, 5, QTableWidgetItem(f"{target['hold_time']:.3f}"))
+    target_table.setItem(row, 6, QTableWidgetItem(str(int(target.get("reward_channel", task_config.get("reward_channel", 0))))))
     color_button = QPushButton()
     rgb = target["target_color"]
     color_button.setStyleSheet(f"background-color: rgb({rgb[0]}, {rgb[1]}, {rgb[2]});")
@@ -684,7 +688,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         color_button.setStyleSheet(f"background-color: rgb({new_rgb[0]}, {new_rgb[1]}, {new_rgb[2]});")
 
     color_button.clicked.connect(on_pick_color)
-    target_table.setCellWidget(row, 6, color_button)
+    target_table.setCellWidget(row, 7, color_button)
 
   def sync_table_from_config() -> None:
     target_table.blockSignals(True)
@@ -705,13 +709,15 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     y_item = target_table.item(row, 3)
     radius_item = target_table.item(row, 4)
     hold_item = target_table.item(row, 5)
-    if not all((enabled_item, name_item, x_item, y_item, radius_item, hold_item)):
+    reward_channel_item = target_table.item(row, 6)
+    if not all((enabled_item, name_item, x_item, y_item, radius_item, hold_item, reward_channel_item)):
       return
     try:
       x_val = clamp(float(x_item.text()), 0.0, 1.0)
       y_val = clamp(float(y_item.text()), 0.0, 1.0)
       radius_val = clamp(float(radius_item.text()), 0.01, 0.5)
       hold_val = clamp(float(hold_item.text()), 0.01, 10.0)
+      reward_channel_val = max(0, int(float(reward_channel_item.text())))
     except ValueError:
       target_table.blockSignals(True)
       write_table_row(row, normalize_target(targets[row]))
@@ -724,6 +730,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       "y_norm": y_val,
       "radius_ratio": radius_val,
       "hold_time": hold_val,
+      "reward_channel": reward_channel_val,
       "target_color": normalize_target(targets[row]).get("target_color", DEFAULT_TARGET_COLOR.copy()),
     }
     target_table.blockSignals(True)
@@ -731,7 +738,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     target_table.blockSignals(False)
 
   def on_item_changed(item: QTableWidgetItem) -> None:
-    if item.column() == 6:
+    if item.column() == 7:
       return
     sync_row_to_config(item.row())
 
@@ -751,6 +758,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     "Y",
     "Radius",
     "Hold (s)",
+    "Reward Channel",
     "Color",
   ])
   bulk_field_combo.setCurrentText("Radius")
@@ -832,6 +840,10 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       for i in range(len(targets)):
         targets[i] = normalize_target(targets[i])
         targets[i]["hold_time"] = float(source["hold_time"])
+    elif field == "Reward Channel":
+      for i in range(len(targets)):
+        targets[i] = normalize_target(targets[i])
+        targets[i]["reward_channel"] = int(source["reward_channel"])
     elif field == "Color":
       rgb = list(source["target_color"])
       for i in range(len(targets)):
@@ -978,6 +990,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   current_target_radius_ratio = target_radius_ratio
   current_hold_time = hold_time
   current_target_color = target_color
+  current_reward_channel = reward_channel
   free_play_end_requested = False
   joystick_x = 0.0
   joystick_y = 0.0
@@ -1090,22 +1103,22 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     finally:
       stream.cancel()
 
-  async def deliver_reward() -> None:
-    on_time_ms = int(context.get_reward(reward_channel))
+  async def deliver_reward(channel: int) -> None:
+    on_time_ms = int(context.get_reward(channel))
     if on_time_ms <= 0:
-      LOGGER.info("Reward skipped: channel=%d returned %d ms", reward_channel, on_time_ms)
+      LOGGER.info("Reward skipped: channel=%d returned %d ms", channel, on_time_ms)
       return
     signal = thalamus_pb2.AnalogResponse(
       data=[5, 0],
       spans=[thalamus_pb2.Span(begin=0, end=2, name='Reward')],
       sample_intervals=[1_000_000 * on_time_ms],
     )
-    LOGGER.info("Delivering reward channel=%d duration_ms=%d", reward_channel, on_time_ms)
+    LOGGER.info("Delivering reward channel=%d duration_ms=%d", channel, on_time_ms)
     await context.inject_analog('Reward', signal)
 
-  async def deliver_reward_repeats(repeats: int) -> None:
+  async def deliver_reward_repeats(channel: int, repeats: int) -> None:
     for i in range(max(0, repeats)):
-      await deliver_reward()
+      await deliver_reward(channel)
       if i < repeats - 1:
         await context.sleep(datetime.timedelta(seconds=0.05))
 
@@ -1133,6 +1146,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       "target_position": None,
       "target_radius_ratio": None,
       "hold_time_s": None,
+      "reward_channel": None,
       "target_color_rgb": None,
       "events": [],
       "joystick_active": False,
@@ -1171,7 +1185,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     behav_result["final_attempt"] = current_attempt
     context.behav_result = behav_result
 
-  def place_target() -> typing.Tuple[int, float, float, float, float, QColor]:
+  def place_target() -> typing.Tuple[int, float, float, float, float, int, QColor]:
     enabled_targets = []
     for index, target in enumerate(configured_targets):
       if not isinstance(target, dict):
@@ -1182,6 +1196,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       ty = max(0.0, min(1.0, float(target.get("y_norm", 0.50))))
       tr = max(0.01, min(0.5, float(target.get("radius_ratio", target_radius_ratio))))
       th = max(0.01, min(10.0, float(target.get("hold_time", hold_time))))
+      rc = max(0, int(target.get("reward_channel", reward_channel)))
       raw_color = target.get("target_color", [target_color.red(), target_color.green(), target_color.blue()])
       if isinstance(raw_color, (list, tuple)) and len(raw_color) >= 3:
         tc = QColor(
@@ -1191,10 +1206,10 @@ async def run(context: TaskContextProtocol) -> TaskResult:
         )
       else:
         tc = target_color
-      enabled_targets.append((index, tx, ty, tr, th, tc))
+      enabled_targets.append((index, tx, ty, tr, th, rc, tc))
     if enabled_targets:
       return random.choice(enabled_targets)
-    return -1, 0.75, 0.50, target_radius_ratio, hold_time, target_color
+    return -1, 0.75, 0.50, target_radius_ratio, hold_time, reward_channel, target_color
 
   def apply_direction_influence(raw_jx: float, raw_jy: float) -> typing.Tuple[float, float]:
     jx = raw_jx
@@ -1371,7 +1386,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
           return TaskResult(success=True)
       elif state == "intertrial":
         if now >= iti_end:
-          current_target_index, target_x, target_y, current_target_radius_ratio, current_hold_time, current_target_color = place_target()
+          current_target_index, target_x, target_y, current_target_radius_ratio, current_hold_time, current_reward_channel, current_target_color = place_target()
           hold_start = None
           trial_start = now
           reset_attempt_tracking(now)
@@ -1383,6 +1398,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
             current_attempt["target_position"] = {"x_norm": target_x, "y_norm": target_y}
             current_attempt["target_radius_ratio"] = current_target_radius_ratio
             current_attempt["hold_time_s"] = current_hold_time
+            current_attempt["reward_channel"] = current_reward_channel
             current_attempt["target_color_rgb"] = [
               current_target_color.red(),
               current_target_color.green(),
@@ -1396,6 +1412,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
             target_y=target_y,
             target_radius_ratio=current_target_radius_ratio,
             hold_time_s=current_hold_time,
+            reward_channel=current_reward_channel,
           )
           await context.log("BehavState=start_on")
       else:
@@ -1423,8 +1440,8 @@ async def run(context: TaskContextProtocol) -> TaskResult:
           elif now - hold_start >= current_hold_time:
             hold_progress_ratio = 1.0
             append_event("hold_complete", now, hold_duration_s=now - hold_start)
-            await deliver_reward_repeats(1)
-            append_event("reward_triggered", now, reward_count=1)
+            await deliver_reward_repeats(current_reward_channel, 1)
+            append_event("reward_triggered", now, reward_count=1, reward_channel=current_reward_channel)
             streak_count += 1
             task_config["_streak_count"] = streak_count
             bonus_hit = (
@@ -1433,8 +1450,8 @@ async def run(context: TaskContextProtocol) -> TaskResult:
               and streak_count % streak_bonus_threshold == 0
             )
             if bonus_hit:
-              await deliver_reward_repeats(streak_bonus_reward_count)
-              append_event("bonus_reward_triggered", now, reward_count=streak_bonus_reward_count)
+              await deliver_reward_repeats(current_reward_channel, streak_bonus_reward_count)
+              append_event("bonus_reward_triggered", now, reward_count=streak_bonus_reward_count, reward_channel=current_reward_channel)
               if streak_reset_on_bonus:
                 streak_count = 0
                 task_config["_streak_count"] = 0
