@@ -37,6 +37,7 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_TARGET_RADIUS_RATIO = 0.08
 DEFAULT_TARGET_COLOR = [0, 220, 60]
 DEFAULT_TARGET_HOLD_TIME = 0.40
+KEYBOARD_JOYSTICK_MAGNITUDE = 1.0
 
 def toggle_brightness(brightness: int) -> int:
   return 0 if brightness == 255 else 255
@@ -1022,8 +1023,12 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   current_target_color = target_color
   current_reward_channel = reward_channel
   free_play_end_requested = False
-  joystick_x = 0.0
-  joystick_y = 0.0
+  analog_joystick_x = 0.0
+  analog_joystick_y = 0.0
+  operator_left_pressed = False
+  operator_right_pressed = False
+  operator_up_pressed = False
+  operator_down_pressed = False
   joystick_active_this_trial = False
   cursor_inside_target = False
   hold_progress_ratio = 0.0
@@ -1075,8 +1080,19 @@ async def run(context: TaskContextProtocol) -> TaskResult:
 
   def on_key_release(event: typing.Any) -> None:
     nonlocal free_play_end_requested
-    print('up', event.key())
+    nonlocal operator_left_pressed
+    nonlocal operator_right_pressed
+    nonlocal operator_up_pressed
+    nonlocal operator_down_pressed
     key = event.key()
+    if key == Qt.Key.Key_Left:
+      operator_left_pressed = False
+    elif key == Qt.Key.Key_Right:
+      operator_right_pressed = False
+    elif key == Qt.Key.Key_Up:
+      operator_up_pressed = False
+    elif key == Qt.Key.Key_Down:
+      operator_down_pressed = False
     if free_play_end_key == "q":
       free_play_end_requested = (key == Qt.Key.Key_Q)
     elif free_play_end_key == "enter":
@@ -1086,10 +1102,24 @@ async def run(context: TaskContextProtocol) -> TaskResult:
 
   def on_key_press(event: QKeyEvent) -> None:
     nonlocal free_play_end_requested
-    print('down', event.key())
+    nonlocal operator_left_pressed
+    nonlocal operator_right_pressed
+    nonlocal operator_up_pressed
+    nonlocal operator_down_pressed
+    if event.isAutoRepeat():
+      return
+    key = event.key()
+    if key == Qt.Key.Key_Left:
+      operator_left_pressed = True
+    elif key == Qt.Key.Key_Right:
+      operator_right_pressed = True
+    elif key == Qt.Key.Key_Up:
+      operator_up_pressed = True
+    elif key == Qt.Key.Key_Down:
+      operator_down_pressed = True
 
   async def analog_processor(stream: typing.Any) -> None:
-    nonlocal joystick_x, joystick_y
+    nonlocal analog_joystick_x, analog_joystick_y
     try:
       async for message in stream:
         sample_received_at = time.perf_counter()
@@ -1119,19 +1149,33 @@ async def run(context: TaskContextProtocol) -> TaskResult:
               "x": sample_x,
               "y": sample_y,
             })
-            joystick_x = sample_x
-            joystick_y = sample_y
+            analog_joystick_x = sample_x
+            analog_joystick_y = sample_y
         elif len(message.data) >= 2:
-          joystick_x = float(message.data[0])
-          joystick_y = float(message.data[1])
+          analog_joystick_x = float(message.data[0])
+          analog_joystick_y = float(message.data[1])
           behav_result["joystick_samples"].append({
             "time_perf_counter": sample_received_at,
             "time_since_session_start_s": max(0.0, sample_received_at - session_start),
-            "x": joystick_x,
-            "y": joystick_y,
+            "x": analog_joystick_x,
+            "y": analog_joystick_y,
           })
     finally:
       stream.cancel()
+
+  def get_operator_joystick() -> typing.Tuple[float, float]:
+    x = float(operator_right_pressed) - float(operator_left_pressed)
+    y = float(operator_up_pressed) - float(operator_down_pressed)
+    return (
+      max(-1.0, min(1.0, x * KEYBOARD_JOYSTICK_MAGNITUDE)),
+      max(-1.0, min(1.0, y * KEYBOARD_JOYSTICK_MAGNITUDE)),
+    )
+
+  def get_effective_joystick() -> typing.Tuple[float, float]:
+    operator_jx, operator_jy = get_operator_joystick()
+    if operator_jx != 0.0 or operator_jy != 0.0:
+      return operator_jx, operator_jy
+    return analog_joystick_x, analog_joystick_y
 
   async def deliver_reward(channel: int) -> None:
     on_time_ms = int(context.get_reward(channel))
@@ -1356,6 +1400,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   context.widget.renderer = renderer
   context.widget.key_release_handler = on_key_release
   context.widget.key_press_handler = on_key_press
+  context.widget.setFocus()
 
   channel = context.get_channel('localhost:50050')
   stub = thalamus_pb2_grpc.ThalamusStub(channel)
@@ -1376,12 +1421,13 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       dt = max(0.0, min(0.05, now - last_tick))
       last_tick = now
 
+      raw_jx, raw_jy = get_effective_joystick()
       if control_mode == "direct":
-        jx, jy = apply_direction_influence(joystick_x, joystick_y)
+        jx, jy = apply_direction_influence(raw_jx, raw_jy)
         cursor_x = 0.5 + jx * direct_range
         cursor_y = 0.5 + jy * direct_range
       else:
-        jx, jy = apply_direction_influence(joystick_x, joystick_y)
+        jx, jy = apply_direction_influence(raw_jx, raw_jy)
         if zero_drift_mode:
           # Radial deadband to suppress small spring-back offsets near center.
           if math.hypot(jx, jy) < zero_drift_buffer:

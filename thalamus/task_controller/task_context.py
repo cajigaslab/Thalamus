@@ -706,6 +706,7 @@ class TaskContext(TaskContextProtocol):
         self.widget.renderer = lambda w: None
         self.widget.touch_listener = lambda e: None
         self.widget.gaze_listener = lambda e: None
+        self.widget.key_press_handler = lambda e: None
         self.widget.key_release_handler = lambda e: None
         if self.config.get('eye_scaling', {}).get('Auto Clear', False):
           self.widget.clear_accumulation()
