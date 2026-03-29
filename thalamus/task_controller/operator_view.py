@@ -47,18 +47,8 @@ class ViewWidget(QWidget):
     if canvas_size.isEmpty():
       return
 
-    device_pixel_ratio = self.target.canvas.devicePixelRatioF()
-    if USINGLEGACY_QT:
-      with self.target.canvas.masked(RenderOutput.OPERATOR):
-        image = self.target.canvas.grabFramebuffer()
-    else:
-      image = QImage(int(canvas_size.width() * device_pixel_ratio),
-                     int(canvas_size.height() * device_pixel_ratio),
-                     QImage.Format.Format_ARGB32_Premultiplied) # type: ignore # pylint: disable=no-member
-      image.fill(QColor(0, 0, 0, 255))
-      image.setDevicePixelRatio(device_pixel_ratio)
-      with self.target.canvas.masked(RenderOutput.OPERATOR):
-        self.target.canvas.render(image)
+    with self.target.canvas.masked(RenderOutput.OPERATOR):
+      image = self.target.canvas.grabFramebuffer()
 
     self.latest_image = image
     self.update()
