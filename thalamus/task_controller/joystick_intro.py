@@ -62,6 +62,10 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     task_config["control_mode"] = "direct"
   if "cursor_diameter_ratio" not in task_config:
     task_config["cursor_diameter_ratio"] = 0.1
+  if "reset_cursor_each_trial" not in task_config:
+    task_config["reset_cursor_each_trial"] = True
+  if "direct_recenter_when_idle" not in task_config:
+    task_config["direct_recenter_when_idle"] = True
   if "task_region_x" not in task_config:
     task_config["task_region_x"] = 0.5
   if "task_region_y" not in task_config:
@@ -121,7 +125,9 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Bool("Zero-Drift Mode", "zero_drift_mode", True),
     Form.Constant("Zero-Drift Buffer", "zero_drift_buffer", 0.05, precision=3),
     Form.Constant("Direct Range", "direct_range", 0.45, precision=3),
+    Form.Bool("Direct Recenter When Idle", "direct_recenter_when_idle", True),
     Form.Constant("Cursor Diameter Ratio", "cursor_diameter_ratio", 0.1, precision=3),
+    Form.Bool("Reset Cursor Each Trial", "reset_cursor_each_trial", True),
     Form.Color("Cursor Color", "cursor_color", QColor(255, 70, 70)),
     Form.Constant("Task Region Center X", "task_region_x", 0.5, precision=3),
     Form.Constant("Task Region Center Y", "task_region_y", 0.270, precision=3),
@@ -968,6 +974,21 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   assert context.widget, "Widget is None; cannot render."
 
   task_config = context.config["queue"][0]
+
+  def get_persisted_operator_key_state(key: str) -> bool:
+    stored = task_config.get("_operator_keys_pressed", {})
+    if isinstance(stored, dict):
+      return bool(stored.get(key, False))
+    return False
+
+  def persist_operator_key_state() -> None:
+    task_config["_operator_keys_pressed"] = {
+      "left": bool(operator_left_pressed),
+      "right": bool(operator_right_pressed),
+      "up": bool(operator_up_pressed),
+      "down": bool(operator_down_pressed),
+    }
+
   joystick_node = str(task_config.get("joystick_node", "Joystick"))
   up_influence = max(0.0, min(1.0, float(task_config.get("up_influence_pct", 100)) / 100.0))
   down_influence = max(0.0, min(1.0, float(task_config.get("down_influence_pct", 100)) / 100.0))
@@ -980,7 +1001,9 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   zero_drift_mode = bool(task_config.get("zero_drift_mode", True))
   zero_drift_buffer = float(task_config.get("zero_drift_buffer", 0.03))
   direct_range = float(task_config.get("direct_range", 0.45))
+  direct_recenter_when_idle = bool(task_config.get("direct_recenter_when_idle", True))
   cursor_diameter_ratio = float(task_config.get("cursor_diameter_ratio", 0.1))
+  reset_cursor_each_trial = bool(task_config.get("reset_cursor_each_trial", True))
   cursor_color = QColor(*task_config.get("cursor_color", [255, 70, 70]))
   task_region_x = float(task_config.get("task_region_x", 0.5))
   task_region_y = float(task_config.get("task_region_y", 0.270))
@@ -1009,8 +1032,13 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   state_indicator_x = max(0, int(task_config.get("state_indicator_x", 30)))
   state_indicator_y = max(0, int(task_config.get("state_indicator_y", 70)))
   session_start = time.perf_counter()
-  cursor_x = 0.5
-  cursor_y = 0.5
+  # Preserve the previous cursor position across task runs when the task is
+  # configured for continuous control. This avoids a visible flash back to
+  # center before the next joystick sample arrives.
+  cursor_x = 0.5 if reset_cursor_each_trial else float(task_config.get("_last_cursor_x", 0.5))
+  cursor_y = 0.5 if reset_cursor_each_trial else float(task_config.get("_last_cursor_y", 0.5))
+  cursor_x = max(0.0, min(1.0, cursor_x))
+  cursor_y = max(0.0, min(1.0, cursor_y))
   target_x = 0.5
   target_y = 0.5
 
@@ -1026,10 +1054,10 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   free_play_end_requested = False
   analog_joystick_x = 0.0
   analog_joystick_y = 0.0
-  operator_left_pressed = False
-  operator_right_pressed = False
-  operator_up_pressed = False
-  operator_down_pressed = False
+  operator_left_pressed = get_persisted_operator_key_state("left") if not reset_cursor_each_trial else False
+  operator_right_pressed = get_persisted_operator_key_state("right") if not reset_cursor_each_trial else False
+  operator_up_pressed = get_persisted_operator_key_state("up") if not reset_cursor_each_trial else False
+  operator_down_pressed = get_persisted_operator_key_state("down") if not reset_cursor_each_trial else False
   operator_cursor_latched = False
   joystick_active_this_trial = False
   cursor_inside_target = False
@@ -1095,6 +1123,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       operator_up_pressed = False
     elif key == Qt.Key.Key_Down:
       operator_down_pressed = False
+    persist_operator_key_state()
     if free_play_end_key == "q":
       free_play_end_requested = (key == Qt.Key.Key_Q)
     elif free_play_end_key == "enter":
@@ -1119,6 +1148,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       operator_up_pressed = True
     elif key == Qt.Key.Key_Down:
       operator_down_pressed = True
+    persist_operator_key_state()
 
   async def analog_processor(stream: typing.Any) -> None:
     nonlocal analog_joystick_x, analog_joystick_y
@@ -1431,8 +1461,9 @@ async def run(context: TaskContextProtocol) -> TaskResult:
         jy = 0.0
       elif control_mode == "direct":
         jx, jy = apply_direction_influence(analog_joystick_x, analog_joystick_y)
-        cursor_x = 0.5 + jx * direct_range
-        cursor_y = 0.5 + jy * direct_range
+        if analog_active or direct_recenter_when_idle:
+          cursor_x = 0.5 + jx * direct_range
+          cursor_y = 0.5 + jy * direct_range
         operator_cursor_latched = False
       else:
         jx, jy = apply_direction_influence(analog_joystick_x, analog_joystick_y)
@@ -1591,6 +1622,9 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       context.widget.update()
       await context.sleep(datetime.timedelta(seconds=0.01))
   finally:
+    task_config["_last_cursor_x"] = float(cursor_x)
+    task_config["_last_cursor_y"] = float(cursor_y)
+    persist_operator_key_state()
     analog_task.cancel()
     try:
       await analog_task
