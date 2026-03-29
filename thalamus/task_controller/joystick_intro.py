@@ -38,6 +38,7 @@ DEFAULT_TARGET_RADIUS_RATIO = 0.08
 DEFAULT_TARGET_COLOR = [0, 220, 60]
 DEFAULT_TARGET_HOLD_TIME = 0.40
 KEYBOARD_JOYSTICK_MAGNITUDE = 1.0
+OPERATOR_KEYBOARD_CURSOR_SPEED = 0.85
 
 def toggle_brightness(brightness: int) -> int:
   return 0 if brightness == 255 else 255
@@ -1029,6 +1030,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   operator_right_pressed = False
   operator_up_pressed = False
   operator_down_pressed = False
+  operator_cursor_latched = False
   joystick_active_this_trial = False
   cursor_inside_target = False
   hold_progress_ratio = 0.0
@@ -1170,12 +1172,6 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       max(-1.0, min(1.0, x * KEYBOARD_JOYSTICK_MAGNITUDE)),
       max(-1.0, min(1.0, y * KEYBOARD_JOYSTICK_MAGNITUDE)),
     )
-
-  def get_effective_joystick() -> typing.Tuple[float, float]:
-    operator_jx, operator_jy = get_operator_joystick()
-    if operator_jx != 0.0 or operator_jy != 0.0:
-      return operator_jx, operator_jy
-    return analog_joystick_x, analog_joystick_y
 
   async def deliver_reward(channel: int) -> None:
     on_time_ms = int(context.get_reward(channel))
@@ -1421,13 +1417,25 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       dt = max(0.0, min(0.05, now - last_tick))
       last_tick = now
 
-      raw_jx, raw_jy = get_effective_joystick()
-      if control_mode == "direct":
-        jx, jy = apply_direction_influence(raw_jx, raw_jy)
+      operator_jx, operator_jy = get_operator_joystick()
+      operator_override_active = operator_jx != 0.0 or operator_jy != 0.0
+      analog_magnitude = math.hypot(analog_joystick_x, analog_joystick_y)
+      analog_active = analog_magnitude >= (zero_drift_buffer if zero_drift_mode else 0.02)
+      if operator_override_active:
+        jx, jy = apply_direction_influence(operator_jx, operator_jy)
+        cursor_x += jx * OPERATOR_KEYBOARD_CURSOR_SPEED * dt
+        cursor_y += jy * OPERATOR_KEYBOARD_CURSOR_SPEED * dt
+        operator_cursor_latched = True
+      elif operator_cursor_latched and not analog_active:
+        jx = 0.0
+        jy = 0.0
+      elif control_mode == "direct":
+        jx, jy = apply_direction_influence(analog_joystick_x, analog_joystick_y)
         cursor_x = 0.5 + jx * direct_range
         cursor_y = 0.5 + jy * direct_range
+        operator_cursor_latched = False
       else:
-        jx, jy = apply_direction_influence(raw_jx, raw_jy)
+        jx, jy = apply_direction_influence(analog_joystick_x, analog_joystick_y)
         if zero_drift_mode:
           # Radial deadband to suppress small spring-back offsets near center.
           if math.hypot(jx, jy) < zero_drift_buffer:
@@ -1435,6 +1443,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
             jy = 0.0
         cursor_x += jx * cumulative_speed * dt
         cursor_y += jy * cumulative_speed * dt
+        operator_cursor_latched = False
 
       joystick_motion_threshold = zero_drift_buffer if zero_drift_mode else 0.02
       joystick_is_active = math.hypot(jx, jy) >= joystick_motion_threshold
