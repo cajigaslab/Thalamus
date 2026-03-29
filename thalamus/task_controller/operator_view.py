@@ -178,6 +178,8 @@ class CentralWidget(QWidget):
       operator_config['show_gaze'] = True
     if 'capture_mode' not in operator_config:
       operator_config['capture_mode'] = 'framebuffer'
+    if 'show_eye_scaling' not in operator_config:
+      operator_config['show_eye_scaling'] = False
 
     layout = QGridLayout()
     self.view_widget = ViewWidget(target, config)
@@ -203,14 +205,20 @@ class CentralWidget(QWidget):
     layout.addWidget(show_gaze_checkbox, 1, 3)
     show_gaze_checkbox.toggled.connect(lambda v: operator_config.update({'show_gaze': v}))
 
+    toggle_eye_scaling_button = QPushButton(
+      'Hide Eye Scaling' if operator_config['show_eye_scaling'] else 'Show Eye Scaling')
+    layout.addWidget(toggle_eye_scaling_button, 2, 0, 1, 4)
+    toggle_eye_scaling_button.clicked.connect(
+      lambda: operator_config.update({'show_eye_scaling': not bool(operator_config['show_eye_scaling'])}))
+
     capture_mode_combo = QComboBox()
     capture_mode_combo.addItem('Framebuffer', 'framebuffer')
     capture_mode_combo.addItem('Render', 'render')
     capture_mode_index = capture_mode_combo.findData(operator_config['capture_mode'])
     if capture_mode_index >= 0:
       capture_mode_combo.setCurrentIndex(capture_mode_index)
-    layout.addWidget(QLabel('Capture'), 9, 0)
-    layout.addWidget(capture_mode_combo, 9, 1, 1, 3)
+    layout.addWidget(QLabel('Capture'), 10, 0)
+    layout.addWidget(capture_mode_combo, 10, 1, 1, 3)
     capture_mode_combo.currentIndexChanged.connect(
       lambda _: operator_config.update({'capture_mode': capture_mode_combo.currentData()}))
 
@@ -226,14 +234,18 @@ class CentralWidget(QWidget):
         show_touch_checkbox.setChecked(bool(value))
       elif key == 'show_gaze':
         show_gaze_checkbox.setChecked(bool(value))
+      elif key == 'show_eye_scaling':
+        is_visible = bool(value)
+        toggle_eye_scaling_button.setText('Hide Eye Scaling' if is_visible else 'Show Eye Scaling')
+        for widget in eye_scaling_widgets:
+          widget.setVisible(is_visible)
       elif key == 'capture_mode':
         index = capture_mode_combo.findData(value)
         if index >= 0 and capture_mode_combo.currentIndex() != index:
           capture_mode_combo.setCurrentIndex(index)
         self.view_widget.request_capture()
 
-    operator_config.add_observer(on_operator_config_change, lambda: isdeleted(self))
-    operator_config.recap(on_operator_config_change)
+    eye_scaling_widgets: typing.Tuple[QWidget, ...] = ()
 
     def update_field(quadrant: str, field: str, value: float) -> None:
       eye_config[quadrant][field] = value
@@ -244,33 +256,37 @@ class CentralWidget(QWidget):
 
     selected_quadrant = 'I'
 
-    layout.addWidget(QLabel('Eye Scaling'), 2, 0, 1, 4)
+    eye_scaling_header = QLabel('Eye Scaling')
+    layout.addWidget(eye_scaling_header, 3, 0, 1, 4)
 
     quadrant_combo = QComboBox()
     for quadrant, label in QUADRANT_LABELS.items():
       quadrant_combo.addItem(label, quadrant)
-    layout.addWidget(QLabel('Region'), 3, 0)
-    layout.addWidget(quadrant_combo, 3, 1, 1, 3)
+    region_label = QLabel('Region')
+    layout.addWidget(region_label, 4, 0)
+    layout.addWidget(quadrant_combo, 4, 1, 1, 3)
 
     preview = EyeScalingPreview(selected_quadrant, eye_config)
     preview.setMinimumSize(140, 140)
-    layout.addWidget(preview, 4, 0, 1, 4)
+    layout.addWidget(preview, 5, 0, 1, 4)
 
     x_spin_box = QDoubleSpinBox()
     x_spin_box.setMaximum(1e9)
     x_spin_box.setObjectName('selected_quadrant_x')
-    layout.addWidget(QLabel('Horizontal'), 5, 0, 1, 2)
-    layout.addWidget(x_spin_box, 6, 0, 1, 2)
+    horizontal_label = QLabel('Horizontal')
+    layout.addWidget(horizontal_label, 6, 0, 1, 2)
+    layout.addWidget(x_spin_box, 7, 0, 1, 2)
 
     y_spin_box = QDoubleSpinBox()
     y_spin_box.setMaximum(1e9)
     y_spin_box.setObjectName('selected_quadrant_y')
-    layout.addWidget(QLabel('Vertical'), 5, 2, 1, 2)
-    layout.addWidget(y_spin_box, 6, 2, 1, 2)
+    vertical_label = QLabel('Vertical')
+    layout.addWidget(vertical_label, 6, 2, 1, 2)
+    layout.addWidget(y_spin_box, 7, 2, 1, 2)
 
     selection_label = QLabel(QUADRANT_LABELS[selected_quadrant])
     selection_label.setStyleSheet('font-weight: 600;')
-    layout.addWidget(selection_label, 7, 0, 1, 4)
+    layout.addWidget(selection_label, 8, 0, 1, 4)
 
     def refresh_selected_controls() -> None:
       quadrant = quadrant_combo.currentData()
@@ -299,6 +315,23 @@ class CentralWidget(QWidget):
       eye_config[quadrant].add_observer(on_quadrant_config_change)
 
     refresh_selected_controls()
+
+    eye_scaling_widgets = (
+      eye_scaling_header,
+      region_label,
+      quadrant_combo,
+      preview,
+      horizontal_label,
+      x_spin_box,
+      vertical_label,
+      y_spin_box,
+      selection_label,
+    )
+    for widget in eye_scaling_widgets:
+      widget.setVisible(bool(operator_config['show_eye_scaling']))
+
+    operator_config.add_observer(on_operator_config_change, lambda: isdeleted(self))
+    operator_config.recap(on_operator_config_change)
 
     self.setLayout(layout)
 
