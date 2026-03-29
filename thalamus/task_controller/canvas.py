@@ -637,6 +637,19 @@ class Canvas(QOpenGLWidget):
       painter.fillRect(QRect(0, 0, 4000, 4000), QColor(0, 0, 0))
       self.listeners.renderer(painter)
 
+      operator_config = self.config['operator_view'] if 'operator_view' in self.config else {}
+      show_touch = operator_config.get('show_touch', True)
+      show_gaze = operator_config.get('show_gaze', True)
+
+      with painter.masked(RenderOutput.OPERATOR):
+        if show_touch:
+          painter.fillPath(self.input_config.touch_path, QColor(255, 0, 0))
+
+        if show_gaze:
+          painter.setTransform(QTransform.fromTranslate(self.width()/2, self.height()/2))
+          for path in self.input_config.gaze_paths:
+            painter.fillPath(path, QColor(0, 0, 255))
+
     if self.current_output_mask != RenderOutput.OPERATOR:
       for subscriber in self.listeners.paint_subscribers:
         subscriber()
