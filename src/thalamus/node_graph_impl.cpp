@@ -643,6 +643,15 @@ struct ThalamusAPIImpl {
       delete span->data;
     }
   }
+
+  static void error_code_message(struct ThalamusCharSpan* result, ThalamusErrorCode *error) {
+    auto message = error->error->message();
+    char* data = new char[message.size()];
+    std::copy_n(message.begin(), message.size(), data);
+    result->data = data;
+    result->size = message.size();
+    result->owns_data = true;
+  }
 };
 
 std::map<ObservableCollection::Value, ThalamusState*>* ThalamusAPIImpl::cpp_to_c = nullptr;
@@ -806,6 +815,7 @@ public:
     thalamus_api.streambuf_size = ThalamusAPIImpl::streambuf_size;
 
     thalamus_api.charspan_destroy = ThalamusAPIImpl::charspan_destroy;
+    thalamus_api.error_code_message = ThalamusAPIImpl::error_code_message;
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},

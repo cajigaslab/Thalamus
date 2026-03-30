@@ -211,12 +211,9 @@ unsafe extern "C" fn io_callback<T: FnMut(ErrorCode, usize)>(error: *mut Thalamu
     let raw_args = &mut*(data as *mut IOArgs<T>);
     Box::from_raw(raw_args)
   };
-  let error_code = unsafe {
-    let api = &*args.api.raw;
-    (api.error_code_value)(error)
-  };
+  let error_code = ErrorCode::new(args.api, error);
   
-  (args.callback)(ErrorCode{value: error_code}, length);
+  (args.callback)(error_code, length);
 }
 
 pub struct IOFutureState {
@@ -308,11 +305,11 @@ impl SerialPort {
     unsafe {
       let api = &*self.api.raw;
       let error = (api.serial_port_error)(self.port);
-      let error_code = (api.error_code_value)(error);
-      if error_code == 0 {
+      let error_code = ErrorCode::new(self.api, error);
+      if error_code.code == 0 {
         None
       } else {
-        Some(ErrorCode {value: error_code})
+        Some(error_code)
       }
     }
   }
@@ -355,7 +352,7 @@ impl SerialPort {
     self.write_callback(data, |error, size| {
       let waker = {
         let mut state = future.state.lock().unwrap();
-        state.result = if error.value != 0 { Some(Err(error)) } else { Some(Ok(size)) };
+        state.result = if error.code != 0 { Some(Err(error)) } else { Some(Ok(size)) };
         state.waker.take()
       };
       waker.map(|w| { w.wake_by_ref();});
@@ -380,7 +377,7 @@ impl SerialPort {
     self.read_callback(data, |error, size| {
       let waker = {
         let mut state = future.state.lock().unwrap();
-        state.result = if error.value != 0 { Some(Err(error)) } else { Some(Ok(size)) };
+        state.result = if error.code != 0 { Some(Err(error)) } else { Some(Ok(size)) };
         state.waker.take()
       };
       waker.map(|w| { w.wake_by_ref();});
@@ -405,7 +402,7 @@ impl SerialPort {
     self.read_some_callback(data, |error, size| {
       let waker = {
         let mut state = future.state.lock().unwrap();
-        state.result = if error.value != 0 { Some(Err(error)) } else { Some(Ok(size)) };
+        state.result = if error.code != 0 { Some(Err(error)) } else { Some(Ok(size)) };
         state.waker.take()
       };
       waker.map(|w| { w.wake_by_ref();});
@@ -431,7 +428,7 @@ impl SerialPort {
     self.read_until_callback(buffer, delimiter, |error, size| {
       let waker = {
         let mut state = future.state.lock().unwrap();
-        state.result = if error.value != 0 { Some(Err(error)) } else { Some(Ok(size)) };
+        state.result = if error.code != 0 { Some(Err(error)) } else { Some(Ok(size)) };
         state.waker.take()
       };
       waker.map(|w| { w.wake_by_ref();});
@@ -579,26 +576,46 @@ unsafe extern "C" fn timer_on_timer(error: *mut ThalamusErrorCode, data: *mut ::
   unsafe {
     let args = &mut *(data as *mut TimerCallbackArgs);
 
-    let error_code = ((&(*args.api)).error_code_value)(error);
+    let error_code = ErrorCode::new(args.api, error);
 
     let callback = &mut*args.callback;
-    callback.on_timer(ErrorCode {value: error_code});
+    callback.on_timer(error_code);
   }
 }
 
 struct TimerCallbackArgs {
   pub callback: *mut dyn TimerListener,
-  pub api: *const ThalamusAPIRaw
+  pub api: ThalamusAPI
 }
 
 #[derive(Debug)]
 pub struct ErrorCode {
-  pub value: i32
+  pub code: i32,
+  pub message: String
 }
 
 impl ErrorCode {
   pub fn aborted(&self) -> bool {
-    self.value == *OPERATION_ABORTED.get().unwrap()
+    self.code == *OPERATION_ABORTED.get().unwrap()
+  }
+
+  pub fn new(api: ThalamusAPI, error: *mut ThalamusErrorCode) -> ErrorCode {
+    unsafe {
+      let code = ((&(*api.raw)).error_code_value)(error);
+      let message = if code != 0 {
+        let mut span = ThalamusCharSpan { data: null(), size: 0, owns_data: 0};
+        ((&(*api.raw)).error_code_message)(&mut span as *mut ThalamusCharSpan, error);
+
+        let slice = slice::from_raw_parts(span.data as *mut u8, span.size);
+        let text = str::from_utf8(slice).unwrap().to_string();
+        ((&(*api.raw)).charspan_destroy)(&mut span as *mut ThalamusCharSpan);
+        text
+      } else {
+        "".to_string()
+      };
+
+      ErrorCode { code, message }
+    }
   }
 }
 
@@ -778,13 +795,13 @@ impl Drop for OnDrop {
 
 pub struct Timer {
   pub timer: *mut ThalamusTimer,
-  pub api: *const ThalamusAPIRaw
+  pub api: ThalamusAPI
 }
 
 impl Timer {
-  pub fn new(api: *const ThalamusAPIRaw) -> Timer {
+  pub fn new(api: ThalamusAPI) -> Timer {
     unsafe {
-      let timer = ((&(*api)).timer_create)();
+      let timer = ((&(*api.raw)).timer_create)();
       println!("new {:?} {:?}", api, timer);
       Timer {
         api, timer
@@ -794,7 +811,7 @@ impl Timer {
 
   pub fn expires_after(&self, duration: Duration) {
     unsafe {
-      ((&(*self.api)).timer_expire_after_ns)(self.timer, duration.as_nanos() as usize);
+      ((&(*self.api.raw)).timer_expire_after_ns)(self.timer, duration.as_nanos() as usize);
     }
   }
   pub fn async_wait<T>(&self, listener: &T)
@@ -810,7 +827,7 @@ impl Timer {
     let raw = Box::into_raw(args);
     let void_ptr = raw as *mut c_void;
     unsafe {
-      ((&(*self.api)).timer_async_wait)(self.timer, Some(timer_on_timer), void_ptr);
+      ((&(*self.api.raw)).timer_async_wait)(self.timer, Some(timer_on_timer), void_ptr);
     }
   }
 }
@@ -819,7 +836,7 @@ impl Drop for Timer {
   fn drop(&mut self) {
     unsafe {
       println!("drop {:?} {:?}", self.api, self.timer);
-      ((&(*self.api)).timer_destroy)(self.timer);
+      ((&(*self.api.raw)).timer_destroy)(self.timer);
     }
   }
 }

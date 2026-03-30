@@ -239,6 +239,8 @@ extern "C" {
     void (*streambuf_consume)(ThalamusStreamBuf* buffer, size_t count);
     size_t (*streambuf_size)(ThalamusStreamBuf* buffer);
     void (*charspan_destroy)(ThalamusCharSpan* span);
+
+    void (*error_code_message)(struct ThalamusCharSpan* result, ThalamusErrorCode *error);
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories)(struct ThalamusAPI*);
