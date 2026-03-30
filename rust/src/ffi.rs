@@ -15,27 +15,31 @@ pub struct ThalamusNode {
 pub struct ThalamusAnalogNode {
     pub data: ::std::option::Option<
         unsafe extern "C" fn(
+            *mut ThalamusDoubleSpan,
             node: *mut ThalamusNode,
             channel: ::std::os::raw::c_int,
-        ) -> ThalamusDoubleSpan,
+        ),
     >,
     pub short_data: ::std::option::Option<
         unsafe extern "C" fn(
+            *mut ThalamusShortSpan,
             node: *mut ThalamusNode,
             channel: ::std::os::raw::c_int,
-        ) -> ThalamusShortSpan,
+        ),
     >,
     pub int_data: ::std::option::Option<
         unsafe extern "C" fn(
+            *mut ThalamusIntSpan,
             node: *mut ThalamusNode,
             channel: ::std::os::raw::c_int,
-        ) -> ThalamusIntSpan,
+        ),
     >,
     pub ulong_data: ::std::option::Option<
         unsafe extern "C" fn(
+            *mut ThalamusULongSpan,
             node: *mut ThalamusNode,
             channel: ::std::os::raw::c_int,
-        ) -> ThalamusULongSpan,
+        ),
     >,
     pub num_channels: ::std::option::Option<
         unsafe extern "C" fn(node: *mut ThalamusNode) -> ::std::os::raw::c_int,
@@ -72,9 +76,10 @@ pub struct ThalamusAnalogNode {
     >,
     pub name_span: ::std::option::Option<
         unsafe extern "C" fn(
+            *mut ThalamusByteSpan,
             node: *mut ThalamusNode,
             channel: ::std::os::raw::c_int,
-        ) -> ThalamusByteSpan,
+        ),
     >,
 }
 
@@ -197,18 +202,18 @@ pub struct ThalamusAPIRaw {
     
     pub serial_port_read_until: unsafe extern "C" fn(*mut ThalamusSerialPort, *mut ThalamusStreamBuf, *const ::std::os::raw::c_char, usize, ThalamusIOCallback, *mut ::std::os::raw::c_void),
 
-    pub serial_port_read_some: unsafe extern "C" fn(*mut ThalamusSerialPort, ThalamusByteSpan, ThalamusIOCallback, *mut ::std::os::raw::c_void),
+    pub serial_port_read_some: unsafe extern "C" fn(*mut ThalamusSerialPort, *mut ThalamusByteSpan, ThalamusIOCallback, *mut ::std::os::raw::c_void),
 
-    pub serial_port_read: unsafe extern "C" fn(*mut ThalamusSerialPort, ThalamusByteSpan, ThalamusIOCallback, *mut ::std::os::raw::c_void),
+    pub serial_port_read: unsafe extern "C" fn(*mut ThalamusSerialPort, *mut ThalamusByteSpan, ThalamusIOCallback, *mut ::std::os::raw::c_void),
 
-    pub serial_port_write: unsafe extern "C" fn(*mut ThalamusSerialPort, ThalamusByteSpan, ThalamusIOCallback, *mut ::std::os::raw::c_void),
+    pub serial_port_write: unsafe extern "C" fn(*mut ThalamusSerialPort, *mut ThalamusByteSpan, ThalamusIOCallback, *mut ::std::os::raw::c_void),
 
     pub streambuf_create: unsafe extern "C" fn() -> *mut ThalamusStreamBuf,
     pub streambuf_destroy: unsafe extern "C" fn(*mut ThalamusStreamBuf),
-    pub streambuf_to_span: unsafe extern "C" fn(*mut ThalamusStreamBuf) -> ThalamusCharSpan,
+    pub streambuf_to_span: unsafe extern "C" fn(*mut ThalamusCharSpan, *mut ThalamusStreamBuf),
     pub streambuf_consume: unsafe extern "C" fn(*mut ThalamusStreamBuf, usize),
     pub streambuf_size: unsafe extern "C" fn(*mut ThalamusStreamBuf) -> usize,
-    pub charspan_destroy: unsafe extern "C" fn(ThalamusCharSpan),
+    pub charspan_destroy: unsafe extern "C" fn(*mut ThalamusCharSpan),
 }
 
 #[repr(C)]
@@ -336,12 +341,15 @@ pub struct ThalamusNodeFactory {
     c_str: CString
 }
 
-pub extern "C" fn c_node_data<T: crate::api::AnalogNode>(raw_node: *mut ThalamusNode, channel: ::std::os::raw::c_int) -> ThalamusDoubleSpan {
+pub extern "C" fn c_node_data<T: crate::api::AnalogNode>(output: *mut ThalamusDoubleSpan, raw_node: *mut ThalamusNode, channel: ::std::os::raw::c_int) {
   let c_node = unsafe { &*(raw_node as *const ThalamusNode) };
   let node = unsafe { &*(c_node.rust_impl as *const T) };
 
   let result = node.data(channel);
-  ThalamusDoubleSpan { data: result.as_ptr(), size: result.len() }
+  unsafe {
+    (&mut *output).data = result.as_ptr();
+    (&mut *output).size = result.len();
+  }
 }
 
 pub extern "C" fn c_node_num_channels<T: crate::api::AnalogNode>(raw_node: *mut ThalamusNode) -> i32 {
@@ -360,11 +368,14 @@ pub extern "C" fn c_node_name<T: crate::api::AnalogNode>(_raw_node: *mut Thalamu
   ptr::null()
 }
 
-pub extern "C" fn c_node_name_span<T: crate::api::AnalogNode>(raw_node: *mut ThalamusNode, channel: ::std::os::raw::c_int) -> ThalamusByteSpan {
+pub extern "C" fn c_node_name_span<T: crate::api::AnalogNode>(output: *mut ThalamusByteSpan, raw_node: *mut ThalamusNode, channel: ::std::os::raw::c_int) {
   let c_node = unsafe { &*(raw_node as *const ThalamusNode) };
   let node = unsafe { &*(c_node.rust_impl as *const T) };
   let result = node.name(channel);
-  ThalamusByteSpan { data: result.as_ptr(), size: result.len() }
+  unsafe {
+    (&mut *output).data = result.as_ptr();
+    (&mut *output).size = result.len();
+  }
 }
 #[allow(non_snake_case)]
 pub extern "C" fn c_node_has_analog_data<T: crate::api::AnalogNode>(raw_node: *mut ThalamusNode) -> i8 {

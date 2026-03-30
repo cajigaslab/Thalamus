@@ -3,6 +3,7 @@ use core::slice;
 use std::collections::VecDeque;
 use std::ops::Deref;
 use std::pin::Pin;
+use std::ptr::null;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, Waker};
@@ -272,11 +273,12 @@ impl StreamBuf {
   pub fn to_string(&self) -> String {
     unsafe {
       let api = &*self.api.raw;
-      let span = (api.streambuf_to_span)(self.buffer);
+      let mut span = ThalamusCharSpan { data: null(), size: 0, owns_data: 0};
+      (api.streambuf_to_span)(&mut span as *mut ThalamusCharSpan, self.buffer);
       let slice = slice::from_raw_parts(span.data as *mut u8, span.size);
       let text = str::from_utf8(slice).unwrap();
       let result = text.to_string();
-      (api.charspan_destroy)(span);
+      (api.charspan_destroy)(&mut span as *mut ThalamusCharSpan);
       result
     }
   }
@@ -344,7 +346,8 @@ impl SerialPort {
         callback
       });
       let args = Box::into_raw(boxed)  as *mut std::os::raw::c_void;
-      (api.serial_port_write)(self.port, ThalamusByteSpan { data: data.as_ptr(), size: data.len() }, Some(io_callback::<T>), args);
+      let mut span = ThalamusByteSpan { data: data.as_ptr(), size: data.len() };
+      (api.serial_port_write)(self.port, &mut span as *mut ThalamusByteSpan, Some(io_callback::<T>), args);
     }
   }
   pub fn write(&self, data: &[u8]) -> IOFuture {
@@ -368,7 +371,8 @@ impl SerialPort {
         callback
       });
       let args = Box::into_raw(boxed)  as *mut std::os::raw::c_void;
-      (api.serial_port_read)(self.port, ThalamusByteSpan { data: data.as_ptr(), size: data.len() }, Some(io_callback::<T>), args);
+      let mut span = ThalamusByteSpan { data: data.as_ptr(), size: data.len() };
+      (api.serial_port_read)(self.port, &mut span as *mut ThalamusByteSpan, Some(io_callback::<T>), args);
     }
   }
   pub fn read(&self, data: &mut [u8]) -> IOFuture {
@@ -392,7 +396,8 @@ impl SerialPort {
         callback
       });
       let args = Box::into_raw(boxed)  as *mut std::os::raw::c_void;
-      (api.serial_port_read_some)(self.port, ThalamusByteSpan { data: data.as_ptr(), size: data.len() }, Some(io_callback::<T>), args);
+      let mut span = ThalamusByteSpan { data: data.as_ptr(), size: data.len() };
+      (api.serial_port_read_some)(self.port, &mut span as *mut ThalamusByteSpan, Some(io_callback::<T>), args);
     }
   }
   pub fn read_some(&self, data: &mut [u8]) -> IOFuture {

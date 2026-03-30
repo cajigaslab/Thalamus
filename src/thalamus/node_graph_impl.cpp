@@ -159,19 +159,23 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
   }
 
   std::span<const double> data(int channel) const override {
-    auto temp = node->analog->data(node, channel);
+    ThalamusDoubleSpan temp;
+    node->analog->data(&temp, node, channel);
     return std::span<const double>(temp.data, temp.data+temp.size);
   }
   std::span<const short> short_data(int channel) const override {
-    auto temp = node->analog->short_data(node, channel);
+    ThalamusShortSpan temp;
+    node->analog->short_data(&temp, node, channel);
     return std::span<const short>(temp.data, temp.data+temp.size);
   }
   std::span<const int> int_data(int channel) const override {
-    auto temp = node->analog->int_data(node, channel);
+    ThalamusIntSpan temp;
+    node->analog->int_data(&temp, node, channel);
     return std::span<const int>(temp.data, temp.data+temp.size);
   }
   std::span<const uint64_t> ulong_data(int channel) const override {
-    auto temp = node->analog->ulong_data(node, channel);
+    ThalamusULongSpan temp;
+    node->analog->ulong_data(&temp, node, channel);
     return std::span<const uint64_t>(temp.data, temp.data+temp.size);
   }
   int num_channels() const override {
@@ -189,7 +193,8 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
   std::string_view name(int channel) const override {
     auto temp = node->analog->name(node, channel);
     if(temp == nullptr) {
-      auto temp2 = node->analog->name_span(node, channel);
+      ThalamusCharSpan temp2;
+      node->analog->name_span(&temp2, node, channel);
       return std::string_view(temp2.data, temp2.data + temp2.size);
     }
     return temp;
@@ -223,7 +228,8 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
   }
 
   Plane plane(int i) const override {
-    auto temp = node->image->plane(node, i);
+    ThalamusByteSpan temp;
+    node->image->plane(&temp, node, i);
     return std::span<const uint8_t>(temp.data, temp.data+temp.size);
   }
   size_t num_planes() const override {
@@ -261,7 +267,8 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
   }
 
   std::span<MotionCaptureNode::Segment const> segments() const override {
-    auto temp = node->mocap->segments(node);
+    ThalamusMocapSegmentSpan temp;
+    node->mocap->segments(&temp, node);
     return std::span<MotionCaptureNode::Segment const>(temp.data, temp.data+temp.size);
   }
   const std::string_view pose_name() const override {
@@ -581,22 +588,22 @@ struct ThalamusAPIImpl {
     });
   }
 
-  static void serial_port_read_some(ThalamusSerialPort* port, ThalamusByteSpan span, ThalamusIOCallback callback, void* data) {
-    port->port.async_read_some(boost::asio::buffer(span.data, span.size), [callback, data] (auto ec, auto count) {
+  static void serial_port_read_some(ThalamusSerialPort* port, ThalamusByteSpan* span, ThalamusIOCallback callback, void* data) {
+    port->port.async_read_some(boost::asio::buffer(span->data, span->size), [callback, data] (auto ec, auto count) {
       ThalamusErrorCode err{ec};
       callback(&err, count, data);
     });
   }
 
-  static void serial_port_read(ThalamusSerialPort* port, ThalamusByteSpan span, ThalamusIOCallback callback, void* data) {
-    boost::asio::async_read(port->port, boost::asio::buffer(span.data, span.size), [callback, data] (auto ec, auto count) {
+  static void serial_port_read(ThalamusSerialPort* port, ThalamusByteSpan* span, ThalamusIOCallback callback, void* data) {
+    boost::asio::async_read(port->port, boost::asio::buffer(span->data, span->size), [callback, data] (auto ec, auto count) {
       ThalamusErrorCode err{ec};
       callback(&err, count, data);
     });
   }
 
-  static void serial_port_write(ThalamusSerialPort* port, ThalamusByteSpan span, ThalamusIOCallback callback, void* data) {
-    boost::asio::async_write(port->port, boost::asio::buffer(span.data, span.size), [callback, data] (auto ec, auto count) {
+  static void serial_port_write(ThalamusSerialPort* port, ThalamusByteSpan* span, ThalamusIOCallback callback, void* data) {
+    boost::asio::async_write(port->port, boost::asio::buffer(span->data, span->size), [callback, data] (auto ec, auto count) {
       ThalamusErrorCode err{ec};
       callback(&err, count, data);
     });
@@ -613,12 +620,14 @@ struct ThalamusAPIImpl {
     delete port;
   }
 
-  static ThalamusCharSpan streambuf_to_span(ThalamusStreamBuf* buffer) {
+  static void streambuf_to_span(struct ThalamusCharSpan* result, ThalamusStreamBuf* buffer) {
     std::istream stream(&buffer->buffer);
     char* data = new char[buffer->buffer.size()];
     std::copy_n(std::istreambuf_iterator<char>(&buffer->buffer), buffer->buffer.size(), data);
 
-    return ThalamusCharSpan { data, buffer->buffer.size(), true };
+    result->data = data;
+    result->size = buffer->buffer.size();
+    result->owns_data = true;
   }
 
   static void streambuf_consume(ThalamusStreamBuf* buffer, size_t count) {
@@ -626,12 +635,12 @@ struct ThalamusAPIImpl {
   }
 
   static size_t streambuf_size(ThalamusStreamBuf* buffer) {
-    buffer->buffer.size();
+    return buffer->buffer.size();
   }
 
-  static void charspan_destroy(ThalamusCharSpan span) {
-    if(span.owns_data) {
-      delete span.data;
+  static void charspan_destroy(ThalamusCharSpan* span) {
+    if(span->owns_data) {
+      delete span->data;
     }
   }
 };
@@ -914,7 +923,7 @@ public:
       std::string type_str = node->at("type");
       auto factory = node_factories.at(type_str);
       
-      creating_index = index;
+      creating_index = int32_t(index);
       auto node_impl =
           std::shared_ptr<Node>(factory->create(node, io_context, outer));
       creating_index = -1;
