@@ -112,10 +112,6 @@ int main(int argc, char **argv) {
               << std::endl;
   }
 
-  boost::log::core::get()->set_filter(boost::log::trivial::severity >=
-                                      boost::log::trivial::info);
-  boost::log::add_common_attributes();
-
   boost::program_options::positional_options_description p;
 
   boost::program_options::options_description desc(
@@ -126,6 +122,7 @@ int main(int argc, char **argv) {
       "GRPC Port")("state-url,s", boost::program_options::value<std::string>(),
                    "Address of Thalamus instance that manages state")
                    ("ext,e", boost::program_options::value<std::vector<std::string>>()->multitoken(), "Shared libraries to extend thalamus");
+  desc.add_options()("log-level,l", boost::program_options::value<std::string>()->default_value("info"), "Set log level");
 
 #ifndef _WIN32
   desc.add_options()
@@ -142,6 +139,20 @@ int main(int argc, char **argv) {
           .run(),
       vm);
   boost::program_options::notify(vm);
+
+  auto log_level = vm["log-level"].as<std::string>();
+  std::map<std::string, boost::log::trivial::severity_level> name_to_level = {
+    {"trace", boost::log::trivial::trace},
+    {"debug", boost::log::trivial::debug},
+    {"info", boost::log::trivial::info},
+    {"warning", boost::log::trivial::warning},
+    {"error", boost::log::trivial::error},
+    {"fatal", boost::log::trivial::fatal},
+  };
+  auto selected_log_level = name_to_level.find(log_level);
+  THALAMUS_ASSERT(selected_log_level != name_to_level.end(), "Invalid log level");
+  boost::log::core::get()->set_filter(boost::log::trivial::severity >= selected_log_level->second);
+  boost::log::add_common_attributes();
 
   if (vm.count("help")) {
     std::cout << desc << std::endl;

@@ -47,6 +47,8 @@ class AnalogWidget(QWidget):
           await queue.put(message)
     except asyncio.CancelledError:
       pass
+    finally:
+      self.stream.cancel()
 
   def mousePressEvent(self, e: QMouseEvent):
     self.holding = True

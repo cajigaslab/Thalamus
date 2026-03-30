@@ -7,6 +7,8 @@
 #include <boost/qvm/quat_access.hpp>
 #include <boost/qvm/vec_access.hpp>
 #include <grpcpp/support/status.h>
+#include "boost/asio/io_context.hpp"
+#include "thalamus.pb.h"
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
@@ -17,6 +19,7 @@
 #include <thalamus/text_node.hpp>
 #include <thalamus/thread.hpp>
 #include <thalamus/grpc.hpp>
+#include <thalamus/node_session.hpp>
 
 namespace thalamus {
 using namespace std::chrono_literals;
@@ -218,21 +221,6 @@ struct Service::Impl {
       stream->Write(transaction);
     }
   }
-
-  class ContextGuard {
-  public:
-    Service *service;
-    ::grpc::ServerContextBase *context;
-    ContextGuard(Service *_service, ::grpc::ServerContextBase *_context)
-        : service(_service), context(_context) {
-      std::lock_guard<std::mutex> lock(service->impl->mutex);
-      service->impl->contexts.insert(context);
-    }
-    ~ContextGuard() {
-      std::lock_guard<std::mutex> lock(service->impl->mutex);
-      service->impl->contexts.erase(context);
-    }
-  };
 
   struct AnalogSession : public ServerWriteReactor<::thalamus_grpc::AnalogResponse> {
     struct State {
@@ -439,7 +427,7 @@ struct Service::Impl {
                                            ::grpc::WriteOptions options)>
                             writer) {
 
-    Impl::ContextGuard guard(outer, context);
+    ContextGuard guard(outer, context);
     while (!context->IsCancelled()) {
       std::promise<void> promise;
       auto future = promise.get_future();
@@ -582,7 +570,7 @@ Service::get_type_name(::grpc::ServerContext *,
     ::grpc::ServerContext *context,
     const ::thalamus_grpc::NodeSelector *request,
     ::thalamus_grpc::StringListMessage *response) {
-  Impl::ContextGuard guard(this, context);
+  ContextGuard guard(this, context);
 
   std::promise<void> promise;
   auto future = promise.get_future();
@@ -681,7 +669,7 @@ Service::events(::grpc::ServerContext *context,
                 ::grpc::ServerReader<::thalamus_grpc::Event> *reader,
                 ::thalamus_grpc::Empty *) {
   set_current_thread_name("events");
-  Impl::ContextGuard guard(this, context);
+  ContextGuard guard(this, context);
   ::thalamus_grpc::Event the_event;
   while (reader->Read(&the_event)) {
     TRACE_EVENT("thalamus", "events");
@@ -703,7 +691,7 @@ Service::events(::grpc::ServerContext *context,
                             ::grpc::ServerReader<::thalamus_grpc::Text> *reader,
                             ::thalamus_grpc::Empty *) {
   set_current_thread_name("log");
-  Impl::ContextGuard guard(this, context);
+  ContextGuard guard(this, context);
   ::thalamus_grpc::Text the_text;
   while (reader->Read(&the_text)) {
     TRACE_EVENT("thalamus", "log");
@@ -750,7 +738,7 @@ struct JConnection : public boost::signals2::scoped_connection {
                       const ::thalamus_grpc::Empty *,
                       ::grpc::ServerWriter<::thalamus_grpc::Text> *writer) {
   set_current_thread_name("logout");
-  Impl::ContextGuard guard(this, context);
+  ContextGuard guard(this, context);
 
   JConnection connection(log_signal, [writer](const ::thalamus_grpc::Text& text) {
     writer->Write(text);
@@ -775,7 +763,7 @@ struct JConnection : public boost::signals2::scoped_connection {
     ::grpc::ServerReaderWriter<::thalamus_grpc::ObservableTransaction,
                                ::thalamus_grpc::ObservableTransaction>
         *stream) {
-  Impl::ContextGuard guard(this, context);
+  ContextGuard guard(this, context);
   thalamus_grpc::ObservableTransaction in;
   thalamus_grpc::ObservableTransaction out;
   bool thread_name_set = false;
@@ -849,7 +837,7 @@ struct JConnection : public boost::signals2::scoped_connection {
     ::grpc::ServerContext *context,
     const ::thalamus_grpc::ObservableReadRequest *request,
     ::grpc::ServerWriter<::thalamus_grpc::ObservableTransaction> *stream) {
-  Impl::ContextGuard guard(this, context);
+  ContextGuard guard(this, context);
   thalamus_grpc::ObservableTransaction in;
   thalamus_grpc::ObservableTransaction out;
 
@@ -940,7 +928,7 @@ struct JConnection : public boost::signals2::scoped_connection {
     ::grpc::ServerReader<::thalamus_grpc::InjectMotionCaptureRequest> *reader,
     ::thalamus_grpc::Empty *) {
   set_current_thread_name("inject_motion_capture");
-  Impl::ContextGuard guard(this, context);
+  ContextGuard guard(this, context);
   ::thalamus_grpc::InjectMotionCaptureRequest request;
   std::string node_name;
   if (!reader->Read(&request)) {
@@ -1027,7 +1015,7 @@ struct JConnection : public boost::signals2::scoped_connection {
     ::grpc::ServerReader<::thalamus_grpc::InjectAnalogRequest> *reader,
     ::thalamus_grpc::Empty *) {
   set_current_thread_name("inject_analog");
-  Impl::ContextGuard guard(this, context);
+  ContextGuard guard(this, context);
   ::thalamus_grpc::InjectAnalogRequest request;
   std::string node_name;
   if (!reader->Read(&request)) {
@@ -1121,216 +1109,178 @@ struct Counter {
 };
 std::atomic_size_t Counter::count = 0;
 
-::grpc::Status
-Service::graph(::grpc::ServerContext *context,
-               const ::thalamus_grpc::GraphRequest *request,
-               ::grpc::ServerWriter<::thalamus_grpc::GraphResponse> *writer) {
-  Impl::ContextGuard guard(this, context);
-  std::stringstream stream;
-  stream << request->node().name();
-  for (auto &name : request->channel_names()) {
-    stream << " " << name;
-  }
-  Counter counter(stream.str());
-  while (!context->IsCancelled()) {
-    std::promise<void> promise;
-    auto future = promise.get_future();
-    std::shared_ptr<Node> raw_node;
-    boost::asio::post(impl->io_context, [&] {
-      impl->node_graph.get_node(request->node(), [&](auto ptr) {
-        raw_node = ptr.lock();
-        promise.set_value();
-      });
-    });
-    while (future.wait_for(1s) == std::future_status::timeout &&
-           !context->IsCancelled()) {
-      if (impl->io_context.stopped()) {
-        writer->WriteLast(::thalamus_grpc::GraphResponse(),
-                          ::grpc::WriteOptions());
-        return ::grpc::Status::OK;
-      }
-    }
-    if (!node_cast<AnalogNode *>(raw_node.get())) {
-      std::this_thread::sleep_for(1s);
-      continue;
-    }
+struct GraphSession : public NodeSession<AnalogNode, thalamus_grpc::GraphResponse> {
+  const thalamus_grpc::GraphRequest request;
+  boost::signals2::scoped_connection channels_changed_connection;
+  boost::signals2::scoped_connection ready_connection;
+  
+  std::vector<size_t> channels;
 
-    AnalogNode *node = node_cast<AnalogNode *>(raw_node.get());
-    std::vector<size_t> channels(request->channels().begin(),
-                                 request->channels().end());
+  std::chrono::nanoseconds bin_ns;
+  std::vector<double> mins;
+  std::vector<double> maxs;
+  std::vector<double> previous_mins;
+  std::vector<double> previous_maxes;
+  std::vector<std::chrono::nanoseconds> current_times;
+  std::vector<std::chrono::nanoseconds> bin_ends;
+  thalamus::vector<std::string> channel_names;
+  std::optional<std::chrono::nanoseconds> first_time;
+  bool channels_changed;
 
-    std::chrono::nanoseconds bin_ns(request->bin_ns());
-    std::mutex connection_mutex;
-    std::vector<double> mins(channels.size(),
-                             std::numeric_limits<double>::max());
-    std::vector<double> maxs(channels.size(),
-                             -std::numeric_limits<double>::max());
-    std::vector<double> previous_mins(channels.size(), 0);
-    std::vector<double> previous_maxes(channels.size(), 0);
-    std::vector<std::chrono::nanoseconds> current_times(channels.size());
-    std::vector<std::chrono::nanoseconds> bin_ends(channels.size(), bin_ns);
-    thalamus::vector<std::string> channel_names(
-        request->channel_names().begin(), request->channel_names().end());
-    std::optional<std::chrono::nanoseconds> first_time;
-    bool channels_changed = true;
+  bool has_channels;
 
-    auto has_channels = !channels.empty() || !channel_names.empty();
+  GraphSession(NodeGraph& graph, boost::asio::io_context& _io_context, ::grpc::CallbackServerContext& _context, const ::thalamus_grpc::GraphRequest *_request, ContextGuard&& guard)
+  : NodeSession<AnalogNode, thalamus_grpc::GraphResponse>(graph, _io_context, _context, _request->node(), std::move(guard))
+  , request(*_request)
+  {}
 
-    using channels_changed_signal_type = decltype(node->channels_changed);
-    boost::signals2::scoped_connection channels_connection =
-        node->channels_changed.connect(
-            channels_changed_signal_type::slot_type([&](const AnalogNode *) {
-              std::unique_lock<std::mutex> lock(connection_mutex);
-              channels_changed = true;
-            }));
+  void subscribe() override {
+    channels.assign(request.channels().begin(),
+                                  request.channels().end());
 
-    
+    bin_ns = std::chrono::nanoseconds(request.bin_ns());
+    mins.assign(channels.size(),
+                            std::numeric_limits<double>::max());
+    maxs.assign(channels.size(),
+                            -std::numeric_limits<double>::max());
+    previous_mins.assign(channels.size(), 0);
+    previous_maxes.assign(channels.size(), 0);
+    current_times.assign(channels.size(), 0ns);
+    bin_ends.assign(channels.size(), bin_ns);
+    channel_names.assign(
+        request.channel_names().begin(), request.channel_names().end());
+    channels_changed = true;
 
-    std::promise<std::string> redirect_promise;
-    auto redirect_future = redirect_promise.get_future();
-    boost::asio::post(impl->io_context, [&] {
-      redirect_promise.set_value(std::string(raw_node->redirect()));
-    });
-    auto redirect = redirect_future.get();
+    has_channels = !channels.empty() || !channel_names.empty();
 
-    if(!redirect.empty()) {
-      ::thalamus_grpc::GraphResponse response;
-      response.set_redirect(redirect);
-      writer->Write(response);
-      return ::grpc::Status::OK;
-    }
+    using channels_changed_signal_type = decltype(typed_node->channels_changed);
+    channels_changed_connection =
+      typed_node->channels_changed.connect(
+        channels_changed_signal_type::slot_type([this,c_state=this->state](const AnalogNode *) {
+          std::lock_guard<std::mutex> lock(c_state->mutex);
+          if(c_state->joining) {
+            return;
+          }
+          channels_changed = true;
+        }));
 
     using signal_type = decltype(raw_node->ready);
-    auto connection =
-        raw_node->ready.connect(signal_type::slot_type([&](const Node * base_node) {
-          if (!node->has_analog_data()) {
-            return;
-          }
-          
-          std::lock_guard<std::mutex> lock(connection_mutex);
-          ::thalamus_grpc::GraphResponse response;
+    ready_connection =
+      raw_node->ready.connect(signal_type::slot_type([this,c_state=this->state](const Node *) {
+        std::lock_guard<std::mutex> lock(c_state->mutex);
+        if(c_state->joining) {
+          return;
+        }
+        if (!typed_node->has_analog_data()) {
+          return;
+        }
+        
+        ::thalamus_grpc::GraphResponse response;
 
-          auto new_redirect = base_node->redirect();
-          if(!new_redirect.empty()) {
-            response.set_redirect(new_redirect);
-            writer->Write(response);
-            return;
+        auto num_channels = size_t(typed_node->num_channels());
+        if (!has_channels && channels.size() != num_channels) {
+          for (auto i = channels.size(); i < num_channels; ++i) {
+            channels.push_back(i);
           }
+          channels.resize(num_channels);
+          mins.resize(num_channels, std::numeric_limits<double>::max());
+          maxs.resize(num_channels, -std::numeric_limits<double>::max());
+          previous_mins.resize(num_channels);
+          previous_maxes.resize(num_channels);
+          current_times.resize(num_channels);
+          bin_ends.resize(num_channels, bin_ns);
+        }
 
-          auto num_channels = size_t(node->num_channels());
-          if (!has_channels && channels.size() != num_channels) {
-            for (auto i = channels.size(); i < num_channels; ++i) {
-              channels.push_back(i);
-            }
-            channels.resize(num_channels);
-            mins.resize(num_channels, std::numeric_limits<double>::max());
-            maxs.resize(num_channels, -std::numeric_limits<double>::max());
-            previous_mins.resize(num_channels);
-            previous_maxes.resize(num_channels);
-            current_times.resize(num_channels);
-            bin_ends.resize(num_channels, bin_ns);
-          }
-
-          if (!channel_names.empty()) {
-            std::vector<int> named_channels;
-            for (auto &name : channel_names) {
-              for (auto i = 0; i < int(num_channels); ++i) {
-                if (node->name(i) == name) {
-                  named_channels.push_back(i);
-                  break;
-                }
+        if (!channel_names.empty()) {
+          std::vector<int> named_channels;
+          for (auto &name : channel_names) {
+            for (auto i = 0; i < int(num_channels); ++i) {
+              if (typed_node->name(i) == name) {
+                named_channels.push_back(i);
+                break;
               }
             }
-            if (named_channels.size() == channel_names.size()) {
-              channels.insert(channels.end(), named_channels.begin(),
-                              named_channels.end());
-              channel_names.clear();
-
-              channels.resize(channels.size());
-              mins.resize(channels.size(), std::numeric_limits<double>::max());
-              maxs.resize(channels.size(), -std::numeric_limits<double>::max());
-              previous_mins.resize(channels.size());
-              previous_maxes.resize(channels.size());
-              current_times.resize(channels.size());
-              bin_ends.resize(channels.size(), bin_ns);
-            } else {
-              return;
-            }
           }
+          if (named_channels.size() == channel_names.size()) {
+            channels.insert(channels.end(), named_channels.begin(),
+                            named_channels.end());
+            channel_names.clear();
 
-          response.set_channels_changed(channels_changed);
-          channels_changed = false;
-          if (!first_time) {
-            first_time = node->time();
+            channels.resize(channels.size());
+            mins.resize(channels.size(), std::numeric_limits<double>::max());
+            maxs.resize(channels.size(), -std::numeric_limits<double>::max());
+            previous_mins.resize(channels.size());
+            previous_maxes.resize(channels.size());
+            current_times.resize(channels.size());
+            bin_ends.resize(channels.size(), bin_ns);
+          } else {
+            return;
           }
-          auto is_transformed = node->is_transformed();
-          for (auto c = 0u; c < channels.size(); ++c) {
-            auto channel = channels[c];
-            auto &min = mins[c];
-            auto &max = maxs[c];
-            auto &current_time = current_times[c];
-            auto &bin_end = bin_ends[c];
-            if (channel >= num_channels) {
-              continue;
-            }
-            auto span = response.add_spans();
-            span->set_begin(uint32_t(response.bins_size()));
+        }
 
-            auto interval = node->sample_interval(int(channel));
-            if (interval == 0ns) {
-              current_time = node->time() - *first_time;
-            }
-            auto scale = is_transformed ? node->scale(int(channel)) : 1.0;
-            auto offset = is_transformed ? node->offset(int(channel)) : 0.0;
-            visit_node(node, [&](auto wrapper) {
-              auto data = wrapper->data(int(channel));
-              for (auto sample_raw : data) {
-                double sample = double(sample_raw) * scale + offset;
-                auto wrote = current_time >= bin_end;
-                while (current_time >= bin_end) {
-                  response.add_bins(min);
-                  response.add_bins(max);
-                  bin_end += bin_ns;
-                }
-                if (wrote) {
-                  min = std::numeric_limits<double>::max();
-                  max = -std::numeric_limits<double>::max();
-                }
-                min = std::min(min, sample);
-                max = std::max(max, sample);
-                current_time += interval;
+        response.set_channels_changed(channels_changed);
+        channels_changed = false;
+        if (!first_time) {
+          first_time = typed_node->time();
+        }
+        auto is_transformed = typed_node->is_transformed();
+        for (auto c = 0u; c < channels.size(); ++c) {
+          auto channel = channels[c];
+          auto &min = mins[c];
+          auto &max = maxs[c];
+          auto &current_time = current_times[c];
+          auto &bin_end = bin_ends[c];
+          if (channel >= num_channels) {
+            continue;
+          }
+          auto span = response.add_spans();
+          span->set_begin(uint32_t(response.bins_size()));
+
+          auto interval = typed_node->sample_interval(int(channel));
+          if (interval == 0ns) {
+            current_time = typed_node->time() - *first_time;
+          }
+          auto scale = is_transformed ? typed_node->scale(int(channel)) : 1.0;
+          auto offset = is_transformed ? typed_node->offset(int(channel)) : 0.0;
+          visit_node(typed_node, [&](auto wrapper) {
+            auto data = wrapper->data(int(channel));
+            for (auto sample_raw : data) {
+              double sample = double(sample_raw) * scale + offset;
+              auto wrote = current_time >= bin_end;
+              while (current_time >= bin_end) {
+                response.add_bins(min);
+                response.add_bins(max);
+                bin_end += bin_ns;
               }
-            });
-            span->set_end(uint32_t(response.bins_size()));
-            auto name = node->name(int(channel));
-            span->set_name(name.data(), name.size());
-          }
-          writer->Write(response);
-        }));
-    raw_node.reset();
-
-    while (!context->IsCancelled() && connection.connected()) {
-      if (impl->io_context.stopped()) {
-        writer->WriteLast(::thalamus_grpc::GraphResponse(),
-                          ::grpc::WriteOptions());
-        return ::grpc::Status::OK;
-      }
-      std::this_thread::sleep_for(1s);
-    }
-    channels_connection.disconnect();
-    connection.disconnect();
-    std::lock_guard<std::mutex> lock(connection_mutex);
-    std::this_thread::sleep_for(1s);
+              if (wrote) {
+                min = std::numeric_limits<double>::max();
+                max = -std::numeric_limits<double>::max();
+              }
+              min = std::min(min, sample);
+              max = std::max(max, sample);
+              current_time += interval;
+            }
+          });
+          span->set_end(uint32_t(response.bins_size()));
+          auto name = typed_node->name(int(channel));
+          span->set_name(name.data(), name.size());
+        }
+        ServerWriteReactor<::thalamus_grpc::GraphResponse>::send(std::move(response));
+      }));
   }
+};
 
-  return ::grpc::Status::OK;
+::grpc::ServerWriteReactor<::thalamus_grpc::GraphResponse>*
+Service::graph(::grpc::CallbackServerContext *context,
+      const ::thalamus_grpc::GraphRequest *request) {
+  return new GraphSession(impl->node_graph, impl->io_context, *context, request, ContextGuard(this, context));
 }
 
 ::grpc::Status Service::channel_info(
     ::grpc::ServerContext *context,
     const ::thalamus_grpc::AnalogRequest *request,
     ::grpc::ServerWriter<::thalamus_grpc::AnalogResponse> *writer) {
-  Impl::ContextGuard guard(this, context);
+  ContextGuard guard(this, context);
   while (!context->IsCancelled()) {
     std::promise<void> promise;
     auto future = promise.get_future();
@@ -1478,7 +1428,7 @@ Service::graph(::grpc::ServerContext *context,
     ::grpc::ServerContext *context,
     const ::thalamus_grpc::SpectrogramRequest *request,
     ::grpc::ServerWriter<::thalamus_grpc::SpectrogramResponse> *writer) {
-  Impl::ContextGuard guard(this, context);
+  ContextGuard guard(this, context);
   while (!context->IsCancelled()) {
     std::promise<void> promise;
     auto future = promise.get_future();
@@ -1718,7 +1668,7 @@ Service::motion_capture(::grpc::ServerContext *context,
 Service::xsens(::grpc::ServerContext *context,
                const ::thalamus_grpc::NodeSelector *request,
                ::grpc::ServerWriter<::thalamus_grpc::XsensResponse> *writer) {
-  Impl::ContextGuard guard(this, context);
+  ContextGuard guard(this, context);
   while (!context->IsCancelled()) {
     std::promise<void> promise;
     auto future = promise.get_future();
@@ -1794,7 +1744,7 @@ static const size_t IMAGE_CHUNK_SIZE = 524288;
 Service::image(::grpc::ServerContext *context,
                const ::thalamus_grpc::ImageRequest *request,
                ::grpc::ServerWriter<::thalamus_grpc::Image> *writer) {
-  Impl::ContextGuard guard(this, context);
+  ContextGuard guard(this, context);
   while (!context->IsCancelled()) {
     std::promise<void> promise;
     auto future = promise.get_future();
@@ -1964,7 +1914,7 @@ Service::image(::grpc::ServerContext *context,
     ::grpc::ServerContext *context,
     ::grpc::ServerReaderWriter<::thalamus_grpc::Pong, ::thalamus_grpc::Ping>
         *stream) {
-  Impl::ContextGuard guard(this, context);
+  ContextGuard guard(this, context);
   thalamus_grpc::Ping ping;
   thalamus_grpc::Pong pong;
   while (stream->Read(&ping)) {
@@ -1986,7 +1936,7 @@ Service::image(::grpc::ServerContext *context,
     ::grpc::ServerReaderWriter<::thalamus_grpc::EvalRequest,
                                ::thalamus_grpc::EvalResponse> *stream) {
   set_current_thread_name("eval");
-  Impl::ContextGuard guard(this, context);
+  ContextGuard guard(this, context);
   ::thalamus_grpc::EvalResponse response;
   impl->eval_stream = stream;
   while (stream->Read(&response)) {
@@ -2009,7 +1959,7 @@ Service::image(::grpc::ServerContext *context,
     ::grpc::ServerReaderWriter<::thalamus_grpc::StimResponse,
                                ::thalamus_grpc::StimRequest> *reader) {
   set_current_thread_name("stim");
-  Impl::ContextGuard guard(this, context);
+  ContextGuard guard(this, context);
   ::thalamus_grpc::StimRequest request;
   thalamus_grpc::NodeSelector node_name;
   if (!reader->Read(&request)) {
@@ -2152,4 +2102,22 @@ Service::Impl::AnalogSession::~AnalogSession() {
   std::lock_guard<std::mutex> lock(state->mutex);
   state->joining = true;
 }
+
+ContextGuard::ContextGuard(Service *_service, ::grpc::ServerContextBase *_context)
+    : service(_service), context(_context) {
+  std::lock_guard<std::mutex> lock(service->impl->mutex);
+  service->impl->contexts.insert(context);
+}
+
+ContextGuard::ContextGuard(ContextGuard&& original)
+    : service(original.service), context(original.context) {
+  std::lock_guard<std::mutex> lock(service->impl->mutex);
+  original.context = nullptr;
+}
+
+ContextGuard::~ContextGuard() {
+  std::lock_guard<std::mutex> lock(service->impl->mutex);
+  service->impl->contexts.erase(context);
+}
+
 } // namespace thalamus
