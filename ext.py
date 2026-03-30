@@ -11,10 +11,9 @@ def widgets():
       UserData(UserDataType.DOUBLE_SPINBOX, 'Amplitude', 1.0, []),
       UserData(UserDataType.DOUBLE_SPINBOX, 'Frequency', 1.0, []),
     ]),
-    'EXT2_DEMO': Factory(None, [
+    'EXT_SERIAL': Factory(None, [
       UserData(UserDataType.CHECK_BOX, 'Running', False, []),
-      UserData(UserDataType.DOUBLE_SPINBOX, 'Amplitude', 1.0, []),
-      UserData(UserDataType.DOUBLE_SPINBOX, 'Frequency', 1.0, []),
+      UserData(UserDataType.OPEN_FILE, 'Port', '', []),
     ])
   }
 

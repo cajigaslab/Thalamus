@@ -43,6 +43,7 @@ struct DemoNodeInner {
   input: RefCell<Option<Receiver<Message>>>,
   output: RefCell<Option<Sender<Message>>>,
   time: RefCell<Duration>,
+  task: RefCell<Option<TaskScope>>
 }
 
 struct DemoNode {
@@ -212,7 +213,8 @@ impl Node for DemoNode {
       amplitude: RefCell::new(0.0),
       samples: RefCell::new(Vec::new()),
       time: RefCell::new(Duration::from_millis(0)),
-      api
+      api,
+      task: RefCell::new(None)
     });
 
     let change_ref = Rc::downgrade(&inner);
@@ -229,7 +231,7 @@ impl Node for DemoNode {
  
     {
       let loop_ref= Rc::downgrade(&inner);
-      run_task(async move {
+      *inner.task.borrow_mut() = Some(run_task(async move {
         loop {
           let sleep_future = {
             let Some(lock_ref) = loop_ref.upgrade() else {
@@ -269,7 +271,7 @@ impl Node for DemoNode {
             _ => {}
           };
         }
-      });
+      }));
     }
 
     DemoNode { inner }
