@@ -77,6 +77,7 @@ extern "C" {
     struct ThalamusMocapNode* mocap;
     struct ThalamusImageNode* image;
     struct ThalamusTextNode* text;
+    void* plugin_impl;
   };
 
   struct ThalamusAnalogNode {

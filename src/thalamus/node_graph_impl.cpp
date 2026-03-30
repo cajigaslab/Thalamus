@@ -622,11 +622,12 @@ struct ThalamusAPIImpl {
 
   static void streambuf_to_span(struct ThalamusCharSpan* result, ThalamusStreamBuf* buffer) {
     std::istream stream(&buffer->buffer);
-    char* data = new char[buffer->buffer.size()];
+    auto size = buffer->buffer.size();
+    char* data = new char[size];
     std::copy_n(std::istreambuf_iterator<char>(&buffer->buffer), buffer->buffer.size(), data);
 
     result->data = data;
-    result->size = buffer->buffer.size();
+    result->size = size;
     result->owns_data = true;
   }
 

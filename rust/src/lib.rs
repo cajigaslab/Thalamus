@@ -1,5 +1,5 @@
 use std::ops::Deref;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::{self, JoinHandle, sleep};
 use std::{cell::RefCell, ptr};
@@ -19,9 +19,9 @@ use api::{
   ThalamusNodeFactory,
   StateValue
 };
-use regex::Regex;
+//use regex::Regex;
 
-use crate::api::{OPERATION_ABORTED, Sleeper, SleeperWaker, SliceDeref, StateKey, TaskScope, ThalamusAPI, run_task};
+use crate::api::{Sleeper, SleeperWaker, SliceDeref, StateKey, TaskScope, ThalamusAPI, run_task};
 
 enum Message {
   Running(bool),
@@ -55,7 +55,7 @@ impl AnalogNode for DemoNode {
           &self,
           _channel: i32,
       ) -> impl Deref<Target = [f64]> {
-    SliceDeref::new(self.inner.samples.borrow())
+    SliceDeref::new(self.inner.samples.borrow(), None, None)
   }
 
   fn num_channels(&self) -> i32 { 1 }
@@ -303,38 +303,63 @@ struct SerialNodeInner {
 }
 
 impl SerialNodeInner {
-  async fn serial_loop(&self) {
-    let port = self.api.create_serial_port();
-    port.open(&self.port.borrow()).unwrap();
-    port.set_baud_rate(115200).unwrap();
+  async fn serial_loop(this_weak: Weak<Self>) {
+    let (port, buffer) = {
+      let Some(this) = this_weak.upgrade() else {
+        return;
+      };
 
-    let buffer = self.api.create_streambuf();
+      let port = this.api.create_serial_port();
+      port.open(&this.port.borrow()).map_err(|e| { panic!("SERIAL ERROR: {}", e.message) } );
+      port.set_baud_rate(115200).map_err(|e| { panic!("SERIAL ERROR: {}", e.message) } );
+
+      let buffer = this.api.create_streambuf();
+      (port, buffer)
+    };
 
     //let re = Regex::new(r"(x\s*=\s*(\d+)\s*,\s*y\s*=\s*(\d+))").unwrap();
 
     loop {
+      println!("Read");
       let result = port.read_until(&buffer, "\n").await;
       match result {
         Err(err) => {
-          if err.value == *OPERATION_ABORTED.get().unwrap() {
+          println!("Err {}", err.message);
+          if err.aborted() {
             return;
           }
-          panic!("Unexpected error");
+          panic!("SERIAL ERROR: {}", err.message);
         },
-        Ok(_) => {
+        Ok(count) => {
+          println!("Ok {}", count);
           let line = buffer.to_string();
           buffer.consume(buffer.size());
 
           
-          let parts = line.split(",");
-          let numbers: Vec<f64> = parts.map(|t| t.parse::<f64>().unwrap()).collect();
+          println!("{}", line);
+          let parts = line.trim().split(",");
+          let numbers: Vec<f64> = parts
+              .map(|t| t.parse::<f64>())
+              .filter(|p| p.is_ok())
+              .map(|p| p.unwrap())
+              .collect();
+          println!("numbers {:?}", numbers);
+
+          let Some(this) = this_weak.upgrade() else {
+            return;
+          };
+
           if numbers.len() == 2 {
-            let mut samples = self.samples.borrow_mut();
+            let mut samples = this.samples.borrow_mut();
             samples.clear();
             samples.push(numbers[0]);
             samples.push(numbers[1]);
           }
-          self.api.ready();
+          {
+            let samples = this.samples.borrow();
+            println!("samples {:?}", samples);
+          }
+          this.api.ready();
         }
       }
     }
@@ -349,9 +374,9 @@ impl SerialNodeInner {
     match key_str.as_str() {
       "Running" => {
         if StateValue::Bool(true) == value {
-          let clone = self.clone();
+          let clone = Rc::downgrade(&self);
           *self.task.borrow_mut() = Some(run_task(async move {
-            clone.serial_loop().await;
+            SerialNodeInner::serial_loop(clone).await;
           }));
         } else {
           *self.task.borrow_mut() = None
@@ -377,19 +402,28 @@ impl AnalogNode for SerialNode {
           &self,
           _channel: i32,
       ) -> impl Deref<Target = [f64]> {
-    SliceDeref::new(self.inner.samples.borrow())
+    
+      match _channel {
+          0 => SliceDeref::new(self.inner.samples.borrow(), Some(0), Some(1)),
+          1 => SliceDeref::new(self.inner.samples.borrow(), Some(1), Some(2)),
+          _ => SliceDeref::new(self.inner.samples.borrow(), Some(0), Some(0))
+      }
   }
 
-  fn num_channels(&self) -> i32 { 1 }
+  fn num_channels(&self) -> i32 { 2 }
   fn sample_interval(&self, _channel: i32) -> Duration {
-    Duration::from_millis(1)
+    Duration::from_millis(16)
   }
   fn name(
           &self,
           _channel: i32,
       ) -> &str {
-        "samples"
+      match _channel {
+          0 => "ch1",
+          1 => "ch2",
+          _ => "err"
       }
+  }
 }
 
 impl Node for SerialNode {
@@ -421,6 +455,13 @@ impl Node for SerialNode {
     state.recap();
 
     SerialNode { inner }
+  }
+}
+
+impl Drop for SerialNode {
+  fn drop(&mut self) {
+    println!("SerialNode.drop");
+    //self.inner.task.borrow_mut().take().map(|t| { drop(t) });
   }
 }
 

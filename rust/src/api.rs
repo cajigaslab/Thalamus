@@ -230,7 +230,9 @@ impl Future for IOFuture {
   type Output = Result<usize, ErrorCode>;
 
   fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+    println!("Poll");
     let mut state = self.state.lock().unwrap();
+    println!("Poll lock");
     match state.result.take() {
       Some(result) => {
         std::task::Poll::Ready(result)
@@ -348,10 +350,12 @@ impl SerialPort {
     }
   }
   pub fn write(&self, data: &[u8]) -> IOFuture {
-    let future = IOFuture {state: Arc::new(Mutex::new(IOFutureState {result: None, waker: None}))};
+    let state = Arc::new(Mutex::new(IOFutureState {result: None, waker: None}));
+    let state_clone = state.clone();
+    let future = IOFuture { state };
     self.write_callback(data, |error, size| {
       let waker = {
-        let mut state = future.state.lock().unwrap();
+        let mut state = state_clone.lock().unwrap();
         state.result = if error.code != 0 { Some(Err(error)) } else { Some(Ok(size)) };
         state.waker.take()
       };
@@ -424,10 +428,15 @@ impl SerialPort {
     }
   }
   pub fn read_until(&self, buffer: &StreamBuf, delimiter: &str) -> IOFuture {
-    let future = IOFuture {state: Arc::new(Mutex::new(IOFutureState {result: None, waker: None}))};
-    self.read_until_callback(buffer, delimiter, |error, size| {
+    println!("Read Until");
+    let state = Arc::new(Mutex::new(IOFutureState {result: None, waker: None}));
+    let state_clone = state.clone();
+    let future = IOFuture { state };
+    self.read_until_callback(buffer, delimiter, move |error, size| {
+      println!("Callback");
       let waker = {
-        let mut state = future.state.lock().unwrap();
+        let mut state = state_clone.lock().unwrap();
+        println!("lock");
         state.result = if error.code != 0 { Some(Err(error)) } else { Some(Ok(size)) };
         state.waker.take()
       };
@@ -493,6 +502,7 @@ pub struct TaskScope {
 
 impl Drop for TaskScope {
   fn drop(&mut self) {
+    println!("TaskScope.drop");
     let mut state = self.task.state.lock().unwrap();
     state.future = None;
   }
@@ -855,12 +865,14 @@ pub trait Node {
 //}
 
 pub struct SliceDeref<T: Deref<Target = Vec<f64>>> {
-  inner: T
+  inner: T,
+  begin: Option<usize>,
+  end: Option<usize>
 }
 
 impl<T: Deref<Target = Vec<f64>>> SliceDeref<T> {
-  pub fn new(inner: T) -> SliceDeref<T> {
-    SliceDeref { inner }
+  pub fn new(inner: T, begin: Option<usize>, end: Option<usize>) -> SliceDeref<T> {
+    SliceDeref { inner, begin, end }
   }
 }
 
@@ -868,7 +880,20 @@ impl<T: Deref<Target = Vec<f64>>> Deref for SliceDeref<T> {
     type Target = [f64];
 
     fn deref(&self) -> &Self::Target {
-        self.inner.as_slice()
+        match (self.begin, self.end) {
+            (None, None) => {
+                self.inner.as_slice()
+            },
+            (Some(begin), None) => {
+                &self.inner.as_slice()[begin..]
+            },
+            (Some(begin), Some(end)) => {
+                &self.inner.as_slice()[begin..end]
+            },
+            (None, Some(end)) => {
+                &self.inner.as_slice()[..end]
+            },
+        }
     }
 }
 

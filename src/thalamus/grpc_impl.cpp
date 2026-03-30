@@ -1134,6 +1134,8 @@ struct GraphSession : public NodeSession<AnalogNode, thalamus_grpc::GraphRespons
   , request(*_request)
   {}
 
+  ~GraphSession() override;
+
   void subscribe() override {
     channels.assign(request.channels().begin(),
                                   request.channels().end());
@@ -1269,6 +1271,8 @@ struct GraphSession : public NodeSession<AnalogNode, thalamus_grpc::GraphRespons
       }));
   }
 };
+
+GraphSession::~GraphSession() {}
 
 ::grpc::ServerWriteReactor<::thalamus_grpc::GraphResponse>*
 Service::graph(::grpc::CallbackServerContext *context,
