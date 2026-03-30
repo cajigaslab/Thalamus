@@ -1,0 +1,102 @@
+{
+  "touch_channels": [
+    0,
+    1
+  ],
+  "task_clusters": [
+    {
+      "type": "task_cluster",
+      "name": "Joystick Paddle Intro",
+      "weight": 1,
+      "tasks": [
+        {
+          "task_type": "joystick_paddle_intro",
+          "type": "task",
+          "goal": 10,
+          "name": "Paddle Intercept",
+          "joystick_node": "Joystick",
+          "control_mode": "direct",
+          "cumulative_speed": 0.75,
+          "zero_drift_mode": true,
+          "zero_drift_buffer": 0.05,
+          "direct_range": 0.44,
+          "direct_recenter_when_idle": false,
+          "reset_paddle_each_trial": false,
+          "task_region_x": 0.5,
+          "task_region_y": 0.5,
+          "task_region_width": 0.72,
+          "task_region_height": 0.78,
+          "paddle_x_norm": 0.12,
+          "paddle_height_ratio": 0.22,
+          "paddle_width_ratio": 0.035,
+          "paddle_color": [
+            80,
+            220,
+            255
+          ],
+          "ball_radius_ratio": 0.04,
+          "ball_color": [
+            255,
+            210,
+            90
+          ],
+          "intercept_line_color": [
+            120,
+            120,
+            120
+          ],
+          "ball_start_x_norm": 0.92,
+          "ball_speed_norm_per_s": 0.52,
+          "ball_vertical_drift_norm_per_s": 0.10,
+          "ball_spawn_y_min": 0.20,
+          "ball_spawn_y_max": 0.80,
+          "ball_bounce_off_walls": false,
+          "show_intercept_line": true,
+          "show_trail": true,
+          "reward_channel": 0,
+          "intertrial_interval": 1.0,
+          "trial_timeout": 4.0,
+          "ignore_idle_trial_failures": true,
+          "success_flash_duration_s": 0.15,
+          "state_indicator_x": 30,
+          "state_indicator_y": 70
+        }
+      ]
+    }
+  ],
+  "queue": [],
+  "reward_schedule": {
+    "schedules": [
+      [
+        0
+      ]
+    ],
+    "index": 0
+  },
+  "Orchestration": {
+    "Remote Executor": false,
+    "Processes": []
+  },
+  "nodes": [],
+  "Persistence": {
+    "Cached": []
+  },
+  "eye_scaling": {
+    "I": {
+      "x": 1,
+      "y": 1
+    },
+    "II": {
+      "x": 1,
+      "y": 1
+    },
+    "III": {
+      "x": 1,
+      "y": 1
+    },
+    "IV": {
+      "x": 1,
+      "y": 1
+    }
+  }
+}

@@ -13,7 +13,7 @@
           "task_type": "joystick_intro",
           "type": "task",
           "goal": 6,
-          "name": "Untitled",
+          "name": "joy_intro",
           "intertrial_timeout": {
             "min": 1,
             "max": 1
@@ -191,6 +191,104 @@
           "state_indicator_y": 70.0,
           "reset_cursor_each_trial": false,
           "direct_recenter_when_idle": false
+        },
+        {
+          "task_type": "joystick_paddle_intro",
+          "type": "task",
+          "goal": 4,
+          "name": "pong intro",
+          "intertrial_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "start_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "hold_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "blink_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "fail_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "success_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 1
+          },
+          "target_height": {
+            "min": 1,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [],
+          "joystick_node": "Joystick",
+          "control_mode": "direct",
+          "cumulative_speed": 0.75,
+          "zero_drift_mode": true,
+          "zero_drift_buffer": 0.05,
+          "direct_range": 0.44,
+          "direct_recenter_when_idle": false,
+          "reset_paddle_each_trial": false,
+          "task_region_x": 0.5,
+          "task_region_y": 0.5,
+          "task_region_width": 0.72,
+          "task_region_height": 0.78,
+          "reward_channel": 0,
+          "intertrial_interval": 1.0,
+          "trial_timeout": 4.0,
+          "ignore_idle_trial_failures": true,
+          "paddle_x_norm": 0.12,
+          "paddle_height_ratio": 0.22,
+          "paddle_width_ratio": 0.035,
+          "paddle_color": [
+            80,
+            220,
+            255
+          ],
+          "ball_radius_ratio": 0.04,
+          "ball_color": [
+            255,
+            210,
+            90
+          ],
+          "intercept_line_color": [
+            120,
+            120,
+            120
+          ],
+          "ball_start_x_norm": 0.92,
+          "ball_speed_norm_per_s": 0.3,
+          "ball_vertical_drift_norm_per_s": 0.12,
+          "ball_spawn_y_min": 0.18,
+          "ball_spawn_y_max": 0.82,
+          "ball_bounce_off_walls": true,
+          "show_intercept_line": true,
+          "show_trail": true,
+          "success_flash_duration_s": 0.15,
+          "state_indicator_x": 30,
+          "state_indicator_y": 70
         }
       ]
     }
@@ -230,7 +328,7 @@
       "y": 1
     }
   },
-  "status": "Untitled/Untitled = 8/4",
+  "status": "Untitled/pong intro = 4/0",
   "thalamus_view_geometry": [
     100,
     100,
