@@ -502,11 +502,16 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     painter.setBrush(paddle_color)
     painter.drawRect(paddle_left, paddle_top, paddle_w_px, paddle_h_px)
 
-    painter.setPen(QPen(ball_color, 1))
-    painter.setBrush(ball_color)
-    painter.drawEllipse(ball_px_x - ball_r_px, ball_px_y - ball_r_px, 2 * ball_r_px, 2 * ball_r_px)
+    if state == "start_on":
+      painter.setPen(QPen(ball_color, 1))
+      painter.setBrush(ball_color)
+      painter.drawEllipse(ball_px_x - ball_r_px, ball_px_y - ball_r_px, 2 * ball_r_px, 2 * ball_r_px)
 
-    flash_active = flash_until is not None and time.perf_counter() < flash_until
+    flash_active = (
+      state == "start_on"
+      and flash_until is not None
+      and time.perf_counter() < flash_until
+    )
     if flash_active:
       painter.setPen(QPen(QColor(255, 255, 255, 200), max(2, int(0.008 * min_dim))))
       painter.setBrush(Qt.BrushStyle.NoBrush)

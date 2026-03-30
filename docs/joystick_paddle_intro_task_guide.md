@@ -13,6 +13,7 @@ This is intended as a bridge between:
 
 In normal task mode:
 - The task waits between trials.
+- During the intertrial period, the ball is not shown.
 - A ball appears on the right side of the task region.
 - The subject controls a paddle on the left side of the task region.
 - The ball moves toward the paddle.
@@ -50,6 +51,7 @@ Definitions:
 The task is between trials.
 This is the waiting period before the next ball appears.
 The task starts in this state.
+During this period, the ball is not drawn on the screen.
 
 ### `start_on`
 The ball becomes visible and starts moving.
