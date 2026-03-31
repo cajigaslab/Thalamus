@@ -72,6 +72,7 @@ def parse_args() -> argparse.Namespace:
   parser = argparse.ArgumentParser(description='Thalamus signal pipeline')
   parser.add_argument('-c', '--config', help='Config file location')
   parser.add_argument('-t', '--trace', action='store_true', help='Enable tracing')
+  parser.add_argument('-l', '--log-level', choices=['trace', 'debug', 'info', 'warning', 'error', 'fatal'], default='info', help='Log level')
   parser.add_argument('-p', '--port', type=int, default=50050, help='GRPC port')
   parser.add_argument('-u', '--ui-port', type=int, default=50051, help='UI GRPC port')
   parser.add_argument('-d', '--dotnet-port', type=int, default=50052, help='dotnet GRPC port')
@@ -90,9 +91,22 @@ async def async_main() -> None:
 
   asyncio.get_event_loop().set_exception_handler(exception_handler)
   logging.basicConfig(level=logging.INFO, format='%(levelname)s %(asctime)s %(name)s:%(lineno)s %(message)s')
-  logging.getLogger('matplotlib.font_manager').setLevel(logging.INFO)
 
   arguments = parse_args()
+
+  log_level = logging.INFO
+  if arguments.log_level in ('trace', 'debug'):
+    log_level = logging.DEBUG
+  elif arguments.log_level == 'info':
+    log_level = logging.INFO
+  elif arguments.log_level == 'warning':
+    log_level = logging.WARNING
+  elif arguments.log_level == 'error':
+    log_level = logging.ERROR
+  elif arguments.log_level == 'fatal':
+    log_level = logging.CRITICAL
+
+  logging.getLogger('matplotlib.font_manager').setLevel(log_level)
   
   ext_widgets = {}
   ext_library = None
@@ -138,6 +152,7 @@ async def async_main() -> None:
   dotnet_filename = pathlib.Path(get_path('thalamus.dotnet', 'dotnet' + ('.exe' if sys.platform == 'win32' else '')))
   bmbi_native_proc = None
   command = bmbi_native_filename, 'thalamus', '--port', str(arguments.port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else [])
+  command = command + ('--log-level', arguments.log_level)
   if ext_library is not None:
     command = command + ('--ext',) + ext_library
   LOGGER.info('COMMAND %s', ' '.join(command))

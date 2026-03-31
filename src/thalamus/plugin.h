@@ -62,6 +62,7 @@ extern "C" {
   struct ThalamusCharSpan {
     char* data;
     uint64_t size;
+    char owns_data;
   };
 
   struct ThalamusAnalogNode;
@@ -76,13 +77,14 @@ extern "C" {
     struct ThalamusMocapNode* mocap;
     struct ThalamusImageNode* image;
     struct ThalamusTextNode* text;
+    void* plugin_impl;
   };
 
   struct ThalamusAnalogNode {
-    struct ThalamusDoubleSpan (*data)(struct ThalamusNode* node, int channel);
-    struct ThalamusShortSpan (*short_data)(struct ThalamusNode* node, int channel);
-    struct ThalamusIntSpan (*int_data)(struct ThalamusNode* node, int channel);
-    struct ThalamusULongSpan (*ulong_data)(struct ThalamusNode* node, int channel);
+    void (*data)(struct ThalamusDoubleSpan*, struct ThalamusNode* node, int channel);
+    void (*short_data)(struct ThalamusShortSpan*, struct ThalamusNode* node, int channel);
+    void (*int_data)(struct ThalamusIntSpan*, struct ThalamusNode* node, int channel);
+    void (*ulong_data)(struct ThalamusULongSpan*, struct ThalamusNode* node, int channel);
     int (*num_channels)(struct ThalamusNode* node);
     uint64_t (*sample_interval_ns)(struct ThalamusNode* node, int channel);
     const char* (*name)(struct ThalamusNode* node, int channel);
@@ -93,7 +95,7 @@ extern "C" {
     char (*is_transformed)(struct ThalamusNode* node);
     double (*scale)(struct ThalamusNode* node, int channel);
     double (*offset)(struct ThalamusNode* node, int channel);
-    struct ThalamusCharSpan (*name_span)(struct ThalamusNode* node, int channel);
+    void (*name_span)(struct ThalamusCharSpan*, struct ThalamusNode* node, int channel);
   };
 
   enum ThalamusImageFormat {
@@ -105,7 +107,7 @@ extern "C" {
   };
 
   struct ThalamusImageNode {
-    struct ThalamusByteSpan (*plane)(struct ThalamusNode*, int channel);
+    void (*plane)(struct ThalamusByteSpan*, struct ThalamusNode*, int channel);
     size_t (*num_planes)(struct ThalamusNode*);
     enum ThalamusImageFormat (*format)(struct ThalamusNode*);
     size_t (*width)(struct ThalamusNode*);
@@ -129,7 +131,7 @@ extern "C" {
   };
 
   struct ThalamusMocapNode {
-    const struct ThalamusMocapSegmentSpan (*segments)(struct ThalamusNode*);
+    void (*segments)(struct ThalamusMocapSegmentSpan*, struct ThalamusNode*);
     const char* (*pose_name)(struct ThalamusNode*);
     //void (*inject)(ThalamusNode*, const ThalamusMocapSegmentSpan);
     char (*has_motion_data)(struct ThalamusNode*);
@@ -151,6 +153,11 @@ extern "C" {
   struct ThalamusErrorCode;
   typedef void (*ThalamusTimerCallback)(struct ThalamusErrorCode*, void* data);
   typedef void (*ThalamusPostCallback)(void* data);
+
+  struct ThalamusSerialPort;
+  struct ThalamusStreamBuf;
+
+  typedef void (*ThalamusIOCallback)(ThalamusErrorCode*, size_t, void* data);
 
   struct ThalamusAPI {
     char (*state_is_dict)(struct ThalamusState*);
@@ -202,6 +209,39 @@ extern "C" {
     void (*state_set_at_index_bool)(struct ThalamusState*, int64_t, char);
 
     void (*io_context_post)(ThalamusPostCallback, void*);
+
+    void (*trace_event_begin)(const char*);
+
+    void (*trace_event_begin_span)(const char*, size_t);
+
+    void (*trace_event_end)();
+
+    ThalamusSerialPort* (*serial_port_create)();
+
+    void (*serial_port_destroy)(ThalamusSerialPort*);
+
+    void (*serial_set_baud_rate)(ThalamusSerialPort*, uint32_t);
+
+    void (*serial_port_open)(ThalamusSerialPort*, const char*);
+
+    ThalamusErrorCode* (*serial_port_error)(ThalamusSerialPort*);
+
+    void (*serial_port_read_until)(ThalamusSerialPort* port, ThalamusStreamBuf* buffer, char* delimiter, size_t delimiter_len, ThalamusIOCallback callback, void* data);
+    
+    void (*serial_port_read_some)(ThalamusSerialPort* port, struct ThalamusByteSpan* span, ThalamusIOCallback callback, void* data);
+
+    void (*serial_port_read)(ThalamusSerialPort* port, struct ThalamusByteSpan* span, ThalamusIOCallback callback, void* data);
+
+    void (*serial_port_write)(ThalamusSerialPort* port, struct ThalamusByteSpan* span, ThalamusIOCallback callback, void* data);
+
+    ThalamusStreamBuf* (*streambuf_create)();
+    void (*streambuf_destroy)(ThalamusStreamBuf* port);
+    void (*streambuf_to_span)(struct ThalamusCharSpan*, ThalamusStreamBuf* buffer);
+    void (*streambuf_consume)(ThalamusStreamBuf* buffer, size_t count);
+    size_t (*streambuf_size)(ThalamusStreamBuf* buffer);
+    void (*charspan_destroy)(ThalamusCharSpan* span);
+
+    void (*error_code_message)(struct ThalamusCharSpan* result, ThalamusErrorCode *error);
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories)(struct ThalamusAPI*);
