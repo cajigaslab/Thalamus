@@ -19,6 +19,7 @@ use api::{
   ThalamusNodeFactory,
   StateValue
 };
+use futures::select;
 //use regex::Regex;
 
 use crate::api::{Sleeper, SleeperWaker, SliceDeref, StateKey, TaskScope, ThalamusAPI, run_task};
@@ -304,64 +305,85 @@ struct SerialNodeInner {
 
 impl SerialNodeInner {
   async fn serial_loop(this_weak: Weak<Self>) {
-    let (port, buffer) = {
+    let (port, buffer, timer) = {
       let Some(this) = this_weak.upgrade() else {
         return;
       };
+
+      let mut samples = this.samples.borrow_mut();
+      samples.clear();
+      samples.push(0.0);
+      samples.push(0.0);
 
       let port = this.api.create_serial_port();
       port.open(&this.port.borrow()).map_err(|e| { panic!("SERIAL ERROR: {}", e.message) } );
       port.set_baud_rate(115200).map_err(|e| { panic!("SERIAL ERROR: {}", e.message) } );
 
       let buffer = this.api.create_streambuf();
-      (port, buffer)
+
+      let timer = this.api.create_timer();
+      (port, buffer, timer)
     };
 
     //let re = Regex::new(r"(x\s*=\s*(\d+)\s*,\s*y\s*=\s*(\d+))").unwrap();
 
+    let mut sleep = timer.sleep(Duration::from_millis(16));
+    let mut read = port.read_until(&buffer, "\n");
+
     loop {
       println!("Read");
-      let result = port.read_until(&buffer, "\n").await;
-      match result {
-        Err(err) => {
-          println!("Err {}", err.message);
-          if err.aborted() {
-            return;
-          }
-          panic!("SERIAL ERROR: {}", err.message);
-        },
-        Ok(count) => {
-          println!("Ok {}", count);
-          let line = buffer.to_string();
-          buffer.consume(buffer.size());
-
-          
-          println!("{}", line);
-          let parts = line.trim().split(",");
-          let numbers: Vec<f64> = parts
-              .map(|t| t.parse::<f64>())
-              .filter(|p| p.is_ok())
-              .map(|p| p.unwrap())
-              .collect();
-          println!("numbers {:?}", numbers);
-
+      select! {
+        _ = sleep => {
           let Some(this) = this_weak.upgrade() else {
             return;
           };
-
-          if numbers.len() == 2 {
-            let mut samples = this.samples.borrow_mut();
-            samples.clear();
-            samples.push(numbers[0]);
-            samples.push(numbers[1]);
-          }
-          {
-            let samples = this.samples.borrow();
-            println!("samples {:?}", samples);
-          }
           this.api.ready();
+          sleep = timer.sleep(Duration::from_millis(16));
         }
-      }
+        result = read => {
+          match result {
+            Err(err) => {
+              println!("Err {}", err.message);
+              if err.aborted() {
+                return;
+              }
+              panic!("SERIAL ERROR: {}", err.message);
+            },
+            Ok(count) => {
+              println!("Ok {}", count);
+              let line = buffer.to_string();
+              buffer.consume(buffer.size());
+
+              
+              println!("{}", line);
+              let parts = line.trim().split(",");
+              let numbers: Vec<f64> = parts
+                  .map(|t| t.parse::<f64>())
+                  .filter(|p| p.is_ok())
+                  .map(|p| p.unwrap())
+                  .collect();
+              println!("numbers {:?}", numbers);
+
+              let Some(this) = this_weak.upgrade() else {
+                return;
+              };
+
+              if numbers.len() == 2 {
+                let mut samples = this.samples.borrow_mut();
+                samples.clear();
+                samples.push(numbers[0]);
+                samples.push(numbers[1]);
+              }
+              {
+                let samples = this.samples.borrow();
+                println!("samples {:?}", samples);
+              }
+              this.api.ready();
+            }
+          }
+          read = port.read_until(&buffer, "\n");
+        }
+      };
     }
   }
 

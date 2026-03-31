@@ -5,11 +5,13 @@ use std::ops::Deref;
 use std::pin::Pin;
 use std::ptr::null;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::task::{Context, Poll, Waker};
 use std::{os::raw::c_void, sync::OnceLock};
 use std::time::Duration;
 use std::ffi::{CStr, CString};
+
+use futures::future::FusedFuture;
 
 pub use crate::ffi::{
   *
@@ -88,6 +90,18 @@ impl ThalamusAPI {
       }
     }
   }
+
+  
+  pub fn create_timer(&self) -> Timer {
+    unsafe {
+      let timer = ((&(*self.raw)).timer_create)();
+      println!("new timer {:?} {:?}", self, timer);
+      Timer {
+        api: *self, timer
+      }
+    }
+  }
+
 }
 
 struct SleeperState {
@@ -216,44 +230,6 @@ unsafe extern "C" fn io_callback<T: FnMut(ErrorCode, usize)>(error: *mut Thalamu
   (args.callback)(error_code, length);
 }
 
-pub struct IOFutureState {
-  waker: Option<Waker>,
-  result: Option<Result<usize, ErrorCode>>
-  //state: Arc<Mutex<SleeperFutureState>>
-}
-
-pub struct IOFuture {
-  state: Arc<Mutex<IOFutureState>>
-}
-
-impl Future for IOFuture {
-  type Output = Result<usize, ErrorCode>;
-
-  fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
-    println!("Poll");
-    let mut state = self.state.lock().unwrap();
-    println!("Poll lock");
-    match state.result.take() {
-      Some(result) => {
-        std::task::Poll::Ready(result)
-      },
-      None => {
-        match &mut state.waker {
-          Some(waker) => {
-            if !waker.will_wake(cx.waker()) {
-              *waker = cx.waker().clone();
-            }
-          },
-          None => {
-            state.waker = Some(cx.waker().clone());
-          }
-        }
-        std::task::Poll::Pending
-      }
-    }
-  }
-}
-
 pub struct StreamBuf {
   api: ThalamusAPI,
   buffer: *mut ThalamusStreamBuf
@@ -349,17 +325,11 @@ impl SerialPort {
       (api.serial_port_write)(self.port, &mut span as *mut ThalamusByteSpan, Some(io_callback::<T>), args);
     }
   }
-  pub fn write(&self, data: &[u8]) -> IOFuture {
-    let state = Arc::new(Mutex::new(IOFutureState {result: None, waker: None}));
-    let state_clone = state.clone();
-    let future = IOFuture { state };
-    self.write_callback(data, |error, size| {
-      let waker = {
-        let mut state = state_clone.lock().unwrap();
-        state.result = if error.code != 0 { Some(Err(error)) } else { Some(Ok(size)) };
-        state.waker.take()
-      };
-      waker.map(|w| { w.wake_by_ref();});
+  pub fn write(&self, data: &[u8]) -> SimpleFuture<usize, ErrorCode> {
+    let future = SimpleFuture::new();
+    let state = future.state.clone();
+    self.write_callback(data, move |error, size| {
+      resolve_simple_future(state.lock().unwrap(), size, error);
     });
     future
   }
@@ -376,15 +346,11 @@ impl SerialPort {
       (api.serial_port_read)(self.port, &mut span as *mut ThalamusByteSpan, Some(io_callback::<T>), args);
     }
   }
-  pub fn read(&self, data: &mut [u8]) -> IOFuture {
-    let future = IOFuture {state: Arc::new(Mutex::new(IOFutureState {result: None, waker: None}))};
-    self.read_callback(data, |error, size| {
-      let waker = {
-        let mut state = future.state.lock().unwrap();
-        state.result = if error.code != 0 { Some(Err(error)) } else { Some(Ok(size)) };
-        state.waker.take()
-      };
-      waker.map(|w| { w.wake_by_ref();});
+  pub fn read(&self, data: &mut [u8]) -> SimpleFuture<usize, ErrorCode> {
+    let future = SimpleFuture::new();
+    let state = future.state.clone();
+    self.read_callback(data, move |error, size| {
+      resolve_simple_future(state.lock().unwrap(), size, error);
     });
     future
   }
@@ -401,15 +367,11 @@ impl SerialPort {
       (api.serial_port_read_some)(self.port, &mut span as *mut ThalamusByteSpan, Some(io_callback::<T>), args);
     }
   }
-  pub fn read_some(&self, data: &mut [u8]) -> IOFuture {
-    let future = IOFuture {state: Arc::new(Mutex::new(IOFutureState {result: None, waker: None}))};
-    self.read_some_callback(data, |error, size| {
-      let waker = {
-        let mut state = future.state.lock().unwrap();
-        state.result = if error.code != 0 { Some(Err(error)) } else { Some(Ok(size)) };
-        state.waker.take()
-      };
-      waker.map(|w| { w.wake_by_ref();});
+  pub fn read_some(&self, data: &mut [u8]) -> SimpleFuture<usize, ErrorCode> {
+    let future = SimpleFuture::new();
+    let state = future.state.clone();
+    self.read_some_callback(data, move |error, size| {
+      resolve_simple_future(state.lock().unwrap(), size, error);
     });
     future
   }
@@ -427,20 +389,12 @@ impl SerialPort {
       (api.serial_port_read_until)(self.port, buffer.buffer, delimiter_ptr, delimiter_bytes.len(), Some(io_callback::<T>), args);
     }
   }
-  pub fn read_until(&self, buffer: &StreamBuf, delimiter: &str) -> IOFuture {
+  pub fn read_until(&self, buffer: &StreamBuf, delimiter: &str) -> SimpleFuture<usize, ErrorCode> {
     println!("Read Until");
-    let state = Arc::new(Mutex::new(IOFutureState {result: None, waker: None}));
-    let state_clone = state.clone();
-    let future = IOFuture { state };
+    let future = SimpleFuture::new();
+    let state = future.state.clone();
     self.read_until_callback(buffer, delimiter, move |error, size| {
-      println!("Callback");
-      let waker = {
-        let mut state = state_clone.lock().unwrap();
-        println!("lock");
-        state.result = if error.code != 0 { Some(Err(error)) } else { Some(Ok(size)) };
-        state.waker.take()
-      };
-      waker.map(|w| { w.wake_by_ref();});
+      resolve_simple_future(state.lock().unwrap(), size, error);
     });
     future
   }
@@ -582,20 +536,87 @@ unsafe extern "C" fn state_on_change<T: FnMut(&State, i32, StateValue, StateValu
   (args.callback)(&source, action, key, value);
 }
 
-unsafe extern "C" fn timer_on_timer(error: *mut ThalamusErrorCode, data: *mut ::std::os::raw::c_void) {
-  unsafe {
-    let args = &mut *(data as *mut TimerCallbackArgs);
+pub struct SimpleFutureState<T, E> {
+  waker: Option<Waker>,
+  result: Option<Result<T, E>>,
+  done: bool,
+  //state: Arc<Mutex<SleeperFutureState>>
+}
 
-    let error_code = ErrorCode::new(args.api, error);
+pub struct SimpleFuture<T, E> {
+  state: Arc<Mutex<SimpleFutureState<T, E>>>
+}
 
-    let callback = &mut*args.callback;
-    callback.on_timer(error_code);
+impl<T, E> SimpleFutureState<T, E> {
+  pub fn set(mut this: MutexGuard<Self>, result: Result<T, E>) {
+    this.result = Some(result);
+    this.done = true;
+    let waker = this.waker.take();
+    drop(this);
+    waker.map(|w| w.wake_by_ref());
   }
 }
 
-struct TimerCallbackArgs {
-  pub callback: *mut dyn TimerListener,
-  pub api: ThalamusAPI
+fn resolve_simple_future<T>(this: MutexGuard<SimpleFutureState<T, ErrorCode>>, value: T, error: ErrorCode) {
+  let result = if error.code != 0 { Err(error) } else { Ok(value) };
+  SimpleFutureState::<T, ErrorCode>::set(this, result);
+}
+
+impl<T, E> Future for SimpleFuture<T, E> {
+  type Output = Result<T, E>;
+
+  fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+    println!("Poll");
+    let mut state = self.state.lock().unwrap();
+    println!("Poll lock");
+    match state.result.take() {
+      Some(result) => {
+        std::task::Poll::Ready(result)
+      },
+      None => {
+        match &mut state.waker {
+          Some(waker) => {
+            if !waker.will_wake(cx.waker()) {
+              *waker = cx.waker().clone();
+            }
+          },
+          None => {
+            state.waker = Some(cx.waker().clone());
+          }
+        }
+        std::task::Poll::Pending
+      }
+    }
+  }
+}
+
+impl<T, E> FusedFuture for SimpleFuture<T, E> {
+  fn is_terminated(&self) -> bool {
+    self.state.lock().unwrap().done
+  }
+}
+
+impl<T, E> SimpleFuture<T, E> {
+  pub fn new() -> SimpleFuture<T, E> {
+    SimpleFuture::<T, E> {
+      state: Arc::new(Mutex::new(SimpleFutureState::<T, E> {done: false, waker: None, result: None}))
+    }
+  }
+}
+
+unsafe extern "C" fn timer_on_timer<T: FnMut(ErrorCode)>(error: *mut ThalamusErrorCode, data: *mut ::std::os::raw::c_void) {
+  let mut args = unsafe {
+    let raw_args = &mut*(data as *mut TimerCallbackArgs<T>);
+    Box::from_raw(raw_args)
+  };
+  let error_code = ErrorCode::new(args.api, error);
+  
+  (args.callback)(error_code);
+}
+
+struct TimerCallbackArgs<T> {
+  pub api: ThalamusAPI,
+  pub callback: T
 }
 
 #[derive(Debug)]
@@ -632,10 +653,6 @@ impl ErrorCode {
 struct StateConnectionCallbackArgs<T: FnMut(&State, i32, StateValue, StateValue)> {
   pub callback: T,
   pub api: ThalamusAPI
-}
-
-pub trait TimerListener {
-    fn on_timer(&mut self, error: ErrorCode);
 }
 
 pub trait DictSetter {
@@ -809,36 +826,26 @@ pub struct Timer {
 }
 
 impl Timer {
-  pub fn new(api: ThalamusAPI) -> Timer {
+  pub fn sleep_callback<T: FnMut(ErrorCode)>(&self, duration: Duration, callback: T) {
     unsafe {
-      let timer = ((&(*api.raw)).timer_create)();
-      println!("new {:?} {:?}", api, timer);
-      Timer {
-        api, timer
-      }
-    }
-  }
-
-  pub fn expires_after(&self, duration: Duration) {
-    unsafe {
-      ((&(*self.api.raw)).timer_expire_after_ns)(self.timer, duration.as_nanos() as usize);
-    }
-  }
-  pub fn async_wait<T>(&self, listener: &T)
-  where T: TimerListener + 'static 
-  {
-    let const_ptr = listener as *const dyn TimerListener;
-    let mut_ptr = const_ptr as *mut dyn TimerListener;
-
-    let args = Box::new(TimerCallbackArgs {
-        callback: mut_ptr,
-        api: self.api
+      let api = &*self.api.raw;
+      let boxed = Box::new(TimerCallbackArgs {
+        api: self.api,
+        callback
       });
-    let raw = Box::into_raw(args);
-    let void_ptr = raw as *mut c_void;
-    unsafe {
-      ((&(*self.api.raw)).timer_async_wait)(self.timer, Some(timer_on_timer), void_ptr);
+      let args = Box::into_raw(boxed)  as *mut std::os::raw::c_void;
+      let ns = duration.as_nanos() as usize;
+      (api.timer_expire_after_ns)(self.timer, ns);
+      (api.timer_async_wait)(self.timer, Some(timer_on_timer::<T>), args);
     }
+  }
+  pub fn sleep(&self, duration: Duration) -> SimpleFuture<(), ErrorCode> {
+    let future = SimpleFuture::new();
+    let state = future.state.clone();
+    self.sleep_callback(duration, move |error| {
+      resolve_simple_future(state.lock().unwrap(), (), error);
+    });
+    future
   }
 }
 
