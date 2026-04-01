@@ -480,7 +480,7 @@ class ControlWindow(QMainWindow):
     self.operator_window.show()
     self.operator_window.activateWindow()
 
-  def showEvent(self, event: QShowEvent) -> None: # pylint: disable=invalid-name
+  def showEvent(self, event) -> None: # pylint: disable=invalid-name
     super().showEvent(event)
     if self.operator_view_autolaunch_attempted:
       return
