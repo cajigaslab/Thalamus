@@ -334,11 +334,13 @@ class ControlWindow(QMainWindow):
                config_data: ConfigData,
                done_future: asyncio.Future) -> None:
     super().__init__()
+    self.subject_window = subject_window
     self.task_context = task_context
     self.config_data = config_data
     self.done_future = done_future
     self.valid_queue_items: typing.List[QTreeWidgetItem] = []
     self.operator_window: typing.Optional[OperatorWindow] = None
+    self.operator_view_autolaunch_attempted = False
 
     file_menu = self.menuBar().addMenu("&File")
     add_action(file_menu, 'Start/Stop', self.on_start_stop)
@@ -469,11 +471,23 @@ class ControlWindow(QMainWindow):
                                            "Operator View is not supported in remote executor mode")
       return
 
+    operator_config = self.task_context.config.get('operator_view', {})
     if not self.operator_window or self.operator_window.closed:
       self.operator_window = OperatorWindow(subject_window, self.task_context.config)
-    self.operator_window.resize(self.width()//2, self.height()//2)
+      geometry = operator_config.get('view_geometry', None)
+      if not geometry or len(geometry) != 4 or geometry[2] < 0 or geometry[3] < 0:
+        self.operator_window.resize(self.width()//2, self.height()//2)
     self.operator_window.show()
     self.operator_window.activateWindow()
+
+  def showEvent(self, event: QShowEvent) -> None: # pylint: disable=invalid-name
+    super().showEvent(event)
+    if self.operator_view_autolaunch_attempted:
+      return
+    self.operator_view_autolaunch_attempted = True
+    operator_config = self.task_context.config.get('operator_view', {})
+    if operator_config.get('auto_launch', False) and self.operator_window is None:
+      QTimer.singleShot(0, lambda: self.on_operator_view(self.subject_window))
 
   def closeEvent(self, event: QCloseEvent) -> None: # pylint: disable=invalid-name
     """

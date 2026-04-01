@@ -3,6 +3,7 @@ Module defining the operator view
 """
 import typing
 import functools
+import datetime
 
 from ..qt import *
 
@@ -14,6 +15,7 @@ USINGLEGACY_QT = PYQT_VERSION < packaging.version.parse('5.11.0')
 from .window import Window as TaskWindow
 from .util import RenderOutput
 from ..config import ObservableCollection
+from ..util import MeteredUpdater
 
 QUADRANT_LABELS = {
   'I': 'Top Right',
@@ -180,6 +182,8 @@ class CentralWidget(QWidget):
       operator_config['capture_mode'] = 'framebuffer'
     if 'show_eye_scaling' not in operator_config:
       operator_config['show_eye_scaling'] = False
+    if 'auto_launch' not in operator_config:
+      operator_config['auto_launch'] = False
 
     layout = QGridLayout()
     self.view_widget = ViewWidget(target, config)
@@ -205,9 +209,14 @@ class CentralWidget(QWidget):
     layout.addWidget(show_gaze_checkbox, 1, 3)
     show_gaze_checkbox.toggled.connect(lambda v: operator_config.update({'show_gaze': v}))
 
+    auto_launch_checkbox = QCheckBox('Launch On Startup')
+    auto_launch_checkbox.setChecked(operator_config['auto_launch'])
+    layout.addWidget(auto_launch_checkbox, 2, 0, 1, 2)
+    auto_launch_checkbox.toggled.connect(lambda v: operator_config.update({'auto_launch': v}))
+
     toggle_eye_scaling_button = QPushButton(
       'Hide Eye Scaling' if operator_config['show_eye_scaling'] else 'Show Eye Scaling')
-    layout.addWidget(toggle_eye_scaling_button, 2, 0, 1, 4)
+    layout.addWidget(toggle_eye_scaling_button, 2, 2, 1, 2)
     toggle_eye_scaling_button.clicked.connect(
       lambda: operator_config.update({'show_eye_scaling': not bool(operator_config['show_eye_scaling'])}))
 
@@ -234,6 +243,8 @@ class CentralWidget(QWidget):
         show_touch_checkbox.setChecked(bool(value))
       elif key == 'show_gaze':
         show_gaze_checkbox.setChecked(bool(value))
+      elif key == 'auto_launch':
+        auto_launch_checkbox.setChecked(bool(value))
       elif key == 'show_eye_scaling':
         is_visible = bool(value)
         toggle_eye_scaling_button.setText('Hide Eye Scaling' if is_visible else 'Show Eye Scaling')
@@ -342,11 +353,36 @@ class Window(QMainWindow):
   def __init__(self, target: TaskWindow, config: ObservableCollection) -> None:
     super().__init__()
     self.target = target
+    self.config = config
     self.closed = False
+    if 'operator_view' not in self.config:
+      self.config['operator_view'] = {}
+    operator_config = self.config['operator_view']
+    if 'view_geometry' not in operator_config:
+      operator_config['view_geometry'] = [100, 100, 900, 700]
+    self.view_geometry_updater = MeteredUpdater(
+      operator_config['view_geometry'],
+      datetime.timedelta(seconds=1),
+      lambda: isdeleted(self))
     self.central_widget = CentralWidget(self.target, config)
     self.target.canvas.listeners.paint_subscribers.append(self.central_widget.view_widget.request_capture)
     self.setCentralWidget(self.central_widget)
+    self.setWindowTitle('Operator View')
+    x, y, w, h = operator_config['view_geometry']
+    self.move(x, y)
+    self.resize(w, h)
     self.central_widget.view_widget.request_capture()
+
+  def moveEvent(self, event: QMoveEvent) -> None: # pylint: disable=invalid-name
+    offset = self.frameGeometry().size() - self.geometry().size()
+    position = event.pos() - QPoint(offset.width(), offset.height())
+    position = QPoint(max(0, position.x()), max(0, position.y()))
+    self.view_geometry_updater[:2] = position.x(), position.y()
+    super().moveEvent(event)
+
+  def resizeEvent(self, event: QResizeEvent) -> None: # pylint: disable=invalid-name
+    self.view_geometry_updater[2:] = event.size().width(), event.size().height()
+    super().resizeEvent(event)
 
   def closeEvent(self, event: QCloseEvent) -> None: # pylint: disable=invalid-name
     """
