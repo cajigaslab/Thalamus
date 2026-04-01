@@ -19,6 +19,18 @@ In free-play mode:
 - The subject can move the cursor freely.
 - The task ends when the configured key is released.
 
+## Operator View Overlay
+
+When this task is shown in Operator View, it now draws a white text overlay in the top-right corner of the operator display only.
+
+The overlay shows:
+- current target name
+- current target size as task-region radius percent
+- current reward channel
+- next item in the task queue
+
+This overlay is not shown on the subject display.
+
 ## Two Kinds of Logging
 
 This task now records behavior at two levels:

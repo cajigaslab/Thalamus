@@ -29,7 +29,7 @@ from ..qt import *
 from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
 from .widgets import Form
-from .util import create_task_with_exc_handling, CanvasPainterProtocol, TaskContextProtocol, TaskResult
+from .util import create_task_with_exc_handling, CanvasPainterProtocol, TaskContextProtocol, TaskResult, RenderOutput
 from ..config import *
 
 LOGGER = logging.getLogger(__name__)
@@ -973,7 +973,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
 async def run(context: TaskContextProtocol) -> TaskResult:
   assert context.widget, "Widget is None; cannot render."
 
-  task_config = context.config["queue"][0]
+  task_config = getattr(context, "task_config", context.config["queue"][0])
 
   def get_persisted_operator_key_state(key: str) -> bool:
     stored = task_config.get("_operator_keys_pressed", {})
@@ -1051,6 +1051,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   current_hold_time = hold_time
   current_target_color = target_color
   current_reward_channel = reward_channel
+  next_target_preview: typing.Optional[typing.Tuple[int, float, float, float, float, int, QColor]] = None
   free_play_end_requested = False
   analog_joystick_x = 0.0
   analog_joystick_y = 0.0
@@ -1311,6 +1312,19 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       return random.choice(enabled_targets)
     return -1, 0.75, 0.50, target_radius_ratio, hold_time, reward_channel, target_color
 
+  def ensure_next_target_preview() -> None:
+    nonlocal next_target_preview
+    if next_target_preview is None:
+      next_target_preview = place_target()
+
+  def consume_next_target() -> typing.Tuple[int, float, float, float, float, int, QColor]:
+    nonlocal next_target_preview
+    ensure_next_target_preview()
+    assert next_target_preview is not None
+    selected_target = next_target_preview
+    next_target_preview = place_target()
+    return selected_target
+
   def apply_direction_influence(raw_jx: float, raw_jy: float) -> typing.Tuple[float, float]:
     jx = raw_jx
     jy = raw_jy
@@ -1323,6 +1337,60 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     elif jy < 0.0:
       jy *= down_influence
     return jx, jy
+
+  def get_current_target_name() -> str:
+    if 0 <= current_target_index < len(configured_targets):
+      target = configured_targets[current_target_index]
+      if isinstance(target, dict):
+        name = str(target.get("name", "")).strip()
+        if name:
+          return name
+    if current_target_index >= 0:
+      return f"Target {current_target_index + 1}"
+    return "None"
+
+  def get_target_name(index: int) -> str:
+    if 0 <= index < len(configured_targets):
+      target = configured_targets[index]
+      if isinstance(target, dict):
+        name = str(target.get("name", "")).strip()
+        if name:
+          return name
+    if index >= 0:
+      return f"Target {index + 1}"
+    return "None"
+
+  def get_next_target_label() -> str:
+    if next_target_preview is None:
+      return "None"
+    return get_target_name(next_target_preview[0])
+
+  def draw_operator_hud(painter: CanvasPainterProtocol, width: int, height: int) -> None:
+    original_font = painter.font()
+    hud_font = QFont(original_font)
+    hud_font.setPointSize(max(14, original_font.pointSize() + 6))
+    painter.setFont(hud_font)
+    size_percent = 100.0 * current_target_radius_ratio
+    lines = [
+      f"Target: {get_current_target_name()}",
+      f"Size: {size_percent:.1f}% region radius",
+      f"Reward Channel: {current_reward_channel}",
+      f"Next Target: {get_next_target_label()}",
+    ]
+    margin = 14
+    line_spacing = 6
+    metrics = painter.fontMetrics()
+    line_height = metrics.height()
+    block_height = len(lines) * line_height + max(0, len(lines) - 1) * line_spacing
+    y = margin
+    for index, line in enumerate(lines):
+      line_top = y + index * (line_height + line_spacing)
+      painter.drawText(
+        QRect(margin, line_top, max(1, width - 2 * margin), line_height),
+        int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop),
+        line,
+      )
+    painter.setFont(original_font)
 
   def renderer(painter: CanvasPainterProtocol) -> None:
     nonlocal success_pop_start
@@ -1423,6 +1491,10 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       state_color,
     )
 
+    with painter.masked(RenderOutput.OPERATOR):
+      painter.setPen(QPen(QColor(255, 255, 255), 1))
+      draw_operator_hud(painter, w, h)
+
   context.widget.renderer = renderer
   context.widget.key_release_handler = on_key_release
   context.widget.key_press_handler = on_key_press
@@ -1438,6 +1510,8 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   analog_task = create_task_with_exc_handling(analog_processor(stream))
 
   try:
+    if not cursor_only_mode:
+      ensure_next_target_preview()
     if cursor_only_mode:
       reset_attempt_tracking(session_start)
       append_event("free_play_start", session_start)
@@ -1502,7 +1576,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
           return TaskResult(success=True)
       elif state == "intertrial":
         if now >= iti_end:
-          current_target_index, target_x, target_y, current_target_radius_ratio, current_hold_time, current_reward_channel, current_target_color = place_target()
+          current_target_index, target_x, target_y, current_target_radius_ratio, current_hold_time, current_reward_channel, current_target_color = consume_next_target()
           hold_start = None
           trial_start = now
           reset_attempt_tracking(now)
