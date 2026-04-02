@@ -1368,7 +1368,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   def draw_operator_hud(painter: CanvasPainterProtocol, width: int, height: int) -> None:
     original_font = painter.font()
     hud_font = QFont(original_font)
-    hud_font.setPointSize(max(14, original_font.pointSize() + 6))
+    hud_font.setPointSize(max(24, original_font.pointSize() + 12))
     painter.setFont(hud_font)
     size_percent = 100.0 * current_target_radius_ratio
     lines = [
