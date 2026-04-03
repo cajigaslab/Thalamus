@@ -207,10 +207,11 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   target_table.setColumnCount(8)
   target_table.setHorizontalHeaderLabels(["Enabled", "Name", "X", "Y", "Radius", "Hold (s)", "Reward Channel", "Color"])
   target_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-  target_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+  target_table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
   target_table.horizontalHeader().setStretchLastSection(True)
   target_table.verticalHeader().setVisible(False)
   target_table.setMinimumHeight(190)
+  target_table.setToolTip("Each row is a target. Multi-select rows to remove several at once.")
 
   def clamp(v: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, v))
@@ -249,10 +250,125 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       "target_color": DEFAULT_TARGET_COLOR.copy(),
     }
 
+  def make_target_from_template(
+    template_target: typing.Dict[str, typing.Any],
+    index: int,
+    x_norm: float,
+    y_norm: float,
+    prefix: str,
+  ) -> typing.Dict[str, typing.Any]:
+    base = normalize_target(template_target)
+    base["name"] = f"{prefix.strip() or 'Target'} {index}"
+    base["x_norm"] = clamp(float(x_norm), 0.0, 1.0)
+    base["y_norm"] = clamp(float(y_norm), 0.0, 1.0)
+    return base
+
+  def generate_rectangular_grid_points(
+    rows: int,
+    columns: int,
+    edge_margin: float,
+    center_exclusion_radius: float,
+  ) -> typing.List[typing.Tuple[float, float]]:
+    points: typing.List[typing.Tuple[float, float]] = []
+    rows = max(1, int(rows))
+    columns = max(1, int(columns))
+    margin = clamp(float(edge_margin), 0.0, 0.45)
+    exclusion_radius = max(0.0, float(center_exclusion_radius))
+    usable_left = margin
+    usable_right = 1.0 - margin
+    usable_bottom = margin
+    usable_top = 1.0 - margin
+    if usable_right <= usable_left or usable_top <= usable_bottom:
+      return points
+
+    def axis_positions(count: int, lo: float, hi: float) -> typing.List[float]:
+      if count <= 1:
+        return [(lo + hi) / 2.0]
+      step = (hi - lo) / float(count - 1)
+      return [lo + i * step for i in range(count)]
+
+    x_positions = axis_positions(columns, usable_left, usable_right)
+    y_positions = axis_positions(rows, usable_bottom, usable_top)
+    for y in y_positions:
+      for x in x_positions:
+        if math.hypot(x - 0.5, y - 0.5) < exclusion_radius:
+          continue
+        points.append((x, y))
+    return points
+
+  def generate_hexagonal_points(
+    rows: int,
+    columns: int,
+    edge_margin: float,
+    center_exclusion_radius: float,
+  ) -> typing.List[typing.Tuple[float, float]]:
+    points: typing.List[typing.Tuple[float, float]] = []
+    rows = max(1, int(rows))
+    columns = max(1, int(columns))
+    margin = clamp(float(edge_margin), 0.0, 0.45)
+    exclusion_radius = max(0.0, float(center_exclusion_radius))
+    usable_left = margin
+    usable_right = 1.0 - margin
+    usable_bottom = margin
+    usable_top = 1.0 - margin
+    if usable_right <= usable_left or usable_top <= usable_bottom:
+      return points
+
+    width = usable_right - usable_left
+    height = usable_top - usable_bottom
+    x_step = 0.0 if columns <= 1 else width / float(columns - 1)
+    y_step = 0.0 if rows <= 1 else height / float(rows - 1)
+    if rows > 1 and columns > 1 and y_step <= 0.0:
+      y_step = x_step * math.sqrt(3.0) / 2.0
+
+    for row in range(rows):
+      row_y = usable_bottom + (height / 2.0 if rows <= 1 else row * y_step)
+      if row_y < usable_bottom - 1e-9 or row_y > usable_top + 1e-9:
+        continue
+      offset = 0.5 * x_step if (row % 2 == 1 and columns > 1) else 0.0
+      for column in range(columns):
+        row_x = usable_left + (width / 2.0 if columns <= 1 else column * x_step + offset)
+        if row_x < usable_left - 1e-9 or row_x > usable_right + 1e-9:
+          continue
+        if math.hypot(row_x - 0.5, row_y - 0.5) < exclusion_radius:
+          continue
+        points.append((row_x, row_y))
+    return points
+
+  def generate_annulus_points(
+    ring_count: int,
+    points_per_ring: int,
+    inner_radius: float,
+    outer_radius: float,
+    angle_offset_deg: float,
+  ) -> typing.List[typing.Tuple[float, float]]:
+    points: typing.List[typing.Tuple[float, float]] = []
+    ring_count = max(1, int(ring_count))
+    points_per_ring = max(1, int(points_per_ring))
+    inner = clamp(float(inner_radius), 0.0, 0.70)
+    outer = clamp(float(outer_radius), inner, 0.70)
+    angle_offset = math.radians(float(angle_offset_deg))
+
+    radii = [outer] if ring_count <= 1 else [
+      inner + (outer - inner) * (i / float(ring_count - 1))
+      for i in range(ring_count)
+    ]
+    for ring_index, radius in enumerate(radii):
+      ring_points = max(1, points_per_ring * (ring_index + 1))
+      for point_index in range(ring_points):
+        angle = angle_offset + (2.0 * math.pi * point_index / float(ring_points))
+        x = 0.5 + radius * math.cos(angle)
+        y = 0.5 + radius * math.sin(angle)
+        if x < 0.0 or x > 1.0 or y < 0.0 or y > 1.0:
+          continue
+        points.append((x, y))
+    return points
+
   class LayoutPreview(QWidget):
     def __init__(
       self,
       targets_ref: typing.List[typing.Dict[str, typing.Any]],
+      generated_preview_getter: typing.Callable[[], typing.List[typing.Dict[str, typing.Any]]],
       cursor_radius_getter: typing.Callable[[], float],
       select_callback: typing.Callable[[int], None],
       update_callback: typing.Callable[[], None],
@@ -260,6 +376,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     ) -> None:
       super().__init__(parent)
       self.targets_ref = targets_ref
+      self.generated_preview_getter = generated_preview_getter
       self.cursor_radius_getter = cursor_radius_getter
       self.select_callback = select_callback
       self.update_callback = update_callback
@@ -390,6 +507,17 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         label = str(target.get("name", f"T{i + 1}"))
         painter.drawText(int(center.x() + radius + 6.0), int(center.y() - radius - 4.0), label)
 
+      preview_pen = QPen(QColor(120, 200, 255, 220), 2, Qt.PenStyle.DashLine)
+      preview_brush = QColor(120, 200, 255, 70)
+      for i, target in enumerate(self.generated_preview_getter()):
+        center = self._target_center(region_rect, target)
+        radius = self._target_radius_px(region_rect, target)
+        painter.setPen(preview_pen)
+        painter.setBrush(preview_brush)
+        painter.drawEllipse(center, radius, radius)
+        painter.setPen(QPen(QColor(220, 240, 255), 1))
+        painter.drawText(int(center.x() + radius + 6.0), int(center.y() + radius + 14.0), f"Preview {i + 1}")
+
       cursor_center = QPointF(region_rect.center().x(), region_rect.center().y())
       cursor_radius = max(0.005, min(0.5, float(self.cursor_radius_getter()))) * min(region_rect.width(), region_rect.height())
       cursor_color_rgb = task_config.get("cursor_color", [255, 70, 70])
@@ -400,6 +528,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
 
       painter.setPen(QPen(QColor(200, 200, 200), 1))
       painter.drawText(12, 18, "Drag target centers to reposition them inside the task region.")
+      if self.generated_preview_getter():
+        painter.drawText(12, 36, "Dashed blue targets are generator preview targets and are not saved yet.")
 
   def open_layout_editor() -> None:
     existing_dialog = getattr(result, "_layout_editor_dialog", None)
@@ -424,12 +554,12 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     dialog.destroyed.connect(clear_layout_editor_reference)
 
     draft_targets = [normalize_target(target) for target in list(targets)]
-    if not draft_targets:
-      draft_targets.append(make_default_target(1))
+    pending_generated_targets: typing.List[typing.Dict[str, typing.Any]] = []
+    pending_generator_operation = "append"
 
     dialog_layout = QHBoxLayout(dialog)
     preview: typing.Optional[LayoutPreview] = None
-    selected_index = 0
+    selected_index = 0 if draft_targets else -1
     draft_cursor_radius = max(0.005, min(0.5, float(task_config.get("cursor_diameter_ratio", 0.1)) / 2.0))
 
     side_panel = QWidget(dialog)
@@ -437,7 +567,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     side_layout.setContentsMargins(0, 0, 0, 0)
 
     target_list = QListWidget()
-    target_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+    target_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+    target_list.setToolTip("Select one or more targets. Drag in the preview to reposition the current target.")
     side_layout.addWidget(QLabel("Targets"))
     side_layout.addWidget(target_list, 1)
 
@@ -464,6 +595,14 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     hold_spin.setSingleStep(0.05)
     reward_channel_spin.setRange(0, 255)
     reward_channel_spin.setSingleStep(1)
+    name_edit.setToolTip("Name shown in the target list and operator overlay.")
+    enabled_box.setToolTip("Disabled targets stay in the table but are not eligible for trial selection.")
+    x_spin.setToolTip("Normalized horizontal position inside the task region. 0 = left, 1 = right.")
+    y_spin.setToolTip("Normalized vertical position inside the task region. 0 = bottom, 1 = top.")
+    radius_spin.setToolTip("Target radius as a fraction of the task region's smaller dimension.")
+    hold_spin.setToolTip("How long the cursor must stay inside the target to complete it.")
+    reward_channel_spin.setToolTip("Reward output channel used when this target succeeds.")
+    color_button.setToolTip("Choose the display color for the selected target.")
 
     form_layout.addRow("Name", name_edit)
     form_layout.addRow("", enabled_box)
@@ -482,18 +621,124 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     cursor_radius_spin.setDecimals(3)
     cursor_radius_spin.setSingleStep(0.005)
     cursor_radius_spin.setValue(draft_cursor_radius)
+    cursor_radius_spin.setToolTip("Reference cursor radius shown in the layout preview center.")
     cursor_layout.addRow("Cursor Radius", cursor_radius_spin)
     side_layout.addWidget(cursor_panel)
+
+    generator_panel = QGroupBox("Target Generator")
+    generator_layout = QFormLayout(generator_panel)
+    generator_mode_combo = QComboBox()
+    generator_mode_combo.addItem("Annulus / Rings", "annulus")
+    generator_mode_combo.addItem("Rectangular Grid", "grid")
+    generator_mode_combo.addItem("Hexagonal Packing", "hex")
+    generator_operation_combo = QComboBox()
+    generator_operation_combo.addItem("Append", "append")
+    generator_operation_combo.addItem("Replace", "replace")
+    name_prefix_edit = QLineEdit("Target")
+    use_selected_style_box = QCheckBox("Use selected target style")
+    use_selected_style_box.setChecked(True)
+    generator_mode_combo.setToolTip("Choose how target coordinates are generated.")
+    generator_operation_combo.setToolTip("Append adds to the current draft. Replace swaps the draft for generated targets when you apply the preview.")
+    name_prefix_edit.setToolTip("Base name used when new generated targets are created.")
+    use_selected_style_box.setToolTip("Copy size, hold, reward, enabled state, and color from the selected target.")
+
+    annulus_ring_count_spin = QSpinBox()
+    annulus_ring_count_spin.setRange(1, 20)
+    annulus_ring_count_spin.setValue(2)
+    annulus_ring_count_spin.setToolTip("Number of concentric rings to generate.")
+    annulus_points_per_ring_spin = QSpinBox()
+    annulus_points_per_ring_spin.setRange(1, 64)
+    annulus_points_per_ring_spin.setValue(8)
+    annulus_points_per_ring_spin.setToolTip("Base number of targets on the first ring. Outer rings scale up from this value.")
+    annulus_inner_radius_spin = QDoubleSpinBox()
+    annulus_inner_radius_spin.setRange(0.0, 0.70)
+    annulus_inner_radius_spin.setDecimals(3)
+    annulus_inner_radius_spin.setSingleStep(0.01)
+    annulus_inner_radius_spin.setValue(0.22)
+    annulus_inner_radius_spin.setToolTip("Distance from center to the innermost ring. Useful for keeping the center clean.")
+    annulus_outer_radius_spin = QDoubleSpinBox()
+    annulus_outer_radius_spin.setRange(0.0, 0.70)
+    annulus_outer_radius_spin.setDecimals(3)
+    annulus_outer_radius_spin.setSingleStep(0.01)
+    annulus_outer_radius_spin.setValue(0.38)
+    annulus_outer_radius_spin.setToolTip("Distance from center to the outermost ring.")
+    annulus_angle_offset_spin = QDoubleSpinBox()
+    annulus_angle_offset_spin.setRange(0.0, 360.0)
+    annulus_angle_offset_spin.setDecimals(1)
+    annulus_angle_offset_spin.setSingleStep(5.0)
+    annulus_angle_offset_spin.setValue(0.0)
+    annulus_angle_offset_spin.setToolTip("Rotate the ring pattern around the center.")
+
+    grid_rows_spin = QSpinBox()
+    grid_rows_spin.setRange(1, 50)
+    grid_rows_spin.setValue(6)
+    grid_rows_spin.setToolTip("Number of target rows for grid and hex generators.")
+    grid_columns_spin = QSpinBox()
+    grid_columns_spin.setRange(1, 50)
+    grid_columns_spin.setValue(8)
+    grid_columns_spin.setToolTip("Number of target columns for grid and hex generators.")
+    grid_margin_spin = QDoubleSpinBox()
+    grid_margin_spin.setRange(0.0, 0.45)
+    grid_margin_spin.setDecimals(3)
+    grid_margin_spin.setSingleStep(0.01)
+    grid_margin_spin.setValue(0.08)
+    grid_margin_spin.setToolTip("Leaves a border so targets do not sit right against the task-region edge.")
+    center_exclusion_spin = QDoubleSpinBox()
+    center_exclusion_spin.setRange(0.0, 0.70)
+    center_exclusion_spin.setDecimals(3)
+    center_exclusion_spin.setSingleStep(0.01)
+    center_exclusion_spin.setValue(0.18)
+    center_exclusion_spin.setToolTip("Circular exclusion zone around center to prevent accidental idle hits.")
+
+    generator_hint_label = QLabel("")
+    generator_hint_label.setWordWrap(True)
+    generator_hint_label.setToolTip("Short description of the currently selected generator mode.")
+    preview_generator_button = QPushButton("Preview")
+    apply_preview_button = QPushButton("Apply Preview")
+    clear_preview_button = QPushButton("Clear Preview")
+    preview_generator_button.setToolTip("Build a temporary preview in the canvas without changing the draft target list.")
+    apply_preview_button.setToolTip("Commit the currently previewed generated targets using the selected Append or Replace operation.")
+    clear_preview_button.setToolTip("Discard the current generator preview.")
+
+    generator_layout.addRow("Mode", generator_mode_combo)
+    generator_layout.addRow("Operation", generator_operation_combo)
+    generator_layout.addRow("Name Prefix", name_prefix_edit)
+    generator_layout.addRow("", use_selected_style_box)
+    generator_layout.addRow("Rows", grid_rows_spin)
+    generator_layout.addRow("Columns", grid_columns_spin)
+    generator_layout.addRow("Ring Count", annulus_ring_count_spin)
+    generator_layout.addRow("Base Points / Ring", annulus_points_per_ring_spin)
+    generator_layout.addRow("Edge Margin", grid_margin_spin)
+    generator_layout.addRow("Center Exclusion", center_exclusion_spin)
+    generator_layout.addRow("Inner Radius", annulus_inner_radius_spin)
+    generator_layout.addRow("Outer Radius", annulus_outer_radius_spin)
+    generator_layout.addRow("Angle Offset", annulus_angle_offset_spin)
+    generator_layout.addRow("", generator_hint_label)
+    preview_button_row = QWidget()
+    preview_button_row_layout = QHBoxLayout(preview_button_row)
+    preview_button_row_layout.setContentsMargins(0, 0, 0, 0)
+    preview_button_row_layout.addWidget(preview_generator_button)
+    preview_button_row_layout.addWidget(apply_preview_button)
+    preview_button_row_layout.addWidget(clear_preview_button)
+    generator_layout.addRow("", preview_button_row)
+    side_layout.addWidget(generator_panel)
 
     button_row = QWidget()
     button_row_layout = QHBoxLayout(button_row)
     button_row_layout.setContentsMargins(0, 0, 0, 0)
     add_button = QPushButton("Add")
     remove_button = QPushButton("Remove")
+    clear_all_button = QPushButton("Clear All")
     save_button = QPushButton("Save")
     cancel_button = QPushButton("Cancel")
+    add_button.setToolTip("Duplicate the selected target, or add a new default target if nothing is selected.")
+    remove_button.setToolTip("Remove every selected target from the draft.")
+    clear_all_button.setToolTip("Remove all draft targets from the editor.")
+    save_button.setToolTip("Commit draft targets back to the task configuration.")
+    cancel_button.setToolTip("Close the editor without saving draft changes.")
     button_row_layout.addWidget(add_button)
     button_row_layout.addWidget(remove_button)
+    button_row_layout.addWidget(clear_all_button)
     button_row_layout.addStretch(1)
     button_row_layout.addWidget(save_button)
     button_row_layout.addWidget(cancel_button)
@@ -507,6 +752,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         if not bool(target.get("enabled", True)):
           label += " (disabled)"
         target_list.addItem(label)
+      if 0 <= selected_index < target_list.count():
+        target_list.setCurrentRow(selected_index)
       target_list.blockSignals(False)
 
     def update_color_button() -> None:
@@ -580,8 +827,9 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       if preview is not None:
         preview.set_selected_index(selected_index)
 
-    def select_index(index: int) -> None:
+    def update_selected_index_from_list() -> None:
       nonlocal selected_index
+      index = target_list.currentRow()
       if index < 0 or index >= len(draft_targets):
         selected_index = -1
       else:
@@ -594,7 +842,45 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       if preview is not None:
         preview.update()
 
-    preview = LayoutPreview(draft_targets, lambda: draft_cursor_radius, select_index, refresh_editor, dialog)
+    def update_preview_buttons() -> None:
+      has_preview = bool(pending_generated_targets)
+      apply_preview_button.setEnabled(has_preview)
+      clear_preview_button.setEnabled(has_preview)
+
+    def update_generator_controls() -> None:
+      mode = str(generator_mode_combo.currentData())
+      is_annulus = mode == "annulus"
+      annulus_ring_count_spin.setEnabled(is_annulus)
+      annulus_points_per_ring_spin.setEnabled(is_annulus)
+      annulus_inner_radius_spin.setEnabled(is_annulus)
+      annulus_outer_radius_spin.setEnabled(is_annulus)
+      annulus_angle_offset_spin.setEnabled(is_annulus)
+      grid_rows_spin.setEnabled(not is_annulus)
+      grid_columns_spin.setEnabled(not is_annulus)
+      center_exclusion_spin.setEnabled(not is_annulus)
+      grid_margin_spin.setEnabled(not is_annulus)
+      if is_annulus:
+        generator_hint_label.setText(
+          "Annulus places targets in concentric rings and naturally leaves the center open."
+        )
+      elif mode == "hex":
+        generator_hint_label.setText(
+          "Hexagonal packing gives denser, more uniform coverage than a rectangular grid."
+        )
+      else:
+        generator_hint_label.setText(
+          "Rectangular grid covers the task region evenly while respecting the center exclusion zone."
+        )
+
+    preview = LayoutPreview(
+      draft_targets,
+      lambda: pending_generated_targets,
+      lambda: draft_cursor_radius,
+      lambda index: target_list.setCurrentRow(index),
+      refresh_editor,
+      dialog,
+    )
+    preview.setToolTip("Solid targets are in the draft. Dashed blue targets are generator previews.")
     dialog_layout.addWidget(preview, 1)
     dialog_layout.addWidget(side_panel)
 
@@ -611,6 +897,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         "hold_time": hold_spin.value(),
         "reward_channel": reward_channel_spin.value(),
       })
+      clear_generated_preview()
       refresh_editor()
 
     def choose_color() -> None:
@@ -621,6 +908,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       if not selected.isValid():
         return
       draft_targets[selected_index]["target_color"] = [selected.red(), selected.green(), selected.blue()]
+      clear_generated_preview()
       refresh_editor()
 
     name_edit.textEdited.connect(lambda _text: apply_field_changes())
@@ -631,7 +919,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     hold_spin.valueChanged.connect(lambda _value: apply_field_changes())
     reward_channel_spin.valueChanged.connect(lambda _value: apply_field_changes())
     color_button.clicked.connect(choose_color)
-    target_list.currentRowChanged.connect(select_index)
+    target_list.itemSelectionChanged.connect(update_selected_index_from_list)
 
     def on_cursor_radius_changed(value: float) -> None:
       nonlocal draft_cursor_radius
@@ -650,16 +938,105 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         new_target = make_default_target(len(draft_targets) + 1)
       draft_targets.append(new_target)
       selected_index = len(draft_targets) - 1
+      clear_generated_preview()
       refresh_editor()
 
     def remove_layout_target() -> None:
       nonlocal selected_index
-      if not (0 <= selected_index < len(draft_targets)):
+      selected_rows = sorted({index.row() for index in target_list.selectedIndexes()}, reverse=True)
+      if not selected_rows and 0 <= selected_index < len(draft_targets):
+        selected_rows = [selected_index]
+      if not selected_rows:
         return
-      del draft_targets[selected_index]
-      if not draft_targets:
-        draft_targets.append(make_default_target(1))
-      selected_index = min(selected_index, len(draft_targets) - 1)
+      for row in selected_rows:
+        if 0 <= row < len(draft_targets):
+          del draft_targets[row]
+      selected_index = min(selected_index, len(draft_targets) - 1) if draft_targets else -1
+      clear_generated_preview()
+      refresh_editor()
+
+    def clear_all_layout_targets() -> None:
+      nonlocal selected_index
+      draft_targets[:] = []
+      selected_index = -1
+      clear_generated_preview()
+      refresh_editor()
+
+    def make_generator_template() -> typing.Dict[str, typing.Any]:
+      if use_selected_style_box.isChecked() and 0 <= selected_index < len(draft_targets):
+        return normalize_target(draft_targets[selected_index])
+      if draft_targets:
+        return normalize_target(draft_targets[0])
+      return make_default_target(1)
+
+    def build_generated_targets() -> typing.List[typing.Dict[str, typing.Any]]:
+      mode = str(generator_mode_combo.currentData())
+      if mode == "annulus":
+        points = generate_annulus_points(
+          annulus_ring_count_spin.value(),
+          annulus_points_per_ring_spin.value(),
+          annulus_inner_radius_spin.value(),
+          annulus_outer_radius_spin.value(),
+          annulus_angle_offset_spin.value(),
+        )
+      elif mode == "hex":
+        points = generate_hexagonal_points(
+          grid_rows_spin.value(),
+          grid_columns_spin.value(),
+          grid_margin_spin.value(),
+          center_exclusion_spin.value(),
+        )
+      else:
+        points = generate_rectangular_grid_points(
+          grid_rows_spin.value(),
+          grid_columns_spin.value(),
+          grid_margin_spin.value(),
+          center_exclusion_spin.value(),
+        )
+
+      if not points:
+        return []
+
+      template_target = make_generator_template()
+      prefix = name_prefix_edit.text().strip() or "Target"
+      start_index = 1 if str(generator_operation_combo.currentData()) == "replace" else len(draft_targets) + 1
+      return [
+        make_target_from_template(template_target, start_index + i, x, y, prefix)
+        for i, (x, y) in enumerate(points)
+      ]
+
+    def preview_generated_targets() -> None:
+      nonlocal pending_generator_operation
+      generated_targets = build_generated_targets()
+      if not generated_targets:
+        QMessageBox.warning(
+          dialog,
+          "No Targets Generated",
+          "The current generator settings produced no valid targets. Adjust the margin or center exclusion values.",
+        )
+        return
+      pending_generated_targets[:] = generated_targets
+      pending_generator_operation = str(generator_operation_combo.currentData())
+      update_preview_buttons()
+      if preview is not None:
+        preview.update()
+
+    def clear_generated_preview() -> None:
+      pending_generated_targets.clear()
+      update_preview_buttons()
+      if preview is not None:
+        preview.update()
+
+    def apply_generated_preview() -> None:
+      nonlocal selected_index
+      if not pending_generated_targets:
+        return
+      if pending_generator_operation == "replace":
+        draft_targets[:] = [normalize_target(target) for target in pending_generated_targets]
+      else:
+        draft_targets.extend(normalize_target(target) for target in pending_generated_targets)
+      selected_index = len(draft_targets) - 1 if draft_targets else -1
+      clear_generated_preview()
       refresh_editor()
 
     def save_layout() -> None:
@@ -676,6 +1053,11 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
 
     add_button.clicked.connect(add_layout_target)
     remove_button.clicked.connect(remove_layout_target)
+    clear_all_button.clicked.connect(clear_all_layout_targets)
+    generator_mode_combo.currentIndexChanged.connect(lambda _index: update_generator_controls())
+    preview_generator_button.clicked.connect(preview_generated_targets)
+    apply_preview_button.clicked.connect(apply_generated_preview)
+    clear_preview_button.clicked.connect(clear_generated_preview)
     save_button.clicked.connect(save_layout)
     cancel_button.clicked.connect(dialog.reject)
 
@@ -691,6 +1073,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       slider.installEventFilter(no_wheel_filter)
 
     refresh_editor()
+    update_generator_controls()
+    update_preview_buttons()
     dialog.show()
     dialog.raise_()
     dialog.activateWindow()
@@ -787,6 +1171,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   controls_layout.setContentsMargins(0, 0, 0, 0)
   add_target_button = QPushButton("Add Target")
   remove_target_button = QPushButton("Remove Selected")
+  clear_targets_button = QPushButton("Clear All")
   edit_layout_button = QPushButton("Edit Layout...")
   bulk_field_combo = QComboBox()
   bulk_field_combo.addItems([
@@ -801,8 +1186,15 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   ])
   bulk_field_combo.setCurrentText("Radius")
   apply_to_all_button = QPushButton("Apply Field to All")
+  add_target_button.setToolTip("Add a new target. If a row is selected, the new target copies that row.")
+  remove_target_button.setToolTip("Remove all selected rows from the target table.")
+  clear_targets_button.setToolTip("Remove every target row from the table.")
+  edit_layout_button.setToolTip("Open the visual layout editor for dragging, previewing, and bulk generation.")
+  bulk_field_combo.setToolTip("Choose which field from the selected row should be copied to all targets.")
+  apply_to_all_button.setToolTip("Copy the chosen field from the selected row to every target.")
   controls_layout.addWidget(add_target_button)
   controls_layout.addWidget(remove_target_button)
+  controls_layout.addWidget(clear_targets_button)
   controls_layout.addWidget(edit_layout_button)
   controls_layout.addWidget(QLabel("Field:"))
   controls_layout.addWidget(bulk_field_combo)
@@ -835,10 +1227,11 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     for row in selected_rows:
       if 0 <= row < len(targets):
         del targets[row]
-    if not targets:
-      targets.append({
-        **make_default_target(1)
-      })
+    sync_table_from_config()
+
+  def clear_targets() -> None:
+    while targets:
+      del targets[len(targets) - 1]
     sync_table_from_config()
 
   def apply_selected_field_to_all() -> None:
@@ -894,6 +1287,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
 
   add_target_button.clicked.connect(add_target)
   remove_target_button.clicked.connect(remove_target)
+  clear_targets_button.clicked.connect(clear_targets)
   edit_layout_button.clicked.connect(open_layout_editor)
   apply_to_all_button.clicked.connect(apply_selected_field_to_all)
 

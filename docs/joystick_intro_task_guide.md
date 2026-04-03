@@ -31,6 +31,46 @@ The overlay shows:
 
 This overlay is not shown on the subject display.
 
+## Target Authoring Workflow
+
+Targets are still stored as rows in `task_config["targets"]`, and the existing table-based editing workflow is unchanged.
+
+The Target Layout Editor now supports two complementary ways of building layouts:
+
+- manual editing and dragging of individual targets
+- pattern-based generation for faster bulk placement
+
+The generator is meant to accelerate initial layout creation while preserving the current utility of the editor as a refinement tool.
+
+### Generator modes
+
+- `Annulus / Rings`
+  - creates concentric rings of targets around the task-region center
+  - useful for direct joystick control because it naturally keeps the center area clear
+- `Rectangular Grid`
+  - creates evenly spaced rows and columns across the task region
+  - supports a circular center exclusion zone so idle direct-control cursor position does not accidentally overlap a target
+- `Hexagonal Packing`
+  - creates staggered rows for denser and more uniform spatial coverage than a rectangular grid
+  - also supports the same circular center exclusion zone
+
+### Generator behaviors
+
+- `Append` adds generated targets to the current draft set
+- `Replace` discards the current draft set and replaces it with the generated targets
+- `Preview` shows generated targets as a temporary dashed overlay in the layout editor before they are committed
+- `Apply Preview` commits the current preview using the selected append or replace behavior
+- `Clear Preview` discards the current generator preview without changing the draft targets
+- `Use selected target style` copies radius, hold time, reward channel, enabled state, and color from the selected target when generating new targets
+- generated targets are still editable afterward through the same table fields and drag-based layout preview
+
+### Editing conveniences
+
+- most target editor controls now include hover tooltips describing what they change
+- the target list inside the layout editor supports multi-selection removal
+- the main target table also supports multi-selection removal
+- both interfaces now provide a `Clear All` action for deleting the full target set
+
 ## Two Kinds of Logging
 
 This task now records behavior at two levels:
