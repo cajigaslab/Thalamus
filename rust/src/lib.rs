@@ -339,7 +339,7 @@ impl SerialNodeInner {
           };
           this.api.ready();
           sleep = timer.sleep(Duration::from_millis(16));
-        }
+        },
         result = read => {
           match result {
             Err(err) => {
@@ -382,7 +382,7 @@ impl SerialNodeInner {
             }
           }
           read = port.read_until(&buffer, "\n");
-        }
+        },
       };
     }
   }

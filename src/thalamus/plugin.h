@@ -147,6 +147,7 @@ extern "C" {
     void (*destroy)(struct ThalamusNodeFactory*, struct ThalamusNode*);
     char (*prepare)(struct ThalamusNodeFactory*);
     void (*cleanup)(struct ThalamusNodeFactory*);
+    void* plugin_impl;
   };
 
   struct ThalamusTimer;
@@ -157,7 +158,7 @@ extern "C" {
   struct ThalamusSerialPort;
   struct ThalamusStreamBuf;
 
-  typedef void (*ThalamusIOCallback)(ThalamusErrorCode*, size_t, void* data);
+  typedef void (*ThalamusIOCallback)(struct ThalamusErrorCode*, size_t, void* data);
 
   struct ThalamusAPI {
     char (*state_is_dict)(struct ThalamusState*);
@@ -216,32 +217,32 @@ extern "C" {
 
     void (*trace_event_end)();
 
-    ThalamusSerialPort* (*serial_port_create)();
+    struct ThalamusSerialPort* (*serial_port_create)();
 
-    void (*serial_port_destroy)(ThalamusSerialPort*);
+    void (*serial_port_destroy)(struct ThalamusSerialPort*);
 
-    void (*serial_set_baud_rate)(ThalamusSerialPort*, uint32_t);
+    void (*serial_set_baud_rate)(struct ThalamusSerialPort*, uint32_t);
 
-    void (*serial_port_open)(ThalamusSerialPort*, const char*);
+    void (*serial_port_open)(struct ThalamusSerialPort*, const char*);
 
-    ThalamusErrorCode* (*serial_port_error)(ThalamusSerialPort*);
+    struct ThalamusErrorCode* (*serial_port_error)(struct ThalamusSerialPort*);
 
-    void (*serial_port_read_until)(ThalamusSerialPort* port, ThalamusStreamBuf* buffer, char* delimiter, size_t delimiter_len, ThalamusIOCallback callback, void* data);
+    void (*serial_port_read_until)(struct ThalamusSerialPort* port, struct ThalamusStreamBuf* buffer, char* delimiter, size_t delimiter_len, ThalamusIOCallback callback, void* data);
     
-    void (*serial_port_read_some)(ThalamusSerialPort* port, struct ThalamusByteSpan* span, ThalamusIOCallback callback, void* data);
+    void (*serial_port_read_some)(struct ThalamusSerialPort* port, struct ThalamusByteSpan* span, ThalamusIOCallback callback, void* data);
 
-    void (*serial_port_read)(ThalamusSerialPort* port, struct ThalamusByteSpan* span, ThalamusIOCallback callback, void* data);
+    void (*serial_port_read)(struct ThalamusSerialPort* port, struct ThalamusByteSpan* span, ThalamusIOCallback callback, void* data);
 
-    void (*serial_port_write)(ThalamusSerialPort* port, struct ThalamusByteSpan* span, ThalamusIOCallback callback, void* data);
+    void (*serial_port_write)(struct ThalamusSerialPort* port, struct ThalamusByteSpan* span, ThalamusIOCallback callback, void* data);
 
-    ThalamusStreamBuf* (*streambuf_create)();
-    void (*streambuf_destroy)(ThalamusStreamBuf* port);
-    void (*streambuf_to_span)(struct ThalamusCharSpan*, ThalamusStreamBuf* buffer);
-    void (*streambuf_consume)(ThalamusStreamBuf* buffer, size_t count);
-    size_t (*streambuf_size)(ThalamusStreamBuf* buffer);
-    void (*charspan_destroy)(ThalamusCharSpan* span);
+    struct ThalamusStreamBuf* (*streambuf_create)();
+    void (*streambuf_destroy)(struct ThalamusStreamBuf* port);
+    void (*streambuf_to_span)(struct ThalamusCharSpan*, struct ThalamusStreamBuf* buffer);
+    void (*streambuf_consume)(struct ThalamusStreamBuf* buffer, size_t count);
+    size_t (*streambuf_size)(struct ThalamusStreamBuf* buffer);
+    void (*charspan_destroy)(struct ThalamusCharSpan* span);
 
-    void (*error_code_message)(struct ThalamusCharSpan* result, ThalamusErrorCode *error);
+    void (*error_code_message)(struct ThalamusCharSpan* result, struct ThalamusErrorCode *error);
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories)(struct ThalamusAPI*);

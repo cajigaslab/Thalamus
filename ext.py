@@ -20,7 +20,8 @@ def widgets():
 def library():
   #return [pathlib.Path.cwd() / 'ext.dll', pathlib.Path.cwd() / 'ext2.dll']
   if platform.system() == 'Windows':
-    return pathlib.Path.cwd() / 'rust/target/debug/thalamus_rs.dll'
+    #return pathlib.Path.cwd() / 'rust/target/debug/thalamus_rs.dll'
+    return pathlib.Path.cwd() / 'go/thalamus_go.dll'
   else:
     return pathlib.Path.cwd() / 'rust/target/debug/libthalamus_rs.so'
 
