@@ -20,7 +20,9 @@ PERFETTO_DEFINE_CATEGORIES(
     perfetto::Category("storage")
         .SetDescription("Storage node events"),
     perfetto::Category("nidaq")
-        .SetDescription("NIDAQ node events"));
+        .SetDescription("NIDAQ node events"),
+    perfetto::Category("plugin")
+        .SetDescription("Thalamus plugin"));
 #endif
 
 namespace thalamus {

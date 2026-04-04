@@ -11,17 +11,17 @@ def widgets():
       UserData(UserDataType.DOUBLE_SPINBOX, 'Amplitude', 1.0, []),
       UserData(UserDataType.DOUBLE_SPINBOX, 'Frequency', 1.0, []),
     ]),
-    'EXT2_DEMO': Factory(None, [
+    'EXT_SERIAL': Factory(None, [
       UserData(UserDataType.CHECK_BOX, 'Running', False, []),
-      UserData(UserDataType.DOUBLE_SPINBOX, 'Amplitude', 1.0, []),
-      UserData(UserDataType.DOUBLE_SPINBOX, 'Frequency', 1.0, []),
+      UserData(UserDataType.OPEN_FILE, 'Port', '', []),
     ])
   }
 
 def library():
   #return [pathlib.Path.cwd() / 'ext.dll', pathlib.Path.cwd() / 'ext2.dll']
   if platform.system() == 'Windows':
-    return pathlib.Path.cwd() / 'rust/target/debug/thalamus_rs.dll'
+    #return pathlib.Path.cwd() / 'rust/target/debug/thalamus_rs.dll'
+    return pathlib.Path.cwd() / 'go/thalamus_go.dll'
   else:
     return pathlib.Path.cwd() / 'rust/target/debug/libthalamus_rs.so'
 
