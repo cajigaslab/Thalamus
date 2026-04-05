@@ -1,5 +1,6 @@
+use std::ops::Deref;
+use std::rc::{Rc, Weak};
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::{Arc};
 use std::thread::{self, JoinHandle, sleep};
 use std::{cell::RefCell, ptr};
 use std::time::{Duration};
@@ -11,15 +12,17 @@ use api::{
   ThalamusNode,
   State,
   OnDrop,
-  ThalamusAPI,
+  ThalamusAPIRaw,
   Node,
   AnalogNode,
   WrappableNode,
   ThalamusNodeFactory,
   StateValue
 };
+use futures::select;
+//use regex::Regex;
 
-use crate::api::{Clock, Sleeper, SleeperWaker, StateKey, run_task};
+use crate::api::{Sleeper, SleeperWaker, SliceDeref, StateKey, TaskScope, ThalamusAPI, run_task};
 
 enum Message {
   Running(bool),
@@ -29,49 +32,52 @@ enum Message {
   Time(Duration)
 }
 
-struct DemoNode {
+struct DemoNodeInner {
   state: State,
-  state_connection: Option<OnDrop>,
-  thread: Option<JoinHandle<()>>,
-  node: *const ThalamusNode,
-  api: *const ThalamusAPI,
-  running: bool,
-  frequency: f64,
-  amplitude: f64,
-  samples: Vec<f64>,
+  state_connection: RefCell<Option<OnDrop>>,
+  thread: RefCell<Option<JoinHandle<()>>>,
+  api: ThalamusAPI,
+  frequency: RefCell<f64>,
+  amplitude: RefCell<f64>,
+  samples: RefCell<Vec<f64>>,
   sleeper: Sleeper,
-  input: Option<Receiver<Message>>,
-  output: Option<Sender<Message>>,
-  time: Duration,
+  input: RefCell<Option<Receiver<Message>>>,
+  output: RefCell<Option<Sender<Message>>>,
+  time: RefCell<Duration>,
+  task: RefCell<Option<TaskScope>>
+}
+
+struct DemoNode {
+  inner: Rc<DemoNodeInner>
 }
 
 impl AnalogNode for DemoNode {
   fn data(
           &self,
           _channel: i32,
-      ) -> &[f64] {
-    &self.samples
+      ) -> impl Deref<Target = [f64]> {
+    SliceDeref::new(self.inner.samples.borrow(), None, None)
   }
 
   fn num_channels(&self) -> i32 { 1 }
   fn sample_interval(&self, _channel: i32) -> Duration {
     Duration::from_millis(1)
   }
-  fn name<'a>(
+  fn name(
           &self,
           _channel: i32,
-      ) -> &'a str {
+      ) -> &str {
         "data"
       }
 }
 
-fn gen_signal(input: mpsc::Receiver<Message>, output: mpsc::Sender<Message>, waker: SleeperWaker, clock: Clock) {
+fn gen_signal(input: mpsc::Receiver<Message>, output: mpsc::Sender<Message>, waker: SleeperWaker, api: ThalamusAPI) {
   let mut running = true;
   let mut amplitude_opt = None;
   let mut frequency_opt = None;
   let mut samples_opt = None;
 
-  let mut last = clock.now();
+  let mut last = api.time();
   let start = last;
   let mut now = last;
   let interval = Duration::from_millis(16);
@@ -100,7 +106,7 @@ fn gen_signal(input: mpsc::Receiver<Message>, output: mpsc::Sender<Message>, wak
       Ok(Message::Time(_)) => { }
       Err(_) => {}
     }
-    now = clock.now();
+    now = api.time();
 
     let Some(amplitude) = amplitude_opt.as_ref() else {
       continue
@@ -126,13 +132,13 @@ fn gen_signal(input: mpsc::Receiver<Message>, output: mpsc::Sender<Message>, wak
 
     if now < last {
       sleep(last - now);
-      now = clock.now();
+      now = api.time();
     }
   }
 }
 
-impl DemoNode {
-  fn on_change(&mut self, _source: &State, _action: i32, key: StateValue, value: StateValue) {
+impl DemoNodeInner {
+  fn on_change(&self, _source: &State, _action: i32, key: StateValue, value: StateValue) {
     println!("DemoNode::on_change {:?} {:?}", key, value);
     let StateValue::String(key_str) = key else {
       return
@@ -141,35 +147,31 @@ impl DemoNode {
     match key_str.as_str() {
       "Running" => {
         if StateValue::Bool(true) == value {
-          self.running = true;
-
           let (self_output, gen_input) = mpsc::channel::<Message>();
           let (gen_output, self_input) = mpsc::channel::<Message>();
 
           let waker = self.sleeper.waker();
-          let clock = Clock::new(self.api);
-          self.thread = Some(thread::Builder::new()
-                               .name("gen_signal".into())
-                               .spawn(move || gen_signal(gen_input, gen_output, waker, clock)).expect("Failed to spawn thread"));
-          self_output.send(Message::Amplitude(self.amplitude)).unwrap();
-          self_output.send(Message::Frequency(self.frequency)).unwrap();
-          self_output.send(Message::Samples(std::mem::take(&mut self.samples))).unwrap();
-          self.samples = Vec::new();
+          let api = self.api;
+          *self.thread.borrow_mut() = Some(thread::Builder::new()
+                                             .name("gen_signal".into())
+                                             .spawn(move || gen_signal(gen_input, gen_output, waker, api)).expect("Failed to spawn thread"));
+          self_output.send(Message::Amplitude(*self.amplitude.borrow())).unwrap();
+          self_output.send(Message::Frequency(*self.frequency.borrow())).unwrap();
+          self_output.send(Message::Samples(std::mem::take(&mut *self.samples.borrow_mut()))).unwrap();
 
-          self.input = Some(self_input);
-          self.output = Some(self_output);
+          *self.input.borrow_mut() = Some(self_input);
+          *self.output.borrow_mut() = Some(self_output);
         } else if let Some(thread) = self.thread.take() {
-          self.output.as_ref().map(|o| o.send(Message::Running(false)).unwrap());
+          self.output.borrow().as_ref().map(|o| o.send(Message::Running(false)).unwrap());
           thread.join().expect("Thread join failed");
-          self.running = false;
         }
       },
       "Amplitude" => {
         let StateValue::Float(val) = value else {
           return
         };
-        self.amplitude = val;
-        if let Some(out) = &self.output {
+        *self.amplitude.borrow_mut() = val;
+        if let Some(out) = &*self.output.borrow() {
           out.send(Message::Amplitude(val)).expect("Send Amplitude failed");
         }
       },
@@ -177,8 +179,8 @@ impl DemoNode {
         let StateValue::Float(val) = value else {
           return
         };
-        self.frequency = val;
-        if let Some(out) = &self.output {
+        *self.frequency.borrow_mut() = val;
+        if let Some(out) = &*self.output.borrow() {
           out.send(Message::Frequency(val)).expect("Send Frequency failed");
         }
       },
@@ -187,68 +189,56 @@ impl DemoNode {
   }
 }
 
+impl DemoNode {
+}
+
 #[allow(non_snake_case)]
 fn RUNNING() -> StateKey {
   StateKey::String("Running".to_owned())
 }
 
 impl Node for DemoNode {
-  fn api(&self) -> *const ThalamusAPI {
-    return self.api
-  }
-  fn base(&self) -> *const ThalamusNode {
-    return self.node
-  }
   fn time(&self) -> Duration {
-    self.time
+    *self.inner.time.borrow()
   }
 
-  fn new(base: *const ThalamusNode, api: *const ThalamusAPI, state: State) -> Arc<RefCell<Self>> {
-    if let StateValue::Bool(b) = state.get(RUNNING()) {
-      println!("Running {}", b);
-    }
-
-    let result = Arc::new(RefCell::new(DemoNode {
-      thread: None,
+  fn new(api: ThalamusAPI, state: State) -> Self {
+    let inner = Rc::new(DemoNodeInner {
+      thread: RefCell::new(None),
       state: state.clone(),
-      state_connection: None,
+      state_connection: RefCell::new(None),
       sleeper: Sleeper::new(api),
-      input: None,
-      output: None,
-      running: false,
-      frequency: 0.0,
-      amplitude: 0.0,
-      samples: Vec::<f64>::new(),
-      time: Duration::from_millis(0),
-      node: base,
-      api
-    }));
+      input: RefCell::new(None),
+      output: RefCell::new(None),
+      frequency: RefCell::new(0.0),
+      amplitude: RefCell::new(0.0),
+      samples: RefCell::new(Vec::new()),
+      time: RefCell::new(Duration::from_millis(0)),
+      api,
+      task: RefCell::new(None)
+    });
 
-    if let StateValue::Bool(d) = state.get(RUNNING()) {
-      println!("Running2 {}", d);
-    }
-
-    let change_ref = Arc::downgrade(&result);
+    let change_ref = Rc::downgrade(&inner);
     let callback = move |source: &State, action: i32, key: StateValue, value: StateValue| {
       change_ref.upgrade().map(|val| {
-        val.borrow_mut().on_change(source, action, key, value);
+        val.on_change(source, action, key, value);
       });
     };
     {
-      let mut temp = result.borrow_mut();
-      temp.state_connection = Some(temp.state.connect(callback));
+      let mut temp = inner.state_connection.borrow_mut();
+      *temp = Some(inner.state.connect(callback));
     }
     state.recap();
  
     {
-      let loop_ref= Arc::downgrade(&result);
-      run_task(async move {
+      let loop_ref= Rc::downgrade(&inner);
+      *inner.task.borrow_mut() = Some(run_task(async move {
         loop {
           let sleep_future = {
             let Some(lock_ref) = loop_ref.upgrade() else {
               break
             };
-            lock_ref.borrow_mut().sleeper.wait()
+            lock_ref.sleeper.wait()
           };
           if !sleep_future.await {
             break
@@ -258,55 +248,246 @@ impl Node for DemoNode {
           };
           
           let message = {
-            let this = lock_ref.borrow();
-            let input = this.input.as_ref().unwrap();
-            input.recv().unwrap()
+            lock_ref.input.borrow().as_ref().unwrap().recv().unwrap()
           };
           match message {
             Message::Samples(mut val) => {
               {
-                let mut this = lock_ref.borrow_mut();
-                std::mem::swap(&mut val, &mut this.samples);
+                let mut samples = lock_ref.samples.borrow_mut();
+                std::mem::swap(&mut val, &mut *samples);
               }
-              lock_ref.borrow().ready();
+              api.ready();
               {
-                let mut this = lock_ref.borrow_mut();
-                std::mem::swap(&mut val, &mut this.samples);
+                let mut samples = lock_ref.samples.borrow_mut();
+                std::mem::swap(&mut val, &mut *samples);
               }
               {
-                let this = lock_ref.borrow();
-                let output = this.output.as_ref().unwrap();
-                output.send(Message::Samples(val)).unwrap();
+                lock_ref.output.borrow().as_ref().unwrap().send(Message::Samples(val)).unwrap();
               }
             },
             Message::Time(val) => {
-              let mut this = lock_ref.borrow_mut();
-              this.time = val;
+              let mut time = lock_ref.time.borrow_mut();
+              *time = val;
             },
             _ => {}
-          }
+          };
         }
-      });
+      }));
     }
 
-    result
+    DemoNode { inner }
   }
 }
 
 impl Drop for DemoNode {
   fn drop(&mut self) {
-    if let StateValue::Bool(d) = self.state.get(RUNNING()) {
+    if let StateValue::Bool(d) = self.inner.state.get(RUNNING()) {
       println!("Running3 {}", d);
     }
-    self.state.set(RUNNING(), StateValue::Bool(false));
-    if let Some(thread) = self.thread.take() {
-      self.output.as_ref().map(|o| o.send(Message::Running(false)).unwrap());
+    self.inner.state.set(RUNNING(), StateValue::Bool(false));
+    if let Some(thread) = self.inner.thread.take() {
+      self.inner.output.borrow().as_ref().map(|o| o.send(Message::Running(false)).unwrap());
       thread.join().expect("Thread join failed");
     }
     println!("DemoNode drop");
   }
 }
 
+struct SerialNodeInner {
+  state: State,
+  state_connection: RefCell<Option<OnDrop>>,
+  api: ThalamusAPI,
+  samples: RefCell<Vec<f64>>,
+  time: RefCell<Duration>,
+  port: RefCell<String>,
+  task: RefCell<Option<TaskScope>>
+}
+
+impl SerialNodeInner {
+  async fn serial_loop(this_weak: Weak<Self>) {
+    let (port, buffer, timer) = {
+      let Some(this) = this_weak.upgrade() else {
+        return;
+      };
+
+      let mut samples = this.samples.borrow_mut();
+      samples.clear();
+      samples.push(0.0);
+      samples.push(0.0);
+
+      let port = this.api.create_serial_port();
+      port.open(&this.port.borrow()).map_err(|e| { panic!("SERIAL ERROR: {}", e.message) } );
+      port.set_baud_rate(115200).map_err(|e| { panic!("SERIAL ERROR: {}", e.message) } );
+
+      let buffer = this.api.create_streambuf();
+
+      let timer = this.api.create_timer();
+      (port, buffer, timer)
+    };
+
+    //let re = Regex::new(r"(x\s*=\s*(\d+)\s*,\s*y\s*=\s*(\d+))").unwrap();
+
+    let mut sleep = timer.sleep(Duration::from_millis(16));
+    let mut read = port.read_until(&buffer, "\n");
+
+    loop {
+      println!("Read");
+      select! {
+        _ = sleep => {
+          let Some(this) = this_weak.upgrade() else {
+            return;
+          };
+          this.api.ready();
+          sleep = timer.sleep(Duration::from_millis(16));
+        },
+        result = read => {
+          match result {
+            Err(err) => {
+              println!("Err {}", err.message);
+              if err.aborted() {
+                return;
+              }
+              panic!("SERIAL ERROR: {}", err.message);
+            },
+            Ok(count) => {
+              println!("Ok {}", count);
+              let line = buffer.to_string();
+              buffer.consume(buffer.size());
+
+              
+              println!("{}", line);
+              let parts = line.trim().split(",");
+              let numbers: Vec<f64> = parts
+                  .map(|t| t.parse::<f64>())
+                  .filter(|p| p.is_ok())
+                  .map(|p| p.unwrap())
+                  .collect();
+              println!("numbers {:?}", numbers);
+
+              let Some(this) = this_weak.upgrade() else {
+                return;
+              };
+
+              if numbers.len() == 2 {
+                let mut samples = this.samples.borrow_mut();
+                samples.clear();
+                samples.push(numbers[0]);
+                samples.push(numbers[1]);
+              }
+              {
+                let samples = this.samples.borrow();
+                println!("samples {:?}", samples);
+              }
+              this.api.ready();
+            }
+          }
+          read = port.read_until(&buffer, "\n");
+        },
+      };
+    }
+  }
+
+  fn on_change(self: Rc<Self>, _source: &State, _action: i32, key: StateValue, value: StateValue) {
+    println!("DemoNode::on_change {:?} {:?}", key, value);
+    let StateValue::String(key_str) = key else {
+      return
+    };
+
+    match key_str.as_str() {
+      "Running" => {
+        if StateValue::Bool(true) == value {
+          let clone = Rc::downgrade(&self);
+          *self.task.borrow_mut() = Some(run_task(async move {
+            SerialNodeInner::serial_loop(clone).await;
+          }));
+        } else {
+          *self.task.borrow_mut() = None
+        }
+      },
+      "Port" => {
+        let StateValue::String(val) = value else {
+          return
+        };
+        *self.port.borrow_mut() = val;
+      },
+      _ => {}
+    }
+  }
+}
+
+struct SerialNode {
+  inner: Rc<SerialNodeInner>
+}
+
+impl AnalogNode for SerialNode {
+  fn data(
+          &self,
+          _channel: i32,
+      ) -> impl Deref<Target = [f64]> {
+    
+      match _channel {
+          0 => SliceDeref::new(self.inner.samples.borrow(), Some(0), Some(1)),
+          1 => SliceDeref::new(self.inner.samples.borrow(), Some(1), Some(2)),
+          _ => SliceDeref::new(self.inner.samples.borrow(), Some(0), Some(0))
+      }
+  }
+
+  fn num_channels(&self) -> i32 { 2 }
+  fn sample_interval(&self, _channel: i32) -> Duration {
+    Duration::from_millis(16)
+  }
+  fn name(
+          &self,
+          _channel: i32,
+      ) -> &str {
+      match _channel {
+          0 => "ch1",
+          1 => "ch2",
+          _ => "err"
+      }
+  }
+}
+
+impl Node for SerialNode {
+  fn time(&self) -> Duration {
+    *self.inner.time.borrow()
+  }
+
+  fn new(api: ThalamusAPI, state: State) -> Self {
+    let inner = Rc::new(SerialNodeInner {
+      state: state.clone(),
+      state_connection: RefCell::new(None),
+      api,
+      samples: RefCell::new(Vec::<f64>::new()),
+      time: RefCell::new(Duration::from_millis(0)),
+      port: RefCell::new("".to_string()),
+      task: RefCell::new(None)
+    });
+
+    let change_ref = Rc::downgrade(&inner);
+    let callback = move |source: &State, action: i32, key: StateValue, value: StateValue| {
+      change_ref.upgrade().map(|val| {
+        val.on_change(source, action, key, value);
+      });
+    };
+    {
+      let mut temp = inner.state_connection.borrow_mut();
+      *temp = Some(inner.state.connect(callback));
+    }
+    state.recap();
+
+    SerialNode { inner }
+  }
+}
+
+impl Drop for SerialNode {
+  fn drop(&mut self) {
+    println!("SerialNode.drop");
+    //self.inner.task.borrow_mut().take().map(|t| { drop(t) });
+  }
+}
+
 export_nodes!(
-  ("EXT_DEMO", DemoNode)
+  ("EXT_DEMO", DemoNode),
+  ("EXT_SERIAL", SerialNode)
 );

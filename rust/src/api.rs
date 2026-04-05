@@ -1,104 +1,22 @@
 
-use std::cell::RefCell;
+use core::slice;
 use std::collections::VecDeque;
+use std::ops::Deref;
 use std::pin::Pin;
+use std::ptr::null;
 use std::rc::Rc;
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::task::{Context, Poll, Waker};
 use std::{os::raw::c_void, sync::OnceLock};
 use std::time::Duration;
 use std::ffi::{CStr, CString};
 
+use futures::future::FusedFuture;
+
 pub use crate::ffi::{
   *
 };
 use crate::wakers::{self, RcWake};
-
-//pub mod mpsc {
-//  use std::{collections::VecDeque, sync::{Arc, Mutex}, task::Waker};
-//  use crate::api::ThalamusAPI;
-//
-//  struct Shared<T> {
-//    msg: VecDeque<T>,
-//    pending: VecDeque<Arc<Mutex<PendingReceive<T>>>>
-//  }
-//
-//  struct Sender<T> {
-//    shared: Arc<Mutex<Shared<T>>>
-//  }
-//
-//  struct Receiver<T> {
-//    shared: Arc<Mutex<Shared<T>>>
-//  }
-//
-//  struct PendingReceive<T> {
-//    val: Option<T>,
-//    waker: Option<Waker>
-//  }
-//
-//  struct ReceiveFuture<T> {
-//    val: Arc<Mutex<PendingReceive<T>>>
-//  }
-//
-//  impl<T> Sender<T> {
-//    pub fn send(&self, arg: T) {
-//      let mut shared = self.shared.lock().unwrap();
-//      match shared.pending.pop_front() {
-//        Some(waiter) => {
-//          let mut locked = waiter.lock().unwrap();
-//          locked.val = Some(arg);
-//          locked.waker.take().map(|w|w.wake());
-//        }
-//        None => {
-//          shared.msg.push_back(arg);
-//        }
-//      }
-//    }
-//  }
-//
-//  impl<T> Receiver<T> {
-//    pub fn recv(&self) -> ReceiveFuture<T> {
-//      let mut shared = self.shared.lock().unwrap();
-//      match shared.msg.pop_front() {
-//        Some(val) => {
-//          ReceiveFuture { val: Arc::new(Mutex::new(PendingReceive { val: Some(val), waker: None })) }
-//        }
-//        None => {
-//          let temp = Arc::new(Mutex::new(PendingReceive { val: None, waker: None }));
-//          shared.pending.push_back(temp.clone());
-//          ReceiveFuture { val: temp }
-//        }
-//      }
-//    }
-//  }
-//
-//  impl<T> Future for ReceiveFuture<T> {
-//    type Output = T;
-//
-//    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
-//      let mut val = self.val.lock().unwrap();
-//      if let Some(v) = val.val.take() {
-//        std::task::Poll::Ready(v)
-//      } else {
-//        val.waker = Some(cx.waker().clone());
-//        std::task::Poll::Pending
-//      }
-//    }
-//  }
-//
-//  pub fn channel<T>(api: *const ThalamusAPI) -> (Arc<Sender<T>>, Arc<Receiver<T>>) {
-//    let shared = Arc::new(
-//      Mutex::new(Shared {
-//        msg: VecDeque::<T>::new(), 
-//        pending: VecDeque::<PendingReceive<T>>::new()
-//      }
-//    ));
-//
-//    let receiver = Arc::new(Receiver::<T> {api, msg: VecDeque::<T>::new(), pending: VecDeque::<PendingReceive>::new()});
-//    
-//    (Arc::new(Sender::<T> {api, msg: Vec::<T>::new(), receiver: Arc::into_raw(Arc::clone(&receiver))}), receiver)
-//  }
-//}
 
 struct PostArgs<T> {
   call: T
@@ -112,55 +30,92 @@ unsafe extern "C" fn post_callback<T: FnMut()>(data: *mut ::std::os::raw::c_void
   (args.call)();
 }
 
-pub fn post<T: FnMut()>(api_raw: *const ThalamusAPI, call: T) {
-  unsafe {
-    let api = &*api_raw;
-    let call_ptr = Box::into_raw(Box::new(PostArgs {
-      call
-    }));
-    let void_ptr = call_ptr as *mut std::os::raw::c_void;
-    (api.io_context_post)(Some(post_callback::<T>), void_ptr);
-
-    //let call_ref =  &*call_ptr;
-    //let mut done = call_ref.mutex.lock().unwrap();
-    //while !*done {
-    //  done = call_ref.cond.wait(done).unwrap();
-    //}
-    //
-    //drop(Box::from_raw(call_ptr));
-  }
+#[derive(Debug,PartialEq,Copy,Clone)]
+pub struct ThalamusAPI {
+  pub raw: *mut ThalamusAPIRaw,
+  pub node: *mut ThalamusNode
 }
+unsafe impl Send for ThalamusAPI {}
 
-struct ThalamusApiPointer {
-  api: *const ThalamusAPI
-}
-unsafe impl Send for ThalamusApiPointer {}
-
-pub struct Clock {
-  api: ThalamusApiPointer
-}
-
-impl Clock {
-  pub fn new(api: *const ThalamusAPI) -> Clock {
-    Clock { api: ThalamusApiPointer { api }}
+impl ThalamusAPI {
+  pub fn time(&self) -> Duration {
+    unsafe {
+      let time_ns = (&*self.raw).time_ns;
+      return Duration::from_nanos(time_ns());
+    }
   }
 
-  pub fn now(&self) -> Duration {
-    time(self.api.api)
+  pub fn ready(&self) {
+    unsafe {
+      let node_ready = (&*self.raw).node_ready;
+      node_ready(self.node);
+    }
   }
+
+  pub fn post<T: FnMut() + 'static>(&self, call: T) {
+    unsafe {
+      let api = &*self.raw;
+      let call_ptr = Box::into_raw(Box::new(PostArgs {
+        call
+      }));
+      let void_ptr = call_ptr as *mut std::os::raw::c_void;
+      (api.io_context_post)(Some(post_callback::<T>), void_ptr);
+
+      //let call_ref =  &*call_ptr;
+      //let mut done = call_ref.mutex.lock().unwrap();
+      //while !*done {
+      //  done = call_ref.cond.wait(done).unwrap();
+      //}
+      //
+      //drop(Box::from_raw(call_ptr));
+    }
+  }
+
+  pub fn create_serial_port(&self) -> SerialPort {
+    unsafe {
+      let api = &*self.raw;
+      let port = (api.serial_port_create)();
+      SerialPort {
+        api: *self, port
+      }
+    }
+  }
+
+  pub fn create_streambuf(&self) -> StreamBuf {
+    unsafe {
+      let api = &*self.raw;
+      let buffer = (api.streambuf_create)();
+      StreamBuf {
+        api: *self, buffer
+      }
+    }
+  }
+
+  
+  pub fn create_timer(&self) -> Timer {
+    unsafe {
+      let timer = ((&(*self.raw)).timer_create)();
+      println!("new timer {:?} {:?}", self, timer);
+      Timer {
+        api: *self, timer
+      }
+    }
+  }
+
 }
 
 struct SleeperState {
-  api: ThalamusApiPointer,
   wakes: i32,
   futures: VecDeque<Arc<Mutex<SleeperFutureState>>>
 }
 
 pub struct Sleeper {
+  api: ThalamusAPI,
   state: Arc<Mutex<SleeperState>>
 }
 
 pub struct SleeperWaker {
+  api: ThalamusAPI,
   state: Arc<Mutex<SleeperState>>
 }
 
@@ -203,10 +158,10 @@ impl Future for SleeperFuture {
 
 impl SleeperWaker {
   pub fn wake_impl(&self, immediate: bool) {
-    let api = self.state.lock().unwrap().api.api;
+    let state = self.state.clone();
     let closure = move || { 
       let future = {
-        let mut lock = self.state.lock().unwrap();
+        let mut lock = state.lock().unwrap();
         if lock.wakes >= 0 {
           lock.wakes += 1;
         }
@@ -220,7 +175,7 @@ impl SleeperWaker {
     if immediate {
       closure();
     } else {
-      post(api, closure);
+      self.api.post(closure);
     }
   }
 
@@ -230,12 +185,12 @@ impl SleeperWaker {
 }
 
 impl Sleeper {
-  pub fn new(api:*const ThalamusAPI) -> Sleeper {
-    Sleeper { state: Arc::new(Mutex::new( SleeperState { wakes: 0, api: ThalamusApiPointer { api }, futures: VecDeque::<Arc<Mutex<SleeperFutureState>>>::new() }))}
+  pub fn new(api: ThalamusAPI) -> Sleeper {
+    Sleeper { api, state: Arc::new(Mutex::new( SleeperState { wakes: 0, futures: VecDeque::<Arc<Mutex<SleeperFutureState>>>::new() }))}
   }
 
   pub fn waker(&self) -> SleeperWaker {
-    SleeperWaker { state: self.state.clone() }
+    SleeperWaker { api: self.api, state: self.state.clone() }
   }
 
   pub fn wait(&self) -> SleeperFuture {
@@ -260,16 +215,215 @@ impl Drop for Sleeper {
   }
 }
 
+struct IOArgs<T> {
+  api: ThalamusAPI,
+  callback: T
+}
+
+unsafe extern "C" fn io_callback<T: FnMut(ErrorCode, usize)>(error: *mut ThalamusErrorCode, length: usize, data: *mut ::std::os::raw::c_void) {
+  let mut args = unsafe {
+    let raw_args = &mut*(data as *mut IOArgs<T>);
+    Box::from_raw(raw_args)
+  };
+  let error_code = ErrorCode::new(args.api, error);
+  
+  (args.callback)(error_code, length);
+}
+
+pub struct StreamBuf {
+  api: ThalamusAPI,
+  buffer: *mut ThalamusStreamBuf
+}
+
+impl Drop for StreamBuf {
+  fn drop(&mut self) {
+    unsafe {
+      let api = &*self.api.raw;
+      (api.streambuf_destroy)(self.buffer);
+    }
+  }
+}
+
+impl StreamBuf {
+  pub fn to_string(&self) -> String {
+    unsafe {
+      let api = &*self.api.raw;
+      let mut span = ThalamusCharSpan { data: null(), size: 0, owns_data: 0};
+      (api.streambuf_to_span)(&mut span as *mut ThalamusCharSpan, self.buffer);
+      let slice = slice::from_raw_parts(span.data as *mut u8, span.size);
+      let text = str::from_utf8(slice).unwrap();
+      let result = text.to_string();
+      (api.charspan_destroy)(&mut span as *mut ThalamusCharSpan);
+      result
+    }
+  }
+
+  pub fn consume(&self, count: usize) {
+    unsafe {
+      let api = &*self.api.raw;
+      (api.streambuf_consume)(self.buffer, count);
+    }
+  }
+
+  pub fn size(&self) -> usize {
+    unsafe {
+      let api = &*self.api.raw;
+      (api.streambuf_size)(self.buffer)
+    }
+  }
+}
+
+pub struct SerialPort {
+  api: ThalamusAPI,
+  port: *mut ThalamusSerialPort
+}
+
+impl SerialPort {
+  pub fn error(&self) -> Option<ErrorCode> {
+    unsafe {
+      let api = &*self.api.raw;
+      let error = (api.serial_port_error)(self.port);
+      let error_code = ErrorCode::new(self.api, error);
+      if error_code.code == 0 {
+        None
+      } else {
+        Some(error_code)
+      }
+    }
+  }
+  pub fn open(&self, name: &str) -> Result<(), ErrorCode> {
+    unsafe {
+      let api = &*self.api.raw;
+      let c_str= CString::new(name).unwrap();
+      (api.serial_port_open)(self.port, c_str.as_ptr());
+      match self.error() {
+        None => Ok(()),
+        Some(error) => Err(error)
+      }
+    }
+  }
+  pub fn set_baud_rate(&self, rate: u32) -> Result<(), ErrorCode> {
+    unsafe {
+      let api = &*self.api.raw;
+      (api.serial_set_baud_rate)(self.port, rate);
+      match self.error() {
+        None => Ok(()),
+        Some(error) => Err(error)
+      }
+    }
+  }
+
+  pub fn write_callback<T: FnMut(ErrorCode, usize)>(&self, data: &[u8], callback: T) {
+    unsafe {
+      let api = &*self.api.raw;
+      let boxed = Box::new(IOArgs {
+        api: self.api,
+        callback
+      });
+      let args = Box::into_raw(boxed)  as *mut std::os::raw::c_void;
+      let mut span = ThalamusByteSpan { data: data.as_ptr(), size: data.len() };
+      (api.serial_port_write)(self.port, &mut span as *mut ThalamusByteSpan, Some(io_callback::<T>), args);
+    }
+  }
+  pub fn write(&self, data: &[u8]) -> SimpleFuture<usize, ErrorCode> {
+    let future = SimpleFuture::new();
+    let state = future.state.clone();
+    self.write_callback(data, move |error, size| {
+      resolve_simple_future(state.lock().unwrap(), size, error);
+    });
+    future
+  }
+
+  pub fn read_callback<T: FnMut(ErrorCode, usize)>(&self, data: &mut [u8], callback: T) {
+    unsafe {
+      let api = &*self.api.raw;
+      let boxed = Box::new(IOArgs {
+        api: self.api,
+        callback
+      });
+      let args = Box::into_raw(boxed)  as *mut std::os::raw::c_void;
+      let mut span = ThalamusByteSpan { data: data.as_ptr(), size: data.len() };
+      (api.serial_port_read)(self.port, &mut span as *mut ThalamusByteSpan, Some(io_callback::<T>), args);
+    }
+  }
+  pub fn read(&self, data: &mut [u8]) -> SimpleFuture<usize, ErrorCode> {
+    let future = SimpleFuture::new();
+    let state = future.state.clone();
+    self.read_callback(data, move |error, size| {
+      resolve_simple_future(state.lock().unwrap(), size, error);
+    });
+    future
+  }
+
+  pub fn read_some_callback<T: FnMut(ErrorCode, usize)>(&self, data: &mut [u8], callback: T) {
+    unsafe {
+      let api = &*self.api.raw;
+      let boxed = Box::new(IOArgs {
+        api: self.api,
+        callback
+      });
+      let args = Box::into_raw(boxed)  as *mut std::os::raw::c_void;
+      let mut span = ThalamusByteSpan { data: data.as_ptr(), size: data.len() };
+      (api.serial_port_read_some)(self.port, &mut span as *mut ThalamusByteSpan, Some(io_callback::<T>), args);
+    }
+  }
+  pub fn read_some(&self, data: &mut [u8]) -> SimpleFuture<usize, ErrorCode> {
+    let future = SimpleFuture::new();
+    let state = future.state.clone();
+    self.read_some_callback(data, move |error, size| {
+      resolve_simple_future(state.lock().unwrap(), size, error);
+    });
+    future
+  }
+
+  pub fn read_until_callback<T: FnMut(ErrorCode, usize)>(&self, buffer: &StreamBuf, delimiter: &str, callback: T) {
+    unsafe {
+      let api = &*self.api.raw;
+      let boxed = Box::new(IOArgs {
+        api: self.api,
+        callback
+      });
+      let args = Box::into_raw(boxed)  as *mut std::os::raw::c_void;
+      let delimiter_bytes = delimiter.as_bytes();
+      let delimiter_ptr = delimiter_bytes.as_ptr() as *const i8;
+      (api.serial_port_read_until)(self.port, buffer.buffer, delimiter_ptr, delimiter_bytes.len(), Some(io_callback::<T>), args);
+    }
+  }
+  pub fn read_until(&self, buffer: &StreamBuf, delimiter: &str) -> SimpleFuture<usize, ErrorCode> {
+    println!("Read Until");
+    let future = SimpleFuture::new();
+    let state = future.state.clone();
+    self.read_until_callback(buffer, delimiter, move |error, size| {
+      resolve_simple_future(state.lock().unwrap(), size, error);
+    });
+    future
+  }
+}
+
+impl Drop for SerialPort {
+  fn drop(&mut self) {
+    unsafe {
+      let api = &*self.api.raw;
+      (api.serial_port_destroy)(self.port);
+    }
+  }
+}
+
 struct TaskState {
-  future: Pin<Box<dyn Future<Output = ()>>>,
+  future: Option<Pin<Box<dyn Future<Output = ()>>>>,
   poll: Poll<()>
 }
 
 impl TaskState {
   fn poll(&mut self, cx: &mut Context<'_>) {
-    let future = self.future.as_mut();
-    if self.poll.is_pending() {
-      self.poll = future.poll(cx);
+    match self.future.as_mut() {
+      None => {},
+      Some(pin_future) => {
+        let future = pin_future.as_mut();
+        if self.poll.is_pending() {
+          self.poll = future.poll(cx);
+        }
+      }
     }
   }
 }
@@ -280,9 +434,12 @@ struct Task {
 
 impl Task {
   fn poll(self: &Rc<Self>) {
+    let mut state = self.state.lock().unwrap();
+    if let None = state.future {
+      return;
+    }
     let waker = wakers::waker(self.clone());
     let mut cx = Context::from_waker(&waker);
-    let mut state = self.state.lock().unwrap();
     state.poll(&mut cx);
   }
 }
@@ -293,18 +450,32 @@ impl RcWake for Task {
   }
 }
 
-pub fn run_task<F>(future: F)
+pub struct TaskScope {
+  task: Rc<Task>
+}
+
+impl Drop for TaskScope {
+  fn drop(&mut self) {
+    println!("TaskScope.drop");
+    let mut state = self.task.state.lock().unwrap();
+    state.future = None;
+  }
+}
+
+pub fn run_task<F>(future: F) -> TaskScope
 where
   F: Future<Output = ()> + 'static
 {
   let task = Rc::new(Task {
-    state: Mutex::new(TaskState {future: Box::pin(future), poll: Poll::Pending})
+    state: Mutex::new(TaskState {
+    future: Some(Box::pin(future)), poll: Poll::Pending})
   });
 
   task.poll();
+  TaskScope{ task: task.clone() }
 }
 
-pub fn time(api: *const ThalamusAPI) -> Duration {
+pub fn time(api: *const ThalamusAPIRaw) -> Duration {
   unsafe {
     return Duration::from_nanos(((&*api).time_ns)());
   }
@@ -313,7 +484,7 @@ pub fn time(api: *const ThalamusAPI) -> Duration {
 #[derive(Debug,PartialEq)]
 pub struct State {
   state: *mut ThalamusState,
-  api: *const ThalamusAPI
+  api: ThalamusAPI
 }
 
 #[derive(Debug,PartialEq)]
@@ -332,21 +503,21 @@ pub enum StateKey {
   String(String)
 }
 
-fn wrap_state(api_raw:*const ThalamusAPI, arg: *mut ThalamusState) -> StateValue {
+fn wrap_state(api:ThalamusAPI, arg: *mut ThalamusState) -> StateValue {
   unsafe {
-    let api = &*api_raw;
-    if (api.state_is_bool)(arg) != 0 {
-      StateValue::Bool((api.state_get_bool)(arg) != 0)
-    } else if (api.state_is_dict)(arg) != 0 {
+    let raw = &*api.raw;
+    if (raw.state_is_bool)(arg) != 0 {
+      StateValue::Bool((raw.state_get_bool)(arg) != 0)
+    } else if (raw.state_is_dict)(arg) != 0 {
       StateValue::Dict(State::new(api, arg))
-    } else if (api.state_is_float)(arg) != 0 {
-      StateValue::Float((api.state_get_float)(arg))
-    } else if (api.state_is_int)(arg) != 0 {
-      StateValue::Int((api.state_get_int)(arg))
-    } else if (api.state_is_list)(arg) != 0 {
+    } else if (raw.state_is_float)(arg) != 0 {
+      StateValue::Float((raw.state_get_float)(arg))
+    } else if (raw.state_is_int)(arg) != 0 {
+      StateValue::Int((raw.state_get_int)(arg))
+    } else if (raw.state_is_list)(arg) != 0 {
       StateValue::List(State::new(api, arg))
-    } else if (api.state_is_string)(arg) != 0 {
-      let ptr = ((&*api).state_get_string)(arg);
+    } else if (raw.state_is_string)(arg) != 0 {
+      let ptr = ((&*raw).state_get_string)(arg);
       let text = CStr::from_ptr(ptr).to_str().unwrap();
       StateValue::String(text.to_string())
     } else {
@@ -365,39 +536,123 @@ unsafe extern "C" fn state_on_change<T: FnMut(&State, i32, StateValue, StateValu
   (args.callback)(&source, action, key, value);
 }
 
-unsafe extern "C" fn timer_on_timer(error: *mut ThalamusErrorCode, data: *mut ::std::os::raw::c_void) {
-  unsafe {
-    let args = &mut *(data as *mut TimerCallbackArgs);
+pub struct SimpleFutureState<T, E> {
+  waker: Option<Waker>,
+  result: Option<Result<T, E>>,
+  done: bool,
+  //state: Arc<Mutex<SleeperFutureState>>
+}
 
-    let error_code = ((&(*args.api)).error_code_value)(error);
+pub struct SimpleFuture<T, E> {
+  state: Arc<Mutex<SimpleFutureState<T, E>>>
+}
 
-    let callback = &mut*args.callback;
-    callback.on_timer(ErrorCode {value: error_code});
+impl<T, E> SimpleFutureState<T, E> {
+  pub fn set(mut this: MutexGuard<Self>, result: Result<T, E>) {
+    this.result = Some(result);
+    this.done = true;
+    let waker = this.waker.take();
+    drop(this);
+    waker.map(|w| w.wake_by_ref());
   }
 }
 
-struct TimerCallbackArgs {
-  pub callback: *mut dyn TimerListener,
-  pub api: *const ThalamusAPI
+fn resolve_simple_future<T>(this: MutexGuard<SimpleFutureState<T, ErrorCode>>, value: T, error: ErrorCode) {
+  let result = if error.code != 0 { Err(error) } else { Ok(value) };
+  SimpleFutureState::<T, ErrorCode>::set(this, result);
 }
 
+impl<T, E> Future for SimpleFuture<T, E> {
+  type Output = Result<T, E>;
+
+  fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+    println!("Poll");
+    let mut state = self.state.lock().unwrap();
+    println!("Poll lock");
+    match state.result.take() {
+      Some(result) => {
+        std::task::Poll::Ready(result)
+      },
+      None => {
+        match &mut state.waker {
+          Some(waker) => {
+            if !waker.will_wake(cx.waker()) {
+              *waker = cx.waker().clone();
+            }
+          },
+          None => {
+            state.waker = Some(cx.waker().clone());
+          }
+        }
+        std::task::Poll::Pending
+      }
+    }
+  }
+}
+
+impl<T, E> FusedFuture for SimpleFuture<T, E> {
+  fn is_terminated(&self) -> bool {
+    self.state.lock().unwrap().done
+  }
+}
+
+impl<T, E> SimpleFuture<T, E> {
+  pub fn new() -> SimpleFuture<T, E> {
+    SimpleFuture::<T, E> {
+      state: Arc::new(Mutex::new(SimpleFutureState::<T, E> {done: false, waker: None, result: None}))
+    }
+  }
+}
+
+unsafe extern "C" fn timer_on_timer<T: FnMut(ErrorCode)>(error: *mut ThalamusErrorCode, data: *mut ::std::os::raw::c_void) {
+  let mut args = unsafe {
+    let raw_args = &mut*(data as *mut TimerCallbackArgs<T>);
+    Box::from_raw(raw_args)
+  };
+  let error_code = ErrorCode::new(args.api, error);
+  
+  (args.callback)(error_code);
+}
+
+struct TimerCallbackArgs<T> {
+  pub api: ThalamusAPI,
+  pub callback: T
+}
+
+#[derive(Debug)]
 pub struct ErrorCode {
-  pub value: i32
+  pub code: i32,
+  pub message: String
 }
 
 impl ErrorCode {
   pub fn aborted(&self) -> bool {
-    self.value == *OPERATION_ABORTED.get().unwrap()
+    self.code == *OPERATION_ABORTED.get().unwrap()
+  }
+
+  pub fn new(api: ThalamusAPI, error: *mut ThalamusErrorCode) -> ErrorCode {
+    unsafe {
+      let code = ((&(*api.raw)).error_code_value)(error);
+      let message = if code != 0 {
+        let mut span = ThalamusCharSpan { data: null(), size: 0, owns_data: 0};
+        ((&(*api.raw)).error_code_message)(&mut span as *mut ThalamusCharSpan, error);
+
+        let slice = slice::from_raw_parts(span.data as *mut u8, span.size);
+        let text = str::from_utf8(slice).unwrap().to_string();
+        ((&(*api.raw)).charspan_destroy)(&mut span as *mut ThalamusCharSpan);
+        text
+      } else {
+        "".to_string()
+      };
+
+      ErrorCode { code, message }
+    }
   }
 }
 
 struct StateConnectionCallbackArgs<T: FnMut(&State, i32, StateValue, StateValue)> {
   pub callback: T,
-  pub api: *const ThalamusAPI
-}
-
-pub trait TimerListener {
-    fn on_timer(&mut self, error: ErrorCode);
+  pub api: ThalamusAPI
 }
 
 pub trait DictSetter {
@@ -419,9 +674,9 @@ pub trait ListSetter {
 }
 
 impl State {
-  pub fn new(api:*const ThalamusAPI, state:*mut ThalamusState) -> State {
+  pub fn new(api:ThalamusAPI, state:*mut ThalamusState) -> State {
     unsafe {
-      ((&*api).state_inc_ref)(state);
+      ((&*api.raw).state_inc_ref)(state);
     }
     State {
       state: state, api: api
@@ -432,13 +687,13 @@ impl State {
     let result = match index {
       StateKey::Int(key) => {
         unsafe {
-          ((&*self.api).state_get_at_index)(self.state, key as usize)
+          ((&*self.api.raw).state_get_at_index)(self.state, key as usize)
         }
       },
       StateKey::String(key_raw) => {
         let key = CString::new(key_raw).unwrap();
         unsafe {
-          ((&*self.api).state_get_at_name)(self.state, key.as_ptr())
+          ((&*self.api.raw).state_get_at_name)(self.state, key.as_ptr())
         }
       }
     };
@@ -446,7 +701,7 @@ impl State {
   }
 
   pub fn set(&self, index: StateKey, raw_value: StateValue) {
-    let api = unsafe { &*self.api };
+    let api = unsafe { &*self.api.raw };
     match index {
       StateKey::Int(key) => {
         unsafe {
@@ -511,7 +766,7 @@ impl State {
 
   pub fn recap(&self) {
     unsafe {
-      ((&*self.api).state_recap)(self.state);
+      ((&*self.api.raw).state_recap)(self.state);
     }
   }
 
@@ -523,7 +778,7 @@ impl State {
       });
       let raw = Box::into_raw(callback_args);
       let connection = unsafe {
-        ((&*self.api).state_recursive_change_connect)(self.state, Some(state_on_change::<T>), raw as *mut c_void)
+        ((&*self.api.raw).state_recursive_change_connect)(self.state, Some(state_on_change::<T>), raw as *mut c_void)
       };
       println!("connect {:?} {:?} {:?}", self.api, connection, raw);
 
@@ -531,7 +786,7 @@ impl State {
       let cleanup = move || {
         println!("connect drop {:?} {:?}", cleanup_api, connection);
         unsafe {
-          ((&*cleanup_api).state_recursive_change_disconnect)(connection);
+          ((&*cleanup_api.raw).state_recursive_change_disconnect)(connection);
           drop(Box::from_raw(raw));
         }
         println!("StateConnection::drop");
@@ -550,7 +805,7 @@ impl Clone for State {
 impl Drop for State {
   fn drop(&mut self) {
     unsafe {
-      ((&*self.api).state_dec_ref)(self.state);
+      ((&*self.api.raw).state_dec_ref)(self.state);
     }
   }
 }
@@ -567,40 +822,30 @@ impl Drop for OnDrop {
 
 pub struct Timer {
   pub timer: *mut ThalamusTimer,
-  pub api: *const ThalamusAPI
+  pub api: ThalamusAPI
 }
 
 impl Timer {
-  pub fn new(api: *const ThalamusAPI) -> Timer {
+  pub fn sleep_callback<T: FnMut(ErrorCode)>(&self, duration: Duration, callback: T) {
     unsafe {
-      let timer = ((&(*api)).timer_create)();
-      println!("new {:?} {:?}", api, timer);
-      Timer {
-        api, timer
-      }
-    }
-  }
-
-  pub fn expires_after(&self, duration: Duration) {
-    unsafe {
-      ((&(*self.api)).timer_expire_after_ns)(self.timer, duration.as_nanos() as usize);
-    }
-  }
-  pub fn async_wait<T>(&self, listener: &T)
-  where T: TimerListener + 'static 
-  {
-    let const_ptr = listener as *const dyn TimerListener;
-    let mut_ptr = const_ptr as *mut dyn TimerListener;
-
-    let args = Box::new(TimerCallbackArgs {
-        callback: mut_ptr,
-        api: self.api
+      let api = &*self.api.raw;
+      let boxed = Box::new(TimerCallbackArgs {
+        api: self.api,
+        callback
       });
-    let raw = Box::into_raw(args);
-    let void_ptr = raw as *mut c_void;
-    unsafe {
-      ((&(*self.api)).timer_async_wait)(self.timer, Some(timer_on_timer), void_ptr);
+      let args = Box::into_raw(boxed)  as *mut std::os::raw::c_void;
+      let ns = duration.as_nanos() as usize;
+      (api.timer_expire_after_ns)(self.timer, ns);
+      (api.timer_async_wait)(self.timer, Some(timer_on_timer::<T>), args);
     }
+  }
+  pub fn sleep(&self, duration: Duration) -> SimpleFuture<(), ErrorCode> {
+    let future = SimpleFuture::new();
+    let state = future.state.clone();
+    self.sleep_callback(duration, move |error| {
+      resolve_simple_future(state.lock().unwrap(), (), error);
+    });
+    future
   }
 }
 
@@ -608,28 +853,62 @@ impl Drop for Timer {
   fn drop(&mut self) {
     unsafe {
       println!("drop {:?} {:?}", self.api, self.timer);
-      ((&(*self.api)).timer_destroy)(self.timer);
+      ((&(*self.api.raw)).timer_destroy)(self.timer);
     }
   }
 }
 
 pub trait Node {
-  fn api(&self) -> *const ThalamusAPI;
-  fn base(&self) -> *const ThalamusNode;
-  fn ready(&self) {
-    unsafe {
-      ((&(*self.api())).node_ready)(self.base());
-    }
-  }
   fn time(&self) -> Duration;
-  fn new(base:*const ThalamusNode, api: *const ThalamusAPI, state: State) -> Arc<RefCell<Self>>;
+  fn new(api: ThalamusAPI, state: State) -> Self;
+}
+
+//impl<'a, REF, VAL: ?Sized, FUNC: Fn(&Ref<'a, REF>) -> &'a VAL> RefCellGuard<'a, REF, VAL, FUNC> {
+//  pub fn new(_ref: Ref<'a, REF>, val:&'a VAL) -> RefCellGuard<'a, REF, VAL> {
+//    RefCellGuard::<'a> {
+//      _ref, val
+//    }
+//  }
+//}
+
+pub struct SliceDeref<T: Deref<Target = Vec<f64>>> {
+  inner: T,
+  begin: Option<usize>,
+  end: Option<usize>
+}
+
+impl<T: Deref<Target = Vec<f64>>> SliceDeref<T> {
+  pub fn new(inner: T, begin: Option<usize>, end: Option<usize>) -> SliceDeref<T> {
+    SliceDeref { inner, begin, end }
+  }
+}
+
+impl<T: Deref<Target = Vec<f64>>> Deref for SliceDeref<T> {
+    type Target = [f64];
+
+    fn deref(&self) -> &Self::Target {
+        match (self.begin, self.end) {
+            (None, None) => {
+                self.inner.as_slice()
+            },
+            (Some(begin), None) => {
+                &self.inner.as_slice()[begin..]
+            },
+            (Some(begin), Some(end)) => {
+                &self.inner.as_slice()[begin..end]
+            },
+            (None, Some(end)) => {
+                &self.inner.as_slice()[..end]
+            },
+        }
+    }
 }
 
 pub trait AnalogNode {
   fn data(
           &self,
           channel: i32,
-      ) -> &[f64];
+      ) -> impl Deref<Target = [f64]>;
 
   fn short_data<'a>(
           &self,
@@ -653,10 +932,10 @@ pub trait AnalogNode {
 
   fn num_channels(&self) -> i32;
   fn sample_interval(&self, channel: i32) -> Duration;
-  fn name<'a>(
+  fn name(
           &self,
           channel: ::std::os::raw::c_int,
-      ) -> &'a str;
+      ) -> &str;
   fn has_analog_data(&self) -> bool{
         true
       }
@@ -716,7 +995,7 @@ impl<T: crate::api::AnalogNode> WrapAnalog for T {
 
 pub static OPERATION_ABORTED: OnceLock<i32> = OnceLock::<i32>::new();
 
-pub fn setup(api_raw: *mut ThalamusAPI) {
+pub fn setup(api_raw: *mut ThalamusAPIRaw) {
   unsafe {
     let api = &*api_raw;
     OPERATION_ABORTED.set((api.error_code_operation_aborted)())
@@ -741,7 +1020,7 @@ impl WrappableNode for $type {
 
 
 #[unsafe(no_mangle)]
-pub extern "C" fn get_node_factories(api: *mut ThalamusAPI) -> *const *const ThalamusNodeFactory {
+pub extern "C" fn get_node_factories(api: *mut ThalamusAPIRaw) -> *const *const ThalamusNodeFactory {
   println!("get_node_factories");
   $crate::api::setup(api);
   let mut vec = Vec::<*const ThalamusNodeFactory>::new();
