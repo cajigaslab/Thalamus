@@ -21,6 +21,7 @@ import asyncio
 import datetime
 import logging
 import math
+import os
 import random
 import time
 import typing
@@ -29,7 +30,7 @@ from ..qt import *
 from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
 from .widgets import Form
-from .util import create_task_with_exc_handling, CanvasPainterProtocol, TaskContextProtocol, TaskResult, RenderOutput
+from .util import create_task_with_exc_handling, CanvasPainterProtocol, TaskContextProtocol, TaskResult, RenderOutput, get_sound
 from ..config import *
 
 LOGGER = logging.getLogger(__name__)
@@ -1367,6 +1368,9 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
 async def run(context: TaskContextProtocol) -> TaskResult:
   assert context.widget, "Widget is None; cannot render."
 
+  success_sound = get_sound(os.path.join(os.path.dirname(__file__), "success_clip.wav"))
+  fail_sound = get_sound(os.path.join(os.path.dirname(__file__), "failure_clip.wav"))
+
   task_config = getattr(context, "task_config", context.config["queue"][0])
 
   def get_persisted_operator_key_state(key: str) -> bool:
@@ -1966,6 +1970,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
         if free_play_end_requested:
           append_event("free_play_end_requested", now)
           finalize_attempt("success", now)
+          success_sound.play()
           await context.log("BehavState=success")
           return TaskResult(success=True)
       elif state == "intertrial":
@@ -2049,6 +2054,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
                 await context.sleep(datetime.timedelta(seconds=0.01))
             append_event("success", now, streak_count=streak_count)
             finalize_attempt("success", now)
+            success_sound.play()
             await context.log("BehavState=success")
             return TaskResult(success=True)
           else:
@@ -2084,6 +2090,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
             now,
             failure_reason="timeout_without_movement" if not joystick_active_this_trial else "timeout_after_movement",
           )
+          fail_sound.play()
           await context.log("BehavState=fail")
           return TaskResult(success=False)
 
