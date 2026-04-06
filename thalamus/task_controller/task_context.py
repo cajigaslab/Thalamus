@@ -292,8 +292,6 @@ class TaskContext(TaskContextProtocol):
     self.running = False
     self.servicer = servicer
     self.stub = stub
-    self.log_queue = IterableQueue()
-    self.log_stream = stub.log(self.log_queue)
     self.inject_analog_streams: typing.Dict[str, IterableQueue] = {}
     self.node_request_streams: typing.Dict[str, NodeRequestStream] = {}
     self.next_node_request_id = 1
@@ -690,6 +688,9 @@ class TaskContext(TaskContextProtocol):
       self.trial_summary_data.behav_result.clear()
       self.trial_summary_data.used_values.clear()
 
+      self.log_queue = IterableQueue()
+      _ = await self.stub.log(self.log_queue)
+
       if self.widget:
         task = self.task_descriptions_map[self.task_config['task_type']]
         try:
@@ -736,6 +737,9 @@ class TaskContext(TaskContextProtocol):
         if self.trial_summary_data.behav_result:
           trial_summ['behav_result'] = self.trial_summary_data.behav_result
         await self.log(json.dumps(trial_summ))
+      
+      await self.log_queue.close()
+      await self.log_queue.join()
     
     for future in self.sleeper.cancelled_futures:
       future.exception()
