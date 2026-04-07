@@ -383,11 +383,18 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       self.update_callback = update_callback
       self.selected_index = -1
       self.drag_index = -1
+      self.drag_enabled = True
       self.setMinimumSize(420, 420)
       self.setMouseTracking(True)
 
     def set_selected_index(self, index: int) -> None:
       self.selected_index = index
+      self.update()
+
+    def set_drag_enabled(self, enabled: bool) -> None:
+      self.drag_enabled = bool(enabled)
+      if not self.drag_enabled:
+        self.drag_index = -1
       self.update()
 
     def _region_rect(self) -> QRectF:
@@ -456,7 +463,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       if event.button() != Qt.MouseButton.LeftButton:
         return super().mousePressEvent(event)
       index = self._hit_test(self._event_pos(event))
-      self.drag_index = index
+      self.drag_index = index if self.drag_enabled else -1
       self.selected_index = index
       self.select_callback(index)
       self.update()
@@ -528,9 +535,61 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       painter.drawEllipse(cursor_center, cursor_radius, cursor_radius)
 
       painter.setPen(QPen(QColor(200, 200, 200), 1))
-      painter.drawText(12, 18, "Drag target centers to reposition them inside the task region.")
+      if self.drag_enabled:
+        painter.drawText(12, 18, "Drag target centers to reposition them inside the task region.")
+      else:
+        painter.drawText(12, 18, "Drag move is disabled. Click targets to select them without repositioning.")
       if self.generated_preview_getter():
         painter.drawText(12, 36, "Dashed blue targets are generator preview targets and are not saved yet.")
+
+  class PersistentLayoutEditorDialog(QDialog):
+    def __init__(
+      self,
+      config: ObservableCollection,
+      config_key: str,
+      parent: typing.Optional[QWidget] = None,
+    ) -> None:
+      super().__init__(parent, Qt.WindowType.Window)
+      self._config = config
+      self._config_key = config_key
+      self._persist_enabled = False
+
+    def restore_persisted_geometry(self, fallback_width: int, fallback_height: int) -> None:
+      raw = self._config.get(self._config_key, {})
+      geometry = dict(raw) if isinstance(raw, dict) else {}
+      width = max(320, int(geometry.get("width", fallback_width)))
+      height = max(240, int(geometry.get("height", fallback_height)))
+      x_value = geometry.get("x", None)
+      y_value = geometry.get("y", None)
+      self.resize(width, height)
+      if x_value is not None and y_value is not None:
+        self.move(int(x_value), int(y_value))
+      self._persist_enabled = True
+      self._save_geometry()
+
+    def _save_geometry(self) -> None:
+      if not self._persist_enabled or self.isMinimized() or self.isMaximized():
+        return
+      pos = self.pos()
+      size = self.size()
+      self._config[self._config_key] = {
+        "x": int(pos.x()),
+        "y": int(pos.y()),
+        "width": int(size.width()),
+        "height": int(size.height()),
+      }
+
+    def moveEvent(self, event: typing.Any) -> None:
+      super().moveEvent(event)
+      self._save_geometry()
+
+    def resizeEvent(self, event: typing.Any) -> None:
+      super().resizeEvent(event)
+      self._save_geometry()
+
+    def closeEvent(self, event: typing.Any) -> None:
+      self._save_geometry()
+      super().closeEvent(event)
 
   def open_layout_editor() -> None:
     existing_dialog = getattr(result, "_layout_editor_dialog", None)
@@ -540,12 +599,12 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       existing_dialog.activateWindow()
       return
 
-    dialog = QDialog(result, Qt.WindowType.Window)
+    dialog = PersistentLayoutEditorDialog(task_config, "target_layout_editor_geometry", result)
     dialog.setWindowTitle("Target Layout Editor")
     dialog.setModal(False)
     dialog.setWindowModality(Qt.WindowModality.NonModal)
     dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
-    dialog.resize(900, 560)
+    dialog.restore_persisted_geometry(900, 560)
     result._layout_editor_dialog = dialog # type: ignore[attr-defined]
 
     def clear_layout_editor_reference(*_args: typing.Any) -> None:
@@ -583,6 +642,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     hold_spin = QDoubleSpinBox()
     reward_channel_spin = QSpinBox()
     color_button = QPushButton("Choose Color")
+    enable_drag_box = QCheckBox("Enable drag move")
+    enable_drag_box.setChecked(True)
 
     for spin in (x_spin, y_spin):
       spin.setRange(0.0, 1.0)
@@ -596,6 +657,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     hold_spin.setSingleStep(0.05)
     reward_channel_spin.setRange(0, 255)
     reward_channel_spin.setSingleStep(1)
+    for spin in (x_spin, y_spin, radius_spin, hold_spin, reward_channel_spin):
+      spin.setKeyboardTracking(False)
     name_edit.setToolTip("Name shown in the target list and operator overlay.")
     enabled_box.setToolTip("Disabled targets stay in the table but are not eligible for trial selection.")
     x_spin.setToolTip("Normalized horizontal position inside the task region. 0 = left, 1 = right.")
@@ -604,6 +667,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     hold_spin.setToolTip("How long the cursor must stay inside the target to complete it.")
     reward_channel_spin.setToolTip("Reward output channel used when this target succeeds.")
     color_button.setToolTip("Choose the display color for the selected target.")
+    enable_drag_box.setToolTip("Disable this to select targets in the preview without accidentally moving them.")
 
     form_layout.addRow("Name", name_edit)
     form_layout.addRow("", enabled_box)
@@ -624,6 +688,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     cursor_radius_spin.setValue(draft_cursor_radius)
     cursor_radius_spin.setToolTip("Reference cursor radius shown in the layout preview center.")
     cursor_layout.addRow("Cursor Radius", cursor_radius_spin)
+    cursor_layout.addRow("", enable_drag_box)
     side_layout.addWidget(cursor_panel)
 
     generator_panel = QGroupBox("Target Generator")
@@ -882,6 +947,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       dialog,
     )
     preview.setToolTip("Solid targets are in the draft. Dashed blue targets are generator previews.")
+    preview.set_drag_enabled(enable_drag_box.isChecked())
     dialog_layout.addWidget(preview, 1)
     dialog_layout.addWidget(side_panel)
 
@@ -914,11 +980,11 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
 
     name_edit.textEdited.connect(lambda _text: apply_field_changes())
     enabled_box.toggled.connect(lambda _checked: apply_field_changes())
-    x_spin.valueChanged.connect(lambda _value: apply_field_changes())
-    y_spin.valueChanged.connect(lambda _value: apply_field_changes())
-    radius_spin.valueChanged.connect(lambda _value: apply_field_changes())
-    hold_spin.valueChanged.connect(lambda _value: apply_field_changes())
-    reward_channel_spin.valueChanged.connect(lambda _value: apply_field_changes())
+    x_spin.editingFinished.connect(apply_field_changes)
+    y_spin.editingFinished.connect(apply_field_changes)
+    radius_spin.editingFinished.connect(apply_field_changes)
+    hold_spin.editingFinished.connect(apply_field_changes)
+    reward_channel_spin.editingFinished.connect(apply_field_changes)
     color_button.clicked.connect(choose_color)
     target_list.itemSelectionChanged.connect(update_selected_index_from_list)
 
@@ -929,6 +995,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         preview.update()
 
     cursor_radius_spin.valueChanged.connect(on_cursor_radius_changed)
+    enable_drag_box.toggled.connect(preview.set_drag_enabled)
 
     def add_layout_target() -> None:
       nonlocal selected_index
