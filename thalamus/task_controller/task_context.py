@@ -292,8 +292,7 @@ class TaskContext(TaskContextProtocol):
     self.running = False
     self.servicer = servicer
     self.stub = stub
-    self.log_queue = IterableQueue()
-    self.log_stream = stub.log(self.log_queue)
+    self.log_queue: typing.Optional[IterableQueue] = None
     self.inject_analog_streams: typing.Dict[str, IterableQueue] = {}
     self.node_request_streams: typing.Dict[str, NodeRequestStream] = {}
     self.next_node_request_id = 1
@@ -405,6 +404,8 @@ class TaskContext(TaskContextProtocol):
     await queue.put(thalamus_pb2.StimRequest(trigger=0))
 
   async def log(self, text: str):
+    if self.log_queue is None:
+      raise RuntimeError('Log stream is not active')
     await self.log_queue.put(thalamus_pb2.Text(text=text,time=int(time.perf_counter()*1e9)))
 
   @property
@@ -689,53 +690,60 @@ class TaskContext(TaskContextProtocol):
 
       self.trial_summary_data.behav_result.clear()
       self.trial_summary_data.used_values.clear()
-
-      if self.widget:
-        task = self.task_descriptions_map[self.task_config['task_type']]
-        try:
-          await self.refresh_streams()
-          LOGGER.debug('TRIAL START')
-          await self.log('TRIAL START ' + self.task_config["type"] + ' ' + self.task_config["name"])
-          result = await task.run(self)
-          await self.log('TRIAL FINISHED ' + self.task_config["type"] + ' ' + self.task_config["name"])
-          self.__update_status(result.success)
-          LOGGER.debug('TRIAL FINISH')
-        except asyncio.CancelledError:
-          LOGGER.debug('CANCELLED')
-          was_cancelled = True
-        self.widget.renderer = lambda w: None
-        self.widget.touch_listener = lambda e: None
-        self.widget.gaze_listener = lambda e: None
-        self.widget.key_press_handler = lambda e: None
-        self.widget.key_release_handler = lambda e: None
-        if self.config.get('eye_scaling', {}).get('Auto Clear', False):
-          self.widget.clear_accumulation()
-        self.widget.update()
-      else:
-        try:
-          result = await self.__execute_remote_task(self.task_config)
-        except asyncio.CancelledError:
-          LOGGER.debug('CANCELLED')
-          was_cancelled = True
+      self.log_queue = IterableQueue()
+      log_coroutine = self.stub.log(self.log_queue)
+      try:
+        if self.widget:
+          task = self.task_descriptions_map[self.task_config['task_type']]
+          try:
+            await self.refresh_streams()
+            LOGGER.debug('TRIAL START')
+            await self.log('TRIAL START ' + self.task_config["type"] + ' ' + self.task_config["name"])
+            result = await task.run(self)
+            await self.log('TRIAL FINISHED ' + self.task_config["type"] + ' ' + self.task_config["name"])
+            self.__update_status(result.success)
+            LOGGER.debug('TRIAL FINISH')
+          except asyncio.CancelledError:
+            LOGGER.debug('CANCELLED')
+            was_cancelled = True
+          self.widget.renderer = lambda w: None
+          self.widget.touch_listener = lambda e: None
+          self.widget.gaze_listener = lambda e: None
+          self.widget.key_press_handler = lambda e: None
+          self.widget.key_release_handler = lambda e: None
+          if self.config.get('eye_scaling', {}).get('Auto Clear', False):
+            self.widget.clear_accumulation()
+          self.widget.update()
+        else:
+          try:
+            result = await self.__execute_remote_task(self.task_config)
+          except asyncio.CancelledError:
+            LOGGER.debug('CANCELLED')
+            was_cancelled = True
       
-      if not was_cancelled and result.success:
-        self.task_config['goal'] -= 1
-        current_index = self.config['reward_schedule']['index']
-        modulus = min(len(s) for s in self.config['reward_schedule']['schedules'])
-        self.config['reward_schedule']['index'] = (current_index + 1) % modulus
-      if not self.sleeper.running:
-        break
+        if not was_cancelled and result.success:
+          self.task_config['goal'] -= 1
+          current_index = self.config['reward_schedule']['index']
+          modulus = min(len(s) for s in self.config['reward_schedule']['schedules'])
+          self.config['reward_schedule']['index'] = (current_index + 1) % modulus
+        if not self.sleeper.running:
+          break
 
-      if not was_cancelled:
-        trial_summ = {
-          'used_values': self.trial_summary_data.used_values,
-          'task_config': {**self.task_config.unwrap(), **self.get_canvas_info()},
-          'task_result': result._asdict()
-        }
+        if not was_cancelled:
+          trial_summ = {
+            'used_values': self.trial_summary_data.used_values,
+            'task_config': {**self.task_config.unwrap(), **self.get_canvas_info()},
+            'task_result': result._asdict()
+          }
 
-        if self.trial_summary_data.behav_result:
-          trial_summ['behav_result'] = self.trial_summary_data.behav_result
-        await self.log(json.dumps(trial_summ))
+          if self.trial_summary_data.behav_result:
+            trial_summ['behav_result'] = self.trial_summary_data.behav_result
+          await self.log(json.dumps(trial_summ))
+      finally:
+        await self.log_queue.close()
+        await self.log_queue.join()
+        await log_coroutine
+        self.log_queue = None
     
     for future in self.sleeper.cancelled_futures:
       future.exception()
