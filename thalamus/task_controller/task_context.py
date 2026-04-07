@@ -689,7 +689,7 @@ class TaskContext(TaskContextProtocol):
       self.trial_summary_data.used_values.clear()
 
       self.log_queue = IterableQueue()
-      _ = await self.stub.log(self.log_queue)
+      log_coroutine = self.stub.log(self.log_queue)
 
       if self.widget:
         task = self.task_descriptions_map[self.task_config['task_type']]
@@ -740,6 +740,7 @@ class TaskContext(TaskContextProtocol):
       
       await self.log_queue.close()
       await self.log_queue.join()
+      await log_coroutine
     
     for future in self.sleeper.cancelled_futures:
       future.exception()
