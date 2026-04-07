@@ -40,6 +40,7 @@ service Thalamus {
   rpc stim(stream StimRequest) returns (stream StimResponse) {}
   rpc inject_motion_capture(stream InjectMotionCaptureRequest) returns (Empty) {}
   rpc dialog(Dialog) returns (Empty) {}
+  rpc about(Empty) returns (Text) {}
 }
 
 message TextRequest {
@@ -171,6 +172,7 @@ message StorageRecord {
   }
   uint64 time = 4;
   string node = 5;
+  uint64 seq = 11;
 }
 
 message File {

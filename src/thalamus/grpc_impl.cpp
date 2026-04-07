@@ -18,6 +18,8 @@
 #include <thalamus/thread.hpp>
 #include <thalamus/grpc.hpp>
 
+#include <thalamus_config.h>
+
 namespace thalamus {
 using namespace std::chrono_literals;
 using namespace std::placeholders;
@@ -566,6 +568,18 @@ Service::get_modalities(::grpc::ServerContext *context,
   if (node_cast<TextNode *>(raw_node.get())) {
     response->add_values(thalamus_grpc::Modalities::TextModality);
   }
+  return ::grpc::Status::OK;
+}
+
+::grpc::Status
+Service::about(::grpc::ServerContext *,
+               const ::thalamus_grpc::Empty *,
+               ::thalamus_grpc::Text *response) {
+  std::stringstream stream;
+  stream << "Version: " << THALAMUS_VERSION << "\n";
+  stream << "Build Type: " << THALAMUS_BUILD_TYPE << "\n";
+  stream << "Git Commit: " << THALAMUS_GIT_COMMIT_HASH << "\n";
+  response->set_text(stream.str());
   return ::grpc::Status::OK;
 }
 

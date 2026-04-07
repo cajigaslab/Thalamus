@@ -1664,6 +1664,12 @@ class ThalamusWindow(QMainWindow):
     settingsmenu = menubar.addMenu('Settings')
     settingsmenu.addAction('Persistence').triggered.connect(self.on_persistence)
 
+    about_response = await self.stub.about(thalamus_pb2.Empty())
+    self.about = about_response.text
+
+    settingsmenu = menubar.addMenu('Help')
+    settingsmenu.addAction('About Thalamus').triggered.connect(self.on_about)
+
     self.state['data_views'].add_observer(self.on_data_views_changed)
     for i, view in enumerate(self.state['data_views']):
       self.on_data_views_changed(ObservableCollection.Action.SET, i, view)
@@ -1671,6 +1677,9 @@ class ThalamusWindow(QMainWindow):
     self.state['node_widgets'].add_observer(self.on_node_widgets_changed)
     for i, widget in enumerate(self.state['node_widgets']):
       self.on_node_widgets_changed(ObservableCollection.Action.SET, i, widget)
+
+  def on_about(self):
+    QMessageBox.about(self, "About Thalamus", self.about)
 
   def on_persistence(self):
     if 'Persistence' not in self.state:
