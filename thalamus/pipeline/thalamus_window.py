@@ -1568,6 +1568,16 @@ class PlaybackDialog(QDialog):
 
     return selected
 
+class NodeFilterProxyModel(QSortFilterProxyModel):
+  '''
+  Filters on node name and type.  All properties of matching nodes will pass through.
+  '''
+  def filterAcceptsRow(self, source_row: int, source_parent: QModelIndex) -> bool:
+    if source_parent.isValid():
+      return True
+    
+    return super().filterAcceptsRow(source_row, source_parent)
+
 class ThalamusWindow(QMainWindow):
   def __init__(self, address, state: ObservableDict, stub: thalamus_pb2_grpc.ThalamusStub, done_future: asyncio.Future, ext_widgets: typing.Dict[str, Factory]):
     super().__init__()
@@ -1610,6 +1620,11 @@ class ThalamusWindow(QMainWindow):
     else:
       self.setWindowTitle(f'Thalamus')
 
+    if 'sort' not in self.state:
+      self.state['sort'] = False
+    if 'filter' not in self.state:
+      self.state['filter'] = ''
+
     if 'thalamus_view_geometry' not in self.state:
       self.state['thalamus_view_geometry'] = [100, 100, 384, 768]
     x, y, w, h = self.state['thalamus_view_geometry']
@@ -1625,7 +1640,12 @@ class ThalamusWindow(QMainWindow):
     self.view.setItemDelegate(Delegate(self.view, self.state))
 
     self.model = ItemModel(self.state['nodes'], self.stub, self.address)
-    self.view.setModel(self.model)
+    
+    self.sort_model = NodeFilterProxyModel()
+    self.sort_model.setFilterKeyColumn(-1)
+    self.sort_model.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+    self.sort_model.setSourceModel(self.model)
+    self.view.setModel(self.sort_model)
     self.model.dataChanged.connect(self.on_data_changed)
 
     self.view.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -1634,6 +1654,23 @@ class ThalamusWindow(QMainWindow):
     self.grid_layout.addWidget(self.view, 0, 0, 1, 2)
     self.grid_layout.addWidget(add_button, 1, 0)
     self.grid_layout.addWidget(remove_button, 1, 1)
+
+    self.sort_checkbox = QCheckBox("Sort:")
+    def on_sort_changed(checked):
+      self.state['sort'] = checked
+    self.sort_checkbox.toggled.connect(on_sort_changed)
+
+    self.filter_edit = QLineEdit()
+    def on_filter_changed(text):
+      self.state['filter'] = text
+    self.filter_edit.textChanged.connect(on_filter_changed)
+
+    sort_filter_row = QHBoxLayout()
+    sort_filter_row.addWidget(self.sort_checkbox)
+    sort_filter_row.addWidget(QLabel("Filter:"))
+    sort_filter_row.addWidget(self.filter_edit)
+
+    self.grid_layout.addLayout(sort_filter_row, 2, 0, 1, 2)
 
     central_widget = QWidget()
     central_widget.setLayout(self.grid_layout)
@@ -1678,6 +1715,8 @@ class ThalamusWindow(QMainWindow):
     for i, widget in enumerate(self.state['node_widgets']):
       self.on_node_widgets_changed(ObservableCollection.Action.SET, i, widget)
 
+    self.state.add_observer(self.on_state_changed)
+
   def on_about(self):
     QMessageBox.about(self, "About Thalamus", self.about)
 
@@ -1700,6 +1739,18 @@ class ThalamusWindow(QMainWindow):
   def resizeEvent(self, a0: QResizeEvent) -> None:
     self.view_geometry_updater[2:] = a0.size().width(), a0.size().height()
     return super().resizeEvent(a0)
+
+  def on_state_changed(self, action: ObservableCollection.Action, key: typing.Any, value: typing.Any):
+    if key == 'sort':
+      if self.sort_checkbox.isChecked() != value:
+        self.sort_checkbox.setChecked(value)
+      self.view.setSortingEnabled(value)
+      if not value:
+        self.sort_model.sort(-1, Qt.SortOrder.AscendingOrder)
+    elif key == 'filter':
+      if self.filter_edit.text() != value:
+        self.filter_edit.setText(value)
+      self.sort_model.setFilterRegularExpression(value)
 
   def on_data_views_changed(self, action: ObservableCollection.Action, key: typing.Any, value: typing.Any):
     if action == ObservableCollection.Action.SET:
