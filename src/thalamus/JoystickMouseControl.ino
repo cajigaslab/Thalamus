@@ -1,9 +1,9 @@
 const int xPin = A0;
 const int yPin = A1;
 
-// measured centers
-const int xCenter = 516;
-const int yCenter = 514;
+// centers (will be measured)
+int xCenter = 0;
+int yCenter = 0;
 
 // deadzone
 const int deadzone = 3;
@@ -12,8 +12,8 @@ const int deadzone = 3;
 const float alpha = 0.15;
 
 // filtered values
-float fx = xCenter;
-float fy = yCenter;
+float fx = 0;
+float fy = 0;
 
 int applyDeadzone(int value, int center, int dz) {
   if (abs(value - center) <= dz) {
@@ -25,10 +25,36 @@ int applyDeadzone(int value, int center, int dz) {
 void setup() {
   Serial.begin(115200);
   while (!Serial) {;}
+
+  // 🔹 Calibrate center
+  const int samples = 100;
+  long xSum = 0;
+  long ySum = 0;
+
+  Serial.println("Calibrating... keep joystick centered");
+
+  for (int i = 0; i < samples; i++) {
+    xSum += analogRead(xPin);
+    ySum += analogRead(yPin);
+    delay(5);
+  }
+
+  xCenter = xSum / samples;
+  yCenter = ySum / samples;
+
+  // initialize filter with center
+  fx = xCenter;
+  fy = yCenter;
+
+  Serial.print("Center X: ");
+  Serial.println(xCenter);
+  Serial.print("Center Y: ");
+  Serial.println(yCenter);
+
+  Serial.println("Calibration done.");
 }
 
 void loop() {
-
   int xRaw = analogRead(xPin);
   int yRaw = analogRead(yPin);
 
@@ -43,7 +69,6 @@ void loop() {
   xFiltered = applyDeadzone(xFiltered, xCenter, deadzone);
   yFiltered = applyDeadzone(yFiltered, yCenter, deadzone);
 
-  // send ONLY filtered values
   Serial.print(xFiltered);
   Serial.print(",");
   Serial.println(yFiltered);
