@@ -16,10 +16,10 @@
       "AcquisitionFrameRate": 150.0,
       "Gain": 0.0,
       "view_geometry": [
-        1465,
-        1232,
+        1402,
+        1317,
         455,
-        365
+        367
       ],
       "Camera Values": {
         "WidthMax": 1280,
@@ -47,10 +47,10 @@
       "Computing": true,
       "View": true,
       "view_geometry": [
-        1638,
-        1800,
-        282,
-        163
+        1558,
+        1162,
+        308,
+        160
       ],
       "Render Thresholded": false,
       "Pix X": 290,
@@ -217,6 +217,10 @@
         {
           "Name": "Joystick",
           "Address": ""
+        },
+        {
+          "Name": "Intan",
+          "Address": ""
         }
       ],
       "tab": 1
@@ -262,9 +266,9 @@
       "Gain": 0.0,
       "view_geometry": [
         66,
-        1232,
-        557,
-        446
+        1116,
+        688,
+        551
       ],
       "Camera Values": {
         "WidthMax": 1280,
@@ -295,9 +299,9 @@
       "Gain": 0.0,
       "view_geometry": [
         66,
-        1719,
-        566,
-        455
+        1668,
+        469,
+        365
       ],
       "Camera Values": {
         "WidthMax": 1280,
@@ -327,10 +331,10 @@
       "AcquisitionFrameRate": 150.0,
       "Gain": 0.0,
       "view_geometry": [
-        1550,
-        1633,
-        368,
-        212
+        1495,
+        1114,
+        369,
+        240
       ],
       "Camera Values": {
         "WidthMax": 1280,
@@ -530,10 +534,10 @@
       "Equation": "",
       "Parser Error": true,
       "view_geometry": [
-        1533,
-        459,
+        1464,
+        1593,
         382,
-        698
+        584
       ]
     },
     {
@@ -711,19 +715,38 @@
       "Y Center": 514,
       "Dead Zone": 15,
       "Running": true
+    },
+    {
+      "name": "Intan",
+      "type": "INTAN",
+      "Connected": true,
+      "Running": true,
+      "Address": "192.168.1.241",
+      "Command Port": 5000,
+      "Waveform Port": 5001,
+      "Metadata Node": "",
+      "Channels": [
+        "A-000",
+        "A-001",
+        "A-002",
+        "A-003",
+        "A-004",
+        "A-005"
+      ],
+      "Error": "Connection reset by peer [system:104 at /home/bijanadmin/bowser/Thalamus_joystick/Thalamus/build/clang-release/_deps/boost_content-src/boost/asio/detail/reactive_socket_recv_op.hpp:133:37 in function 'do_complete']"
     }
   ],
   "thalamus_view_geometry": [
-    73,
-    246,
+    146,
+    1388,
     384,
     768
   ],
   "data_views": [
     {
       "view_geometry": [
-        499,
-        7,
+        543,
+        1145,
         1028,
         218
       ],
@@ -756,8 +779,8 @@
     },
     {
       "view_geometry": [
-        17,
-        12,
+        70,
+        2040,
         478,
         187
       ],
@@ -776,6 +799,29 @@
           "range_max": 10
         }
       ]
+    },
+    {
+      "view_geometry": [
+        1210,
+        1824,
+        445,
+        400
+      ],
+      "rows": 1,
+      "columns": 1,
+      "views": [
+        {
+          "row": 0,
+          "column": 0,
+          "selected_node": "Intan",
+          "selected_channel": "A-000",
+          "view_type": "Time Series",
+          "draw_value": false,
+          "static_range": false,
+          "range_min": 0,
+          "range_max": 10
+        }
+      ]
     }
   ],
   "node_widgets": [
@@ -783,8 +829,8 @@
       "node": "Experiment",
       "dock_area": "",
       "view_geometry": [
-        1529,
-        0,
+        1435,
+        1201,
         390,
         208
       ]
@@ -793,14 +839,14 @@
       "node": "Recording",
       "dock_area": "",
       "view_geometry": [
-        1529,
-        238,
+        1498,
+        1490,
         391,
         208
       ]
     },
     {
-      "node": "Oculomatic",
+      "node": "Intan",
       "dock_area": "right",
       "view_geometry": [
         190,
@@ -850,7 +896,7 @@
         50.0
       ]
     ],
-    "index": 0
+    "index": 1
   },
   "touch_channels": [
     0,
@@ -862,6 +908,10 @@
       {
         "Command": "python /home/bijanadmin/bowser/Thalamus/fiducial.py",
         "Critial (Crash on Failure)": true
+      },
+      {
+        "Command": "python /home/bijanadmin/bowser/Thalamus_joystick/Thalamus/intan.py",
+        "Critial (Crash on Failure)": false
       }
     ]
   },
@@ -9537,9 +9587,9 @@
     "capture_mode": "framebuffer",
     "show_eye_scaling": false,
     "view_geometry": [
-      626,
-      1232,
-      833,
+      547,
+      1288,
+      866,
       573
     ],
     "auto_launch": true
