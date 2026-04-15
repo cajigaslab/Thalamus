@@ -46,7 +46,7 @@ def generate():
       old_path.unlink()
       new_path.rename(old_path)
 
-def write_metadata(metadata, filename):
+def write_metadata(metadata, filename, no_native):
   version = metadata['version']
   description = metadata['description']
   name = metadata['name']
@@ -54,6 +54,7 @@ def write_metadata(metadata, filename):
   maintainer_email = metadata['maintainer_email']
   license = metadata['license']
   license_file = metadata['license-file']
+  requirements_file = 'requirements-no-native.txt' if no_native else 'requirements.txt'
 
   with open(filename, 'w') as wheel_file:
     wheel_file.write('Metadata-Version: 2.4\n')
@@ -65,9 +66,10 @@ def write_metadata(metadata, filename):
     wheel_file.write(f'License-Expression: {license}\n')
     wheel_file.write(f'License-File: {license_file}\n')
 
-    with open('requirements.txt') as requirements_file:
-      wheel_file.write(f'Requires-Dist: grpcio-tools=={grpc.__version__}\n')
-      wheel_file.write(f'Requires-Dist: grpcio-reflection=={grpc.__version__}\n')
+    with open(requirements_file) as requirements_file:
+      if not no_native:
+        wheel_file.write(f'Requires-Dist: grpcio-tools=={grpc.__version__}\n')
+        wheel_file.write(f'Requires-Dist: grpcio-reflection=={grpc.__version__}\n')
       for line in requirements_file:
         if not line.startswith('grpc'):
           wheel_file.write(f'Requires-Dist: {line}')
@@ -75,6 +77,9 @@ def write_metadata(metadata, filename):
     wheel_file.write('Description-Content-Type: text/markdown\n\n')
     readme = pathlib.Path('README.md').read_text()
     wheel_file.write(readme)
+
+  #with open(filename, 'r') as wheel_file:
+  #  print(wheel_file.read())
 
 def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   config_settings = config_settings if config_settings else {}
@@ -138,7 +143,9 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   osx_target_underscored = osx_target.replace('.', '_')
 
   platform_tag = None
-  if platform.system() == 'Windows':
+  if no_native:
+    platform_tag = 'any'
+  elif platform.system() == 'Windows':
     platform_tag = 'win_amd64'
   elif platform.system() == 'Darwin':
     processor = 'arm64' if 'arm' in platform.processor() else 'x86_64'
@@ -153,6 +160,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
 
   underscore_name = name.replace('-', '_')
   whl_name = f'{underscore_name}-{version}-py3-none-{platform_tag}.whl'
+  print('whl_name', whl_name)
   pathlib.Path(f'{underscore_name}-{version}.dist-info').mkdir(exist_ok=True)
 
   with open(f'{underscore_name}-{version}.dist-info/WHEEL', 'w') as wheel_file:
@@ -160,7 +168,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     wheel_file.write('Generator: thalamus.build\n')
     wheel_file.write(f'Root-Is-Purelib: false\n')
 
-  write_metadata(metadata, f'{underscore_name}-{version}.dist-info/METADATA')
+  write_metadata(metadata, f'{underscore_name}-{version}.dist-info/METADATA', no_native)
 
   cmake_command = [
     'cmake',
@@ -271,6 +279,8 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   return whl_name
 
 def build_sdist(sdist_directory, config_settings=None):
+  config_settings = config_settings if config_settings else {}
+
   print('build_sdist', pathlib.Path.cwd())
   print(sdist_directory)
   print(config_settings)
@@ -278,6 +288,7 @@ def build_sdist(sdist_directory, config_settings=None):
   config = toml.load('pyproject.toml')
   metadata = config['project']
   version = metadata['version']
+  no_native = 'no-native' in config_settings
 
   root = pathlib.Path(f'thalamus-{version}')
   sdist_name = f'{root}.tar.gz'
