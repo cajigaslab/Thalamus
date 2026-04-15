@@ -3,6 +3,7 @@ import re
 import sys
 import toml
 import grpc
+import google.protobuf
 import shutil
 import base64
 import zipfile
@@ -67,7 +68,9 @@ def write_metadata(metadata, filename, no_native):
     wheel_file.write(f'License-File: {license_file}\n')
 
     with open(requirements_file) as requirements_file:
-      if not no_native:
+      if no_native:
+        wheel_file.write(f'Requires-Dist: protobuf=={google.protobuf.__version__}\n')
+      else:
         wheel_file.write(f'Requires-Dist: grpcio-tools=={grpc.__version__}\n')
         wheel_file.write(f'Requires-Dist: grpcio-reflection=={grpc.__version__}\n')
       for line in requirements_file:
