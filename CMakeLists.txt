@@ -185,6 +185,8 @@ target_compile_options(hydrate PRIVATE ${WARNING_FLAGS})
 add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/node_graph_impl.hpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/node_graph_impl.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/http_server.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/http_server.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/state.hpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/state.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/state_manager.hpp"

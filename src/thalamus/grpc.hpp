@@ -4,6 +4,7 @@
 #include <mutex>
 #include <functional>
 #include <condition_variable>
+#include <thalamus/util.hpp>
 
 
 #ifdef __clang__
@@ -11,23 +12,34 @@
 #pragma clang diagnostic ignored "-Weverything"
 #endif
 #include <boost/asio.hpp>
+#include <boost/cobalt.hpp>
 #include <grpcpp/grpcpp.h>
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
 
 namespace thalamus {
+
   template<typename T>
+  concept ProtobufMessage = std::derived_from<T, google::protobuf::Message>;
+
+  template<ProtobufMessage T, bool serialize = false>
   class ReadReactor : public grpc::ClientReadReactor<T> {
   public:
+    using Callback = std::function<void(std::conditional_t<serialize, std::string, T>&& value)>;
+
     std::mutex mutex;
     std::condition_variable condition;
     T in;
     grpc::ClientContext context;
     bool done = false;
     boost::asio::io_context& io_context;
-    std::function<void(T&&)> callback;
-    ReadReactor(boost::asio::io_context& _io_context, const std::function<void(T&&)>& _callback) : io_context(_io_context), callback(_callback) {}
+    boost::asio::steady_timer timer;
+    Callback callback;
+    ReadReactor(boost::asio::io_context& _io_context, const Callback& _callback)
+    : io_context(_io_context),
+      timer(io_context),
+      callback(_callback) {}
     ~ReadReactor() override {
       //grpc::ClientBidiReactor<task_controller_grpc::TaskResult, task_controller_grpc::TaskConfig>::StartWritesDone();
       context.TryCancel();
@@ -38,10 +50,23 @@ namespace thalamus {
       grpc::ClientReadReactor<T>::StartRead(&in);
       grpc::ClientReadReactor<T>::StartCall();
     }
+
+    template<typename Duration>
+    boost::asio::awaitable<bool> wait(Duration duration) {
+      if(done) {
+        co_return done;
+      }
+      timer.expires_after(duration);
+      auto [ec] = co_await timer.async_wait(boost::asio::as_tuple(boost::asio::use_awaitable));
+      THALAMUS_ASSERT(!ec || ec.value() == boost::asio::error::operation_aborted, "Error in Reactor %s", ec.message());
+      co_return done;
+    }
+
     void signal_done() {
       {
         std::lock_guard<std::mutex> lock(mutex);
         done = true;
+        timer.cancel();
       }
       condition.notify_all();
     }
@@ -50,10 +75,15 @@ namespace thalamus {
         signal_done();
         return;
       }
-      boost::asio::post(io_context, [&,c_in=std::move(in)]() mutable {
-        //std::cout << "POST" << std::endl;
-        callback(std::move(c_in));
-      });
+      if constexpr (serialize) {
+        boost::asio::post(io_context, [&,c_in=in.SerializePartialAsString()]() mutable {
+          callback(std::move(c_in));
+        });
+      } else {
+        boost::asio::post(io_context, [&,c_in=std::move(in)]() mutable {
+          callback(std::move(c_in));
+        });
+      }
       grpc::ClientReadReactor<T>::StartRead(&in);
     }
     void OnDone(const grpc::Status&) override {
