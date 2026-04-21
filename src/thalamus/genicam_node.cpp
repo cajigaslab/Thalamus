@@ -2296,12 +2296,15 @@ struct GenicamNode::Impl {
               return;
             }
             vendor.resize(vendor.size() - 1);
+
+            //The iDS GenTL driver detects non iDS cameras and if you interact
+            //with them through the iDS driver the program will crash.
             if (interface_id.find("IDS") != std::string::npos &&
                 vendor.find("IDS") == std::string::npos) {
               THALAMUS_LOG(info)
                   << "IDS GenTL detected another vendor's camera, ignoring.  "
                   << vendor;
-              return;
+              continue;
             }
 
             GenTL::DEV_HANDLE dev_handle;
