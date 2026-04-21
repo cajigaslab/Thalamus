@@ -25,17 +25,23 @@ struct HttpException : public std::exception {
   const boost::beast::http::status status;
   const std::string message;
   HttpException(boost::beast::http::status _status, const std::string& _message) : status(_status), message(_message) {}
+  ~HttpException() override;
 
-  const char* what() const override {
+  const char* what() const noexcept override {
     return message.c_str();
   }
 };
+
+HttpException::~HttpException() {}
 
 struct WebSocketException : public std::exception {
   const boost::beast::websocket::close_code status;
   WebSocket&& ws;
   WebSocketException(boost::beast::websocket::close_code _status, WebSocket&& _ws) : status(_status), ws(std::move(_ws)) {}
+  ~WebSocketException() override;
 };
+
+WebSocketException::~WebSocketException() {}
 
 static void http_assert(bool cond, boost::beast::http::status status) {
   if(!cond) {

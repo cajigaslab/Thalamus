@@ -12,7 +12,6 @@
 #pragma clang diagnostic ignored "-Weverything"
 #endif
 #include <boost/asio.hpp>
-#include <boost/cobalt.hpp>
 #include <grpcpp/grpcpp.h>
 #ifdef __clang__
 #pragma clang diagnostic pop

@@ -107,6 +107,8 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   sanitizer = config_settings.get('sanitizer', None)
   target = config_settings.get('target', None)
   dotnet = 'dotnet' in config_settings
+  cc = config_settings.get('cc', 'clang')
+  cxx = config_settings.get('cxx', 'clang++')
 
   default_parallel = str(os.cpu_count())
   parallel = int(config_settings.get('job', default_parallel))
@@ -197,9 +199,9 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
         '-DCMAKE_CXX_COMPILER=cl']
   else:
     cmake_command += [
-      '-DCMAKE_C_COMPILER=clang',
-      '-DCMAKE_CXX_COMPILER=clang++',
-      '-DCMAKE_LINKER=clang']
+      f'-DCMAKE_C_COMPILER={cc}',
+      f'-DCMAKE_CXX_COMPILER={cxx}',
+      f'-DCMAKE_LINKER={cc}']
 
   for key, value in config_settings.items():
     if key[0] == 'D':
