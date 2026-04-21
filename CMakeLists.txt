@@ -133,7 +133,7 @@ execute_process(
 set(GIT_COMMIT_HASH "${THALAMUS_GIT_COMMIT_HASH}")
 
 execute_process(
-  COMMAND python -c "import toml;config = toml.load('pyproject.toml');print(config['project']['version'])"
+  COMMAND python3 -c "import toml;config = toml.load('pyproject.toml');print(config['project']['version'])"
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   OUTPUT_VARIABLE THALAMUS_VERSION
   OUTPUT_STRIP_TRAILING_WHITESPACE)
