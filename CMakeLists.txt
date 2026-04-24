@@ -128,9 +128,17 @@ include(cmake/hdf5.cmake)
 execute_process(
   COMMAND git log -1 --format=%h
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  OUTPUT_VARIABLE GIT_COMMIT_HASH
+  OUTPUT_VARIABLE THALAMUS_GIT_COMMIT_HASH
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
+set(GIT_COMMIT_HASH "${THALAMUS_GIT_COMMIT_HASH}")
+
+execute_process(
+  COMMAND python3 -c "import toml;config = toml.load('pyproject.toml');print(config['project']['version'])"
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  OUTPUT_VARIABLE THALAMUS_VERSION
   OUTPUT_STRIP_TRAILING_WHITESPACE)
 
+set(THALAMUS_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
 configure_file(thalamus_config.h.in thalamus_config.h)
  
 set(PROTO_SOURCES
@@ -177,6 +185,8 @@ target_compile_options(hydrate PRIVATE ${WARNING_FLAGS})
 add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/node_graph_impl.hpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/node_graph_impl.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/http_server.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/http_server.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/state.hpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/state.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/state_manager.hpp"
