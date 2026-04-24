@@ -270,11 +270,7 @@ int main(int argc, char **argv) {
   grpc::ServerBuilder builder;
   builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
   std::unique_ptr<NodeGraphImpl> node_graph(
-<<<<<<< HEAD
-      new NodeGraphImpl(nodes, io_context, system_start, steady_start, stub.get()
-=======
       new NodeGraphImpl(nodes, io_context, system_start, steady_start, stub.get(), extensions
->>>>>>> ffbb08e41eff1730e6256c68c42ac2342f3cbe6c
 #ifndef _WIN32
                         ,pool_sched_policy_opt, pool_sched_priority_opt
 #endif
