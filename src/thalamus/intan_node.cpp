@@ -116,8 +116,8 @@ struct IntanNode::Impl {
   // double sample_rate;
   size_t counter = 0;
   std::string address = "localhost";
-  long long command_port = 5000;
-  long long waveform_port = 5001;
+  int64_t command_port = 5000;
+  int64_t waveform_port = 5001;
   unsigned char command_buffer[1024];
   unsigned char waveform_buffer[16384];
   IntanNode *outer;
@@ -524,9 +524,9 @@ public:
     if (key_str == "Address") {
       address = std::get<std::string>(v);
     } else if (key_str == "Command Port") {
-      command_port = std::get<long long>(v);
+      command_port = std::get<int64_t>(v);
     } else if (key_str == "Waveform Port") {
-      waveform_port = std::get<long long>(v);
+      waveform_port = std::get<int64_t>(v);
     } else if (key_str == "Connected") {
       if(!constructed) {
         return;

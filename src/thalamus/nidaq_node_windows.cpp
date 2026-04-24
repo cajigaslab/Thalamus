@@ -571,7 +571,7 @@ struct NidaqOutputNode::Impl {
                  const ObservableCollection::Value &v) {
     TRACE_EVENT("thalamus", "NidaqOutputNode::on_change");
     if (_source == stims_state.get()) {
-      auto key_int = std::get<long long>(k);
+      auto key_int = std::get<int64_t>(k);
       if (std::holds_alternative<std::string>(v)) {
         stims[int(key_int)] = std::get<std::string>(v);
       } else {

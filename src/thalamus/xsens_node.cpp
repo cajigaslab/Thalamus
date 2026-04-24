@@ -29,6 +29,44 @@ namespace thalamus {
 MotionCaptureNode::~MotionCaptureNode() {}
 bool MotionCaptureNode::has_motion_data() const { return true; }
 
+static const size_t serialized_size = 32;
+
+static ThalamusMocapSegment parse_segment(unsigned char *data) {
+  TRACE_EVENT("thalamus", "XsensNode::Segment::parse");
+  ThalamusMocapSegment segment;
+  segment.segment_id = ntohl(*reinterpret_cast<unsigned int *>(data));
+
+  unsigned int temp;
+  unsigned char *temp_chars = reinterpret_cast<unsigned char *>(&temp);
+
+  temp = ntohl(*reinterpret_cast<unsigned int *>(data + 4));
+  segment.position[0] = *reinterpret_cast<float *>(temp_chars);
+  temp = ntohl(*reinterpret_cast<unsigned int *>(data + 8));
+  segment.position[1] = *reinterpret_cast<float *>(temp_chars);
+  temp = ntohl(*reinterpret_cast<unsigned int *>(data + 12));
+  segment.position[2] = *reinterpret_cast<float *>(temp_chars);
+
+  temp = ntohl(*reinterpret_cast<unsigned int *>(data + 16));
+  segment.rotation[0] = *reinterpret_cast<float *>(temp_chars);
+  temp = ntohl(*reinterpret_cast<unsigned int *>(data + 20));
+  segment.rotation[1] = *reinterpret_cast<float *>(temp_chars);
+  temp = ntohl(*reinterpret_cast<unsigned int *>(data + 24));
+  segment.rotation[2] = *reinterpret_cast<float *>(temp_chars);
+  temp = ntohl(*reinterpret_cast<unsigned int *>(data + 28));
+  segment.rotation[3] = *reinterpret_cast<float *>(temp_chars);
+
+  return segment;
+}
+
+static boost::qvm::quat<float> to_quat(float input[4]) {
+  return boost::qvm::quat<float>{
+    input[0],
+    input[1],
+    input[2],
+    input[3]
+  };
+}
+
 class RateTracker {
   std::vector<std::chrono::nanoseconds> heap;
   std::chrono::nanoseconds last_now;
@@ -122,7 +160,7 @@ struct XsensNode::Impl {
   std::chrono::nanoseconds start_time = 0ns;
   std::vector<std::string> channel_names;
   size_t num_base_channel_names = 0;
-  long long actor = 0;
+  int64_t actor = 0;
 
   enum class SendType { Current, Min, Max };
   SendType send_type = SendType::Current;
@@ -223,11 +261,11 @@ struct XsensNode::Impl {
     unsigned char *position = buffer + 24;
     unsigned char *end = position + payload_size;
     while (position < end) {
-      _segments.push_back(Segment::parse(position));
+      _segments.push_back(parse_segment(position));
       _segments.back().actor = character_id;
       _segments.back().frame = sample_counter;
       _segments.back().time = time_code;
-      position += Segment::serialized_size;
+      position += serialized_size;
     }
     _segment_span =
         std::span<Segment const>(_segments.begin(), _segments.end());
@@ -235,27 +273,27 @@ struct XsensNode::Impl {
     if (character_id == actor) {
       auto hand_offset = 23;
 
-      auto bend = boost::qvm::conjugate(_segments[size_t(hand_offset + 2)].rotation)*_segments[size_t(hand_offset + 3)].rotation;
+      auto bend = boost::qvm::conjugate(to_quat(_segments[size_t(hand_offset + 2)].rotation))*to_quat(_segments[size_t(hand_offset + 3)].rotation);
       fingers[0].update(2*double(std::acos(boost::qvm::S(bend))));
-      bend = boost::qvm::conjugate(_segments[size_t(hand_offset + 5)].rotation)*_segments[size_t(hand_offset + 6)].rotation;
+      bend = boost::qvm::conjugate(to_quat(_segments[size_t(hand_offset + 5)].rotation))*to_quat(_segments[size_t(hand_offset + 6)].rotation);
       fingers[1].update(2*double(std::acos(boost::qvm::S(bend))));
-      bend = boost::qvm::conjugate(_segments[size_t(hand_offset + 9)].rotation)*_segments[size_t(hand_offset + 10)].rotation;
+      bend = boost::qvm::conjugate(to_quat(_segments[size_t(hand_offset + 9)].rotation))*to_quat(_segments[size_t(hand_offset + 10)].rotation);
       fingers[2].update(2*double(std::acos(boost::qvm::S(bend))));
-      bend = boost::qvm::conjugate(_segments[size_t(hand_offset + 13)].rotation)*_segments[size_t(hand_offset + 14)].rotation;
+      bend = boost::qvm::conjugate(to_quat(_segments[size_t(hand_offset + 13)].rotation))*to_quat(_segments[size_t(hand_offset + 14)].rotation);
       fingers[3].update(2*double(std::acos(boost::qvm::S(bend))));
-      bend = boost::qvm::conjugate(_segments[size_t(hand_offset + 17)].rotation)*_segments[size_t(hand_offset + 18)].rotation;
+      bend = boost::qvm::conjugate(to_quat(_segments[size_t(hand_offset + 17)].rotation))*to_quat(_segments[size_t(hand_offset + 18)].rotation);
       fingers[4].update(2*double(std::acos(boost::qvm::S(bend))));
 
       hand_offset = 43;
-      bend = boost::qvm::conjugate(_segments[size_t(hand_offset + 2)].rotation)*_segments[size_t(hand_offset + 3)].rotation;
+      bend = boost::qvm::conjugate(to_quat(_segments[size_t(hand_offset + 2)].rotation))*to_quat(_segments[size_t(hand_offset + 3)].rotation);
       fingers[5].update(2*double(std::acos(boost::qvm::S(bend))));
-      bend = boost::qvm::conjugate(_segments[size_t(hand_offset + 5)].rotation)*_segments[size_t(hand_offset + 6)].rotation;
+      bend = boost::qvm::conjugate(to_quat(_segments[size_t(hand_offset + 5)].rotation))*to_quat(_segments[size_t(hand_offset + 6)].rotation);
       fingers[6].update(2*double(std::acos(boost::qvm::S(bend))));
-      bend = boost::qvm::conjugate(_segments[size_t(hand_offset + 9)].rotation)*_segments[size_t(hand_offset + 10)].rotation;
+      bend = boost::qvm::conjugate(to_quat(_segments[size_t(hand_offset + 9)].rotation))*to_quat(_segments[size_t(hand_offset + 10)].rotation);
       fingers[7].update(2*double(std::acos(boost::qvm::S(bend))));
-      bend = boost::qvm::conjugate(_segments[size_t(hand_offset + 13)].rotation)*_segments[size_t(hand_offset + 14)].rotation;
+      bend = boost::qvm::conjugate(to_quat(_segments[size_t(hand_offset + 13)].rotation))*to_quat(_segments[size_t(hand_offset + 14)].rotation);
       fingers[8].update(2*double(std::acos(boost::qvm::S(bend))));
-      bend = boost::qvm::conjugate(_segments[size_t(hand_offset + 17)].rotation)*_segments[size_t(hand_offset + 18)].rotation;
+      bend = boost::qvm::conjugate(to_quat(_segments[size_t(hand_offset + 17)].rotation))*to_quat(_segments[size_t(hand_offset + 18)].rotation);
       fingers[9].update(2*double(std::acos(boost::qvm::S(bend))));
 
       has_analog_data = true;
@@ -275,7 +313,7 @@ struct XsensNode::Impl {
       auto min_distance = std::numeric_limits<double>::max();
       for (size_t i = 0; i < poses->size(); ++i) {
         ObservableListPtr pose = poses->at(i);
-        long long pose_mask = pose->at(0);
+        int64_t pose_mask = pose->at(0);
         auto distance = 0.0;
         for (auto d : mask) {
           distance += std::abs(d - (pose_mask & 0x01));
@@ -320,7 +358,7 @@ struct XsensNode::Impl {
       pose_with_left_hand = std::get<std::string>(value) == "Left";
       return;
     } else if (key_str == "Actor") {
-      actor = std::get<long long>(value);
+      actor = std::get<int64_t>(value);
       return;
     } else if (key_str == "Send Type") {
       auto value_str = std::get<std::string>(value);
@@ -435,35 +473,6 @@ void XsensNode::inject(const std::span<Segment const> &segments) {
   impl->pose_name = "";
   impl->has_analog_data = false;
   ready(this);
-}
-
-const size_t MotionCaptureNode::Segment::serialized_size = 32;
-
-XsensNode::Segment XsensNode::Segment::parse(unsigned char *data) {
-  TRACE_EVENT("thalamus", "XsensNode::Segment::parse");
-  Segment segment;
-  segment.segment_id = ntohl(*reinterpret_cast<unsigned int *>(data));
-
-  unsigned int temp;
-  unsigned char *temp_chars = reinterpret_cast<unsigned char *>(&temp);
-
-  temp = ntohl(*reinterpret_cast<unsigned int *>(data + 4));
-  boost::qvm::X(segment.position) = *reinterpret_cast<float *>(temp_chars);
-  temp = ntohl(*reinterpret_cast<unsigned int *>(data + 8));
-  boost::qvm::Y(segment.position) = *reinterpret_cast<float *>(temp_chars);
-  temp = ntohl(*reinterpret_cast<unsigned int *>(data + 12));
-  boost::qvm::Z(segment.position) = *reinterpret_cast<float *>(temp_chars);
-
-  temp = ntohl(*reinterpret_cast<unsigned int *>(data + 16));
-  boost::qvm::S(segment.rotation) = *reinterpret_cast<float *>(temp_chars);
-  temp = ntohl(*reinterpret_cast<unsigned int *>(data + 20));
-  boost::qvm::X(segment.rotation) = *reinterpret_cast<float *>(temp_chars);
-  temp = ntohl(*reinterpret_cast<unsigned int *>(data + 24));
-  boost::qvm::Y(segment.rotation) = *reinterpret_cast<float *>(temp_chars);
-  temp = ntohl(*reinterpret_cast<unsigned int *>(data + 28));
-  boost::qvm::Z(segment.rotation) = *reinterpret_cast<float *>(temp_chars);
-
-  return segment;
 }
 
 std::chrono::nanoseconds XsensNode::time() const { return impl->time; }
@@ -673,11 +682,11 @@ public:
         THALAMUS_ASSERT(!ec, "%s", ec.what());
       }
     } else if (key_str == "Num Props") {
-      num_props = 0; // std::get<long long int>(k);
+      num_props = 0; // std::get<int64_t>(k);
     } else if (key_str == "Amplitude") {
       amplitude = std::get<double>(v);
     } else if (key_str == "Duration (ms)") {
-      duration = std::chrono::milliseconds(std::get<long long int>(v));
+      duration = std::chrono::milliseconds(std::get<int64_t>(v));
     }
   }
 
@@ -756,6 +765,8 @@ public:
         auto handengine_time =
             frame_ms + second * 1'000 + minute * 60'000 + hour * 3'600'000;
         _segments.clear();
+        std::vector<boost::qvm::quat<float>> rotations;
+        std::vector<boost::qvm::vec<float, 3>> positions;
         for (auto &bone_value : bones) {
           auto bone = bone_value.as_object();
           std::string_view name = bone["name"].as_string();
@@ -783,12 +794,12 @@ public:
           auto total_rotation = pre_rotation * rotation * post_rotation;
 
           auto &segment = _segments.emplace_back();
-          segment.position =
-              boost::qvm::vec<float, 3>{translation[0].to_number<float>(),
+          
+          positions.push_back(boost::qvm::vec<float, 3>{translation[0].to_number<float>(),
                                         -translation[1].to_number<float>(),
-                                        -translation[2].to_number<float>()};
-          segment.position /= 100;
-          segment.rotation = total_rotation;
+                                        -translation[2].to_number<float>()});
+          positions.back() /= 100;
+          rotations.push_back(total_rotation);
           segment.time = handengine_time;
           segment.frame = frame_count;
           auto lookup = HAND_ENGINE_TO_XSENS_SEGMENT_IDS.find(name);
@@ -798,44 +809,57 @@ public:
         std::sort(_segments.begin(), _segments.end(),
                   [](auto &a, auto &b) { return a.segment_id < b.segment_id; });
 
-        _segments[0].rotation = boost::qvm::quat<float>{1, 0, 0, 0};
-        _segments[0].position = boost::qvm::vec<float, 3>{0, 0, 0};
-        _segments[1].rotation = _segments[0].rotation * _segments[1].rotation;
-        _segments[1].position = _segments[0].position +
-                                _segments[0].rotation * _segments[1].position;
-        _segments[2].rotation = _segments[1].rotation * _segments[2].rotation;
-        _segments[2].position = _segments[1].position +
-                                _segments[1].rotation * _segments[2].position;
-        _segments[3].rotation = _segments[2].rotation * _segments[3].rotation;
-        _segments[3].position = _segments[2].position +
-                                _segments[2].rotation * _segments[3].position;
+        rotations[0] = {1, 0, 0, 0};
+        positions[0] = {0, 0, 0};
+        rotations[1] = rotations[0] * rotations[1];
+        positions[1] = positions[0] +
+                       rotations[0] * positions[1];
+        rotations[2] = rotations[1] * rotations[2];
+        positions[2] = positions[1] +
+                       rotations[1] * positions[2];
+        rotations[3] = rotations[2] * rotations[3];
+        positions[3] = positions[2] +
+                       rotations[2] * positions[3];
         for (auto i = 0; i < 4; ++i) {
-          _segments[size_t(4 + i * 4)].rotation =
-              _segments[0].rotation * _segments[size_t(4 + i * 4)].rotation;
-          _segments[size_t(4 + i * 4)].position =
-              _segments[0].position +
-              _segments[0].rotation * _segments[size_t(4 + i * 4)].position;
+          rotations[size_t(4 + i * 4)] =
+              rotations[0] * rotations[size_t(4 + i * 4)];
+          positions[size_t(4 + i * 4)] =
+              positions[0] +
+              rotations[0] * positions[size_t(4 + i * 4)];
           for (auto j = 1; j < 4; j++) {
-            _segments[size_t(4 + i * 4 + j)].rotation =
-                _segments[size_t(4 + i * 4 + j - 1)].rotation *
-                _segments[size_t(4 + i * 4 + j)].rotation;
-            _segments[size_t(4 + i * 4 + j)].position =
-                _segments[size_t(4 + i * 4 + j - 1)].position +
-                _segments[size_t(4 + i * 4 + j - 1)].rotation *
-                    _segments[size_t(4 + i * 4 + j)].position;
+            rotations[size_t(4 + i * 4 + j)] =
+                rotations[size_t(4 + i * 4 + j - 1)] *
+                rotations[size_t(4 + i * 4 + j)];
+            positions[size_t(4 + i * 4 + j)] =
+                positions[size_t(4 + i * 4 + j - 1)] +
+                rotations[size_t(4 + i * 4 + j - 1)] *
+                    positions[size_t(4 + i * 4 + j)];
           }
         }
 
+        for(size_t i = 0;i < _segments.size();++i) {
+          auto& r = rotations[i];
+          _segments[i].rotation[0] = boost::qvm::S(r);
+          _segments[i].rotation[1] = boost::qvm::X(r);
+          _segments[i].rotation[2] = boost::qvm::Y(r);
+          _segments[i].rotation[3] = boost::qvm::Z(r);
+
+          auto& p = positions[i];
+          _segments[i].position[0] = boost::qvm::X(p);
+          _segments[i].position[1] = boost::qvm::Y(p);
+          _segments[i].position[2] = boost::qvm::Z(p);
+        }
+
         thumb_distance = double(
-            boost::qvm::mag(_segments[3].position - _segments[2].position));
+            boost::qvm::mag(positions[3] - positions[2]));
         index_distance = double(
-            boost::qvm::mag(_segments[7].position - _segments[5].position));
+            boost::qvm::mag(positions[7] - positions[5]));
         middle_distance = double(
-            boost::qvm::mag(_segments[11].position - _segments[9].position));
+            boost::qvm::mag(positions[11] - positions[9]));
         ring_distance = double(
-            boost::qvm::mag(_segments[15].position - _segments[13].position));
+            boost::qvm::mag(positions[15] - positions[13]));
         pinky_distance = double(
-            boost::qvm::mag(_segments[19].position - _segments[17].position));
+            boost::qvm::mag(positions[19] - positions[17]));
         //_segments.resize(4);
         _segment_span =
             std::span<Segment const>(_segments.begin(), _segments.end());
@@ -948,4 +972,41 @@ size_t XsensNode::modalities() const { return infer_modalities<XsensNode>(); }
 size_t HandEngineNode::modalities() const {
   return infer_modalities<HandEngineNode>();
 }
+
+struct MotionCaptureNodeImpl::Impl {
+  std::chrono::nanoseconds now;
+  std::span<Segment const> segments;
+};
+
+MotionCaptureNodeImpl::MotionCaptureNodeImpl(ObservableDictPtr, boost::asio::io_context &,
+                                             NodeGraph *) : impl(new Impl()) {}
+MotionCaptureNodeImpl::~MotionCaptureNodeImpl() {}
+
+std::span<MotionCaptureNode::Segment const> MotionCaptureNodeImpl::segments() const {
+  return impl->segments;
+}
+
+const std::string_view MotionCaptureNodeImpl::pose_name() const {
+  return "";
+}
+
+std::chrono::nanoseconds MotionCaptureNodeImpl::time() const {
+  return impl->now;
+}
+
+void MotionCaptureNodeImpl::inject(const std::span<Segment const> &segments) {
+  impl->now = std::chrono::steady_clock::now().time_since_epoch();
+  impl->segments = segments;
+  ready(this);
+}
+
+bool MotionCaptureNodeImpl::has_motion_data() const {
+  return true;
+}
+
+std::string MotionCaptureNodeImpl::type_name() { return "MOCAP"; }
+size_t MotionCaptureNodeImpl::modalities() const {
+  return infer_modalities<MotionCaptureNodeImpl>();
+}
+
 } // namespace thalamus

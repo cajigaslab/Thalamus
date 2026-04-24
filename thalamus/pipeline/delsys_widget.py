@@ -11,6 +11,9 @@ import bisect
 import pathlib
 import typing
 import json
+import logging
+
+LOGGER = logging.getLogger(__name__)
 
 def next_id(components):
   ids = set(c['ID'] for c in components)
@@ -183,5 +186,5 @@ class DelsysWidget(QWidget):
     config.add_recursive_observer(on_change, lambda: isdeleted(self), True)
 
   def closeEvent(self, e):
-    print('DelsysWidget.closeEvent')
+    LOGGER.debug('DelsysWidget.closeEvent')
     self.loop_task.cancel()

@@ -40,8 +40,8 @@ template <typename T> struct Caster {
     } else {
       std::string arg_text = "???";
       std::string m_name = "???";
-      if constexpr (std::is_same<M, long long int>()) {
-        m_name = "long long int";
+      if constexpr (std::is_same<M, int64_t>()) {
+        m_name = "int64_t";
         arg_text = std::to_string(arg);
       } else if constexpr (std::is_same<M, std::string>()) {
         m_name = "std::string";
@@ -58,8 +58,8 @@ template <typename T> struct Caster {
       }
 
       std::string t_name = "???";
-      if constexpr (std::is_same<T, long long int>()) {
-        t_name = "long long int";
+      if constexpr (std::is_same<T, int64_t>()) {
+        t_name = "int64_t";
       } else if constexpr (std::is_same<T, std::string>()) {
         t_name = "std::string";
       } else if constexpr (std::is_same<T, double>()) {
@@ -208,11 +208,11 @@ struct GenicamNode::Impl {
     }
 #endif
 
-    using RegValue = std::variant<long long int, std::string, double>;
+    using RegValue = std::variant<int64_t, std::string, double>;
 
     static calculator::number reg_to_number(const RegValue &from) {
-      if (std::holds_alternative<long long int>(from)) {
-        return std::get<long long int>(from);
+      if (std::holds_alternative<int64_t>(from)) {
+        return std::get<int64_t>(from);
       } else if (std::holds_alternative<double>(from)) {
         return std::get<double>(from);
       }
@@ -220,8 +220,8 @@ struct GenicamNode::Impl {
       return 0;
     }
     static RegValue number_to_reg(const calculator::number &from) {
-      if (std::holds_alternative<long long int>(from)) {
-        return std::get<long long int>(from);
+      if (std::holds_alternative<int64_t>(from)) {
+        return std::get<int64_t>(from);
       } else if (std::holds_alternative<double>(from)) {
         return std::get<double>(from);
       }
@@ -233,7 +233,7 @@ struct GenicamNode::Impl {
       virtual RegValue get(const std::string &reg) = 0;
       virtual void
       set(const std::string &reg,
-          const std::variant<long long int, std::string, double> &value) = 0;
+          const std::variant<int64_t, std::string, double> &value) = 0;
       virtual bool is_writable(const std::string &) = 0;
       virtual std::chrono::nanoseconds polling_time(const std::string &) = 0;
     };
@@ -283,7 +283,7 @@ struct GenicamNode::Impl {
         return result ? *result : 0ns;
       }
 
-      long long int read() {
+      int64_t read() {
         TRACE_EVENT("thalamus", "IntConverter::read");
         if (!from_program) {
           auto iter = from_code.cbegin();
@@ -305,10 +305,10 @@ struct GenicamNode::Impl {
         calculator::eval eval{substitutions};
         TRACE_EVENT("thalamus", "calculator::eval");
         auto result = eval(*from_program);
-        return variant_cast<long long int>(result);
+        return variant_cast<int64_t>(result);
       }
 
-      void write(long long int from) {
+      void write(int64_t from) {
         TRACE_EVENT("thalamus", "IntConverter::write");
         if (!to_program) {
           auto iter = to_code.cbegin();
@@ -446,7 +446,7 @@ struct GenicamNode::Impl {
         return result ? *result : 0ns;
       }
 
-      long long int read() {
+      int64_t read() {
         TRACE_EVENT("thalamus", "IntSwissKnife::read");
         if (!program) {
           auto iter = code.cbegin();
@@ -466,7 +466,7 @@ struct GenicamNode::Impl {
         calculator::eval eval{substitutions};
         TRACE_EVENT("thalamus", "calculator::eval");
         auto result = eval(*program);
-        return variant_cast<long long int>(result);
+        return variant_cast<int64_t>(result);
       }
     };
 
@@ -544,11 +544,11 @@ struct GenicamNode::Impl {
 
         auto total_address = int64_t(address);
         if (!p_address.empty()) {
-          total_address += std::get<long long int>(device->get(p_address));
+          total_address += std::get<int64_t>(device->get(p_address));
         }
         if (!int_swiss_knife.empty()) {
           total_address +=
-              std::get<long long int>(device->get(int_swiss_knife));
+              std::get<int64_t>(device->get(int_swiss_knife));
         }
 
         auto error = cti->GCReadPort(handle, size_t(total_address),
@@ -582,17 +582,17 @@ struct GenicamNode::Impl {
         return _polling_time;
       }
 
-      long long int read() {
+      int64_t read() {
         TRACE_EVENT("thalamus", "IntReg::read");
         buffer.resize(length);
 
         auto total_address = int64_t(address);
         if (!p_address.empty()) {
-          total_address += std::get<long long int>(device->get(p_address));
+          total_address += std::get<int64_t>(device->get(p_address));
         }
         if (!int_swiss_knife.empty()) {
           total_address +=
-              std::get<long long int>(device->get(int_swiss_knife));
+              std::get<int64_t>(device->get(int_swiss_knife));
         }
 
         auto error = cti->GCReadPort(handle, size_t(total_address),
@@ -620,7 +620,7 @@ struct GenicamNode::Impl {
                       _unsigned || !(first_byte & 0x80) ? 0ll : -1ll, visitor);
 
         if (msb) {
-          long long int mask = (1ll << (*msb + 1)) - 1;
+          int64_t mask = (1ll << (*msb + 1)) - 1;
           result &= mask;
         }
         if (lsb) {
@@ -630,7 +630,7 @@ struct GenicamNode::Impl {
         return result;
       }
 
-      void write(long long int value) {
+      void write(int64_t value) {
         TRACE_EVENT("thalamus", "IntReg::write");
         std::vector<unsigned char> mask;
         for (auto i = 0ull; i < length; ++i) {
@@ -663,7 +663,7 @@ struct GenicamNode::Impl {
 
         auto total_address = int64_t(address);
         if (!p_address.empty()) {
-          total_address += std::get<long long int>(device->get(p_address));
+          total_address += std::get<int64_t>(device->get(p_address));
         }
 
         buffer.resize(length);
@@ -728,11 +728,11 @@ struct GenicamNode::Impl {
 
         auto total_address = int64_t(address);
         if (!p_address.empty()) {
-          total_address += std::get<long long int>(device->get(p_address));
+          total_address += std::get<int64_t>(device->get(p_address));
         }
         if (!int_swiss_knife.empty()) {
           total_address +=
-              std::get<long long int>(device->get(int_swiss_knife));
+              std::get<int64_t>(device->get(int_swiss_knife));
         }
 
         auto error = cti->GCReadPort(handle, size_t(total_address),
@@ -757,10 +757,10 @@ struct GenicamNode::Impl {
         } else if (length == 8) {
           if (little_endian) {
             boost::endian::little_to_native_inplace(
-                *reinterpret_cast<long long int *>(buffer.data()));
+                *reinterpret_cast<int64_t *>(buffer.data()));
           } else {
             boost::endian::big_to_native_inplace(
-                *reinterpret_cast<long long int *>(buffer.data()));
+                *reinterpret_cast<int64_t *>(buffer.data()));
           }
 
           result = *reinterpret_cast<double *>(buffer.data());
@@ -774,7 +774,7 @@ struct GenicamNode::Impl {
         TRACE_EVENT("thalamus", "FloatReg::write");
         auto total_address = int64_t(address);
         if (!p_address.empty()) {
-          total_address += std::get<long long int>(device->get(p_address));
+          total_address += std::get<int64_t>(device->get(p_address));
         }
 
         GenTL::GC_ERROR error = GenTL::GC_ERR_SUCCESS;
@@ -783,7 +783,7 @@ struct GenicamNode::Impl {
         if (length == 4) {
           auto temp_float = float(new_value);
           auto temp_char = reinterpret_cast<unsigned char *>(&temp_float);
-          auto temp_int = *reinterpret_cast<long long *>(temp_char);
+          auto temp_int = *reinterpret_cast<int64_t *>(temp_char);
 
           if (little_endian) {
             boost::endian::native_to_little_inplace(temp_int);
@@ -796,7 +796,7 @@ struct GenicamNode::Impl {
                                    &length2);
         } else if (length == 8) {
           auto temp_char = reinterpret_cast<unsigned char *>(&new_value);
-          auto temp_int = *reinterpret_cast<long long *>(temp_char);
+          auto temp_int = *reinterpret_cast<int64_t *>(temp_char);
 
           if (little_endian) {
             boost::endian::native_to_little_inplace(temp_int);
@@ -821,7 +821,7 @@ struct GenicamNode::Impl {
       std::string name;
     };
 
-    template <typename T = long long int>
+    template <typename T = int64_t>
     static T get_int(const boost::property_tree::ptree &tree,
                      const std::string &path, T default_value) {
       auto text = tree.get_optional<std::string>(path);
@@ -848,7 +848,7 @@ struct GenicamNode::Impl {
         return std::nullopt;
       }
       if constexpr (std::is_integral<T>()) {
-        long long int result;
+        int64_t result;
         if (text->starts_with("0x")) {
           auto success = absl::SimpleHexAtoi(*text, &result);
           THALAMUS_ASSERT(success, "Failed to parse %s", *text);
@@ -925,16 +925,16 @@ struct GenicamNode::Impl {
     struct Command {
       Device *device;
       std::string value;
-      std::variant<std::string, long long int> command_value;
+      std::variant<std::string, int64_t> command_value;
 
       void execute() {
         TRACE_EVENT("thalamus", "Command::execute");
-        long long int output;
+        int64_t output;
         if (std::holds_alternative<std::string>(command_value)) {
           auto command_value_str = std::get<std::string>(command_value);
-          output = variant_cast<long long int>(device->get(command_value_str));
+          output = variant_cast<int64_t>(device->get(command_value_str));
         } else {
-          output = std::get<long long int>(command_value);
+          output = std::get<int64_t>(command_value);
         }
 
         device->set(value, output);
@@ -944,8 +944,8 @@ struct GenicamNode::Impl {
     struct Enumeration {
       Device *device;
       std::string value;
-      std::map<std::string, long long int> enums;
-      std::map<long long int, std::string> reverse_enums;
+      std::map<std::string, int64_t> enums;
+      std::map<int64_t, std::string> reverse_enums;
 
       std::string read() {
         TRACE_EVENT("thalamus", "Enumeration::read");
@@ -954,7 +954,7 @@ struct GenicamNode::Impl {
             reverse_enums[i.second] = i.first;
           }
         }
-        auto key = variant_cast<long long int>(device->get(this->value));
+        auto key = variant_cast<int64_t>(device->get(this->value));
         auto result = reverse_enums.at(key);
         return result;
       }
@@ -979,28 +979,28 @@ struct GenicamNode::Impl {
         return device->polling_time(this->value);
       }
 
-      long long int read() {
+      int64_t read() {
         TRACE_EVENT("thalamus", "Integer::read");
-        auto result = variant_cast<long long int>(device->get(this->value));
+        auto result = variant_cast<int64_t>(device->get(this->value));
         return result;
       }
 
-      void write(long long int new_value) {
+      void write(int64_t new_value) {
         TRACE_EVENT("thalamus", "Integer::write");
-        std::optional<long long int> min_val =
+        std::optional<int64_t> min_val =
             this->min
-                ? std::optional<long long int>(
-                      variant_cast<long long int>(device->get(*this->min)))
+                ? std::optional<int64_t>(
+                      variant_cast<int64_t>(device->get(*this->min)))
                 : std::nullopt;
-        std::optional<long long int> max_val =
+        std::optional<int64_t> max_val =
             this->max
-                ? std::optional<long long int>(
-                      variant_cast<long long int>(device->get(*this->max)))
+                ? std::optional<int64_t>(
+                      variant_cast<int64_t>(device->get(*this->max)))
                 : std::nullopt;
-        std::optional<long long int> inc_val =
+        std::optional<int64_t> inc_val =
             this->inc
-                ? std::optional<long long int>(
-                      variant_cast<long long int>(device->get(*this->inc)))
+                ? std::optional<int64_t>(
+                      variant_cast<int64_t>(device->get(*this->inc)))
                 : std::nullopt;
 
         if (min_val) {
@@ -1039,7 +1039,7 @@ struct GenicamNode::Impl {
       bool ready = false;
       boost::property_tree::ptree tree;
 
-      using Value = std::variant<long long int, double, std::string, Link,
+      using Value = std::variant<int64_t, double, std::string, Link,
                                  StringReg, IntConverter, IntReg, IntSwissKnife,
                                  FloatReg, SwissKnife, Converter, Float,
                                  Integer, Enumeration, Command>;
@@ -1321,7 +1321,7 @@ struct GenicamNode::Impl {
 
             if (current_name == "Integer") {
               auto p_value = current->get_optional<std::string>("pValue");
-              auto value = get_optional<long long int>(*current, "Value");
+              auto value = get_optional<int64_t>(*current, "Value");
               auto min = current->get_optional<std::string>("pMin");
               auto max = current->get_optional<std::string>("pMax");
               auto inc = current->get_optional<std::string>("pInc");
@@ -1563,9 +1563,9 @@ struct GenicamNode::Impl {
                     int_swiss_knife_node->get<std::string>("<xmlattr>.Name");
               }
 
-              auto lsb = current->get_optional<long long int>("LSB");
-              auto msb = current->get_optional<long long int>("MSB");
-              auto bit = current->get_optional<long long int>("Bit");
+              auto lsb = current->get_optional<int64_t>("LSB");
+              auto msb = current->get_optional<int64_t>("MSB");
+              auto bit = current->get_optional<int64_t>("Bit");
               if (bit) {
                 lsb = msb = bit;
               }
@@ -1587,9 +1587,9 @@ struct GenicamNode::Impl {
                          little_endian,
                          _unsigned,
                          access_mode,
-                         lsb ? std::optional<long long int>(lsb.value())
+                         lsb ? std::optional<int64_t>(lsb.value())
                              : std::nullopt,
-                         msb ? std::optional<long long int>(msb.value())
+                         msb ? std::optional<int64_t>(msb.value())
                              : std::nullopt,
                          {}, polling_time};
             } else if (current_name == "StructReg") {
@@ -1611,9 +1611,9 @@ struct GenicamNode::Impl {
                     int_swiss_knife_node->get<std::string>("<xmlattr>.Name");
               }
 
-              auto default_lsb = current->get_optional<long long int>("LSB");
-              auto default_msb = current->get_optional<long long int>("MSB");
-              auto default_bit = current->get_optional<long long int>("Bit");
+              auto default_lsb = current->get_optional<int64_t>("LSB");
+              auto default_msb = current->get_optional<int64_t>("MSB");
+              auto default_bit = current->get_optional<int64_t>("Bit");
               if (default_bit) {
                 default_lsb = default_msb = default_bit;
               }
@@ -1636,9 +1636,9 @@ struct GenicamNode::Impl {
                 auto p_address =
                     pair.second.get<std::string>("pAddress", default_p_address);
 
-                auto lsb = pair.second.get_optional<long long int>("LSB");
-                auto msb = pair.second.get_optional<long long int>("MSB");
-                auto bit = pair.second.get_optional<long long int>("Bit");
+                auto lsb = pair.second.get_optional<int64_t>("LSB");
+                auto msb = pair.second.get_optional<int64_t>("MSB");
+                auto bit = pair.second.get_optional<int64_t>("Bit");
                 lsb = lsb ? lsb : default_lsb;
                 msb = msb ? msb : default_msb;
                 bit = bit ? bit : default_bit;
@@ -1665,17 +1665,17 @@ struct GenicamNode::Impl {
                            little_endian,
                            _unsigned,
                            access_mode,
-                           lsb ? std::optional<long long int>(lsb.value())
+                           lsb ? std::optional<int64_t>(lsb.value())
                                : std::nullopt,
-                           msb ? std::optional<long long int>(msb.value())
+                           msb ? std::optional<int64_t>(msb.value())
                                : std::nullopt,
                            {}, polling_time};
               }
             } else if (current_name == "Enumeration") {
               auto p_value = current->get_optional<std::string>("pValue");
-              auto value = get_optional<long long int>(*current, "Value");
-              std::map<std::string, long long int> enums;
-              std::map<long long int, std::string> reverse_enums;
+              auto value = get_optional<int64_t>(*current, "Value");
+              std::map<std::string, int64_t> enums;
+              std::map<int64_t, std::string> reverse_enums;
 
               for (auto &pair : *current) {
                 if (pair.first != "EnumEntry") {
@@ -1684,7 +1684,7 @@ struct GenicamNode::Impl {
                 auto enum_name =
                     pair.second.get_optional<std::string>("<xmlattr>.Name");
                 auto enum_value =
-                    get_optional<long long int>(pair.second, "Value");
+                    get_optional<int64_t>(pair.second, "Value");
                 enums[*enum_name] = *enum_value;
                 reverse_enums[*enum_value] = *enum_name;
               }
@@ -1839,8 +1839,8 @@ struct GenicamNode::Impl {
 
         buffer_handles.resize(announce_min);
         buffer_data.resize(announce_min);
-        auto frame_width = variant_cast<long long int>(get("Width"));
-        auto frame_height = variant_cast<long long int>(get("Height"));
+        auto frame_width = variant_cast<int64_t>(get("Width"));
+        auto frame_height = variant_cast<int64_t>(get("Height"));
         for (auto i = 0ull; i < buffer_data.size(); ++i) {
           buffer_data.at(i) = std::vector<unsigned char>(payload_size, 0);
           auto &buffer = buffer_data.at(i);
@@ -1868,14 +1868,14 @@ struct GenicamNode::Impl {
 
       static std::atomic_uint global_frame;
 
-      void stream_target(long long int frame_width,
-                         long long int frame_height) {
+      void stream_target(int64_t frame_width,
+                         int64_t frame_height) {
         set_current_thread_name("GENTL");
 
         auto start_time = std::chrono::steady_clock::now();
         std::optional<std::chrono::steady_clock::time_point> next_temp_poll;
         std::chrono::nanoseconds temp_poll_interval = 0ns;
-        if(exists("DeviceTemperature")) {
+        if(false/*exists("DeviceTemperature")*/) {
           temp_poll_interval = 1'000'000'000ns;//polling_time("DeviceTemperature");
           next_temp_poll = start_time;
         }
@@ -1962,13 +1962,13 @@ struct GenicamNode::Impl {
         THALAMUS_ASSERT(false, "Register is not a command");
       }
 
-      std::variant<long long int, std::string, double>
+      std::variant<int64_t, std::string, double>
       get(const std::string &reg) override {
         TRACE_EVENT("thalamus", "DeviceImpl::get");
         auto i = nodes.find(reg);
         THALAMUS_ASSERT(i != nodes.end(), "Register not found: %s", reg);
-        if (std::holds_alternative<long long int>(i->second)) {
-          return std::get<long long int>(i->second);
+        if (std::holds_alternative<int64_t>(i->second)) {
+          return std::get<int64_t>(i->second);
         } else if (std::holds_alternative<double>(i->second)) {
           return std::get<double>(i->second);
         } else if (std::holds_alternative<std::string>(i->second)) {
@@ -2001,12 +2001,12 @@ struct GenicamNode::Impl {
       }
 
       void set(const std::string &reg,
-               const std::variant<long long int, std::string, double> &value)
+               const std::variant<int64_t, std::string, double> &value)
           override {
         TRACE_EVENT("thalamus", "DeviceImpl::set");
-        if (std::holds_alternative<long long int>(value)) {
+        if (std::holds_alternative<int64_t>(value)) {
           THALAMUS_LOG(debug)
-              << reg << " int=" << std::get<long long int>(value);
+              << reg << " int=" << std::get<int64_t>(value);
         } else if (std::holds_alternative<std::string>(value)) {
           THALAMUS_LOG(debug)
               << reg << " string=" << std::get<std::string>(value);
@@ -2017,12 +2017,12 @@ struct GenicamNode::Impl {
         THALAMUS_ASSERT(i != nodes.end(), "Register not found: %s", reg);
         if (std::holds_alternative<Integer>(i->second)) {
           std::get<Integer>(i->second).write(
-              variant_cast<long long int>(value));
+              variant_cast<int64_t>(value));
         } else if (std::holds_alternative<IntReg>(i->second)) {
-          std::get<IntReg>(i->second).write(variant_cast<long long int>(value));
+          std::get<IntReg>(i->second).write(variant_cast<int64_t>(value));
         } else if (std::holds_alternative<IntConverter>(i->second)) {
           std::get<IntConverter>(i->second).write(
-              variant_cast<long long int>(value));
+              variant_cast<int64_t>(value));
         } else if (std::holds_alternative<Float>(i->second)) {
           std::get<Float>(i->second).write(variant_cast<double>(value));
         } else if (std::holds_alternative<FloatReg>(i->second)) {
@@ -2045,7 +2045,7 @@ struct GenicamNode::Impl {
         TRACE_EVENT("thalamus", "DeviceImpl::get");
         auto i = nodes.find(reg);
         THALAMUS_ASSERT(i != nodes.end(), "Register not found: %s", reg);
-        if (std::holds_alternative<long long int>(i->second)) {
+        if (std::holds_alternative<int64_t>(i->second)) {
           return 0ns;
         } else if (std::holds_alternative<double>(i->second)) {
           return 0ns;
@@ -2558,14 +2558,14 @@ struct GenicamNode::Impl {
     if(sanitize) {
       sanitize_camera(d);
     }
-    write_key_to_camera<long long int>(d, "Width");
-    write_key_to_camera<long long int>(d, "Height");
-    write_key_to_camera<long long int>(d, "OffsetX");
-    write_key_to_camera<long long int>(d, "OffsetY");
-    write_key_to_camera<long long int>(d, "Width");
-    write_key_to_camera<long long int>(d, "Height");
-    write_key_to_camera<long long int>(d, "OffsetX");
-    write_key_to_camera<long long int>(d, "OffsetY");
+    write_key_to_camera<int64_t>(d, "Width");
+    write_key_to_camera<int64_t>(d, "Height");
+    write_key_to_camera<int64_t>(d, "OffsetX");
+    write_key_to_camera<int64_t>(d, "OffsetY");
+    write_key_to_camera<int64_t>(d, "Width");
+    write_key_to_camera<int64_t>(d, "Height");
+    write_key_to_camera<int64_t>(d, "OffsetX");
+    write_key_to_camera<int64_t>(d, "OffsetY");
     write_key_to_camera<double>(d, "ExposureTime");
     write_key_to_camera<double>(d, "AcquisitionFrameRate");
     write_key_to_camera<double>(d, "Gain");
@@ -2584,16 +2584,16 @@ struct GenicamNode::Impl {
     if(sanitize) {
       sanitize_camera(d);
     }
-    read_key_from_camera<long long int>(d, "WidthMax");
-    read_key_from_camera<long long int>(d, "HeightMax");
-    read_key_from_camera<long long int>(d, "Width");
-    read_key_from_camera<long long int>(d, "Height");
-    read_key_from_camera<long long int>(d, "OffsetX");
-    read_key_from_camera<long long int>(d, "OffsetY");
-    read_key_from_camera<long long int>(d, "Width");
-    read_key_from_camera<long long int>(d, "Height");
-    read_key_from_camera<long long int>(d, "OffsetX");
-    read_key_from_camera<long long int>(d, "OffsetY");
+    read_key_from_camera<int64_t>(d, "WidthMax");
+    read_key_from_camera<int64_t>(d, "HeightMax");
+    read_key_from_camera<int64_t>(d, "Width");
+    read_key_from_camera<int64_t>(d, "Height");
+    read_key_from_camera<int64_t>(d, "OffsetX");
+    read_key_from_camera<int64_t>(d, "OffsetY");
+    read_key_from_camera<int64_t>(d, "Width");
+    read_key_from_camera<int64_t>(d, "Height");
+    read_key_from_camera<int64_t>(d, "OffsetX");
+    read_key_from_camera<int64_t>(d, "OffsetY");
     read_key_from_camera<double>(d, "ExposureTime");
     read_key_from_camera<double>(d, "AcquisitionFrameRate");
     read_key_from_camera<double>(d, "Gain");
@@ -2646,8 +2646,8 @@ struct GenicamNode::Impl {
       }
       auto key_str = std::get<std::string>(k);
       if(key_str == "AcquisitionFrameRate") {
-        if(std::holds_alternative<long long>(v)) {
-          target_framerate = double(std::get<long long>(v));
+        if(std::holds_alternative<int64_t>(v)) {
+          target_framerate = double(std::get<int64_t>(v));
         } else if (std::holds_alternative<double>(v)) {
           target_framerate = std::get<double>(v);
         }
@@ -2689,7 +2689,7 @@ bool GenicamNode::Impl::Cti::DeviceImpl::is_writable(const std::string &reg) {
   auto i = nodes.find(reg);
   if (i == nodes.end()) {
     return false;
-  } else if (std::holds_alternative<long long int>(i->second)) {
+  } else if (std::holds_alternative<int64_t>(i->second)) {
     return false;
   } else if (std::holds_alternative<double>(i->second)) {
     return false;

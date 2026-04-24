@@ -128,7 +128,7 @@ class RecordReader:
     self.reader_thread_result: AsyncResult | None = None
     if isinstance(file_arg, (str, pathlib.Path)):
       self.owns_reader = True
-      self.filename = pathlib.Path(file_arg)
+      self.filename = pathlib.Path(file_arg) if isinstance(file_arg, str) else file_arg
       self.reader = None
     else:
       self.owns_reader = False
@@ -308,8 +308,7 @@ class RecordReader:
   def __enter__(self):
     if self.reader is None:
       assert self.filename is not None
-      self.reader = open(self.filename, 'rb')
-      self.filename = pathlib.Path(self.reader.name)
+      self.reader = self.filename.open('rb')
       self.measure()
     self.start()
     return self
@@ -332,7 +331,7 @@ class RecordReader:
   def __read_record(self) -> typing.Optional[typing.Tuple[StorageRecord, int]]:
     assert self.reader is not None
     data = self.reader.read(LONG_SIZE)
-    if not data:
+    if len(data) < LONG_SIZE:
       return
 
     size, = struct.unpack(LONG, data)
@@ -382,7 +381,7 @@ class Timer:
 
 def read_record(stream) -> typing.Optional[StorageRecord]:
   data = stream.read(LONG_SIZE)
-  if not data:
+  if len(data) < LONG_SIZE:
     return
 
   size, = struct.unpack(LONG, data)
@@ -401,7 +400,7 @@ def read_record(stream) -> typing.Optional[StorageRecord]:
 def is_capturefile(f: pathlib.Path):
   if not f.is_file():
     return False
-  with open(f, 'rb') as stream:
+  with f.open('rb') as stream:
     return read_record(stream) is not None
 
 def main():

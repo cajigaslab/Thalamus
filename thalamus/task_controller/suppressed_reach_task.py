@@ -472,7 +472,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
   reward_message.header.stamp = context.ros_manager.node.node.get_clock().now().to_msg()
   reward_message.on_time_ms = int(context.get_reward(all_reward_channels[final_i_selected_target]))
   
-  print("delivering reward %d"%(reward_message.on_time_ms,) )
+  LOGGER.info("delivering reward %d", reward_message.on_time_ms )
   context.publish(RewardDeliveryCmd, 'deliver_reward', reward_message)
     
   success_sound.play()      

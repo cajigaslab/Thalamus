@@ -57,8 +57,8 @@ struct ArucoNode::Impl {
   struct Board {
     double translation_x = 0, translation_y = 0, translation_z = 0;
     cv::Vec3d rotation;
-    long long rows;
-    long long columns;
+    int64_t rows;
+    int64_t columns;
     double markerSize;
     double markerSeparation;
     std::vector<int> ids;
@@ -86,8 +86,8 @@ struct ArucoNode::Impl {
                      const ObservableCollection::Key &key,
                      const ObservableCollection::Value &value) {
     TRACE_EVENT("thalamus", "ArucoNode::on_ids_change");
-    auto key_int = size_t(std::get<long long>(key));
-    auto value_int = std::get<long long>(value);
+    auto key_int = size_t(std::get<int64_t>(key));
+    auto value_int = std::get<int64_t>(value);
 
     auto &board = boards[self];
     if (action == ObservableCollection::Action::Set) {
@@ -107,9 +107,9 @@ struct ArucoNode::Impl {
     auto key_str = std::get<std::string>(key);
     auto &board = boards[self];
     if (key_str == "Rows") {
-      board.rows = std::get<long long>(value);
+      board.rows = std::get<int64_t>(value);
     } else if (key_str == "Columns") {
-      board.columns = std::get<long long>(value);
+      board.columns = std::get<int64_t>(value);
     } else if (key_str == "Marker Size") {
       board.markerSize = std::get<double>(value);
     } else if (key_str == "Marker Separation") {
@@ -403,10 +403,10 @@ struct ArucoNode::Impl {
                   cv::Quat<float>::createFromRvec(board.rotation);
               auto total_quaternion = quaternion * boardQuaterion;
 
-              boost::qvm::S(_segments.back().rotation) = total_quaternion.w;
-              boost::qvm::X(_segments.back().rotation) = total_quaternion.x;
-              boost::qvm::Y(_segments.back().rotation) = total_quaternion.y;
-              boost::qvm::Z(_segments.back().rotation) = total_quaternion.z;
+              _segments.back().rotation[0] = total_quaternion.w;
+              _segments.back().rotation[1] = total_quaternion.x;
+              _segments.back().rotation[2] = total_quaternion.y;
+              _segments.back().rotation[3] = total_quaternion.z;
 
               auto boardTvecX = board.translation_x * rvecMat.at<double>(0, 0) +
                                 board.translation_y * rvecMat.at<double>(0, 1) +
@@ -419,11 +419,11 @@ struct ArucoNode::Impl {
                                 board.translation_z * rvecMat.at<double>(2, 2);
               cv::Vec3d boardTvec(boardTvecX, boardTvecY, boardTvecZ);
 
-              boost::qvm::X(_segments.back().position) =
+              _segments.back().position[0] =
                   float(tvec[0] + boardTvecX);
-              boost::qvm::Y(_segments.back().position) =
+              _segments.back().position[1] =
                   float(tvec[1] + boardTvecY);
-              boost::qvm::Z(_segments.back().position) =
+              _segments.back().position[2] =
                   float(tvec[2] + boardTvecZ);
             } catch (cv::Exception &e) {
               THALAMUS_LOG(error) << e.what();

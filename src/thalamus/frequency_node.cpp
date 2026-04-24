@@ -42,7 +42,7 @@ struct FrequencyNode::Impl {
   FrequencyNode *outer;
   NodeGraph *graph;
   bool channels_changed = true;
-  long long channel_number = -1;
+  int64_t channel_number = -1;
   double expected_frequency = -1;
   double frequency_margin = -1;
   double frequency_std_margin = -1;
@@ -77,7 +77,7 @@ public:
                  const ObservableCollection::Value &v) {
     auto key_str = std::get<std::string>(k);
     if(key_str == "Channel Number") {
-      channel_number = std::get<long long>(v);
+      channel_number = std::get<int64_t>(v);
     } else if (key_str == "Expected Frequency") {
       expected_frequency = std::get<double>(v);
       frequency_margin = expected_frequency*(allowed_error_percent/100);

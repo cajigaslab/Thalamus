@@ -71,6 +71,7 @@ class ThalamusThread:
             if not self.running:
               break
             if transaction.redirection:
+              stream.cancel()
               redirection = transaction.redirection.replace('localhost', self.address.split(':')[0])
               bridge_channel = grpc.aio.insecure_channel(redirection)
               await bridge_channel.channel_ready()
@@ -118,20 +119,29 @@ class ThalamusThread:
 
               for match in matches:
                 if isinstance(match.value, ObservableCollection):
-                  match.value.assign(value, from_remote=True)
+                  if change.action == thalamus_pb2.ObservableChange.Action.Set:
+                    match.value.assign(value, from_remote=True)
+                  elif match.value.parent is not None:
+                    key = match.value.key_in_parent()
+                    match.value.parent.delitem(key, lambda: None, True)
                 elif isinstance(match.path, jsonpath_ng.Index):
-                  if match.path.index == len(match.context.value):
-                    match.context.value.append(value, from_remote=True)
+                  if change.action == thalamus_pb2.ObservableChange.Action.Set:
+                    if match.path.index == len(match.context.value):
+                      match.context.value.append(value, from_remote=True)
+                    else:
+                      match.context.value.setitem(match.path.index, value, lambda: None, True)
                   else:
-                    match.context.value.setitem(match.path.index, value, lambda: None, True)
+                    match.context.value.delitem(match.path.index, lambda: None, True)
                 elif isinstance(match.path, jsonpath_ng.Fields):
-                  match.context.value.setitem(match.path.fields[0], value, lambda: None, True)
+                  if change.action == thalamus_pb2.ObservableChange.Action.Set:
+                    match.context.value.setitem(match.path.fields[0], value, lambda: None, True)
+                  else:
+                    match.context.value.delitem(match.path.fields[0], lambda: None, True)
     except asyncio.CancelledError:
       pass
     except grpc.aio.AioRpcError:
       pass
     except:
-      print('============================================')
       traceback.print_exc()
     finally:
       self.running = False

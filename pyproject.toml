@@ -1,9 +1,10 @@
 [project]
 name = "thalamus"
-version = "0.3.34"
-description = "TODO: Package description"
-license = "TODO: License declaration"
-maintainer = "jarl"
+version = "1.0.3"
+description = "Data Acquisition and Behavioral Experiment Platform"
+license = "GPL-3.0-only"
+license-file = "LICENSE"
+maintainer = "Jarl Haggerty"
 maintainer_email = "Jarl.Haggerty@Pennmedicine.penn.edu"
 requires-python = ">=3.10"
 

@@ -295,7 +295,7 @@ struct DistortionNode::Impl {
                  const ObservableCollection::Value &v) {
     auto key_str = std::get<std::string>(k);
     if (key_str == "Threshold") {
-      threshold = size_t(std::get<long long int>(v));
+      threshold = size_t(std::get<int64_t>(v));
     } else if (key_str == "Computing") {
       computing = std::get<bool>(v);
     } else if (key_str == "Square Size") {
@@ -361,9 +361,9 @@ struct DistortionNode::Impl {
         });
       }
     } else if (key_str == "Rows") {
-      rows = size_t(std::get<long long int>(v));
+      rows = size_t(std::get<int64_t>(v));
     } else if (key_str == "Columns") {
-      columns = size_t(std::get<long long int>(v));
+      columns = size_t(std::get<int64_t>(v));
     } else if (key_str == "Invert") {
       invert = std::get<bool>(v);
     } else if (key_str == "Camera Matrix") {

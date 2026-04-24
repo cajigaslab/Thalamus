@@ -3,10 +3,13 @@ Python implementation of "native thalamus".  Currently does as little as possibl
 '''
 import asyncio
 import typing
+import logging
 
 import grpc
 from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
+
+LOGGER = logging.getLogger(__name__)
 
 class PipelineServicer(thalamus_pb2_grpc.ThalamusServicer):
   def __init__(self):
@@ -17,10 +20,10 @@ class PipelineServicer(thalamus_pb2_grpc.ThalamusServicer):
 
   async def log(self, stream: typing.AsyncIterable[thalamus_pb2.Text], context: grpc.ServicerContext):
     async for text in stream:
-      print('Pipeline', text.text)
+      LOGGER.debug('Pipeline %s', text.text)
 
   async def analog(self, request: thalamus_pb2.AnalogRequest, context: grpc.ServicerContext):
-    print('Pipeline', request)
+    LOGGER.debug('Pipeline %s', request)
     while True:
       await asyncio.sleep(1)
 

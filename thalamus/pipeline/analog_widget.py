@@ -5,6 +5,9 @@ from .. import thalamus_pb2_grpc
 from ..task_controller.util import create_task_with_exc_handling
 import asyncio
 import time
+import logging
+
+LOGGER = logging.getLogger(__name__)
 
 class AnalogWidget(QWidget):
   def __init__(self, config, stub: thalamus_pb2_grpc.ThalamusStub):
@@ -16,7 +19,7 @@ class AnalogWidget(QWidget):
     self.loop_task = create_task_with_exc_handling(self.__loop(config, stub))
 
   def closeEvent(self, e):
-    print('AnalogWidget.closeEvent')
+    LOGGER.debug('AnalogWidget.closeEvent')
     self.loop_task.cancel()
 
   async def __loop(self, config, stub):
@@ -44,6 +47,8 @@ class AnalogWidget(QWidget):
           await queue.put(message)
     except asyncio.CancelledError:
       pass
+    finally:
+      self.stream.cancel()
 
   def mousePressEvent(self, e: QMouseEvent):
     self.holding = True

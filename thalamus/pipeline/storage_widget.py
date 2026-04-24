@@ -7,6 +7,9 @@ import datetime
 import asyncio
 import time
 import bisect
+import logging
+
+LOGGER = logging.getLogger(__name__)
 
 class StorageWidget(QWidget):
   def __init__(self, config: ObservableDict, stub: thalamus_pb2_grpc.ThalamusStub):
@@ -33,7 +36,7 @@ class StorageWidget(QWidget):
 
     def on_add():
       data = combo.currentText()
-      print('on_add', data)
+      LOGGER.debug('on_add %s', data)
       if data and data not in sources_list:
         i = bisect.bisect_left(sources_list, data)
         sources_list.insert(i, data)
@@ -83,7 +86,7 @@ class StorageWidget(QWidget):
         pass
 
     def on_change(source, action, key, value):
-      print(source, action, key, value)
+      LOGGER.debug('%s %s %s %s', source, action, key, value)
       if source is sources_list:
         config['Sources'] = ','.join(sources_list)
         return

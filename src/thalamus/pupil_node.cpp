@@ -142,8 +142,8 @@ struct PupilNode::Impl {
 
     auto end = std::chrono::steady_clock::now();
     auto elapsed = end - start;
-    if (elapsed < 16ms) {
-      timer.expires_after(16ms - elapsed);
+    if (elapsed < 32ms) {
+      timer.expires_after(32ms - elapsed);
     } else {
       timer.expires_after(1ms);
     }
@@ -157,7 +157,7 @@ struct PupilNode::Impl {
     auto key_str = std::get<std::string>(k);
     if (key_str == "Running") {
       is_running = std::get<bool>(v);
-      timer.expires_after(16ms);
+      timer.expires_after(32ms);
       timer.async_wait(std::bind(&Impl::on_timer, this, _1));
     } else if(key_str == "Random Saccade") {
       random_saccade = std::get<bool>(v);
@@ -190,7 +190,7 @@ void PupilNode::inject(const thalamus_grpc::Image &) { THALAMUS_ASSERT(false, "U
 
 std::chrono::nanoseconds PupilNode::time() const { return impl->time; }
 
-std::chrono::nanoseconds PupilNode::frame_interval() const { return 16ms; }
+std::chrono::nanoseconds PupilNode::frame_interval() const { return 32ms; }
 
 bool PupilNode::prepare() { return true; }
 

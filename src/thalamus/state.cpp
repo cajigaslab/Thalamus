@@ -32,10 +32,10 @@ ObservableCollection::ValueWrapper::operator ObservableListPtr() {
   }
 }
 
-ObservableCollection::ValueWrapper::operator long long int() {
+ObservableCollection::ValueWrapper::operator int64_t() {
   auto value = get_value();
-  if (std::holds_alternative<long long int>(value)) {
-    return thalamus::get<long long int>(value);
+  if (std::holds_alternative<int64_t>(value)) {
+    return thalamus::get<int64_t>(value);
   } else if (std::holds_alternative<double>(value)) {
     return int64_t(thalamus::get<double>(value));
   } else {
@@ -43,10 +43,10 @@ ObservableCollection::ValueWrapper::operator long long int() {
     return 0;
   }
 }
-ObservableCollection::ValueWrapper::operator unsigned long long int() {
+ObservableCollection::ValueWrapper::operator uint64_t() {
   auto value = get_value();
-  if (std::holds_alternative<long long int>(value)) {
-    return uint64_t(thalamus::get<long long int>(value));
+  if (std::holds_alternative<int64_t>(value)) {
+    return uint64_t(thalamus::get<int64_t>(value));
   } else if (std::holds_alternative<double>(value)) {
     return uint64_t(thalamus::get<double>(value));
   } else {
@@ -54,21 +54,10 @@ ObservableCollection::ValueWrapper::operator unsigned long long int() {
     return 0;
   }
 }
-ObservableCollection::ValueWrapper::operator unsigned long() {
-  auto value = get_value();
-  if (std::holds_alternative<long long int>(value)) {
-    return uint32_t(thalamus::get<long long int>(value));
-  } else if (std::holds_alternative<double>(value)) {
-    return uint32_t(thalamus::get<double>(value));
-  } else {
-    THALAMUS_ASSERT(false, "Value is not a number");
-    return 0;
-  }
-}
 ObservableCollection::ValueWrapper::operator double() {
   auto value = get_value();
-  if (std::holds_alternative<long long int>(value)) {
-    return double(thalamus::get<long long int>(value));
+  if (std::holds_alternative<int64_t>(value)) {
+    return double(thalamus::get<int64_t>(value));
   } else if (std::holds_alternative<double>(value)) {
     return thalamus::get<double>(value);
   } else {
@@ -78,8 +67,8 @@ ObservableCollection::ValueWrapper::operator double() {
 }
 ObservableCollection::ValueWrapper::operator bool() {
   auto value = get_value();
-  if (std::holds_alternative<long long int>(value)) {
-    return thalamus::get<long long int>(value) != 0;
+  if (std::holds_alternative<int64_t>(value)) {
+    return thalamus::get<int64_t>(value) != 0;
   } else if (std::holds_alternative<double>(value)) {
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -127,7 +116,7 @@ ObservableCollection::VectorIteratorWrapper::operator*() {
   auto this_iterator = this->iterator;
   auto this_end = this->end;
   value_wrapper = ValueWrapper(
-      static_cast<long long int>(key),
+      static_cast<int64_t>(key),
       [this_iterator]() -> Value & { return *this_iterator; },
       [this_iterator, this_end]() -> bool { return this_iterator != this_end; }, collection);
   return *value_wrapper;
@@ -254,8 +243,8 @@ std::string ObservableCollection::address() const {
   THALAMUS_ASSERT(end_opt.has_value(),
                   "Failed to find self in parent collection");
   auto end = *end_opt;
-  if (std::holds_alternative<long long int>(end)) {
-    return absl::StrFormat("%s[%d]", prefix, thalamus::get<long long int>(end));
+  if (std::holds_alternative<int64_t>(end)) {
+    return absl::StrFormat("%s[%d]", prefix, thalamus::get<int64_t>(end));
   } else if (std::holds_alternative<std::string>(end)) {
     if (prefix.empty()) {
       return absl::StrFormat("['%s']", thalamus::get<std::string>(end));
@@ -287,7 +276,7 @@ ObservableList::ObservableList(ObservableCollection *_parent)
 
 ObservableList::ValueWrapper ObservableList::operator[](size_t i) {
   return ValueWrapper(
-      static_cast<long long int>(i),
+      static_cast<int64_t>(i),
       [this, i]() -> Value & { return content[i]; },
       [this, i]() -> bool { return i < content.size(); }, this);
 }
@@ -298,7 +287,7 @@ const ObservableList::Value &ObservableList::operator[](size_t i) const {
 
 ObservableList::ValueWrapper ObservableList::at(size_t i) {
   return ValueWrapper(
-      static_cast<long long int>(i),
+      static_cast<int64_t>(i),
       [this, i]() -> Value & { return content.at(i); },
       [this, i]() -> bool { return i < content.size(); }, this);
 }
@@ -385,14 +374,14 @@ void ObservableList::clear() {
 }
 
 void ObservableList::recap() {
-  long long int i = 0;
+  int64_t i = 0;
   for (auto &v : content) {
     notify(this, Action::Set, i++, v);
   }
 }
 
 void ObservableList::recap(Observer target) {
-  long long int i = 0;
+  int64_t i = 0;
   for (auto &v : content) {
     target(Action::Set, i++, v);
   }
@@ -452,7 +441,7 @@ void ObservableList::push_back(const Value &value,
     thalamus::get<ObservableListPtr>(value)->set_remote_storage(remote_storage);
   }
   content.push_back(value);
-  notify(this, Action::Set, static_cast<long long>(content.size() - 1),
+  notify(this, Action::Set, static_cast<int64_t>(content.size() - 1),
          content.back());
 }
 
@@ -478,7 +467,7 @@ void ObservableList::pop_back(std::function<void()> callback,
     thalamus::get<ObservableListPtr>(value)->parent = nullptr;
   }
   content.pop_back();
-  notify(this, Action::Delete, static_cast<long long>(content.size()), value);
+  notify(this, Action::Delete, static_cast<int64_t>(content.size()), value);
 }
 
 void ObservableCollection::ValueWrapper::assign(const Value &new_value,
@@ -577,7 +566,7 @@ ObservableList::ObservableList(const boost::json::array &that) {
       break;
     }
     case boost::json::kind::uint64: {
-      content.push_back(static_cast<long long>(v.as_uint64()));
+      content.push_back(static_cast<int64_t>(v.as_uint64()));
       break;
     }
     case boost::json::kind::int64: {
@@ -604,8 +593,8 @@ ObservableList::operator boost::json::array() const {
   boost::json::array result;
   for (const auto &value : content) {
     // std::shared_ptr<ObservableDict>, std::shared_ptr<ObservableList>
-    if (std::holds_alternative<long long int>(value)) {
-      result.emplace_back(thalamus::get<long long int>(value));
+    if (std::holds_alternative<int64_t>(value)) {
+      result.emplace_back(thalamus::get<int64_t>(value));
     } else if (std::holds_alternative<double>(value)) {
       result.emplace_back(thalamus::get<double>(value));
     } else if (std::holds_alternative<bool>(value)) {
@@ -636,7 +625,7 @@ ObservableCollection::from_json(const boost::json::value &value) {
     return std::string(value.as_string());
   }
   case boost::json::kind::uint64: {
-    return static_cast<long long>(value.as_uint64());
+    return static_cast<int64_t>(value.as_uint64());
   }
   case boost::json::kind::int64: {
     return value.as_int64();
@@ -654,8 +643,8 @@ ObservableCollection::from_json(const boost::json::value &value) {
 }
 boost::json::value
 ObservableCollection::to_json(const ObservableCollection::Value &value) {
-  if (std::holds_alternative<long long int>(value)) {
-    return thalamus::get<long long int>(value);
+  if (std::holds_alternative<int64_t>(value)) {
+    return thalamus::get<int64_t>(value);
   } else if (std::holds_alternative<double>(value)) {
     return thalamus::get<double>(value);
   } else if (std::holds_alternative<bool>(value)) {
@@ -675,8 +664,8 @@ ObservableCollection::to_json(const ObservableCollection::Value &value) {
 }
 std::string
 ObservableCollection::to_string(const ObservableCollection::Value &value) {
-  if (std::holds_alternative<long long int>(value)) {
-    return std::to_string(thalamus::get<long long int>(value));
+  if (std::holds_alternative<int64_t>(value)) {
+    return std::to_string(thalamus::get<int64_t>(value));
   } else if (std::holds_alternative<double>(value)) {
     return std::to_string(thalamus::get<double>(value));
   } else if (std::holds_alternative<bool>(value)) {
@@ -697,8 +686,8 @@ ObservableCollection::to_string(const ObservableCollection::Value &value) {
 }
 std::string
 ObservableCollection::to_string(const ObservableCollection::Key &value) {
-  if (std::holds_alternative<long long int>(value)) {
-    return std::to_string(thalamus::get<long long int>(value));
+  if (std::holds_alternative<int64_t>(value)) {
+    return std::to_string(thalamus::get<int64_t>(value));
   } else if (std::holds_alternative<bool>(value)) {
     return std::to_string(thalamus::get<bool>(value));
   } else if (std::holds_alternative<std::string>(value)) {
@@ -733,7 +722,7 @@ struct ToBoolVisitor {
   bool operator()(std::monostate) {
     return false;
   }
-  bool operator()(long long int val) {
+  bool operator()(int64_t val) {
     return val == 0;
   }
   bool operator()(double val) {
@@ -948,7 +937,7 @@ void set_jsonpath(ObservableCollection::Value store, const std::string &query,
       auto unwrapped_value = thalamus::get<ObservableListPtr>(value);
       held->assign(*unwrapped_value, from_remote);
     } else {
-      size_t index = size_t(std::get<long long int>(end));
+      size_t index = size_t(std::get<int64_t>(end));
       while (held->size() < index) {
         held->push_back(ObservableCollection::Value(), nullptr, from_remote);
       }
@@ -1198,7 +1187,7 @@ ObservableDict::ObservableDict(const boost::json::object &that) {
       break;
     }
     case boost::json::kind::uint64: {
-      content[v.key()] = static_cast<long long>(v.value().as_uint64());
+      content[v.key()] = static_cast<int64_t>(v.value().as_uint64());
       break;
     }
     case boost::json::kind::int64: {
@@ -1227,16 +1216,16 @@ ObservableDict::operator boost::json::object() const {
     // std::shared_ptr<ObservableDict>, std::shared_ptr<ObservableList>
 
     std::string key;
-    if (std::holds_alternative<long long int>(pair.first)) {
-      key = std::to_string(thalamus::get<long long int>(pair.first));
+    if (std::holds_alternative<int64_t>(pair.first)) {
+      key = std::to_string(thalamus::get<int64_t>(pair.first));
     } else if (std::holds_alternative<std::string>(pair.first)) {
       key = thalamus::get<std::string>(pair.first);
     } else {
       THALAMUS_ABORT("Unexpect key type");
     }
 
-    if (std::holds_alternative<long long int>(pair.second)) {
-      result[key] = thalamus::get<long long int>(pair.second);
+    if (std::holds_alternative<int64_t>(pair.second)) {
+      result[key] = thalamus::get<int64_t>(pair.second);
     } else if (std::holds_alternative<double>(pair.second)) {
       result[key] = thalamus::get<double>(pair.second);
     } else if (std::holds_alternative<bool>(pair.second)) {

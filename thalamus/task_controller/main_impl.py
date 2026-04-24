@@ -17,6 +17,7 @@ import typing
 import asyncio
 import logging
 import argparse
+import importlib
 import itertools
 
 import yaml
@@ -45,8 +46,11 @@ from ..qt import *
 from ..orchestration import Orchestrator
 from .util import create_task_with_exc_handling
 from ..resources import get_path
+from .tasks import add_tasks
 
 UNHANDLED_EXCEPTION: typing.List[Exception] = []
+
+LOGGER = logging.getLogger(__name__)
 
 def exception_handler(loop: asyncio.AbstractEventLoop, context: typing.Mapping[str, typing.Any]) -> None:
   """
@@ -86,6 +90,7 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument('-y', '--pypipeline', action='store_true', help='Use Python data pipeline implementation')
   parser.add_argument('-r', '--remote-executor', action='store_true',
                       help='Send task configs to remote ROS node to execute')
+  parser.add_argument('--ext', help='Extension Module')
   return parser.parse_args(self_args[1:])
 
 async def async_main() -> None:
@@ -99,10 +104,23 @@ async def async_main() -> None:
   done_future = asyncio.get_event_loop().create_future()
 
   asyncio.get_event_loop().set_exception_handler(exception_handler)
-  logging.basicConfig(level=logging.DEBUG, format='%(levelname)s %(asctime)s %(name)s:%(lineno)s %(message)s')
+  logging.basicConfig(level=logging.INFO, format='%(levelname)s %(asctime)s %(name)s:%(lineno)s %(message)s')
   logging.getLogger('matplotlib.font_manager').setLevel(logging.INFO)
 
   arguments = parse_args()
+
+  ext_widgets = {}
+  ext_library = None
+  if arguments.ext is not None:
+    ext_module = importlib.__import__(arguments.ext)
+    if hasattr(ext_module, 'widgets'):
+      ext_widgets.update(ext_module.widgets())
+    if hasattr(ext_module, 'library'):
+      ext_library = ext_module.library()
+      ext_library = [ext_library] if isinstance(ext_library, (str, pathlib.Path)) else ext_library
+      ext_library = tuple(ext_library)
+    if hasattr(ext_module, 'tasks'):
+      add_tasks(ext_module.tasks())
 
   _ = QApplication(sys.argv)
 
@@ -163,9 +181,13 @@ async def async_main() -> None:
     await pypipeline_server.start()
 
   else:
-    print(bmbi_native_filename)
-    bmbi_native_proc = await asyncio.create_subprocess_exec(
-      bmbi_native_filename, 'thalamus', '--port', str(arguments.port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else []))
+    logging.debug('%s', bmbi_native_filename)
+    command = bmbi_native_filename, 'thalamus', '--port', str(arguments.port), '--state-url', f'localhost:{arguments.ui_port}'
+    if ext_library is not None:
+      command = command + ('--ext',) + ext_library
+    if arguments.trace:
+      command = command + ('--trace',)
+    bmbi_native_proc = await asyncio.create_subprocess_exec(*command)
     create_task_with_exc_handling(proc_watcher('native.exe', bmbi_native_proc))
 
   dotnet_proc = None
@@ -223,7 +245,7 @@ async def async_main() -> None:
     (screen_geometry.height()-controller.height()) // 2 + 50)
   controller.show()
 
-  thalamus = ThalamusWindow(f'localhost:{arguments.port}', config, stub, done_future)
+  thalamus = ThalamusWindow(f'localhost:{arguments.port}', config, stub, done_future, ext_widgets)
   await thalamus.load()
   thalamus.resize(384, 768)
   thalamus.move(100, 100)
@@ -259,7 +281,7 @@ async def async_main() -> None:
     await dotnet_proc.wait()
   #if bmbi_native_proc:
   #  await native_watch_task
-  print('DONE')
+  LOGGER.debug('DONE')
 
 def main() -> None:
   '''

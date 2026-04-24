@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import io
 import sys
 import typing
@@ -36,13 +38,20 @@ RAW_FORMATS = {
 }
 
 class VideoWriter:
-  def __init__(self, file_arg: typing.Union[io.IOBase, pathlib.Path, str], format: str | None = None):
+  def __init__(self, file_arg: typing.Union[io.IOBase, pathlib.Path, str], format: str | None = None, command: typing.List[str] | str | None = None):
     self.format = format
+    if command is None:
+      self.command = ['ffmpeg']
+    elif isinstance(command, list):
+      self.command = command
+    else:
+      self.command = [command]
     self.process: typing.Optional[subprocess.Popen] = None
     self.thread: typing.Optional[threading.Thread] = None
 
     if isinstance(file_arg, (str, pathlib.Path)):
       self.filename = pathlib.Path(file_arg)
+      self.format = self.filename.suffix[1:] if self.format is None else self.format
       self.writer = None
     else:
       self.filename = None
@@ -57,7 +66,7 @@ class VideoWriter:
       self.writer.write(data)
 
   def setup(self, image: Image):
-    command = ['ffmpeg', '-y']
+    command = self.command + ['-y']
     if image.format in RAW_FORMATS:
       framerate = min(FRAMERATES, key=lambda a: abs(a[0] - 1e9/(image.frame_interval or 16e6)))
       command += ['-f', 'rawvideo']
@@ -101,7 +110,8 @@ class VideoWriter:
       self.thread.join()
 
 class MultiVideoWriter:
-  def __init__(self, pattern: str = '%s.mp4'):
+  def __init__(self, pattern: str = '%s.mp4', command: typing.List[str] | str | None = None):
+    self.command = command
     self.pattern = pattern
     self.writers: typing.Dict[str, VideoWriter] = {}
   
@@ -118,9 +128,13 @@ class MultiVideoWriter:
     
     node = record.node
     if node not in self.writers:
-      self.writers[node] = VideoWriter(self.pattern % (node,)).__enter__()
+      self.writers[node] = VideoWriter(self.pattern % (node,), command = self.command).__enter__()
     self.writers[node].write(record.image)
     return True
+  
+  def write_all(self, records: typing.Iterable[StorageRecord]):
+    for r in records:
+      self.write(r)
 
   def __enter__(self):
     return self

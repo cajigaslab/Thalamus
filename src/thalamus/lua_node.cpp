@@ -156,7 +156,7 @@ public:
     }
   }
 
-  void on_equation_change(ObservableDictPtr dict, long long index,
+  void on_equation_change(ObservableDictPtr dict, int64_t index,
                           ObservableCollection::Action,
                           const ObservableCollection::Key &k,
                           const ObservableCollection::Value &v) {
@@ -198,12 +198,12 @@ public:
     lua_replace(L, int(index) + 1);
   }
 
-  std::map<long long, boost::signals2::scoped_connection> equation_connections;
+  std::map<int64_t, boost::signals2::scoped_connection> equation_connections;
 
   void on_equations_change(ObservableCollection::Action,
                            const ObservableCollection::Key &k,
                            const ObservableCollection::Value &v) {
-    auto index = std::get<long long>(k);
+    auto index = std::get<int64_t>(k);
     auto value = std::get<ObservableDictPtr>(v);
     equation_connections[index] = value->changed.connect(
         std::bind(&Impl::on_equation_change, this, value, index, _1, _2, _3));

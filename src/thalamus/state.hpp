@@ -40,8 +40,8 @@ using StateColl = ObservableCollection;
 
 class ObservableCollection {
 public:
-  using Key = std::variant<std::monostate, long long int, bool, std::string>;
-  using Value = std::variant<std::monostate, long long int, double, bool,
+  using Key = std::variant<std::monostate, int64_t, bool, std::string>;
+  using Value = std::variant<std::monostate, int64_t, double, bool,
                              std::string, std::shared_ptr<ObservableDict>,
                              std::shared_ptr<ObservableList>>;
   using Map = thalamus::map<Key, Value>;
@@ -75,9 +75,17 @@ public:
 
     operator ObservableDictPtr();
     operator ObservableListPtr();
-    operator long long int();
-    operator unsigned long long int();
-    operator unsigned long();
+    operator int64_t();
+    operator uint64_t();
+    template<typename T>
+    requires std::is_integral<T>::value
+    operator T() {
+      if constexpr (std::is_unsigned<T>::value) {
+        return uint64_t(*this);
+      } else {
+        return int64_t(*this);
+      }
+    }
     operator double();
     operator bool();
     operator std::string();

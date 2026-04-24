@@ -235,11 +235,11 @@ def sample_from_cluster(cluster_config: typing.Dict[str, typing.Any]) -> typing.
   """
   Selects a task from a task_cluster weighted by the remaining goal for each task
   """
-  LOGGER.info('SAMPLING FROM CLUSTER')
+  LOGGER.debug('SAMPLING FROM CLUSTER')
   tasks = cluster_config['tasks']
   weights = [t['goal'] for t in tasks]
   if sum(weights) > .5:
-    LOGGER.info('%s %s', [t['name'] for t in tasks], weights)
+    LOGGER.debug('%s %s', [t['name'] for t in tasks], weights)
     return random.choices(tasks, weights=weights, k=1)[0]
 
   return None
@@ -253,7 +253,7 @@ def sample_from_task(task_config: typing.Dict[str, typing.Any]) -> typing.Option
   """
   When given a task this function will return that task if it has any remaining goal, otherwise, return None.
   """
-  LOGGER.info('SAMPLING FROM TASK')
+  LOGGER.debug('SAMPLING FROM TASK')
   return task_config if task_config['goal'] else None
 
 class TrialSummaryData:
@@ -292,8 +292,6 @@ class TaskContext(TaskContextProtocol):
     self.running = False
     self.servicer = servicer
     self.stub = stub
-    self.log_queue = IterableQueue()
-    self.log_stream = stub.log(self.log_queue)
     self.inject_analog_streams: typing.Dict[str, IterableQueue] = {}
     self.node_request_streams: typing.Dict[str, NodeRequestStream] = {}
     self.next_node_request_id = 1
@@ -315,8 +313,8 @@ class TaskContext(TaskContextProtocol):
         self.use_comedi = False
       else:
         self.use_comedi = True
-        print('comedi device name: ')
-        print(self.it)
+        LOGGER.debug('comedi device name: ')
+        LOGGER.debug('%s', self.it)
         self.comedi_subd = 2
         self.comedi_ch = 0
         c.comedi_dio_config(self.it, 
@@ -560,7 +558,7 @@ class TaskContext(TaskContextProtocol):
     """
     queue = self.config['queue']
     result = None
-    LOGGER.info('GETTING TASK FROM QUEUE')
+    LOGGER.debug('GETTING TASK FROM QUEUE')
     while queue and result is None:
       child = queue[0]
       if child['type'] == 'task_cluster':
@@ -572,14 +570,14 @@ class TaskContext(TaskContextProtocol):
         del queue[0]
 
     if not result:
-      LOGGER.info('GETTING TASK CLUSTER TO ADD TO QUEUE')
+      LOGGER.debug('GETTING TASK CLUSTER TO ADD TO QUEUE')
       clusters = self.config['task_clusters']
       weights = [compute_cluster_weight(cluster) for cluster in clusters]
-      LOGGER.info('%s %s', [t['name'] for t in clusters], weights)
+      LOGGER.debug('%s %s', [t['name'] for t in clusters], weights)
       if sum(weights) > .5:
         selected = random.choices(clusters, weights=weights, k=1)[0]
-        LOGGER.info('GOT %s', selected["name"])
-        #LOGGER.info(json.dumps(selected.unwrap(), indent=2))
+        LOGGER.debug('GOT %s', selected["name"])
+        #LOGGER.debug(json.dumps(selected.unwrap(), indent=2))
         selected_copy = selected.copy()
         for task in selected_copy.get('tasks', []):
           task['task_cluster_name'] = selected_copy['name']
@@ -587,26 +585,26 @@ class TaskContext(TaskContextProtocol):
         result = self.__sample_task(True)
 
     if not recurse:
-      LOGGER.info('QUEUE STATUS')
+      LOGGER.debug('QUEUE STATUS')
       for cluster in queue:
         if cluster['type'] == 'task_cluster':
-          LOGGER.info('  CLUSTER=%s', cluster["name"])
+          LOGGER.debug('  CLUSTER=%s', cluster["name"])
           for task in cluster['tasks']:
-            LOGGER.info('    TASK=%s, GOAL=%s', task["name"], task["goal"])
+            LOGGER.debug('    TASK=%s, GOAL=%s', task["name"], task["goal"])
         else:
-          LOGGER.info('  TASK=%s, GOAL=%s', cluster["name"], cluster["goal"])
+          LOGGER.debug('  TASK=%s, GOAL=%s', cluster["name"], cluster["goal"])
     return result
 
   async def __execute_remote_task(self, task_config: ObservableCollection) -> TaskResult:
     '''
     Publish task config to ROS2 for a remote task executor to handle.
     '''
-    LOGGER.info('waiting for executor')
+    LOGGER.debug('waiting for executor')
     await self.servicer.wait_for_executor()
     config = task_controller_pb2.TaskConfig(body=json.dumps(task_config.unwrap()))
     await self.servicer.send_config(config)
 
-    LOGGER.info('waiting on task')
+    LOGGER.debug('waiting on task')
 
     try:
       grpc_result = await self.servicer.get_result()
@@ -662,6 +660,7 @@ class TaskContext(TaskContextProtocol):
       return {}
 
   def pulse_digital_channel(self):
+    LOGGER.warning('TaskContext.pulse_digital_channel is deprecated')
     if self.use_comedi:
       c.comedi_dio_write(self.it, self.comedi_subd, self.comedi_ch, 1)
       #await asyncio.sleep(0.001)
@@ -677,30 +676,33 @@ class TaskContext(TaskContextProtocol):
     while True:
       self.task_config = self.__sample_task()
       if self.task_config is None:
-        LOGGER.info('NO TASK')
+        LOGGER.debug('NO TASK')
         try:
           await self.sleep(datetime.timedelta(seconds=1))
           continue
         except asyncio.CancelledError:
           break
-      LOGGER.info('RUNNING TASK %s', self.task_config["name"])
+      LOGGER.debug('RUNNING TASK %s', self.task_config["name"])
       was_cancelled = False
 
       self.trial_summary_data.behav_result.clear()
       self.trial_summary_data.used_values.clear()
 
+      self.log_queue = IterableQueue()
+      log_coroutine = self.stub.log(self.log_queue)
+
       if self.widget:
         task = self.task_descriptions_map[self.task_config['task_type']]
         try:
           await self.refresh_streams()
-          LOGGER.info('TRIAL START')
+          LOGGER.debug('TRIAL START')
           await self.log('TRIAL START ' + self.task_config["type"] + ' ' + self.task_config["name"])
           result = await task.run(self)
           await self.log('TRIAL FINISHED ' + self.task_config["type"] + ' ' + self.task_config["name"])
           self.__update_status(result.success)
-          LOGGER.info('TRIAL FINISH')
+          LOGGER.debug('TRIAL FINISH')
         except asyncio.CancelledError:
-          LOGGER.info('CANCELLED')
+          LOGGER.debug('CANCELLED')
           was_cancelled = True
         self.widget.renderer = lambda w: None
         self.widget.touch_listener = lambda e: None
@@ -713,7 +715,7 @@ class TaskContext(TaskContextProtocol):
         try:
           result = await self.__execute_remote_task(self.task_config)
         except asyncio.CancelledError:
-          LOGGER.info('CANCELLED')
+          LOGGER.debug('CANCELLED')
           was_cancelled = True
       
       if not was_cancelled and result.success:
@@ -723,6 +725,7 @@ class TaskContext(TaskContextProtocol):
         self.config['reward_schedule']['index'] = (current_index + 1) % modulus
       if not self.sleeper.running:
         break
+      self.sleeper.cancel()
 
       if not was_cancelled:
         trial_summ = {
@@ -734,6 +737,10 @@ class TaskContext(TaskContextProtocol):
         if self.trial_summary_data.behav_result:
           trial_summ['behav_result'] = self.trial_summary_data.behav_result
         await self.log(json.dumps(trial_summ))
+      
+      await self.log_queue.close()
+      await self.log_queue.join()
+      await log_coroutine
     
     for future in self.sleeper.cancelled_futures:
       future.exception()
@@ -742,7 +749,7 @@ class TaskContext(TaskContextProtocol):
     
     self.running = False
     #asyncio.get_event_loop().wake()
-    LOGGER.info('WAKE')
+    LOGGER.debug('WAKE')
 
   def start(self) -> None:
     """

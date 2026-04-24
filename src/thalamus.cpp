@@ -13,6 +13,8 @@
 #include <thalamus/file.hpp>
 #include <thalamus/thread.hpp>
 #include <thalamus/async.hpp>
+#include <thalamus/plugin.h>
+#include <thalamus/shared_library.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -33,6 +35,7 @@
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
+#include <boost/dll/shared_library.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic pop
@@ -109,10 +112,6 @@ int main(int argc, char **argv) {
               << std::endl;
   }
 
-  boost::log::core::get()->set_filter(boost::log::trivial::severity >=
-                                      boost::log::trivial::trace);
-  boost::log::add_common_attributes();
-
   boost::program_options::positional_options_description p;
 
   boost::program_options::options_description desc(
@@ -121,7 +120,9 @@ int main(int argc, char **argv) {
                                                        "Enable tracing")(
       "port,p", boost::program_options::value<size_t>()->default_value(50050),
       "GRPC Port")("state-url,s", boost::program_options::value<std::string>(),
-                   "Address of Thalamus instance that manages state");
+                   "Address of Thalamus instance that manages state")
+                   ("ext,e", boost::program_options::value<std::vector<std::string>>()->multitoken(), "Shared libraries to extend thalamus");
+  desc.add_options()("log-level,l", boost::program_options::value<std::string>()->default_value("info"), "Set log level");
 
 #ifndef _WIN32
   desc.add_options()
@@ -139,6 +140,20 @@ int main(int argc, char **argv) {
       vm);
   boost::program_options::notify(vm);
 
+  auto log_level = vm["log-level"].as<std::string>();
+  std::map<std::string, boost::log::trivial::severity_level> name_to_level = {
+    {"trace", boost::log::trivial::trace},
+    {"debug", boost::log::trivial::debug},
+    {"info", boost::log::trivial::info},
+    {"warning", boost::log::trivial::warning},
+    {"error", boost::log::trivial::error},
+    {"fatal", boost::log::trivial::fatal},
+  };
+  auto selected_log_level = name_to_level.find(log_level);
+  THALAMUS_ASSERT(selected_log_level != name_to_level.end(), "Invalid log level");
+  boost::log::core::get()->set_filter(boost::log::trivial::severity >= selected_log_level->second);
+  boost::log::add_common_attributes();
+
   if (vm.count("help")) {
     std::cout << desc << std::endl;
     return 0;
@@ -147,8 +162,10 @@ int main(int argc, char **argv) {
 #ifndef _WIN32
   std::map<std::string, int> sched_policies = {
     {"SCHED_OTHER", SCHED_OTHER},
+#ifndef __APPLE__
     {"SCHED_IDLE", SCHED_IDLE},
     {"SCHED_BATCH", SCHED_BATCH},
+#endif
     {"SCHED_FIFO", SCHED_FIFO},
     {"SCHED_RR", SCHED_RR}
   };
@@ -186,6 +203,16 @@ int main(int argc, char **argv) {
     state_url = vm["state-url"].as<std::string>();
   }
   auto port = vm["port"].as<size_t>();
+
+  std::vector<SharedLibrary> extensions;
+  if (vm.count("ext") > 0) {
+    auto exts = vm["ext"].as<std::vector<std::string>>();
+    for(std::filesystem::path ext_path : exts) {
+      if(std::filesystem::exists(ext_path)) {
+        extensions.emplace_back(ext_path.string());
+      }
+    }
+  }
 
   boost::asio::io_context io_context;
 
@@ -237,7 +264,11 @@ int main(int argc, char **argv) {
   grpc::ServerBuilder builder;
   builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
   std::unique_ptr<NodeGraphImpl> node_graph(
+<<<<<<< HEAD
       new NodeGraphImpl(nodes, io_context, system_start, steady_start, stub.get()
+=======
+      new NodeGraphImpl(nodes, io_context, system_start, steady_start, stub.get(), extensions
+>>>>>>> ffbb08e41eff1730e6256c68c42ac2342f3cbe6c
 #ifndef _WIN32
                         ,pool_sched_policy_opt, pool_sched_priority_opt
 #endif
