@@ -65,6 +65,9 @@ extern "C" {
     char owns_data;
   };
 
+  struct ThalamusRequestHandle;
+
+  struct ThalamusJson;
   struct ThalamusAnalogNode;
   struct ThalamusImageNode;
   struct ThalamusMocapNode;
@@ -78,6 +81,7 @@ extern "C" {
     struct ThalamusImageNode* image;
     struct ThalamusTextNode* text;
     void* plugin_impl;
+    void (*request)(struct ThalamusRequestHandle*, struct ThalamusJson*)
   };
 
   struct ThalamusAnalogNode {
@@ -243,6 +247,11 @@ extern "C" {
     void (*charspan_destroy)(struct ThalamusCharSpan* span);
 
     void (*error_code_message)(struct ThalamusCharSpan* result, struct ThalamusErrorCode *error);
+
+    void (*json_to_string)(struct ThalamusCharSpan*, const struct ThalamusJson*);
+    void (*json_from_string)(struct ThalamusJson*, const struct ThalamusCharSpan*);
+
+    void (*request_respond_span)(struct ThalamusRequestHandle*, const struct ThalamusCharSpan*);
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories)(struct ThalamusAPI*);

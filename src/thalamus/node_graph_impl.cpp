@@ -137,6 +137,21 @@ template <typename T> struct NodeFactory : public INodeFactory {
   std::string type_name() override { return T::type_name(); }
 };
 
+struct ThalamusJson {
+  boost::json::value value;
+};
+
+struct ThalamusRequestHandle {
+  void(const boost::json::value &) callback;
+};
+
+static void string_to_span(struct ThalamusCharSpan* output, const std::string& input) {
+  output->data = new char[input.size()];
+  output->size = input.size();
+  std::copy(input.begin(), input.end(), output->data());
+  output->owns_data = 1;
+}
+
 struct ExtNode : public Node, public AnalogNode, public ImageNode, public MotionCaptureNode, public TextNode {
   ThalamusNode* node;
   ThalamusAPI* api;
@@ -284,11 +299,21 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
   std::string_view text() const override {
     return node->text->text(node);
   }
+
   bool has_text_data() const override {
     return node->text->has_text_data(node);
   }
-};
 
+  void process(const boost::json::value & request, std::function<void(const boost::json::value &)> callback) override {
+    if(node->request == nullptr) {
+      callback(boost::json::value());
+      return;
+    }
+    ThalamusJson json{request}
+    auto handle = new ThalamusRequestHandle {callback};
+    node->request(handle, &json);
+  }
+};
 
 ExtNode::~ExtNode() {
   factory->destroy(factory, node);
@@ -652,6 +677,21 @@ struct ThalamusAPIImpl {
     result->data = data;
     result->size = message.size();
     result->owns_data = true;
+  }
+
+  static void json_to_string(struct ThalamusCharSpan* output, const struct ThalamusJson* input) {
+    auto serialized = boost::json::serialize(input->value);
+    string_to_span(output, serialized);
+  }
+
+  static void json_from_string(struct ThalamusJson* output, const struct ThalamusCharSpan* input) {
+    output->value = boost::json::parse(std::string_view(input->data, input->size));
+  }
+
+  static void request_respond_span(struct ThalamusRequestHandle* handle, const struct ThalamusCharSpan* response) {
+    auto value = boost::json::parse(std::string_view(input->data, input->size));
+    handle->callback(value);
+    delete handle;
   }
 };
 
