@@ -19,6 +19,11 @@
 #include <remotelog_node.hpp>
 #ifndef _WIN32
 #include <ros2_node.hpp>
+#else
+#include <mc_node.hpp>
+#endif
+#ifdef _WIN32
+#include <brainproducts_node.hpp>
 #endif
 #include <run_node.hpp>
 #include <run2_node.hpp>
@@ -33,6 +38,8 @@
 #include <video_node.hpp>
 #include <test_pulse_node.hpp>
 #include <wallclock_node.hpp>
+#include <delsys_node.hpp>
+#include <ceci_node.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -141,6 +148,11 @@ public:
         {"LUA", new NodeFactory<LuaNode>()},
 #if !defined(_WIN32) && !defined(__APPLE__)
         {"ROS2", new NodeFactory<Ros2Node>()},
+#else
+        {"MC", new NodeFactory<McNode>()},
+#endif
+#ifdef _WIN32
+        {"BRAINPRODUCTS", new NodeFactory<BrainProductsNode>()},
 #endif
         {"REMOTE", new NodeFactory<RemoteNode>()},
         {"REMOTE_LOG", new NodeFactory<RemoteLogNode>()},
@@ -154,7 +166,9 @@ public:
         {"STIM_PRINTER", new NodeFactory<StimPrinterNode>()},
         {"TEST_PULSE_NODE", new NodeFactory<TestPulseNode>()},
         {"WALLCLOCK", new NodeFactory<WallClockNode>()},
+        {"CECI", new NodeFactory<CeciNode>()},
         //{"HEXASCOPE", new NodeFactory<HexascopeNode>()},
+        {"DELSYS", new NodeFactory<DelsysNode>()},
         {"ARUCO", new NodeFactory<ArucoNode>()}};
 
     using namespace std::placeholders;

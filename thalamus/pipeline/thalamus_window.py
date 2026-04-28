@@ -44,6 +44,7 @@ from .storage_widget import StorageWidget
 from .storage2_widget import Storage2Widget
 from .persistence_widget import PersistenceWidget
 from .run2_widget import Run2Widget
+from .delsys_widget import DelsysWidget
 from ..util import NodeSelector
 from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
@@ -208,6 +209,9 @@ def create_alpha_omega_widget(node: ObservableDict, stub: thalamus_pb2_grpc.Thal
 FACTORIES = {
   'NONE': Factory(None, []),
   'STIM_PRINTER': Factory(None, []),
+  'BRAINPRODUCTS': Factory(None, [
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+  ]),
   'NIDAQ': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.DOUBLE_SPINBOX, 'Sample Rate', 1000.0, []),
@@ -440,7 +444,21 @@ FACTORIES = {
       "DICT_ARUCO_MIP_36h12"])
   ]),
   'HEXASCOPE': Factory(HexascopeWidget, []),
-  'WALLCLOCK': Factory(None, []),
+  'WALLCLOCK': Factory(None, [
+    UserData(UserDataType.CHECK_BOX, 'Integer Data', False, []),
+  ]),
+  'MC': Factory(None, [
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+  ]),
+  'DELSYS': Factory(DelsysWidget, [
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+    UserData(UserDataType.OPEN_FILE, 'Key File', '', []),
+    UserData(UserDataType.OPEN_FILE, 'License File', '', []),
+  ]),
+  'CECI': Factory(None, [
+    UserData(UserDataType.DEFAULT, 'Device 0', 'PXI1Slot4', []),
+    UserData(UserDataType.DEFAULT, 'Device 1', 'PXI1Slot5', []),
+  ]),
 }
 
 FACTORY_NAMES = {}
@@ -469,7 +487,7 @@ class FilePicker(QWidget):
 
     button.clicked.connect(on_click)
 
-class Delegate(QItemDelegate):
+class Delegate(QStyledItemDelegate):
   def __init__(self, tree):
     super().__init__()
     self.tree = tree

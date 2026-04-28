@@ -6,45 +6,8 @@
 #include <memory>
 #include <variant>
 
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Weverything"
-#endif
-
-#include <absl/strings/str_format.h>
-#include <boost/exception/get_error_info.hpp>
-#include <boost/exception/info.hpp>
-#include <boost/log/trivial.hpp>
-#include <boost/log/utility/manipulators.hpp>
-#include <boost/stacktrace.hpp>
-
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
-
-#define THALAMUS_LOG(LEVEL)                                                    \
-  BOOST_LOG_TRIVIAL(LEVEL) << boost::log::add_value("Line", __LINE__)          \
-                           << boost::log::add_value(                           \
-                                  "File", thalamus::filename(__FILE__))        \
-                           << boost::log::add_value("Function", __FUNCTION__)
-
-// #ifdef NDEBUG
-// #define THALAMUS_ASSERT(condition, ...) if(!(condition)) {throw
-// boost::enable_error_info(std::runtime_error(absl::StrFormat(__VA_ARGS__))) <<
-// traced(boost::stacktrace::stacktrace(2,
-// std::numeric_limits<size_t>::max()));} #else
-
-#define THALAMUS_ABORT(...)                                                    \
-  THALAMUS_LOG(fatal) << absl::StrFormat("" __VA_ARGS__) << "\n"               \
-                      << boost::stacktrace::stacktrace(                        \
-                             2, std::numeric_limits<size_t>::max());           \
-  std::abort()
-#define THALAMUS_ABORT_WITH_SKIP(skip, ...)                                    \
-  THALAMUS_LOG(fatal) << absl::StrFormat("" __VA_ARGS__) << "\n"               \
-                      << boost::stacktrace::stacktrace(                        \
-                             2 + skip, std::numeric_limits<size_t>::max());    \
-  std::abort()
-
+#include <thalamus/log.hpp>
+#include <thalamus/assert.hpp>
 // #endif
 
 #define THALAMUS_THROW(exc)                                                    \
@@ -58,11 +21,6 @@
 namespace thalamus {
 typedef boost::error_info<struct tag_stacktrace, boost::stacktrace::stacktrace>
     traced;
-consteval std::string_view filename(const std::string_view &path) {
-  auto filename_start = path.find_last_of("/\\");
-  return filename_start == std::string::npos ? path
-                                             : path.substr(filename_start + 1);
-}
 
 template <typename T> T StacktraceAndThrowOnException(std::function<T()> func) {
   try {
@@ -306,5 +264,4 @@ struct ReceivedEvent {
 };
 } // namespace thalamus
 
-#include <thalamus/assert.hpp>
 

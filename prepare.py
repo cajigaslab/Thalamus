@@ -4,6 +4,7 @@ import io
 import ssl
 import sys
 import time
+import json
 import shutil
 import tarfile
 import zipfile
@@ -67,6 +68,7 @@ def main():
   parser = argparse.ArgumentParser(description='Process some integers.')
   parser.add_argument('--home', default=str(pathlib.Path.home()), help='Use this folder as home')
   parser.add_argument('--ci', action='store_true', help='Use reduced dependencies for CI build')
+  parser.add_argument('--force-vs', action='store_true', help='Run vs installer even if it\'s installed')
 
   args = parser.parse_args()
   home_str = args.home
@@ -169,9 +171,28 @@ def main():
       subprocess.check_call([str(msys2_root / 'msys2_shell.cmd'), '-here', '-use-full-path', '-no-start', '-defterm', '-c', 'pacman --noconfirm -S make diffutils binutils gcc'])
     print('make exists:', (msys2_root / 'usr/bin/make.exe').exists())
 
-    if not pathlib.Path('C:/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe').exists():
-      download('https://aka.ms/vs/17/release/vs_community.exe')
-      subprocess.check_call(['start', '/w', 'vs_community.exe', '--quiet', '--wait', '--norestart', '--add', 'Microsoft.VisualStudio.Workload.NativeDesktop', '--add', 'Microsoft.VisualStudio.Workload.NativeGame', '--includeRecommended'], shell=True)
+    vs_where = pathlib.Path('C:/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe')
+    vs_installed = vs_where.exists()
+    if args.force_vs or not vs_installed:
+      if vs_installed:
+        vs_where_output = subprocess.check_output([vs_where, '-format', 'json'])
+        vs_where_json = json.loads(vs_where_output)
+        vs_setup = pathlib.Path(vs_where_json[0]['properties']['setupEngineFilePath'])
+        vs_install_path = vs_where_json[0]['installationPath']
+        vs_channel_id = vs_where_json[0]['channelId']
+        vs_product_id = vs_where_json[0]['productId']
+        vs_command = ['start', '/w', vs_setup.name, 'modify', '--productId', vs_product_id, '--channelId', vs_channel_id]
+      else:
+        download('https://aka.ms/vs/17/release/vs_community.exe')
+        vs_command = ['start', '/w', 'vs_community.exe', '--wait']
+
+      vs_command += ['--quiet', '--norestart',
+                     '--add', 'Microsoft.VisualStudio.Workload.NativeDesktop',
+                     '--add', 'Microsoft.VisualStudio.Workload.NativeGame',
+                     '--add', 'Microsoft.VisualStudio.Workload.ManagedDesktop',
+                     '--includeRecommended']
+      print(' '.join(vs_command))
+      subprocess.check_call(vs_command, cwd=vs_setup.parent, shell=True)
 
     with winreg.OpenKeyEx(winreg.HKEY_LOCAL_MACHINE,
                           r'SYSTEM\CurrentControlSet\Control\FileSystem', 

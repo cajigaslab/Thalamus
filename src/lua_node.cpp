@@ -393,10 +393,15 @@ void LuaNode::inject(const thalamus::vector<std::span<double const>> &,
 
 bool LuaNode::has_analog_data() const { return true; }
 
-boost::json::value LuaNode::process(const boost::json::value &) {
-  impl->maxes.assign(impl->maxes.size(), -std::numeric_limits<double>::max());
-  impl->mins.assign(impl->mins.size(), std::numeric_limits<double>::max());
-  return boost::json::value();
+boost::json::value LuaNode::process(const boost::json::value & request) {
+  auto str_request = std::string("return ") + boost::json::value_to<std::string>(request);
+  std::cout << request << std::endl;
+  std::cout << str_request << std::endl;
+  luaL_dostring(impl->L, str_request.c_str());
+  auto lua_result = lua_tolstring(impl->L, -1, nullptr);
+  boost::json::string json_result(lua_result);
+  return json_result;
 }
+
 size_t LuaNode::modalities() const { return infer_modalities<LuaNode>(); }
 } // namespace thalamus

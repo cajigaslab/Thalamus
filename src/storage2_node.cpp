@@ -184,6 +184,8 @@ struct Storage2Node::Impl {
       record.set_node(name);
       body->set_time(uint64_t(locked_analog->time().count()));
       body->set_remote_time(uint64_t(locked_analog->remote_time().count()));
+      auto is_transformed = locked_analog->is_transformed();
+      body->set_is_transformed(is_transformed);
       visit_node(locked_analog, [&]<typename T>(T *wrapper) {
         for (auto i = 0; i < wrapper->num_channels(); ++i) {
           auto data = wrapper->data(i);
@@ -208,13 +210,24 @@ struct Storage2Node::Impl {
                            [&] { return name + "(" + channel_name + ")"; });
           }
           auto span = body->add_spans();
+          if(is_transformed) {
+            span->set_offset(wrapper->offset(i));
+            span->set_scale(wrapper->scale(i));
+          }
 
-          if constexpr (std::is_same<typename decltype(data)::value_type,
-                                     short>::value) {
+          constexpr auto is_uint64 = std::is_same<typename decltype(data)::value_type, uint64_t>::value;
+          constexpr auto is_short = std::is_same<typename decltype(data)::value_type, short>::value;
+          constexpr auto is_int = std::is_same<typename decltype(data)::value_type, int>::value;
+          if constexpr (is_short || is_int) {
             span->set_begin(uint32_t(body->mutable_int_data()->size()));
             body->mutable_int_data()->Add(data.begin(), data.end());
             span->set_end(uint32_t(body->mutable_int_data()->size()));
             body->set_is_int_data(true);
+          } else if constexpr (is_uint64) {
+            span->set_begin(uint32_t(body->mutable_ulong_data()->size()));
+            body->mutable_ulong_data()->Add(data.begin(), data.end());
+            span->set_end(uint32_t(body->mutable_ulong_data()->size()));
+            body->set_is_ulong_data(true);
           } else {
             span->set_begin(uint32_t(body->mutable_data()->size()));
             body->mutable_data()->Add(data.begin(), data.end());
@@ -465,7 +478,7 @@ struct Storage2Node::Impl {
 
     output_stream = std::ofstream(rendered, std::ios::trunc | std::ios::binary);
     this->outer->record(output_stream, record);
-    return rendered;
+    return std::string(std::move(rendered));
   }
 
   void close_file() { output_stream.close(); }
@@ -626,7 +639,7 @@ struct Storage2Node::Impl {
     void work() override {
       for (auto &record : in_queue) {
         auto image = record.image();
-
+ 
         thalamus_grpc::StorageRecord compressed_record;
         compressed_record.set_node(node);
         compressed_record.set_time(record.time());
@@ -1301,6 +1314,10 @@ struct Storage2Node::Impl {
 
     if (key_str == "start") {
       return;
+    }
+
+    if (key_str != "Running") {
+        return;
     }
 
     if (!state->contains("Running")) {

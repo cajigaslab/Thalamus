@@ -4,6 +4,7 @@
 #include <span>
 #include <string>
 #include <util.hpp>
+#include <text_node.hpp>
 
 namespace thalamus {
 template <typename T> double interval_to_frequency(T interval) {
@@ -21,6 +22,14 @@ public:
     THALAMUS_ASSERT(false, "AnalogNode::short_data unimplemented");
     return std::span<const short>();
   }
+  virtual std::span<const int> int_data(int) const {
+    THALAMUS_ASSERT(false, "AnalogNode::int_data unimplemented");
+    return std::span<const int>();
+  }
+  virtual std::span<const uint64_t> uint64_data(int) const {
+    THALAMUS_ASSERT(false, "AnalogNode::uint64_data unimplemented");
+    return std::span<const uint64_t>();
+  }
   virtual int num_channels() const = 0;
   virtual std::chrono::nanoseconds sample_interval(int channel) const = 0;
   virtual std::chrono::nanoseconds time() const = 0;
@@ -34,6 +43,12 @@ public:
                       const thalamus::vector<std::string_view> &) = 0;
   virtual bool has_analog_data() const { return true; }
   virtual bool is_short_data() const { return false; }
+  virtual bool is_int_data() const { return false; }
+  virtual bool is_uint64_data() const { return false; }
+
+  virtual bool is_transformed() const { return false; }
+  virtual double scale(int) const { return 1.0; }
+  virtual double offset(int) const { return 0.0; }
 };
 
 template <typename T> class AnalogNodeWrapper {
@@ -46,6 +61,10 @@ public:
   std::span<const T> data(int channel) const {
     if constexpr (std::is_same<T, short>::value) {
       return underlying->short_data(channel);
+    } else if constexpr (std::is_same<T, int>::value) {
+      return underlying->int_data(channel);
+    } else if constexpr (std::is_same<T, uint64_t>::value) {
+      return underlying->uint64_data(channel);
     } else {
       return underlying->data(channel);
     }
@@ -56,11 +75,21 @@ public:
   }
   std::chrono::nanoseconds time() const { return underlying->time(); }
   std::string_view name(int channel) const { return underlying->name(channel); }
+
+  bool is_transformed() const { return underlying->is_transformed(); }
+  double scale(int i) const { return underlying->scale(i); }
+  double offset(int i) const { return underlying->offset(i); }
 };
 
 template <typename T> void visit_node(AnalogNode *node, T callable) {
   if (node->is_short_data()) {
     AnalogNodeWrapper<short> wrapper(node);
+    callable(&wrapper);
+  } else if (node->is_int_data()) {
+    AnalogNodeWrapper<int> wrapper(node);
+    callable(&wrapper);
+  } else if (node->is_uint64_data()) {
+    AnalogNodeWrapper<uint64_t> wrapper(node);
     callable(&wrapper);
   } else {
     AnalogNodeWrapper<double> wrapper(node);
@@ -94,7 +123,7 @@ public:
   size_t modalities() const override;
 };
 
-class WaveGeneratorNode : public AnalogNode, public Node {
+class WaveGeneratorNode : public AnalogNode, public TextNode, public Node {
   struct Impl;
   std::unique_ptr<Impl> impl;
 
@@ -120,6 +149,10 @@ public:
   std::string_view name(int channel) const override;
   std::span<const std::string> get_recommended_channels() const override;
   size_t modalities() const override;
+  
+  std::string_view text() const override;
+  bool has_text_data() const override;
+  bool has_analog_data() const override;
 };
 
 class ToggleNode : public AnalogNode, public Node {

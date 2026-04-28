@@ -25,146 +25,20 @@
 #pragma clang diagnostic pop
 #endif
 
+#include <thalamus/nidaqmx.hpp>
+
 namespace thalamus {
-  
-#ifdef _WIN32
-static ::HMODULE library_handle;
-#else
-static void* library_handle;
-#endif
 
-struct DAQmxAPI {
-  bool loaded = false;
-  decltype(&::DAQmxStartTask) DAQmxStartTask;
-  decltype(&::DAQmxStopTask) DAQmxStopTask;
-  decltype(&::DAQmxClearTask) DAQmxClearTask;
-  decltype(&::DAQmxReadAnalogF64) DAQmxReadAnalogF64;
-  decltype(&::DAQmxCreateTask) DAQmxCreateTask;
-  decltype(&::DAQmxCreateAIVoltageChan) DAQmxCreateAIVoltageChan;
-  decltype(&::DAQmxCreateAICurrentChan) DAQmxCreateAICurrentChan;
-  decltype(&::DAQmxCfgSampClkTiming) DAQmxCfgSampClkTiming;
-  decltype(&::DAQmxRegisterEveryNSamplesEvent) DAQmxRegisterEveryNSamplesEvent;
-  decltype(&::DAQmxWriteDigitalLines) DAQmxWriteDigitalLines;
-  decltype(&::DAQmxWriteAnalogScalarF64) DAQmxWriteAnalogScalarF64;
-  decltype(&::DAQmxWriteAnalogF64) DAQmxWriteAnalogF64;
-  decltype(&::DAQmxCreateDOChan) DAQmxCreateDOChan;
-  decltype(&::DAQmxCreateAOVoltageChan) DAQmxCreateAOVoltageChan;
-  decltype(&::DAQmxCreateAOCurrentChan) DAQmxCreateAOCurrentChan;
-  decltype(&::DAQmxRegisterDoneEvent) DAQmxRegisterDoneEvent;
-  decltype(&::DAQmxCfgDigEdgeStartTrig) DAQmxCfgDigEdgeStartTrig;
-  decltype(&::DAQmxSetBufInputBufSize) DAQmxSetBufInputBufSize;
-  decltype(&::DAQmxGetErrorString) DAQmxGetErrorString;
-  decltype(&::DAQmxGetExtendedErrorInfo) DAQmxGetExtendedErrorInfo;
-  decltype(&::DAQmxTaskControl) DAQmxTaskControl;
-  decltype(&::DAQmxGetSysDevNames) DAQmxGetSysDevNames;
-};
-static DAQmxAPI *daqmxapi;
-
-#ifdef _WIN32
-    template <typename T> T load_function(const std::string &func_name) {
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wcast-function-type"
-#pragma clang diagnostic ignored "-Wcast-function-type-strict"
-#endif
-      auto result = reinterpret_cast<T>(
-          ::GetProcAddress(library_handle, func_name.c_str()));
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
-      if (!result) {
-        THALAMUS_LOG(info) << "Failed to load " << func_name << ".  "
-                           << "NIDAQ disabled";
-      }
-      return result;
-    }
-#else
-    template <typename T> T load_function(const std::string &func_name) {
-      auto result =
-          reinterpret_cast<T>(dlsym(library_handle, func_name.c_str()));
-      if (!result) {
-        THALAMUS_LOG(info) << "Failed to load " << func_name << ".  "
-                           << "NIDAQ disabled";
-      }
-      return result;
-    }
-#endif
+static DAQmxAPI *daqmxapi = nullptr;
 
 static bool prepare_nidaq() {
   static bool has_run = false;
-  if (has_run) {
-    return daqmxapi->loaded;
+  if(!has_run) {
+    daqmxapi = DAQmxAPI::get_singleton();
+    has_run = true;
   }
-  daqmxapi = new DAQmxAPI();
-  has_run = true;
-#ifdef _WIN32
-      library_handle = LoadLibrary("nicaiu");
-#else
-      std::string nidaqmx_path = "/usr/lib/x86_64-linux-gnu/libnidaqmx.so.25.5.0";
-      library_handle = dlopen(nidaqmx_path.c_str(), RTLD_NOW);
-#endif
-  if (!library_handle) {
-    THALAMUS_LOG(info)
-        << "Couldn't find nicaiu.dll.  National Instruments features disabled";
-    return false;
-  }
-  THALAMUS_LOG(info) << "nicaiu.dll found.  Loading DAQmx API";
 
-#ifdef _WIN32
-  std::string nidaq_dll_path(256, ' ');
-  auto filename_size = uint32_t(nidaq_dll_path.size());
-  while (nidaq_dll_path.size() == filename_size) {
-    nidaq_dll_path.resize(2 * nidaq_dll_path.size(), ' ');
-    filename_size = GetModuleFileNameA(library_handle, nidaq_dll_path.data(),
-                                       uint32_t(nidaq_dll_path.size()));
-  }
-  if (filename_size == 0) {
-    THALAMUS_LOG(warning) << "Error while finding nicaiu.dll absolute path";
-  } else {
-    nidaq_dll_path.resize(filename_size);
-    THALAMUS_LOG(info) << "Absolute nicaiu.dll path = " << nidaq_dll_path;
-  }
-#else
-#endif
-
-#define LOAD_FUNC(name)                                                        \
-  do {                                                                         \
-    daqmxapi->name = load_function<decltype(daqmxapi->name)>(#name);                     \
-    if (!daqmxapi->name) {                                                     \
-      return false;                                                                  \
-    }                                                                          \
-  } while (0)
-  
-  LOAD_FUNC(DAQmxStartTask);
-  LOAD_FUNC(DAQmxStopTask);
-  LOAD_FUNC(DAQmxClearTask);
-  LOAD_FUNC(DAQmxReadAnalogF64);
-  LOAD_FUNC(DAQmxCreateTask);
-  LOAD_FUNC(DAQmxCreateAIVoltageChan);
-  LOAD_FUNC(DAQmxCreateAICurrentChan);
-  LOAD_FUNC(DAQmxCfgSampClkTiming);
-  LOAD_FUNC(DAQmxRegisterEveryNSamplesEvent);
-  LOAD_FUNC(DAQmxWriteDigitalLines);
-  LOAD_FUNC(DAQmxWriteAnalogF64);
-  LOAD_FUNC(DAQmxWriteAnalogScalarF64);
-  LOAD_FUNC(DAQmxCreateDOChan);
-  LOAD_FUNC(DAQmxCreateAOVoltageChan);
-  LOAD_FUNC(DAQmxCreateAOCurrentChan);
-  LOAD_FUNC(DAQmxRegisterDoneEvent);
-  LOAD_FUNC(DAQmxCfgDigEdgeStartTrig);
-  LOAD_FUNC(DAQmxSetBufInputBufSize);
-  LOAD_FUNC(DAQmxGetErrorString);
-  LOAD_FUNC(DAQmxGetExtendedErrorInfo);
-  LOAD_FUNC(DAQmxTaskControl);
-  LOAD_FUNC(DAQmxGetSysDevNames);
-
-  char buffer[1024];
-  auto z = daqmxapi->DAQmxGetSysDevNames(buffer, sizeof(buffer));
-  THALAMUS_LOG(info) << z << " " << buffer;
-
-  daqmxapi->loaded = true;
-  THALAMUS_LOG(info) << "DAQmx API loaded";
-  return true;
+  return daqmxapi != nullptr;
 }
 
 static thalamus::vector<std::string> get_channels(const std::string &channel) {

@@ -1,6 +1,6 @@
 [project]
 name = "thalamus"
-version = "0.3.23"
+version = "0.3.34"
 description = "TODO: Package description"
 license = "TODO: License declaration"
 maintainer = "jarl"

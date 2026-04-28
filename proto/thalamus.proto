@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 option java_package = "org.pesaran.thalamus";
+option csharp_namespace = "Thalamus";
 
 package thalamus_grpc;
 
@@ -34,10 +35,15 @@ service Thalamus {
   rpc inject_analog(stream InjectAnalogRequest) returns (Empty) {}
   rpc get_modalities(NodeSelector) returns (ModalitiesMessage) {}
   rpc ping(stream Ping) returns (stream Pong) {}
+  rpc text(TextRequest) returns (stream Text) {}
   rpc inject_text(stream InjectTextRequest) returns (stream Pong) {}
   rpc stim(stream StimRequest) returns (stream StimResponse) {}
   rpc inject_motion_capture(stream InjectMotionCaptureRequest) returns (Empty) {}
   rpc dialog(Dialog) returns (Empty) {}
+}
+
+message TextRequest {
+  NodeSelector node = 1;
 }
 
 message Dialog {
@@ -137,16 +143,19 @@ message NodeResponse {
   enum Status {
     OK = 0;
     NOT_FOUND = 1;
+    REDIRECT = 2;
   }
   string json = 1;
   uint64 id = 2;
   Status status = 3;
+  string redirect = 4;
 }
 
 message Text {
   string text = 1;
   uint64 time = 2;
   uint64 remote_time = 3;
+  string redirect = 4;
 }
 
 message StorageRecord {
@@ -305,6 +314,8 @@ message AnalogResponse {
   ChannelType channel_type = 9;
   repeated uint64 ulong_data = 10;
   bool is_ulong_data = 11;
+  string redirect = 12;
+  bool is_transformed = 13;
 }
  
 message GraphRequest {
@@ -318,12 +329,15 @@ message Span {
   uint32 begin = 1;
   uint32 end = 2;
   string name = 3;
+  double scale = 4;
+  double offset = 5;
 }
  
 message GraphResponse {
   repeated double bins = 1;
   repeated Span spans = 2;
   bool channels_changed = 3;
+  string redirect = 4;
 }
   
 message Event {
