@@ -216,7 +216,7 @@ pub struct ThalamusAPIRaw {
     pub streambuf_to_span: unsafe extern "C" fn(*mut ThalamusCharSpan, *mut ThalamusStreamBuf),
     pub streambuf_consume: unsafe extern "C" fn(*mut ThalamusStreamBuf, usize),
     pub streambuf_size: unsafe extern "C" fn(*mut ThalamusStreamBuf) -> usize,
-    pub charspan_destroy: unsafe extern "C" fn(*mut ThalamusCharSpan),
+    pub charspan_release: unsafe extern "C" fn(*mut ThalamusCharSpan),
     
     pub error_code_message: unsafe extern "C" fn(*mut ThalamusCharSpan, *mut ThalamusErrorCode),
 

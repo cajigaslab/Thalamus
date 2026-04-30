@@ -667,7 +667,7 @@ struct ThalamusAPIImpl {
     return buffer->buffer.size();
   }
 
-  static void charspan_destroy(ThalamusCharSpan* span) {
+  static void charspan_release(ThalamusCharSpan* span) {
     if(span->owns_data) {
       delete span->data;
     }
@@ -867,7 +867,7 @@ public:
 
     thalamus_api.streambuf_size = ThalamusAPIImpl::streambuf_size;
 
-    thalamus_api.charspan_destroy = ThalamusAPIImpl::charspan_destroy;
+    thalamus_api.charspan_release = ThalamusAPIImpl::charspan_release;
     thalamus_api.error_code_message = ThalamusAPIImpl::error_code_message;
     thalamus_api.json_to_string = ThalamusAPIImpl::json_to_string;
     thalamus_api.json_from_string = ThalamusAPIImpl::json_from_string;

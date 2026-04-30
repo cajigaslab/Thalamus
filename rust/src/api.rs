@@ -126,7 +126,7 @@ impl Json {
       let text = str::from_utf8(slice).unwrap();
       let result = text.to_string();
       
-      ((&*self.api.raw).charspan_destroy)(&mut span as *mut ThalamusCharSpan);
+      ((&*self.api.raw).charspan_release)(&mut span as *mut ThalamusCharSpan);
 
       result
     }
@@ -319,7 +319,7 @@ impl StreamBuf {
       let slice = slice::from_raw_parts(span.data as *mut u8, span.size);
       let text = str::from_utf8(slice).unwrap();
       let result = text.to_string();
-      (api.charspan_destroy)(&mut span as *mut ThalamusCharSpan);
+      (api.charspan_release)(&mut span as *mut ThalamusCharSpan);
       result
     }
   }
@@ -705,7 +705,7 @@ impl ErrorCode {
 
         let slice = slice::from_raw_parts(span.data as *mut u8, span.size);
         let text = str::from_utf8(slice).unwrap().to_string();
-        ((&(*api.raw)).charspan_destroy)(&mut span as *mut ThalamusCharSpan);
+        ((&(*api.raw)).charspan_release)(&mut span as *mut ThalamusCharSpan);
         text
       } else {
         "".to_string()

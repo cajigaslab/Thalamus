@@ -8,6 +8,8 @@
 #include <vector>
 #include <cmath>
 
+#include <Rec_Stim.hpp>
+
 using namespace std::chrono_literals;
 
 static ThalamusAPI* api = nullptr;
@@ -16,22 +18,18 @@ struct CeciNode {
   ThalamusNode base;
   ThalamusState* state;
   ThalamusStateConnection* state_connection;
-  ThalamusTimer* timer;
-  char running;
-  std::chrono::nanoseconds start_time;
-  std::chrono::nanoseconds last_time;
-  double frequency;
-  double amplitude;
   std::vector<double> samples;
+  std::jthread thread;
+  std::mutex mutex;
+  std::condition_variable cv;
 };
 
 static ThalamusDoubleSpan CeciNode_data(ThalamusNode* node, int) {
-  auto impl = (CeciNode*)node;
-  return ThalamusDoubleSpan{impl->samples.data(), impl->samples.size()};
+  return ThalamusDoubleSpan{nullptr, 0};
 }
 
 static int CeciNode_num_channels(ThalamusNode*) {
-  return 1;
+  return 0;
 }
 
 static size_t CeciNode_sample_interval_ns(ThalamusNode*, int) {
@@ -46,44 +44,58 @@ static char CeciNode_has_analog_data(ThalamusNode*) {
   return true;
 }
 
-static void CeciNode_on_timer(ThalamusErrorCode* error, void* data) {
-  if(api->error_code_value(error) == THALAMUS_OPERATION_ABORTED) {
-    return;
-  }
-
-  auto node = static_cast<CeciNode*>(data);
-  auto now = std::chrono::steady_clock::now().time_since_epoch();
-  node->samples.clear();
-  while(node->last_time < now) {
-    auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(node->last_time - node->start_time).count();
-    auto elapsed_s = double(elapsed_ms)/1e3;
-    node->samples.push_back(node->amplitude*std::sin(2*3.14*node->frequency*elapsed_s));
-    node->last_time += 1ms;
-  }
-
-  api->node_ready(&node->base);
-
-  if(node->running) {
-    api->timer_expire_after_ns(node->timer, 16'000'000);
-    api->timer_async_wait(node->timer, CeciNode_on_timer, node);
-  }
-}
-
 static size_t CeciNode_time_ns(ThalamusNode* raw_node) {
-  auto node = reinterpret_cast<CeciNode*>(raw_node);
-  return size_t((node->last_time - 1ms).count());
+  std::chrono::steady_clock::now().count();
 }
 
 static size_t CeciNode_process(ThalamusNode* raw_node, ThalamusRequestHandle* handle, ThalamusJson* request) {
+  auto node = static_cast<CeciNode*>(raw_node);
+
+  //Currently all you can do with a ThalamusJson is convert it to a string and parse it with a JSON library.
   ThalamusCharSpan span;
   api->json_to_string(&span, request);
-  auto j = nlohmann::json::parse(std::string_view(span.data, span.size));
-  api->charspan_destroy(&span);
+  auto json = nlohmann::json::parse(std::string_view(span.data, span.size));
+  api->charspan_release(&span);
 
-  auto node = reinterpret_cast<CeciNode*>(raw_node);
-  return size_t((node->last_time - 1ms).count());
+  //An empty json object should be interpreted as a trigger.
+  std::string type = "trigger";
+  if(json.find("type") != json.end()) {
+    type = json["type"];
+  }
+
+  if(type == "config") {
+    //Stop the Rec_Stim thread if it is running
+    if(node->thread.joinable()) {
+      node->thread.request_stop();
+      cv.notify_one();
+      node->thread.join();
+    }
+
+    //This function should block until either stimulation should happen or the thread needs to stop.
+    auto trigger = [node] {
+      std::unique_lock<std::mutex> lock(node->mutex);
+      node->cv.wait(lock);
+      auto result = node->triggered;
+      triggered = false;
+      return result;
+    };
+
+    node->thread = std::jthread([trigger, json] (std::stop_token st) {
+      Rec_Stim_main(st, trigger, json);
+    });
+  } else {
+    {
+      std::unique_lock<std::mutex> lock(node->mutex);
+      node->triggered = true;
+    }
+    node->cv.notify_one();
+  }
+
+  ThalamusCharSpan response_text {"{}", 2, 0};
+  auto response = api->json_from_string(&response_text);
+  handle->respond(response);
+  api->json_dec_ref(response);
 }
-
 
 static void CeciNode_on_change(ThalamusState* source, ThalamusStateAction action, ThalamusState* key, ThalamusState* val, void* data) {
   auto node = static_cast<CeciNode*>(data);
@@ -100,20 +112,6 @@ static void CeciNode_on_change(ThalamusState* source, ThalamusStateAction action
       auto val_float = api->state_get_float(val);
       printf("%s = %f\n", key_str, val_float);
     }
-
-    if(strcmp(key_str, "Running") == 0) {
-      node->running = api->state_get_bool(val);
-      if (node->running) {
-        node->start_time = std::chrono::steady_clock::now().time_since_epoch();
-        node->last_time = node->start_time;
-        api->timer_expire_after_ns(node->timer, 16'000'000);
-        api->timer_async_wait(node->timer, CeciNode_on_timer, node);
-      }
-    } else if (strcmp(key_str, "Amplitude") == 0) {
-      node->amplitude = api->state_get_float(val);
-    } else if (strcmp(key_str, "Frequency") == 0) {
-      node->frequency = api->state_get_float(val);
-    }
   }
 }
 
@@ -123,21 +121,28 @@ static ThalamusNode* create_ceci_node(ThalamusState* state, ThalamusIoContext*, 
   auto result = new CeciNode();
   memset(&result->base, 0, sizeof(ThalamusNode));
 
+  result->base.analog = new ThalamusAnalogNode();
+  memset(result->base.analog, 0, sizeof(ThalamusAnalogNode));
+
+  result->base.analog->data = CeciNode_data;
+  result->base.analog->num_channels = CeciNode_num_channels;
+  result->base.analog->sample_interval_ns = CeciNode_sample_interval_ns;
+  result->base.analog->name = CeciNode_name;
+  result->base.analog->has_analog_data = CeciNode_has_analog_data;
+
   result->base.time_ns = CeciNode_time_ns;
   result->base.process = CeciNode_process;
   result->state = state;
-  result->frequency = 1;
-  result->amplitude = 1;
 
   result->state_connection = api->state_recursive_change_connect(state, CeciNode_on_change, result);
-
-  result->timer = api->timer_create();
 
   return &result->base;
 }
 
 static void destroy_ceci_node(ThalamusNode* node) {
   printf("destroy_ceci_node\n");
+  api->state_recursive_change_disconnect(node->state_connection);
+  delete node->base.analog;
   delete node;
 }
 

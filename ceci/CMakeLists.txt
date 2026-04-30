@@ -15,6 +15,7 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 include(FetchContent)
 
+#JSON
 FetchContent_Declare(
   nlohmann_json
   GIT_REPOSITORY https://github.com/nlohmann/json.git
@@ -25,16 +26,40 @@ FetchContent_MakeAvailable(nlohmann_json)
 find_package(Python)
 message("Python_EXECUTABLE ${Python_EXECUTABLE}")
 
+#HDF5
+set(HDF5_EXTERNALLY_CONFIGURED 1)
+set(HDF5_BUILD_TOOLS OFF)
+set(HDF5_ENABLE_Z_LIB_SUPPORT ON)
+set(H5_ZLIB_LIBRARIES "$<TARGET_FILE:zlibstatic>")
+set(HDF5_BUILD_EXAMPLES OFF)
+set(ZLIB_ROOT "${ZLIB_PROCESSED_HEADER_DIR}")
+set(H5_ZLIB_HEADER zlib.h)
+set(H5_HAVE_SYS_STAT_H ON)
+set(H5_HAVE_SYS_TYPES_H ON)
+set(H5_HAVE_VISUAL_STUDIO ON)
+set(H5_ZLIB_INCLUDE_DIRS "${ZLIB_PROCESSED_HEADER_DIR}")
+
+FetchContent_Declare(
+  hdf5
+  URL      https://github.com/HDFGroup/hdf5/releases/download/hdf5_1.14.5/hdf5-1.14.5.tar.gz
+  URL_HASH SHA256=ec2e13c52e60f9a01491bb3158cb3778c985697131fc6a342262d32a26e58e44
+)
+FetchContent_MakeAvailable(hdf5)
+add_dependencies(hdf5-static zlib_processed)
+
+#Thalamus
 execute_process(
   COMMAND "${Python_EXECUTABLE}" -c "import thalamus;import pathlib;print(pathlib.Path(thalamus.__file__).parent)"
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   OUTPUT_VARIABLE THALAMUS_PACKAGE_DIR
   OUTPUT_STRIP_TRAILING_WHITESPACE)
 
+#NIDAQMX
 add_library(nidaqmx INTERFACE)
 target_link_libraries(nidaqmx INTERFACE "C:/Program Files (x86)/National Instruments/Shared/ExternalCompilerSupport/C/lib64/msvc/NIDAQmx.lib")
 target_include_directories(nidaqmx INTERFACE "C:/Program Files (x86)/National Instruments/Shared/ExternalCompilerSupport/C/include")
 
-add_library(ceci SHARED ext.cpp)
+#Implementation
+add_library(ceci SHARED ext.cpp Rec_Stim.c)
 target_link_libraries(ceci PUBLIC nlohmann_json::nlohmann_json nidaqmx)
 target_include_directories(ceci PUBLIC "${THALAMUS_PACKAGE_DIR}")
