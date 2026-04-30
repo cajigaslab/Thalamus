@@ -101,6 +101,15 @@ struct ThalamusStreamBuf {
   boost::asio::streambuf buffer;
 };
 
+struct ThalamusJson {
+  size_t refs;
+  boost::json::value value;
+};
+
+struct ThalamusRequestHandle {
+  std::function<void(const boost::json::value &)> callback;
+};
+
 namespace thalamus {
 using namespace std::chrono_literals;
 
@@ -137,27 +146,20 @@ template <typename T> struct NodeFactory : public INodeFactory {
   std::string type_name() override { return T::type_name(); }
 };
 
-struct ThalamusJson {
-  boost::json::value value;
-};
-
-struct ThalamusRequestHandle {
-  void(const boost::json::value &) callback;
-};
-
 static void string_to_span(struct ThalamusCharSpan* output, const std::string& input) {
   output->data = new char[input.size()];
   output->size = input.size();
-  std::copy(input.begin(), input.end(), output->data());
+  std::copy(input.begin(), input.end(), output->data);
   output->owns_data = 1;
 }
 
 struct ExtNode : public Node, public AnalogNode, public ImageNode, public MotionCaptureNode, public TextNode {
   ThalamusNode* node;
-  ThalamusAPI* api;
-  ThalamusNodeFactory* factory;
+  ThalamusNodeFactory *factory;
+  ThalamusAPI *api;
 
-  ExtNode(ThalamusNode* _node, ThalamusNodeFactory* _factory) : node(_node), factory(_factory) {}
+  ExtNode(ThalamusNode *_node, ThalamusNodeFactory *_factory, ThalamusAPI *_api)
+      : node(_node), factory(_factory), api(_api) {}
   ~ExtNode() override;
 
   size_t modalities() const override {
@@ -305,13 +307,14 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
   }
 
   void process(const boost::json::value & request, std::function<void(const boost::json::value &)> callback) override {
-    if(node->request == nullptr) {
+    if(node->process == nullptr) {
       callback(boost::json::value());
       return;
     }
-    ThalamusJson json{request}
+    auto json = new ThalamusJson{1, request};
     auto handle = new ThalamusRequestHandle {callback};
-    node->request(handle, &json);
+    node->process(node, handle, json);
+    api->json_dec_ref(json);
   }
 };
 
@@ -684,13 +687,22 @@ struct ThalamusAPIImpl {
     string_to_span(output, serialized);
   }
 
-  static void json_from_string(struct ThalamusJson* output, const struct ThalamusCharSpan* input) {
-    output->value = boost::json::parse(std::string_view(input->data, input->size));
+  static struct ThalamusJson* json_from_string(const struct ThalamusCharSpan* input) {
+    return new ThalamusJson{1, boost::json::parse(std::string_view(input->data, input->size))};
   }
 
-  static void request_respond_span(struct ThalamusRequestHandle* handle, const struct ThalamusCharSpan* response) {
-    auto value = boost::json::parse(std::string_view(input->data, input->size));
-    handle->callback(value);
+  static void json_inc_ref(struct ThalamusJson* input) {
+    ++input->refs;
+  }
+
+  static void json_dec_ref(struct ThalamusJson* input) {
+    if(--input->refs == 0) {
+      delete input;
+    }
+  }
+
+  static void request_respond(struct ThalamusRequestHandle* handle, const struct ThalamusJson* response) {
+    handle->callback(response->value);
     delete handle;
   }
 };
@@ -717,7 +729,7 @@ struct ExtNodeFactory : public INodeFactory {
     auto node = underlying->create(underlying, state_wrapper, &io_context, &node_graph);
 
     ThalamusAPIImpl::state_dec_ref(state_wrapper);
-    auto result = new ExtNode(node, underlying);
+    auto result = new ExtNode(node, underlying, api);
     node->impl = result;
     return result;
   }
@@ -857,6 +869,11 @@ public:
 
     thalamus_api.charspan_destroy = ThalamusAPIImpl::charspan_destroy;
     thalamus_api.error_code_message = ThalamusAPIImpl::error_code_message;
+    thalamus_api.json_to_string = ThalamusAPIImpl::json_to_string;
+    thalamus_api.json_from_string = ThalamusAPIImpl::json_from_string;
+    thalamus_api.request_respond = ThalamusAPIImpl::request_respond;
+    thalamus_api.json_inc_ref = ThalamusAPIImpl::json_inc_ref;
+    thalamus_api.json_dec_ref = ThalamusAPIImpl::json_dec_ref;
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},
