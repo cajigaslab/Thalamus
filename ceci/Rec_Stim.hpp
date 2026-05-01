@@ -4,4 +4,11 @@
 #include <functional>
 #include <nlohmann/json.hpp>
 
-int Rec_Stim_main(std::stop_token st, std::function<bool()> trigger, nlohmann::json config)
+struct Channel {
+  std::span<double> data;
+  std::string name;
+  size_t sample_interval_ns;
+};
+
+int Rec_Stim_main(std::stop_token st, std::function<bool()> trigger,
+                  std::function<void(std::vector<Channel>*, size_t)> publish, nlohmann::json config);

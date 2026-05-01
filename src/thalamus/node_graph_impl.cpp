@@ -205,7 +205,7 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
     return std::chrono::nanoseconds(node->time_ns(node));
   }
   std::chrono::nanoseconds remote_time() const override {
-    THALAMUS_ABORT("Unimplemented");
+    return 0ns;
   }
   std::string_view name(int channel) const override {
     auto temp = node->analog->name(node, channel);

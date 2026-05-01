@@ -112,7 +112,7 @@ async def async_main() -> None:
   ext_widgets = {}
   ext_library = None
   if arguments.ext is not None:
-    ext_module = importlib.__import__(arguments.ext)
+    ext_module = importlib.import_module(arguments.ext)
     if hasattr(ext_module, 'widgets'):
       ext_widgets.update(ext_module.widgets())
     if hasattr(ext_module, 'library'):

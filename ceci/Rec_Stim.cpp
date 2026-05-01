@@ -1,16 +1,26 @@
+#include <Rec_Stim.hpp>
+#include <NIDAQmx.h>
+
 #include <string.h>
 #include <stdio.h>
-#include <NIDAQmx.h>
 #include <math.h>
 #include <stdlib.h>
 #include <stdbool.h>
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Weverything"
+#endif
 #include "hdf5.h"
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 #define DAQmxErrChk(functionCall) if( DAQmxFailed(error=(functionCall)) ) goto Error; else
 #define MAX_DEVICES 4
 #define SAMPS_PER_CHAN 12500
 #define TOTAL_CHANS 4
-#define BUFFER_SIZE (SAMPS_PER_CHAN*TOTAL_CHANS)
+#define BUFFER_SIZE (SAMPS_PER_CHAN*TOTAL_CHANS*MAX_DEVICES)
 
 typedef struct {
     const char *devName;
@@ -49,7 +59,7 @@ static int32 CVICALLBACK DoneCallback(TaskHandle taskHandle, int32 status, void 
 #define PI 3.14159265358979323846
 static int32 setupAOTask(DeviceConfig *dev, const char physicalChannels[], float64 sampleRate, float64 input_range, uInt64 sampsPerChan);
 double square_wave(double t, double freq_hz, double duty_cycle);
-double* createStimWave(const StimParams *stim, double sampleRate, const char *ao_chan, int *sampsPerChan);
+double* createStimWave(const StimParams *stim, double sampleRate, const char *ao_chan, int32 *sampsPerChan);
 static int32 CVICALLBACK StimDoneCallback(TaskHandle taskHandle, int32 status, void *callbackData);
 
 static int32 setupDOTask(DeviceConfig *dev, const char physicalChannels[], int32 sampsPerChan, bool32 autoStart, uInt32 *data, int32 *sampsWritten, float64 sampleRate, bool isStimTask);
@@ -57,8 +67,8 @@ static int32 setupDOTask(DeviceConfig *dev, const char physicalChannels[], int32
 void save_to_hdf5(hid_t dataset_name, double *data, int numSamps, int numChans);
 
 DeviceConfig devices[2] = {
-    { .devName = "PXI1Slot4", .ao_enable = {1, 1, 1, 1}, .mux_addr = {0, 0, 0, 0} },  // list primary device first
-    { .devName = "PXI1Slot5", .ao_enable = {1, 1, 1, 1}, .mux_addr = {0, 0, 0, 0} }
+    { .devName = "PXI1Slot5", .ao_enable = {1, 1, 1, 1}, .mux_addr = {0, 0, 0, 0} },  // list primary device first
+    { .devName = "PXI1Slot6", .ao_enable = {1, 1, 1, 1}, .mux_addr = {0, 0, 0, 0} }
 };
 size_t num_devices = sizeof(devices) / sizeof(devices[0]);
 
@@ -82,7 +92,13 @@ uInt32      do_mux2 = (1 << 19); // Set DO line 19 high to enable MUX channel 2
 uInt32      do_mux3 = (1 << 26); // Set DO line 26 high to enable MUX channel 3
 int stim_target = -1;
 
-int Rec_Stim_main(std::stop_token st, std::function<bool()> trigger, nlohmann::json config)
+struct EveryNCallbackData {
+    std::vector<Channel> channels;
+    std::function<void(std::vector<Channel>*, size_t)> publish;
+};
+
+int Rec_Stim_main(std::stop_token st, std::function<bool()> trigger,
+                  std::function<void(std::vector<Channel>*, size_t)> publish, nlohmann::json config)
 {
     StimParams stim = {
         .amp_uA = 100.0,         // current amplitude in uA
@@ -100,6 +116,8 @@ int Rec_Stim_main(std::stop_token st, std::function<bool()> trigger, nlohmann::j
     int32       stim_samps_per_chan = (int32)(stim.stim_dur_s * sampleRate);
 	int32		do_dis_samps_per_chan = (int32)(stim.dis_dur_s * sampleRate);
 
+    EveryNCallbackData callbackData;
+    callbackData.publish = publish;
 
     for (size_t i = 0; i < num_devices; i++) {
         printf("Setting up device %s...\n", devices[i].devName);
@@ -117,6 +135,11 @@ int Rec_Stim_main(std::stop_token st, std::function<bool()> trigger, nlohmann::j
         snprintf(ao_channels, sizeof(ao_channels),"%s/ao0:3", devices[i].devName);
         snprintf(do_channels, sizeof(do_channels),"%s/port0/line0:31", devices[i].devName);
 
+        std::stringstream stream(ai_channels);
+        for (std::string line; std::getline(stream, line, ',');) {
+            callbackData.channels.push_back(Channel{std::span<double>(), line, size_t(1e9/sampleRate)});
+        }
+
         // Setup AI Task
         DAQmxErrChk (setupAITask(&devices[i], ai_channels, sampleRate, input_range, SAMPS_PER_CHAN));
         if (i == 0) { // only set callbacks on primary device and get AI trigger for other devices
@@ -125,7 +148,7 @@ int Rec_Stim_main(std::stop_token st, std::function<bool()> trigger, nlohmann::j
                                                         SAMPS_PER_CHAN,
                                                         0,
                                                         EveryNCallback,
-                                                        NULL));
+                                                        &callbackData));
             DAQmxErrChk (DAQmxRegisterDoneEvent(devices[i].aiHandle,
                                                 0,
                                                 DoneCallback,
@@ -272,28 +295,23 @@ int Rec_Stim_main(std::stop_token st, std::function<bool()> trigger, nlohmann::j
 	printf("Press 's' then Enter to start stimulation.\n");
 	printf("Press 'q' then Enter to stop recording and exit program.\n");
 
-    char c;
     while(!st.stop_requested()) {
         auto triggered = trigger();
         if(!triggered) {
             continue;
         }
 
-        if (c == 's' || c == 'd') {
-            stim_target = c == 's' ? 0 : 1;
-            // Start AO tasks
-            for (int i = (int)num_devices - 1; i >= 0; i--) { // start secondary device AO task first
-                if(i == stim_target) {
-                  DAQmxErrChk (DAQmxStartTask(devices[i].stimDOHandle));
-                }
-                DAQmxErrChk (DAQmxStartTask(devices[i].aoHandle));
+        stim_target = 0;
+        // Start AO tasks
+        for (int i = (int)num_devices - 1; i >= 0; i--) { // start secondary device AO task first
+            if(i == stim_target) {
+                DAQmxErrChk (DAQmxStartTask(devices[i].stimDOHandle));
             }
-            printf("Stimulation delivered.\n");
-        } else if (c == 'q') {
-            printf("Stopping acquisition...\n");
-            break;
+            DAQmxErrChk (DAQmxStartTask(devices[i].aoHandle));
         }
+        printf("Stimulation delivered.\n");
     }
+    printf("Stopping acquisition...\n");
 
 Error:
     if (DAQmxFailed(error)) {
@@ -355,9 +373,6 @@ Error:
     }
 
     printf("Acquisition stopped. Press Enter to exit program.\n");
-    int ch;
-    while ((ch = getchar()) != '\n' && ch != EOF);
-    getchar();
     return 0;
 
 }
@@ -409,38 +424,49 @@ Error:
     return error;
 }
 
-int32 CVICALLBACK EveryNCallback(TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData)
+static float64 data[BUFFER_SIZE];
+
+int32 CVICALLBACK EveryNCallback(TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *rawCallbackData)
 {
 	int32           error=0;
 	char            errBuff[2048]={'\0'};
 
     static int32    sampsRead[MAX_DEVICES] = {0};
     static int32    totalRead[MAX_DEVICES] = {0};
+    int32 offset = 0;
+    EveryNCallbackData* callbackData = reinterpret_cast<EveryNCallbackData*>(rawCallbackData);
+    auto channel_index = 0;
+    std::chrono::nanoseconds now = std::chrono::steady_clock::now().time_since_epoch();
 
     for (int i = 0; i < num_devices; i++) {
-        float64 data[BUFFER_SIZE];
         sampsRead[i] = 0;
 
         DAQmxErrChk (DAQmxReadAnalogF64(devices[i].aiHandle,
                                         SAMPS_PER_CHAN,
                                         10.0,
-                                        DAQmx_Val_GroupByScanNumber,
-                                        data,
+                                        DAQmx_Val_GroupByChannel,
+                                        data + offset,
                                         BUFFER_SIZE,
                                         &sampsRead[i],
                                         NULL));
+        for(auto j = 0;j < TOTAL_CHANS;++j) {
+            callbackData->channels.at(channel_index).data = std::span<double>(data+offset + j*sampsRead[i], data+offset + (j+1)*sampsRead[i]);
+            ++channel_index;
+        }
+        offset += sampsRead[i];
         if (sampsRead[i] > 0) {
             totalRead[i] += sampsRead[i];
             // Save data to HDF5
-            save_to_hdf5(devices[i].dataset_id, data, sampsRead[i], TOTAL_CHANS);
+            //save_to_hdf5(devices[i].dataset_id, data, sampsRead[i], TOTAL_CHANS);
         }
     }
+    callbackData->publish(&callbackData->channels, now.count());
 
-    printf("\r");
-    for (int i = 0; i < num_devices; i++) {
-        printf("Device %s: %d (%d)   ", devices[i].devName, sampsRead[i], totalRead[i]);
-    }
-	fflush(stdout);
+    //printf("\r");
+    //for (int i = 0; i < num_devices; i++) {
+    //    printf("Device %s: %d (%d)   ", devices[i].devName, sampsRead[i], totalRead[i]);
+    //}
+	//fflush(stdout);
 
 Error:
 	if( DAQmxFailed(error) ) {
@@ -572,7 +598,7 @@ double square_wave(double t, double freq_hz, double duty_cycle) {
 double* createStimWave(const StimParams *stim,
                       double sampleRate,     // sampling rate in Hz
                       const char *ao_chan,  // e.g., "AO0", "AO1"
-                      int *sampsPerChan)    // output length
+                      int32 *sampsPerChan)    // output length
 {
     double dc_off = 0.0f;
     // if (strncmp(ao_chan, "AO3", 3) == 0)

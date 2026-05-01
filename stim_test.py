@@ -14,7 +14,7 @@ async def main():
     request = thalamus_pb2.NodeRequest(
       node="Node 1",
       json=json.dumps({
-        'type': 'setup',
+        'type': 'config',
         "amp_uA": 100,
         "pw_us": 200,
         "freq_hz": 200,
@@ -29,15 +29,13 @@ async def main():
     response = await stub.node_request(request)
     print(response)
 
-    #await asyncio.sleep(2)
+    await asyncio.sleep(2)
     while True:
       input()
 
       request = thalamus_pb2.NodeRequest(
         node="Node 1",
-        json=json.dumps({
-          'type': 'stim'
-        })
+        json=json.dumps({})
       )
       response = await stub.node_request(request)
       print(response)

@@ -244,7 +244,7 @@ extern "C" {
     void (*streambuf_to_span)(struct ThalamusCharSpan*, struct ThalamusStreamBuf* buffer);
     void (*streambuf_consume)(struct ThalamusStreamBuf* buffer, size_t count);
     size_t (*streambuf_size)(struct ThalamusStreamBuf* buffer);
-    void (*charspan_destroy)(struct ThalamusCharSpan* span);
+    void (*charspan_release)(struct ThalamusCharSpan* span);
 
     void (*error_code_message)(struct ThalamusCharSpan* result, struct ThalamusErrorCode *error);
 
