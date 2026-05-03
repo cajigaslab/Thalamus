@@ -1875,7 +1875,7 @@ struct GenicamNode::Impl {
         auto start_time = std::chrono::steady_clock::now();
         std::optional<std::chrono::steady_clock::time_point> next_temp_poll;
         std::chrono::nanoseconds temp_poll_interval = 0ns;
-        if(false/*exists("DeviceTemperature")*/) {
+        if((false)/*exists("DeviceTemperature")*/) {
           temp_poll_interval = 1'000'000'000ns;//polling_time("DeviceTemperature");
           next_temp_poll = start_time;
         }
@@ -2296,12 +2296,15 @@ struct GenicamNode::Impl {
               return;
             }
             vendor.resize(vendor.size() - 1);
+
+            //The iDS GenTL driver detects non iDS cameras and if you interact
+            //with them through the iDS driver the program will crash.
             if (interface_id.find("IDS") != std::string::npos &&
                 vendor.find("IDS") == std::string::npos) {
               THALAMUS_LOG(info)
                   << "IDS GenTL detected another vendor's camera, ignoring.  "
                   << vendor;
-              return;
+              continue;
             }
 
             GenTL::DEV_HANDLE dev_handle;

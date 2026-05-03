@@ -74,6 +74,7 @@ if(WIN32)
   add_library(boost INTERFACE ${BOOST_LIBS})
   target_link_libraries(boost INTERFACE ${BOOST_LIBS})
 else()
+  cmake_path(GET CMAKE_C_COMPILER FILENAME TOOLSET)
   add_custom_command(
     DEPENDS "${boost_content_SOURCE_DIR}/b2"
     OUTPUT "${boost_content_SOURCE_DIR}/stage-debug/lib/libboost_date_time.a"
@@ -88,7 +89,7 @@ else()
                             "${boost_content_SOURCE_DIR}/stage-debug/lib/libboost_json.a"
                             "${boost_content_SOURCE_DIR}/stage-debug/lib/libboost_atomic.a"
                     COMMAND
-		    sh ${CMAKE_SOURCE_DIR}/build_boost.sh "${ALL_COMPILE_OPTIONS_SPACED} -DBOOST_ASIO_HAS_STD_INVOKE_RESULT" " ${ALL_LINK_OPTIONS_SPACED}" debug
+		    sh ${CMAKE_SOURCE_DIR}/build_boost.sh "${ALL_COMPILE_OPTIONS_SPACED} -DBOOST_ASIO_HAS_STD_INVOKE_RESULT" " ${ALL_LINK_OPTIONS_SPACED}" debug "${TOOLSET}"
                     WORKING_DIRECTORY ${boost_content_SOURCE_DIR})
   add_custom_command(
     DEPENDS "${boost_content_SOURCE_DIR}/b2"
@@ -104,7 +105,7 @@ else()
                             "${boost_content_SOURCE_DIR}/stage-release/lib/libboost_json.a"
                             "${boost_content_SOURCE_DIR}/stage-release/lib/libboost_atomic.a"
                     COMMAND
-		    sh ${CMAKE_SOURCE_DIR}/build_boost.sh "${ALL_COMPILE_OPTIONS_SPACED} -DBOOST_ASIO_HAS_STD_INVOKE_RESULT" " ${ALL_LINK_OPTIONS_SPACED}" release
+		    sh ${CMAKE_SOURCE_DIR}/build_boost.sh "${ALL_COMPILE_OPTIONS_SPACED} -DBOOST_ASIO_HAS_STD_INVOKE_RESULT" " ${ALL_LINK_OPTIONS_SPACED}" release "${TOOLSET}"
                     WORKING_DIRECTORY ${boost_content_SOURCE_DIR})
   add_library(boost INTERFACE
     "$<IF:$<CONFIG:Debug>,${boost_content_SOURCE_DIR}/stage-debug/lib/libboost_date_time.a,${boost_content_SOURCE_DIR}/stage-release/lib/libboost_date_time.a>"

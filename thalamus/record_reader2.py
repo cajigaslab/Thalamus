@@ -108,6 +108,88 @@ class ZQueue:
 #    
 #  def push(self, message: Image)
 
+class SimpleRecordReader:
+  def __init__(self, file_arg: typing.Union[str, pathlib.Path, io.BufferedReader], node=None):
+    self.filename: typing.Optional[pathlib.Path]
+    self.reader: typing.Optional[io.BufferedReader]
+    self.size = 0
+    self.node_filter = node
+    self.current_position = 0
+    if isinstance(file_arg, (str, pathlib.Path)):
+      self.owns_reader = True
+      self.filename = pathlib.Path(file_arg) if isinstance(file_arg, str) else file_arg
+      self.reader = None
+    else:
+      self.owns_reader = False
+      self.filename = None
+      self.reader = file_arg
+      self.measure()
+
+  def get_record(self) -> typing.Optional[StorageRecord]:
+    temp = self.__read_record()
+    if temp is not None:
+      return temp[0]
+    
+  def progress(self):
+    return self.current_position/self.size
+  
+  def read_progress(self):
+    assert self.reader is not None
+    return self.reader.tell()/self.size
+
+  def __enter__(self):
+    if self.reader is None:
+      assert self.filename is not None
+      self.reader = self.filename.open('rb')
+      self.measure()
+    return self
+  
+  def __exit__(self, type, value, tb):
+    if self.owns_reader:
+      self.reader.close()
+  
+  def measure(self):
+    assert self.reader is not None
+    if not self.reader.seekable():
+      self.size = sys.maxsize
+      return
+
+    self.reader.seek(0, 2)
+    self.size = self.reader.tell()
+    self.reader.seek(0, 0)
+
+  def __read_record(self) -> typing.Optional[typing.Tuple[StorageRecord, int]]:
+    assert self.reader is not None
+    data = self.reader.read(LONG_SIZE)
+    if len(data) < LONG_SIZE:
+      return
+
+    size, = struct.unpack(LONG, data)
+    if size > MAX_SIZE:
+      return
+    #if size > 800*600:
+    #  self.reader.seek(size, 1)
+    #  return self.__read_record()
+
+    data = self.reader.read(size)
+    message = StorageRecord()
+
+    try:
+      message.ParseFromString(data)
+      self.current_position = len(data) + LONG_SIZE
+      return message, self.current_position
+    except google.protobuf.message.DecodeError:
+      return
+  
+  def __iter__(self) -> 'RecordReader':
+    return self
+  
+  def __next__(self) -> StorageRecord:
+    record = self.get_record()
+    if record is None:
+      raise StopIteration()
+    return record
+
 class RecordReader:
   def __init__(self, file_arg: typing.Union[str, pathlib.Path, io.BufferedReader], node=None, decompress=True, decode_video=True):
     self.filename: typing.Optional[pathlib.Path]
@@ -358,6 +440,9 @@ class RecordReader:
     if record is None:
       raise StopIteration()
     return record
+  
+if sys.platform == 'emscripten':
+  RecordReader = SimpleRecordReader
 
 class Timer:
   def __init__(self, seconds: float):

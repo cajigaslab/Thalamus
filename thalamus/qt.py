@@ -28,7 +28,11 @@ if HAS_QT6:
   from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 
   def qt_is_dark_mode():
-    return QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark
+    hints = QGuiApplication.styleHints()
+    if hasattr(hints, 'colorScheme'):
+      return hints.colorScheme() == Qt.ColorScheme.Dark
+    else:
+      return False
 
   def qt_to_polygonf(polygon):
     return polygon.toPolygonF()

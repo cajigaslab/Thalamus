@@ -15,6 +15,7 @@
 #include <thalamus/async.hpp>
 #include <thalamus/plugin.h>
 #include <thalamus/shared_library.hpp>
+#include <thalamus/http_server.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -123,6 +124,8 @@ int main(int argc, char **argv) {
                    "Address of Thalamus instance that manages state")
                    ("ext,e", boost::program_options::value<std::vector<std::string>>()->multitoken(), "Shared libraries to extend thalamus");
   desc.add_options()("log-level,l", boost::program_options::value<std::string>()->default_value("info"), "Set log level");
+  desc.add_options()("ip", boost::program_options::value<std::string>()->default_value("0.0.0.0"), "IP to bind to");
+  desc.add_options()("http-port", boost::program_options::value<uint16_t>()->default_value(50053), "Port to run Websocket server on");
 
 #ifndef _WIN32
   desc.add_options()
@@ -139,6 +142,9 @@ int main(int argc, char **argv) {
           .run(),
       vm);
   boost::program_options::notify(vm);
+
+  auto ip = vm["ip"].as<std::string>();
+  auto http_port = vm["http-port"].as<uint16_t>();
 
   auto log_level = vm["log-level"].as<std::string>();
   std::map<std::string, boost::log::trivial::severity_level> name_to_level = {
@@ -257,7 +263,7 @@ int main(int argc, char **argv) {
     state_manager.emplace(stub.get(), state, io_context);
   }
 
-  std::string server_address = absl::StrFormat("0.0.0.0:%d", port);
+  std::string server_address = absl::StrFormat("%s:%d", ip, port);
 
   grpc::EnableDefaultHealthCheckService(true);
   grpc::reflection::InitProtoReflectionServerBuilderPlugin();
@@ -273,6 +279,9 @@ int main(int argc, char **argv) {
   node_graph->set_service(&service);
   builder.RegisterService(&service);
   auto server = builder.BuildAndStart();
+  auto websocket_channel = server->InProcessChannel(grpc::ChannelArguments());
+  std::unique_ptr<thalamus_grpc::Thalamus::Stub> websocket_stub = thalamus_grpc::Thalamus::NewStub(websocket_channel);
+  HttpServer http_server(io_context, std::move(websocket_stub), ip, http_port);
 
   // std::cout << "Server listening on " << server_address << std::endl;
   std::thread grpc_thread([&] { server->Wait(); });

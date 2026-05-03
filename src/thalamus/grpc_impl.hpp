@@ -154,6 +154,9 @@ public:
                       ::grpc::ServerReaderWriter<::thalamus_grpc::StimResponse,
                                                  ::thalamus_grpc::StimRequest>
                           *reader) override;
+  ::grpc::Status about(::grpc::ServerContext *context,
+                       const ::thalamus_grpc::Empty *request,
+                       ::thalamus_grpc::Text *response) override;
 
   std::future<ObservableCollection::Value> evaluate(const std::string &code);
   bool send_change(ObservableCollection::Action action,
