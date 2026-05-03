@@ -101,6 +101,15 @@ struct ThalamusStreamBuf {
   boost::asio::streambuf buffer;
 };
 
+struct ThalamusJson {
+  size_t refs;
+  boost::json::value value;
+};
+
+struct ThalamusRequestHandle {
+  std::function<void(const boost::json::value &)> callback;
+};
+
 namespace thalamus {
 using namespace std::chrono_literals;
 
@@ -137,12 +146,20 @@ template <typename T> struct NodeFactory : public INodeFactory {
   std::string type_name() override { return T::type_name(); }
 };
 
+static void string_to_span(struct ThalamusCharSpan* output, const std::string& input) {
+  output->data = new char[input.size()];
+  output->size = input.size();
+  std::copy(input.begin(), input.end(), output->data);
+  output->owns_data = 1;
+}
+
 struct ExtNode : public Node, public AnalogNode, public ImageNode, public MotionCaptureNode, public TextNode {
   ThalamusNode* node;
-  ThalamusAPI* api;
-  ThalamusNodeFactory* factory;
+  ThalamusNodeFactory *factory;
+  ThalamusAPI *api;
 
-  ExtNode(ThalamusNode* _node, ThalamusNodeFactory* _factory) : node(_node), factory(_factory) {}
+  ExtNode(ThalamusNode *_node, ThalamusNodeFactory *_factory, ThalamusAPI *_api)
+      : node(_node), factory(_factory), api(_api) {}
   ~ExtNode() override;
 
   size_t modalities() const override {
@@ -188,7 +205,7 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
     return std::chrono::nanoseconds(node->time_ns(node));
   }
   std::chrono::nanoseconds remote_time() const override {
-    THALAMUS_ABORT("Unimplemented");
+    return 0ns;
   }
   std::string_view name(int channel) const override {
     auto temp = node->analog->name(node, channel);
@@ -284,11 +301,22 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
   std::string_view text() const override {
     return node->text->text(node);
   }
+
   bool has_text_data() const override {
     return node->text->has_text_data(node);
   }
-};
 
+  void process(const boost::json::value & request, std::function<void(const boost::json::value &)> callback) override {
+    if(node->process == nullptr) {
+      callback(boost::json::value());
+      return;
+    }
+    auto json = new ThalamusJson{1, request};
+    auto handle = new ThalamusRequestHandle {callback};
+    node->process(node, handle, json);
+    api->json_dec_ref(json);
+  }
+};
 
 ExtNode::~ExtNode() {
   factory->destroy(factory, node);
@@ -639,7 +667,7 @@ struct ThalamusAPIImpl {
     return buffer->buffer.size();
   }
 
-  static void charspan_destroy(ThalamusCharSpan* span) {
+  static void charspan_release(ThalamusCharSpan* span) {
     if(span->owns_data) {
       delete span->data;
     }
@@ -652,6 +680,30 @@ struct ThalamusAPIImpl {
     result->data = data;
     result->size = message.size();
     result->owns_data = true;
+  }
+
+  static void json_to_string(struct ThalamusCharSpan* output, const struct ThalamusJson* input) {
+    auto serialized = boost::json::serialize(input->value);
+    string_to_span(output, serialized);
+  }
+
+  static struct ThalamusJson* json_from_string(const struct ThalamusCharSpan* input) {
+    return new ThalamusJson{1, boost::json::parse(std::string_view(input->data, input->size))};
+  }
+
+  static void json_inc_ref(struct ThalamusJson* input) {
+    ++input->refs;
+  }
+
+  static void json_dec_ref(struct ThalamusJson* input) {
+    if(--input->refs == 0) {
+      delete input;
+    }
+  }
+
+  static void request_respond(struct ThalamusRequestHandle* handle, const struct ThalamusJson* response) {
+    handle->callback(response->value);
+    delete handle;
   }
 };
 
@@ -677,7 +729,7 @@ struct ExtNodeFactory : public INodeFactory {
     auto node = underlying->create(underlying, state_wrapper, &io_context, &node_graph);
 
     ThalamusAPIImpl::state_dec_ref(state_wrapper);
-    auto result = new ExtNode(node, underlying);
+    auto result = new ExtNode(node, underlying, api);
     node->impl = result;
     return result;
   }
@@ -815,8 +867,13 @@ public:
 
     thalamus_api.streambuf_size = ThalamusAPIImpl::streambuf_size;
 
-    thalamus_api.charspan_destroy = ThalamusAPIImpl::charspan_destroy;
+    thalamus_api.charspan_release = ThalamusAPIImpl::charspan_release;
     thalamus_api.error_code_message = ThalamusAPIImpl::error_code_message;
+    thalamus_api.json_to_string = ThalamusAPIImpl::json_to_string;
+    thalamus_api.json_from_string = ThalamusAPIImpl::json_from_string;
+    thalamus_api.request_respond = ThalamusAPIImpl::request_respond;
+    thalamus_api.json_inc_ref = ThalamusAPIImpl::json_inc_ref;
+    thalamus_api.json_dec_ref = ThalamusAPIImpl::json_dec_ref;
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},

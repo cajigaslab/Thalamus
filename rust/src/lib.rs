@@ -4,6 +4,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::{self, JoinHandle, sleep};
 use std::{cell::RefCell, ptr};
 use std::time::{Duration};
+use serde::{Serialize, Deserialize};
 
 mod ffi;
 mod wakers;
@@ -22,14 +23,15 @@ use api::{
 use futures::select;
 //use regex::Regex;
 
-use crate::api::{Sleeper, SleeperWaker, SliceDeref, StateKey, TaskScope, ThalamusAPI, run_task};
+use crate::api::{Json, Sleeper, SleeperWaker, SliceDeref, StateKey, TaskScope, ThalamusAPI, run_task};
 
 enum Message {
   Running(bool),
   Frequency(f64),
   Amplitude(f64),
   Samples(Vec<f64>),
-  Time(Duration)
+  Time(Duration),
+  Pulse(f64)
 }
 
 struct DemoNodeInner {
@@ -81,6 +83,8 @@ fn gen_signal(input: mpsc::Receiver<Message>, output: mpsc::Sender<Message>, wak
   let start = last;
   let mut now = last;
   let interval = Duration::from_millis(16);
+  let mut pulse_time = Duration::from_secs(0);
+  let mut pulse_val = 0.0;
 
   while running {
     let elapsed = now - last;
@@ -103,6 +107,10 @@ fn gen_signal(input: mpsc::Receiver<Message>, output: mpsc::Sender<Message>, wak
         samples_opt = Some(val);
         continue;
       }
+      Ok(Message::Pulse(val)) => { 
+        pulse_time = api.time();
+        pulse_val = val;
+      }
       Ok(Message::Time(_)) => { }
       Err(_) => {}
     }
@@ -121,8 +129,12 @@ fn gen_signal(input: mpsc::Receiver<Message>, output: mpsc::Sender<Message>, wak
     samples.clear();
     while last < now {
       let elapsed = last - start;
-      let elapsed_s = elapsed.as_secs_f64();
-      samples.push(amplitude*f64::sin(2.0*3.14*frequency*elapsed_s));
+      if last > pulse_time && last - pulse_time < Duration::from_millis(100) {
+        samples.push(pulse_val)
+      } else {
+        let elapsed_s = elapsed.as_secs_f64();
+        samples.push(amplitude*f64::sin(2.0*3.14*frequency*elapsed_s));
+      }
       last += Duration::from_millis(1);
     }
     output.send(Message::Time(last - Duration::from_millis(1))).unwrap();
@@ -197,9 +209,23 @@ fn RUNNING() -> StateKey {
   StateKey::String("Running".to_owned())
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct PulseRequest {
+  amplitude: f64
+}
+
 impl Node for DemoNode {
   fn time(&self) -> Duration {
     *self.inner.time.borrow()
+  }
+  
+  fn process(&self, handle: api::Request, request: api::Json) {
+    let text = request.to_string();
+    let request: PulseRequest = serde_json::from_str(&text).unwrap();
+    if let Some(out) = &*self.inner.output.borrow() {
+      out.send(Message::Pulse(request.amplitude)).expect("Send Amplitude failed");
+    }
+    handle.respond(&Json::from_string(self.inner.api, "{\"success\": true}"));
   }
 
   fn new(api: ThalamusAPI, state: State) -> Self {
@@ -451,6 +477,10 @@ impl AnalogNode for SerialNode {
 impl Node for SerialNode {
   fn time(&self) -> Duration {
     *self.inner.time.borrow()
+  }
+  
+  fn process(&self, handle: api::Request, _: api::Json) {
+    handle.respond(&Json::from_string(self.inner.api, "{}"));
   }
 
   fn new(api: ThalamusAPI, state: State) -> Self {
