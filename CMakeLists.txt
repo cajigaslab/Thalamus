@@ -132,8 +132,11 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE)
 set(GIT_COMMIT_HASH "${THALAMUS_GIT_COMMIT_HASH}")
 
+find_package(Python)
+message("Python_EXECUTABLE ${Python_EXECUTABLE}")
+
 execute_process(
-  COMMAND python3 -c "import toml;config = toml.load('pyproject.toml');print(config['project']['version'])"
+  COMMAND "${Python_EXECUTABLE}" -c "import toml;config = toml.load('pyproject.toml');print(config['project']['version'])"
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   OUTPUT_VARIABLE THALAMUS_VERSION
   OUTPUT_STRIP_TRAILING_WHITESPACE)

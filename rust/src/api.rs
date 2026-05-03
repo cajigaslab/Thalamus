@@ -104,6 +104,72 @@ impl ThalamusAPI {
 
 }
 
+pub struct Json {
+  api: ThalamusAPI,
+  handle:*mut ThalamusJson,
+}
+
+impl Json {
+  pub fn new(api: ThalamusAPI, handle:*mut ThalamusJson) -> Json {
+    unsafe {
+      ((&*api.raw).json_inc_ref)(handle);
+    }
+    Json{api, handle}
+  }
+
+  pub fn to_string(&self) -> String {
+    unsafe {
+      let mut span = ThalamusCharSpan { data: null(), size: 0, owns_data: 0};
+      ((&*self.api.raw).json_to_string)(&mut span as *mut ThalamusCharSpan, self.handle);
+
+      let slice = slice::from_raw_parts(span.data as *mut u8, span.size);
+      let text = str::from_utf8(slice).unwrap();
+      let result = text.to_string();
+      
+      ((&*self.api.raw).charspan_release)(&mut span as *mut ThalamusCharSpan);
+
+      result
+    }
+  }
+
+  pub fn from_string(api: ThalamusAPI, text: &str) -> Json {
+      let mut span = ThalamusCharSpan { data: text.as_ptr() as *const i8, size: text.len(), owns_data: 0};
+      
+      
+      let handle = unsafe { ((&*api.raw).json_from_string)(&mut span as *mut ThalamusCharSpan) };
+      Json {
+        api, handle
+      }
+  }
+}
+
+impl Clone for Json {
+  fn clone(&self) -> Self {
+      return Json::new(self.api, self.handle)
+  }
+}
+
+impl Drop for Json {
+  fn drop(&mut self) {
+    unsafe {
+      ((&*self.api.raw).json_dec_ref)(self.handle);
+    }
+  }
+}
+
+pub struct Request {
+  pub api: ThalamusAPI,
+  pub handle:*mut ThalamusRequestHandle,
+}
+
+impl Request {
+  pub fn respond(self, response: &Json) {
+    unsafe {
+      ((&*self.api.raw).request_respond)(self.handle, response.handle)
+    }
+  }
+}
+
 struct SleeperState {
   wakes: i32,
   futures: VecDeque<Arc<Mutex<SleeperFutureState>>>
@@ -253,7 +319,7 @@ impl StreamBuf {
       let slice = slice::from_raw_parts(span.data as *mut u8, span.size);
       let text = str::from_utf8(slice).unwrap();
       let result = text.to_string();
-      (api.charspan_destroy)(&mut span as *mut ThalamusCharSpan);
+      (api.charspan_release)(&mut span as *mut ThalamusCharSpan);
       result
     }
   }
@@ -639,7 +705,7 @@ impl ErrorCode {
 
         let slice = slice::from_raw_parts(span.data as *mut u8, span.size);
         let text = str::from_utf8(slice).unwrap().to_string();
-        ((&(*api.raw)).charspan_destroy)(&mut span as *mut ThalamusCharSpan);
+        ((&(*api.raw)).charspan_release)(&mut span as *mut ThalamusCharSpan);
         text
       } else {
         "".to_string()
@@ -860,6 +926,7 @@ impl Drop for Timer {
 
 pub trait Node {
   fn time(&self) -> Duration;
+  fn process(&self, handle: Request, request: Json);
   fn new(api: ThalamusAPI, state: State) -> Self;
 }
 

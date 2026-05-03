@@ -1251,6 +1251,7 @@ struct Storage2Node::Impl {
   }
 
   void start_thread(std::string output_file) {
+    stop_thread(true);
     is_running = true;
     records.clear();
     queued_bytes = 0;
@@ -1294,9 +1295,9 @@ struct Storage2Node::Impl {
     stats_timer.async_wait(std::bind(&Impl::on_stats_timer, this, _1));
   }
 
-  void stop_thread() {
+  void stop_thread(bool join = true) {
     is_running = false;
-    if (_thread.joinable()) {
+    if (join && _thread.joinable()) {
       _thread.join();
     }
   }
@@ -1325,7 +1326,7 @@ struct Storage2Node::Impl {
     }
     is_running = static_cast<bool>(state->at("Running"));
     if (!is_running) {
-      stop_thread();
+      stop_thread(false);
       return;
     }
 
