@@ -37,6 +37,11 @@
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
 #include <boost/dll/shared_library.hpp>
+#include <boost/dll/runtime_symbol_info.hpp>
+
+#include <client/crashpad_client.h>
+#include <client/crash_report_database.h>
+#include <client/settings.h>
 
 #ifdef __clang__
 #pragma clang diagnostic pop
@@ -63,12 +68,65 @@ static void on_terminate() {
   }
 }
 
+static bool init_crashpad() {
+  std::error_code ec;
+  std::filesystem::path crashes_dir = get_home() / "thalamus_crashes";
+  std::filesystem::create_directories(crashes_dir, ec);
+  if(ec) {
+    std::cerr << "Failed to create crash database directory " << crashes_dir.string()
+              << ": " << ec.message() << std::endl;
+    return false;
+  }
+
+  std::filesystem::path exe_dir(boost::dll::program_location().parent_path().string());
+#ifdef _WIN32
+  std::filesystem::path handler_path = exe_dir / "crashpad_handler.exe";
+  base::FilePath handler(handler_path.wstring());
+  base::FilePath db(crashes_dir.wstring());
+#else
+  std::filesystem::path handler_path = exe_dir / "crashpad_handler";
+  base::FilePath handler(handler_path.string());
+  base::FilePath db(crashes_dir.string());
+#endif
+  //THALAMUS_LOG(info) << handler_path;
+
+  std::unique_ptr<crashpad::CrashReportDatabase> database =
+      crashpad::CrashReportDatabase::Initialize(db);
+  if(!database || !database->GetSettings()) {
+    std::cerr << "Failed to initialize crash database at " << crashes_dir.string() << std::endl;
+    return false;
+  }
+  database->GetSettings()->SetUploadsEnabled(true);
+
+  std::string url = "https://neuro.ophanim.org";
+  //std::string url = "http://localhost:8000";
+  std::map<std::string, std::string> annotations{
+    {"commit", THALAMUS_GIT_COMMIT_HASH},
+    {"version", THALAMUS_VERSION},
+    {"build_type", "THALAMUS_BUILD_TYPE"},
+  };
+  std::vector<std::string> arguments;
+
+  crashpad::CrashpadClient client;
+  bool started = client.StartHandler(handler, db, db, url, annotations, arguments,
+                                     /*restartable=*/false,
+                                     /*asynchronous_start=*/true);
+  if(!started) {
+    std::cerr << "Failed to start crashpad handler at " << handler_path.string() << std::endl;
+  } else {
+    std::cout << "Crashpad handler started at " << handler_path.string()
+              << " (database: " << crashes_dir.string() << ")" << std::endl;
+  }
+  return started;
+}
+
 int main(int argc, char **argv) {
 #ifdef _WIN32
   timeBeginPeriod(1);
 #endif
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
   std::set_terminate(on_terminate);
+  init_crashpad();
   init_movable_clocks();
 
   auto steady_start = std::chrono::steady_clock::now();
@@ -295,6 +353,7 @@ int main(int argc, char **argv) {
         timer.async_wait(poll_function);
       };
   poll_function(boost::system::error_code());
+  //THALAMUS_ABORT("DIE");
 
   io_context.run();
   THALAMUS_LOG(info) << "Shutting down";

@@ -65,12 +65,8 @@ if(WIN32)
     list(APPEND ALL_COMPILE_OPTIONS -g)
   endif()
 else()
-  if(NOT DEFINED ENV{GITHUB_REPOSITORY})
-    message("Release debug symbols enabled")
-    list(APPEND ALL_COMPILE_OPTIONS -g)
-  else()
-    message("Release debug symbols disabled")
-  endif()
+  message("Release debug symbols enabled")
+  list(APPEND ALL_COMPILE_OPTIONS -g)
 endif()
   
 if("${SANITIZER}" STREQUAL thread)
@@ -124,6 +120,7 @@ include(cmake/zlib_processed.cmake)
 include(cmake/opencv.cmake)
 include(cmake/boost.cmake)
 include(cmake/hdf5.cmake)
+include(cmake/crashpad.cmake)
 
 execute_process(
   COMMAND git log -1 --format=%h
@@ -179,7 +176,7 @@ if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
 endif()
 
 add_library(hydrate "src/hydrate.cpp")
-target_link_libraries(hydrate boost grpc++ hdf5-static ffmpeg zlib_processed)
+target_link_libraries(hydrate boost grpc++ hdf5-static ffmpeg zlib_processed crashpad)
 add_dependencies(hydrate protoc_generated)
 target_compile_definitions(hydrate PRIVATE _USE_MATH_DEFINES NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS _GNU_SOURCE)
 target_include_directories(hydrate PRIVATE "${CMAKE_SOURCE_DIR}/src")
@@ -330,7 +327,7 @@ target_compile_definitions(thalamus PRIVATE _USE_MATH_DEFINES)
 target_include_directories(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(thalamus opencv hdf5-static lua
   boost grpc++ grpc++_reflection inja
-  absl::str_format_internal absl::strings absl::str_format ffmpeg cairo perfetto)
+  absl::str_format_internal absl::strings absl::str_format ffmpeg cairo perfetto crashpad)
 if(NOT APPLE)
   target_link_libraries(thalamus zlib_processed)
 endif()
@@ -345,13 +342,14 @@ target_compile_definitions(native PRIVATE _GNU_SOURCE)
 
 target_compile_options(native PRIVATE ${WARNING_FLAGS})
 target_include_directories(native PRIVATE "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(native PRIVATE hydrate thalamus opencv thalamus_ffmpeg ffmpeg sdl protoc_generated lua cairo)
+target_link_libraries(native PRIVATE hydrate thalamus opencv thalamus_ffmpeg ffmpeg sdl protoc_generated lua cairo crashpad)
 
 if(NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
   target_link_options(native PRIVATE -g)
 endif()
 
 add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "$<TARGET_FILE:native>" "${CMAKE_SOURCE_DIR}/thalamus")
+add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "${CRASHPAD_HANDLER_EXE}" "${CMAKE_SOURCE_DIR}/thalamus")
 
 add_executable(test src/test.cpp)
 
