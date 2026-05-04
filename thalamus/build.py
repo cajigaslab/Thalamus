@@ -183,7 +183,8 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
     '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
     f'-DCMAKE_OSX_DEPLOYMENT_TARGET={osx_target}',
-    f'-DBUILD_DOTNET={"ON" if dotnet else "OFF"}'
+    f'-DBUILD_DOTNET={"ON" if dotnet else "OFF"}',
+    f'-DPYTHON={sys.executable}'
   ]
   cmake_command += ['-G', generator]
 
