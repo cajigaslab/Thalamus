@@ -14,9 +14,9 @@ def library():
   #return [pathlib.Path.cwd() / 'ext.dll', pathlib.Path.cwd() / 'ext2.dll']
   if platform.system() == 'Windows':
     #return pathlib.Path.cwd() / 'rust/target/debug/thalamus_rs.dll'
-    return pathlib.Path.cwd() / 'ceci/ceci.dll'
+    return pathlib.Path(__file__).parent / 'ceci.dll'
   else:
-    return pathlib.Path.cwd() / 'ceci/libext.so'
+    return pathlib.Path(__file__).parent / 'libext.so'
 
 def tasks():
   return [
