@@ -91,6 +91,7 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument('-r', '--remote-executor', action='store_true',
                       help='Send task configs to remote ROS node to execute')
   parser.add_argument('--ext', help='Extension Module')
+  parser.add_argument('--crashpad', action='store_true', help='Enable crash data collection')
   return parser.parse_args(self_args[1:])
 
 async def async_main() -> None:
@@ -187,6 +188,8 @@ async def async_main() -> None:
       command = command + ('--ext',) + ext_library
     if arguments.trace:
       command = command + ('--trace',)
+    if arguments.crashpad:
+      command = command + ('--crashpad',)
     bmbi_native_proc = await asyncio.create_subprocess_exec(*command)
     create_task_with_exc_handling(proc_watcher('native.exe', bmbi_native_proc))
 

@@ -77,6 +77,7 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument('-u', '--ui-port', type=int, default=50051, help='UI GRPC port')
   parser.add_argument('-d', '--dotnet-port', type=int, default=50052, help='dotnet GRPC port')
   parser.add_argument('--ext', help='Extension Module')
+  parser.add_argument('--crashpad', action='store_true', help='Enable crash data collection')
   return parser.parse_args(self_args[1:])
 
 async def async_main() -> None:
@@ -155,6 +156,8 @@ async def async_main() -> None:
   command = command + ('--log-level', arguments.log_level)
   if ext_library is not None:
     command = command + ('--ext',) + ext_library
+  if arguments.crashpad:
+    command = command + ('--crashpad',)
   LOGGER.info('COMMAND %s', ' '.join(command))
   bmbi_native_proc = await asyncio.create_subprocess_exec(*command)
   LOGGER.info('PID %s', bmbi_native_proc.pid)
