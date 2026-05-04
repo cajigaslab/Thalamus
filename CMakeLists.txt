@@ -14,6 +14,8 @@ project(thalamus)
 
 option(CODE_COVERAGE "Enable Code Coverage" OFF)
 
+set(THALAMUS_PYTHON "${PYTHON}")
+
 message("CMAKE_SYSTEM_PROCESSOR ${CMAKE_SYSTEM_PROCESSOR}")
 
 if(WIN32)
@@ -132,11 +134,10 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE)
 set(GIT_COMMIT_HASH "${THALAMUS_GIT_COMMIT_HASH}")
 
-find_package(Python)
-message("Python_EXECUTABLE ${Python_EXECUTABLE}")
+message("THALAMUS_PYTHON ${THALAMUS_PYTHON}")
 
 execute_process(
-  COMMAND "${Python_EXECUTABLE}" -c "import toml;config = toml.load('pyproject.toml');print(config['project']['version'])"
+  COMMAND "${THALAMUS_PYTHON}" -c "import toml;config = toml.load('pyproject.toml');print(config['project']['version'])"
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   OUTPUT_VARIABLE THALAMUS_VERSION
   OUTPUT_STRIP_TRAILING_WHITESPACE)
