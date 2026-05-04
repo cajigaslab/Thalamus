@@ -89,9 +89,11 @@ def main():
       old_path = winreg.QueryValueEx(key, 'Path')[0]
 
     #depot_tools
-    #if not shutil.which('gclient'):
-    #  destination = home_path / 'depot_tools'
-    #  subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
+    if not shutil.which('gclient'):
+      destination = home_path / 'depot_tools'
+      if not destination.exists():
+        subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
+      subprocess.check_call([destination / 'gclient'])
 
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-U', 'setuptools'], cwd=home_str)
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-r', str(pathlib.Path.cwd()/'requirements.txt')], cwd=home_str)
@@ -312,11 +314,13 @@ def main():
         bashrc.write(f'\nexport PATH={home_str}/.local/cmake-{CMAKE_VERSION}-linux-x86_64/bin:$PATH\n')
 
     #depot_tools
-    #if not shutil.which('gclient'):
-    #  destination = home_path / 'depot_tools'
-    #  subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
-    #  with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
-    #    bashrc.write(f'\nexport PATH=${destination}:$PATH\n')
+    if not shutil.which('gclient'):
+      destination = home_path / 'depot_tools'
+      if not destination.exists():
+        subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
+      subprocess.check_call([destination / 'gclient'])
+      with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
+        bashrc.write(f'\nexport PATH=${destination}:$PATH\n')
 
     bashrc_path = home_path / '.bashrc'
     bashrc_path.touch()

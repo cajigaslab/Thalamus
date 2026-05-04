@@ -98,14 +98,14 @@ static bool init_crashpad() {
   }
   database->GetSettings()->SetUploadsEnabled(true);
 
-  std::string url = "https://neuro.ophanim.org";
-  //std::string url = "http://localhost:8000";
+  std::string url = "https://sleeve.ophanim.org:8002/crashpad";
+  //std::string url = "http://localhost:8002/crashpad";
   std::map<std::string, std::string> annotations{
     {"commit", THALAMUS_GIT_COMMIT_HASH},
     {"version", THALAMUS_VERSION},
-    {"build_type", "THALAMUS_BUILD_TYPE"},
+    {"build_type", THALAMUS_BUILD_TYPE},
   };
-  std::vector<std::string> arguments;
+  std::vector<std::string> arguments;//{"--no-rate-limit"};
 
   crashpad::CrashpadClient client;
   bool started = client.StartHandler(handler, db, db, url, annotations, arguments,
@@ -126,7 +126,9 @@ int main(int argc, char **argv) {
 #endif
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
   std::set_terminate(on_terminate);
+#ifdef THALAMUS_CRASHPAD
   init_crashpad();
+#endif
   init_movable_clocks();
 
   auto steady_start = std::chrono::steady_clock::now();
