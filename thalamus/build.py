@@ -109,7 +109,6 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   dotnet = 'dotnet' in config_settings
   cc = config_settings.get('cc', 'clang')
   cxx = config_settings.get('cxx', 'clang++')
-  crashpad = 'crashpad' in config_settings
 
   default_parallel = str(os.cpu_count())
   parallel = int(config_settings.get('job', default_parallel))
@@ -185,7 +184,6 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
     f'-DCMAKE_OSX_DEPLOYMENT_TARGET={osx_target}',
     f'-DBUILD_DOTNET={"ON" if dotnet else "OFF"}',
-    f'-DCRASHPAD={"ON" if crashpad else "OFF"}',
     f'-DPYTHON={sys.executable}'
   ]
   cmake_command += ['-G', generator]

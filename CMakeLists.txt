@@ -13,7 +13,6 @@ set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 project(thalamus)
 
 option(CODE_COVERAGE "Enable Code Coverage" OFF)
-option(CRASHPAD "Enable Crashpad" OFF)
 
 message("CMAKE_SYSTEM_PROCESSOR ${CMAKE_SYSTEM_PROCESSOR}")
 
@@ -121,9 +120,7 @@ include(cmake/zlib_processed.cmake)
 include(cmake/opencv.cmake)
 include(cmake/boost.cmake)
 include(cmake/hdf5.cmake)
-if(CRASHPAD)
-  include(cmake/crashpad.cmake)
-endif()
+include(cmake/crashpad.cmake)
 
 execute_process(
   COMMAND git log -1 --format=%h
@@ -142,7 +139,6 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 set(THALAMUS_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
-set(THALAMUS_CRASHPAD "${CRASHPAD}")
 configure_file(thalamus_config.h.in thalamus_config.h)
  
 set(PROTO_SOURCES
@@ -333,10 +329,6 @@ target_link_libraries(thalamus opencv hdf5-static lua
   boost grpc++ grpc++_reflection inja
   absl::str_format_internal absl::strings absl::str_format ffmpeg cairo perfetto crashpad)
 
-if(CRASHPAD)
-  target_link_libraries(thalamus crashpad)
-endif()
-
 if(NOT APPLE)
   target_link_libraries(thalamus zlib_processed)
 endif()
@@ -358,9 +350,7 @@ if(NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
 endif()
 
 add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "$<TARGET_FILE:native>" "${CMAKE_SOURCE_DIR}/thalamus")
-if(CRASHPAD)
-  add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "${CRASHPAD_HANDLER_EXE}" "${CMAKE_SOURCE_DIR}/thalamus")
-endif()
+add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "${CRASHPAD_HANDLER_EXE}" "${CMAKE_SOURCE_DIR}/thalamus")
 
 add_executable(test src/test.cpp)
 

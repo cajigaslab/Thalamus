@@ -48,6 +48,8 @@ from .util import create_task_with_exc_handling
 from ..resources import get_path
 from .tasks import add_tasks
 
+from .. import usersettings
+
 UNHANDLED_EXCEPTION: typing.List[Exception] = []
 
 LOGGER = logging.getLogger(__name__)
@@ -91,7 +93,6 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument('-r', '--remote-executor', action='store_true',
                       help='Send task configs to remote ROS node to execute')
   parser.add_argument('--ext', help='Extension Module')
-  parser.add_argument('--crashpad', action='store_true', help='Enable crash data collection')
   return parser.parse_args(self_args[1:])
 
 async def async_main() -> None:
@@ -124,6 +125,7 @@ async def async_main() -> None:
       add_tasks(ext_module.tasks())
 
   _ = QApplication(sys.argv)
+  use_crashpad = usersettings.data_collection_consent()
 
   if arguments.config:
     config = load(arguments.config)
@@ -188,9 +190,11 @@ async def async_main() -> None:
       command = command + ('--ext',) + ext_library
     if arguments.trace:
       command = command + ('--trace',)
-    if arguments.crashpad:
+    if use_crashpad:
       command = command + ('--crashpad',)
+    LOGGER.info('COMMAND %s', ' '.join(command))
     bmbi_native_proc = await asyncio.create_subprocess_exec(*command)
+    LOGGER.info('PID %s', bmbi_native_proc.pid)
     create_task_with_exc_handling(proc_watcher('native.exe', bmbi_native_proc))
 
   dotnet_proc = None
