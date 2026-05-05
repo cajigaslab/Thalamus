@@ -28,6 +28,11 @@ from . import imagined_task
 from . import feedback_task
 from . import psychopy_task
 from . import gaussian_task
+from . import VCP_delayed_match_to_sample_task
+from . import VCP_delayed_saccade_stim_task
+from . import VCP_delayed_saccade_gaussian_task
+from . import VCP_center_fixation_task
+from . import VCP_receptive_field_mapping_task
 from .task_context import TaskDescription
 
 DESCRIPTIONS = [
@@ -108,7 +113,22 @@ DESCRIPTIONS = [
     psychopy_task.run),
   TaskDescription('gaussian', 'Gaussian',
     gaussian_task.create_widget,
-    gaussian_task.run)
+    gaussian_task.run),
+  TaskDescription('VCP_delayed_match_to_sample_task', 'VCP: Delayed Match to Sample',
+    VCP_delayed_match_to_sample_task.create_widget,
+    VCP_delayed_match_to_sample_task.run),
+  TaskDescription('VCP_delayed_saccade_stim_task', 'VCP: Delayed Saccade - Stim',
+    VCP_delayed_saccade_stim_task.create_widget,
+    VCP_delayed_saccade_stim_task.run),
+  TaskDescription('VCP_delayed_saccade_gaussian_task', 'VCP: Delayed Saccade - Gaussian',
+    VCP_delayed_saccade_gaussian_task.create_widget,
+    VCP_delayed_saccade_gaussian_task.run),
+  TaskDescription('VCP_center_fixation_task', 'VCP: Center Fixation',
+    VCP_center_fixation_task.create_widget,
+    VCP_center_fixation_task.run),
+  TaskDescription('VCP_receptive_field_mapping_task', 'VCP: Receptive Field Mapping',
+    VCP_receptive_field_mapping_task.create_widget,
+    VCP_receptive_field_mapping_task.run)
 ]
 
 DESCRIPTIONS_MAP = dict((description.code, description) for description in DESCRIPTIONS)

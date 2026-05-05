@@ -23,6 +23,8 @@ import numpy
 
 import OpenGL.GL
 
+# from pkg_resources import resource_string, resource_filename
+
 from ..config import ObservableCollection, ObservableDict
 from .util import CanvasPainterProtocol, RenderOutput, voidptr, TaskContextProtocol, create_task_with_exc_handling
 from .. import util_pb2
@@ -35,7 +37,6 @@ from .util import create_task_with_exc_handling
 import grpc
 #from .. import recorder2_pb2
 #from .. import recorder2_pb2_grpc
-from ..resources import read_text
 
 LOGGER = logging.getLogger(__name__)
 
@@ -185,7 +186,7 @@ class BrowserReflectingPainter(QPainter):
       rect = args[0]
       image = args[1]
     else:
-      raise NotImplementedError('Unsupport drawImage call signature ' + str(args))
+      assert(False, 'Unsupport drawImage call signature ' + str(args))
 
     super().drawImage(rect, image)
     self.send({
@@ -624,8 +625,8 @@ class Canvas(QOpenGLWidget):
         painter.fillPath(self.input_config.touch_path, QColor(255, 0, 0))
 
         painter.setTransform(QTransform.fromTranslate(self.width()/2, self.height()/2))
-        for path in self.input_config.gaze_paths:
-          painter.fillPath(path, QColor(0, 0, 255))
+        # for path in self.input_config.gaze_paths: # drawing of gaze history as blue dots
+        #   painter.fillPath(path, QColor(0, 0, 255))
 
     if self.current_output_mask != RenderOutput.OPERATOR:
       for subscriber in self.listeners.paint_subscribers:
@@ -720,7 +721,7 @@ class Canvas(QOpenGLWidget):
         path = '/index.html' if path == '/' else path
         mime_type = MIME_TYPES[os.path.splitext(path)[1]]
         try:
-          stream = read_text(__name__, f'browser{path}')
+          stream = resource_string(__name__, f'browser{path}')
         except FileNotFoundError:
           writer.write(b'HTTP/1.1 404 Not Found\r\n')
           writer.write(b'\r\n')
@@ -824,6 +825,7 @@ class Canvas(QOpenGLWidget):
     Core of touch event processing
     """
     offset = point - self.input_config.last_touch
+    #print('touch')
     if QPoint.dotProduct(offset, offset) > 2:
       self.input_config.touch_path.addEllipse(QPointF(point), POINT_SIZE, POINT_SIZE)
       self.input_config.last_touch = offset
@@ -852,8 +854,7 @@ class Canvas(QOpenGLWidget):
             x = message.data[span.end-1]
           elif span.name == 'Y' and span.begin < span.end:
             y = message.data[span.end-1]
-        if x is None or y is None:
-            continue
+        assert x is not None and y is not None
 
         voltage_point = QPointF(x, -y)
 

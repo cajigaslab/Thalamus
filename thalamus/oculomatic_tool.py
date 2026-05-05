@@ -275,7 +275,7 @@ class OculomaticTool():
             else:
               quadrant = 'II'
           else:
-            if x >= 0:
+            if x <= 0:
               quadrant = 'III'
             else:
               quadrant = 'IV'

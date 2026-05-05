@@ -31,14 +31,16 @@ class ViewWidget(QWidget):
     """
     try:
       self.painting = True
-      if USINGLEGACY_QT:
-        with self.target.canvas.masked(RenderOutput.OPERATOR):
-          image = self.target.canvas.grabFramebuffer()
-      else:
-        image = QImage(self.target.width(), self.target.height(),
-                                   QImage.Format.Format_RGB32) # type: ignore # pylint: disable=no-member
-        with self.target.canvas.masked(RenderOutput.OPERATOR):
-          self.target.canvas.render(image)
+      # if USINGLEGACY_QT:
+      #   with self.target.canvas.masked(RenderOutput.OPERATOR):
+      #     image = self.target.canvas.grabFramebuffer()
+      # else:
+      #   image = QImage(self.target.width(), self.target.height(),
+      #                              QImage.Format.Format_RGB32) # type: ignore # pylint: disable=no-member
+      #   with self.target.canvas.masked(RenderOutput.OPERATOR):
+      #     self.target.canvas.render(image)
+      with self.target.canvas.masked(RenderOutput.OPERATOR):
+        image = self.target.canvas.grabFramebuffer()
 
 
       painter = QPainter(self)
@@ -69,21 +71,91 @@ class CentralWidget(QWidget):
     layout.addWidget(ViewWidget(target), 0, 0, 1, 4)
     layout.setRowStretch(0, 1)
 
-    clear_button = QPushButton('Clear')
+    clear_button = QPushButton('Clear Gaze History') # this button was added to the Operator View to clear the gaze history
     layout.addWidget(clear_button, 1, 0)
     layout.setRowStretch(1, 0)
     clear_button.clicked.connect(target.canvas.clear_accumulation)
 
+    # Connecting clearing of successful trial endpoints to the button
+    # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+    def press_clear_button():
+      target.canvas.do_clear = True
+    clear_button.clicked.connect(press_clear_button)
+    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+    # Example of adding a button to clear the endpoints
+    # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+    # def on_test():
+    #   target.canvas.do_clear = True
+    # clear_endpoints_button = QPushButton('Clear Endpoints') # this button was added to the Operator View to clear the endpoints
+    # layout.addWidget(clear_endpoints_button, 1, 2)
+    # layout.setRowStretch(1, 0)
+    # clear_endpoints_button.clicked.connect(on_test)
+    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+    # Adding extra button to switch targets during eyetracker calibration
+    # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+    def press_next_button():
+      target.canvas.next_target = True
+    next_button = QPushButton('Next') # this button was added to the Operator View to switch between targets for manual eyetracker calibration
+    layout.addWidget(next_button, 1, 2)
+    layout.setRowStretch(1, 0)
+    next_button.clicked.connect(press_next_button)
+    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    
+    # Adding a checkbox for controlling auto clearing of the canvas
     auto_clear_checkbox = QCheckBox('Auto Clear')
     layout.addWidget(auto_clear_checkbox, 1, 1)
     auto_clear_checkbox.toggled.connect(lambda v: eye_config.update({'Auto Clear': v}))
-
     def on_eye_config_change(a, k, v):
       if k == 'Auto Clear':
         auto_clear_checkbox.setChecked(v)
 
     eye_config.add_observer(on_eye_config_change, lambda: isdeleted(self))
     eye_config.recap(on_eye_config_change)
+
+    # Adding a checkbox for controlling visual feedback target highligting circle
+    # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+    my_checkbox = QCheckBox('Draw Subject Feedback Circle')
+    layout.addWidget(my_checkbox, 1, 3)  # Place it in row 1, column 3 (or wherever you want)
+
+    def checkbox_switch(v: bool) -> None:
+      """
+      Callback for when the checkbox is toggled
+      """
+      target.canvas.feedback_choice = v
+
+    my_checkbox.toggled.connect(checkbox_switch)
+    # my_checkbox.toggled.connect(lambda v: eye_config.update({'Draw Subject Feedback Circle': v}))
+
+    def checkbox_switch_change(a, k, v):
+        if k == 'Draw Subject Feedback Circle':
+            my_checkbox.setChecked(v)
+
+    eye_config.add_observer(checkbox_switch_change, lambda: isdeleted(self))
+    eye_config.recap(checkbox_switch_change)
+    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+    # Adding a checkbox for controlling visual feedback fixation cross thickening
+    # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+    my_checkbox2 = QCheckBox('Highlight Fixation Cross')
+    layout.addWidget(my_checkbox2, 2, 3)  # Place it in row 1, column 3 (or wherever you want)
+
+    def checkbox_switch2(v: bool) -> None:
+      """
+      Callback for when the checkbox is toggled
+      """
+      target.canvas.feedback_choice2 = v
+
+    my_checkbox2.toggled.connect(checkbox_switch2)
+
+    def checkbox_switch_change2(a, k, v):
+        if k == 'Highlight Fixation Cross':
+            my_checkbox2.setChecked(v)
+
+    eye_config.add_observer(checkbox_switch_change2, lambda: isdeleted(self))
+    eye_config.recap(checkbox_switch_change2)
+    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
     quadrants = [
       ("I", 2, 0),
