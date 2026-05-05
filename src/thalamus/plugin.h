@@ -65,6 +65,11 @@ extern "C" {
     char owns_data;
   };
 
+  struct ThalamusNodeSelector {
+    ThalamusCharSpan name;
+    ThalamusCharSpan type;
+  };
+
   struct ThalamusRequestHandle;
 
   struct ThalamusJson;
@@ -161,8 +166,14 @@ extern "C" {
 
   struct ThalamusSerialPort;
   struct ThalamusStreamBuf;
+  struct ThalamusNodeWeak;
+  struct ThalamusNodeGetConnection;
+  struct ThalamusNodeReadyConnection;
+  struct ThalamusNodeWeak;
 
   typedef void (*ThalamusIOCallback)(struct ThalamusErrorCode*, size_t, void* data);
+  typedef void (*ThalamusNodeGetCallback)(struct ThalamusNodeWeak*, void* data);
+  typedef void (*ThalamusNodeReadyCallback)(struct ThalamusNode*, void* data);
 
   struct ThalamusAPI {
     char (*state_is_dict)(struct ThalamusState*);
@@ -255,6 +266,16 @@ extern "C" {
 
     void (*json_inc_ref)(struct ThalamusJson* input);
     void (*json_dec_ref)(struct ThalamusJson* input);
+
+    ThalamusNodeGetConnection* (*node_get_node)(struct ThalamusNodeSelector*, ThalamusNodeGetCallback callback, void* data);
+
+    void (*node_inc_ref)(struct ThalamusNode*);
+    void (*node_dec_ref)(struct ThalamusNode*);
+
+    ThalamusNodeReadyConnection* (*node_ready_connect)(struct ThalamusNode*);
+
+    ThalamusNode* (*node_lock)(struct ThalamusNodeWeak*);
+    void (*node_unlock)(struct ThalamusNodeWeak*);
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories)(struct ThalamusAPI*);
