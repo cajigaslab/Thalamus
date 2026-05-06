@@ -21,8 +21,8 @@ from .. import thalamus_pb2_grpc
 
 from .widgets import Form
 from .util import (
-  TaskContextProtocol, UdpProtocol, CanvasPainterProtocol, movella_decorator, TaskResult, MovellaReceiver,
-  nidaq_decorator, NidaqmxTaskWrapper, create_task_with_exc_handling)
+  TaskContextProtocol, CanvasPainterProtocol, TaskResult,
+  create_task_with_exc_handling)
 from ..util import IterableQueue
 
 from ..qt import *
@@ -205,7 +205,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   success_audio_filename = context.task_config.get('success_audio_file', None)
   fail_audio_filename = context.task_config.get('fail_audio_file', None)
   indicate_success_failure = context.task_config.get('indicate_success_failure', True)
-  print('indicate_success_failure', indicate_success_failure)
+  LOGGER.info('indicate_success_failure %s', indicate_success_failure)
 
   start_audio_queue = QSound(start_audio_filename) if start_audio_filename and pathlib.Path(start_audio_filename).exists() else None
   success_audio_queue = QSound(success_audio_filename) if success_audio_filename and pathlib.Path(success_audio_filename).exists() else None

@@ -1,8 +1,12 @@
+import logging
+
 from ..config import ObservableCollection
 from ..qt import *
 
 from .. import thalamus_pb2
 from ..task_controller.util import create_task_with_exc_handling
+
+LOGGER = logging.getLogger(__name__)
 
 class LuaWidget(QWidget):
   def __init__(self, config, stub):
@@ -63,7 +67,7 @@ class LuaWidget(QWidget):
       del self.lines[k]
 
   def on_equation_change(self, label: QLabel, edit, error_label, a, k, v):
-    print(a, k, v)
+    LOGGER.debug('%s %s %s', a, k, v)
     if k == 'Equation':
       if edit.text() != v:
         edit.setText(v)
@@ -72,7 +76,7 @@ class LuaWidget(QWidget):
     elif k == 'Error':
       error_label.setText(v)
       style = 'color: red' if v else 'color: black'
-      print(style)
+      LOGGER.debug('%s', style)
       edit.setStyleSheet(style)
 
   

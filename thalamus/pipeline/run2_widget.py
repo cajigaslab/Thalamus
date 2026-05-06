@@ -3,6 +3,10 @@ from ..config import ObservableDict
 from .. import thalamus_pb2_grpc
 from ..observable_item_models import FlatObservableCollectionModel, TreeObservableCollectionModel, TreeObservableCollectionDelegate
 
+import logging
+
+LOGGER = logging.getLogger(__name__)
+
 class Run2Widget(QTabWidget):
   def __init__(self, config: ObservableDict, stub: thalamus_pb2_grpc.ThalamusStub):
     super().__init__()
@@ -39,7 +43,7 @@ class Run2Widget(QTabWidget):
     self.currentChanged.connect(lambda v: config.update({'tab': v}))
 
     def on_add():
-      print('on_add', self.targets)
+      LOGGER.debug('on_add %s', self.targets)
       if self.targets is None:
         return
       self.targets.append({
@@ -53,7 +57,7 @@ class Run2Widget(QTabWidget):
         return
       rows = sorted(set(i.row() for i in self.qlist.selectedIndexes()), reverse=True)
       for row in rows:
-        print(self.targets, row)
+        LOGGER.debug('%s %s', self.targets, row)
         del self.targets[row]
     remove_button.clicked.connect(on_remove)
 
@@ -75,7 +79,7 @@ class Run2Widget(QTabWidget):
     self.qlist.setItemDelegate(delegate)
 
   def __on_change(self, source, action, key, value):
-    print('__on_change', source, action, key, value)
+    LOGGER.debug('__on_change %s %s %s %s', source, action, key, value)
     if source is self.config:
       if key == 'Targets':
         self.__set_model(value)

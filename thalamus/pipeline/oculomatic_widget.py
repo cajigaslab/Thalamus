@@ -2,6 +2,9 @@ from ..qt import *
 from .. import  thalamus_pb2
 import json
 import asyncio
+import logging
+
+LOGGER = logging.getLogger(__name__)
 
 class OculomaticWidget(QWidget):
   def __init__(self, config, stub):
@@ -80,7 +83,7 @@ class OculomaticWidget(QWidget):
       )
       async def on_recenter_async():
         response = await self.stub.node_request(request)
-        print(response)
+        LOGGER.debug('%s', response)
       asyncio.get_event_loop().create_task(on_recenter_async())
 
     self.recenter_button = QPushButton('Recenter')

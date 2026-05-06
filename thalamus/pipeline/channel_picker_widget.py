@@ -2,9 +2,12 @@ import functools
 import typing
 import bisect
 import pdb
+import logging
 
 from ..qt import *
 from ..config import *
+
+LOGGER = logging.getLogger(__name__)
 
 class Delegate(QItemDelegate):
   def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
@@ -55,7 +58,7 @@ class SourcesModel(QAbstractItemModel):
     if index.parent().isValid():
       index = index.parent()
 
-    print('get_mappings', self.sorted_keys, index.row())
+    LOGGER.debug('get_mappings %s %s', self.sorted_keys, index.row())
     key = self.sorted_keys[index.row()]
     return self.config[key]
 
@@ -67,7 +70,7 @@ class SourcesModel(QAbstractItemModel):
       i = bisect.bisect_left(self.sorted_keys, key)
       self.beginInsertRows(QModelIndex(), i, i)
       self.sorted_keys.insert(i, key)
-      print('on_sources_change', self.sorted_keys)
+      LOGGER.debug('on_sources_change %s', self.sorted_keys)
       self.endInsertRows()
       value.add_observer(lambda *args: self.on_mappings_change(key, *args), functools.partial(isdeleted, self))
       for k, v in enumerate(value):
@@ -84,7 +87,7 @@ class SourcesModel(QAbstractItemModel):
           node.add_observer(on_name_change, functools.partial(isdeleted, self))
           self.monitored_nodes.add(id(node))
     else:
-      print('on_sources_change, remove')
+      LOGGER.debug('on_sources_change, remove')
       i = bisect.bisect_left(self.sorted_keys, key)
       self.beginRemoveRows(QModelIndex(), i, i)
       del self.sorted_keys[i]
@@ -93,7 +96,7 @@ class SourcesModel(QAbstractItemModel):
 
   def on_mappings_change(self, i_name, action, key, value):
     i = self.get_row(i_name)
-    print('on_mappings_change', i, action, key, value)
+    LOGGER.debug('on_mappings_change %s %s %s %s', i, action, key, value)
     parent = self.index(i, 0, QModelIndex())
     if action == ObservableCollection.Action.SET:
       self.beginInsertRows(parent, key, key)
@@ -107,7 +110,7 @@ class SourcesModel(QAbstractItemModel):
 
   def on_mapping_change(self, self_channel, i_name, j, action, key, value):
     i = self.get_row(i_name)
-    print('on_mapping_change', i, j, action, key, value, self.config)
+    LOGGER.debug('on_mapping_change %s %s %s %s %s %s', i, j, action, key, value, self.config)
     parent = self.index(i, 0, QModelIndex())
     self.dataChanged.emit(self.index(j, 0, parent), self.index(j, 1, parent))
     used_channels = set()

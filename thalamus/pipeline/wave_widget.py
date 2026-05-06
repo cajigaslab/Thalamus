@@ -3,8 +3,11 @@ from ..qt import *
 import dataclasses
 import inspect
 import typing
+import logging
 from ..config import ObservableCollection
 from ..observable_item_models import FlatObservableCollectionModel, TreeObservableCollectionModel, TreeObservableCollectionDelegate
+
+LOGGER = logging.getLogger(__name__)
 
 WAVE_PROPERTIES = set(['Frequency',
         'Amplitude',
@@ -37,7 +40,7 @@ class WaveWidget(QWidget):
     self.setLayout(layout)
 
     def on_add():
-      print('on_add', self.waves)
+      LOGGER.debug('on_add %s', self.waves)
       if self.waves is None:
         return
       self.waves.append({
@@ -55,7 +58,7 @@ class WaveWidget(QWidget):
         return
       rows = sorted(set(i.row() for i in self.qlist.selectedIndexes()), reverse=True)
       for row in rows:
-        print(self.waves, row)
+        LOGGER.debug('%s %s', self.waves, row)
         del self.waves[row]
     remove_button.clicked.connect(on_remove)
 
@@ -77,7 +80,7 @@ class WaveWidget(QWidget):
     self.qlist.setItemDelegate(delegate)
 
   def __on_change(self, source, action, key, value):
-    print('__on_change', source, action, key, value)
+    LOGGER.debug('__on_change %s %s %s %s', source, action, key, value)
     if source is self.config:
       if key == 'Waves':
         self.__set_model(value)

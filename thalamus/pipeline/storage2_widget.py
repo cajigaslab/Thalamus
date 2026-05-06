@@ -1,6 +1,6 @@
 from ..qt import *
 from .. import thalamus_pb2_grpc
-from ..observable_item_models import FlatObservableCollectionModel, TreeObservableCollectionModel, TreeObservableCollectionDelegate
+from ..observable_item_models import FlatObservableCollectionModel, TreeObservableCollectionModel, TreeObservableCollectionDelegate, get_selected_rows
 from ..config import ObservableDict
 from ..task_controller.util import create_task_with_exc_handling
 import datetime
@@ -9,6 +9,9 @@ import time
 import bisect
 import pathlib
 import typing
+import logging
+
+LOGGER = logging.getLogger(__name__)
 
 class FilePicker(QWidget):
   def __init__(self, value = '', parent = None):
@@ -37,17 +40,17 @@ class FilePicker(QWidget):
 
 class FileDelegate(QItemDelegate):
   def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
-    print('createEditor')
+    LOGGER.debug('createEditor')
     return FilePicker('', parent)
 
   def setEditorData(self, editor: QWidget, index: QModelIndex) -> None:
     editor = typing.cast(FilePicker, editor)
     data = index.data(Qt.ItemDataRole.EditRole)
-    print('setEditorData', data)
+    LOGGER.debug('setEditorData %s', data)
     editor.set_value(data)
 
   def setModelData(self, editor: QWidget, model: QAbstractItemModel, index: QModelIndex):
-    print('setModelData')
+    LOGGER.debug('setModelData')
     editor = typing.cast(FilePicker, editor)
     data = editor.value()
     model.setData(index, data, Qt.ItemDataRole.EditRole)
@@ -124,8 +127,8 @@ class Storage2Widget(QWidget):
       })
 
     def on_remove():
-      for item in list(qlist.selectedIndexes())[::-1]:
-        del sources[item.row()]
+      for item in get_selected_rows(qlist):
+        del sources[item]
 
     add_button.clicked.connect(on_add)
     remove_button.clicked.connect(on_remove)
@@ -142,8 +145,8 @@ class Storage2Widget(QWidget):
       })
 
     def on_remove_file():
-      for item in list(file_qlist.selectedIndexes())[::-1]:
-        del files[item.row()]
+      for item in get_selected_rows(file_qlist):
+        del files[item]
 
     add_file_button.clicked.connect(on_add_file)
     remove_file_button.clicked.connect(on_remove_file)
@@ -155,8 +158,8 @@ class Storage2Widget(QWidget):
       })
 
     def on_remove_metadata():
-      for item in list(file_qlist.selectedIndexes())[::-1]:
-        del metadata[item.row()]
+      for item in get_selected_rows(metadata_qlist):
+        del metadata[item]
 
     add_metadata_button.clicked.connect(on_add_metadata)
     remove_metadata_button.clicked.connect(on_remove_metadata)
@@ -169,16 +172,19 @@ class Storage2Widget(QWidget):
 
     layout = QVBoxLayout()
     layout.addWidget(status)
+    layout.addWidget(QLabel('Nodes:'))
     layout.addWidget(qlist)
     button_layout = QHBoxLayout()
     button_layout.addWidget(add_button)
     button_layout.addWidget(remove_button)
     layout.addLayout(button_layout)
+    layout.addWidget(QLabel('Files:'))
     layout.addWidget(file_qlist)
     button_layout = QHBoxLayout()
     button_layout.addWidget(add_file_button)
     button_layout.addWidget(remove_file_button)
     layout.addLayout(button_layout)
+    layout.addWidget(QLabel('Metadata:'))
     layout.addWidget(metadata_qlist)
     button_layout = QHBoxLayout()
     button_layout.addWidget(add_metadata_button)
@@ -213,7 +219,7 @@ class Storage2Widget(QWidget):
     def on_change(source, action, key, value):
       nonlocal last_running
 
-      print(source, action, key, value)
+      LOGGER.debug('%s %s %s %s', source, action, key, value)
       if key == 'Running':
         if self.task:
           self.task.cancel()

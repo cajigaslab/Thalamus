@@ -1,0 +1,98 @@
+#pragma once
+
+#include <thalamus/analog_node.hpp>
+#include <thalamus/base_node.hpp>
+#include <boost/qvm/quat.hpp>
+#include <boost/qvm/vec.hpp>
+#include <thalamus/state.hpp>
+#include <string>
+#include <thalamus/plugin.h>
+
+namespace thalamus {
+using namespace std::chrono_literals;
+
+class MotionCaptureNode {
+public:
+  using Segment = ThalamusMocapSegment;
+  virtual ~MotionCaptureNode();
+  virtual std::span<Segment const> segments() const = 0;
+  virtual const std::string_view pose_name() const = 0;
+  virtual std::chrono::nanoseconds time() const = 0;
+  virtual void inject(const std::span<Segment const> &segments) = 0;
+  virtual bool has_motion_data() const;
+};
+
+class MotionCaptureNodeImpl : public Node, public MotionCaptureNode {
+  struct Impl;
+  std::unique_ptr<Impl> impl;
+public:
+  MotionCaptureNodeImpl(ObservableDictPtr state, boost::asio::io_context &io_context,
+                        NodeGraph *);
+  ~MotionCaptureNodeImpl() override;
+  std::span<Segment const> segments() const override;
+  const std::string_view pose_name() const override;
+  std::chrono::nanoseconds time() const override;
+  void inject(const std::span<Segment const> &segments) override;
+  bool has_motion_data() const override;
+  static std::string type_name();
+  size_t modalities() const override;
+};
+
+class XsensNode : public Node, public MotionCaptureNode, public AnalogNode {
+  struct Impl;
+  std::unique_ptr<Impl> impl;
+
+public:
+  XsensNode(ObservableDictPtr state, boost::asio::io_context &io_context,
+            NodeGraph *);
+  ~XsensNode() override;
+  static std::string type_name();
+  std::span<Segment const> segments() const override;
+  const std::string_view pose_name() const override;
+  std::chrono::nanoseconds time() const override;
+  void inject(const std::span<Segment const> &segments) override;
+
+  std::span<const double> data(int channel) const override;
+  int num_channels() const override;
+  std::string_view name(int channel) const override;
+  std::chrono::nanoseconds sample_interval(int i) const override;
+  void
+  inject(const thalamus::vector<std::span<double const>> &spans,
+         const thalamus::vector<std::chrono::nanoseconds> &sample_intervals,
+         const thalamus::vector<std::string_view> &) override;
+  bool has_analog_data() const override;
+  bool has_motion_data() const override;
+
+  boost::json::value process(const boost::json::value &) override;
+  size_t modalities() const override;
+};
+
+class HandEngineNode : public Node,
+                       public MotionCaptureNode,
+                       public AnalogNode {
+  struct Impl;
+  std::unique_ptr<Impl> impl;
+
+public:
+  HandEngineNode(ObservableDictPtr state, boost::asio::io_context &io_context,
+                 NodeGraph *);
+  ~HandEngineNode() override;
+  static std::string type_name();
+  std::span<Segment const> segments() const override;
+  const std::string_view pose_name() const override;
+  std::chrono::nanoseconds time() const override;
+  void inject(const std::span<Segment const> &segments) override;
+
+  std::span<const double> data(int channel) const override;
+  int num_channels() const override;
+  std::string_view name(int channel) const override;
+  std::chrono::nanoseconds sample_interval(int i) const override;
+  void
+  inject(const thalamus::vector<std::span<double const>> &spans,
+         const thalamus::vector<std::chrono::nanoseconds> &sample_intervals,
+         const thalamus::vector<std::string_view> &) override;
+  bool has_analog_data() const override;
+  bool has_motion_data() const override;
+  size_t modalities() const override;
+};
+} // namespace thalamus

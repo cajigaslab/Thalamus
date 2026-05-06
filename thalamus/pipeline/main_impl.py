@@ -18,13 +18,14 @@ import asyncio
 import logging
 import argparse
 import itertools
+import importlib
 
 import yaml
 
 from ..config import *
 from ..cache_manager import CacheManager
 
-from pkg_resources import resource_string, resource_filename
+from ..resources import get_path
 
 import grpc
 from .. import ophanim_pb2_grpc
@@ -32,10 +33,14 @@ from .. import thalamus_pb2_grpc
 from ..task_controller.observable_bridge import ObservableBridge
 from .thalamus_window import ThalamusWindow
 from ..servicer import ThalamusServicer
+from .. import thalamus_stub
+from ..task_controller.util import create_task_with_exc_handling
 
 from ..qt import *
 from .. import process
 UNHANDLED_EXCEPTION: typing.List[Exception] = []
+
+LOGGER = logging.getLogger(__name__)
 
 def exception_handler(loop: asyncio.AbstractEventLoop, context: typing.Mapping[str, typing.Any]) -> None:
   """
@@ -67,8 +72,11 @@ def parse_args() -> argparse.Namespace:
   parser = argparse.ArgumentParser(description='Thalamus signal pipeline')
   parser.add_argument('-c', '--config', help='Config file location')
   parser.add_argument('-t', '--trace', action='store_true', help='Enable tracing')
+  parser.add_argument('-l', '--log-level', choices=['trace', 'debug', 'info', 'warning', 'error', 'fatal'], default='info', help='Log level')
   parser.add_argument('-p', '--port', type=int, default=50050, help='GRPC port')
   parser.add_argument('-u', '--ui-port', type=int, default=50051, help='UI GRPC port')
+  parser.add_argument('-d', '--dotnet-port', type=int, default=50052, help='dotnet GRPC port')
+  parser.add_argument('--ext', help='Extension Module')
   return parser.parse_args(self_args[1:])
 
 async def async_main() -> None:
@@ -82,10 +90,34 @@ async def async_main() -> None:
   done_future = asyncio.get_event_loop().create_future()
 
   asyncio.get_event_loop().set_exception_handler(exception_handler)
-  logging.basicConfig(level=logging.DEBUG, format='%(levelname)s %(asctime)s %(name)s:%(lineno)s %(message)s')
-  logging.getLogger('matplotlib.font_manager').setLevel(logging.INFO)
+  logging.basicConfig(level=logging.INFO, format='%(levelname)s %(asctime)s %(name)s:%(lineno)s %(message)s')
 
   arguments = parse_args()
+
+  log_level = logging.INFO
+  if arguments.log_level in ('trace', 'debug'):
+    log_level = logging.DEBUG
+  elif arguments.log_level == 'info':
+    log_level = logging.INFO
+  elif arguments.log_level == 'warning':
+    log_level = logging.WARNING
+  elif arguments.log_level == 'error':
+    log_level = logging.ERROR
+  elif arguments.log_level == 'fatal':
+    log_level = logging.CRITICAL
+
+  logging.getLogger('matplotlib.font_manager').setLevel(log_level)
+  
+  ext_widgets = {}
+  ext_library = None
+  if arguments.ext is not None:
+    ext_module = importlib.import_module(arguments.ext)
+    if hasattr(ext_module, 'widgets'):
+      ext_widgets.update(ext_module.widgets())
+    if hasattr(ext_module, 'library'):
+      ext_library = ext_module.library()
+      ext_library = [ext_library] if isinstance(ext_library, (str, pathlib.Path)) else ext_library
+      ext_library = tuple(str(e) for e in ext_library)
 
   _ = QApplication(sys.argv)
 
@@ -109,12 +141,31 @@ async def async_main() -> None:
   server.add_insecure_port(listen_addr)
   logging.info("Starting GRPC server on %s", listen_addr)
   await server.start()
+
+  async def proc_watcher(name: str, proc: asyncio.subprocess.Process):
+    await proc.wait()
+    if not done_future.done():
+      logging.error(f'{name} process terminated, shutting down UI')
+      done_future.set_result(None)
   
-  bmbi_native_filename = resource_filename('thalamus', 'native' + ('.exe' if sys.platform == 'win32' else ''))
+  bmbi_native_filename = get_path('native' + ('.exe' if sys.platform == 'win32' else ''))
+  dotnet_filename = pathlib.Path(get_path('thalamus.dotnet', 'dotnet' + ('.exe' if sys.platform == 'win32' else '')))
   bmbi_native_proc = None
   command = bmbi_native_filename, 'thalamus', '--port', str(arguments.port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else [])
-  print('COMMAND', ' '.join(command))
+  command = command + ('--log-level', arguments.log_level)
+  if ext_library is not None:
+    command = command + ('--ext',) + ext_library
+  LOGGER.info('COMMAND %s', ' '.join(command))
   bmbi_native_proc = await asyncio.create_subprocess_exec(*command)
+  LOGGER.info('PID %s', bmbi_native_proc.pid)
+  create_task_with_exc_handling(proc_watcher('native.exe', bmbi_native_proc))
+
+  dotnet_proc = None
+  #if False:
+  if dotnet_filename.exists():
+    dotnet_command = str(dotnet_filename), '--port', str(arguments.dotnet_port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else [])
+    dotnet_proc = await asyncio.create_subprocess_exec(*dotnet_command)
+    create_task_with_exc_handling(proc_watcher('dotnet.exe', dotnet_proc))
 
   channel = grpc.aio.insecure_channel(f'localhost:{arguments.port}')
   await channel.channel_ready()
@@ -122,7 +173,8 @@ async def async_main() -> None:
 
   screen_geometry = qt_screen_geometry()
 
-  thalamus = ThalamusWindow(f'localhost:{arguments.port}', config, stub, done_future)
+  thalamus = ThalamusWindow(f'localhost:{arguments.port}', config, stub, done_future, ext_widgets)
+  servicer.window = thalamus
   thalamus.enable_config_menu(arguments.config)
   await thalamus.load()
   thalamus.show()
@@ -140,8 +192,10 @@ async def async_main() -> None:
   await channel.close()
   if bmbi_native_proc:
     await bmbi_native_proc.wait()
+  if dotnet_proc:
+    await dotnet_proc.wait()
 
-  print('DONE')
+  LOGGER.debug('DONE')
 
 def main() -> None:
   '''

@@ -1,0 +1,15 @@
+pyyaml
+numpy>=1.24.0
+matplotlib
+dataclasses
+jinja2
+h5py>=3.1.0
+scipy
+typing_extensions>=4.4.0; python_version >= "3.8"
+typing_extensions; python_version < "3.8"
+numpy-stl
+scikit-learn
+Pillow
+lark
+jsonpath_ng<1.8.0
+toml

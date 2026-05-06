@@ -21,7 +21,6 @@ from multiprocessing.pool import ThreadPool
 import yaml
 import numpy
 import scipy.io
-import pkg_resources
 
 from thalamus.thalamus_pb2 import StorageRecord, Image, Compressed
 import google.protobuf.message
@@ -58,7 +57,7 @@ class ZQueue:
     with self.lock:
       while not self.output_messages and not self.done:
         self.lock.release()
-        time.sleep(1)
+        time.sleep(.1)
         self.lock.acquire()
       if self.done:
         return None
@@ -250,7 +249,7 @@ class RecordReader:
       while not self.records:
         self.lock.release()
         #print('get_record', 'sleep')
-        time.sleep(1)
+        time.sleep(.1)
         self.lock.acquire()
       position, record = self.records.popleft()
       if isinstance(record, PendingMessage):
@@ -376,3 +375,15 @@ def is_capturefile(f: pathlib.Path):
     return False
   with open(f, 'rb') as stream:
     return read_record(stream) is not None
+
+def main():
+  #parser = argparse.ArgumentParser()
+  filename = sys.argv[1]
+  print('filename', filename)
+  with RecordReader(filename) as reader:
+    for record in reader:
+      print(record)
+      input()
+
+if __name__ == '__main__':
+  main()

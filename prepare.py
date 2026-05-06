@@ -4,6 +4,7 @@ import io
 import ssl
 import sys
 import time
+import json
 import shutil
 import tarfile
 import zipfile
@@ -16,13 +17,14 @@ import urllib.request
 if sys.platform == 'win32':
   import winreg
 
-def is_up_to_date(command, regex, required_version):
+def is_up_to_date(command: str, regex, required_version):
   if shutil.which(command) is None:
     return '', False
 
   output = subprocess.check_output([command, '--version'], encoding='utf8')
   version_match = re.search(regex, output)
   version = int(version_match.group(1)), int(version_match.group(2)), int(version_match.group(3))
+  print(command, output, version_match, version)
   return version, version >= required_version
 
 UNHANDLED_EXCEPTION = None
@@ -66,6 +68,8 @@ def download(url: str):
 def main():
   parser = argparse.ArgumentParser(description='Process some integers.')
   parser.add_argument('--home', default=str(pathlib.Path.home()), help='Use this folder as home')
+  parser.add_argument('--ci', action='store_true', help='Use reduced dependencies for CI build')
+  parser.add_argument('--force-vs', action='store_true', help='Run vs installer even if it\'s installed')
 
   args = parser.parse_args()
   home_str = args.home
@@ -101,24 +105,16 @@ def main():
         subprocess.check_call(['powershell', '-Command', 'Expand-Archive -DestinationPath ' + os.environ['USERPROFILE'] + ' nasm-2.15.05-win64.zip'])
 
     #clang
-    clang_which = shutil.which('clang')
-    print('Current clang:', clang_which)
-    if not clang_which:
+    _, clang_is_current = is_up_to_date('clang++', r'clang version (\d+).(\d+).(\d+)', (21, 0, 0))
+    if not clang_is_current:
       destination = 'C:\\Program Files\\LLVM\\bin'
       new_path.append(destination)
       expected_clang = pathlib.Path(destination) / 'clang.exe'
       print(f'{expected_clang} exists: {expected_clang.exists()}')
-      if not expected_clang.exists():
-        download('https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.0/LLVM-19.1.0-win64.exe')
-        subprocess.check_call(['LLVM-19.1.0-win64.exe', '/S'])
-        #waiting = True
-        #while waiting:
-        #  print('waiting for LLVM')
-        #  time.sleep(1)
-        #  waiting = False
-        #  for p in psutil.process_iter():
-        #    if 'LLVM' in p.name():
-        #      waiting = True
+      _, clang_is_current = is_up_to_date(str(expected_clang), r'clang version (\d+).(\d+).(\d+)', (21, 0, 0))
+      if not clang_is_current:
+        download('https://github.com/llvm/llvm-project/releases/download/llvmorg-21.1.8/LLVM-21.1.8-win64.exe')
+        subprocess.check_call(['LLVM-21.1.8-win64.exe', '/S'])
 
     #pkg-config
     pkg_config_which = shutil.which('pkg-config')
@@ -164,12 +160,32 @@ def main():
 
     print('make exists before:', (msys2_root / 'usr/bin/make.exe').exists())
     if not (msys2_root / 'usr/bin/make.exe').exists():
+      subprocess.check_call([str(msys2_root / 'msys2_shell.cmd'), '-here', '-use-full-path', '-no-start', '-defterm', '-c', 'pacman --noconfirm -Syu'])
       subprocess.check_call([str(msys2_root / 'msys2_shell.cmd'), '-here', '-use-full-path', '-no-start', '-defterm', '-c', 'pacman --noconfirm -S make diffutils binutils gcc'])
     print('make exists:', (msys2_root / 'usr/bin/make.exe').exists())
 
-    if not pathlib.Path('C:/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe').exists():
-      download('https://aka.ms/vs/17/release/vs_community.exe')
-      subprocess.check_call(['start', '/w', 'vs_community.exe', '--quiet', '--wait', '--norestart', '--add', 'Microsoft.VisualStudio.Workload.NativeDesktop', '--add', 'Microsoft.VisualStudio.Workload.NativeGame', '--includeRecommended'], shell=True)
+    vs_where = pathlib.Path('C:/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe')
+    vs_installed = vs_where.exists()
+    if args.force_vs or not vs_installed:
+      if vs_installed:
+        vs_where_output = subprocess.check_output([vs_where, '-format', 'json'])
+        vs_where_json = json.loads(vs_where_output)
+        vs_setup = pathlib.Path(vs_where_json[0]['properties']['setupEngineFilePath'])
+        vs_install_path = vs_where_json[0]['installationPath']
+        vs_channel_id = vs_where_json[0]['channelId']
+        vs_product_id = vs_where_json[0]['productId']
+        vs_command = ['start', '/w', vs_setup.name, 'modify', '--productId', vs_product_id, '--channelId', vs_channel_id]
+      else:
+        download('https://aka.ms/vs/17/release/vs_community.exe')
+        vs_command = ['start', '/w', 'vs_community.exe', '--wait']
+
+      vs_command += ['--quiet', '--norestart',
+                     '--add', 'Microsoft.VisualStudio.Workload.NativeDesktop',
+                     '--add', 'Microsoft.VisualStudio.Workload.NativeGame',
+                     '--add', 'Microsoft.VisualStudio.Workload.ManagedDesktop',
+                     '--includeRecommended']
+      print(' '.join(vs_command))
+      subprocess.check_call(vs_command, cwd=vs_setup.parent, shell=True)
 
     with winreg.OpenKeyEx(winreg.HKEY_LOCAL_MACHINE,
                           r'SYSTEM\CurrentControlSet\Control\FileSystem', 
@@ -191,7 +207,11 @@ def main():
     #depot_tools
     if not shutil.which('gclient'):
       destination = home_path / 'depot_tools'
-      subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
+      if not destination.exists():
+        subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
+      subprocess.check_call([destination / 'gclient'])
+      with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
+        bashrc.write(f'\nexport PATH={destination}:$PATH\n')
 
     #nasm
     if not shutil.which('nasm'):
@@ -202,7 +222,9 @@ def main():
 
     #cmake
     if not shutil.which('cmake'):
-      subprocess.check_call(['curl', '-L', '-o', f'cmake-{CMAKE_VERSION}-macos-universal.tar.gz', 'https://github.com/Kitware/CMake/releases/download/v{CMAKE_VERSION}/cmake-{CMAKE_VERSION}-macos-universal.tar.gz'])
+      command = ['curl', '-L', '-o', f'cmake-{CMAKE_VERSION}-macos-universal.tar.gz', f'https://github.com/Kitware/CMake/releases/download/v{CMAKE_VERSION}/cmake-{CMAKE_VERSION}-macos-universal.tar.gz']
+      print(' '.join(command))
+      subprocess.check_call(command)
       subprocess.check_call(['tar', '-xvzf', f'cmake-{CMAKE_VERSION}-macos-universal.tar.gz', '-C', os.environ['HOME']])
       with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
         bashrc.write(f'\nexport PATH={home_str}/cmake-{CMAKE_VERSION}-macos-universal/CMake.app/Contents/bin:$PATH\n')
@@ -210,12 +232,22 @@ def main():
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-U', 'setuptools'], cwd=home_str)
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-r', str(pathlib.Path.cwd()/'requirements.txt')], cwd=home_str)
 
-    with open(str(home_path / '.bash_profile'), 'r') as bash_profile:
-      bash_profile_content = bash_profile.read()
-    if "source ~/.thalamusrc" not in bash_profile_content:
-      with open(str(home_path / '.bash_profile'), 'a') as bash_profile:
-        bash_profile.write(f'\nsource ~/.thalamusrc\n')
+    if 'zsh' in os.environ['SHELL']:
+      bash_profile_path = home_path / '.zshenv'
+    else:
+      bash_profile_path = home_path / '.bash_profile'
 
+    print('source profile path', bash_profile_path)
+
+    if bash_profile_path.exists():
+      with open(str(bash_profile_path), 'r') as bash_profile:
+        bash_profile_content = bash_profile.read()
+    else:
+      bash_profile_content = ''
+
+    if "source ~/.thalamusrc" not in bash_profile_content:
+      with open(str(bash_profile_path), 'a') as bash_profile:
+        bash_profile.write(f'\nsource ~/.thalamusrc\n')
 
   else:
     (home_path / '.thalamusrc').touch()
@@ -259,26 +291,32 @@ def main():
                           'libbrotli-dev', 'autotools-dev', 'automake',
                           'swig', 'debconf-utils', 'libusb-1.0-0', 'ffmpeg'])
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-U', 'setuptools'], cwd=home_str)
-    subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-r', str(pathlib.Path.cwd()/'requirements.txt')], cwd=home_str)
+    if args.ci:
+      subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-r', str(pathlib.Path.cwd()/'requirements-ci.txt')], cwd=home_str)
+    else:
+      subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-r', str(pathlib.Path.cwd()/'requirements.txt')], cwd=home_str)
                           
-    _, clang_is_current = is_up_to_date('clang++', r'clang version (\d+).(\d+).(\d+)', (10, 0, 0))
+    (home_path / '.local').mkdir(exist_ok=True)
+    _, clang_is_current = is_up_to_date('clang++', r'clang version (\d+).(\d+).(\d+)', (18, 0, 0))
     if not clang_is_current:
-      subprocess.check_call(['sudo', 'apt', 'install', '-y', 'clang'])
-    clang_version, _ = is_up_to_date('clang++', r'clang version (\d+).(\d+).(\d+)', (10, 0, 0))
-    subprocess.check_call(['sudo', 'apt', 'install', '-y', f'libclang-{clang_version[0]}-dev', ])
+      download('https://github.com/llvm/llvm-project/releases/download/llvmorg-18.1.8/clang+llvm-18.1.8-x86_64-linux-gnu-ubuntu-18.04.tar.xz')
+      subprocess.check_call(['tar', '-xvf', f'clang+llvm-18.1.8-x86_64-linux-gnu-ubuntu-18.04.tar.xz', '-C', f'{home_str}/.local'])
+      with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
+        bashrc.write(f'\nexport PATH={home_str}/.local/clang+llvm-18.1.8-x86_64-linux-gnu-ubuntu-18.04/bin:$PATH\n')
 
     _, cmake_is_current = is_up_to_date('cmake', r'cmake version (\d+).(\d+).(\d+)', (3, 16, 0))
     if not cmake_is_current:
-      subprocess.check_call(['wget', f'https://github.com/Kitware/CMake/releases/download/v{CMAKE_VERSION}/cmake-{CMAKE_VERSION}-linux-x86_64.sh'])
-      (home_path / '.local').mkdir(exist_ok=True)
+      download(f'https://github.com/Kitware/CMake/releases/download/v{CMAKE_VERSION}/cmake-{CMAKE_VERSION}-linux-x86_64.sh')
       subprocess.check_call(['sh', f'./cmake-{CMAKE_VERSION}-linux-x86_64.sh', f'--prefix={home_str}/.local', '--skip-license', '--include-subdir'])
       with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
         bashrc.write(f'\nexport PATH={home_str}/.local/cmake-{CMAKE_VERSION}-linux-x86_64/bin:$PATH\n')
 
     #depot_tools
-    if not shutil.which('gclient'):
-      destination = home_path / 'depot_tools'
-      subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
+    #if not shutil.which('gclient'):
+    #  destination = home_path / 'depot_tools'
+    #  subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
+    #  with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
+    #    bashrc.write(f'\nexport PATH=${destination}:$PATH\n')
 
     bashrc_path = home_path / '.bashrc'
     bashrc_path.touch()

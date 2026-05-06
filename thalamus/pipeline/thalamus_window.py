@@ -11,7 +11,7 @@ import pathlib
 import datetime
 import itertools
 import collections
-import pkg_resources
+from ..resources import read_text
 from ..config import *
 import functools
 import h5py
@@ -44,6 +44,8 @@ from .storage_widget import StorageWidget
 from .storage2_widget import Storage2Widget
 from .persistence_widget import PersistenceWidget
 from .run2_widget import Run2Widget
+from .delsys_widget import DelsysWidget
+from .samplemonitor_widget import SampleMonitorWidget
 from ..util import NodeSelector
 from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
@@ -72,12 +74,14 @@ class UserDataType(enum.Enum):
   CHECK_BOX = enum.auto()
   SPINBOX = enum.auto()
   DOUBLE_SPINBOX = enum.auto()
+  OPEN_FILE = enum.auto()
+  SAVE_FILE = enum.auto()
 
 class UserData(typing.NamedTuple):
   type: UserDataType
   key: str
   value: typing.Any
-  options: typing.List[str]
+  options: typing.Union[typing.List[str], typing.Callable[[ObservableDict], typing.List[str]]]
 
 class Factory(typing.NamedTuple):
   create_widget: typing.Optional[typing.Callable[[ObservableDict, thalamus_pb2_grpc.ThalamusStub], QWidget]]
@@ -127,7 +131,7 @@ class AlphaOmegaTableModel(QAbstractTableModel):
         return Qt.CheckState.Checked if channel['selected'] else Qt.CheckState.Unchecked
 
   def setData(self, index: QModelIndex, value: typing.Any, role: int = ...) -> bool:
-    print('setData', index, value, role)
+    LOGGER.debug('setData %s %s %s', index, value, role)
     channel = self.channels[index.row()]
     channel['selected'] = value == Qt.CheckState.Checked
     self.dataChanged.emit(index, index)
@@ -203,9 +207,16 @@ def create_alpha_omega_widget(node: ObservableDict, stub: thalamus_pb2_grpc.Thal
 
   return result
 
+def get_node_names(config):
+  nodes = config.get('nodes', [])
+  return [''] + [n['name'] for n in nodes]
+
 FACTORIES = {
   'NONE': Factory(None, []),
   'STIM_PRINTER': Factory(None, []),
+  'BRAINPRODUCTS': Factory(None, [
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+  ]),
   'NIDAQ': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.DOUBLE_SPINBOX, 'Sample Rate', 1000.0, []),
@@ -215,12 +226,12 @@ FACTORIES = {
     UserData(UserDataType.COMBO_BOX, 'Terminal Config', 'Default', ['Default', 'RSE', 'NRSE', 'Diff', 'Pseudo Diff']),
     UserData(UserDataType.COMBO_BOX, 'Channel Type', 'Voltage', ['Voltage', 'Current']),
     UserData(UserDataType.COMBO_BOX, 'Shunt Resistor Location', 'Default', ['Default', 'Internal', 'External']),
-    UserData(UserDataType.DOUBLE_SPINBOX, 'Shunt Resistor Ohms', '1000', []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Shunt Resistor Ohms', 1000.0, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
   ]),
   'NIDAQ_OUT': Factory(StimWidget, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
-    UserData(UserDataType.DEFAULT, 'Source', '', []),
+    UserData(UserDataType.COMBO_BOX, 'Source', '', get_node_names),
     UserData(UserDataType.CHECK_BOX, 'Fast Foward', False, []),
     UserData(UserDataType.DEFAULT, 'Channel', 'Dev1/ao0', []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
@@ -240,6 +251,9 @@ FACTORIES = {
   'XSENS': Factory(XsensEditorWidget, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.SPINBOX, 'Port', 9763, []),
+    UserData(UserDataType.CHECK_BOX, 'View', False, []),
+  ]),
+  'MOCAP': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
   ]),
   'HAND_ENGINE': Factory(None, [
@@ -287,9 +301,10 @@ FACTORIES = {
   ]),
   'STORAGE2': Factory(Storage2Widget, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
-    UserData(UserDataType.DEFAULT, 'Output File', 'test.tha', []),
+    UserData(UserDataType.SAVE_FILE, 'Output File', 'test.tha', []),
     UserData(UserDataType.CHECK_BOX, 'Compress Analog', False, []),
     UserData(UserDataType.CHECK_BOX, 'Compress Video', False, []),
+    UserData(UserDataType.CHECK_BOX, 'Simple Copy', False, []),
   ]),
   'STARTER': Factory(None, [
     UserData(UserDataType.SPINBOX, 'Channel',  0, []),
@@ -336,7 +351,7 @@ FACTORIES = {
     UserData(UserDataType.DOUBLE_SPINBOX, 'Y Gain', 0.0, []),
     UserData(UserDataType.CHECK_BOX, 'Invert X', False, []),
     UserData(UserDataType.CHECK_BOX, 'Invert Y', False, []),
-    UserData(UserDataType.DEFAULT, 'Source', '', []),
+    UserData(UserDataType.COMBO_BOX, 'Source', '', get_node_names),
     UserData(UserDataType.CHECK_BOX, 'Computing', False, []),
     UserData(UserDataType.CHECK_BOX, 'Render Thresholded', False, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
@@ -372,12 +387,13 @@ FACTORIES = {
   'LUA': Factory(lambda c, s: LuaWidget(c, s), [
     UserData(UserDataType.DEFAULT, 'Source', '', [])]),
   'TOUCH_SCREEN': Factory(TouchScreenWidget, [
-    UserData(UserDataType.DEFAULT, 'Source', '', [])]),
+    UserData(UserDataType.COMBO_BOX, 'Source', '', get_node_names)]),
   'REMOTE': Factory(None, [
     UserData(UserDataType.DEFAULT, 'Address', '', []),
     UserData(UserDataType.DEFAULT, 'Node', '', []),
     UserData(UserDataType.DOUBLE_SPINBOX, 'Probe Frequency', 10.0, []),
     UserData(UserDataType.SPINBOX, 'Probe Size', 128, []),
+    UserData(UserDataType.CHECK_BOX, 'View', False, []),
     UserData(UserDataType.CHECK_BOX, 'Running', False, [])]),
   'REMOTE_LOG': Factory(None, [
     UserData(UserDataType.DEFAULT, 'Address', '', []),
@@ -388,6 +404,7 @@ FACTORIES = {
   'PUPIL': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
+    UserData(UserDataType.CHECK_BOX, 'Random Saccade', False, []),
   ]),
   'CHESSBOARD': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
@@ -435,12 +452,70 @@ FACTORIES = {
       "DICT_ARUCO_MIP_36h12"])
   ]),
   'HEXASCOPE': Factory(HexascopeWidget, []),
-  'WALLCLOCK': Factory(None, []),
+  'WALLCLOCK': Factory(None, [
+    UserData(UserDataType.CHECK_BOX, 'Integer Values', False, []),
+    UserData(UserDataType.COMBO_BOX, 'Type',  "System", [
+      "System",
+      "NTP",
+      "PTP"])
+  ]),
+  'DELSYS': Factory(DelsysWidget, [
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+    UserData(UserDataType.OPEN_FILE, 'Key File', '', []),
+    UserData(UserDataType.OPEN_FILE, 'License File', '', []),
+  ]),
+  'CECI': Factory(None, [
+    UserData(UserDataType.DEFAULT, 'Device 0', 'PXI1Slot4', []),
+    UserData(UserDataType.DEFAULT, 'Device 1', 'PXI1Slot5', []),
+  ]),
+  'FREQUENCY': Factory(None, [
+    UserData(UserDataType.SPINBOX, 'Channel Number', 0, []),
+    UserData(UserDataType.CHECK_BOX, 'Alert', False, []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Expected Frequency', -1.0, []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Expected Frequency Std', -1.0, []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Allowed Error (%)', -1.0, []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Threshold', 2.5, []),
+    UserData(UserDataType.DEFAULT, 'Source', '', []),
+  ]),
+  'SAMPLE_MONITOR': Factory(SampleMonitorWidget, [
+    UserData(UserDataType.CHECK_BOX, 'Alert', False, []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Allowed Error (%)', -1.0, []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Interval (s)', 1.0, []),
+  ]),
 }
 
 FACTORY_NAMES = {}
 
-class Delegate(QItemDelegate):
+class FilePicker(QWidget):
+  def __init__(self, tree: QTreeView, data_type: UserDataType, parent: QWidget):
+    super().__init__(parent)
+    self.edit = QLineEdit()
+    button = QPushButton('...')
+    layout = QHBoxLayout()
+    layout.addWidget(self.edit)
+    layout.addWidget(button)
+    self.setLayout(layout)
+
+    def on_click():
+      if data_type == UserDataType.OPEN_FILE:
+        name, filter = QFileDialog.getOpenFileName(self, 'Select File', self.edit.text())
+      else:
+        name, filter = QFileDialog.getSaveFileName(self, 'Select File', self.edit.text(), options=QFileDialog.Option.DontConfirmOverwrite)
+      if not name:
+        tree.setCurrentIndex(QModelIndex())
+        return
+      
+      self.edit.setText(name)
+      tree.setCurrentIndex(QModelIndex())
+
+    button.clicked.connect(on_click)
+
+class Delegate(QStyledItemDelegate):
+  def __init__(self, tree, config):
+    super().__init__()
+    self.tree = tree
+    self.config = config
+
   def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
     user_data = typing.cast(UserData, index.data(Qt.ItemDataRole.UserRole))
     if index.column() == 0 and index.parent() == QModelIndex():
@@ -449,6 +524,8 @@ class Delegate(QItemDelegate):
       return QComboBox(parent)
     elif user_data.type == UserDataType.CHECK_BOX:
       return QCheckBox(parent)
+    elif user_data.type == UserDataType.DEFAULT:
+      return QLineEdit(parent)
     elif user_data.type == UserDataType.SPINBOX:
       result = QSpinBox(parent)
       result.setRange(-1000000, 1000000)
@@ -456,6 +533,9 @@ class Delegate(QItemDelegate):
     elif user_data.type == UserDataType.DOUBLE_SPINBOX:
       result = QDoubleSpinBox(parent)
       result.setRange(-1000000.0, 1000000.0)
+      return result
+    elif user_data.type in (UserDataType.OPEN_FILE, UserDataType.SAVE_FILE):
+      result = FilePicker(self.tree, user_data.type, parent)
       return result
     else:
       return super().createEditor(parent, option, index)
@@ -466,20 +546,30 @@ class Delegate(QItemDelegate):
       return super().setEditorData(editor, index)
     elif user_data.type == UserDataType.COMBO_BOX:
       combo_box = typing.cast(QComboBox, editor)
-      for value in user_data.options:
+      if callable(user_data.options):
+        options = user_data.options(self.config)
+      else:
+        options = user_data.options
+      for value in options:
         combo_box.addItem(FACTORY_NAMES[value] if index.column() == 0 else value, value)
-      for i, value in enumerate(user_data.options):
+      for i, value in enumerate(options):
         if value == index.data():
           combo_box.setCurrentIndex(i)
     elif user_data.type == UserDataType.CHECK_BOX:
       check_box = typing.cast(QCheckBox, editor)
       check_box.setChecked(user_data.value)
+    elif user_data.type == UserDataType.DEFAULT:
+      line_edit = typing.cast(QLineEdit, editor)
+      line_edit.setText(str(index.data()))
     elif user_data.type == UserDataType.SPINBOX:
       spin_box = typing.cast(QSpinBox, editor)
       spin_box.setValue(index.data())
-    elif user_data.type == UserDataType.SPINBOX:
+    elif user_data.type == UserDataType.DOUBLE_SPINBOX:
       double_spin_box = typing.cast(QDoubleSpinBox, editor)
       double_spin_box.setValue(index.data())
+    elif user_data.type in (UserDataType.OPEN_FILE, UserDataType.SAVE_FILE):
+      file_widget = typing.cast(FilePicker, editor)
+      file_widget.edit.setText(index.data())
     else:
       return super().setEditorData(editor, index)
     
@@ -494,14 +584,36 @@ class Delegate(QItemDelegate):
     elif user_data.type == UserDataType.CHECK_BOX:
       check_box = typing.cast(QCheckBox, editor)
       model.setData(index, check_box.isChecked())
+    elif user_data.type == UserDataType.DEFAULT:
+      line_edit = typing.cast(QLineEdit, editor)
+      model.setData(index, line_edit.text())
     elif user_data.type == UserDataType.SPINBOX:
       spin_box = typing.cast(QSpinBox, editor)
       model.setData(index, spin_box.value())
-    elif user_data.type == UserDataType.SPINBOX:
+    elif user_data.type == UserDataType.DOUBLE_SPINBOX:
       double_spin_box = typing.cast(QDoubleSpinBox, editor)
       model.setData(index, double_spin_box.value())
+    elif user_data.type in (UserDataType.OPEN_FILE, UserDataType.SAVE_FILE):
+      file_widget = typing.cast(FilePicker, editor)
+      model.setData(index, file_widget.edit.text())
     else:
       return super().setModelData(editor, model, index)
+
+  def sizeHint(self, option, index: QModelIndex):
+    user_data = index.data(Qt.ItemDataRole.UserRole)
+    if not isinstance(user_data, UserData):
+      return super().sizeHint(option, index)
+    
+    if user_data.type in (UserDataType.OPEN_FILE, UserDataType.SAVE_FILE):
+      return FilePicker(None, '', None).sizeHint()
+    else:
+      return super().sizeHint(option, index)
+
+  def updateEditorGeometry(self, editor, option: QStyleOptionViewItem, index):
+    if isinstance(editor, FilePicker):
+      editor.setGeometry(option.rect)
+    else:
+      super().updateEditorGeometry(editor, option, index)
     
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg # type: ignore
 from matplotlib.figure import Figure # type: ignore
@@ -718,8 +830,8 @@ class XsensView(QOpenGLWidget):
     self.program = OpenGL.GL.glCreateProgram()
     self.vertex = OpenGL.GL.glCreateShader(OpenGL.GL.GL_VERTEX_SHADER)
     self.fragment = OpenGL.GL.glCreateShader(OpenGL.GL.GL_FRAGMENT_SHADER)
-    self.vertex_code = pkg_resources.resource_string(__name__, 'shaders/xsens.vert')
-    self.fragment_code = pkg_resources.resource_string(__name__, 'shaders/xsens.frag')
+    self.vertex_code = read_text(__name__, 'shaders/xsens.vert')
+    self.fragment_code = read_text(__name__, 'shaders/xsens.frag')
 
     OpenGL.GL.glEnable(OpenGL.GL.GL_DEPTH_TEST)
 
@@ -1233,7 +1345,7 @@ class ItemModel(QAbstractItemModel):
       factory = FACTORIES[type]
       fields = factory.fields
       field = fields[index.row()]
-      print(node, field, value)
+      LOGGER.debug('%s %s %s', node, field, value)
       if node[field.key] != value:
         node[field.key] = value
         self.dataChanged.emit(index, index, [role])
@@ -1456,9 +1568,20 @@ class PlaybackDialog(QDialog):
 
     return selected
 
+class NodeFilterProxyModel(QSortFilterProxyModel):
+  '''
+  Filters on node name and type.  All properties of matching nodes will pass through.
+  '''
+  def filterAcceptsRow(self, source_row: int, source_parent: QModelIndex) -> bool:
+    if source_parent.isValid():
+      return True
+    
+    return super().filterAcceptsRow(source_row, source_parent)
+
 class ThalamusWindow(QMainWindow):
-  def __init__(self, address, state: ObservableDict, stub: thalamus_pb2_grpc.ThalamusStub, done_future: asyncio.Future):
+  def __init__(self, address, state: ObservableDict, stub: thalamus_pb2_grpc.ThalamusStub, done_future: asyncio.Future, ext_widgets: typing.Dict[str, Factory]):
     super().__init__()
+    FACTORIES.update(ext_widgets)
     self.model: typing.Optional[ItemModel] = None
     self.state = state
     self.stub = stub
@@ -1497,6 +1620,11 @@ class ThalamusWindow(QMainWindow):
     else:
       self.setWindowTitle(f'Thalamus')
 
+    if 'sort' not in self.state:
+      self.state['sort'] = False
+    if 'filter' not in self.state:
+      self.state['filter'] = ''
+
     if 'thalamus_view_geometry' not in self.state:
       self.state['thalamus_view_geometry'] = [100, 100, 384, 768]
     x, y, w, h = self.state['thalamus_view_geometry']
@@ -1509,10 +1637,15 @@ class ThalamusWindow(QMainWindow):
     remove_button = QPushButton('Remove')
     remove_button.clicked.connect(self.on_remove)
     self.view = QTreeView()
-    self.view.setItemDelegate(Delegate())
+    self.view.setItemDelegate(Delegate(self.view, self.state))
 
     self.model = ItemModel(self.state['nodes'], self.stub, self.address)
-    self.view.setModel(self.model)
+    
+    self.sort_model = NodeFilterProxyModel()
+    self.sort_model.setFilterKeyColumn(-1)
+    self.sort_model.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+    self.sort_model.setSourceModel(self.model)
+    self.view.setModel(self.sort_model)
     self.model.dataChanged.connect(self.on_data_changed)
 
     self.view.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -1521,6 +1654,23 @@ class ThalamusWindow(QMainWindow):
     self.grid_layout.addWidget(self.view, 0, 0, 1, 2)
     self.grid_layout.addWidget(add_button, 1, 0)
     self.grid_layout.addWidget(remove_button, 1, 1)
+
+    self.sort_checkbox = QCheckBox("Sort:")
+    def on_sort_changed(checked):
+      self.state['sort'] = checked
+    self.sort_checkbox.toggled.connect(on_sort_changed)
+
+    self.filter_edit = QLineEdit()
+    def on_filter_changed(text):
+      self.state['filter'] = text
+    self.filter_edit.textChanged.connect(on_filter_changed)
+
+    sort_filter_row = QHBoxLayout()
+    sort_filter_row.addWidget(self.sort_checkbox)
+    sort_filter_row.addWidget(QLabel("Filter:"))
+    sort_filter_row.addWidget(self.filter_edit)
+
+    self.grid_layout.addLayout(sort_filter_row, 2, 0, 1, 2)
 
     central_widget = QWidget()
     central_widget.setLayout(self.grid_layout)
@@ -1551,6 +1701,12 @@ class ThalamusWindow(QMainWindow):
     settingsmenu = menubar.addMenu('Settings')
     settingsmenu.addAction('Persistence').triggered.connect(self.on_persistence)
 
+    about_response = await self.stub.about(thalamus_pb2.Empty())
+    self.about = about_response.text
+
+    settingsmenu = menubar.addMenu('Help')
+    settingsmenu.addAction('About Thalamus').triggered.connect(self.on_about)
+
     self.state['data_views'].add_observer(self.on_data_views_changed)
     for i, view in enumerate(self.state['data_views']):
       self.on_data_views_changed(ObservableCollection.Action.SET, i, view)
@@ -1558,6 +1714,11 @@ class ThalamusWindow(QMainWindow):
     self.state['node_widgets'].add_observer(self.on_node_widgets_changed)
     for i, widget in enumerate(self.state['node_widgets']):
       self.on_node_widgets_changed(ObservableCollection.Action.SET, i, widget)
+
+    self.state.add_observer(self.on_state_changed)
+
+  def on_about(self):
+    QMessageBox.about(self, "About Thalamus", self.about)
 
   def on_persistence(self):
     if 'Persistence' not in self.state:
@@ -1579,6 +1740,18 @@ class ThalamusWindow(QMainWindow):
     self.view_geometry_updater[2:] = a0.size().width(), a0.size().height()
     return super().resizeEvent(a0)
 
+  def on_state_changed(self, action: ObservableCollection.Action, key: typing.Any, value: typing.Any):
+    if key == 'sort':
+      if self.sort_checkbox.isChecked() != value:
+        self.sort_checkbox.setChecked(value)
+      self.view.setSortingEnabled(value)
+      if not value:
+        self.sort_model.sort(-1, Qt.SortOrder.AscendingOrder)
+    elif key == 'filter':
+      if self.filter_edit.text() != value:
+        self.filter_edit.setText(value)
+      self.sort_model.setFilterRegularExpression(value)
+
   def on_data_views_changed(self, action: ObservableCollection.Action, key: typing.Any, value: typing.Any):
     if action == ObservableCollection.Action.SET:
       self.data_views[id(value)] = DataWidget(value, self.state, self.stub)
@@ -1586,7 +1759,7 @@ class ThalamusWindow(QMainWindow):
       del self.data_views[id(value)]
 
   def on_selection_changed(self, selected: QItemSelection, deselected: typing.Optional[QItemSelection]):
-    print('on_selection_changed')
+    LOGGER.debug('on_selection_changed')
     indexes = selected.indexes()
     index = indexes[0] if indexes and indexes[0] else None
     if not index:
@@ -1597,7 +1770,7 @@ class ThalamusWindow(QMainWindow):
       node = nodes[index.row()]
     else:
       node = nodes[index.parent().row()]
-    print(node)
+    LOGGER.debug('%s', node)
 
     node_type = node['type']
     factory = FACTORIES[node_type]
@@ -1633,19 +1806,19 @@ class ThalamusWindow(QMainWindow):
       dock_is_deleted = lambda: isdeleted(dock)
 
       def name_observer(a, k, v):
-        print('name_observer', k, v)
+        LOGGER.debug('name_observer %s %s', k, v)
         if k == 'name':
           value['node'] = v
       node.add_observer(name_observer, dock_is_deleted)
 
       def title_observer(a, k, v):
-        print('title_observer', k, v)
+        LOGGER.debug('title_observer %s %s', k, v)
         if k == 'node':
           dock.setWindowTitle(v)
       value.add_observer(title_observer, dock_is_deleted)
 
       def type_observer(a, k, v):
-        print('type_observer', k, v)
+        LOGGER.debug('type_observer %s %s', k, v)
         if k == 'type':
           previous_widget = dock.widget();
           factory = FACTORIES[v]
@@ -1682,7 +1855,7 @@ class ThalamusWindow(QMainWindow):
       self.dock_widgets.append(dock)
 
   def on_data_changed(self, top_left: QModelIndex, bottom_right: QModelIndex, roles: typing.List[int]):
-    print('on_data_changed')
+    LOGGER.debug('on_data_changed')
     if top_left.parent() == QModelIndex():
       if top_left.column() == 1:
         self.on_selection_changed(QItemSelection(top_left, bottom_right), None)

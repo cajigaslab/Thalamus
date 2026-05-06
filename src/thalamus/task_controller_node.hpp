@@ -1,0 +1,14 @@
+#include <thalamus/base_node.hpp>
+
+namespace thalamus {
+class TaskControllerNode : public Node {
+  struct Impl;
+  std::unique_ptr<Impl> impl;
+
+public:
+  TaskControllerNode(ObservableDictPtr, boost::asio::io_context &, NodeGraph *);
+  ~TaskControllerNode() override;
+  static std::string type_name();
+  size_t modalities() const override;
+};
+} // namespace thalamus

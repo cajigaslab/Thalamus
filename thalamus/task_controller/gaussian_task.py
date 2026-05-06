@@ -351,64 +351,64 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   widget.renderer = renderer
   await context.log(json.dumps(context.config))
 
-  print(state)
+  LOGGER.info('%s', state)
   acquired = False
   while not acquired:
-    print(state)
+    LOGGER.info('%s', state)
     acquired = await wait_for(context, lambda: QPoint.dotProduct(gaze - center, gaze-center)**.5 < WINDOW_PIX, timedelta(seconds=1))
 
   state = State.FIXATE_1
-  print(state)
+  LOGGER.info('%s', state)
   widget.update()
   await wait_for_hold(context, lambda: QPoint.dotProduct(gaze - center, gaze-center)**.5 < WINDOW_PIX, timedelta(seconds=fix1_timeout), timedelta(seconds=-1))
 
   state = State.TARGET_PRESENTATION
-  print(state)
+  LOGGER.info('%s', state)
   widget.update()
   success = await wait_for_hold(context, lambda: QPoint.dotProduct(gaze - center, gaze-center)**.5 < WINDOW_PIX, timedelta(seconds=blink_timeout), timedelta(seconds=.1))
   if not success:
     state = State.FAILURE
-    print(state)
+    LOGGER.info('%s', state)
     failure_sound.play()
     await context.sleep(timedelta(seconds=penalty_delay))
     return TaskResult(False)
 
   state = State.FIXATE_2
-  print(state)
+  LOGGER.info('%s', state)
   widget.update()
   success = await wait_for_hold(context, lambda: QPoint.dotProduct(gaze - center, gaze-center)**.5 < WINDOW_PIX, timedelta(seconds=fix2_timeout), timedelta(seconds=.1))
   if not success:
     state = State.FAILURE
-    print(state)
+    LOGGER.info('%s', state)
     failure_sound.play()
     await context.sleep(timedelta(seconds=penalty_delay))
     return TaskResult(False)
 
   state = State.ACQUIRE_TARGET
-  print(state)
+  LOGGER.info('%s', state)
   widget.update()
   success = await wait_for(context, lambda: QPoint.dotProduct(gaze - target_pos, gaze-target_pos)**.5 < WINDOW_PIX, timedelta(seconds=decision_timeout))
   if not success:
     state = State.FAILURE
-    print(state)
+    LOGGER.info('%s', state)
     failure_sound.play()
     await context.sleep(timedelta(seconds=penalty_delay))
     return TaskResult(False)
 
   state = State.HOLD_TARGET
-  print(state)
+  LOGGER.info('%s', state)
   widget.update()
   success = await wait_for_hold(context, lambda: QPoint.dotProduct(gaze - target_pos, gaze-target_pos)**.5 < WINDOW_PIX,
                                 timedelta(seconds=fix2_timeout), timedelta(seconds=.1))
   if not success:
     state = State.FAILURE
-    print(state)
+    LOGGER.info('%s', state)
     failure_sound.play()
     await context.sleep(timedelta(seconds=penalty_delay))
     return TaskResult(False)
 
   state = State.SUCCESS
-  print(state)
+  LOGGER.info('%s', state)
   success_sound.play()
 
   return TaskResult(False)

@@ -1,5 +1,6 @@
 import typing
 import functools
+import logging
 
 from ..config import *
 from ..qt import *
@@ -8,6 +9,8 @@ from ..task_controller.util import create_task_with_exc_handling
 from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
 from ..observable_item_models import FlatObservableCollectionModel
+
+LOGGER = logging.getLogger(__name__)
 
 class HexascopeWidget(QWidget):
   def __init__(self, config: ObservableDict, stub):
@@ -99,10 +102,10 @@ class HexascopeWidget(QWidget):
           node = config['name'],
           json = json.dumps({'type': 'lock'})
         )
-        print('LOCKING')
+        LOGGER.debug('LOCKING')
         response = await stub.node_request(request)
-        print('LOCKED')
-        print(response)
+        LOGGER.debug('LOCKED')
+        LOGGER.debug(response)
         lock_button.setText("Locked")
 
       create_task_with_exc_handling(async_lock())
@@ -124,10 +127,10 @@ class HexascopeWidget(QWidget):
           json = json.dumps({'type': 'move_hexa', 'value': self.positions[self.pi]})
         )
         self.pi = (self.pi + 1) % len(self.positions)
-        print('Jogging')
+        LOGGER.debug('Jogging')
         response = await stub.node_request(request)
-        print('jogged')
-        print(response)
+        LOGGER.debug('jogged')
+        LOGGER.debug(response)
 
       create_task_with_exc_handling(async_lock())
       

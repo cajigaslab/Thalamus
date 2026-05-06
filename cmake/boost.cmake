@@ -16,7 +16,7 @@ FetchContent_MakeAvailable(boost_content)
 
 if(WIN32)
   add_custom_command(OUTPUT "${boost_content_SOURCE_DIR}/b2.exe"
-    COMMAND cmd /c call bootstrap.bat
+    COMMAND cmd /c call bootstrap.bat clang-win
     WORKING_DIRECTORY ${boost_content_SOURCE_DIR})
 else()
   add_custom_command(OUTPUT "${boost_content_SOURCE_DIR}/b2"
@@ -33,20 +33,14 @@ if(WIN32)
     string(APPEND BOOST_ALL_COMPILE_OPTIONS_SPACED " /FS")
   endif()
   set(BOOST_ABI_TAG "$<IF:$<CONFIG:Debug>,-sgd-x64,-s-x64>")
-  if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-    message("CMAKE_CXX_COMPILER_VERSION ${CMAKE_CXX_COMPILER_VERSION}")
-    string(REPLACE "." ";" BOOST_COMPILER_VERSION "${CMAKE_CXX_COMPILER_VERSION}")
-    message("BOOST_COMPILER_VERSION ${BOOST_COMPILER_VERSION}")
-    list(GET BOOST_COMPILER_VERSION 0 BOOST_MAJOR_COMPILER_VERSION)
-    set(BOOST_VC_TOOLSET clangw${BOOST_MAJOR_COMPILER_VERSION})
-    set(BOOST_TOOLSET toolset=clang-win)
-  else()
-    execute_process(COMMAND cmd /c call bootstrap.bat WORKING_DIRECTORY "${boost_content_SOURCE_DIR}" OUTPUT_VARIABLE BOOTSTRAP_STDOUT)
-    string(REGEX MATCH "### Using 'vc[0-9]+' toolset" VC_TOOLSET_LINE "${BOOTSTRAP_STDOUT}")
-    string(REGEX MATCH "vc[0-9]+" VC_TOOLSET_MATCH "${VC_TOOLSET_LINE}")
-    set(BOOST_VC_TOOLSET ${VC_TOOLSET_MATCH})
-    set(BOOST_CFLAGS "cflags=/FS")
-  endif()
+
+  message("CMAKE_CXX_COMPILER_VERSION ${CMAKE_CXX_COMPILER_VERSION}")
+  string(REPLACE "." ";" BOOST_COMPILER_VERSION "${CMAKE_CXX_COMPILER_VERSION}")
+  message("BOOST_COMPILER_VERSION ${BOOST_COMPILER_VERSION}")
+  list(GET BOOST_COMPILER_VERSION 0 BOOST_MAJOR_COMPILER_VERSION)
+  set(BOOST_VC_TOOLSET clangw${BOOST_MAJOR_COMPILER_VERSION})
+  set(BOOST_TOOLSET toolset=clang-win)
+
   message("USING TOOLSET ${BOOST_VC_TOOLSET}")
 
   set(BOOST_LIBS 
@@ -70,7 +64,7 @@ if(WIN32)
     "cxxflags=${BOOST_ALL_COMPILE_OPTIONS_SPACED} -DBOOST_ASIO_HAS_STD_INVOKE_RESULT -D_WIN32_WINNT=0x0A00"
     "linkflags=${ALL_LINK_OPTIONS_SPACED}"
     "--build-dir=${boost_content_BINARY_DIR}"
-    --abbreviate-paths 
+    --hash
     --with-atomic --with-chrono --with-thread --with-filesystem --with-date_time --with-system --with-program_options
     --with-log --with-json --with-container address-model=64 debug-symbols=on debug-store=database runtime-link=static
     link=static cxxstd=20
@@ -80,6 +74,7 @@ if(WIN32)
   add_library(boost INTERFACE ${BOOST_LIBS})
   target_link_libraries(boost INTERFACE ${BOOST_LIBS})
 else()
+  cmake_path(GET CMAKE_C_COMPILER FILENAME TOOLSET)
   add_custom_command(
     DEPENDS "${boost_content_SOURCE_DIR}/b2"
     OUTPUT "${boost_content_SOURCE_DIR}/stage-debug/lib/libboost_date_time.a"
@@ -94,7 +89,7 @@ else()
                             "${boost_content_SOURCE_DIR}/stage-debug/lib/libboost_json.a"
                             "${boost_content_SOURCE_DIR}/stage-debug/lib/libboost_atomic.a"
                     COMMAND
-		    sh ${CMAKE_SOURCE_DIR}/build_boost.sh "${ALL_COMPILE_OPTIONS_SPACED} -DBOOST_ASIO_HAS_STD_INVOKE_RESULT" " ${ALL_LINK_OPTIONS_SPACED}" debug
+		    sh ${CMAKE_SOURCE_DIR}/build_boost.sh "${ALL_COMPILE_OPTIONS_SPACED} -DBOOST_ASIO_HAS_STD_INVOKE_RESULT" " ${ALL_LINK_OPTIONS_SPACED}" debug "${TOOLSET}"
                     WORKING_DIRECTORY ${boost_content_SOURCE_DIR})
   add_custom_command(
     DEPENDS "${boost_content_SOURCE_DIR}/b2"
@@ -110,7 +105,7 @@ else()
                             "${boost_content_SOURCE_DIR}/stage-release/lib/libboost_json.a"
                             "${boost_content_SOURCE_DIR}/stage-release/lib/libboost_atomic.a"
                     COMMAND
-		    sh ${CMAKE_SOURCE_DIR}/build_boost.sh "${ALL_COMPILE_OPTIONS_SPACED} -DBOOST_ASIO_HAS_STD_INVOKE_RESULT" " ${ALL_LINK_OPTIONS_SPACED}" release
+		    sh ${CMAKE_SOURCE_DIR}/build_boost.sh "${ALL_COMPILE_OPTIONS_SPACED} -DBOOST_ASIO_HAS_STD_INVOKE_RESULT" " ${ALL_LINK_OPTIONS_SPACED}" release "${TOOLSET}"
                     WORKING_DIRECTORY ${boost_content_SOURCE_DIR})
   add_library(boost INTERFACE
     "$<IF:$<CONFIG:Debug>,${boost_content_SOURCE_DIR}/stage-debug/lib/libboost_date_time.a,${boost_content_SOURCE_DIR}/stage-release/lib/libboost_date_time.a>"

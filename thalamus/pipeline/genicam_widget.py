@@ -1,8 +1,11 @@
 import enum
 import json
+import logging
 from ..qt import *
 from ..task_controller.util import create_task_with_exc_handling
 from .. import thalamus_pb2
+
+LOGGER = logging.getLogger(__name__)
 
 class Edge(enum.Enum):
   LEFT = enum.auto()
@@ -184,7 +187,7 @@ class GenicamComboBox(QComboBox):
     self.loaded = False
 
   async def asyncShowPopup(self):
-    print('asyncShowPopup')
+    LOGGER.debug('asyncShowPopup')
     if self.loaded:
       super().showPopup()
       return
@@ -194,7 +197,7 @@ class GenicamComboBox(QComboBox):
 
     response = await self.stub.node_request(thalamus_pb2.NodeRequest(node=name,json="\"get_cameras\""))
     cameras = json.loads(response.json)
-    print('asyncShowPopup', cameras)
+    LOGGER.debug('asyncShowPopup %s', cameras)
     self.clear()
     if cameras is None:
       return
@@ -219,7 +222,7 @@ class GenicamComboBox(QComboBox):
 
 
   def showPopup(self):
-    print('showPopup')
+    LOGGER.debug('showPopup')
     create_task_with_exc_handling(self.asyncShowPopup())
 
 class GenicamWidget(QWidget):

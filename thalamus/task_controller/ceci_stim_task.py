@@ -52,7 +52,7 @@ def compute_waveform(config: ObservableDict):
     else:
         dc_off = 0
 
-    sample_rate_hz = 100e3
+    sample_rate_hz = 125e3
     sample_period_s = 1/sample_rate_hz
     amplitude_ua = config['Amplitude (uA)']
     amplitude_a = amplitude_ua/1e6
@@ -129,7 +129,7 @@ class WaveformWidget(QWidget):
     self.out_wave = out_wave
     self.path = QPainterPath()
     self.path.moveTo(0, out_wave[0])
-    sample_rate_hz = 100e3
+    sample_rate_hz = 125e3
     sample_period_s = 1/sample_rate_hz
     for i, sample in enumerate(out_wave):
       #t = i*sample_period_s
@@ -222,8 +222,9 @@ class StimWidget(QWidget):
       if field not in config:
         config[field] = options[0] if options else ''
         
-      def on_change(button: QRadioButton):
-        config[field] = combo.currentData()
+      def on_change(text: str):
+        LOGGER.info('on_change %s', text)
+        config[field] = text
 
       combo = QComboBox()
       combo.addItems(options)
@@ -430,22 +431,6 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Uniform('Baseline Interval', 'baseline_timeout', 1, 1, 's'),
     Form.Constant('Window Size', 'window_size', 0, '\u00B0'),
     Form.Color('Color', 'target_color', QColor(255, 255, 255)),
-    #Form.Bool('AO0 Enabled', 'AO0 Enabled', False),
-    #Form.Constant('AO0 Amplitude (uA)', 'AO0 Amplitude', 1),
-    #Form.Constant('AO0 Frequency', 'AO0 Frequency', 1),
-    #Form.Constant('AO0 Count', 'AO0 Count', 1),
-    #Form.Bool('AO1 Enabled', 'AO1 Enabled', False),
-    #Form.Constant('AO1 Amplitude (uA)', 'AO1 Amplitude', 1),
-    #Form.Constant('AO1 Frequency', 'AO1 Frequency', 1),
-    #Form.Constant('AO1 Count', 'AO1 Count', 1),
-    #Form.Bool('AO2 Enabled', 'AO2 Enabled', False),
-    #Form.Constant('AO2 Amplitude (uA)', 'AO2 Amplitude', 1),
-    #Form.Constant('AO2 Frequency', 'AO2 Frequency', 1),
-    #Form.Constant('AO2 Count', 'AO2 Count', 1),
-    #Form.Bool('AO3 Enabled', 'AO3 Enabled', False),
-    #Form.Constant('AO3 Amplitude (uA)', 'AO3 Amplitude', 1),
-    #Form.Constant('AO3 Frequency', 'AO3 Frequency', 1),
-    #Form.Constant('AO3 Count', 'AO3 Count', 1),
     Form.Constant('Mux', 'Mux', 0,),
     Form.Choice('Electrode', 'Electrode', [
       ('Microprobe', 'Microprobe'),
@@ -503,10 +488,13 @@ def ecc_to_px(ecc, dpi):
   x_px = x_inch*dpi
   return x_px
 
+IS_SETUP = False
+
 async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-many-statements
   """
   Implementation of the state machine for the simple task
   """
+  global IS_SETUP
   assert context.widget, 'Widget is None'
 
   intertrial_timeout = datetime.timedelta(seconds=context.get_value('intertrial_timeout'))
@@ -524,6 +512,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   stimulation_channel = context.task_config['Stimulation Channel']
   all_enabled = [False, False, False, False]
 
+  LOGGER.info('stimulation_channel %s', stimulation_channel)
   if stimulation_channel == "AO3":
     all_enabled[3] = True
     ao = 3
@@ -546,30 +535,48 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   stim_declaration: StimDeclaration = StimDeclaration()
   stim_data: AnalogResponse = stim_declaration.data
   stim_data.channel_type = AnalogResponse.ChannelType.Voltage
-  waveform = compute_waveform(context.task_config)
-  if waveform is not None:
-    stim_data.data.extend(waveform)
-    stim_data.spans.append(Span(begin=0,end=len(stim_data.data),name=f'/PXI1Slot4/ao{ao}'))
-    stim_data.sample_intervals.append(int(1e9/100e3))
+  #waveform = compute_waveform(context.task_config)
+  #if waveform is not None:
+  #  stim_data.data.extend(waveform)
+  #  stim_data.spans.append(Span(begin=0,end=len(stim_data.data),name=f'/PXI1Slot4/ao{ao}'))
+  #  stim_data.sample_intervals.append(int(1e9/125e3))
 
-  mux_signal = AnalogResponse(
-    data=mux_bits + stim_bits + [5],
-    spans=[
-      Span(begin=0,end=1,name='/PXI1Slot4/port0/line20'),
-      Span(begin=1,end=2,name='/PXI1Slot4/port0/line29'),
-      Span(begin=2,end=3,name='/PXI1Slot4/port0/line19'),
-      Span(begin=3,end=4,name='/PXI1Slot4/port0/line26'),
-      Span(begin=4,end=5,name='/PXI1Slot4/port0/line7'),
-      Span(begin=5,end=6,name='/PXI1Slot4/port0/line2'),
-      Span(begin=6,end=7,name='/PXI1Slot4/port0/line1'),
-      Span(begin=7,end=8,name='/PXI1Slot4/port0/line6'),
-      Span(begin=8,end=9,name='/PXI1Slot4/port0/line8'),
-    ],
-    sample_intervals=[0, 0, 0, 0, 0, 0, 0, 0, 0])
-  print(mux_signal)
-  await context.inject_analog('Mux', mux_signal)
-  if waveform is not None:
-    await context.arm_stim('Ceci', stim_declaration)
+  #mux_signal = AnalogResponse(
+  #  data=mux_bits + stim_bits + [5],
+  #  spans=[
+  #    Span(begin=0,end=1,name='/PXI1Slot4/port0/line20'),
+  #    Span(begin=1,end=2,name='/PXI1Slot4/port0/line29'),
+  #    Span(begin=2,end=3,name='/PXI1Slot4/port0/line19'),
+  #    Span(begin=3,end=4,name='/PXI1Slot4/port0/line26'),
+  #    Span(begin=4,end=5,name='/PXI1Slot4/port0/line7'),
+  #    Span(begin=5,end=6,name='/PXI1Slot4/port0/line2'),
+  #    Span(begin=6,end=7,name='/PXI1Slot4/port0/line1'),
+  #    Span(begin=7,end=8,name='/PXI1Slot4/port0/line6'),
+  #    Span(begin=8,end=9,name='/PXI1Slot4/port0/line8'),
+  #  ],
+  #  sample_intervals=[0, 0, 0, 0, 0, 0, 0, 0, 0])
+  #LOGGER.info('%s', mux_signal)
+  #await context.inject_analog('Mux', mux_signal)
+
+  if IS_SETUP:
+    await context.node_request('Node 1', {
+      'type': 'teardown',
+    })
+    IS_SETUP = False
+
+  await context.node_request('Node 1', {
+    'type': 'setup',
+    "amp_uA": context.task_config['Amplitude (uA)'],
+    "pw_us": context.task_config['Pulse Width (us)'],
+    "freq_hz": context.task_config['Frequency (Hz)'],
+    "ipd_ms": context.task_config['Interphase Delay (ms)'],
+    "num_pulses": context.task_config['Number of Pulses'],
+    "stim_dur_s": context.task_config['Stimulation Duration (s)'],
+    "is_biphasic": context.task_config['Phase'] == 'Biphasic',
+    "polarity": 1 if context.task_config['Lead'] == 'Cathode-leading' else -1,
+    "dis_dur_s": context.task_config['Discharge Duration (s)']
+  })
+  IS_SETUP = True
 
   display_indicator = False
   state = State.NONE
@@ -609,10 +616,13 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       painter.fillRect(rect, Qt.GlobalColor.red)
     elif state == State.SUCCESS:
       if deliver_stim and painter.output_mask == RenderOutput.SUBJECT:
-        print('STIMMING')
+        LOGGER.info('STIMMING')
+
         create_task_with_exc_handling(asyncio.gather(
-          context.log('STIM'),
-          context.trigger_stim('Ceci')
+          context.node_request('Node 1', {
+            'type': 'stim',
+          }),
+          context.log('STIM')
         ))
         deliver_stim = False
         
@@ -626,7 +636,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
 
     with painter.masked(RenderOutput.OPERATOR):
       painter.setBrush(QColor(255, 255, 255, 128))
-      painter.drawEllipse(fixation_point, window_size, window_size)
+      painter.drawEllipse(QPointF(fixation_point), window_size, window_size)
 
   context.widget.touch_listener = touch_handler
   context.widget.gaze_listener = gaze_handler

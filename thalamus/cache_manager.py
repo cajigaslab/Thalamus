@@ -25,13 +25,30 @@ class SaveConfig(enum.Enum):
 
 class CacheManager:
   def __init__(self, config):
-    connection = sqlite3.connect('thalamus.db')
+    try:
+      connection = sqlite3.connect('thalamus.db')
+    except sqlite3.OperationalError:
+      LOGGER.warning('Failed to create thalamus.db, cache management disabled.')
+      return
+    
     exists = connection.execute('SELECT * from sqlite_master WHERE name =\'cache\'').fetchone()
     if not exists:
       connection.execute('CREATE TABLE cache (address, value)')
       connection.execute('CREATE INDEX cache_index ON cache (address)')
       connection.commit()
+
+    if 'Persistence' not in config:
+      config['Persistence'] = {}
+    persistence_config = config['Persistence']
+
+    if 'Cached' not in persistence_config:
+      persistence_config['Cached'] = []
+    cached_config = persistence_config['Cached']
+    cached_addresses = set(c['Address'] for c in cached_config)
+
     for address, value in connection.execute('SELECT address, value FROM cache'):
+      if address not in cached_addresses:
+        continue
       try:
         jsonpath_expr = jsonpath_ng.ext.parse(address)
       except Exception as _exc: # pylint: disable=broad-except
@@ -61,38 +78,30 @@ class CacheManager:
         elif isinstance(match.path, jsonpath_ng.Fields):
           match.context.value[match.path.fields[0]] = value
 
-    if 'Persistence' not in config:
-      config['Persistence'] = {}
-    persistence_config = config['Persistence']
-
-    if 'Cached' not in persistence_config:
-      persistence_config['Cached'] = []
-    cached_config = persistence_config['Cached']
-
     def on_property_change(address: str, root, save_config: SaveConfig, key_filter, source, action, key, value):
-      print('on_property_change', address, root, save_config, key_filter, key, key_filter == key, value)
+      LOGGER.debug('on_property_change %s %s %s %s %s %s %s', address, root, save_config, key_filter, key, key_filter == key, value)
       if action == ObservableCollection.Action.DELETE:
         return
 
       exists = connection.execute('SELECT * from cache WHERE address = ?', (address,)).fetchone()
-      print('exists', exists)
+      LOGGER.debug('exists %s', exists)
       if exists:
         if save_config == SaveConfig.ROOT:
-          print('UPDATE ROOT')
+          LOGGER.debug('UPDATE ROOT')
           connection.execute('UPDATE cache SET value = ? WHERE address = ?', (json.dumps(root.unwrap()), address))
           connection.commit()
         elif key == key_filter:
-          print('UPDATE VALUE')
+          LOGGER.debug('UPDATE VALUE')
           dumped = json.dumps(value.unwrap() if isinstance(value, ObservableCollection) else value)
           connection.execute('UPDATE cache SET value = ? WHERE address = ?', (dumped, address))
           connection.commit()
       else:
         if save_config == SaveConfig.ROOT:
-          print('INSERT ROOT')
+          LOGGER.debug('INSERT ROOT')
           connection.execute('INSERT INTO cache VALUES (?, ?)', (address, json.dumps(root.unwrap())))
           connection.commit()
         elif key == key_filter:
-          print('INSERT VALUE')
+          LOGGER.debug('INSERT VALUE')
           dumped = json.dumps(value.unwrap() if isinstance(value, ObservableCollection) else value)
           connection.execute('INSERT INTO cache VALUES (?, ?)', (address, dumped))
           connection.commit()
@@ -106,7 +115,7 @@ class CacheManager:
       gen_end = lambda: current_tag != generation_tag
       for c in cached_config:
         address = c['Address']
-        print('ADDRESS', address)
+        LOGGER.debug('ADDRESS %s', address)
         try:
           jsonpath_expr = jsonpath_ng.ext.parse(address)
         except Exception as _exc: # pylint: disable=broad-except
@@ -124,17 +133,17 @@ class CacheManager:
 
         for match in matches:
           if isinstance(match.value, ObservableCollection):
-            print('Observing1', match.value)
+            LOGGER.debug('Observing1 %s', match.value)
             observer = lambda *args, address=address, root=match.value: on_property_change(address, root, SaveConfig.ROOT, None, *args)
             match.value.add_recursive_observer(observer, gen_end)
             match.value.recap(lambda *args: observer(match.value, *args))
           elif isinstance(match.path, jsonpath_ng.Index):
-            print('Observing2', match.context.value, match.path.index)
+            LOGGER.debug('Observing2 %s %s', match.context.value, match.path.index)
             observer = lambda *args, address=address, key_filter=match.path.index, root=match.context.value: on_property_change(address, root, SaveConfig.VALUE, key_filter, *args)
             match.context.value.add_recursive_observer(observer, gen_end)
             match.context.value.recap(lambda *args: observer(match.context.value, *args))
           elif isinstance(match.path, jsonpath_ng.Fields):
-            print('Observing3', match.context.value, match.path.fields[0])
+            LOGGER.debug('Observing3 %s %s', match.context.value, match.path.fields[0])
             observer = lambda *args, address=address, key_filter=match.path.fields[0], root=match.context.value: on_property_change(address, root, SaveConfig.VALUE, key_filter, *args)
             match.context.value.add_recursive_observer(observer, gen_end)
             match.context.value.recap(lambda *args: observer(match.context.value, *args))

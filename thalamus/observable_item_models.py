@@ -7,6 +7,9 @@ import traceback
 from .config import ObservableCollection, ObservableDict, ObservableList
 from .qt import *
 
+def get_selected_rows(qlist: QListView) -> typing.List[int]:
+  return sorted(set(i.row() for i in qlist.selectedIndexes()), reverse=True)
+
 class FlatObservableCollectionModel(QAbstractItemModel):
   def __init__(self, config: ObservableCollection, transformer: typing.Callable[[typing.Any], typing.Any], depth = 1):
     super().__init__()

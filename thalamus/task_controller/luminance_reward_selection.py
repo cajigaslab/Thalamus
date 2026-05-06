@@ -450,7 +450,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
 
   await context.inject_analog('Reward', signal)
 
-  print("delivering reward %d"%(on_time_ms,) )
+  LOGGER.info("delivering reward %d", on_time_ms )
   context.behav_result = {
     'chosen_target': acquired_targ,
     'reward_given': reward_given,

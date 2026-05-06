@@ -9,6 +9,7 @@ import datetime
 import itertools
 import traceback
 import matplotlib
+import logging
 from ..config import *
 
 from ..util import open_preferred_app
@@ -18,6 +19,10 @@ from .. import thalamus_pb2
 from ..qt import *
 
 from ..task_controller.util import create_task_with_exc_handling
+
+from matplotlib import pyplot
+
+LOGGER = logging.getLogger(__name__)
 
 class DataWidget(QMainWindow):
   def __init__(self, config, root_config, stub):
@@ -111,6 +116,13 @@ class PlotCanvas(QWidget):
     self.stub = stub
     self.task = None
     self.config = config
+    self.is_dark_mode = qt_is_dark_mode()
+
+    if self.is_dark_mode:
+      c = pyplot.get_cmap('Pastel1').colors[0]
+    else:
+      c = pyplot.get_cmap('tab10').colors[0]
+    self.color = QColor(int(c[0]*255), int(c[1]*255), int(c[2]*255))
 
     if 'draw_value' not in self.config:
       config['draw_value'] = False
@@ -167,13 +179,13 @@ class PlotCanvas(QWidget):
       self.toggle()
 
   def stop(self):
-    print('stop', self.task)
+    LOGGER.debug('stop %s', self.task)
     if self.task is not None:
       self.toggle()
 
   def toggle(self):
     if self.task is not None:
-      print('Will Cancel')
+      LOGGER.debug('Will Cancel')
       self.stream.cancel()
       self.task.cancel()
       self.task = None
@@ -233,7 +245,7 @@ class PlotCanvas(QWidget):
     offset = -self.current_ns
     painter.save()
     painter.setClipRect(QRectF(0, range[0], self.duration_ns, range_size))
-    for path, color in zip(self.paths, [Qt.GlobalColor.blue, Qt.GlobalColor.blue, Qt.GlobalColor.blue]):
+    for path, color in zip(self.paths, [self.color, self.color, self.color]):
       pen.setColor(color)
       painter.setPen(pen)
       painter.save()
@@ -243,7 +255,10 @@ class PlotCanvas(QWidget):
       offset += self.duration_ns
     painter.restore()
 
-    pen.setColor(Qt.GlobalColor.black)
+    if self.is_dark_mode:
+      pen.setColor(Qt.GlobalColor.white)
+    else:
+      pen.setColor(Qt.GlobalColor.black)
     painter.setPen(pen)
     bounds = QRectF(0, range[0], self.duration_ns, range_size)
     device_bounds = painter.transform().mapRect(bounds)
@@ -256,7 +271,7 @@ class PlotCanvas(QWidget):
       denom = denom if denom > 0 else 1
       interp = (self.current_value - self.range[0])/denom
       interp = max(0.0, min(1.0, interp))
-      text = "{0:.3}".format(self.current_value)
+      text = "{0:.5}".format(self.current_value)
       font = painter.font()
       font.setPixelSize(int(device_bounds.height()/2))
       painter.save()
@@ -265,6 +280,8 @@ class PlotCanvas(QWidget):
       painter.drawText(device_bounds, Qt.AlignmentFlag.AlignRight, text)
       painter.restore()
 
+    if self.is_dark_mode:
+      painter.setPen(Qt.GlobalColor.white)
     painter.drawText(0, metrics.height(), str(self.range[1]))
     painter.drawText(0, self.height(), str(self.range[0]))
 
@@ -275,7 +292,10 @@ class PlotCanvas(QWidget):
     painter.scale((self.width() - 2*metrics.height()), metrics.height())
     pen = painter.pen()
     pen.setCosmetic(True)
-    pen.setColor(Qt.GlobalColor.black)
+    if self.is_dark_mode:
+      pen.setColor(Qt.GlobalColor.white)
+    else:
+      pen.setColor(Qt.GlobalColor.black)
     painter.setPen(pen)
     painter.drawPath(self.ruler_path)
 
@@ -309,9 +329,9 @@ class PlotCanvas(QWidget):
     except asyncio.CancelledError:
       pass
     finally:
-      print('Cancelling')
+      LOGGER.debug('Cancelling')
       stream.cancel()
-      print('Cancelled')
+      LOGGER.debug('Cancelled')
 
 
 class SpectrogramCanvas(QWidget):
@@ -422,9 +442,9 @@ class SpectrogramCanvas(QWidget):
     except asyncio.CancelledError:
       pass
     finally:
-      print('Cancelling')
+      LOGGER.debug('Cancelling')
       stream.cancel()
-      print('Cancelled')
+      LOGGER.debug('Cancelled')
 
 class NodesModel(QAbstractListModel):
   def __init__(self, nodes_list):
@@ -435,7 +455,7 @@ class NodesModel(QAbstractListModel):
       self.on_change(ObservableCollection.Action.SET, i, n)
 
   def on_change(self, action, key, value):
-    print('NodesModel.on_change', action, key, value)
+    LOGGER.debug('NodesModel.on_change %s %s %s', action, key, value)
           
     if action == ObservableCollection.Action.SET:
       self.beginInsertRows(QModelIndex(), key, key)
@@ -470,7 +490,7 @@ class ChannelComboBox(QComboBox):
       self.__on_change(None, k, v)
 
   def __on_change(self, action, key, value):
-    print('ChannelComboBox.__on_change', action, key, value)
+    LOGGER.debug('ChannelComboBox.__on_change %s %s %s', action, key, value)
     if key == 'selected_node':
       if self.task is not None:
         self.task.cancel()
@@ -620,16 +640,16 @@ class Plot(QWidget):
 
     assert self.root_config is not None
     self.nodes = self.root_config['nodes']
-    print('__init__', self.config)
+    LOGGER.debug('__init__ %s', self.config)
 
     def on_node_combobox_change(selected_node: str):
-      print('on_node_combobox_change', selected_node, self.config['selected_node'])
+      LOGGER.debug('on_node_combobox_change %s %s', selected_node, self.config['selected_node'])
       if selected_node == self.config['selected_node']:
         return
       self.config['selected_node'] = selected_node
 
     def on_channel_combobox_change(selected_channel: str):
-      print('on_channel_combobox_change', selected_channel, self.config['selected_channel'])
+      LOGGER.debug('on_channel_combobox_change %s %s', selected_channel, self.config['selected_channel'])
       if selected_channel == self.config['selected_channel']:
         return
       self.config['selected_channel'] = selected_channel
@@ -644,7 +664,7 @@ class Plot(QWidget):
     self.channel_combobox.currentTextChanged.connect(on_channel_combobox_change)
 
   def on_config_changed(self, action, key, value):
-    print(action, key, value)
+    LOGGER.debug('%s %s %s', action, key, value)
     if key == 'selected_node':
       self.node_combobox.setCurrentText(value)
       self.canvas.restart()

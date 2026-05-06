@@ -17,6 +17,7 @@ import typing
 import asyncio
 import logging
 import argparse
+import importlib
 import itertools
 
 import yaml
@@ -28,9 +29,9 @@ from ..config import *
 from ..cache_manager import CacheManager
 from .. import process
 
-from pkg_resources import resource_string, resource_filename
-
 from .controller import ControlWindow, ConfigData
+
+from ..resources import get_path
 
 import grpc
 from .. import task_controller_pb2_grpc
@@ -39,12 +40,17 @@ from .. import thalamus_pb2_grpc
 from .servicer import TaskControllerServicer
 from .observable_bridge import ObservableBridge
 from ..pipeline.thalamus_window import ThalamusWindow
+from ..pipeline.pypipeline import PipelineServicer
 from ..servicer import ThalamusServicer
 from ..qt import *
 from ..orchestration import Orchestrator
 from .util import create_task_with_exc_handling
+from ..resources import get_path
+from .tasks import add_tasks
 
 UNHANDLED_EXCEPTION: typing.List[Exception] = []
+
+LOGGER = logging.getLogger(__name__)
 
 def exception_handler(loop: asyncio.AbstractEventLoop, context: typing.Mapping[str, typing.Any]) -> None:
   """
@@ -81,8 +87,10 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument('-o', '--ophanim-url', help='Ophanim URL')
   parser.add_argument('-t', '--trace', action='store_true', help='Enable tracing')
   parser.add_argument('-n', '--no-orchestration', action='store_true', help='Disable orchestration')
+  parser.add_argument('-y', '--pypipeline', action='store_true', help='Use Python data pipeline implementation')
   parser.add_argument('-r', '--remote-executor', action='store_true',
                       help='Send task configs to remote ROS node to execute')
+  parser.add_argument('--ext', help='Extension Module')
   return parser.parse_args(self_args[1:])
 
 async def async_main() -> None:
@@ -96,10 +104,23 @@ async def async_main() -> None:
   done_future = asyncio.get_event_loop().create_future()
 
   asyncio.get_event_loop().set_exception_handler(exception_handler)
-  logging.basicConfig(level=logging.DEBUG, format='%(levelname)s %(asctime)s %(name)s:%(lineno)s %(message)s')
+  logging.basicConfig(level=logging.INFO, format='%(levelname)s %(asctime)s %(name)s:%(lineno)s %(message)s')
   logging.getLogger('matplotlib.font_manager').setLevel(logging.INFO)
 
   arguments = parse_args()
+
+  ext_widgets = {}
+  ext_library = None
+  if arguments.ext is not None:
+    ext_module = importlib.import_module(arguments.ext)
+    if hasattr(ext_module, 'widgets'):
+      ext_widgets.update(ext_module.widgets())
+    if hasattr(ext_module, 'library'):
+      ext_library = ext_module.library()
+      ext_library = [ext_library] if isinstance(ext_library, (str, pathlib.Path)) else ext_library
+      ext_library = tuple(ext_library)
+    if hasattr(ext_module, 'tasks'):
+      add_tasks(ext_module.tasks())
 
   _ = QApplication(sys.argv)
 
@@ -138,12 +159,44 @@ async def async_main() -> None:
   server.add_insecure_port(listen_addr)
   logging.info("Starting GRPC server on %s", listen_addr)
   await server.start()
-  
-  bmbi_native_filename = resource_filename('thalamus', 'native' + ('.exe' if sys.platform == 'win32' else ''))
-  bmbi_native_proc = None
-  bmbi_native_proc = await asyncio.create_subprocess_exec(
-      bmbi_native_filename, 'thalamus', '--port', str(arguments.port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else []))
 
+  async def proc_watcher(name: str, proc: asyncio.subprocess.Process):
+    await proc.wait()
+    if not done_future.done():
+      logging.error(f'{name} process terminated, shutting down UI')
+      done_future.set_result(None)
+  
+  bmbi_native_filename = get_path('native' + ('.exe' if sys.platform == 'win32' else ''))
+  dotnet_filename = pathlib.Path(get_path('thalamus.dotnet', 'dotnet' + ('.exe' if sys.platform == 'win32' else '')))
+  bmbi_native_proc = None
+  pypipeline_servicer = None
+  if arguments.pypipeline:
+    pypipeline_server = grpc.aio.server()
+    pypipeline_servicer = PipelineServicer()
+    thalamus_pb2_grpc.add_ThalamusServicer_to_server(pypipeline_servicer, pypipeline_server)
+
+    pypipeline_addr = f'[::]:{arguments.port}'
+    pypipeline_server.add_insecure_port(pypipeline_addr)
+    logging.info("Starting GRPC PyPipeline server on %s", pypipeline_addr)
+    await pypipeline_server.start()
+
+  else:
+    logging.debug('%s', bmbi_native_filename)
+    command = bmbi_native_filename, 'thalamus', '--port', str(arguments.port), '--state-url', f'localhost:{arguments.ui_port}'
+    if ext_library is not None:
+      command = command + ('--ext',) + ext_library
+    if arguments.trace:
+      command = command + ('--trace',)
+    bmbi_native_proc = await asyncio.create_subprocess_exec(*command)
+    create_task_with_exc_handling(proc_watcher('native.exe', bmbi_native_proc))
+
+  dotnet_proc = None
+  if False:
+  #if dotnet_filename.exists():
+    dotnet_command = str(dotnet_filename), '--port', str(arguments.dotnet_port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else [])
+    dotnet_proc = await asyncio.create_subprocess_exec(*dotnet_command)
+    create_task_with_exc_handling(proc_watcher('dotnet.exe', dotnet_proc))
+    
   channel = grpc.aio.insecure_channel(f'localhost:{arguments.port}')
   await channel.channel_ready()
   stub = thalamus_pb2_grpc.ThalamusStub(channel)
@@ -185,28 +238,20 @@ async def async_main() -> None:
     window.set_task_context(task_context)
 
   controller = ControlWindow(window, task_context, ConfigData(user_config, arguments.config), done_future)
+  servicer.window = controller
   controller.resize(1024, 768)
   controller.move(
     (screen_geometry.width()-controller.width()) // 2 + 50,
     (screen_geometry.height()-controller.height()) // 2 + 50)
   controller.show()
 
-  thalamus = ThalamusWindow(f'localhost:{arguments.port}', config, stub, done_future)
+  thalamus = ThalamusWindow(f'localhost:{arguments.port}', config, stub, done_future, ext_widgets)
   await thalamus.load()
   thalamus.resize(384, 768)
   thalamus.move(100, 100)
   thalamus.show()
 
-  async def native_watch():
-    print('native.exe waiting')
-    await bmbi_native_proc.wait()
-    print('native.exe closed')
-    if not done_future.done:
-      done_future.set_result(None)
-
-  native_watch_task = None
-  if bmbi_native_proc:
-    native_watch_task = create_task_with_exc_handling(native_watch())
+  #native_watch_task = None
 
   try:
     while not done_future.done() and not UNHANDLED_EXCEPTION:
@@ -231,8 +276,12 @@ async def async_main() -> None:
 
   await channel.close()
   if bmbi_native_proc:
-    await native_watch_task
-  print('DONE')
+    await bmbi_native_proc.wait()
+  if dotnet_proc:
+    await dotnet_proc.wait()
+  #if bmbi_native_proc:
+  #  await native_watch_task
+  LOGGER.debug('DONE')
 
 def main() -> None:
   '''

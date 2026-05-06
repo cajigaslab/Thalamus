@@ -3,22 +3,21 @@ Defines the RewardSchedule widget
 """
 
 import typing
+import logging
 import functools
 
 from ..qt import *
 
 import matplotlib
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg # type: ignore
-from matplotlib.figure import Figure # type: ignore
 from matplotlib import pyplot
 
 from ..config import ObservableCollection
 
-matplotlib.use('Qt5Agg')
-
 COLORS = [
   QColor(int(c[0]*255), int(c[1]*255), int(c[2]*255)) for c in pyplot.get_cmap('tab10').colors
 ]
+
+LOGGER = logging.getLogger(__name__)
 
 class RewardSchedule(QWidget): # type: ignore
   '''
@@ -43,7 +42,7 @@ class RewardSchedule(QWidget): # type: ignore
     return QSize(200, 200)
 
   def regen_graphs(self):
-    print('regen_graphs')
+    LOGGER.debug('regen_graphs')
     for k, graph in enumerate(self.config['schedules']):
       path = QPainterPath()
       enumeration = enumerate(graph)
@@ -62,7 +61,7 @@ class RewardSchedule(QWidget): # type: ignore
       self.length = max([p.elementCount() for p in self.paths if p is not None] + [0])
 
   def paintEvent(self, event: QPaintEvent):
-    print('update')
+    LOGGER.debug('update')
     super().paintEvent(event)
     if self.need_graph_regen:
       self.regen_graphs()

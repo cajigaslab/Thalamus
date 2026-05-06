@@ -1,0 +1,28 @@
+name: test
+
+on:
+  workflow_dispatch: {}
+    
+permissions:
+  contents: write
+  
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.PAT }}
+      if: ${{ github.ref_name == 'main' }}
+    - uses: actions/checkout@v4
+      if: ${{ github.ref_name != 'main' }}
+    - name: Set Git name 
+      run: git config --global user.name "Github Actions"
+    - name: Set Git email 
+      run: git config --global user.email "no@email.com"
+    - run: |
+        echo "ref_name ${{ github.ref_name }}"
+        git remote -v
+        git commit --allow-empty -m "Hello World2"
+        git push

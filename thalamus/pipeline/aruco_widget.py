@@ -5,6 +5,9 @@ import functools
 import pathlib
 import traceback
 import numpy
+import logging
+
+LOGGER = logging.getLogger(__name__)
 
 class BoardsModel(QAbstractItemModel):
   def __init__(self, config: ObservableList):
@@ -34,7 +37,7 @@ class BoardsModel(QAbstractItemModel):
   def fill_ids(self, board):
     board_row = self.get_row(board)
     parent = self.index(board_row, 0, QModelIndex())
-    print('fill')
+    LOGGER.debug('fill')
 
     new_size = board['Rows']*board['Columns']
     ids = board['ids']
@@ -49,11 +52,11 @@ class BoardsModel(QAbstractItemModel):
       for i in range(len(ids), new_size):
         ids.append(next_id+i)
       self.endInsertRows()
-    print('filled')
+    LOGGER.debug('filled')
 
   def on_board_change(self, board, action, key, value):
     i = self.get_row(board)
-    print('on_board_change', i, action, key, value)
+    LOGGER.debug('on_board_change %s %s %s %s', i, action, key, value)
     if key == 'Rows':
       index = self.index(i, 0, QModelIndex())
       self.dataChanged.emit(index, index)
@@ -99,12 +102,12 @@ class BoardsModel(QAbstractItemModel):
         self.on_ids_change(board, ObservableCollection.Action.SET, k, v)
 
   def on_ids_change(self, board, action, key, value):
-    print('on_ids_change', action, key, value)
+    LOGGER.debug('on_ids_change %s %s %s', action, key, value)
     if action == ObservableCollection.Action.SET:
       i = self.get_row(board)
       parent = self.index(i, 0, QModelIndex())
       index = self.index(key+2, 1, parent)
-      print('on_ids_change', self.rowCount(parent), key+2, index.row(), index.column())
+      LOGGER.debug('on_ids_change %s %s %s %s', self.rowCount(parent), key+2, index.row(), index.column())
       self.dataChanged.emit(index, index)
 
   def data(self, index: QModelIndex, role: int) -> typing.Any:
@@ -158,7 +161,7 @@ class BoardsModel(QAbstractItemModel):
         return 'IDs:'
       elif index.column() == 1 and index.row() >= 2:
         ids = board['ids']
-        print('data', ids, index.row())
+        LOGGER.debug('data %s %s', ids, index.row())
         return ids[index.row()-2]
 
   def setData(self, index: QModelIndex, value: typing.Any, role: int = Qt.ItemDataRole.EditRole) -> bool:
@@ -262,7 +265,7 @@ class BoardsModel(QAbstractItemModel):
       if board is None:
         board = self.config[parent.row()]
         ids = board['ids']
-        print('rowCount', ids, len(ids) + 2)
+        LOGGER.debug('rowCount %s %s', ids, len(ids) + 2)
         return len(ids) + 2
       return 0
 
@@ -327,7 +330,7 @@ class ArucoWidget(QWidget):
 
     def on_add():
       max_id = 0
-      print(boards)
+      LOGGER.debug('%s', boards)
       for board in boards:
         max_id = max(board['ids'] + [max_id])
       board = {

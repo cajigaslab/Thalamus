@@ -1,5 +1,9 @@
 from ..qt import *
 
+import logging
+
+LOGGER = logging.getLogger(__name__)
+
 class DistortionTextEdit(QTextEdit):
   def __init__(self):
     super().__init__()
@@ -44,10 +48,10 @@ class DistortionWidget(QWidget):
     config.add_observer(self.on_change, lambda: isdeleted(self))
 
     def update_camera_matrix(a, k, v):
-      print('update_camera_matrix', k, v)
+      LOGGER.debug('update_camera_matrix %s %s', k, v)
       self.on_change(None, 'Camera Matrix', config['Camera Matrix'])
     def update_distortion_coefficients(a, k, v):
-      print('update_distortion_coefficients', k, v)
+      LOGGER.debug('update_distortion_coefficients %s %s', k, v)
       self.on_change(None, 'Distortion Coefficients', config['Distortion Coefficients'])
 
     config['Camera Matrix'].add_observer(update_camera_matrix, lambda: isdeleted(self))
@@ -118,7 +122,7 @@ class DistortionWidget(QWidget):
       self.on_change(None, k, v)
 
   def on_change(self, action, key, value):
-    print('DistortionWidget', key, value)
+    LOGGER.debug('DistortionWidget %s %s', key, value)
     if key == 'Invert':
       if self.invert_checkbox.isChecked() != value:
         self.invert_checkbox.setChecked(value)

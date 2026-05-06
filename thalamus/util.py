@@ -4,6 +4,7 @@ Reward delivery implementation
 import typing
 import asyncio
 import pathlib
+import logging
 import datetime
 import platform
 import functools
@@ -13,6 +14,8 @@ from .config import *
 from .qt import *
 
 Executable = typing.Callable[[], None]
+
+LOGGER = logging.getLogger(__name__)
 
 class MeteredUpdater:
   def __init__(self, config: ObservableCollection, interval: datetime.timedelta, stop_when: typing.Callable[[], bool]):
@@ -25,7 +28,7 @@ class MeteredUpdater:
   async def __loop(self):
     while not self.stop_when():
       for k, v in self.updates:
-        print(k)
+        LOGGER.debug('%s', k)
         v()
       self.updates = []
       await asyncio.sleep(self.interval.total_seconds())
@@ -94,8 +97,8 @@ class IterableQueue:
 class NodeSelector(QWidget):
   def __init__(self, node: ObservableDict, selector_key: str, multi_select: bool = True):
     super().__init__()
-    print('create_run_widget')
-    print(node)
+    LOGGER.debug('create_run_widget')
+    LOGGER.debug('%s', node)
     layout = QVBoxLayout()
     combo = QComboBox()
     add_button = QPushButton('Add')
@@ -144,13 +147,13 @@ class NodeSelector(QWidget):
 
     if not multi_select:
       def text_changed(text):
-        print('text_changed', text)
+        LOGGER.debug('text_changed %s', text)
         node[selector_key] = text
       combo.currentTextChanged.connect(text_changed)
 
     def on_add():
-      print('on_add')
-      print(node)
+      LOGGER.debug('on_add')
+      LOGGER.debug('%s', node)
       current = [t.strip() for t in node[selector_key].split(',')]
       new_node = combo.currentData()
       if new_node is None:
@@ -181,7 +184,7 @@ class NodeSelector(QWidget):
       if multi_select:
         qlist.clear()
         new_targets = sorted(t.strip() for t in node[key].split(','))
-        print('new_targets', new_targets)
+        LOGGER.debug('new_targets %s', new_targets)
         qlist.addItems(new_targets)
       else:
         combo.setCurrentText(value)

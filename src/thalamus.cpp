@@ -1,6 +1,6 @@
 #include <thalamus/tracing.hpp>
-#include "node_graph_impl.hpp"
-#include <state.hpp>
+#include "thalamus/node_graph_impl.hpp"
+#include <thalamus/state.hpp>
 #include <thalamus.hpp>
 #ifdef _WIN32
 #include <timeapi.h>
@@ -8,10 +8,14 @@
 #include <chrono>
 #include <thalamus_config.h>
 
-#include "grpc_impl.hpp"
-#include <state_manager.hpp>
+#include "thalamus/grpc_impl.hpp"
+#include <thalamus/state_manager.hpp>
 #include <thalamus/file.hpp>
 #include <thalamus/thread.hpp>
+#include <thalamus/async.hpp>
+#include <thalamus/plugin.h>
+#include <thalamus/shared_library.hpp>
+#include <thalamus/http_server.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -32,6 +36,7 @@
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
+#include <boost/dll/shared_library.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic pop
@@ -64,6 +69,7 @@ int main(int argc, char **argv) {
 #endif
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
   std::set_terminate(on_terminate);
+  init_movable_clocks();
 
   auto steady_start = std::chrono::steady_clock::now();
   auto system_start = std::chrono::system_clock::now();
@@ -107,10 +113,6 @@ int main(int argc, char **argv) {
               << std::endl;
   }
 
-  boost::log::core::get()->set_filter(boost::log::trivial::severity >=
-                                      boost::log::trivial::trace);
-  boost::log::add_common_attributes();
-
   boost::program_options::positional_options_description p;
 
   boost::program_options::options_description desc(
@@ -119,7 +121,19 @@ int main(int argc, char **argv) {
                                                        "Enable tracing")(
       "port,p", boost::program_options::value<size_t>()->default_value(50050),
       "GRPC Port")("state-url,s", boost::program_options::value<std::string>(),
-                   "Address of Thalamus instance that manages state");
+                   "Address of Thalamus instance that manages state")
+                   ("ext,e", boost::program_options::value<std::vector<std::string>>()->multitoken(), "Shared libraries to extend thalamus");
+  desc.add_options()("log-level,l", boost::program_options::value<std::string>()->default_value("info"), "Set log level");
+  desc.add_options()("ip", boost::program_options::value<std::string>()->default_value("0.0.0.0"), "IP to bind to");
+  desc.add_options()("http-port", boost::program_options::value<uint16_t>()->default_value(50053), "Port to run Websocket server on");
+
+#ifndef _WIN32
+  desc.add_options()
+    ("main-sched-policy", boost::program_options::value<std::string>()->default_value(""), "pthreads schduling policy for the main thread")
+    ("main-sched-priority", boost::program_options::value<int>()->default_value(-1), "pthreads schduling priority for the main thread")
+    ("pool-sched-policy", boost::program_options::value<std::string>()->default_value(""), "pthreads schduling policy for the default thread pool")
+    ("pool-sched-priority", boost::program_options::value<int>()->default_value(-1), "pthreads schduling priority for the default thread pool");
+#endif
 
   boost::program_options::variables_map vm;
   boost::program_options::store(
@@ -129,16 +143,82 @@ int main(int argc, char **argv) {
       vm);
   boost::program_options::notify(vm);
 
+  auto ip = vm["ip"].as<std::string>();
+  auto http_port = vm["http-port"].as<uint16_t>();
+
+  auto log_level = vm["log-level"].as<std::string>();
+  std::map<std::string, boost::log::trivial::severity_level> name_to_level = {
+    {"trace", boost::log::trivial::trace},
+    {"debug", boost::log::trivial::debug},
+    {"info", boost::log::trivial::info},
+    {"warning", boost::log::trivial::warning},
+    {"error", boost::log::trivial::error},
+    {"fatal", boost::log::trivial::fatal},
+  };
+  auto selected_log_level = name_to_level.find(log_level);
+  THALAMUS_ASSERT(selected_log_level != name_to_level.end(), "Invalid log level");
+  boost::log::core::get()->set_filter(boost::log::trivial::severity >= selected_log_level->second);
+  boost::log::add_common_attributes();
+
   if (vm.count("help")) {
     std::cout << desc << std::endl;
     return 0;
   }
+
+#ifndef _WIN32
+  std::map<std::string, int> sched_policies = {
+    {"SCHED_OTHER", SCHED_OTHER},
+#ifndef __APPLE__
+    {"SCHED_IDLE", SCHED_IDLE},
+    {"SCHED_BATCH", SCHED_BATCH},
+#endif
+    {"SCHED_FIFO", SCHED_FIFO},
+    {"SCHED_RR", SCHED_RR}
+  };
+  auto main_sched_policy_name = vm["main-sched-policy"].as<std::string>();
+  auto main_sched_priority = vm["main-sched-priority"].as<int>();
+  auto pool_sched_policy_name = vm["pool-sched-policy"].as<std::string>();
+  auto pool_sched_priority = vm["pool-sched-priority"].as<int>();
+  THALAMUS_LOG(info) << "Main thread config";
+  if(!main_sched_policy_name.empty() && main_sched_priority > -1) {
+    THALAMUS_LOG(info) << "Main thread setting priority " << main_sched_policy_name << " " << main_sched_priority;
+    auto main_sched_policy = sched_policies[main_sched_policy_name];
+
+    struct sched_param param;
+    param.sched_priority = main_sched_priority;
+
+    pthread_t thId = pthread_self();
+    pthread_setschedparam(thId, main_sched_policy, &param);
+  } else {
+    THALAMUS_LOG(info) << "Main thread using default priority";
+  }
+
+  std::optional<int> pool_sched_policy_opt;
+  if(!pool_sched_policy_name.empty()) {
+    pool_sched_policy_opt = sched_policies[pool_sched_policy_name];
+  }
+
+  std::optional<int> pool_sched_priority_opt;
+  if(pool_sched_priority > -1) {
+    pool_sched_priority_opt = pool_sched_priority;
+  }
+#endif
 
   std::string state_url;
   if (vm.count("state-url") > 0) {
     state_url = vm["state-url"].as<std::string>();
   }
   auto port = vm["port"].as<size_t>();
+
+  std::vector<SharedLibrary> extensions;
+  if (vm.count("ext") > 0) {
+    auto exts = vm["ext"].as<std::vector<std::string>>();
+    for(std::filesystem::path ext_path : exts) {
+      if(std::filesystem::exists(ext_path)) {
+        extensions.emplace_back(ext_path.string());
+      }
+    }
+  }
 
   boost::asio::io_context io_context;
 
@@ -183,18 +263,25 @@ int main(int argc, char **argv) {
     state_manager.emplace(stub.get(), state, io_context);
   }
 
-  std::string server_address = absl::StrFormat("0.0.0.0:%d", port);
+  std::string server_address = absl::StrFormat("%s:%d", ip, port);
 
   grpc::EnableDefaultHealthCheckService(true);
   grpc::reflection::InitProtoReflectionServerBuilderPlugin();
   grpc::ServerBuilder builder;
   builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
   std::unique_ptr<NodeGraphImpl> node_graph(
-      new NodeGraphImpl(nodes, io_context, system_start, steady_start, stub.get()));
+      new NodeGraphImpl(nodes, io_context, system_start, steady_start, stub.get(), extensions
+#ifndef _WIN32
+                        ,pool_sched_policy_opt, pool_sched_priority_opt
+#endif
+    ));
   Service service(state, io_context, *node_graph, state_url);
   node_graph->set_service(&service);
   builder.RegisterService(&service);
   auto server = builder.BuildAndStart();
+  auto websocket_channel = server->InProcessChannel(grpc::ChannelArguments());
+  std::unique_ptr<thalamus_grpc::Thalamus::Stub> websocket_stub = thalamus_grpc::Thalamus::NewStub(websocket_channel);
+  HttpServer http_server(io_context, std::move(websocket_stub), ip, http_port);
 
   // std::cout << "Server listening on " << server_address << std::endl;
   std::thread grpc_thread([&] { server->Wait(); });
@@ -242,6 +329,7 @@ int main(int argc, char **argv) {
   }
   shutdown_condition.notify_all();
   termination_thread.join();
+  cleanup_movable_clocks();
   THALAMUS_LOG(info) << "Thalamus Ending";
 
   return 0;

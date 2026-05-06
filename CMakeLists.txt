@@ -12,6 +12,8 @@ set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 
 project(thalamus)
 
+option(CODE_COVERAGE "Enable Code Coverage" OFF)
+
 message("CMAKE_SYSTEM_PROCESSOR ${CMAKE_SYSTEM_PROCESSOR}")
 
 if(WIN32)
@@ -126,16 +128,29 @@ include(cmake/hdf5.cmake)
 execute_process(
   COMMAND git log -1 --format=%h
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  OUTPUT_VARIABLE GIT_COMMIT_HASH
+  OUTPUT_VARIABLE THALAMUS_GIT_COMMIT_HASH
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
+set(GIT_COMMIT_HASH "${THALAMUS_GIT_COMMIT_HASH}")
+
+find_package(Python)
+message("Python_EXECUTABLE ${Python_EXECUTABLE}")
+
+execute_process(
+  COMMAND "${Python_EXECUTABLE}" -c "import toml;config = toml.load('pyproject.toml');print(config['project']['version'])"
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  OUTPUT_VARIABLE THALAMUS_VERSION
   OUTPUT_STRIP_TRAILING_WHITESPACE)
 
+set(THALAMUS_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
 configure_file(thalamus_config.h.in thalamus_config.h)
  
 set(PROTO_SOURCES
   proto/util.proto
   proto/task_controller.proto
   proto/ophanim.proto
-  proto/thalamus.proto)
+  proto/thalamus.proto
+  #proto/delsys.proto
+  )
 apply_protoc_grpc(PROTO_GENERATED_SOURCES ${PROTO_SOURCES})
 
 add_library(protoc_generated OBJECT ${PROTO_GENERATED_SOURCES} ${PROTO_SOURCES})
@@ -171,88 +186,95 @@ target_include_directories(hydrate PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_compile_options(hydrate PRIVATE ${WARNING_FLAGS})
   
 add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/node_graph_impl.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/node_graph_impl.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/state.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/state.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/state_manager.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/state_manager.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/base_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/base_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/analog_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/analog_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/alpha_omega_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/alpha_omega_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/grpc_impl.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/grpc_impl.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/util.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/util.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/h5handle.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/h5handle.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/xsens_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/xsens_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/storage_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/storage_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/storage2_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/storage2_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/run_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/run_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/run2_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/run2_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/remote_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/remote_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/remotelog_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/remotelog_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/ophanim_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/ophanim_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/task_controller_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/task_controller_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/image_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/image_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/oculomatic_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/oculomatic_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/distortion_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/distortion_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/text_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/text_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/log_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/log_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/thread_pool.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/thread_pool.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/base64.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/base64.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/nidaq_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/node_graph_impl.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/node_graph_impl.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/http_server.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/http_server.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/state.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/state.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/state_manager.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/state_manager.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/base_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/base_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/analog_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/analog_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/alpha_omega_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/alpha_omega_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/grpc_impl.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/grpc_impl.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/util.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/util.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/h5handle.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/h5handle.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/xsens_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/xsens_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/storage_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/storage_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/storage2_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/storage2_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/run_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/run_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/run2_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/run2_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/remote_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/remote_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/remotelog_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/remotelog_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/ophanim_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/ophanim_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/task_controller_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/task_controller_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/image_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/image_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/oculomatic_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/oculomatic_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/distortion_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/distortion_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/text_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/text_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/log_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/log_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/thread_pool.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/thread_pool.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/base64.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/base64.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/nidaq_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/nidaq_node_windows.cpp"
                      "${CMAKE_SOURCE_DIR}/src/gentl.h"
-                     "${CMAKE_SOURCE_DIR}/src/genicam_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/genicam_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/channel_picker_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/channel_picker_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/algebra_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/algebra_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/normalize_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/normalize_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/lua_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/lua_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/intan_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/intan_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/aruco_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/aruco_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/spikeglx_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/spikeglx_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/sync_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/sync_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/video_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/video_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/touchscreen_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/touchscreen_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/stim_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/stim_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/stim_printer_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/stim_printer_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/wallclock_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/wallclock_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/src/test_pulse_node.hpp"
-                     "${CMAKE_SOURCE_DIR}/src/test_pulse_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/genicam_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/genicam_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/channel_picker_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/channel_picker_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/algebra_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/algebra_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/normalize_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/normalize_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/lua_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/lua_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/intan_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/intan_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/aruco_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/aruco_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/spikeglx_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/spikeglx_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/sync_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/sync_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/video_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/video_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/touchscreen_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/touchscreen_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/stim_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/stim_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/stim_printer_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/stim_printer_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/wallclock_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/wallclock_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/delsys_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/delsys_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/ceci_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/ceci_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/test_pulse_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/test_pulse_node.cpp"
                      #"${CMAKE_SOURCE_DIR}/src/hexascope_node.hpp"
                      #"${CMAKE_SOURCE_DIR}/src/hexascope_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/file.hpp"
@@ -261,12 +283,22 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/thread.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/tracing.hpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/tracing.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/nidaqmx.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/nidaqmx.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/record_reader.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/record_reader.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/frequency_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/frequency_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/samplemonitor_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/samplemonitor_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/shared_library.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/shared_library.cpp"
                      "${CMAKE_SOURCE_DIR}/proto/thalamus.proto")
 target_sources(thalamus PRIVATE 
-               "${CMAKE_SOURCE_DIR}/src/pupil_node.hpp"
-               "${CMAKE_SOURCE_DIR}/src/pupil_node.cpp"
-               "${CMAKE_SOURCE_DIR}/src/chessboard_node.hpp"
-               "${CMAKE_SOURCE_DIR}/src/chessboard_node.cpp")
+               "${CMAKE_SOURCE_DIR}/src/thalamus/pupil_node.hpp"
+               "${CMAKE_SOURCE_DIR}/src/thalamus/pupil_node.cpp"
+               "${CMAKE_SOURCE_DIR}/src/thalamus/chessboard_node.hpp"
+               "${CMAKE_SOURCE_DIR}/src/thalamus/chessboard_node.cpp")
 
 if(WIN32)
   target_compile_definitions(thalamus PRIVATE _WIN32_WINNT=0x0A00 _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN BOOST_STACKTRACE_USE_WINDBG)
@@ -274,17 +306,25 @@ if(WIN32)
   if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
     target_compile_options(thalamus PRIVATE /bigobj)
   endif()
-  target_sources(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src/nidaq_node_windows.cpp")
+  target_sources(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src/thalamus/brainproducts_node.hpp"
+                                  "${CMAKE_SOURCE_DIR}/src/thalamus/brainproducts_node.cpp")
+  target_include_directories(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src/brain_products")
 elseif(APPLE)
-  target_sources(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src/nidaq_node_mac.cpp")
   target_compile_definitions(thalamus PRIVATE _GNU_SOURCE)
 else()
-  target_sources(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src/nidaq_node_linux.cpp"
-                                  "${CMAKE_SOURCE_DIR}/src/ros2_node.hpp"
-                                  "${CMAKE_SOURCE_DIR}/src/ros2_node.cpp")
+  target_sources(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src/thalamus/ros2_node.hpp"
+                                  "${CMAKE_SOURCE_DIR}/src/thalamus/ros2_node.cpp")
   target_link_libraries(thalamus comedi m)
 endif()
 target_compile_options(thalamus PRIVATE ${WARNING_FLAGS})
+if(CODE_COVERAGE)
+  target_compile_options(hydrate PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+  target_compile_options(thalamus PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+  target_link_options(hydrate PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+  target_link_options(thalamus PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+  target_compile_definitions(hydrate PRIVATE CODE_COVERAGE)
+  target_compile_definitions(thalamus PRIVATE CODE_COVERAGE)
+endif()
 
 target_compile_definitions(thalamus PRIVATE _USE_MATH_DEFINES)
 target_include_directories(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src")
@@ -307,13 +347,45 @@ target_compile_options(native PRIVATE ${WARNING_FLAGS})
 target_include_directories(native PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(native PRIVATE hydrate thalamus opencv thalamus_ffmpeg ffmpeg sdl protoc_generated lua cairo)
 
-if(APPLE)
-  target_link_options(native PRIVATE -pagezero_size 10000 -image_base 7fff04c4a000)
-endif()
-
 if(NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
   target_link_options(native PRIVATE -g)
 endif()
 
 add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "$<TARGET_FILE:native>" "${CMAKE_SOURCE_DIR}/thalamus")
 
+add_executable(test src/test.cpp)
+
+if(WIN32)
+  target_compile_definitions(test PRIVATE _WIN32_WINNT=0x0A00)
+endif()
+target_compile_definitions(test PRIVATE _GNU_SOURCE)
+
+target_compile_options(test PRIVATE ${WARNING_FLAGS})
+target_include_directories(test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(test PRIVATE
+  gtest hydrate thalamus opencv thalamus_ffmpeg ffmpeg sdl protoc_generated lua cairo)
+
+target_compile_options(test PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+target_link_options(test PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+
+if(NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
+  target_link_options(test PRIVATE -g)
+endif()
+
+if(WIN32 AND BUILD_DOTNET)
+  #Install nuget packages during configure
+  execute_process(COMMAND msbuild -t:restore "/p:Platform=Any CPU"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/dotnet")
+
+  add_custom_target(dotnet
+    COMMAND msbuild dotnet.sln /p:Configuration=${CMAKE_BUILD_TYPE} "/p:Platform=Any CPU"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/dotnet")
+  
+  add_custom_command(TARGET dotnet POST_BUILD COMMAND 
+    cmake -E copy_directory "${CMAKE_SOURCE_DIR}/dotnet/dotnet/bin/${CMAKE_BUILD_TYPE}/net8.0"
+    "${CMAKE_SOURCE_DIR}/thalamus/dotnet")
+  add_dependencies(native dotnet)
+endif()
+add_executable(Rec_Stim Rec_Stim.cpp)
+target_link_libraries(Rec_Stim PRIVATE hdf5-static thalamus)
+target_include_directories(Rec_Stim PRIVATE "${CMAKE_SOURCE_DIR}/src")

@@ -6,6 +6,7 @@ import typing
 import asyncio
 import traceback
 import threading
+import logging
 import multiprocessing
 
 from matplotlib.figure import Figure
@@ -16,6 +17,8 @@ from ..thalamus_pb2_grpc import ThalamusStub
 from ..config import ObservableDict
 from ..util import IterableQueue
 from ..task_controller.util import create_task_with_exc_handling
+
+LOGGER = logging.getLogger(__name__)
 
 def evaluate(code_str: str, queue: multiprocessing.Queue):
   try:
@@ -162,7 +165,7 @@ class StimWidget(QWidget):
     self.samples = None
     def queue_processor():
       def inner(y):
-        print('got', y)
+        LOGGER.debug('got %s', y)
         if isinstance(y, str):
           error.setText(y)
         else:
@@ -195,7 +198,7 @@ class StimWidget(QWidget):
     def on_apply():
       on_cancel()
       args = edit.toPlainText(), self.queue
-      print(args)
+      LOGGER.debug('%s', args)
       self.process = multiprocessing.Process(target=evaluate,args=args)
       self.process.start()
       error.setText('Busy')
@@ -260,17 +263,17 @@ class StimWidget(QWidget):
     view.clicked.connect(on_retrieve)
 
   def closeEvent(self, e):
-    print('STIMCLOSE')
+    LOGGER.debug('STIMCLOSE')
     self.running = False
-    print(1)
+    LOGGER.debug('1')
     self.queue.cancel_join_thread()
-    print(2)
+    LOGGER.debug('2')
     self.queue_thread.join()
-    print(3)
+    LOGGER.debug('3')
     if self.process is not None:
-      print(4)
+      LOGGER.debug('4')
       self.process.kill()
-      print(5)
+      LOGGER.debug('5')
       self.process.join()
-      print(6)
+      LOGGER.debug('6')
 
