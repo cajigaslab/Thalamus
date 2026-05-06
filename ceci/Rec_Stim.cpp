@@ -123,7 +123,7 @@ int Rec_Stim_main(std::stop_token st, std::function<bool()> trigger,
     callbackData.publish = publish;
 
     for (size_t i = 0; i < num_devices; i++) {
-        printf("Setting up device %s...\n", devices[i].devName);
+        printf("Setting up device %s...\n", devices[i].devName.c_str());
         // Add MUX address to DO enable mask
         devices[i].doEnableMask = do_enable; // baseline: enable power
         if (devices[i].mux_addr[0]) devices[i].doEnableMask |= do_mux0; // MUX address line 0
@@ -134,9 +134,9 @@ int Rec_Stim_main(std::stop_token st, std::function<bool()> trigger,
         char ai_channels[256], ao_channels[64], do_channels[64];
         snprintf(ai_channels, sizeof(ai_channels),
                  "%s/ai17,%s/ai16,%s/ai7,%s/ai6",
-                 devices[i].devName, devices[i].devName, devices[i].devName, devices[i].devName);
-        snprintf(ao_channels, sizeof(ao_channels),"%s/ao0:3", devices[i].devName);
-        snprintf(do_channels, sizeof(do_channels),"%s/port0/line0:31", devices[i].devName);
+                 devices[i].devName.c_str(), devices[i].devName.c_str(), devices[i].devName.c_str(), devices[i].devName.c_str());
+        snprintf(ao_channels, sizeof(ao_channels),"%s/ao0:3", devices[i].devName.c_str());
+        snprintf(do_channels, sizeof(do_channels),"%s/port0/line0:31", devices[i].devName.c_str());
 
         std::stringstream stream(ai_channels);
         for (std::string line; std::getline(stream, line, ',');) {
@@ -266,7 +266,7 @@ int Rec_Stim_main(std::stop_token st, std::function<bool()> trigger,
         // HDF5 Setup Code
         // Create new HDF5 files using default properties
         char filename[64];
-        snprintf(filename, sizeof(filename), "data_%s.h5", devices[i].devName);
+        snprintf(filename, sizeof(filename), "data_%s.h5", devices[i].devName.c_str());
         devices[i].file_id = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
 
         // Create the dataspace for the datasets
@@ -279,7 +279,7 @@ int Rec_Stim_main(std::stop_token st, std::function<bool()> trigger,
         // Create the datasets
         hid_t space = H5Screate_simple(2, dims, maxdims);
         char dataset_name[32];
-        snprintf(dataset_name, sizeof(dataset_name), "%s_AI", devices[i].devName);
+        snprintf(dataset_name, sizeof(dataset_name), "%s_AI", devices[i].devName.c_str());
         devices[i].dataset_id = H5Dcreate(devices[i].file_id, dataset_name, H5T_NATIVE_DOUBLE, space,
                                     H5P_DEFAULT, plist, H5P_DEFAULT);
 
@@ -351,7 +351,7 @@ Error:
         // Force DO lines low before exiting
         int32 doSampsWritten;
         char do_channels[64];
-        snprintf(do_channels, sizeof(do_channels),"%s/port0/line0:31", devices[i].devName);
+        snprintf(do_channels, sizeof(do_channels),"%s/port0/line0:31", devices[i].devName.c_str());
         DAQmxErrChk (setupDOTask(&devices[i], do_channels, 1, 1, &do_disable, &doSampsWritten, sampleRate, false));
         DAQmxErrChk (DAQmxStopTask(devices[i].doHandle)); // Stop task
         DAQmxErrChk (DAQmxClearTask(devices[i].doHandle)); // Clear task to release lines
@@ -511,7 +511,7 @@ Error:
             // Set DO lines low to disable external power
             char do_channels[64];
             int32 doSampsWritten;
-            snprintf(do_channels, sizeof(do_channels), "%s/port0/line0:31", devices[i].devName);
+            snprintf(do_channels, sizeof(do_channels), "%s/port0/line0:31", devices[i].devName.c_str());
             DAQmxErrChk (setupDOTask(&devices[i],
                                     do_channels,
                                     1,		// one sample per channel
@@ -574,7 +574,7 @@ Error:
             // Set DO lines low to disable external power
             char do_channels[64];
             int32 doSampsWritten;
-            snprintf(do_channels, sizeof(do_channels), "%s/port0/line0:31", devices[i].devName);
+            snprintf(do_channels, sizeof(do_channels), "%s/port0/line0:31", devices[i].devName.c_str());
             DAQmxErrChk (setupDOTask(&devices[i],
                                     do_channels,
                                     1,		// one sample per channel

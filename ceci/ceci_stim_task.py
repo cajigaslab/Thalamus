@@ -11,15 +11,15 @@ import asyncio
 import numpy
 import scipy.signal
 
-from ..qt import *
+from thalamus.qt import *
 
-from . import task_context
-from .widgets import Form, ListAsTabsWidget
-from .util import wait_for, wait_for_hold, TaskResult, TaskContextProtocol, CanvasPainterProtocol, RenderOutput, create_task_with_exc_handling
-from .. import task_controller_pb2
-from ..config import *
+from thalamus.task_controller import task_context
+from thalamus.task_controller.widgets import Form, ListAsTabsWidget
+from thalamus.task_controller.util import wait_for, wait_for_hold, TaskResult, TaskContextProtocol, CanvasPainterProtocol, RenderOutput, create_task_with_exc_handling
+from thalamus import task_controller_pb2
+from thalamus.config import *
 
-from ..thalamus_pb2 import StimRequest, StimDeclaration, AnalogResponse, Span
+from thalamus.thalamus_pb2 import StimRequest, StimDeclaration, AnalogResponse, Span
 
 LOGGER = logging.getLogger(__name__)
 
@@ -265,13 +265,14 @@ class StimWidget(QWidget):
     return_combo.setEnabled(False)
     add_switch('Phase', ['Biphasic', 'Monophasic'])
     add_switch('Lead', ['Cathode-leading', 'Anode-leading'])
+
     add_spinbox('Amplitude (uA)', 100)
     add_spinbox('Pulse Width (us)', 200)
-    add_spinbox('Frequency (Hz)', 200)
+    add_spinbox('Frequency (Hz)', 100)
     add_spinbox('Number of Pulses', 1, False)
-    add_spinbox('Interphase Delay (ms)', 0)
-    add_spinbox('Stimulation Duration (s)', .5)
-    add_spinbox('Discharge Duration (s)', .5)
+    add_spinbox('Interphase Delay (ms)', .104)
+    add_spinbox('Stimulation Duration (s)', .1)
+    add_spinbox('Discharge Duration (s)', .0)
     wave = WaveformWidget(config)
     layout.addWidget(wave, 0, layout.columnCount(), layout.rowCount(), 1)
 
@@ -488,13 +489,10 @@ def ecc_to_px(ecc, dpi):
   x_px = x_inch*dpi
   return x_px
 
-IS_SETUP = False
-
 async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-many-statements
   """
   Implementation of the state machine for the simple task
   """
-  global IS_SETUP
   assert context.widget, 'Widget is None'
 
   intertrial_timeout = datetime.timedelta(seconds=context.get_value('intertrial_timeout'))
@@ -509,55 +507,6 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   window_size = ecc_to_px(window_size, dpi)
   window_size_squared = window_size*window_size
 
-  stimulation_channel = context.task_config['Stimulation Channel']
-  all_enabled = [False, False, False, False]
-
-  LOGGER.info('stimulation_channel %s', stimulation_channel)
-  if stimulation_channel == "AO3":
-    all_enabled[3] = True
-    ao = 3
-  elif stimulation_channel == "AO2":
-    all_enabled[2] = True
-    ao = 2
-  elif stimulation_channel == "AO1":
-    all_enabled[1] = True
-    ao = 1
-  elif stimulation_channel == "AO0":
-    all_enabled[0] = True
-    ao = 0
-    
-  mux = round(context.task_config['Mux'])
-  mux_bits = [5*((mux >> i) & 1) for i in range(4)]
-  stim_bits = [5 if e else 0 for e in all_enabled]
-  stim_bits = [stim_bits[1], stim_bits[3], stim_bits[2], stim_bits[0]]
-  
-  #stim_request = StimRequest()
-  stim_declaration: StimDeclaration = StimDeclaration()
-  stim_data: AnalogResponse = stim_declaration.data
-  stim_data.channel_type = AnalogResponse.ChannelType.Voltage
-  #waveform = compute_waveform(context.task_config)
-  #if waveform is not None:
-  #  stim_data.data.extend(waveform)
-  #  stim_data.spans.append(Span(begin=0,end=len(stim_data.data),name=f'/PXI1Slot4/ao{ao}'))
-  #  stim_data.sample_intervals.append(int(1e9/125e3))
-
-  #mux_signal = AnalogResponse(
-  #  data=mux_bits + stim_bits + [5],
-  #  spans=[
-  #    Span(begin=0,end=1,name='/PXI1Slot4/port0/line20'),
-  #    Span(begin=1,end=2,name='/PXI1Slot4/port0/line29'),
-  #    Span(begin=2,end=3,name='/PXI1Slot4/port0/line19'),
-  #    Span(begin=3,end=4,name='/PXI1Slot4/port0/line26'),
-  #    Span(begin=4,end=5,name='/PXI1Slot4/port0/line7'),
-  #    Span(begin=5,end=6,name='/PXI1Slot4/port0/line2'),
-  #    Span(begin=6,end=7,name='/PXI1Slot4/port0/line1'),
-  #    Span(begin=7,end=8,name='/PXI1Slot4/port0/line6'),
-  #    Span(begin=8,end=9,name='/PXI1Slot4/port0/line8'),
-  #  ],
-  #  sample_intervals=[0, 0, 0, 0, 0, 0, 0, 0, 0])
-  #LOGGER.info('%s', mux_signal)
-  #await context.inject_analog('Mux', mux_signal)
-
   await context.node_request('Node 1', {
     'type': 'config',
     "amp_uA": context.task_config['Amplitude (uA)'],
@@ -570,7 +519,6 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     "polarity": 1 if context.task_config['Lead'] == 'Cathode-leading' else -1,
     "dis_dur_s": context.task_config['Discharge Duration (s)']
   })
-  IS_SETUP = True
 
   display_indicator = False
   state = State.NONE

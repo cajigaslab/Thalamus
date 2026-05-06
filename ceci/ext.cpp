@@ -176,6 +176,7 @@ static ThalamusNode* create_ceci_node(ThalamusNodeFactory *, ThalamusState* stat
   result->state = state;
 
   result->state_connection = api->state_recursive_change_connect(state, CeciNode_on_change, result);
+  api->state_recap(state);
   
   result->triggered = false;
   result->channels = nullptr;
