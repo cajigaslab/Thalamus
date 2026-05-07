@@ -173,7 +173,7 @@ extern "C" {
 
   typedef void (*ThalamusIOCallback)(struct ThalamusErrorCode*, size_t, void* data);
   typedef void (*ThalamusNodeGetCallback)(struct ThalamusNodeWeak*, void* data);
-  typedef void (*ThalamusNodeReadyCallback)(struct ThalamusNode*, void* data);
+  typedef void (*ThalamusNodeReadyCallback)(void* data);
 
   struct ThalamusAPI {
     char (*state_is_dict)(struct ThalamusState*);
@@ -272,10 +272,13 @@ extern "C" {
     void (*node_inc_ref)(struct ThalamusNode*);
     void (*node_dec_ref)(struct ThalamusNode*);
 
-    ThalamusNodeReadyConnection* (*node_ready_connect)(struct ThalamusNode*);
+    struct ThalamusNodeReadyConnection* (*node_ready_connect)(struct ThalamusNode*, ThalamusNodeReadyCallback callback, void* data);
 
     ThalamusNode* (*node_lock)(struct ThalamusNodeWeak*);
     void (*node_unlock)(struct ThalamusNodeWeak*);
+
+    void (*node_get_node_disconnect)(struct ThalamusNodeGetConnection*);
+    void (*node_ready_disconnect)(struct ThalamusNodeReadyConnection*);
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories)(struct ThalamusAPI*);

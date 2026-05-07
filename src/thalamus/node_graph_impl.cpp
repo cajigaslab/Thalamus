@@ -325,10 +325,61 @@ ExtNode::~ExtNode() {
 struct ThalamusAPIImpl {
   static std::map<ObservableCollection::Value, ThalamusState*>* cpp_to_c;
   static std::map<ThalamusState*, ObservableCollection::Value>* c_to_cpp;
-  static std::map<ObservableCollection::Value, ThalamusStateConnection*>* cpp_to_c_conns;
-  static std::map<ThalamusStateConnection*, ObservableCollection::Value>* c_to_cpp_conns;
+
+  static std::map<Node*, ThalamusNodeWeak*>* node_cpp_to_c;
+  static std::map<ThalamusNodeWeak*, Node*>* node_c_to_cpp;
+
   static boost::asio::io_context* io_context;
   static NodeGraph* node_graph;
+
+  static ThalamusNodeWeak* wrap_node(std::shared_ptr<Node> node) {
+    auto result = new ThalamusNodeWeak();
+    memset(result->node, 0, sizeof(ThalamusNode));
+    result->weak = node;
+    result->refs = 1;
+    result->locks = 0;
+
+    auto interfaces = new Interfaces();
+    interfaces->node = node.get();
+    result->node.impl = interfaces;
+
+    AnalogNode* analog;
+    if((analog = node_cast<AnalogNode*>(node.get()))) {
+      interfaces->analog = analog;
+      result->node.analog = new ThalamusAnalogNode();
+      result->node.analog->data = plugin_analog_data;
+      result->node.analog->short_data = plugin_analog_short_data;
+      result->node.analog->int_data = plugin_analog_int_data;
+      result->node.analog->ulong_data = plugin_analog_ulong_data;
+      result->node.analog->num_channels = plugin_analog_num_channels;
+      result->node.analog->sample_interval_ns = plugin_analog_sample_interval_ns;
+      result->node.analog->name = plugin_analog_name;
+      result->node.analog->has_analog_data = plugin_analog_has_analog_data;
+      result->node.analog->is_short_data = plugin_analog_is_short_data;
+      result->node.analog->is_int_data = plugin_analog_is_int_data;
+      result->node.analog->is_ulong_data = plugin_analog_is_ulong_data;
+      result->node.analog->is_transformed = plugin_analog_is_transformed;
+      result->node.analog->scale = plugin_analog_scale;
+      result->node.analog->offset = plugin_analog_offset;
+      result->node.analog->name_span = plugin_analog_name_span;
+    }
+
+    return result;
+  }
+
+  static ThalamusState* get_node_ref(std::shared_ptr<Node> val) {
+    auto i = node_cpp_to_c->find(val.get());
+    if(i == node_cpp_to_c->end()) {
+      auto new_ptr = wrap_node(val);
+      THALAMUS_LOG(info) << "new_state " << get_path(new_ptr->value) << " " << new_ptr->count;
+      (*node_cpp_to_c)[val] = new_ptr;
+      (*node_c_to_cpp)[new_ptr] = val;
+      return new_ptr;
+    } else {
+      node_inc_ref(i->second);
+      return i->second;
+    }
+  }
 
   static ThalamusState* get_state_ref(ObservableCollection::Key key) {
     if(std::holds_alternative<std::monostate>(key)) {
@@ -716,18 +767,49 @@ struct ThalamusAPIImpl {
       selector.set_type(std::string(c_selector.type.data, c_selector.type.size));
     }
 
-    graph->get_node_scoped(selector, [] (auto node) {
-      callback(, data)
+    auto result = new ThalamusNodeGetConnection();
+    result->connection = graph->get_node_scoped(selector, [callback, data] (auto node) {
+      auto weak = get_node_ref(node);
+      callback(weak, data)
     });
+    return result;
   }
 
-    void (*node_inc_ref)(struct ThalamusNodeWeak*);
-    void (*node_dec_ref)(struct ThalamusNodeWeak*);
+  static void node_inc_ref(struct ThalamusNodeWeak* node) {
+    ++node->refs;
+  }
+
+  static void node_dec_ref(struct ThalamusNodeWeak* node) {
+    if(--node->refs == 0) {
+      c_to_cpp->erase(node);
+      cpp_to_c->erase(state->value);
+      delete node;
+      delete node;
+    }
+  }
+
+  static ThalamusNodeReadyConnection* node_ready_connect(struct ThalamusNode* node, ThalamusNodeReadyCallback callback, void* data) {
+    auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+    
+    auto result = new ThalamusNodeReadyConnection();
+    result->connection = interfaces->node->ready.connect([callback, data] (auto) {
+      callback(data);
+    });
+    return result;
+  }
+
 
     ThalamusNodeReadyConnection* (*node_ready_connect)(struct ThalamusNode*);
 
     ThalamusNode* (*node_lock)(struct ThalamusNodeWeak*);
     void (*node_unlock)(struct ThalamusNodeWeak*);
+
+    void (*node_get_node_disconnect)(struct ThalamusNodeGetConnection*);
+    void (*node_ready_disconnect)(struct ThalamusNodeReadyConnection*);
+};
+
+struct ThalamusNodeGetConnection {
+  NodeGraph::NodeConnection connection;
 };
 
 struct ThalamusNodeWeak {
@@ -735,9 +817,11 @@ struct ThalamusNodeWeak {
   std::shared_ptr<Node> shared;
   std::weak_ptr<Node> weak;
   int refs;
+  int locks;
 };
 
 struct Interfaces {
+  Node* node = nullptr;
   AnalogNode* analog = nullptr;
 };
 
@@ -746,44 +830,6 @@ void plugin_analog_data(struct ThalamusDoubleSpan* output, struct ThalamusNode* 
   auto span = interfaces->analog->data(channel);
   output->data = span.data();
   output->size = span.size();
-}
-
-ThalamusNodeWeak* wrap_node(std::weak_ptr<Node> node) {
-  auto result = new ThalamusNodeWeak();
-  memset(result->node, 0, sizeof(ThalamusNode));
-  result->weak = node;
-  result->refs = 1;
-
-  auto locked = node.lock();
-  if(!locked) {
-    return result;
-  }
-
-  auto interfaces = new Interfaces();
-  result->node.impl = interfaces
-
-  AnalogNode* analog;
-  if((analog = node_cast<AnalogNode*>(locked.get()))) {
-    interfaces->analog = analog;
-    result->node.analog = new ThalamusAnalogNode();
-    result->node.analog->data = plugin_analog_data;
-    result->node.analog->short_data = plugin_analog_short_data;
-    result->node.analog->int_data = plugin_analog_int_data;
-    result->node.analog->ulong_data = plugin_analog_ulong_data;
-    result->node.analog->num_channels = plugin_analog_num_channels;
-    result->node.analog->sample_interval_ns = plugin_analog_sample_interval_ns;
-    result->node.analog->name = plugin_analog_name;
-    result->node.analog->has_analog_data = plugin_analog_has_analog_data;
-    result->node.analog->is_short_data = plugin_analog_is_short_data;
-    result->node.analog->is_int_data = plugin_analog_is_int_data;
-    result->node.analog->is_ulong_data = plugin_analog_is_ulong_data;
-    result->node.analog->is_transformed = plugin_analog_is_transformed;
-    result->node.analog->scale = plugin_analog_scale;
-    result->node.analog->offset = plugin_analog_offset;
-    result->node.analog->name_span = plugin_analog_name_span;
-  }
-
-  return result;
 }
 
 std::map<ObservableCollection::Value, ThalamusState*>* ThalamusAPIImpl::cpp_to_c = nullptr;
