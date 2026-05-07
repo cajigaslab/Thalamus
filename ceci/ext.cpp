@@ -29,6 +29,8 @@ struct CeciNode {
   std::vector<Channel>* channels;
   std::promise<void> promise;
   size_t time_ns;
+  std::string dev1;
+  std::string dev2;
 };
 
 static void CeciNode_data(ThalamusDoubleSpan* result, ThalamusNode* raw_node, int channel) {
@@ -103,6 +105,8 @@ static void CeciNode_process(ThalamusNode* raw_node, ThalamusRequestHandle* hand
     CeciNode_stop(node);
     
     node->triggered = false;
+    json["dev1"] = node->dev1;
+    json["dev2"] = node->dev2;
 
     //This function should block until either stimulation should happen or the thread needs to stop.
     auto trigger = [node] {
@@ -142,17 +146,12 @@ static void CeciNode_process(ThalamusNode* raw_node, ThalamusRequestHandle* hand
 static void CeciNode_on_change(ThalamusState* source, ThalamusStateAction action, ThalamusState* key, ThalamusState* val, void* data) {
   auto node = reinterpret_cast<CeciNode*>(data);
   if(api->state_is_string(key)) {
-    auto key_str = api->state_get_string(key);
+    std::string key_str = api->state_get_string(key);
 
-    if(api->state_is_string(val)) {
-      auto val_str = api->state_get_string(val);
-      printf("%s = %s\n", key_str, val_str);
-    } else if (api->state_is_bool(val)) {
-      auto val_bool = api->state_get_bool(val);
-      printf("%s = %d\n", key_str, val_bool);
-    } else if (api->state_is_float(val)) {
-      auto val_float = api->state_get_float(val);
-      printf("%s = %f\n", key_str, val_float);
+    if(key_str == "Device 1") {
+      node->dev1 = api->state_get_string(val);
+    } else if(key_str == "Device 2") {
+      node->dev2 = api->state_get_string(val);
     }
   }
 }
