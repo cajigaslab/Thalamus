@@ -239,16 +239,10 @@ async def async_main() -> None:
 
   controller = ControlWindow(window, task_context, ConfigData(user_config, arguments.config), done_future)
   servicer.window = controller
-  controller.resize(1024, 768)
-  controller.move(
-    (screen_geometry.width()-controller.width()) // 2 + 50,
-    (screen_geometry.height()-controller.height()) // 2 + 50)
   controller.show()
 
   thalamus = ThalamusWindow(f'localhost:{arguments.port}', config, stub, done_future, ext_widgets)
   await thalamus.load()
-  thalamus.resize(384, 768)
-  thalamus.move(100, 100)
   thalamus.show()
 
   #native_watch_task = None
