@@ -50,6 +50,7 @@
 #include <thalamus/frequency_node.hpp>
 #include <thalamus/samplemonitor_node.hpp>
 #include <thalamus/plugin.h>
+#include <thalamus/modalities_util.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -322,6 +323,30 @@ ExtNode::~ExtNode() {
   factory->destroy(factory, node);
 }
 
+struct ThalamusNodeGetConnection {
+  NodeGraph::NodeConnection connection;
+};
+
+struct ThalamusNodeWeak {
+  ThalamusNode node;
+  std::shared_ptr<Node> shared;
+  std::weak_ptr<Node> weak;
+  int refs;
+  int locks;
+};
+
+struct Interfaces {
+  Node* node = nullptr;
+  AnalogNode* analog = nullptr;
+};
+
+void plugin_analog_data(struct ThalamusDoubleSpan* output, struct ThalamusNode* node, int channel) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  auto span = interfaces->analog->data(channel);
+  output->data = span.data();
+  output->size = span.size();
+}
+
 struct ThalamusAPIImpl {
   static std::map<ObservableCollection::Value, ThalamusState*>* cpp_to_c;
   static std::map<ThalamusState*, ObservableCollection::Value>* c_to_cpp;
@@ -334,7 +359,7 @@ struct ThalamusAPIImpl {
 
   static ThalamusNodeWeak* wrap_node(std::shared_ptr<Node> node) {
     auto result = new ThalamusNodeWeak();
-    memset(result->node, 0, sizeof(ThalamusNode));
+    memset(&result->node, 0, sizeof(ThalamusNode));
     result->weak = node;
     result->refs = 1;
     result->locks = 0;
@@ -372,7 +397,7 @@ struct ThalamusAPIImpl {
     if(i == node_cpp_to_c->end()) {
       auto new_ptr = wrap_node(val);
       THALAMUS_LOG(info) << "new_state " << get_path(new_ptr->value) << " " << new_ptr->count;
-      (*node_cpp_to_c)[val] = new_ptr;
+      (*node_cpp_to_c)[val.get()] = new_ptr;
       (*node_c_to_cpp)[new_ptr] = val;
       return new_ptr;
     } else {
@@ -770,7 +795,7 @@ struct ThalamusAPIImpl {
     auto result = new ThalamusNodeGetConnection();
     result->connection = graph->get_node_scoped(selector, [callback, data] (auto node) {
       auto weak = get_node_ref(node);
-      callback(weak, data)
+      callback(weak, data);
     });
     return result;
   }
@@ -781,9 +806,9 @@ struct ThalamusAPIImpl {
 
   static void node_dec_ref(struct ThalamusNodeWeak* node) {
     if(--node->refs == 0) {
-      c_to_cpp->erase(node);
-      cpp_to_c->erase(state->value);
-      delete node;
+      node_c_to_cpp->erase(node);
+      auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+      node_cpp_to_c->erase(interfaces->node);
       delete node;
     }
   }
@@ -808,36 +833,16 @@ struct ThalamusAPIImpl {
     void (*node_ready_disconnect)(struct ThalamusNodeReadyConnection*);
 };
 
-struct ThalamusNodeGetConnection {
-  NodeGraph::NodeConnection connection;
-};
-
-struct ThalamusNodeWeak {
-  ThalamusNode node;
-  std::shared_ptr<Node> shared;
-  std::weak_ptr<Node> weak;
-  int refs;
-  int locks;
-};
-
-struct Interfaces {
-  Node* node = nullptr;
-  AnalogNode* analog = nullptr;
-};
-
-void plugin_analog_data(struct ThalamusDoubleSpan* output, struct ThalamusNode* node, int channel) {
-  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
-  auto span = interfaces->analog->data(channel);
-  output->data = span.data();
-  output->size = span.size();
-}
-
 std::map<ObservableCollection::Value, ThalamusState*>* ThalamusAPIImpl::cpp_to_c = nullptr;
 std::map<ThalamusState*, ObservableCollection::Value>* ThalamusAPIImpl::c_to_cpp = nullptr;
 std::map<ObservableCollection::Value, ThalamusStateConnection*>* ThalamusAPIImpl::cpp_to_c_conns = nullptr;
 std::map<ThalamusStateConnection*, ObservableCollection::Value>* ThalamusAPIImpl::c_to_cpp_conns = nullptr;
 boost::asio::io_context* ThalamusAPIImpl::io_context = nullptr;
 NodeGraph* ThalamusAPIImpl::node_graph = nullptr;
+
+
+std::map<Node*, ThalamusNodeWeak*>* ThalamusAPIImpl::node_cpp_to_c = nullptr;
+std::map<ThalamusNodeWeak*, Node*>* ThalamusAPIImpl::node_c_to_cpp = nullptr;
 
 struct ExtNodeFactory : public INodeFactory {
   ThalamusNodeFactory* underlying;
@@ -919,6 +924,8 @@ public:
 
     ThalamusAPIImpl::cpp_to_c = new std::map<ObservableCollection::Value, ThalamusState*>();
     ThalamusAPIImpl::c_to_cpp = new std::map<ThalamusState*, ObservableCollection::Value>();
+    ThalamusAPIImpl::node_cpp_to_c = new std::map<Node*, ThalamusNodeWeak*>();
+    ThalamusAPIImpl::node_c_to_cpp = new std::map<ThalamusNodeWeak*, Node*>();
     ThalamusAPIImpl::io_context = &io_context;
     ThalamusAPIImpl::node_graph = _outer;
 

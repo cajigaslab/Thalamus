@@ -40,7 +40,7 @@ extern "C" {
   struct ThalamusNodeGraph;
 
   struct ThalamusDoubleSpan {
-    double* data;
+    const double* data;
     size_t size;
   };
   struct ThalamusShortSpan {
