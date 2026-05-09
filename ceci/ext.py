@@ -3,10 +3,13 @@ from thalamus.pipeline.thalamus_window import Factory, UserData, UserDataType
 from thalamus.task_controller.task_context import TaskDescription
 #import ext_task
 import platform
+import ceci_stim_task
 
 def widgets():
   return {
     'EXT_CECI': Factory(None, [
+      UserData(UserDataType.DEFAULT, 'Device 1', 'PXI1Slot4', []),
+      UserData(UserDataType.DEFAULT, 'Device 2', 'PXI1Slot5', []),
     ])
   }
 
@@ -20,5 +23,5 @@ def library():
 
 def tasks():
   return [
-    #TaskDescription('ext_task', 'Ext Task', ext_task.create_widget, ext_task.run)
+    TaskDescription('ext_ceci_task', 'Ext Ceci Stim Task', ceci_stim_task.create_widget, ceci_stim_task.run)
   ]
