@@ -21,7 +21,9 @@ jobs:
       if: ${{ github.ref_name == 'main' }}
     - uses: actions/checkout@v4
       if: ${{ github.ref_name != 'main' }}
-    - run: echo ${{ secrets.CICD_PFX }} | sha256sum -
+    - run: |
+        echo ${{ secrets.CICD_PFX }} | base64 -d > cicd.pfx
+        openssl pkcs12 -info -in cicd.pfx -passin pass: -nokeys
     - name: Set Git name 
       run: git config --global user.name "Github Actions"
     - name: Set Git email 
