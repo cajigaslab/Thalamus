@@ -93,7 +93,7 @@ def main():
       destination = home_path / 'depot_tools'
       if not destination.exists():
         subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
-      subprocess.check_call([destination / 'gclient'])
+      subprocess.check_call([destination / 'gclient.bat'])
 
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-U', 'setuptools'], cwd=home_str)
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-r', str(pathlib.Path.cwd()/'requirements.txt')], cwd=home_str)
