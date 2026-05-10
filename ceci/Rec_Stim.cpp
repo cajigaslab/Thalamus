@@ -23,7 +23,7 @@
 #define BUFFER_SIZE (SAMPS_PER_CHAN*TOTAL_CHANS*MAX_DEVICES)
 
 typedef struct {
-    const char *devName;
+    std::string devName;
     TaskHandle aiHandle;
     TaskHandle aoHandle;
     TaskHandle doHandle;
@@ -101,16 +101,19 @@ int Rec_Stim_main(std::stop_token st, std::function<bool()> trigger,
                   std::function<void(std::vector<Channel>*, size_t)> publish, nlohmann::json config)
 {
     StimParams stim = {
-        .amp_uA = 100.0,         // current amplitude in uA
-        .pw_us = 200.0,          // pulse width in us
-        .freq_hz = 100.0,        // pulse train frequency in Hz
-        .ipd_ms = 0.104,         // inter-phase delay in ms
-        .num_pulses = 1,         // pulses per train
-        .stim_dur_s = 0.1,       // stimulation duration in seconds
-        .is_biphasic = true,     // true for biphasic, false for monophasic
-        .polarity = 1,           // 1 = cathode-leading, -1 = anode-leading
-        .dis_dur_s = 0.0f        // discharge duration in seconds
+        .amp_uA = config["amp_uA"],         // current amplitude in uA
+        .pw_us = config["pw_us"],          // pulse width in us
+        .freq_hz = config["freq_hz"],        // pulse train frequency in Hz
+        .ipd_ms = config["ipd_ms"],         // inter-phase delay in ms
+        .num_pulses = config["num_pulses"],         // pulses per train
+        .stim_dur_s = config["stim_dur_s"],       // stimulation duration in seconds
+        .is_biphasic = config["is_biphasic"],     // true for biphasic, false for monophasic
+        .polarity = config["polarity"],           // 1 = cathode-leading, -1 = anode-leading
+        .dis_dur_s = config["dis_dur_s"]        // discharge duration in seconds
     };
+
+    devices[0].devName = config["dev1"];
+    devices[1].devName = config["dev2"];
 
 	const char  *ao_chan_names[TOTAL_CHANS] = {"AO0", "AO1", "AO2", "AO3"};
     int32       stim_samps_per_chan = (int32)(stim.stim_dur_s * sampleRate);

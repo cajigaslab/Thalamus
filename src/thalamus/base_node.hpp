@@ -88,5 +88,5 @@ public:
 };
 
 std::vector<std::weak_ptr<ObservableDict>>
-get_nodes(ObservableList *nodes, const std::vector<std::string> &names);
+get_nodes(const ObservableList *nodes, const std::vector<std::string> &names);
 } // namespace thalamus

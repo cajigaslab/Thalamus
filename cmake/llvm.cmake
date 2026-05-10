@@ -9,7 +9,7 @@ endif()
 FetchContent_Declare(
   llvm
   GIT_REPOSITORY https://github.com/llvm/llvm-project
-  GIT_TAG        llvmorg-14.0.3
+  GIT_TAG        llvmorg-17.0.6
   SOURCE_SUBDIR  thalamus-nonexistant
 )  
 message("Populate libc++")
@@ -19,6 +19,7 @@ if(NOT EXISTS "${llvm_BINARY_DIR}/CMakeCache.txt")
   message("BUILD libc++")
   execute_process(
     COMMAND cmake ${llvm_SOURCE_DIR}/runtimes -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DLLVM_ENABLE_RUNTIMES=libcxx\\;libcxxabi
+    -G "${CMAKE_GENERATOR}"
     -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
     -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
     -DCMAKE_OSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}
@@ -30,7 +31,7 @@ if(NOT EXISTS "${llvm_BINARY_DIR}/CMakeCache.txt")
   message("BUILT libc++")
 endif()
 if(NOT EXISTS "${llvm_BINARY_DIR}/lib/libc++.a")
-  execute_process(COMMAND cmake --build . ${CMAKE_PARALLEL} -- cxx_static cxxabi_static VERBOSE=1
+  execute_process(COMMAND cmake --build . ${CMAKE_PARALLEL} -- cxx_static cxxabi_static
                     WORKING_DIRECTORY ${llvm_BINARY_DIR})
   if("${SANITIZER}" STREQUAL thread)
     execute_process(COMMAND ar dv libc++abi.a cxa_guard.cpp.o WORKING_DIRECTORY ${llvm_BINARY_DIR}/lib)
