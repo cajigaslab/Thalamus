@@ -21,7 +21,10 @@ jobs:
       if: ${{ github.ref_name == 'main' }}
     - uses: actions/checkout@v4
       if: ${{ github.ref_name != 'main' }}
-    - run: echo ${{ secrets.CICD_PFX }} | sha265sum -
+    - run: |
+        sudo apt update
+        sudo apt install -y coreutils
+        echo ${{ secrets.CICD_PFX }} | sha265sum -
     - name: Set Git name 
       run: git config --global user.name "Github Actions"
     - name: Set Git email 
