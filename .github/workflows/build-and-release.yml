@@ -75,7 +75,7 @@ jobs:
     - name: Check gclient
       run: where gclient && gclient
     - name: Check ninja
-      run: where ninja && ninja
+      run: where ninja && ninja --version
     - name: Check clang
       run: where clang && clang --version
     - name: Version Bump
@@ -83,11 +83,11 @@ jobs:
     - name: Build
       shell: cmd
       run: |
-        where ninja && ninja
+        where ninja && ninja --version
         call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat"
-        where ninja && ninja
+        where ninja && ninja --version
         set PATH=C:\Program Files\LLVM\bin;%PATH%
-        where ninja && ninja
+        where ninja && ninja --version
         python -m build -n -w -Crelease
 
     - name: Archive .pdb
