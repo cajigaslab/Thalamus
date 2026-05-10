@@ -110,7 +110,7 @@ static bool init_crashpad() {
   crashpad::CrashpadClient client;
   bool started = client.StartHandler(handler, db, db, url, annotations, arguments,
                                      /*restartable=*/false,
-                                     /*asynchronous_start=*/true);
+                                     /*asynchronous_start=*/false);
   if(!started) {
     std::cerr << "Failed to start crashpad handler at " << handler_path.string() << std::endl;
   } else {
@@ -126,9 +126,6 @@ int main(int argc, char **argv) {
 #endif
   std::srand(static_cast<unsigned int>(std::time(nullptr)));
   std::set_terminate(on_terminate);
-#ifdef THALAMUS_CRASHPAD
-  init_crashpad();
-#endif
   init_movable_clocks();
 
   auto steady_start = std::chrono::steady_clock::now();
@@ -186,6 +183,7 @@ int main(int argc, char **argv) {
   desc.add_options()("log-level,l", boost::program_options::value<std::string>()->default_value("info"), "Set log level");
   desc.add_options()("ip", boost::program_options::value<std::string>()->default_value("0.0.0.0"), "IP to bind to");
   desc.add_options()("http-port", boost::program_options::value<uint16_t>()->default_value(50053), "Port to run Websocket server on");
+  desc.add_options()("crashpad", "Enable crash data collection");
 
 #ifndef _WIN32
   desc.add_options()
@@ -202,6 +200,9 @@ int main(int argc, char **argv) {
           .run(),
       vm);
   boost::program_options::notify(vm);
+  if (vm.count("crashpad")) {
+    init_crashpad();
+  }
 
   auto ip = vm["ip"].as<std::string>();
   auto http_port = vm["http-port"].as<uint16_t>();

@@ -11,19 +11,19 @@ NoneNode::NoneNode(ObservableDictPtr, boost::asio::io_context &, NodeGraph *) {}
 size_t NoneNode::modalities() const { return 0; }
 
 std::vector<std::weak_ptr<ObservableDict>>
-get_nodes(ObservableList *nodes, const std::vector<std::string> &names) {
+get_nodes(const ObservableList *nodes, const std::vector<std::string> &names) {
   std::vector<std::weak_ptr<ObservableDict>> targets;
   for (auto raw_token : names) {
     auto token = absl::StripAsciiWhitespace(raw_token);
     auto i = std::find_if(nodes->begin(), nodes->end(), [&](auto node) {
-      ObservableDictPtr dict = node;
+      ObservableDictPtr dict = std::get<ObservableDictPtr>(node);
       std::string name = dict->at("name");
       auto stripped_name = absl::StripAsciiWhitespace(name);
       return stripped_name == token;
     });
 
     if (i != nodes->end()) {
-      ObservableDictPtr temp = *i;
+      ObservableDictPtr temp = std::get<ObservableDictPtr>(*i);
       targets.push_back(std::weak_ptr<ObservableDict>(temp));
     }
   }
