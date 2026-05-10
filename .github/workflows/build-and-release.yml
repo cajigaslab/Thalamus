@@ -49,7 +49,7 @@ jobs:
         echo "python prepare.py --ci" >> prepare_and_build.sh
         echo "source ~/.thalamusrc" >> prepare_and_build.sh
         echo "cmake --version" >> prepare_and_build.sh
-        echo "python -m build -n -w -Crelease" >> prepare_and_build.sh
+        echo "python -m build -n -w -Crelease -Ccrashpad" >> prepare_and_build.sh
         chmod +x prepare_and_build.sh
         echo prepare_and_build.sh
         cat prepare_and_build.sh
@@ -58,6 +58,22 @@ jobs:
       uses: docker://ubuntu:18.04
       with:
         entrypoint: ./prepare_and_build.sh
+
+    - name: Archive and strip debug symbols
+      run: |
+        VERSION=`git describe --exact-match --tags`
+        HASH=`git log -1 --format=%h`
+        UNSTRIPPED=native-linux-$VERSION-$HASH
+        echo $UNSTRIPPED
+
+        echo ${{ secrets.CICD_PFX }} | base64 -d > cicd.pfx
+        curl --cert-type P12 --cert cicd.pfx --data-binary @thalamus/native -H "Content-Type: application/octet-stream" https://sleeve.ophanim.org/proc/experiments/cicd/days/000000/files/$UNSTRIPPED
+        checksum=`python3 checksum.py -a adler -i thalamus/native`
+        echo checksum $checksum
+        curl --cert-type P12 --cert cicd.pfx --data-binary $checksum -H "Content-Type: application/octet-stream" https://sleeve.ophanim.org/proc/experiments/cicd/days/000000/file_hashes/$UNSTRIPPED
+
+        strip thalamus/native
+
     - name: Archive Distribution
       uses: actions/upload-artifact@v4
       with:
@@ -85,7 +101,22 @@ jobs:
       run: |
         call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat"
         set PATH=C:\Program Files\LLVM\bin;%PATH%
-        python -m build -n -w -Crelease
+        python -m build -n -w -Crelease -Ccrashpad
+
+    - name: Archive .pdb
+      shell: bash
+      run: |
+        VERSION=`git describe --exact-match --tags`
+        HASH=`git log -1 --format=%h`
+        UNSTRIPPED=native-win-$VERSION-$HASH.pdb
+        echo $UNSTRIPPED
+
+        echo ${{ secrets.CICD_PFX }} | base64 -d > cicd.pfx
+        curl --cert-type P12 --cert cicd.pfx --data-binary @build/clang-release/native.pdb -H "Content-Type: application/octet-stream" https://sleeve.ophanim.org/proc/experiments/cicd/days/000000/files/$UNSTRIPPED
+        checksum=`python3 checksum.py -a adler -i build/clang-release/native.pdb`
+        echo checksum $checksum
+        curl --cert-type P12 --cert cicd.pfx --data-binary $checksum -H "Content-Type: application/octet-stream" https://sleeve.ophanim.org/proc/experiments/cicd/days/000000/file_hashes/$UNSTRIPPED
+
     - name: Archive Distribution
       uses: actions/upload-artifact@v4
       with:
@@ -107,7 +138,23 @@ jobs:
     - name: Version Bump
       run: source $HOME/.thalamusrc && source pyenv/bin/activate && python3 bump.py patch
     - name: Build
-      run: source $HOME/.thalamusrc && source pyenv/bin/activate && python3 -m build -n -w -Crelease
+      run: source $HOME/.thalamusrc && source pyenv/bin/activate && python3 -m build -n -w -Crelease -Ccrashpad
+
+    - name: Archive and strip debug symbols
+      run: |
+        VERSION=`git describe --exact-match --tags`
+        HASH=`git log -1 --format=%h`
+        UNSTRIPPED=native-mac-$VERSION-$HASH
+        echo $UNSTRIPPED
+
+        echo ${{ secrets.CICD_PFX }} | base64 -d > cicd.pfx
+        curl --cert-type P12 --cert cicd.pfx --data-binary @thalamus/native -H "Content-Type: application/octet-stream" https://sleeve.ophanim.org/proc/experiments/cicd/days/000000/files/$UNSTRIPPED
+        checksum=`python3 checksum.py -a adler -i thalamus/native`
+        echo checksum $checksum
+        curl --cert-type P12 --cert cicd.pfx --data-binary $checksum -H "Content-Type: application/octet-stream" https://sleeve.ophanim.org/proc/experiments/cicd/days/000000/file_hashes/$UNSTRIPPED
+
+        strip thalamus/native
+
     - name: Archive Distribution
       uses: actions/upload-artifact@v4
       with:
