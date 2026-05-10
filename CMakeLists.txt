@@ -102,7 +102,7 @@ include(cmake/inja.cmake)
   #  include(cmake/luajit.cmake)
   #endif()
  
-if(NOT WIN32 AND NOT APPLE)
+if(NOT WIN32 AND NOT APPLE AND NOT STRIP)
   include(cmake/llvm.cmake)
   list(APPEND ALL_COMPILE_OPTIONS ${LIBCXX_COMPILE_OPTIONS})
   list(APPEND ALL_LINK_OPTIONS ${LIBCXX_LINK_OPTIONS})
