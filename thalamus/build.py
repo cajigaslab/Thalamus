@@ -190,6 +190,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   cmake_command += ['-G', generator]
 
   if sys.platform == 'win32':
+    cmake_command += ['-DCMAKE_MAKE_PROGRAM=' + shutil.which('ninja')]
     if clang:
       cmake_command += [
         '-DCMAKE_C_COMPILER=clang',
