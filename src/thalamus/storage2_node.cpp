@@ -687,11 +687,13 @@ struct Storage2Node::Impl {
           THALAMUS_ASSERT(false, "Unsupported format");
         }
 
+        auto height = std::min(image.height(), uint32_t(frame->height));
         for (auto p = 0ull; p < size_t(image.data().size()); ++p) {
           auto linesize = image.data(int(p)).size() / image.height();
-          auto width = image.width() * bps[p];
-          for (auto y = 0u; y < image.height(); ++y) {
-            std::copy_n(image.data(int(p)).data() + y * linesize, width,
+          auto width = std::min(image.width(), uint32_t(frame->width));
+          auto width_bits = width * bps[p];
+          for (auto y = 0u; y < height; ++y) {
+            std::copy_n(image.data(int(p)).data() + y * linesize, width_bits,
                         src_data[p] + y * uint32_t(src_linesize[p]));
           }
         }
@@ -699,7 +701,7 @@ struct Storage2Node::Impl {
         if (pts > 0 && src_format == AV_PIX_FMT_GRAY8) {
           dst_data[0] = src_data[0];
         } else {
-          sws_scale(sws_context, src_data, src_linesize, 0, int(image.height()),
+          sws_scale(sws_context, src_data, src_linesize, 0, int(height),
                     dst_data, dst_linesize);
         }
         std::copy(std::begin(dst_data), std::end(dst_data), frame->data);
