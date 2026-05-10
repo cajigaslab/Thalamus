@@ -73,21 +73,33 @@ jobs:
     - name: Prepare
       run: python prepare.py
     - name: Check gclient
-      run: where gclient && gclient
+      shell: cmd
+      run: |
+        where gclient
+        gclient
     - name: Check ninja
-      run: where ninja && ninja --version
+      shell: cmd
+      run: |
+        where ninja
+        ninja --version
+        call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat"
+        where ninja
+        ninja --version
+        set PATH=C:\Program Files\LLVM\bin;%PATH%
+        where ninja
+        ninja --version
     - name: Check clang
-      run: where clang && clang --version
+      shell: cmd
+      run: |
+        where clang
+        clang --version
     - name: Version Bump
       run: python bump.py patch
     - name: Build
       shell: cmd
       run: |
-        where ninja && ninja --version
         call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat"
-        where ninja && ninja --version
         set PATH=C:\Program Files\LLVM\bin;%PATH%
-        where ninja && ninja --version
         python -m build -n -w -Crelease
 
     - name: Archive .pdb
