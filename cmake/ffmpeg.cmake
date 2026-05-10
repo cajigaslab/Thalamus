@@ -85,14 +85,18 @@ if(WIN32)
 else()
   string(REPLACE "-nostdinc++" "" FFMPEG_COMPILE_OPTIONS_SPACED "${ALL_C_COMPILE_OPTIONS_SPACED}")
   if(APPLE)
-    set(FFMPEG_APPLE_FLAGS --disable-libxcb)
+    list(APPEND FFMPEG_EXTRA_FLAGS --disable-libxcb)
   endif()
+  if(SANITIZER)
+    list(APPEND FFMPEG_EXTRA_FLAGS --disable-asm)
+  endif()
+
   add_custom_command(
     OUTPUT "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
     DEPENDS zlib_processed sdl
     COMMAND cmake -E env 
     "PKG_CONFIG_PATH=${ZLIB_PKG_CONFIG_DIR}:${SDL_PKG_CONFIG_DIR}"
-    "${ffmpeg_SOURCE_DIR}/configure" ${FFMPEG_APPLE_FLAGS} --cc=${CMAKE_C_COMPILER} "--extra-cflags=${FFMPEG_COMPILE_OPTIONS_SPACED}" "--extra-ldflags=${ALL_C_LINK_OPTIONS_SPACED}" --enable-static --disable-shared --disable-sndio $<IF:$<CONFIG:Debug>,--enable-debug,> --prefix=${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install
+    "${ffmpeg_SOURCE_DIR}/configure" ${FFMPEG_EXTRA_FLAGS} --cc=${CMAKE_C_COMPILER} "--extra-cflags=${FFMPEG_COMPILE_OPTIONS_SPACED}" "--extra-ldflags=${ALL_C_LINK_OPTIONS_SPACED}" --enable-static --disable-shared --disable-sndio $<IF:$<CONFIG:Debug>,--enable-debug,> --prefix=${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install
     && cmake -E touch_nocreate "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
     WORKING_DIRECTORY "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>")
   set(FFMPEG_MAKE_COMMAND make -j ${CPU_COUNT} && make install)
