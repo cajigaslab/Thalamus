@@ -287,9 +287,12 @@ def main() -> None:
   '''
   Setup before running async_main
   '''
-  loop = asyncio.get_event_loop()
   try:
-    loop.run_until_complete(async_main())
+    if hasattr(asyncio, 'run'):
+      asyncio.run(async_main())
+    else:
+      loop = asyncio.get_event_loop()
+      loop.run_until_complete(async_main())
   except RuntimeError:
     if not UNHANDLED_EXCEPTION:
       raise

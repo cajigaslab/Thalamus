@@ -204,9 +204,12 @@ def main() -> None:
   if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-  loop = asyncio.get_event_loop()
   try:
-    loop.run_until_complete(async_main())
+    if hasattr(asyncio, 'run'):
+      asyncio.run(async_main())
+    else:
+      loop = asyncio.get_event_loop()
+      loop.run_until_complete(async_main())
   except RuntimeError:
     if not UNHANDLED_EXCEPTION:
       raise
