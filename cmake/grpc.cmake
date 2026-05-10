@@ -14,11 +14,9 @@ set(ABSL_ENABLE_INSTALL ON)
 set(gRPC_BUILD_TESTS ON)
 
 FetchContent_MakeAvailable(gRPC)
-if("${CMAKE_BUILD_TYPE}" STREQUAL Debug)
-  #Disable constinit for debug builds, https://github.com/protocolbuffers/protobuf/issues/21957
-  execute_process(COMMAND git apply "${CMAKE_SOURCE_DIR}/patches/protobuf.debug"
-                  WORKING_DIRECTORY "${grpc_SOURCE_DIR}/third_party/protobuf")
-endif()
+#Disable constinit for all builds, https://github.com/protocolbuffers/protobuf/issues/21957
+execute_process(COMMAND git apply "${CMAKE_SOURCE_DIR}/patches/protobuf"
+                WORKING_DIRECTORY "${grpc_SOURCE_DIR}/third_party/protobuf")
 
 
 #file(READ "${grpc_SOURCE_DIR}/third_party/zlib/CMakeLists.txt" FILE_CONTENTS)

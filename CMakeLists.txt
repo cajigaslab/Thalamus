@@ -13,6 +13,7 @@ set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 project(thalamus)
 
 option(CODE_COVERAGE "Enable Code Coverage" OFF)
+option(STRIP "Strip native execute when copied to thalamus dir" OFF)
 
 message("CMAKE_SYSTEM_PROCESSOR ${CMAKE_SYSTEM_PROCESSOR}")
 
@@ -349,7 +350,11 @@ if(NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
   target_link_options(native PRIVATE -g)
 endif()
 
-add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "$<TARGET_FILE:native>" "${CMAKE_SOURCE_DIR}/thalamus")
+if(STRIP)
+  add_custom_command(TARGET native POST_BUILD COMMAND strip "$<TARGET_FILE:native>" -o "${CMAKE_SOURCE_DIR}/thalamus/native")
+else()
+  add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "$<TARGET_FILE:native>" "${CMAKE_SOURCE_DIR}/thalamus")
+endif()
 add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "${CRASHPAD_HANDLER_EXE}" "${CMAKE_SOURCE_DIR}/thalamus")
 
 add_executable(test src/test.cpp)

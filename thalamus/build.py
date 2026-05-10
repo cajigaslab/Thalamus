@@ -213,6 +213,8 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     cmake_command += [f'-DSANITIZER={sanitizer}']
   if code_coverage:
     cmake_command += [f'-DCODE_COVERAGE=ON']
+  if strip:
+    cmake_command += [f'-DSTRIP=ON']
 
   if is_android:
     sdk = pathlib.Path.home() / 'AppData' / 'Local' / 'Android' / 'Sdk'
@@ -241,8 +243,6 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     subprocess.check_call(command)
     pathlib.Path('thalamus/thalamus').mkdir(exist_ok=True)
     shutil.copy('src/thalamus/plugin.h', 'thalamus/thalamus/plugin.h')
-    if strip:
-      subprocess.check_call(['strip', 'thalamus/native'])
 
   license_dir = pathlib.Path(f'{underscore_name}-{version}.dist-info/licenses')
   license_dir.mkdir(exist_ok=True)
