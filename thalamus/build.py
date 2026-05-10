@@ -109,7 +109,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   dotnet = 'dotnet' in config_settings
   cc = config_settings.get('cc', 'clang')
   cxx = config_settings.get('cxx', 'clang++')
-  crashpad = 'crashpad' in config_settings
+  strip = 'strip' in config_settings
 
   default_parallel = str(os.cpu_count())
   parallel = int(config_settings.get('job', default_parallel))
@@ -145,7 +145,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   maintainer = metadata['maintainer']
   maintainer_email = metadata['maintainer_email']
   license = metadata['license']
-  osx_target = '11.0'
+  osx_target = '12.0'
   osx_target_underscored = osx_target.replace('.', '_')
 
   platform_tag = None
@@ -185,7 +185,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
     f'-DCMAKE_OSX_DEPLOYMENT_TARGET={osx_target}',
     f'-DBUILD_DOTNET={"ON" if dotnet else "OFF"}',
-    f'-DCRASHPAD={"ON" if crashpad else "OFF"}'
+    f'-DPYTHON={sys.executable}'
   ]
   cmake_command += ['-G', generator]
 
@@ -214,6 +214,8 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     cmake_command += [f'-DSANITIZER={sanitizer}']
   if code_coverage:
     cmake_command += [f'-DCODE_COVERAGE=ON']
+  if strip:
+    cmake_command += [f'-DSTRIP=ON']
 
   if is_android:
     sdk = pathlib.Path.home() / 'AppData' / 'Local' / 'Android' / 'Sdk'
@@ -268,8 +270,9 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
       in_ignored_dir = any(d in ("__pycache__", '.vs') for d in parents)
       has_ignored_suffix = path.suffix not in ('.py', '.pyi', '.vert', '.proto', '.comp', '.frag', '.exe', '.h')
       is_native_executable = path.stem == 'native'
+      is_crashpad_handler = path.stem == 'crashpad_handler'
       is_dotnet_file = "dotnet" in parents
-      if is_dir or in_ignored_dir or has_ignored_suffix and not is_native_executable and not is_dotnet_file:
+      if is_dir or in_ignored_dir or has_ignored_suffix and not is_native_executable and not is_crashpad_handler and not is_dotnet_file:
         #print(path, 'DROP')
         continue
       files.append(path)

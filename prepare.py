@@ -93,7 +93,7 @@ def main():
       destination = home_path / 'depot_tools'
       if not destination.exists():
         subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
-      subprocess.check_call([destination / 'gclient'])
+      subprocess.check_call([destination / 'gclient.bat'])
 
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-U', 'setuptools'], cwd=home_str)
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-r', str(pathlib.Path.cwd()/'requirements.txt')], cwd=home_str)
@@ -257,6 +257,7 @@ def main():
                           'python3-pip', 'git', 'wget', 'sudo', 'curl', 'ninja-build', 'lsb-release',
                           'libsm-dev', 'libice-dev', 'libudev-dev', 'libdbus-1-dev', 'libzstd-dev', 'libbz2-dev',
                           'libgles2-mesa-dev',
+                          'libcurl4-openssl-dev',
                           'libfontconfig1-dev',
                           'libfreetype6-dev',
                           'libx11-dev',
@@ -320,7 +321,7 @@ def main():
         subprocess.check_call(['git', 'clone', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', destination])
       subprocess.check_call([destination / 'gclient'])
       with open(str(home_path / '.thalamusrc'), 'a') as bashrc:
-        bashrc.write(f'\nexport PATH=${destination}:$PATH\n')
+        bashrc.write(f'\nexport PATH={destination}:$PATH\n')
 
     bashrc_path = home_path / '.bashrc'
     bashrc_path.touch()

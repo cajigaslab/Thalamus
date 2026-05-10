@@ -277,7 +277,7 @@ Error:
         // Setup AI Task
         DAQmxErrChk (setupAITask(api, &devices[i], ai_channels, sampleRate, input_range, SAMPS_PER_CHAN));
         if (i == 0) { // only set callbacks on primary device and use get AI trigger for other devices
-            auto channel_tokens = absl::StrSplit(ai_channels, ',');
+            std::vector<std::string> channel_tokens = absl::StrSplit(ai_channels, ',');
             names.insert(names.end(), channel_tokens.begin(), channel_tokens.end());
   
             DAQmxErrChk (api->DAQmxRegisterEveryNSamplesEvent(devices[i].aiHandle,
