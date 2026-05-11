@@ -34,6 +34,7 @@ jobs:
     - name: Prepare
       run: source pyenv/bin/activate && python3 prepare.py
     - name: Version Bump
+      id: version_bump
       run: |
         source $HOME/.thalamusrc && source pyenv/bin/activate && python3 bump.py patch
         echo version=`git describe --exact-match --tags` >> "$GITHUB_OUTPUT"
@@ -119,10 +120,10 @@ jobs:
     - name: Archive .pdb
       shell: cmd
       run: |
-        echo UNSTRIPPED=$UNSTRIPPED
-        echo CHECKSUM=$CHECKSUM
-        curl --cert-type P12 --cert cicd.pfx --data-binary @build/clang-release/native.pdb -H "Content-Type: application/octet-stream" https://sleeve.ophanim.org/proc/experiments/cicd/days/000000/files/$UNSTRIPPED
-        curl --cert-type P12 --cert cicd.pfx --data-binary $CHECKSUM -H "Content-Type: application/octet-stream" https://sleeve.ophanim.org/proc/experiments/cicd/days/000000/file_hashes/$UNSTRIPPED
+        echo UNSTRIPPED=%UNSTRIPPED%
+        echo CHECKSUM=%CHECKSUM%
+        curl --cert-type P12 --cert cicd.pfx --data-binary @build/clang-release/native.pdb -H "Content-Type: application/octet-stream" https://sleeve.ophanim.org/proc/experiments/cicd/days/000000/files/%UNSTRIPPED%
+        curl --cert-type P12 --cert cicd.pfx --data-binary %CHECKSUM% -H "Content-Type: application/octet-stream" https://sleeve.ophanim.org/proc/experiments/cicd/days/000000/file_hashes/%UNSTRIPPED%
 
     - name: Archive Distribution
       uses: actions/upload-artifact@v4
