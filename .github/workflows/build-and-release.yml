@@ -94,7 +94,7 @@ jobs:
       run: |
         call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat"
         mklink /j D:\LLVM "C:\Program Files\LLVM"
-        set PATH=D:\LLVM;%PATH%
+        set PATH=D:\LLVM\bin;%PATH%
         echo 111111111111111111111111111111111
         where clang
         echo 222222222222222222222222222222222
