@@ -70,6 +70,9 @@ jobs:
       run: git config --global user.name "Github Actions"
     - name: Set Git email 
       run: git config --global user.email "no@email.com"
+    - run: choco install curl
+    - shell: cmd
+      run: where curl
     - name: Prepare
       run: python prepare.py
     - name: Check gclient
@@ -100,19 +103,26 @@ jobs:
         echo 222222222222222222222222222222222
         python -m build -n -w -Crelease
 
-    - name: Archive .pdb
+    - name: Prepare Archive .pdb
       shell: bash
       run: |
         VERSION=`git describe --exact-match --tags`
         HASH=`git log -1 --format=%h`
         UNSTRIPPED=native-win-$VERSION-$HASH.pdb
-        echo $UNSTRIPPED
-
+        echo UNSTRIPPED=$UNSTRIPPED
+        echo UNSTRIPPED=$UNSTRIPPED >> $GITHUB_ENV
+        CHECKSUM=`python checksum.py -a adler -i build/clang-release/native.pdb`
+        echo CHECKSUM=$CHECKSUM
+        echo CHECKSUM=$CHECKSUM >> $GITHUB_ENV
         echo ${{ secrets.CICD_PFX }} | base64 -d > cicd.pfx
+        
+    - name: Archive .pdb
+      shell: cmd
+      run: |
+        echo UNSTRIPPED=$UNSTRIPPED
+        echo CHECKSUM=$CHECKSUM
         curl --cert-type P12 --cert cicd.pfx --data-binary @build/clang-release/native.pdb -H "Content-Type: application/octet-stream" https://sleeve.ophanim.org/proc/experiments/cicd/days/000000/files/$UNSTRIPPED
-        checksum=`python3 checksum.py -a adler -i build/clang-release/native.pdb`
-        echo checksum $checksum
-        curl --cert-type P12 --cert cicd.pfx --data-binary $checksum -H "Content-Type: application/octet-stream" https://sleeve.ophanim.org/proc/experiments/cicd/days/000000/file_hashes/$UNSTRIPPED
+        curl --cert-type P12 --cert cicd.pfx --data-binary $CHECKSUM -H "Content-Type: application/octet-stream" https://sleeve.ophanim.org/proc/experiments/cicd/days/000000/file_hashes/$UNSTRIPPED
 
     - name: Archive Distribution
       uses: actions/upload-artifact@v4
