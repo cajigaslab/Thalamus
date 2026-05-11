@@ -108,13 +108,13 @@ def main():
         subprocess.check_call(['powershell', '-Command', 'Expand-Archive -DestinationPath ' + os.environ['USERPROFILE'] + ' nasm-2.15.05-win64.zip'])
 
     #clang
-    _, clang_is_current = is_up_to_date('clang++', r'clang version (\d+).(\d+).(\d+)', (21, 0, 0))
+    _, clang_is_current = is_up_to_date('clang++', r'clang version (\d+).(\d+).(\d+)', (20, 0, 0))
     if not clang_is_current:
       destination = 'C:\\Program Files\\LLVM\\bin'
       new_path.append(destination)
       expected_clang = pathlib.Path(destination) / 'clang.exe'
       print(f'{expected_clang} exists: {expected_clang.exists()}')
-      _, clang_is_current = is_up_to_date(str(expected_clang), r'clang version (\d+).(\d+).(\d+)', (21, 0, 0))
+      _, clang_is_current = is_up_to_date(str(expected_clang), r'clang version (\d+).(\d+).(\d+)', (20, 0, 0))
       if not clang_is_current:
         download('https://github.com/llvm/llvm-project/releases/download/llvmorg-21.1.8/LLVM-21.1.8-win64.exe')
         subprocess.check_call(['LLVM-21.1.8-win64.exe', '/S'])
