@@ -82,12 +82,6 @@ jobs:
       run: |
         where ninja
         ninja --version
-        call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat"
-        where ninja
-        ninja --version
-        set PATH=C:\Program Files\LLVM\bin;%PATH%
-        where ninja
-        ninja --version
     - name: Check clang
       shell: cmd
       run: |
@@ -99,7 +93,11 @@ jobs:
       shell: cmd
       run: |
         call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat"
-        set PATH=C:\Program Files\LLVM\bin;%PATH%
+        mklink /j D:\LLVM "C:\Program Files\LLVM"
+        set PATH=D:\LLVM;%PATH%
+        echo 111111111111111111111111111111111
+        where clang
+        echo 222222222222222222222222222222222
         python -m build -n -w -Crelease
 
     - name: Archive .pdb
