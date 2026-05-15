@@ -301,7 +301,9 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       nonlocal target_acquired
       nonlocal i_selected_target
       nonlocal touch_pos
-      
+
+      touch_pos = cursor #moved up
+    
       #check acquisition of center target - is it within window of target?
       center_acquired = distance(all_target_rects[i_center_target].center(), cursor) < all_target_windows[i_center_target]
 
@@ -320,7 +322,6 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
          if distance(all_target_rects[current_target_to_highlight].center(), cursor) < all_target_windows[current_target_to_highlight]:
             target_acquired = True
             i_selected_target = current_target_to_highlight
-            touch_pos = cursor
             return
       #if not inside correct target
       for i in i_periph_targs: 
@@ -329,8 +330,6 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
                target_acquired = True
                i_selected_target = i  # This is a wrong target touch
                break
-
-      touch_pos = cursor
 
   context.widget.touch_listener = touch_handler
   state_brightness = 0
