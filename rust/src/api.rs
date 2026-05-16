@@ -1048,7 +1048,6 @@ impl<T: crate::api::AnalogNode> WrapAnalog for T {
       (*c_node.analog).num_channels = Some(c_node_num_channels::<T>);
       (*c_node.analog).sample_interval_ns = Some(c_node_sample_interval_ns::<T>);
       (*c_node.analog).name = Some(c_node_name::<T>);
-      (*c_node.analog).name_span = Some(c_node_name_span::<T>);
       (*c_node.analog).has_analog_data = Some(c_node_has_analog_data::<T>);
       (*c_node.analog).is_short_data = Some(c_node_is_short_data::<T>);
       (*c_node.analog).is_int_data = Some(c_node_is_int_data::<T>);

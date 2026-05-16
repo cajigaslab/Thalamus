@@ -50,12 +50,6 @@ pub struct ThalamusAnalogNode {
     pub sample_interval_ns: ::std::option::Option<
         unsafe extern "C" fn(node: *mut ThalamusNode, channel: ::std::os::raw::c_int) -> u64,
     >,
-    pub name: ::std::option::Option<
-        unsafe extern "C" fn(
-            node: *mut ThalamusNode,
-            channel: ::std::os::raw::c_int,
-        ) -> *const ::std::os::raw::c_char,
-    >,
     pub has_analog_data: ::std::option::Option<
         unsafe extern "C" fn(node: *mut ThalamusNode) -> ::std::os::raw::c_char,
     >,
@@ -77,7 +71,7 @@ pub struct ThalamusAnalogNode {
     pub offset: ::std::option::Option<
         unsafe extern "C" fn(node: *mut ThalamusNode, channel: ::std::os::raw::c_int) -> f64,
     >,
-    pub name_span: ::std::option::Option<
+    pub name: ::std::option::Option<
         unsafe extern "C" fn(
             *mut ThalamusByteSpan,
             node: *mut ThalamusNode,
@@ -95,7 +89,6 @@ impl ThalamusAnalogNode {
       ulong_data: None,
       num_channels: None,
       sample_interval_ns: None,
-      name: None,
       has_analog_data: None,
       is_short_data: None,
       is_int_data: None,
@@ -103,7 +96,7 @@ impl ThalamusAnalogNode {
       is_transformed: None,
       scale: None,
       offset: None,
-      name_span: None
+      name: None
     }
   }
 }
@@ -398,11 +391,7 @@ pub extern "C" fn c_node_sample_interval_ns<T: crate::api::AnalogNode>(raw_node:
   node.sample_interval(channel).as_nanos() as u64
 }
 
-pub extern "C" fn c_node_name<T: crate::api::AnalogNode>(_raw_node: *mut ThalamusNode, _channel: ::std::os::raw::c_int) -> *const i8 {
-  ptr::null()
-}
-
-pub extern "C" fn c_node_name_span<T: crate::api::AnalogNode>(output: *mut ThalamusByteSpan, raw_node: *mut ThalamusNode, channel: ::std::os::raw::c_int) {
+pub extern "C" fn c_node_name<T: crate::api::AnalogNode>(output: *mut ThalamusByteSpan, raw_node: *mut ThalamusNode, channel: ::std::os::raw::c_int) {
   let c_node = unsafe { &*(raw_node as *const ThalamusNode) };
   let node = &deref_plugin_impl::<T>(c_node).node;
   let result = node.name(channel);

@@ -44,23 +44,23 @@ extern "C" {
     size_t size;
   };
   struct ThalamusShortSpan {
-    short* data;
+    const short* data;
     size_t size;
   };
   struct ThalamusIntSpan {
-    int* data;
+    const int* data;
     size_t size;
   };
   struct ThalamusULongSpan {
-    uint64_t* data;
+    const uint64_t* data;
     size_t size;
   };
   struct ThalamusByteSpan {
-    uint8_t* data;
+    const uint8_t* data;
     uint64_t size;
   };
   struct ThalamusCharSpan {
-    char* data;
+    const char* data;
     uint64_t size;
     char owns_data;
   };
@@ -96,7 +96,6 @@ extern "C" {
     void (*ulong_data)(struct ThalamusULongSpan*, struct ThalamusNode* node, int channel);
     int (*num_channels)(struct ThalamusNode* node);
     uint64_t (*sample_interval_ns)(struct ThalamusNode* node, int channel);
-    const char* (*name)(struct ThalamusNode* node, int channel);
     char (*has_analog_data)(struct ThalamusNode* node);
     char (*is_short_data)(struct ThalamusNode* node);
     char (*is_int_data)(struct ThalamusNode* node);
@@ -104,7 +103,7 @@ extern "C" {
     char (*is_transformed)(struct ThalamusNode* node);
     double (*scale)(struct ThalamusNode* node, int channel);
     double (*offset)(struct ThalamusNode* node, int channel);
-    void (*name_span)(struct ThalamusCharSpan*, struct ThalamusNode* node, int channel);
+    void (*name)(struct ThalamusCharSpan*, struct ThalamusNode* node, int channel);
   };
 
   enum ThalamusImageFormat {
@@ -166,13 +165,11 @@ extern "C" {
 
   struct ThalamusSerialPort;
   struct ThalamusStreamBuf;
-  struct ThalamusNodeWeak;
   struct ThalamusNodeGetConnection;
   struct ThalamusNodeReadyConnection;
-  struct ThalamusNodeWeak;
 
   typedef void (*ThalamusIOCallback)(struct ThalamusErrorCode*, size_t, void* data);
-  typedef void (*ThalamusNodeGetCallback)(struct ThalamusNodeWeak*, void* data);
+  typedef void (*ThalamusNodeGetCallback)(struct ThalamusNode*, void* data);
   typedef void (*ThalamusNodeReadyCallback)(void* data);
 
   struct ThalamusAPI {
@@ -273,9 +270,6 @@ extern "C" {
     void (*node_dec_ref)(struct ThalamusNode*);
 
     struct ThalamusNodeReadyConnection* (*node_ready_connect)(struct ThalamusNode*, ThalamusNodeReadyCallback callback, void* data);
-
-    ThalamusNode* (*node_lock)(struct ThalamusNodeWeak*);
-    void (*node_unlock)(struct ThalamusNodeWeak*);
 
     void (*node_get_node_disconnect)(struct ThalamusNodeGetConnection*);
     void (*node_ready_disconnect)(struct ThalamusNodeReadyConnection*);
