@@ -342,9 +342,9 @@ namespace Thalamus
                     {
                         if (value is string filename)
                         {
-                            if (File.Exists(filename))
+                            if (System.IO.File.Exists(filename))
                             {
-                                this.key = File.ReadAllText(filename);
+                                this.key = System.IO.File.ReadAllText(filename);
                             }
                         }
                         else
@@ -356,9 +356,9 @@ namespace Thalamus
                     {
                         if (value is string filename)
                         {
-                            if (File.Exists(filename))
+                            if (System.IO.File.Exists(filename))
                             {
-                                license = File.ReadAllText(filename);
+                                license = System.IO.File.ReadAllText(filename);
                             }
                         }
                         else
