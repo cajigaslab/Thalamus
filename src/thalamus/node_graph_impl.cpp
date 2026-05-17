@@ -1,3 +1,4 @@
+#include "boost/signals2/connection.hpp"
 #include <cstddef>
 #include <limits>
 #include <thalamus/tracing.hpp>
@@ -148,9 +149,10 @@ template <typename T> struct NodeFactory : public INodeFactory {
 };
 
 static void string_to_span(struct ThalamusCharSpan* output, const std::string& input) {
-  output->data = new char[input.size()];
+  auto data = new char[input.size()];
+  std::copy(input.begin(), input.end(), data);
+  output->data = data;
   output->size = input.size();
-  std::copy(input.begin(), input.end(), output->data);
   output->owns_data = 1;
 }
 
@@ -330,100 +332,105 @@ struct Interfaces {
   int count = 0;
 };
 
-#define ASSERT_SAFE if(!cond) [[unlikely]] { THALAMUS_ABORT("Node should only be accessed in get_node or ready callback") }
+struct ThalamusNodeReadyConnection {
+  boost::signals2::connection connection;
+  ThalamusNode* node;
+};
 
-void plugin_analog_data(struct ThalamusDoubleSpan* output, struct ThalamusNode* node, int channel) {
+#define ASSERT_SAFE() do { if(!interfaces->safe) [[unlikely]] { THALAMUS_ABORT("Node should only be accessed in get_node or ready callback"); } } while(0)
+
+static void plugin_analog_data(struct ThalamusDoubleSpan* output, struct ThalamusNode* node, int channel) {
   auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
-  ASSERT_SAFE;
+  ASSERT_SAFE();
   auto span = interfaces->analog->data(channel);
   output->data = span.data();
   output->size = span.size();
 }
 
-int16_t plugin_analog_short_data(struct ThalamusShortSpan* output, struct ThalamusNode* node, int channel) {
+static void plugin_analog_short_data(struct ThalamusShortSpan* output, struct ThalamusNode* node, int channel) {
   auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
-  ASSERT_SAFE;
+  ASSERT_SAFE();
   auto span = interfaces->analog->short_data(channel);
   output->data = span.data();
   output->size = span.size();
 }
 
-int plugin_analog_int_data(struct ThalamusIntSpan* output, struct ThalamusNode* node, int channel) {
+static void plugin_analog_int_data(struct ThalamusIntSpan* output, struct ThalamusNode* node, int channel) {
   auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
-  ASSERT_SAFE;
-  auto span = interfaces->analog->intdata(channel);
+  ASSERT_SAFE();
+  auto span = interfaces->analog->int_data(channel);
   output->data = span.data();
   output->size = span.size();
 }
 
-uint64_t plugin_analog_ulong_data(struct ThalamusULongSpan* output, struct ThalamusNode* node, int channel) {
+static void plugin_analog_ulong_data(struct ThalamusULongSpan* output, struct ThalamusNode* node, int channel) {
   auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
-  ASSERT_SAFE;
+  ASSERT_SAFE();
   auto span = interfaces->analog->ulong_data(channel);
   output->data = span.data();
   output->size = span.size();
 }
 
-int plugin_analog_num_channels(struct ThalamusNode* node) {
+static int plugin_analog_num_channels(struct ThalamusNode* node) {
   auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
-  ASSERT_SAFE;
-  return interfaces->analog->num_channels(channel);
+  ASSERT_SAFE();
+  return interfaces->analog->num_channels();
 }
 
-uint64_t plugin_analog_sample_interval_ns(struct ThalamusNode* node, int channel) {
+static uint64_t plugin_analog_sample_interval_ns(struct ThalamusNode* node, int channel) {
   auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
-  ASSERT_SAFE;
+  ASSERT_SAFE();
   std::chrono::nanoseconds ns = interfaces->analog->sample_interval(channel);
-  return ns.count();
+  return uint64_t(ns.count());
 }
 
-void plugin_analog_name(ThalamusCharSpan* output, struct ThalamusNode* node, int channel) {
+static void plugin_analog_name(ThalamusCharSpan* output, struct ThalamusNode* node, int channel) {
   auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
-  ASSERT_SAFE;
+  ASSERT_SAFE();
   auto name = interfaces->analog->name(channel);
   output->data = name.data();
   output->size = name.size();
 }
 
-char plugin_analog_has_analog_data(struct ThalamusNode* node) {
+static char plugin_analog_has_analog_data(struct ThalamusNode* node) {
   auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
-  ASSERT_SAFE;
+  ASSERT_SAFE();
   return interfaces->analog->has_analog_data() ? 1 : 0;
 }
 
-char plugin_analog_is_short_data(struct ThalamusNode* node) {
+static char plugin_analog_is_short_data(struct ThalamusNode* node) {
   auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
-  ASSERT_SAFE;
+  ASSERT_SAFE();
   return interfaces->analog->is_short_data() ? 1 : 0;
 }
 
-char plugin_analog_is_int_data(struct ThalamusNode* node) {
+static char plugin_analog_is_int_data(struct ThalamusNode* node) {
   auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
-  ASSERT_SAFE;
+  ASSERT_SAFE();
   return interfaces->analog->is_int_data() ? 1 : 0;
 }
 
-char plugin_analog_is_ulong_data(struct ThalamusNode* node) {
+static char plugin_analog_is_ulong_data(struct ThalamusNode* node) {
   auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
-  ASSERT_SAFE;
+  ASSERT_SAFE();
   return interfaces->analog->is_ulong_data() ? 1 : 0;
 }
 
-char plugin_analog_is_transformed(struct ThalamusNode* node) {
+static char plugin_analog_is_transformed(struct ThalamusNode* node) {
   auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
-  ASSERT_SAFE;
+  ASSERT_SAFE();
   return interfaces->analog->is_transformed() ? 1 : 0;
 }
 
-double plugin_analog_scale(struct ThalamusNode* node, int channel) {
+static double plugin_analog_scale(struct ThalamusNode* node, int channel) {
   auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
-  ASSERT_SAFE;
+  ASSERT_SAFE();
   return interfaces->analog->scale(channel);
 }
 
-double plugin_analog_offset(struct ThalamusNode* node, int channel) {
+static double plugin_analog_offset(struct ThalamusNode* node, int channel) {
   auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
-  ASSERT_SAFE;
+  ASSERT_SAFE();
   return interfaces->analog->offset(channel);
 }
 
@@ -432,10 +439,10 @@ struct NodeGuard {
   NodeGuard(ThalamusNode* node) : interfaces(reinterpret_cast<Interfaces*>(node->impl)) {
     interfaces->safe = true;
   }
-  ~NodeGuard(ThalamusNode* node) {
+  ~NodeGuard() {
     interfaces->safe = false;
   }
-}
+};
 
 struct ThalamusAPIImpl {
   static std::map<ObservableCollection::Value, ThalamusState*>* cpp_to_c;
@@ -447,17 +454,17 @@ struct ThalamusAPIImpl {
   static boost::asio::io_context* io_context;
   static NodeGraph* node_graph;
 
-  static ThalamusNode* wrap_node(std::shared_ptr<Node> node) {
+  static ThalamusNode* wrap_node(Node* node) {
     auto result = new ThalamusNode();
-    memset(&result, 0, sizeof(ThalamusNode));
+    memset(result, 0, sizeof(ThalamusNode));
 
     auto interfaces = new Interfaces();
-    interfaces->node = node.get();
+    interfaces->node = node;
     interfaces->count = 1;
     result->impl = interfaces;
 
     AnalogNode* analog;
-    if((analog = node_cast<AnalogNode*>(node.get()))) {
+    if((analog = node_cast<AnalogNode*>(node))) {
       interfaces->analog = analog;
       result->analog = new ThalamusAnalogNode();
       result->analog->data = plugin_analog_data;
@@ -479,12 +486,12 @@ struct ThalamusAPIImpl {
     return result;
   }
 
-  static ThalamusState* get_node_ref(std::shared_ptr<Node> val) {
-    auto i = node_cpp_to_c->find(val.get());
+  static ThalamusNode* get_node_ref(Node* val) {
+    auto i = node_cpp_to_c->find(val);
     if(i == node_cpp_to_c->end()) {
       auto new_ptr = wrap_node(val);
-      THALAMUS_LOG(info) << "new_state " << get_path(new_ptr->value) << " " << new_ptr->count;
-      (*node_cpp_to_c)[val.get()] = new_ptr;
+      //THALAMUS_LOG(info) << "new_state " << get_path(new_ptr->value) << " " << new_ptr->count;
+      (*node_cpp_to_c)[val] = new_ptr;
       (*node_c_to_cpp)[new_ptr] = val;
       return new_ptr;
     } else {
@@ -872,15 +879,15 @@ struct ThalamusAPIImpl {
 
   static ThalamusNodeGetConnection* node_get_node(struct ThalamusNodeSelector* c_selector, ThalamusNodeGetCallback callback, void* data) {
     thalamus_grpc::NodeSelector selector;
-    if(c_selector.name.data) {
-      selector.set_name(std::string(c_selector.name.data, c_selector.name.size));
+    if(c_selector->name.data) {
+      selector.set_name(std::string(c_selector->name.data, c_selector->name.size));
     }
-    if(c_selector.type.data) {
-      selector.set_type(std::string(c_selector.type.data, c_selector.type.size));
+    if(c_selector->type.data) {
+      selector.set_type(std::string(c_selector->type.data, c_selector->type.size));
     }
 
     auto result = new ThalamusNodeGetConnection();
-    result->connection = graph->get_node_scoped(selector, [callback, data] (auto node) {
+    result->connection = node_graph->get_node_scoped(selector, [callback, data] (auto node) {
       auto ref = get_node_ref(node);
       {
         NodeGuard lock(ref);
@@ -896,12 +903,12 @@ struct ThalamusAPIImpl {
     ++interfaces->count;
   }
 
-  static void node_dec_ref(struct ThalamusNode*) {
+  static void node_dec_ref(struct ThalamusNode* node) {
     auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
     if(--interfaces->count == 0) {
-      node_c_to_cpp->erase(state);
-      node_cpp_to_c->erase(state->value);
-      delete state;
+      node_c_to_cpp->erase(node);
+      node_cpp_to_c->erase(interfaces->node);
+      delete node;
     }
   }
 
@@ -909,9 +916,11 @@ struct ThalamusAPIImpl {
     auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
     
     auto result = new ThalamusNodeReadyConnection();
-    result->connection = interfaces->node->ready.connect([callback, data] (auto) {
-      NodeGuard lock(ref);
-      callback(data);
+    result->node = node;
+    node_inc_ref(node);
+    result->connection = interfaces->node->ready.connect([node, callback, data] (auto) {
+      NodeGuard lock(node);
+      callback(node, data);
     });
     return result;
   }
@@ -920,14 +929,13 @@ struct ThalamusAPIImpl {
     delete conn;
   }
   static void node_ready_disconnect(struct ThalamusNodeReadyConnection* conn) {
+    node_dec_ref(conn->node);
     delete conn;
   }
 };
 
 std::map<ObservableCollection::Value, ThalamusState*>* ThalamusAPIImpl::cpp_to_c = nullptr;
 std::map<ThalamusState*, ObservableCollection::Value>* ThalamusAPIImpl::c_to_cpp = nullptr;
-std::map<ObservableCollection::Value, ThalamusStateConnection*>* ThalamusAPIImpl::cpp_to_c_conns = nullptr;
-std::map<ThalamusStateConnection*, ObservableCollection::Value>* ThalamusAPIImpl::c_to_cpp_conns = nullptr;
 boost::asio::io_context* ThalamusAPIImpl::io_context = nullptr;
 NodeGraph* ThalamusAPIImpl::node_graph = nullptr;
 
@@ -1020,9 +1028,6 @@ public:
     ThalamusAPIImpl::io_context = &io_context;
     ThalamusAPIImpl::node_graph = _outer;
 
-    //ThalamusAPIImpl::cpp_to_c_conns = new std::map<ObservableCollection::Value, ThalamusStateConnection*>();
-    //ThalamusAPIImpl::c_to_cpp_conns = new std::map<ThalamusStateConnection*, ObservableCollection::Value>();
-
     thalamus_api.state_is_dict = ThalamusAPIImpl::state_is_dict;
     thalamus_api.state_is_list = ThalamusAPIImpl::state_is_list;
     thalamus_api.state_is_string = ThalamusAPIImpl::state_is_string;
@@ -1100,6 +1105,12 @@ public:
     thalamus_api.request_respond = ThalamusAPIImpl::request_respond;
     thalamus_api.json_inc_ref = ThalamusAPIImpl::json_inc_ref;
     thalamus_api.json_dec_ref = ThalamusAPIImpl::json_dec_ref;
+
+    thalamus_api.node_get_node = ThalamusAPIImpl::node_get_node;
+    thalamus_api.node_ready_connect = ThalamusAPIImpl::node_ready_connect;
+
+    thalamus_api.node_get_node_disconnect = ThalamusAPIImpl::node_get_node_disconnect;
+    thalamus_api.node_ready_disconnect = ThalamusAPIImpl::node_ready_disconnect;
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},
