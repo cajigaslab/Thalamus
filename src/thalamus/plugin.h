@@ -59,6 +59,10 @@ extern "C" {
     const uint8_t* data;
     uint64_t size;
   };
+  struct ThalamusMutableByteSpan {
+    uint8_t* data;
+    uint64_t size;
+  };
   struct ThalamusCharSpan {
     const char* data;
     uint64_t size;
@@ -241,9 +245,9 @@ extern "C" {
 
     void (*serial_port_read_until)(struct ThalamusSerialPort* port, struct ThalamusStreamBuf* buffer, char* delimiter, size_t delimiter_len, ThalamusIOCallback callback, void* data);
     
-    void (*serial_port_read_some)(struct ThalamusSerialPort* port, struct ThalamusByteSpan* span, ThalamusIOCallback callback, void* data);
+    void (*serial_port_read_some)(struct ThalamusSerialPort* port, struct ThalamusMutableByteSpan* span, ThalamusIOCallback callback, void* data);
 
-    void (*serial_port_read)(struct ThalamusSerialPort* port, struct ThalamusByteSpan* span, ThalamusIOCallback callback, void* data);
+    void (*serial_port_read)(struct ThalamusSerialPort* port, struct ThalamusMutableByteSpan* span, ThalamusIOCallback callback, void* data);
 
     void (*serial_port_write)(struct ThalamusSerialPort* port, struct ThalamusByteSpan* span, ThalamusIOCallback callback, void* data);
 

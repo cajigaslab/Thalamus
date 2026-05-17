@@ -408,8 +408,8 @@ impl SerialPort {
         callback
       });
       let args = Box::into_raw(boxed)  as *mut std::os::raw::c_void;
-      let mut span = ThalamusByteSpan { data: data.as_ptr(), size: data.len() };
-      (api.serial_port_read)(self.port, &mut span as *mut ThalamusByteSpan, Some(io_callback::<T>), args);
+      let mut span = ThalamusMutableByteSpan { data: data.as_mut_ptr(), size: data.len() };
+      (api.serial_port_read)(self.port, &mut span as *mut ThalamusMutableByteSpan, Some(io_callback::<T>), args);
     }
   }
   pub fn read(&self, data: &mut [u8]) -> SimpleFuture<usize, ErrorCode> {
@@ -429,8 +429,8 @@ impl SerialPort {
         callback
       });
       let args = Box::into_raw(boxed)  as *mut std::os::raw::c_void;
-      let mut span = ThalamusByteSpan { data: data.as_ptr(), size: data.len() };
-      (api.serial_port_read_some)(self.port, &mut span as *mut ThalamusByteSpan, Some(io_callback::<T>), args);
+      let mut span = ThalamusMutableByteSpan { data: data.as_mut_ptr(), size: data.len() };
+      (api.serial_port_read_some)(self.port, &mut span as *mut ThalamusMutableByteSpan, Some(io_callback::<T>), args);
     }
   }
   pub fn read_some(&self, data: &mut [u8]) -> SimpleFuture<usize, ErrorCode> {

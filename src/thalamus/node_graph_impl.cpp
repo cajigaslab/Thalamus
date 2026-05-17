@@ -1,4 +1,3 @@
-#include "boost/signals2/connection.hpp"
 #include <cstddef>
 #include <limits>
 #include <thalamus/tracing.hpp>
@@ -57,6 +56,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
 #endif
+#include "boost/signals2/connection.hpp"
 #include <grpcpp/create_channel.h>
 #include <thalamus.grpc.pb.h>
 #ifdef __clang__
@@ -110,6 +110,15 @@ struct ThalamusJson {
 
 struct ThalamusRequestHandle {
   std::function<void(const boost::json::value &)> callback;
+};
+
+struct ThalamusNodeGetConnection {
+  thalamus::NodeGraph::NodeConnection connection;
+};
+
+struct ThalamusNodeReadyConnection {
+  boost::signals2::connection connection;
+  ThalamusNode* node;
 };
 
 namespace thalamus {
@@ -321,20 +330,11 @@ ExtNode::~ExtNode() {
   factory->destroy(factory, node);
 }
 
-struct ThalamusNodeGetConnection {
-  NodeGraph::NodeConnection connection;
-};
-
 struct Interfaces {
   Node* node = nullptr;
   AnalogNode* analog = nullptr;
   bool safe = false;
   int count = 0;
-};
-
-struct ThalamusNodeReadyConnection {
-  boost::signals2::connection connection;
-  ThalamusNode* node;
 };
 
 #define ASSERT_SAFE() do { if(!interfaces->safe) [[unlikely]] { THALAMUS_ABORT("Node should only be accessed in get_node or ready callback"); } } while(0)
@@ -787,14 +787,14 @@ struct ThalamusAPIImpl {
     });
   }
 
-  static void serial_port_read_some(ThalamusSerialPort* port, ThalamusByteSpan* span, ThalamusIOCallback callback, void* data) {
+  static void serial_port_read_some(ThalamusSerialPort* port, ThalamusMutableByteSpan* span, ThalamusIOCallback callback, void* data) {
     port->port.async_read_some(boost::asio::buffer(span->data, span->size), [callback, data] (auto ec, auto count) {
       ThalamusErrorCode err{ec};
       callback(&err, count, data);
     });
   }
 
-  static void serial_port_read(ThalamusSerialPort* port, ThalamusByteSpan* span, ThalamusIOCallback callback, void* data) {
+  static void serial_port_read(ThalamusSerialPort* port, ThalamusMutableByteSpan* span, ThalamusIOCallback callback, void* data) {
     boost::asio::async_read(port->port, boost::asio::buffer(span->data, span->size), [callback, data] (auto ec, auto count) {
       ThalamusErrorCode err{ec};
       callback(&err, count, data);
@@ -888,7 +888,7 @@ struct ThalamusAPIImpl {
 
     auto result = new ThalamusNodeGetConnection();
     result->connection = node_graph->get_node_scoped(selector, [callback, data] (auto node) {
-      auto ref = get_node_ref(node);
+      auto ref = get_node_ref(node.lock().get());
       {
         NodeGuard lock(ref);
         callback(ref, data);

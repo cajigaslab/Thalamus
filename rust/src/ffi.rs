@@ -123,6 +123,13 @@ pub type ThalamusIOCallback = ::std::option::Option<
     unsafe extern "C" fn(err: *mut ThalamusErrorCode, count: usize, data: *mut ::std::os::raw::c_void),
 >;
 
+pub type ThalamusNodeGetCallback = ::std::option::Option<
+    unsafe extern "C" fn(err: *mut ThalamusNode, data: *mut ::std::os::raw::c_void),
+>;
+pub type ThalamusNodeReadyCallback = ::std::option::Option<
+    unsafe extern "C" fn(err: *mut ThalamusNode, data: *mut ::std::os::raw::c_void),
+>;
+
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ThalamusAPIRaw {
@@ -198,9 +205,9 @@ pub struct ThalamusAPIRaw {
     
     pub serial_port_read_until: unsafe extern "C" fn(*mut ThalamusSerialPort, *mut ThalamusStreamBuf, *const ::std::os::raw::c_char, usize, ThalamusIOCallback, *mut ::std::os::raw::c_void),
 
-    pub serial_port_read_some: unsafe extern "C" fn(*mut ThalamusSerialPort, *mut ThalamusByteSpan, ThalamusIOCallback, *mut ::std::os::raw::c_void),
+    pub serial_port_read_some: unsafe extern "C" fn(*mut ThalamusSerialPort, *mut ThalamusMutableByteSpan, ThalamusIOCallback, *mut ::std::os::raw::c_void),
 
-    pub serial_port_read: unsafe extern "C" fn(*mut ThalamusSerialPort, *mut ThalamusByteSpan, ThalamusIOCallback, *mut ::std::os::raw::c_void),
+    pub serial_port_read: unsafe extern "C" fn(*mut ThalamusSerialPort, *mut ThalamusMutableByteSpan, ThalamusIOCallback, *mut ::std::os::raw::c_void),
 
     pub serial_port_write: unsafe extern "C" fn(*mut ThalamusSerialPort, *mut ThalamusByteSpan, ThalamusIOCallback, *mut ::std::os::raw::c_void),
 
@@ -220,6 +227,25 @@ pub struct ThalamusAPIRaw {
 
     pub json_inc_ref: unsafe extern "C" fn(*mut ThalamusJson),
     pub json_dec_ref: unsafe extern "C" fn(*mut ThalamusJson),
+
+    pub node_get_node: unsafe extern "C" fn(*mut ThalamusNodeSelector, ThalamusNodeGetCallback, *mut ::std::os::raw::c_void) -> *mut ThalamusNodeGetConnection,
+
+    pub node_ready_connect: unsafe extern "C" fn(*mut ThalamusNode, ThalamusNodeReadyCallback, *mut ::std::os::raw::c_void) -> *mut ThalamusNodeReadyConnection,
+
+    pub node_get_node_disconnect: unsafe extern "C" fn(*mut ThalamusNodeGetConnection),
+    pub node_ready_disconnect: unsafe extern "C" fn(*mut ThalamusNodeReadyConnection),
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ThalamusNodeGetConnection {
+    _unused: [u8; 0],
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ThalamusNodeReadyConnection {
+    _unused: [u8; 0],
 }
 
 #[repr(C)]
@@ -321,6 +347,19 @@ pub struct ThalamusCharSpan {
 pub struct ThalamusByteSpan {
     pub data: *const u8,
     pub size: usize,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ThalamusMutableByteSpan {
+    pub data: *mut u8,
+    pub size: usize,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ThalamusNodeSelector {
+  pub name: ThalamusCharSpan,
+  pub _type: ThalamusCharSpan,
 }
 
 #[repr(C)]

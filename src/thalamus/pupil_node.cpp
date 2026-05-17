@@ -169,10 +169,10 @@ struct PupilNode::Impl {
     } else if(key_str == "Random Saccade") {
       random_saccade = std::get<bool>(v);
     } else if(key_str == "Width") {
-      width = std::get<int64_t>(v);
+      width = int(std::get<int64_t>(v));
       init_cairo();
     } else if(key_str == "Height") {
-      height = std::get<int64_t>(v);
+      height = int(std::get<int64_t>(v));
       init_cairo();
     }
   }
