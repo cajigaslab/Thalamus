@@ -234,6 +234,11 @@ pub struct ThalamusAPIRaw {
 
     pub node_get_node_disconnect: unsafe extern "C" fn(*mut ThalamusNodeGetConnection),
     pub node_ready_disconnect: unsafe extern "C" fn(*mut ThalamusNodeReadyConnection),
+
+    pub node_channels_changed: unsafe extern "C" fn(*mut ThalamusNode),
+
+    pub node_channels_changed_connect: unsafe extern "C" fn(*mut ThalamusNode, ThalamusNodeReadyCallback, *mut ::std::os::raw::c_void) -> *mut ThalamusNodeReadyConnection,
+    pub node_channels_changed_disconnect: unsafe extern "C" fn(*mut ThalamusNodeReadyConnection),
 }
 
 #[repr(C)]

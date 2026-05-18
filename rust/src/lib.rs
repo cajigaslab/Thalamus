@@ -23,7 +23,7 @@ use api::{
 use futures::select;
 //use regex::Regex;
 
-use crate::api::{Json, Sleeper, SleeperWaker, SliceDeref, StateKey, TaskScope, ThalamusAPI, run_task};
+use crate::api::{ExtNode, Json, Sleeper, SleeperWaker, SliceDeref, StateKey, StrDeref, TaskScope, ThalamusAPI, run_task};
 
 enum Message {
   Running(bool),
@@ -68,7 +68,7 @@ impl AnalogNode for DemoNode {
   fn name(
           &self,
           _channel: i32,
-      ) -> &str {
+      ) -> impl Deref<Target = str> {
         "data"
       }
 }
@@ -465,7 +465,7 @@ impl AnalogNode for SerialNode {
   fn name(
           &self,
           _channel: i32,
-      ) -> &str {
+      ) -> impl Deref<Target = str> {
       match _channel {
           0 => "ch1",
           1 => "ch2",
@@ -517,7 +517,166 @@ impl Drop for SerialNode {
   }
 }
 
+struct AlgebraNodeInner {
+  state: State,
+  state_connection: RefCell<Option<OnDrop>>,
+  api: ThalamusAPI,
+  samples: RefCell<Vec<f64>>,
+  time: RefCell<Duration>,
+  get_node: RefCell<OnDrop>,
+  node_ready: RefCell<OnDrop>,
+  scale: RefCell<f64>,
+  sample_interval: RefCell<Duration>,
+  channel_name: RefCell<String>
+}
+
+struct AlgebraNode {
+  inner: Rc<AlgebraNodeInner>
+}
+
+impl AlgebraNodeInner {
+  fn on_data(&self, node: &ExtNode) {
+    let Some(analog) = node.analog() else {
+      return;
+    };
+
+    if !analog.has_analog_data() {
+      return;
+    }
+
+    if analog.num_channels() < 1 {
+      return;
+    }
+    
+    {
+      let scale = *self.scale.borrow();
+      let mut samples = self.samples.borrow_mut();
+      samples.clear();
+      for ele in analog.data(0) {
+        samples.push(scale*ele);
+      }
+
+      let mut current_sample_interval = self.sample_interval.borrow_mut();
+      let new_sample_interval = analog.sample_interval(0);
+      if *current_sample_interval != new_sample_interval {
+        *current_sample_interval = new_sample_interval;
+        self.api.channels_changed();
+      }
+
+      let mut current_channel_name = self.channel_name.borrow_mut();
+      let new_channel_name = analog.name(0);
+      if *current_channel_name != new_channel_name {
+        *current_channel_name = new_channel_name.to_string();
+        self.api.channels_changed();
+      }
+    }
+
+    self.api.ready();
+  }
+
+  fn on_change(self: Rc<Self>, _source: &State, _action: i32, key: StateValue, value: StateValue) {
+    println!("DemoNode::on_change {:?} {:?}", key, value);
+    let StateValue::String(key_str) = key else {
+      return
+    };
+
+    match key_str.as_str() {
+      "Node" => {
+        let StateValue::String(val) = value else {
+          return
+        };
+        let weak = Rc::downgrade(&self);
+        *self.get_node.borrow_mut() = self.api.get_node(api::NodeSelector::Name(&val), move |node| {
+          let weak2 = Weak::clone(&weak);
+          weak.upgrade().map(|this| {
+            *this.node_ready.borrow_mut() = node.subscribe(move |node| {
+
+              weak2.upgrade().map(|this| {
+                this.on_data(node);
+              });
+
+            });
+          });
+        });
+      },
+      "Scale" => {
+        if let StateValue::Float(val) = value {
+          *self.scale.borrow_mut() = val;
+        }
+      }
+      _ => {}
+    }
+  }
+}
+
+impl AnalogNode for AlgebraNode {
+  fn data(
+          &self,
+          _channel: i32,
+      ) -> impl Deref<Target = [f64]> {
+    
+      match _channel {
+          0 => SliceDeref::new(self.inner.samples.borrow(), None, None),
+          _ => SliceDeref::new(self.inner.samples.borrow(), Some(0), Some(0))
+      }
+  }
+
+  fn num_channels(&self) -> i32 { 1 }
+  fn sample_interval(&self, _channel: i32) -> Duration {
+    *self.inner.sample_interval.borrow()
+  }
+  fn name(
+          &self,
+          _channel: i32,
+      ) -> impl Deref<Target = str> {
+      match _channel {
+          0 => StrDeref{ inner: self.inner.channel_name.borrow() },
+          _ => panic!("Error")
+      }
+  }
+}
+
+impl Node for AlgebraNode {
+  fn time(&self) -> Duration {
+    *self.inner.time.borrow()
+  }
+  
+  fn process(&self, _: api::Request, _: api::Json) {
+    panic!("Unimplemented")
+  }
+
+  fn new(api: ThalamusAPI, state: State) -> Self {
+    let inner = Rc::new(AlgebraNodeInner {
+      state: state.clone(),
+      state_connection: RefCell::new(None),
+      api,
+      samples: RefCell::new(Vec::<f64>::new()),
+      time: RefCell::new(Duration::from_millis(0)),
+      get_node: RefCell::new(OnDrop::noop()),
+      node_ready: RefCell::new(OnDrop::noop()),
+      scale: RefCell::new(1.0),
+      sample_interval: RefCell::new(Duration::from_secs(0)),
+      channel_name: RefCell::new("".to_string()),
+    });
+
+    let change_ref = Rc::downgrade(&inner);
+    let callback = move |source: &State, action: i32, key: StateValue, value: StateValue| {
+      change_ref.upgrade().map(|val| {
+        val.on_change(source, action, key, value);
+      });
+    };
+    {
+      let mut temp = inner.state_connection.borrow_mut();
+      *temp = Some(inner.state.connect(callback));
+    }
+    state.recap();
+
+    AlgebraNode { inner }
+  }
+}
+
 export_nodes!(
   ("EXT_DEMO", DemoNode),
-  ("EXT_SERIAL", SerialNode)
+  ("EXT_SERIAL", SerialNode),
+  ("EXT_ALGEBRA", AlgebraNode)
 );

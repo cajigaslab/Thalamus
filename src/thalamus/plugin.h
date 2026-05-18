@@ -274,6 +274,11 @@ extern "C" {
 
     void (*node_get_node_disconnect)(struct ThalamusNodeGetConnection*);
     void (*node_ready_disconnect)(struct ThalamusNodeReadyConnection*);
+
+    void (*node_channels_changed)(struct ThalamusNode*);
+
+    ThalamusNodeReadyConnection* (*node_channels_changed_connect)(struct ThalamusNode*, ThalamusNodeReadyCallback callback, void* data);
+    void (*node_channels_changed_disconnect)(struct ThalamusNodeReadyConnection*);
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories)(struct ThalamusAPI*);

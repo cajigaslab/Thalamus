@@ -113,11 +113,11 @@ struct ThalamusRequestHandle {
 };
 
 struct ThalamusNodeGetConnection {
-  thalamus::NodeGraph::NodeConnection connection;
+  boost::signals2::scoped_connection connection;
 };
 
 struct ThalamusNodeReadyConnection {
-  boost::signals2::connection connection;
+  boost::signals2::scoped_connection connection;
   ThalamusNode* node;
 };
 
@@ -932,6 +932,29 @@ struct ThalamusAPIImpl {
     node_dec_ref(conn->node);
     delete conn;
   }
+
+  static void node_channels_changed(struct ThalamusNode* node) {
+    auto ext_node = reinterpret_cast<ExtNode*>(node->impl);
+    ext_node->channels_changed(ext_node);
+  }
+
+  static ThalamusNodeReadyConnection* node_channels_changed_connect(struct ThalamusNode* node, ThalamusNodeReadyCallback callback, void* data) {
+    auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+    
+    auto result = new ThalamusNodeReadyConnection();
+    result->node = node;
+    node_inc_ref(node);
+    result->connection = interfaces->analog->channels_changed.connect([node, callback, data] (auto) {
+      NodeGuard lock(node);
+      callback(node, data);
+    });
+    return result;
+  }
+
+  static void node_channels_changed_disconnect(struct ThalamusNodeReadyConnection* conn) {
+    node_dec_ref(conn->node);
+    delete conn;
+  }
 };
 
 std::map<ObservableCollection::Value, ThalamusState*>* ThalamusAPIImpl::cpp_to_c = nullptr;
@@ -1111,6 +1134,10 @@ public:
 
     thalamus_api.node_get_node_disconnect = ThalamusAPIImpl::node_get_node_disconnect;
     thalamus_api.node_ready_disconnect = ThalamusAPIImpl::node_ready_disconnect;
+    thalamus_api.node_channels_changed = ThalamusAPIImpl::node_channels_changed;
+    
+    thalamus_api.node_channels_changed_connect = ThalamusAPIImpl::node_channels_changed_connect;
+    thalamus_api.node_channels_changed_disconnect = ThalamusAPIImpl::node_channels_changed_disconnect;
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},

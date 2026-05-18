@@ -22,6 +22,16 @@ struct PostArgs<T> {
   call: T
 }
 
+struct GetNodeArgs<T> {
+  api: *mut ThalamusAPIRaw,
+  callback: T
+}
+
+struct NodeReadyArgs<T> {
+  api: *mut ThalamusAPIRaw,
+  callback: T
+}
+
 unsafe extern "C" fn post_callback<T: FnMut()>(data: *mut ::std::os::raw::c_void) {
   let mut args = unsafe {
     let raw_args = &mut*(data as *mut PostArgs<T>);
@@ -30,12 +40,210 @@ unsafe extern "C" fn post_callback<T: FnMut()>(data: *mut ::std::os::raw::c_void
   (args.call)();
 }
 
+pub struct ExtNode {
+  api: *mut ThalamusAPIRaw,
+  node: *mut ThalamusNode
+}
+
+impl ExtNode {
+  pub fn time(&self) -> Duration {
+    let ns = unsafe {
+      ((*self.node).time_ns).unwrap()(self.node)
+    };
+    Duration::from_nanos(ns)
+  }
+
+  pub fn subscribe<T: FnMut(&ExtNode) + 'static>(&self, callback: T) -> OnDrop {
+    let call_ptr = Box::into_raw(Box::new(NodeReadyArgs {
+      api: self.api,
+      callback
+    }));
+    let void_ptr = call_ptr as *mut std::os::raw::c_void;
+
+    let connection = unsafe {
+      ((&*self.api).node_ready_connect)(self.node, Some(node_ready_callback::<T>), void_ptr)
+    };
+    let api = self.api;
+    let cleanup = move || {
+      unsafe {
+        ((&*api).node_ready_disconnect)(connection);
+        drop(Box::from_raw(call_ptr));
+      }
+    };
+    OnDrop { action: Box::new(cleanup) }
+  }
+
+  pub fn analog<'a>(&'a self) -> Option<ExtAnalogNode<'a>> {
+    let analog = unsafe {
+      (*self.node).analog
+    };
+    if analog.is_null() {
+      None
+    } else {
+      Some(ExtAnalogNode { node: self, analog })
+    }
+  }
+}
+
+pub struct ExtAnalogNode<'a> {
+  node: &'a ExtNode,
+  analog: *mut ThalamusAnalogNode,
+}
+
+impl<'a> ExtAnalogNode<'a> {
+  pub fn subscribe_channels_changed<T: FnMut(&ExtNode) + 'static>(&self, callback: T) -> OnDrop {
+    let call_ptr = Box::into_raw(Box::new(NodeReadyArgs {
+      api: self.node.api,
+      callback
+    }));
+    let void_ptr = call_ptr as *mut std::os::raw::c_void;
+
+    let connection = unsafe {
+      ((&*self.node.api).node_channels_changed_connect)(self.node.node, Some(node_ready_callback::<T>), void_ptr)
+    };
+    let api = self.node.api;
+    let cleanup = move || {
+      unsafe {
+        ((&*api).node_channels_changed_disconnect)(connection);
+        drop(Box::from_raw(call_ptr));
+      }
+    };
+    OnDrop { action: Box::new(cleanup) }
+  }
+
+  pub fn data(
+      &self,
+      channel: i32) -> &[f64] {
+    let mut span = ThalamusDoubleSpan { data : null(), size: 0 };
+    unsafe {
+      let data = (*self.analog).data.unwrap();
+      data(&mut span as *mut ThalamusDoubleSpan, self.node.node, channel);
+      std::slice::from_raw_parts(span.data, span.size)
+    }
+  }
+
+  pub fn short_data(
+          &self,
+          channel: i32) -> &[i16] {
+    let mut span = ThalamusShortSpan { data : null(), size: 0 };
+    unsafe {
+      let data = (*self.analog).short_data.unwrap();
+      data(&mut span as *mut ThalamusShortSpan, self.node.node, channel);
+      std::slice::from_raw_parts(span.data, span.size)
+    }
+  }
+
+  pub fn int_data(
+          &self,
+          channel: i32) -> &[i32] {
+    let mut span = ThalamusIntSpan { data : null(), size: 0 };
+    unsafe {
+      let data = (*self.analog).int_data.unwrap();
+      data(&mut span as *mut ThalamusIntSpan, self.node.node, channel);
+      std::slice::from_raw_parts(span.data, span.size)
+    }
+  }
+  pub fn ulong_data(
+          &self,
+          channel: i32,
+  ) -> &'a [u64] {
+    let mut span = ThalamusULongSpan { data : null(), size: 0 };
+    unsafe {
+      let data = (*self.analog).ulong_data.unwrap();
+      data(&mut span as *mut ThalamusULongSpan, self.node.node, channel);
+      std::slice::from_raw_parts(span.data, span.size)
+    }
+  }
+
+  pub fn num_channels(&self) -> i32 {
+    unsafe {
+      let num_channels = (*self.analog).num_channels.unwrap();
+      num_channels(self.node.node)
+    }
+  }
+  pub fn sample_interval(&self, channel: i32) -> Duration {
+    unsafe {
+      let sample_interval_ns = (*self.analog).sample_interval_ns.unwrap();
+      Duration::from_nanos(sample_interval_ns(self.node.node, channel))
+    }
+  }
+  pub fn name(
+          &self,
+          channel: i32) -> &str {
+    let mut span = ThalamusByteSpan { data : null(), size: 0 };
+    unsafe {
+      let name_func = (*self.analog).name.unwrap();
+      name_func(&mut span as *mut ThalamusByteSpan, self.node.node, channel);
+      let slice = std::slice::from_raw_parts(span.data, span.size);
+      std::str::from_utf8(slice).unwrap()
+    }
+  }
+  pub fn has_analog_data(&self) -> bool {
+    unsafe {
+      ((*self.analog).has_analog_data.unwrap())(self.node.node) != 0
+    }
+  }
+  pub fn is_short_data(&self) -> bool {
+    unsafe {
+      ((*self.analog).is_short_data.unwrap())(self.node.node) != 0
+    }
+  }
+  pub fn is_int_data(&self) -> bool {
+    unsafe {
+      ((*self.analog).is_int_data.unwrap())(self.node.node) != 0
+    }
+  }
+  pub fn is_ulong_data(&self) -> bool {
+    unsafe {
+      ((*self.analog).is_ulong_data.unwrap())(self.node.node) != 0
+    }
+  }
+  pub fn is_transformed(&self) -> bool {
+    unsafe {
+      ((*self.analog).is_transformed.unwrap())(self.node.node) != 0
+    }
+  }
+  pub fn scale(&self, channel: i32) -> f64 {
+    unsafe {
+      ((*self.analog).scale.unwrap())(self.node.node, channel)
+    }
+  }
+  pub fn offset(&self, channel: i32) -> f64 {
+    unsafe {
+      ((*self.analog).offset.unwrap())(self.node.node, channel)
+    }
+  }
+}
+
+unsafe extern "C" fn node_ready_callback<T: FnMut(&ExtNode)>(node: *mut ThalamusNode, data: *mut ::std::os::raw::c_void) {
+  let args = unsafe {
+    &mut*(data as *mut NodeReadyArgs<T>)
+  };
+
+  let ext_node = ExtNode {api: args.api, node};
+  (args.callback)(&ext_node);
+}
+
+unsafe extern "C" fn get_node_callback<T: FnMut(&ExtNode)>(node: *mut ThalamusNode, data: *mut ::std::os::raw::c_void) {
+  let args = unsafe {
+    &mut*(data as *mut GetNodeArgs<T>)
+  };
+
+  let ext_node = ExtNode {api: args.api, node};
+  (args.callback)(&ext_node);
+}
+
 #[derive(Debug,PartialEq,Copy,Clone)]
 pub struct ThalamusAPI {
   pub raw: *mut ThalamusAPIRaw,
   pub node: *mut ThalamusNode
 }
 unsafe impl Send for ThalamusAPI {}
+
+pub enum NodeSelector<'a> {
+  Name(&'a str),
+  Type(&'a String)
+}
 
 impl ThalamusAPI {
   pub fn time(&self) -> Duration {
@@ -49,6 +257,13 @@ impl ThalamusAPI {
     unsafe {
       let node_ready = (&*self.raw).node_ready;
       node_ready(self.node);
+    }
+  }
+
+  pub fn channels_changed(&self) {
+    unsafe {
+      let node_channels_changed = (&*self.raw).node_channels_changed;
+      node_channels_changed(self.node);
     }
   }
 
@@ -102,6 +317,42 @@ impl ThalamusAPI {
     }
   }
 
+  pub fn get_node<T: FnMut(&ExtNode) + 'static>(&self, selector: NodeSelector, callback: T) -> OnDrop {
+    let mut c_selector = ThalamusNodeSelector {
+      name: ThalamusCharSpan { data: null(), size: 0, owns_data: 0 },
+      _type: ThalamusCharSpan { data: null(), size: 0, owns_data: 0 }
+    };
+
+    match selector {
+      NodeSelector::Name(val) => {
+        c_selector.name.data = val.as_ptr() as *const i8;
+        c_selector.name.size = val.len();
+      },
+      NodeSelector::Type(val) => {
+        c_selector._type.data = val.as_ptr() as *const i8;
+        c_selector._type.size = val.len();
+      }
+    };
+
+    let call_ptr = Box::into_raw(Box::new(GetNodeArgs {
+        api: self.raw,
+        callback
+    }));
+    let void_ptr = call_ptr as *mut std::os::raw::c_void;
+
+    let connection = unsafe {
+      ((&*self.raw).node_get_node)(&mut c_selector as *mut ThalamusNodeSelector, Some(get_node_callback::<T>), void_ptr)
+    };
+
+    let api = self.raw;
+    let cleanup = move || {
+      unsafe {
+        ((&*api).node_get_node_disconnect)(connection);
+        drop(Box::from_raw(call_ptr));
+      };
+    };
+    OnDrop { action: Box::new(cleanup) }
+  }
 }
 
 pub struct Json {
@@ -880,6 +1131,12 @@ pub struct OnDrop {
   action: Box<dyn FnMut()>
 }
 
+impl OnDrop {
+  pub fn noop() -> OnDrop {
+    OnDrop { action: Box::new(|| {}) }
+  }
+}
+
 impl Drop for OnDrop {
   fn drop(&mut self) {
     (self.action)();
@@ -937,6 +1194,18 @@ pub trait Node {
 //    }
 //  }
 //}
+
+pub struct StrDeref<T: Deref<Target = String>> {
+  pub inner: T,
+}
+
+impl<T: Deref<Target = String>> Deref for StrDeref<T> {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+      self.inner.as_str()
+    }
+}
 
 pub struct SliceDeref<T: Deref<Target = Vec<f64>>> {
   inner: T,
@@ -1002,7 +1271,7 @@ pub trait AnalogNode {
   fn name(
           &self,
           channel: ::std::os::raw::c_int,
-      ) -> &str;
+      ) -> impl Deref<Target = str>;
   fn has_analog_data(&self) -> bool{
         true
       }
