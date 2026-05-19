@@ -3,7 +3,7 @@
     {
       "name": "Cam Rear",
       "type": "GENICAM",
-      "Running": true,
+      "Running": false,
       "View": true,
       "Camera": "Spinnaker_GenTL:17278772",
       "WidthMax": 1280,
@@ -176,7 +176,7 @@
     {
       "name": "Experiment",
       "type": "RUNNER2",
-      "Running": true,
+      "Running": false,
       "Targets": [
         {
           "Name": "Cam Rear",
@@ -248,7 +248,7 @@
     {
       "name": "Cam Left",
       "type": "GENICAM",
-      "Running": true,
+      "Running": false,
       "View": true,
       "Camera": "Spinnaker_GenTL:18299726",
       "WidthMax": 1280,
@@ -281,7 +281,7 @@
     {
       "name": "Cam Top",
       "type": "GENICAM",
-      "Running": true,
+      "Running": false,
       "View": true,
       "Camera": "VimbaUSBTL:DEV_1AB228000429",
       "WidthMax": 1280,
@@ -314,7 +314,7 @@
     {
       "name": "Cam Eye",
       "type": "GENICAM",
-      "Running": true,
+      "Running": false,
       "View": true,
       "Camera": "VimbaUSBTL:DEV_1AB228001040",
       "WidthMax": 1280,
@@ -362,7 +362,7 @@
       "name": "Storage",
       "type": "STORAGE2",
       "Running": false,
-      "Output File": "/mnt/sraid/Eeve_Behavior_AlexRig/%y%m%d/behave",
+      "Output File": "/mnt/sraid/Eevee_Behavior_AlexRig/%y%m%d/behave",
       "Compress Analog": false,
       "Compress Video": true,
       "Sources": [
@@ -473,7 +473,7 @@
       "name": "experiment",
       "type": "STORAGE2",
       "Running": false,
-      "Output File": "/mnt/sraid/Eeve_Behavior_AlexRig/%y%m%d/behave",
+      "Output File": "/mnt/sraid/Eevee_Behavior_AlexRig/%y%m%d/behave",
       "Compress Analog": false,
       "Compress Video": false,
       "Sources": [],
@@ -506,7 +506,7 @@
     {
       "name": "Reward out",
       "type": "NIDAQ_OUT",
-      "Running": true,
+      "Running": false,
       "Source": "Reward",
       "Fast Foward": false,
       "Channel": "Dev1/ao0",
@@ -516,7 +516,7 @@
     {
       "name": "Analog in",
       "type": "NIDAQ",
-      "Running": true,
+      "Running": false,
       "Sample Rate": 1000.0,
       "Poll Interval": 16,
       "Zero Latency": false,
@@ -551,7 +551,7 @@
       "type": "SERIAL_TOUCH_SCREEN",
       "Port": "/dev/ttyUSB0",
       "No Touch Timeout (ms)": 1000,
-      "Running": true
+      "Running": false
     },
     {
       "name": "Node 3",
@@ -585,7 +585,7 @@
     {
       "name": "Fiducial Out",
       "type": "NIDAQ_OUT",
-      "Running": true,
+      "Running": false,
       "Source": "Fiducial",
       "Fast Foward": false,
       "Channel": "Dev1/port0/line1",
@@ -710,13 +710,13 @@
       "X Center": 480,
       "Y Center": 514,
       "Dead Zone": 15,
-      "Running": true
+      "Running": false
     }
   ],
   "thalamus_view_geometry": [
     100,
     100,
-    384,
+    825,
     768
   ],
   "data_views": [
@@ -803,7 +803,7 @@
       "node": "Storage",
       "dock_area": "right",
       "view_geometry": [
-        190,
+        631,
         23,
         194,
         745
@@ -910,7 +910,7 @@
   "task_clusters": [
     {
       "type": "task_cluster",
-      "name": "Bowser",
+      "name": "Eevee",
       "weight": 0,
       "tasks": [
         {
