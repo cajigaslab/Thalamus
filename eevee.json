@@ -3,7 +3,7 @@
     {
       "name": "Cam Rear",
       "type": "GENICAM",
-      "Running": false,
+      "Running": true,
       "View": true,
       "Camera": "Spinnaker_GenTL:17278772",
       "WidthMax": 1280,
@@ -176,7 +176,7 @@
     {
       "name": "Experiment",
       "type": "RUNNER2",
-      "Running": false,
+      "Running": true,
       "Targets": [
         {
           "Name": "Cam Rear",
@@ -248,7 +248,7 @@
     {
       "name": "Cam Left",
       "type": "GENICAM",
-      "Running": false,
+      "Running": true,
       "View": true,
       "Camera": "Spinnaker_GenTL:18299726",
       "WidthMax": 1280,
@@ -281,7 +281,7 @@
     {
       "name": "Cam Top",
       "type": "GENICAM",
-      "Running": false,
+      "Running": true,
       "View": true,
       "Camera": "VimbaUSBTL:DEV_1AB228000429",
       "WidthMax": 1280,
@@ -295,7 +295,7 @@
       "Gain": 0.0,
       "view_geometry": [
         66,
-        1723,
+        1722,
         566,
         455
       ],
@@ -314,7 +314,7 @@
     {
       "name": "Cam Eye",
       "type": "GENICAM",
-      "Running": false,
+      "Running": true,
       "View": true,
       "Camera": "VimbaUSBTL:DEV_1AB228001040",
       "WidthMax": 1280,
@@ -458,13 +458,13 @@
           "Text": true
         }
       ],
-      "rec": 2,
-      "start": 3895991.402277042,
+      "rec": 1,
+      "start": 4070909.254781225,
       "Files": [],
       "Metadata": [
         {
           "Key": "Rec",
-          "Value": 2
+          "Value": 1
         }
       ],
       "Simple Copy": false
@@ -506,7 +506,7 @@
     {
       "name": "Reward out",
       "type": "NIDAQ_OUT",
-      "Running": false,
+      "Running": true,
       "Source": "Reward",
       "Fast Foward": false,
       "Channel": "Dev1/ao0",
@@ -516,7 +516,7 @@
     {
       "name": "Analog in",
       "type": "NIDAQ",
-      "Running": false,
+      "Running": true,
       "Sample Rate": 1000.0,
       "Poll Interval": 16,
       "Zero Latency": false,
@@ -551,7 +551,7 @@
       "type": "SERIAL_TOUCH_SCREEN",
       "Port": "/dev/ttyUSB0",
       "No Touch Timeout (ms)": 1000,
-      "Running": false
+      "Running": true
     },
     {
       "name": "Node 3",
@@ -585,7 +585,7 @@
     {
       "name": "Fiducial Out",
       "type": "NIDAQ_OUT",
-      "Running": false,
+      "Running": true,
       "Source": "Fiducial",
       "Fast Foward": false,
       "Channel": "Dev1/port0/line1",
@@ -710,13 +710,13 @@
       "X Center": 480,
       "Y Center": 514,
       "Dead Zone": 15,
-      "Running": false
+      "Running": true
     }
   ],
   "thalamus_view_geometry": [
     100,
     100,
-    825,
+    384,
     768
   ],
   "data_views": [
@@ -803,7 +803,7 @@
       "node": "Storage",
       "dock_area": "right",
       "view_geometry": [
-        631,
+        190,
         23,
         194,
         745
@@ -7546,9 +7546,9 @@
           "targets": [
             {
               "name": "Target 1",
-              "enabled": true,
-              "x_norm": 0.187,
-              "y_norm": 0.511,
+              "enabled": false,
+              "x_norm": 0.17,
+              "y_norm": 0.496,
               "radius_ratio": 0.2,
               "hold_time": 0.1,
               "reward_channel": 2,
@@ -7561,8 +7561,8 @@
             {
               "name": "Target 1 Copy",
               "enabled": true,
-              "x_norm": 0.498,
-              "y_norm": 0.728,
+              "x_norm": 0.5059523809523809,
+              "y_norm": 0.8448160980810234,
               "radius_ratio": 0.2,
               "hold_time": 0.1,
               "reward_channel": 2,
@@ -7575,8 +7575,8 @@
             {
               "name": "Target 1 Copy",
               "enabled": true,
-              "x_norm": 0.48335974643423135,
-              "y_norm": 0.2853442770300637,
+              "x_norm": 0.5044642857142857,
+              "y_norm": 0.20515724946695102,
               "radius_ratio": 0.2,
               "hold_time": 0.1,
               "reward_channel": 2,
@@ -7588,9 +7588,9 @@
             },
             {
               "name": "Target 1 Copy",
-              "enabled": true,
-              "x_norm": 0.8256735340729001,
-              "y_norm": 0.5053220427182629,
+              "enabled": false,
+              "x_norm": 0.826,
+              "y_norm": 0.505,
               "radius_ratio": 0.2,
               "hold_time": 0.1,
               "reward_channel": 2,
@@ -7637,10 +7637,10 @@
           "show_hold_progress_ring": true,
           "show_success_pop": true,
           "success_pop_duration_s": 0.12,
-          "up_influence_pct": 52,
-          "down_influence_pct": 50,
-          "left_influence_pct": 51,
-          "right_influence_pct": 51,
+          "up_influence_pct": 80,
+          "down_influence_pct": 79,
+          "left_influence_pct": 0,
+          "right_influence_pct": 0,
           "ignore_idle_trial_failures": true,
           "state_indicator_x": 30.0,
           "state_indicator_y": 70.0,
