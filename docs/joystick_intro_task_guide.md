@@ -17,6 +17,7 @@ In normal task mode:
 In free-play mode:
 - No target-based trial logic is used.
 - The subject can move the cursor freely.
+- Free-play can optionally reward joystick exploration without any target.
 - The task ends when the configured key is released.
 
 ## Operator View Overlay
@@ -126,7 +127,45 @@ In this task, the most common failure is timeout before successful hold completi
 1. A single free-play attempt record is created.
 2. The task still begins with `BehavState=intertrial`.
 3. The subject can move the cursor around without target success/fail logic.
-4. When the configured end key is released, the run ends as a successful free-play exit.
+4. If free-play reward is enabled, analog joystick activity can trigger reward.
+5. When the configured end key is released, the run ends as a successful free-play exit.
+
+## Cursor-Only Free-Play Reward
+
+Cursor-only free-play mode can optionally reward joystick exploration. This is intended for the earliest learning stage, where simply contacting or moving the joystick should be reinforced before target acquisition is required.
+
+This reward path is only used when `cursor_only_mode` is `true`. Normal target-based trials are unchanged.
+
+### Free-play reward settings
+
+### `free_play_reward_enabled`
+Whether joystick exploration reward is enabled during cursor-only free play.
+The default is `false`, preserving the previous free-play behavior.
+
+### `free_play_reward_policy`
+How free-play joystick activity is rewarded.
+
+Supported values:
+- `touch_bouts`: reward each time the analog joystick crosses from inactive to active, subject to cooldown
+- `first_touch`: reward only the first active joystick contact in the free-play attempt
+- `timed_active`: reward repeatedly while the analog joystick remains active, subject to cooldown
+
+### `free_play_reward_threshold`
+Analog joystick magnitude needed to count as active for free-play reward.
+If this is `0.0`, the task uses the same movement threshold as the zero-drift setting.
+
+### `free_play_reward_cooldown_s`
+Minimum time between free-play rewards.
+This prevents reward from being delivered every frame.
+
+### `free_play_reward_channel`
+Reward channel used for free-play rewards.
+By default, this follows the top-level `reward_channel`.
+
+### Important free-play reward note
+
+Free-play reward uses the raw analog joystick input, not the operator keyboard arrow-key override. This keeps the reward tied to physical joystick contact or movement.
+Each triggered free-play reward also plays the task success sound as an immediate audio cue.
 
 ## Control Modes
 
@@ -234,6 +273,7 @@ Pulled from the selected target configuration at target onset.
 ### `reward_channel`
 Reward channel selected for that target on that attempt.
 If an older target config does not provide this field, the task falls back to the top-level `reward_channel`.
+In cursor-only free-play mode, target reward fields are not used; free-play reward fields describe exploratory reward instead.
 
 ### `target_color_rgb`
 The displayed target color at target onset.
@@ -284,6 +324,30 @@ If no hold ever began, this is `None`.
 ### `success_time_s`
 For successful attempts, this matches the attempt duration.
 For non-successful attempts, this is `None`.
+
+### `free_play_reward_enabled`
+Only used in cursor-only free-play mode.
+Whether exploratory joystick reward was enabled for the attempt.
+
+### `free_play_reward_policy`
+Only used in cursor-only free-play mode.
+The free-play reward policy used for the attempt.
+
+### `free_play_reward_threshold`
+Only used in cursor-only free-play mode.
+Joystick magnitude threshold used to count analog joystick activity.
+
+### `free_play_reward_cooldown_s`
+Only used in cursor-only free-play mode.
+Minimum seconds between exploratory rewards.
+
+### `free_play_reward_channel`
+Only used in cursor-only free-play mode.
+Reward channel used for exploratory rewards.
+
+### `free_play_reward_count`
+Only used in cursor-only free-play mode.
+Number of exploratory rewards triggered during the free-play attempt.
 
 ## Rich Event Names Stored in `events`
 
@@ -336,6 +400,11 @@ Only used in cursor-only free-play mode.
 Marks the end-key release that requests free-play exit.
 Only used in cursor-only free-play mode.
 
+### `free_play_reward_triggered`
+An exploratory free-play reward was requested because analog joystick activity satisfied the configured reward policy.
+Only used in cursor-only free-play mode.
+The event includes reward channel, reward count, total free-play reward count, joystick x/y values, joystick magnitude, and policy.
+
 ## What Is Stored Per Joystick Sample
 
 Each item in `behav_result["joystick_samples"]` contains:
@@ -369,6 +438,7 @@ Some are explicit fields, and others can be calculated from the saved events and
 - Hold completion timing
 - Number of target entries
 - Reward and bonus-reward occurrence
+- Free-play exploratory reward occurrence
 - Whether a timeout happened before or after movement
 - Whether an idle timeout was ignored
 - Session-wide joystick trajectory over time

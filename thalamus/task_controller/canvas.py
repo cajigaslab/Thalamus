@@ -444,7 +444,7 @@ class Handles:
 
   def __repr__(self) -> str:
     return str(self)
-
+import time
 class Canvas(QOpenGLWidget):
   """
   The QWidget the task will render on and that will generate mouse events on touch input
@@ -457,6 +457,9 @@ class Canvas(QOpenGLWidget):
                mock_sleep: typing.Optional[typing.Callable[[float], 'asyncio.Future[None]']] = None) -> None:
     super().__init__()
     self.setUpdateBehavior(QOpenGLWidget.UpdateBehavior.NoPartialUpdate)
+    # self.draw_duration = 0.0
+    # self.frame_count = 0.0
+    # self.last_print = time.perf_counter()
     
     # set up connection to joystick here() - option
 
@@ -627,6 +630,8 @@ class Canvas(QOpenGLWidget):
     '''
     assert self.opengl_config, 'opengl_config is None'
 
+    # start = time.perf_counter()
+
     locations = GlslLocations(0, 1, self.opengl_config.color_loc, self.opengl_config.mv_matrix_loc,
                               self.opengl_config.proj_matrix_loc, self.opengl_config.normal_matrix_loc)
     geometry = qt_screen_geometry()
@@ -653,6 +658,16 @@ class Canvas(QOpenGLWidget):
     if self.current_output_mask != RenderOutput.OPERATOR:
       for subscriber in self.listeners.paint_subscribers:
         subscriber()
+
+    # end = time.perf_counter()
+    # self.frame_count += 1
+    # self.draw_duration += end - start
+
+    # if start - self.last_print > 1:
+    #   print('draw_duration', self.draw_duration/self.frame_count, self.frame_count)
+    #   self.last_print = start
+    #   self.draw_duration = 0.0
+    #   self.frame_count = 0.0
 
   async def __start_server(self, port: int) -> None:
     """

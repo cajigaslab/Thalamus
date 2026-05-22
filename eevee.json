@@ -28,8 +28,8 @@
         "Height": 1024,
         "OffsetX": 0,
         "OffsetY": 0,
-        "ExposureTime": 5002.021789550781,
-        "AcquisitionFrameRate": 150.0,
+        "ExposureTime": 4997.014999389648,
+        "AcquisitionFrameRate": 40.0,
         "Gain": 0.0
       }
     },
@@ -45,12 +45,12 @@
       "Invert Y": false,
       "Source": "Cam Eye",
       "Computing": true,
-      "View": true,
+      "View": false,
       "view_geometry": [
-        1638,
-        1858,
-        282,
-        163
+        993,
+        1232,
+        927,
+        1011
       ],
       "Render Thresholded": false,
       "Pix X": 290,
@@ -191,10 +191,6 @@
           "Address": ""
         },
         {
-          "Name": "Cam Eye",
-          "Address": ""
-        },
-        {
           "Name": "Node 2",
           "Address": ""
         },
@@ -273,8 +269,8 @@
         "Height": 1024,
         "OffsetX": 0,
         "OffsetY": 0,
-        "ExposureTime": 16545.772552490234,
-        "AcquisitionFrameRate": 60.0,
+        "ExposureTime": 16565.85931777954,
+        "AcquisitionFrameRate": 40.0,
         "Gain": 0.0
       }
     },
@@ -314,8 +310,8 @@
     {
       "name": "Cam Eye",
       "type": "GENICAM",
-      "Running": true,
-      "View": true,
+      "Running": false,
+      "View": false,
       "Camera": "VimbaUSBTL:DEV_1AB228001040",
       "WidthMax": 1280,
       "HeightMax": 1024,
@@ -616,7 +612,7 @@
       }
     },
     {
-      "name": "Node 6",
+      "name": "Distortion Cam Left",
       "type": "DISTORTION",
       "Threshold": 152,
       "Invert": false,
@@ -626,7 +622,7 @@
       "Computing": false,
       "Source": "Cam Left",
       "View": false,
-      "Show Threshold": true,
+      "Show Threshold": false,
       "Camera Matrix": [
         [
           1759.0725861808512,
@@ -659,9 +655,9 @@
       ]
     },
     {
-      "name": "Node 7",
+      "name": "Distortion Cam Top",
       "type": "DISTORTION",
-      "Threshold": 114,
+      "Threshold": 195,
       "Invert": false,
       "Rows": 4,
       "Columns": 5,
@@ -669,17 +665,17 @@
       "Computing": false,
       "Source": "Cam Top",
       "View": false,
-      "Show Threshold": true,
+      "Show Threshold": false,
       "Camera Matrix": [
         [
-          1.0,
+          1823.889743187819,
           0.0,
-          0.0
+          692.9132724748054
         ],
         [
           0.0,
-          1.0,
-          0.0
+          1826.35773213304,
+          500.4911905220172
         ],
         [
           0.0,
@@ -688,15 +684,15 @@
         ]
       ],
       "Distortion Coefficients": [
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0
+        -0.21625108913733793,
+        1.6856679243894344,
+        -0.0012640024607760525,
+        0.00821710941770234,
+        -9.47478498505918
       ],
       "view_geometry": [
-        964,
-        1265,
+        886,
+        451,
         400,
         400
       ]
@@ -711,12 +707,98 @@
       "Y Center": 514,
       "Dead Zone": 15,
       "Running": true
+    },
+    {
+      "name": "Aruco Top",
+      "type": "ARUCO",
+      "Running": false,
+      "Marker Mode": false,
+      "View": true,
+      "Source": "Distortion Cam Top",
+      "Dictionary": "DICT_4X4_50",
+      "Boards": [
+        {
+          "Rows": 3,
+          "Columns": 4,
+          "Marker Size": 0.05,
+          "Marker Separation": 0.01,
+          "ids": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "translation_x": 0.0,
+          "translation_y": 0.0,
+          "translation_z": 0.0,
+          "rotation_x": 0.0,
+          "rotation_y": 0.0,
+          "rotation_z": 0.0
+        }
+      ],
+      "view_geometry": [
+        2807,
+        1381,
+        694,
+        676
+      ]
+    },
+    {
+      "name": "Aruco Left",
+      "type": "ARUCO",
+      "Running": false,
+      "Marker Mode": false,
+      "View": true,
+      "Source": "Distortion Cam Left",
+      "Dictionary": "DICT_4X4_50",
+      "Boards": [
+        {
+          "Rows": 3,
+          "Columns": 4,
+          "Marker Size": 0.05,
+          "Marker Separation": 0.01,
+          "ids": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "translation_x": 0.0,
+          "translation_y": 0.0,
+          "translation_z": 0.0,
+          "rotation_x": 0.0,
+          "rotation_y": 0.0,
+          "rotation_z": 0.0
+        }
+      ],
+      "view_geometry": [
+        2279,
+        1403,
+        400,
+        408
+      ]
     }
   ],
   "thalamus_view_geometry": [
     100,
     100,
-    384,
+    506,
     768
   ],
   "data_views": [
@@ -757,8 +839,8 @@
     {
       "view_geometry": [
         17,
-        12,
-        478,
+        0,
+        488,
         187
       ],
       "rows": 1,
@@ -786,7 +868,7 @@
         1529,
         0,
         390,
-        208
+        242
       ]
     },
     {
@@ -800,17 +882,185 @@
       ]
     },
     {
-      "node": "Storage",
+      "node": "Cam Rear",
       "dock_area": "right",
       "view_geometry": [
         190,
         23,
-        194,
+        316,
         745
       ]
     }
   ],
-  "queue": [],
+  "queue": [
+    {
+      "task_type": "joystick_intro",
+      "type": "task",
+      "goal": 1,
+      "name": "Cursor",
+      "intertrial_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "start_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "hold_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "blink_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "fail_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "success_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "target_x": {
+        "min": 1,
+        "max": 1
+      },
+      "target_y": {
+        "min": 1,
+        "max": 1
+      },
+      "target_width": {
+        "min": 1,
+        "max": 1
+      },
+      "target_height": {
+        "min": 1,
+        "max": 1
+      },
+      "target_color": [
+        255,
+        255,
+        255
+      ],
+      "targets": [
+        {
+          "name": "Target 1",
+          "enabled": false,
+          "x_norm": 0.17,
+          "y_norm": 0.496,
+          "radius_ratio": 0.2,
+          "hold_time": 0.1,
+          "reward_channel": 2,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "name": "Target 1 Copy",
+          "enabled": true,
+          "x_norm": 0.5059523809523809,
+          "y_norm": 0.8448160980810234,
+          "radius_ratio": 0.2,
+          "hold_time": 0.1,
+          "reward_channel": 2,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "name": "Target 1 Copy",
+          "enabled": true,
+          "x_norm": 0.5044642857142857,
+          "y_norm": 0.20515724946695102,
+          "radius_ratio": 0.2,
+          "hold_time": 0.1,
+          "reward_channel": 2,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "name": "Target 1 Copy",
+          "enabled": false,
+          "x_norm": 0.826,
+          "y_norm": 0.505,
+          "radius_ratio": 0.2,
+          "hold_time": 0.1,
+          "reward_channel": 2,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        }
+      ],
+      "joystick_node": "Joystick",
+      "control_mode": "direct",
+      "cursor_only_mode": true,
+      "free_play_end_key": "space",
+      "cumulative_speed": 0.7,
+      "zero_drift_mode": true,
+      "zero_drift_buffer": 0.05,
+      "direct_range": 0.45,
+      "cursor_diameter_ratio": 0.08,
+      "cursor_color": [
+        153,
+        193,
+        241
+      ],
+      "task_region_x": 0.5,
+      "task_region_y": 0.27,
+      "task_region_width": 0.5,
+      "task_region_height": 0.67,
+      "reward_channel": 2.0,
+      "trial_timeout": 8.0,
+      "intertrial_interval": 1.0,
+      "disable_up": true,
+      "disable_down": true,
+      "disable_left": false,
+      "disable_right": false,
+      "animations_enabled": true,
+      "task_animation_enabled": true,
+      "target_animation_enabled": true,
+      "show_streak_hud": true,
+      "streak_bonus_threshold": 0,
+      "streak_bonus_reward_count": 1,
+      "streak_reset_on_bonus": false,
+      "inside_tint_strength_pct": 20,
+      "show_hold_progress_ring": true,
+      "show_success_pop": true,
+      "success_pop_duration_s": 0.12,
+      "up_influence_pct": 100,
+      "down_influence_pct": 100,
+      "left_influence_pct": 100,
+      "right_influence_pct": 100,
+      "ignore_idle_trial_failures": true,
+      "state_indicator_x": 30.0,
+      "state_indicator_y": 70.0,
+      "reset_cursor_each_trial": false,
+      "direct_recenter_when_idle": false,
+      "target_layout_editor_geometry": {
+        "x": 333,
+        "y": 56,
+        "width": 1195,
+        "height": 1081
+      },
+      "free_play_reward_enabled": true,
+      "free_play_reward_policy": "touch_bouts",
+      "free_play_reward_threshold": 0.0,
+      "free_play_reward_cooldown_s": 1.0,
+      "free_play_reward_channel": 2,
+      "task_cluster_name": "Joy",
+      "queue_index": 0
+    }
+  ],
   "reward_schedule": {
     "schedules": [
       [
@@ -7141,7 +7391,12 @@
           "state_indicator_x": 30.0,
           "state_indicator_y": 70.0,
           "reset_cursor_each_trial": true,
-          "direct_recenter_when_idle": true
+          "direct_recenter_when_idle": true,
+          "free_play_reward_enabled": false,
+          "free_play_reward_policy": "touch_bouts",
+          "free_play_reward_threshold": 0.0,
+          "free_play_reward_cooldown_s": 1.0,
+          "free_play_reward_channel": 2
         },
         {
           "task_type": "joystick_intro",
@@ -7337,7 +7592,12 @@
           "state_indicator_x": 30.0,
           "state_indicator_y": 70.0,
           "reset_cursor_each_trial": true,
-          "direct_recenter_when_idle": true
+          "direct_recenter_when_idle": true,
+          "free_play_reward_enabled": false,
+          "free_play_reward_policy": "touch_bouts",
+          "free_play_reward_threshold": 0.0,
+          "free_play_reward_cooldown_s": 1.0,
+          "free_play_reward_channel": 2
         },
         {
           "task_type": "joystick_intro",
@@ -7491,7 +7751,12 @@
           "state_indicator_x": 30.0,
           "state_indicator_y": 70.0,
           "reset_cursor_each_trial": false,
-          "direct_recenter_when_idle": false
+          "direct_recenter_when_idle": false,
+          "free_play_reward_enabled": false,
+          "free_play_reward_policy": "touch_bouts",
+          "free_play_reward_threshold": 0.0,
+          "free_play_reward_cooldown_s": 1.0,
+          "free_play_reward_channel": 2
         },
         {
           "task_type": "joystick_intro",
@@ -7651,7 +7916,12 @@
             "y": 56,
             "width": 1195,
             "height": 1081
-          }
+          },
+          "free_play_reward_enabled": false,
+          "free_play_reward_policy": "touch_bouts",
+          "free_play_reward_threshold": 0.0,
+          "free_play_reward_cooldown_s": 1.0,
+          "free_play_reward_channel": 2
         },
         {
           "task_type": "joystick_intro",
@@ -8155,7 +8425,12 @@
           "state_indicator_x": 30.0,
           "state_indicator_y": 70.0,
           "reset_cursor_each_trial": false,
-          "direct_recenter_when_idle": false
+          "direct_recenter_when_idle": false,
+          "free_play_reward_enabled": false,
+          "free_play_reward_policy": "touch_bouts",
+          "free_play_reward_threshold": 0.0,
+          "free_play_reward_cooldown_s": 1.0,
+          "free_play_reward_channel": 2
         },
         {
           "task_type": "joystick_intro",
@@ -8301,7 +8576,177 @@
             "y": 1137,
             "width": 1469,
             "height": 1081
-          }
+          },
+          "free_play_reward_enabled": false,
+          "free_play_reward_policy": "touch_bouts",
+          "free_play_reward_threshold": 0.0,
+          "free_play_reward_cooldown_s": 1.0,
+          "free_play_reward_channel": 2
+        },
+        {
+          "task_type": "joystick_intro",
+          "type": "task",
+          "goal": 1,
+          "name": "Cursor",
+          "intertrial_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "start_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "hold_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "blink_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "fail_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "success_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 1
+          },
+          "target_height": {
+            "min": 1,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [
+            {
+              "name": "Target 1",
+              "enabled": false,
+              "x_norm": 0.17,
+              "y_norm": 0.496,
+              "radius_ratio": 0.2,
+              "hold_time": 0.1,
+              "reward_channel": 2,
+              "target_color": [
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "name": "Target 1 Copy",
+              "enabled": true,
+              "x_norm": 0.5059523809523809,
+              "y_norm": 0.8448160980810234,
+              "radius_ratio": 0.2,
+              "hold_time": 0.1,
+              "reward_channel": 2,
+              "target_color": [
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "name": "Target 1 Copy",
+              "enabled": true,
+              "x_norm": 0.5044642857142857,
+              "y_norm": 0.20515724946695102,
+              "radius_ratio": 0.2,
+              "hold_time": 0.1,
+              "reward_channel": 2,
+              "target_color": [
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "name": "Target 1 Copy",
+              "enabled": false,
+              "x_norm": 0.826,
+              "y_norm": 0.505,
+              "radius_ratio": 0.2,
+              "hold_time": 0.1,
+              "reward_channel": 2,
+              "target_color": [
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "joystick_node": "Joystick",
+          "control_mode": "direct",
+          "cursor_only_mode": true,
+          "free_play_end_key": "space",
+          "cumulative_speed": 0.7,
+          "zero_drift_mode": true,
+          "zero_drift_buffer": 0.05,
+          "direct_range": 0.45,
+          "cursor_diameter_ratio": 0.08,
+          "cursor_color": [
+            153,
+            193,
+            241
+          ],
+          "task_region_x": 0.5,
+          "task_region_y": 0.27,
+          "task_region_width": 0.5,
+          "task_region_height": 0.67,
+          "reward_channel": 2.0,
+          "trial_timeout": 8.0,
+          "intertrial_interval": 1.0,
+          "disable_up": true,
+          "disable_down": true,
+          "disable_left": false,
+          "disable_right": false,
+          "animations_enabled": true,
+          "task_animation_enabled": true,
+          "target_animation_enabled": true,
+          "show_streak_hud": true,
+          "streak_bonus_threshold": 0,
+          "streak_bonus_reward_count": 1,
+          "streak_reset_on_bonus": false,
+          "inside_tint_strength_pct": 20,
+          "show_hold_progress_ring": true,
+          "show_success_pop": true,
+          "success_pop_duration_s": 0.12,
+          "up_influence_pct": 100,
+          "down_influence_pct": 100,
+          "left_influence_pct": 100,
+          "right_influence_pct": 100,
+          "ignore_idle_trial_failures": true,
+          "state_indicator_x": 30.0,
+          "state_indicator_y": 70.0,
+          "reset_cursor_each_trial": false,
+          "direct_recenter_when_idle": false,
+          "target_layout_editor_geometry": {
+            "x": 333,
+            "y": 56,
+            "width": 1195,
+            "height": 1081
+          },
+          "free_play_reward_enabled": true,
+          "free_play_reward_policy": "touch_bouts",
+          "free_play_reward_threshold": 0.0,
+          "free_play_reward_cooldown_s": 1.0,
+          "free_play_reward_channel": 2
         }
       ]
     },
