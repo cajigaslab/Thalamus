@@ -73,7 +73,6 @@ struct PupilNode::Impl {
 
   int width = 512;
   int height = 512;
-  int stride = cairo_format_stride_for_width(CAIRO_FORMAT_A8, width);
   std::vector<unsigned char> cairo_data;
 
   double x = 256;
@@ -92,13 +91,21 @@ struct PupilNode::Impl {
     state_connection =
         state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
     this->state->recap(std::bind(&Impl::on_change, this, _1, _2, _3));
+
+    init_cairo();
+    pattern.reset(cairo_pattern_create_radial(0, 0, 8, 0, 0, 64));
+    cairo_pattern_add_color_stop_rgba(pattern.get(), 0, 0, 0, 0, 0);
+    cairo_pattern_add_color_stop_rgba(pattern.get(), 1, 0, 0, 0, 1);
+  }
+
+  void init_cairo() {
+    int stride = cairo_format_stride_for_width(CAIRO_FORMAT_A8, width);
+
+    cairo.reset();
     cairo_data.assign(size_t(stride * height), 0);
     surface.reset(cairo_image_surface_create_for_data(
         cairo_data.data(), CAIRO_FORMAT_A8, width, height, stride));
     cairo.reset(cairo_create(surface.get()));
-    pattern.reset(cairo_pattern_create_radial(0, 0, 8, 0, 0, 64));
-    cairo_pattern_add_color_stop_rgba(pattern.get(), 0, 0, 0, 0, 0);
-    cairo_pattern_add_color_stop_rgba(pattern.get(), 1, 0, 0, 0, 1);
   }
 
   ~Impl() {
@@ -161,6 +168,12 @@ struct PupilNode::Impl {
       timer.async_wait(std::bind(&Impl::on_timer, this, _1));
     } else if(key_str == "Random Saccade") {
       random_saccade = std::get<bool>(v);
+    } else if(key_str == "Width") {
+      width = int(std::get<int64_t>(v));
+      init_cairo();
+    } else if(key_str == "Height") {
+      height = int(std::get<int64_t>(v));
+      init_cairo();
     }
   }
 };

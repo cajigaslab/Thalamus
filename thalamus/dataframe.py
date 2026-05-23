@@ -3,6 +3,7 @@ import sys
 import enum
 import pathlib
 import argparse
+import warnings
 import collections
 
 import pandas
@@ -18,7 +19,7 @@ class DataFrameBuilder:
     Text = enum.auto()
     Invalid = enum.auto()
 
-  def __init__(self, node, data_type: 'DataFrameBuilder.Type', channel_pattern: re.Pattern | str | None = None):
+  def __init__(self, node, data_type: 'DataFrameBuilder.Type' = Type.Analog, channel_pattern: re.Pattern | str | None = None, warn: bool = False):
     self.node = node
     self.channel_pattern = re.compile(channel_pattern) if isinstance(channel_pattern, str) else channel_pattern
     self.ref_channel = None
@@ -30,6 +31,7 @@ class DataFrameBuilder:
     self.__type = data_type
     self.text_time = []
     self.text = []
+    self.warn = warn
 
   def build(self):
     if self.__type == DataFrameBuilder.Type.Analog:
@@ -91,8 +93,12 @@ class DataFrameBuilder:
       self.sample_intervals[span.name] = sample_interval
       if self.ref_interval != sample_interval:
         formatted = pformat(self.sample_intervals)
-        raise ValueError(f'All Channels must have the same sample interval.  Expected {self.ref_interval}'
-                         f'Filter out channels with the channel_pattern parameter.  Got:\n{formatted}')
+        message = (f'All Channels must have the same sample interval.  Expected {self.ref_interval}. '
+                   f'Filter out channels with the channel_pattern parameter.  Got:\n{formatted}')
+        if self.warn:
+          warnings.warn(message)
+        else:
+          raise ValueError(message)
 
       if analog.is_int_data:
         data = analog.int_data[span.begin:span.end]

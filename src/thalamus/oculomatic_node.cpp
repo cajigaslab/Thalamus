@@ -41,7 +41,7 @@ struct OculomaticNode::Impl {
   Format format;
   bool need_recenter = false;
   std::pair<double, double> centering_offset = std::make_pair(AOUT_MIN, AOUT_MIN);
-  std::pair<int, int> centering_pix;
+  std::pair<double, double> centering_pix;
   NodeGraph *graph;
   size_t threshold;
   size_t min_area;
@@ -93,8 +93,8 @@ struct OculomaticNode::Impl {
   }
 
   static std::pair<double, double>
-  normalize_center(int pix_x, int pix_y, const std::pair<int, int> &dimensions,
-                   const std::pair<int, int> &centering_pix,
+  normalize_center(double pix_x, double pix_y, const std::pair<int, int> &dimensions,
+                   const std::pair<double, double> &centering_pix,
                    const std::pair<double, double> &centering_offset,
                    double x_gain, double y_gain, bool invert_x, bool invert_y) {
     TRACE_EVENT("thalamus", "OculomaticNode::normalize_center");
@@ -288,12 +288,12 @@ struct OculomaticNode::Impl {
           TRACE_EVENT("thalamus", "cv::moments");
           m = cv::moments(contours[size_t(selected)]);
         }
-        auto center = std::make_pair(static_cast<int>(m.m10 / (m.m00 + 1e-6)),
-                                     static_cast<int>(m.m01 / (m.m00 + 1e-6)));
+        auto center = std::make_pair(m.m10 / (m.m00 + 1e-6),
+                                     m.m01 / (m.m00 + 1e-6));
         if (current_need_recenter) {
           auto new_centering_offset = std::pair<double, double>(0.0, 0.0);
           auto new_centering_pix =
-              std::pair<int, int>(center.first, center.second);
+              std::pair<double, double>(center.first, center.second);
           new_centering_offset = normalize_center(
               center.first, center.second, std::make_pair(width, height),
               new_centering_pix, new_centering_offset, this_x_gain, this_y_gain,
@@ -392,9 +392,19 @@ struct OculomaticNode::Impl {
     } else if (key_str == "Invert Y") {
       invert_y = std::get<bool>(v);
     } else if (key_str == "Pix X") {
-      centering_pix.first = int(std::get<int64_t>(v));
+      if (std::holds_alternative<double>(v)) {
+        centering_pix.first = std::get<double>(v);
+      }
+      else {
+        centering_pix.first = double(std::get<int64_t>(v));
+      }
     } else if (key_str == "Pix Y") {
-      centering_pix.second = int(std::get<int64_t>(v));
+      if (std::holds_alternative<double>(v)) {
+        centering_pix.second = std::get<double>(v);
+      }
+      else {
+        centering_pix.second = double(std::get<int64_t>(v));
+      }
     } else if (key_str == "Source") {
       std::string source_str = state->at("Source");
       auto token = std::string(absl::StripAsciiWhitespace(source_str));
