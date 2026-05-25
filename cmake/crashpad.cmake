@@ -59,8 +59,12 @@ clang_path = \"${CRASHPAD_CLANG_BASE_PATH_SHORT}\"
 extra_cflags = \"${CRASHPAD_EXTRA_CFLAGS}\"
 extra_cflags_cc = \"${CRASHPAD_LIBCXX_CFLAGS}\"
 extra_ldflags = \"${CRASHPAD_LIBCXX_LDFLAGS}\"
-mac_deployment_target=\"${CMAKE_OSX_DEPLOYMENT_TARGET}\"
 ")
+if(APPLE)
+ file(APPEND "${CRASHPAD_OUT_DIR}/args.gn"
+"mac_deployment_target=\"${CMAKE_OSX_DEPLOYMENT_TARGET}\"
+")
+endif()
 
 set(CRASHPAD_GCLIENT_STAMP "${GCLIENT_CHECKOUT}/gclient.stamp")
 add_custom_command(

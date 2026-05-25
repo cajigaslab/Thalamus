@@ -55,7 +55,7 @@ public:
     for (auto i = 0u; i < num_threads; ++i) {
       auto thread_name = absl::StrFormat("%s[%d]", name, i);
       threads.emplace_back([&, thread_name, thread_policy, thread_priority] {
-        THALAMUS_LOG(info) << "Start Pool thread " << thread_name;
+        THALAMUS_LOG(debug) << "Start Pool thread " << thread_name;
 #ifndef _WIN32
         if(thread_policy && thread_priority) {
           THALAMUS_LOG(info) << "Pool thread setting priority " << *thread_policy << " " << *thread_priority;
