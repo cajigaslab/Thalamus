@@ -4,11 +4,14 @@ Defines the controller UI
 
 import typing
 import asyncio
+import datetime
 import functools
 
 from ..qt import *
 
 import numpy
+
+from ..util import MeteredUpdater
 
 from .task_context import TaskContext, TaskDescription
 from .util import remove_by_is
@@ -388,12 +391,35 @@ class ControlWindow(QMainWindow):
     dock.setWidget(plot)
     self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock)
 
+    if 'task_controller_view_geometry' not in self.task_context.config:
+      screen_geometry = qt_screen_geometry()
+      width, height = 1024, 768
+      x = (screen_geometry.width() - width)//2 + 50
+      y = (screen_geometry.height() - height)//2 + 50
+      self.task_context.config['task_controller_view_geometry'] = [x, y, width, height]
+  
+    x, y, w, h = self.task_context.config['task_controller_view_geometry']
+    self.view_geometry_updater = MeteredUpdater(self.task_context.config['task_controller_view_geometry'], datetime.timedelta(seconds=1), lambda: isdeleted(self))
+    self.move(x, y)
+    self.resize(w, h)
+
     self.init()
     self.task_context.config['queue'].add_observer(self.on_queue_changed)
 
     self.setWindowTitle(f'Task Controller: {self.config_data.file_name}')
 
     self.__prepare_status()
+
+  def moveEvent(self, a0: QMoveEvent) -> None:
+    offset = self.frameGeometry().size() - self.geometry().size()
+    position = a0.pos() - QPoint(offset.width(), offset.height())
+    position = QPoint(max(0, position.x()), max(0, position.y()))
+    self.view_geometry_updater[:2] = position.x(), position.y()
+    return super().moveEvent(a0)
+
+  def resizeEvent(self, a0: QResizeEvent) -> None:
+    self.view_geometry_updater[2:] = a0.size().width(), a0.size().height()
+    return super().resizeEvent(a0)
 
   def __prepare_status(self) -> None:
     if 'status' not in self.task_context.config:
