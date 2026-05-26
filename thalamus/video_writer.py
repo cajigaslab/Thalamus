@@ -8,6 +8,7 @@ import threading
 import subprocess
 
 from thalamus.thalamus_pb2 import StorageRecord, Image
+from thalamus.record_reader2 import RecordReader
 
 EXECUTABLE_EXTENSION = '.exe' if sys.platform == 'win32' else ''
 
@@ -142,3 +143,14 @@ class MultiVideoWriter:
   def __exit__(self, type, value, tb):
     for writer in self.writers.values():
       writer.__exit__(type, value, tb)
+
+def main():
+  filename = sys.argv[1]
+  print('Reading', filename)
+  with RecordReader(filename, decode_video=False) as reader, MultiVideoWriter(f'{filename}.%s.mp4') as writer:
+    for record in reader:
+      #print(record)
+      writer.write(record)
+
+if __name__ == '__main__':
+  main()

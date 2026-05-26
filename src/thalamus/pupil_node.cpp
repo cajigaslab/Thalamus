@@ -1,6 +1,7 @@
 #include <thalamus/modalities_util.hpp>
 #include <thalamus/pupil_node.hpp>
 #include <thalamus/thread_pool.hpp>
+#include <thalamus/node_util.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -53,7 +54,9 @@ struct PupilNode::Impl {
   size_t next_output_frame = 0;
 
   ThreadPool &pool;
+  boost::asio::io_context draw_context;
   boost::asio::steady_timer timer;
+  std::jthread draw_thread;
 
   struct DeleteCairoSurface {
     void operator()(cairo_surface_t *p) { cairo_surface_destroy(p); }
@@ -86,7 +89,9 @@ struct PupilNode::Impl {
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
        PupilNode *_outer, NodeGraph *_graph)
       : io_context(_io_context), state(_state), outer(_outer), graph(_graph),
-        pool(graph->get_thread_pool()), timer(io_context) {
+        pool(graph->get_thread_pool()), timer(draw_context) {
+    outer->ready_multithreaded.emplace();
+    
     using namespace std::placeholders;
     state_connection =
         state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
@@ -109,6 +114,9 @@ struct PupilNode::Impl {
   }
 
   ~Impl() {
+    boost::asio::post(draw_context, [&] {
+      timer.cancel();
+    });
     (*state)["Running"].assign(false, [&] {});
   }
 
@@ -141,11 +149,7 @@ struct PupilNode::Impl {
     cairo_arc(cairo.get(), 0, 0, 128, 0, 2 * M_PI);
     cairo_fill(cairo.get());
 
-    outer->ready(outer);
-
-    if (!is_running) {
-      return;
-    }
+    node::signal_ready(outer, io_context);
 
     auto end = std::chrono::steady_clock::now();
     auto elapsed = end - start;
@@ -164,8 +168,18 @@ struct PupilNode::Impl {
     auto key_str = std::get<std::string>(k);
     if (key_str == "Running") {
       is_running = std::get<bool>(v);
-      timer.expires_after(32ms);
-      timer.async_wait(std::bind(&Impl::on_timer, this, _1));
+      if(is_running) {
+        draw_thread = std::jthread([&] {
+          timer.expires_after(32ms);
+          timer.async_wait(std::bind(&Impl::on_timer, this, _1));
+          draw_context.run();
+        });
+      } else if (draw_thread.joinable()) {
+        boost::asio::post(draw_context, [&] {
+          timer.cancel();
+        });
+        draw_thread.join();
+      }
     } else if(key_str == "Random Saccade") {
       random_saccade = std::get<bool>(v);
     } else if(key_str == "Width") {

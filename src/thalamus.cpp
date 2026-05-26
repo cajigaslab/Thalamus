@@ -375,9 +375,13 @@ int main(int argc, char **argv) {
   });
 
   service.stop();
-  server->Shutdown();
+  THALAMUS_LOG(info) << "Service stopped";
+  server->Shutdown(std::chrono::system_clock::now() + 2s);
+  THALAMUS_LOG(info) << "Server shutdown";
   grpc_thread.join();
+  THALAMUS_LOG(info) << "GRPC thread joined";
   node_graph.reset();
+  THALAMUS_LOG(info) << "Node Graph reset";
 
 #ifdef __clang__
   if (vm.count("trace")) {

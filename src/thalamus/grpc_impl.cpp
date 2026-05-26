@@ -20,6 +20,7 @@
 #include <thalamus/thread.hpp>
 #include <thalamus/grpc.hpp>
 #include <thalamus/node_session.hpp>
+#include <thalamus/node_util.hpp>
 
 #include <thalamus_config.h>
 
@@ -1123,6 +1124,116 @@ struct Counter {
 };
 std::atomic_size_t Counter::count = 0;
 
+static const size_t IMAGE_CHUNK_SIZE = 524288;
+
+struct ImageSession : public NodeSession<ImageNode, thalamus_grpc::Image> {
+  const thalamus_grpc::ImageRequest request;
+  boost::signals2::scoped_connection ready_connection;
+
+  std::vector<std::chrono::steady_clock::time_point> frame_times;
+
+  ImageSession(NodeGraph& graph, boost::asio::io_context& _io_context, ::grpc::CallbackServerContext& _context, const ::thalamus_grpc::ImageRequest *_request, ContextGuard&& guard)
+  : NodeSession<ImageNode, thalamus_grpc::Image>(graph, _io_context, _context, _request->node(), std::move(guard))
+  , request(*_request)
+  {}
+
+  ~ImageSession() override;
+
+  void subscribe() override {
+    ready_connection = node::connect_ready_multithreaded(this->raw_node.get(), [this,c_state=this->state](const Node *) {
+      std::lock_guard<std::mutex> lock(c_state->mutex);
+      if(c_state->joining) {
+        return;
+      }
+      if (!typed_node->has_image_data()) {
+          return;
+      }
+
+      TRACE_EVENT("thalamus", "Service::image(on ready)");
+      std::vector<::thalamus_grpc::Image> responses;
+      size_t position = 0;
+
+      if (request.framerate() > 0) {
+        auto now = std::chrono::steady_clock::now();
+        while (!frame_times.empty() && now - frame_times.front() >= 1s) {
+          std::pop_heap(frame_times.begin(), frame_times.end(),
+                        [](auto &l, auto &r) { return l > r; });
+          frame_times.pop_back();
+        }
+        if (!frame_times.empty()) {
+          auto duration = now - frame_times.front();
+          auto duration_seconds =
+              double(duration.count()) / decltype(duration)::period::den;
+          if (double(frame_times.size()) / duration_seconds >=
+              request.framerate()) {
+            return;
+          }
+        }
+
+        frame_times.push_back(now);
+        std::push_heap(frame_times.begin(), frame_times.end(),
+                       [](auto &l, auto &r) { return l > r; });
+      }
+
+      size_t data_count = 0;
+      for (auto i = 0ull; i < typed_node->num_planes(); ++i) {
+        auto data = typed_node->plane(int(i));
+        data_count += data.size();
+      }
+
+      auto width = typed_node->width();
+      auto height = typed_node->height();
+      thalamus_grpc::Image::Format format;
+      switch (typed_node->format()) {
+      case ImageNode::Format::Gray:
+        format = thalamus_grpc::Image::Format::Image_Format_Gray;
+        break;
+      case ImageNode::Format::RGB:
+        format = thalamus_grpc::Image::Format::Image_Format_RGB;
+        break;
+      case ImageNode::Format::YUYV422:
+        format = thalamus_grpc::Image::Format::Image_Format_YUYV422;
+        break;
+      case ImageNode::Format::YUV420P:
+        format = thalamus_grpc::Image::Format::Image_Format_YUV420P;
+        break;
+      case ImageNode::Format::YUVJ420P:
+        format = thalamus_grpc::Image::Format::Image_Format_YUVJ420P;
+        break;
+      }
+
+      while (position < data_count) {
+        thalamus_grpc::Image piece;
+        piece.set_width(uint32_t(width));
+        piece.set_height(uint32_t(height));
+        piece.set_format(format);
+        piece.set_frame_interval(size_t(typed_node->frame_interval().count()));
+
+        size_t plane_offset = 0;
+        size_t remaining_chunk = IMAGE_CHUNK_SIZE;
+        for (auto i = 0ull; i < typed_node->num_planes(); ++i) {
+          auto data = typed_node->plane(int(i));
+          if (position > plane_offset + data.size() || !remaining_chunk) {
+            piece.add_data();
+          } else {
+            auto in_plane_offset = position - plane_offset;
+            auto count =
+                std::min(data.size() - in_plane_offset, remaining_chunk);
+            piece.add_data(data.data() + in_plane_offset, count);
+            remaining_chunk -= count;
+            position += count;
+          }
+          plane_offset += data.size();
+        }
+        piece.set_last(position >= data_count);
+        ServerWriteReactor<::thalamus_grpc::Image>::send(std::move(piece));
+      }
+    });
+  }
+};
+
+ImageSession::~ImageSession() {}
+
 struct GraphSession : public NodeSession<AnalogNode, thalamus_grpc::GraphResponse> {
   const thalamus_grpc::GraphRequest request;
   boost::signals2::scoped_connection channels_changed_connection;
@@ -1756,163 +1867,10 @@ Service::xsens(::grpc::ServerContext *context,
   return ::grpc::Status::OK;
 }
 
-static const size_t IMAGE_CHUNK_SIZE = 524288;
-
-::grpc::Status
-Service::image(::grpc::ServerContext *context,
-               const ::thalamus_grpc::ImageRequest *request,
-               ::grpc::ServerWriter<::thalamus_grpc::Image> *writer) {
-  ContextGuard guard(this, context);
-  while (!context->IsCancelled()) {
-    std::promise<void> promise;
-    auto future = promise.get_future();
-    std::shared_ptr<Node> raw_node;
-    {
-      TRACE_EVENT("thalamus", "Service::image(get node)");
-      boost::asio::post(impl->io_context, [&] {
-        impl->node_graph.get_node(request->node(), [&](auto ptr) {
-          raw_node = ptr.lock();
-          promise.set_value();
-        });
-      });
-      while (future.wait_for(1s) == std::future_status::timeout &&
-             !context->IsCancelled()) {
-        if (impl->io_context.stopped()) {
-          writer->WriteLast(::thalamus_grpc::Image(), ::grpc::WriteOptions());
-          return ::grpc::Status::OK;
-        }
-      }
-      if (!node_cast<ImageNode *>(raw_node.get())) {
-        std::this_thread::sleep_for(1s);
-        continue;
-      }
-    }
-
-    auto node = node_cast<ImageNode *>(raw_node.get());
-
-    std::mutex connection_mutex;
-    std::mutex images_mutex;
-    std::condition_variable cond;
-    std::vector<thalamus_grpc::Image> images;
-    std::vector<std::chrono::steady_clock::time_point> frame_times;
- 
-    using signal_type = decltype(raw_node->ready);
-    auto connection = raw_node->ready.connect(
-        signal_type::slot_type([&](const Node *) {
-          if (!node->has_image_data()) {
-              return;
-          }
-
-          TRACE_EVENT("thalamus", "Service::image(on ready)");
-          std::lock_guard<std::mutex> lock(connection_mutex);
-          std::vector<::thalamus_grpc::Image> responses;
-          size_t position = 0;
-
-          if (request->framerate() > 0) {
-            auto now = std::chrono::steady_clock::now();
-            while (!frame_times.empty() && now - frame_times.front() >= 1s) {
-              std::pop_heap(frame_times.begin(), frame_times.end(),
-                            [](auto &l, auto &r) { return l > r; });
-              frame_times.pop_back();
-            }
-            if (!frame_times.empty()) {
-              auto duration = now - frame_times.front();
-              auto duration_seconds =
-                  double(duration.count()) / decltype(duration)::period::den;
-              if (double(frame_times.size()) / duration_seconds >=
-                  request->framerate()) {
-                return;
-              }
-            }
-
-            frame_times.push_back(now);
-            std::push_heap(frame_times.begin(), frame_times.end(),
-                           [](auto &l, auto &r) { return l > r; });
-          }
-
-          size_t data_count = 0;
-          for (auto i = 0ull; i < node->num_planes(); ++i) {
-            auto data = node->plane(int(i));
-            data_count += data.size();
-          }
-
-          auto width = node->width();
-          auto height = node->height();
-          thalamus_grpc::Image::Format format;
-          switch (node->format()) {
-          case ImageNode::Format::Gray:
-            format = thalamus_grpc::Image::Format::Image_Format_Gray;
-            break;
-          case ImageNode::Format::RGB:
-            format = thalamus_grpc::Image::Format::Image_Format_RGB;
-            break;
-          case ImageNode::Format::YUYV422:
-            format = thalamus_grpc::Image::Format::Image_Format_YUYV422;
-            break;
-          case ImageNode::Format::YUV420P:
-            format = thalamus_grpc::Image::Format::Image_Format_YUV420P;
-            break;
-          case ImageNode::Format::YUVJ420P:
-            format = thalamus_grpc::Image::Format::Image_Format_YUVJ420P;
-            break;
-          }
-
-          while (position < data_count) {
-            responses.emplace_back();
-            auto &piece = responses.back();
-            piece.set_width(uint32_t(width));
-            piece.set_height(uint32_t(height));
-            piece.set_format(format);
-            piece.set_frame_interval(size_t(node->frame_interval().count()));
-
-            size_t plane_offset = 0;
-            size_t remaining_chunk = IMAGE_CHUNK_SIZE;
-            for (auto i = 0ull; i < node->num_planes(); ++i) {
-              auto data = node->plane(int(i));
-              if (position > plane_offset + data.size() || !remaining_chunk) {
-                piece.add_data();
-              } else {
-                auto in_plane_offset = position - plane_offset;
-                auto count =
-                    std::min(data.size() - in_plane_offset, remaining_chunk);
-                piece.add_data(data.data() + in_plane_offset, count);
-                remaining_chunk -= count;
-                position += count;
-              }
-              plane_offset += data.size();
-            }
-          }
-          responses.back().set_last(true);
-
-          std::lock_guard<std::mutex> lock2(images_mutex);
-          for (auto &i : responses) {
-            images.push_back(std::move(i));
-          }
-          cond.notify_one();
-        }).track_foreign(raw_node));
-    raw_node.reset();
-
-    while (!context->IsCancelled() && connection.connected()) {
-      if (impl->io_context.stopped()) {
-        writer->WriteLast(::thalamus_grpc::Image(), ::grpc::WriteOptions());
-        return ::grpc::Status::OK;
-      }
-      std::vector<thalamus_grpc::Image> local_images;
-      {
-        std::unique_lock<std::mutex> lock2(images_mutex);
-        cond.wait_for(lock2, 1s);
-        local_images.swap(images);
-      }
-      for (auto &i : local_images) {
-        writer->Write(i);
-      }
-    }
-    connection.disconnect();
-    std::lock_guard<std::mutex> lock(connection_mutex);
-    std::this_thread::sleep_for(1s);
-  }
-
-  return ::grpc::Status::OK;
+::grpc::ServerWriteReactor<::thalamus_grpc::Image>*
+Service::image(::grpc::CallbackServerContext *context,
+               const ::thalamus_grpc::ImageRequest *request) {
+  return new ImageSession(impl->node_graph, impl->io_context, *context, request, ContextGuard(this, context));
 }
 
 ::grpc::Status Service::notification(

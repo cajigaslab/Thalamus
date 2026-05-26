@@ -1,3 +1,4 @@
+#include <mutex>
 #include <thalamus/tracing.hpp>
 #include <fstream>
 #include <thalamus/image_node.hpp>
@@ -8,6 +9,7 @@
 #include <thalamus/thread.hpp>
 #include <thalamus/thread_pool.hpp>
 #include <thalamus/util.hpp>
+#include <thalamus/node_util.hpp>
 
 #ifdef _WIN32
 #include <WinSock2.h>
@@ -263,6 +265,13 @@ struct Storage2Node::Impl {
 
   template <typename T>
   void update_metrics(int metrics_index, int sub_index, size_t count, T name,
+                      bool is_rate = true) {
+    std::lock_guard<std::mutex> lock(stats_mutex);
+    update_metrics_unsafe(metrics_index, sub_index, count, name, is_rate);
+  }
+
+  template <typename T>
+  void update_metrics_unsafe(int metrics_index, int sub_index, size_t count, T name,
                       bool is_rate = true) {
     auto key = std::make_pair(metrics_index, sub_index);
     auto offset = offsets.find(key);
@@ -1217,22 +1226,20 @@ struct Storage2Node::Impl {
       return;
     }
 
-    update_metrics(0, 0, queued_records, [&] { return "Output Queue Count"; });
-    update_metrics(0, 1, queued_bytes, [&] { return "Output Queue Bytes"; });
-    update_metrics(0, 2, written_bytes, [&] { return "Written Bytes"; });
-    update_metrics(0, 3, queue_max_bytes, [&] { return "Max Queued Bytes"; });
+    std::lock_guard<std::mutex> stats_lock(stats_mutex);
+    update_metrics_unsafe(0, 0, queued_records, [&] { return "Output Queue Count"; });
+    update_metrics_unsafe(0, 1, queued_bytes, [&] { return "Output Queue Bytes"; });
+    update_metrics_unsafe(0, 2, written_bytes, [&] { return "Written Bytes"; });
+    update_metrics_unsafe(0, 3, queue_max_bytes, [&] { return "Max Queued Bytes"; });
     queued_records = 0;
     queued_bytes = 0;
     written_bytes = 0;
     queue_max_bytes = 0;
     std::chrono::nanoseconds average_sweep;
-    {
-      std::lock_guard<std::mutex> stats_lock(stats_mutex);
-      average_sweep = sweep_count ? (total_sweep_time / sweep_count) : 0ns;
-      sweep_count = 0;
-      total_sweep_time = 0ns;
-    }
-    update_metrics(0, 4, size_t(average_sweep.count()), [&] { return "Average Sweep (ns)"; });
+    average_sweep = sweep_count ? (total_sweep_time / sweep_count) : 0ns;
+    sweep_count = 0;
+    total_sweep_time = 0ns;
+    update_metrics_unsafe(0, 4, size_t(average_sweep.count()), [&] { return "Average Sweep (ns)"; });
 
     auto now = std::chrono::steady_clock::now();
     auto elapsed = now - last_publish;
@@ -1353,9 +1360,12 @@ struct Storage2Node::Impl {
     source_connections.clear();
 
     if (state->contains("Sources")) {
-      metrics.clear();
-      offsets.clear();
-      names.clear();
+      {
+        std::lock_guard<std::mutex> stats_lock(stats_mutex);
+        metrics.clear();
+        offsets.clear();
+        names.clear();
+      }
       ObservableListPtr sources_list = state->at("Sources");
       for(size_t i = 0;i < sources_list->size();++i) {
         ObservableDictPtr source_dict = sources_list->at(i);
@@ -1387,9 +1397,8 @@ struct Storage2Node::Impl {
           }
           if (record_image && node_cast<ImageNode *>(locked_source.get()) != nullptr) {
             auto image_source = node_cast<ImageNode *>(locked_source.get());
-            auto image_source_connection =
-                locked_source->ready.connect(std::bind(
-                    &Impl::on_image_data, this, _1, node, image_source, matrics_index));
+            auto image_source_connection = node::connect_ready_multithreaded(
+              locked_source.get(), std::bind(&Impl::on_image_data, this, _1, node, image_source, matrics_index));
             source_connections.push_back(std::move(image_source_connection));
           }
           if (record_text && node_cast<TextNode *>(locked_source.get()) != nullptr) {

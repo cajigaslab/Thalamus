@@ -232,8 +232,15 @@ namespace thalamus {
     }
 
     void OnDone() override {
-      std::cout << "OnDone" << std::endl;
+      THALAMUS_LOG(trace) << "OnDone";
       signal_done();
+      delete this;
+    }
+
+    void OnCancel() override {
+      THALAMUS_LOG(trace) << "OnCancel";
+      grpc::ServerBidiReactor<REQUEST, RESPONSE>::Finish(grpc::Status::OK);
+      // delete this;
     }
 
     void do_send() {
