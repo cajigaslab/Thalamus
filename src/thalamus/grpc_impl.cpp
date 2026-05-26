@@ -266,7 +266,9 @@ struct Service::Impl {
     , channels_specified(!_request->channels().empty() || !_request->channel_names().empty())
     , context_guard(_service, &server_context) {
       THALAMUS_LOG(trace) << "Create AnalogSession";
+    }
 
+    void start() {
       get_node();
     }
 
@@ -421,7 +423,9 @@ struct Service::Impl {
 
   ::grpc::ServerWriteReactor<::thalamus_grpc::AnalogResponse>* analog(::grpc::CallbackServerContext* context,
                         const ::thalamus_grpc::AnalogRequest *request) {
-    return new AnalogSession(node_graph, io_context, *context, request, this->outer);
+    auto result = new AnalogSession(node_graph, io_context, *context, request, this->outer);
+    result->start();
+    return result;
   }
 
   ::grpc::Status text(::grpc::ServerContext *context,
@@ -1402,7 +1406,9 @@ GraphSession::~GraphSession() {}
 ::grpc::ServerWriteReactor<::thalamus_grpc::GraphResponse>*
 Service::graph(::grpc::CallbackServerContext *context,
       const ::thalamus_grpc::GraphRequest *request) {
-  return new GraphSession(impl->node_graph, impl->io_context, *context, request, ContextGuard(this, context));
+  auto result = new GraphSession(impl->node_graph, impl->io_context, *context, request, ContextGuard(this, context));
+  result->start();
+  return result;
 }
 
 ::grpc::Status Service::channel_info(
@@ -1870,7 +1876,9 @@ Service::xsens(::grpc::ServerContext *context,
 ::grpc::ServerWriteReactor<::thalamus_grpc::Image>*
 Service::image(::grpc::CallbackServerContext *context,
                const ::thalamus_grpc::ImageRequest *request) {
-  return new ImageSession(impl->node_graph, impl->io_context, *context, request, ContextGuard(this, context));
+  auto result = new ImageSession(impl->node_graph, impl->io_context, *context, request, ContextGuard(this, context));
+  result->start();
+  return result;
 }
 
 ::grpc::Status Service::notification(

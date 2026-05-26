@@ -2,6 +2,7 @@
 #include <thalamus/modalities_util.hpp>
 #include <thalamus/thread_pool.hpp>
 #include <thalamus/node_util.hpp>
+#include <thread>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -53,7 +54,7 @@ struct ChessBoardNode::Impl {
   ThreadPool &pool;
   boost::asio::io_context draw_context;
   boost::asio::steady_timer timer;
-  std::jthread draw_thread;
+  std::thread draw_thread;
 
   struct DeleteCairoSurface {
     void operator()(cairo_surface_t *p) { cairo_surface_destroy(p); }
@@ -93,6 +94,10 @@ struct ChessBoardNode::Impl {
   }
 
   ~Impl() {
+    boost::asio::post(draw_context, [&] {
+      timer.cancel();
+    });
+    draw_thread.join();
     (*state)["Running"].assign(false, [&] {});
   }
 
@@ -160,7 +165,7 @@ struct ChessBoardNode::Impl {
     if (key_str == "Running") {
       is_running = std::get<bool>(v);
       if(is_running) {
-        draw_thread = std::jthread([&] {
+        draw_thread = std::thread([&] {
           timer.expires_after(16ms);
           timer.async_wait(std::bind(&Impl::on_timer, this, _1));
           draw_context.run();

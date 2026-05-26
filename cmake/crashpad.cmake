@@ -46,7 +46,7 @@ else()
 endif()
 
 if(WIN32 AND CMAKE_BUILD_TYPE STREQUAL "Debug")
-  set(CRASHPAD_EXTRA_CFLAGS "/MTd /D_DEBUG /D_ITERATOR_DEBUG_LEVEL=2")
+  set(CRASHPAD_EXTRA_CFLAGS "/MTd /D_DEBUG /D_ITERATOR_DEBUG_LEVEL=2 ${ALL_C_COMPILE_OPTIONS_SPACED}")
 endif()
 
 string(REPLACE ";" " " CRASHPAD_LIBCXX_CFLAGS  "${LIBCXX_COMPILE_OPTIONS}")
@@ -57,8 +57,8 @@ file(WRITE "${CRASHPAD_OUT_DIR}/args.gn"
 "is_debug = ${CRASHPAD_IS_DEBUG}
 clang_path = \"${CRASHPAD_CLANG_BASE_PATH_SHORT}\"
 extra_cflags = \"${CRASHPAD_EXTRA_CFLAGS}\"
-extra_cflags_cc = \"${CRASHPAD_LIBCXX_CFLAGS}\"
-extra_ldflags = \"${CRASHPAD_LIBCXX_LDFLAGS}\"
+extra_cflags_cc = \"${ALL_COMPILE_OPTIONS_SPACED}\"
+extra_ldflags = \"${ALL_LINK_OPTIONS_SPACED}\"
 ")
 if(APPLE)
  file(APPEND "${CRASHPAD_OUT_DIR}/args.gn"

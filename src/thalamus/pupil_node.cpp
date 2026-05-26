@@ -2,6 +2,7 @@
 #include <thalamus/pupil_node.hpp>
 #include <thalamus/thread_pool.hpp>
 #include <thalamus/node_util.hpp>
+#include <thread>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -56,7 +57,7 @@ struct PupilNode::Impl {
   ThreadPool &pool;
   boost::asio::io_context draw_context;
   boost::asio::steady_timer timer;
-  std::jthread draw_thread;
+  std::thread draw_thread;
 
   struct DeleteCairoSurface {
     void operator()(cairo_surface_t *p) { cairo_surface_destroy(p); }
@@ -117,6 +118,7 @@ struct PupilNode::Impl {
     boost::asio::post(draw_context, [&] {
       timer.cancel();
     });
+    draw_thread.join();
     (*state)["Running"].assign(false, [&] {});
   }
 
@@ -169,7 +171,7 @@ struct PupilNode::Impl {
     if (key_str == "Running") {
       is_running = std::get<bool>(v);
       if(is_running) {
-        draw_thread = std::jthread([&] {
+        draw_thread = std::thread([&] {
           timer.expires_after(32ms);
           timer.async_wait(std::bind(&Impl::on_timer, this, _1));
           draw_context.run();
@@ -226,10 +228,14 @@ bool PupilNode::has_image_data() const { return true; }
 boost::json::value PupilNode::process(const boost::json::value &request) {
   for (auto &v : request.as_object()) {
     if (v.key() == "mousemove") {
-      auto &event = v.value().as_object();
-      impl->target_x = event.find("offsetX")->value().to_number<int>();
-      impl->target_y = event.find("offsetY")->value().to_number<int>();
-      impl->last_saccade = std::chrono::steady_clock::now();
+      if(impl->is_running) {
+        boost::asio::post(impl->draw_context, [this,v] {
+          auto &event = v.value().as_object();
+          impl->target_x = event.find("offsetX")->value().to_number<int>();
+          impl->target_y = event.find("offsetY")->value().to_number<int>();
+          impl->last_saccade = std::chrono::steady_clock::now();
+        });
+      }
     }
   }
 

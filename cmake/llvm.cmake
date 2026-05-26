@@ -9,16 +9,16 @@ endif()
 FetchContent_Declare(
   llvm
   GIT_REPOSITORY https://github.com/llvm/llvm-project
-  GIT_TAG        llvmorg-17.0.6
+  GIT_TAG        llvmorg-${CMAKE_CXX_COMPILER_VERSION}
   SOURCE_SUBDIR  thalamus-nonexistant
-)  
+)
 message("Populate libc++")
 FetchContent_MakeAvailable(llvm)
 message("Populated libc++")
 if(NOT EXISTS "${llvm_BINARY_DIR}/CMakeCache.txt")
   message("BUILD libc++")
   execute_process(
-    COMMAND cmake ${llvm_SOURCE_DIR}/runtimes -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DLLVM_ENABLE_RUNTIMES=libcxx\\;libcxxabi
+    COMMAND cmake ${llvm_SOURCE_DIR}/runtimes -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DLLVM_ENABLE_RUNTIMES=libcxx\\;libcxxabi\\;libunwind
     -G "${CMAKE_GENERATOR}"
     -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
     -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}

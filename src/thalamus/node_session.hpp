@@ -73,7 +73,9 @@ namespace thalamus {
     , selector(_selector)
     , context_guard(std::move(_context_guard)) {
       THALAMUS_LOG(trace) << "Create NodeSession";
+    }
 
+    void start() {
       get_node();
     }
 
