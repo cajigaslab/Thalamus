@@ -454,7 +454,7 @@ class ObservableCollection(abc.ABC):
     return value
 
   def recap(self, observer: typing.Optional[typing.Callable[['ObservableCollection.Action', typing.Any, typing.Any], None]] = None) -> None:
-    items = (self.content.items() if isinstance(self.content, dict) else enumerate(self.content))
+    items = list(self.content.items() if isinstance(self.content, dict) else enumerate(self.content))
 
     default_observer = lambda a, k, v: self.__notify(self, a, k, v)
 
