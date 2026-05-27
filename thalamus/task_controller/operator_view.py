@@ -53,37 +53,73 @@ class ViewWidget(QWidget):
     finally:
       self.painting = False
 
-class CentralWidget(QWidget):
-  """
-  Central widget for the operator view
-  """
-  def __init__(self, target: TaskWindow, config: ObservableCollection) -> None:
+class EyeProjectiveModelWidget(QWidget):
+  def __init__(self, eye_config: ObservableCollection) -> None:
     super().__init__()
 
-    if 'eye_scaling' not in config:
-      config['eye_scaling'] = {}
+    if 'Models' not in eye_config:
+      eye_config['Models'] = {}
+    
+    if 'Projective' not in eye_config['Models']:
+      eye_config['Models']['Projective'] = {
+        'Parameters': [0.5, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0],
+        'DPI': 100.0,
+        'Distance (m)': 1.0
+      }
 
-    eye_config = config['eye_scaling']
+    projective = eye_config['Models']['Projective']
+    parameters = projective['Parameters']
+    parameter_edit = QLineEdit()
+    dpi_spinbox = QDoubleSpinBox()
+    dpi_spinbox.setRange(0, 1000000)
+    distance_spinbox = QDoubleSpinBox()
+    distance_spinbox.setRange(0, 1000000)
+    distance_spinbox.setDecimals(3)
+
+    def on_change(source: ObservableCollection, _: ObservableCollection.Action, key: typing.Any, value: typing.Any) -> None:
+      nonlocal parameters
+      if key == 'Parameters':
+        parameters = value
+        parameters.recap()
+      elif source == parameters:
+        parameter_edit.setText(' '.join(str(p) for p in parameters))
+      elif key == 'DPI':
+        dpi_spinbox.setValue(value)
+      elif key == 'Distance (m)':
+        distance_spinbox.setValue(value)
+
+    def on_edit():
+      nonlocal parameters
+      text = parameter_edit.text()
+      try:
+        new_params = [float(p) for p in text.split()]
+        if len(new_params) != 8:
+          raise ValueError()
+      except ValueError:
+        parameter_edit.setStyleSheet("color: red;")
+        return
+      parameter_edit.setStyleSheet("color: black;")
+      parameters[:] = new_params
+
+    parameter_edit.editingFinished.connect(on_edit)
+    dpi_spinbox.editingFinished.connect(lambda: projective.update({'DPI': dpi_spinbox.value()}))
+    distance_spinbox.editingFinished.connect(lambda: projective.update({'Distance (m)': distance_spinbox.value()}))
 
     layout = QGridLayout()
-    layout.addWidget(ViewWidget(target), 0, 0, 1, 4)
-    layout.setRowStretch(0, 1)
+    layout.addWidget(QLabel('Parameters:'), 0, 0)
+    layout.addWidget(parameter_edit, 0, 1)
+    layout.addWidget(QLabel('DPI:'), 1, 0)
+    layout.addWidget(dpi_spinbox, 1, 1)
+    layout.addWidget(QLabel('Distance (m)'), 2, 0)
+    layout.addWidget(distance_spinbox, 2, 1)
 
-    clear_button = QPushButton('Clear')
-    layout.addWidget(clear_button, 1, 0)
-    layout.setRowStretch(1, 0)
-    clear_button.clicked.connect(target.canvas.clear_accumulation)
+    self.setLayout(layout)
+    projective.add_recursive_observer(on_change, lambda: isdeleted(self))
+    projective.recap()
 
-    auto_clear_checkbox = QCheckBox('Auto Clear')
-    layout.addWidget(auto_clear_checkbox, 1, 1)
-    auto_clear_checkbox.toggled.connect(lambda v: eye_config.update({'Auto Clear': v}))
-
-    def on_eye_config_change(a, k, v):
-      if k == 'Auto Clear':
-        auto_clear_checkbox.setChecked(v)
-
-    eye_config.add_observer(on_eye_config_change, lambda: isdeleted(self))
-    eye_config.recap(on_eye_config_change)
+class EyeQuadrantScalingWidget(QWidget):
+  def __init__(self, eye_config: ObservableCollection) -> None:
+    super().__init__()
 
     quadrants = [
       ("I", 2, 0),
@@ -91,6 +127,8 @@ class CentralWidget(QWidget):
       ("III", 5, 0),
       ("IV", 5, 2)
     ]
+
+    layout = QGridLayout()
 
     def update_field(quadrant: str, field: str, value: float) -> None:
       eye_config[quadrant][field] = value
@@ -122,7 +160,71 @@ class CentralWidget(QWidget):
         x_box.setValue(eye_config[quadrant]['x'])
         y_box.setValue(eye_config[quadrant]['y'])
 
-      eye_config[quadrant].add_observer(functools.partial(on_config_change, quadrant, x_spin_box, y_spin_box))
+      eye_config[quadrant].add_observer(functools.partial(on_config_change, quadrant, x_spin_box, y_spin_box), lambda: isdeleted(self))
+
+    self.setLayout(layout)
+
+
+class CentralWidget(QWidget):
+  """
+  Central widget for the operator view
+  """
+  def __init__(self, target: TaskWindow, config: ObservableCollection) -> None:
+    super().__init__()
+
+    if 'eye_scaling' not in config:
+      config['eye_scaling'] = {}
+
+    eye_config = config['eye_scaling']
+    if 'Selected Model' not in eye_config:
+      eye_config['Selected Model'] = 'Quadrant Scaling'
+
+    layout = QGridLayout()
+    layout.addWidget(ViewWidget(target), 0, 0, 1, 4)
+    layout.setRowStretch(0, 1)
+
+    clear_button = QPushButton('Clear')
+    layout.addWidget(clear_button, 1, 0)
+    layout.setRowStretch(1, 0)
+    clear_button.clicked.connect(target.canvas.clear_accumulation)
+
+    auto_clear_checkbox = QCheckBox('Auto Clear')
+    layout.addWidget(auto_clear_checkbox, 1, 1)
+    auto_clear_checkbox.toggled.connect(lambda v: eye_config.update({'Auto Clear': v}))
+
+    model_combo = QComboBox()
+    model_combo.addItem('Quadrant Scaling')
+    model_combo.addItem('Projective')
+    layout.addWidget(QLabel('Model:'), 2, 0)
+    layout.addWidget(model_combo, 2, 1)
+
+    model_combo.currentTextChanged.connect(lambda t: eye_config.update({'Selected Model': t}))
+
+    model_widget = None
+    def on_eye_config_change(a, k, v):
+      nonlocal model_widget
+      if k == 'Auto Clear':
+        auto_clear_checkbox.setChecked(v)
+      elif k == 'Selected Model':
+        model_combo.setCurrentText(v)
+        if v == 'Quadrant Scaling':
+          new_model_widget = EyeQuadrantScalingWidget(eye_config)
+        elif v == 'Projective':
+          new_model_widget = EyeProjectiveModelWidget(eye_config)
+        else:
+          new_model_widget = QWidget()
+
+        
+        if model_widget is None:
+          model_widget = new_model_widget
+          layout.addWidget(model_widget, 3, 0, 1, 4)
+        else:
+          layout.replaceWidget(model_widget, new_model_widget)
+          model_widget.deleteLater()
+          model_widget = new_model_widget
+
+    eye_config.add_observer(on_eye_config_change, lambda: isdeleted(self))
+    eye_config.recap(on_eye_config_change)
 
     self.setLayout(layout)
 

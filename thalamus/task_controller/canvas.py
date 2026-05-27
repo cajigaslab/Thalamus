@@ -329,16 +329,14 @@ class TouchCalibration():
 
   def __str__(self) -> str:
     return f'TouchCalibration(calibrating_touch={self.calibrating_touch})'
-
-class InputConfig():
-  '''
-  Touch and eye input config
-  '''
-  def __init__(self, config: ObservableCollection) -> None:
-    self.touch_channels = config['touch_channels']
-    self.touch_path = QPainterPath()
-    self.touch_path.setFillRule(Qt.FillRule.WindingFill)
-    self.last_touch = QPoint(0, 0)
+  
+class EyeProjectiveConfig:
+  def __init__(self, config: ObservableCollection):
+    self.detached = True
+  
+class EyeQuadrantScalingConfig:
+  def __init__(self, config: ObservableCollection):
+    self.detached = True
     self.gaze_paths = [
       QPainterPath(), QPainterPath(), QPainterPath(), QPainterPath()]
     self.gaze_paths[0].setFillRule(Qt.FillRule.WindingFill)
@@ -351,14 +349,13 @@ class InputConfig():
       QTransform(),
       QTransform(),
       QTransform()]
-    self.touch_calibration = TouchCalibration(config)
 
     if 'eye_scaling' not in config:
       config['eye_scaling'] = {}
     for quadrant in ["I", "II", "III", "IV"]:
       if quadrant not in config['eye_scaling']:
         config['eye_scaling'][quadrant] = {'x': 1, 'y': 1}
-      config['eye_scaling'][quadrant].add_observer(functools.partial(self.on_eye_scaling_changed, quadrant))
+      config['eye_scaling'][quadrant].add_observer(functools.partial(self.on_eye_scaling_changed, quadrant), lambda: self.detached)
       self.on_eye_scaling_changed(quadrant, ObservableCollection.Action.SET, 'x', config['eye_scaling'][quadrant]['x'])
       self.on_eye_scaling_changed(quadrant, ObservableCollection.Action.SET, 'y', config['eye_scaling'][quadrant]['y'])
 
@@ -392,6 +389,42 @@ class InputConfig():
     for point in points:
       scaled_point = transform.map(point)
       path.addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
+
+class InputConfig():
+  '''
+  Touch and eye input config
+  '''
+  def __init__(self, config: ObservableCollection) -> None:
+    self.touch_channels = config['touch_channels']
+    self.touch_path = QPainterPath()
+    self.touch_path.setFillRule(Qt.FillRule.WindingFill)
+    self.last_touch = QPoint(0, 0)
+    self.touch_calibration = TouchCalibration(config)
+    self.gaze_config = None
+
+    if 'eye_scaling' not in config:
+      config['eye_scaling'] = {}
+    eye_config = config['eye_scaling']
+
+    def on_change(action, key, value):
+      if key == 'Selected Model':
+        if self.gaze_config is not None:
+          self.gaze_config.detached = True
+
+        if value == 'Quadrant Scaling':
+          self.gaze_config = EyeQuadrantScalingConfig(config)
+        elif value == 'Projective':
+          self.gaze_config = EyeProjectiveConfig(config)
+
+    eye_config.add_observer(on_change)
+
+  def paint(self, painter: QPainter, dims: QSize):
+    with painter.masked(RenderOutput.OPERATOR):
+      painter.fillPath(self.touch_path, QColor(255, 0, 0))
+
+      painter.setTransform(QTransform.fromTranslate(dims.width()/2, dims.height()/2))
+      for path in self.gaze_paths:
+        painter.fillPath(path, QColor(0, 0, 255))
 
   def __str__(self) -> str:
     return f'InputConfig(touch_channels={self.touch_channels})'
@@ -620,12 +653,7 @@ class Canvas(QOpenGLWidget):
       painter.fillRect(QRect(0, 0, 4000, 4000), QColor(0, 0, 0))
       self.listeners.renderer(painter)
 
-      with painter.masked(RenderOutput.OPERATOR):
-        painter.fillPath(self.input_config.touch_path, QColor(255, 0, 0))
-
-        painter.setTransform(QTransform.fromTranslate(self.width()/2, self.height()/2))
-        for path in self.input_config.gaze_paths:
-          painter.fillPath(path, QColor(0, 0, 255))
+      self.input_config.paint(painter)
 
     if self.current_output_mask != RenderOutput.OPERATOR:
       for subscriber in self.listeners.paint_subscribers:
