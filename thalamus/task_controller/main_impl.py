@@ -87,6 +87,7 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument('-u', '--ui-port', type=int, default=50051, help='UI GRPC port')
   parser.add_argument('-e', '--recorder-url', help='Recorder URL')
   parser.add_argument('-o', '--ophanim-url', help='Ophanim URL')
+  parser.add_argument('-l', '--log-level', choices=['trace', 'debug', 'info', 'warning', 'error', 'fatal'], default='info', help='Log level')
   parser.add_argument('-t', '--trace', action='store_true', help='Enable tracing')
   parser.add_argument('-n', '--no-orchestration', action='store_true', help='Disable orchestration')
   parser.add_argument('-y', '--pypipeline', action='store_true', help='Use Python data pipeline implementation')
@@ -106,10 +107,22 @@ async def async_main() -> None:
   done_future = asyncio.get_event_loop().create_future()
 
   asyncio.get_event_loop().set_exception_handler(exception_handler)
-  logging.basicConfig(level=logging.INFO, format='%(levelname)s %(asctime)s %(name)s:%(lineno)s %(message)s')
-  logging.getLogger('matplotlib.font_manager').setLevel(logging.INFO)
 
   arguments = parse_args()
+
+  log_level = logging.INFO
+  if arguments.log_level in ('trace', 'debug'):
+    log_level = logging.DEBUG
+  elif arguments.log_level == 'info':
+    log_level = logging.INFO
+  elif arguments.log_level == 'warning':
+    log_level = logging.WARNING
+  elif arguments.log_level == 'error':
+    log_level = logging.ERROR
+  elif arguments.log_level == 'fatal':
+    log_level = logging.CRITICAL
+  logging.basicConfig(level=log_level, format='%(levelname)s %(asctime)s %(name)s:%(lineno)s %(message)s')
+  logging.getLogger('matplotlib.font_manager').setLevel(log_level)
 
   ext_widgets = {}
   ext_library = None
@@ -186,6 +199,7 @@ async def async_main() -> None:
   else:
     logging.debug('%s', bmbi_native_filename)
     command = bmbi_native_filename, 'thalamus', '--port', str(arguments.port), '--state-url', f'localhost:{arguments.ui_port}'
+    command = command + ('--log-level', arguments.log_level)
     if ext_library is not None:
       command = command + ('--ext',) + ext_library
     if arguments.trace:

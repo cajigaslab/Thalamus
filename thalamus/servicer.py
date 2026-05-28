@@ -160,15 +160,29 @@ class ThalamusServicer(thalamus_pb2_grpc.ThalamusServicer):
               continue
 
             for match in matches:
+              #LOGGER.debug('%s', match)
               if isinstance(match.value, ObservableCollection):
-                match.value.assign(value)
+                LOGGER.debug('%s', match.context.value)
+                if change.action == thalamus_pb2.ObservableChange.Action.Set:
+                  match.value.assign(value)
+                elif match.value.parent is not None:
+                  key = match.value.key_in_parent()
+                  del match.value.parent[key]
               elif isinstance(match.path, jsonpath_ng.Index):
-                if match.path.index == len(match.context.value):
-                  match.context.value.append(value)
+                LOGGER.debug('%s', match.context.value)
+                if change.action == thalamus_pb2.ObservableChange.Action.Set:
+                  if match.path.index == len(match.context.value):
+                    match.context.value.append(value)
+                  else:
+                    match.context.value[match.path.index] = value
                 else:
-                  match.context.value[match.path.index] = value
+                  del match.context.value[match.path.index]
               elif isinstance(match.path, jsonpath_ng.Fields):
-                match.context.value[match.path.fields[0]] = value
+                LOGGER.debug('%s', match.context.value)
+                if change.action == thalamus_pb2.ObservableChange.Action.Set:
+                  match.context.value[match.path.fields[0]] = value
+                else:
+                  del match.context.value[match.path.fields[0]]
           if self.pending_out:
             await asyncio.wait(self.pending_out)
           self.pending_out = []

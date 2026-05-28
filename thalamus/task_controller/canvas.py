@@ -330,6 +330,54 @@ class TouchCalibration():
   def __str__(self) -> str:
     return f'TouchCalibration(calibrating_touch={self.calibrating_touch})'
   
+class AngularScalingConfig:
+  def __init__(self, config: ObservableCollection):
+    self.detached = False
+    self.gaze_path = QPainterPath()
+    self.gaze_path.setFillRule(Qt.FillRule.WindingFill)
+
+    models = config['eye_scaling']['Models']
+    if 'Angular Scaling' not in models:
+      models['Angular Scaling'] = {
+        'Angle': [],
+        'Scale': [],
+      }
+
+    self.angle = models['Angular Scaling']['Angle']
+    self.scale = models['Angular Scaling']['Scale']
+
+  def paint(self, painter: QPainter, dims: QSize):
+    painter.setTransform(QTransform.fromTranslate(dims.width()/2, dims.height()/2))
+    painter.fillPath(self.gaze_path, QColor(0, 0, 255))
+
+  def process(self, voltage_point: QPointF):
+    model_length = min(len(self.angle), len(self.scale))
+    if model_length == 0:
+      scaled_point = 10*voltage_point
+    else:
+      val = numpy.arctan2(voltage_point.y(), voltage_point.x())
+      if val < 0:
+        val = numpy.pi + (numpy.pi + val)
+      factor = numpy.interp(val, self.angle[:model_length], self.scale[:model_length], period=2*numpy.pi)
+      scaled_point = factor*voltage_point
+
+    self.gaze_path.addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
+    return scaled_point
+
+  def clear(self):
+    self.gaze_path = QPainterPath()
+    self.gaze_path.setFillRule(Qt.FillRule.WindingFill)
+
+  def get_gaze_transform(self, from_center: QPoint):
+    def transform(x, y):
+      val = numpy.arctan2(y, x)
+      if val < 0:
+        val = numpy.pi + (numpy.pi + val)
+      factor = numpy.interp(val, self.angle, self.scale, period=2*numpy.pi)
+      return factor*x, factor*y
+
+    return transform
+
 class EyeProjectiveConfig:
   def __init__(self, config: ObservableCollection):
     self.detached = False
@@ -514,6 +562,8 @@ class InputConfig():
           self.gaze_config = EyeQuadrantScalingConfig(config)
         elif value == 'Projective':
           self.gaze_config = EyeProjectiveConfig(config)
+        elif value == 'Angular Scaling':
+          self.gaze_config = AngularScalingConfig(config)
 
     eye_config.add_observer(on_change)
     eye_config.recap(on_change)

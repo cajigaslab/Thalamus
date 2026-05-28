@@ -8,6 +8,7 @@ import functools
 from ..qt import *
 
 import packaging.version
+import numpy
 
 PYQT_VERSION = packaging.version.parse(PYQT_VERSION_STR)
 USINGLEGACY_QT = PYQT_VERSION < packaging.version.parse('5.11.0')
@@ -52,6 +53,62 @@ class ViewWidget(QWidget):
       painter.drawImage(render_rect, image)
     finally:
       self.painting = False
+
+class AngularScalingModelWidget(QWidget):
+  def __init__(self, eye_config: ObservableCollection) -> None:
+    super().__init__()
+    self.setMinimumSize(100, 100)
+
+    if 'Models' not in eye_config:
+      eye_config['Models'] = {}
+    
+    if 'Projective' not in eye_config['Models']:
+      eye_config['Models']['Projective'] = {
+        'Angle': [],
+        'Scale': [],
+      }
+
+    self.model = eye_config['Models']['Angular Scaling']
+
+    def on_change(source: ObservableCollection, _: ObservableCollection.Action, key: typing.Any, value: typing.Any) -> None:
+      self.update()
+
+    self.model.add_recursive_observer(on_change, lambda: isdeleted(self))
+    self.model.recap()
+
+  def paintEvent(self, e):
+    painter = QPainter(self)
+
+    anglef = self.model['Angle']
+    scalef = self.model['Scale']
+    length = min(len(anglef), len(scalef))
+
+    diameter = min(self.width(), self.height()) - 10
+    radius = diameter/2
+
+    angles = numpy.linspace(0, 2*numpy.pi, 360)
+    if length:
+      scales = numpy.interp(angles, anglef[:length], scalef[:length], period=2*numpy.pi)
+      scales /= scales.max()
+    else:
+      scales = numpy.ones_like(angles)
+
+    end = None
+    first = True
+    path = QPainterPath()
+    for a, s in zip(angles, scales):
+      coord = radius*numpy.cos(a)*s, radius*numpy.sin(a)*s
+      if first:
+        end = coord
+        path.moveTo(*coord)
+        first = False
+      else:
+        path.lineTo(*coord)
+    if end is not None:
+      path.lineTo(*end)
+
+    painter.translate(radius, radius)
+    painter.drawPath(path)
 
 class EyeProjectiveModelWidget(QWidget):
   def __init__(self, eye_config: ObservableCollection) -> None:
@@ -194,6 +251,7 @@ class CentralWidget(QWidget):
 
     model_combo = QComboBox()
     model_combo.addItem('Quadrant Scaling')
+    model_combo.addItem('Angular Scaling')
     model_combo.addItem('Projective')
     layout.addWidget(QLabel('Model:'), 2, 0)
     layout.addWidget(model_combo, 2, 1)
@@ -211,6 +269,8 @@ class CentralWidget(QWidget):
           new_model_widget = EyeQuadrantScalingWidget(eye_config)
         elif v == 'Projective':
           new_model_widget = EyeProjectiveModelWidget(eye_config)
+        elif v == 'Angular Scaling':
+          new_model_widget = AngularScalingModelWidget(eye_config)
         else:
           new_model_widget = QWidget()
 
