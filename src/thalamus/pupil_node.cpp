@@ -151,7 +151,7 @@ struct PupilNode::Impl {
     cairo_arc(cairo.get(), 0, 0, 128, 0, 2 * M_PI);
     cairo_fill(cairo.get());
 
-    node::signal_ready(outer, io_context);
+    node::signal_ready_offmain(outer, io_context);
 
     auto end = std::chrono::steady_clock::now();
     auto elapsed = end - start;

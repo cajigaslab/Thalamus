@@ -23,7 +23,7 @@ namespace thalamus {
       return node->ready.connect(callback);
     }
 
-    void signal_ready(Node* node, boost::asio::io_context& context) {
+    void signal_ready_offmain(Node* node, boost::asio::io_context& context) {
       std::optional<std::future<void>> future;
       if(!node->ready.empty()) {
         future = boost::asio::post(context, boost::asio::use_future([node] {
@@ -37,6 +37,13 @@ namespace thalamus {
       
       if(future.has_value()) {
         future->get();
+      }
+    }
+
+    void signal_ready_onmain(Node* node) {
+      node->ready(node);
+      if(node->ready_multithreaded) {
+        (*node->ready_multithreaded)(node);
       }
     }
   }

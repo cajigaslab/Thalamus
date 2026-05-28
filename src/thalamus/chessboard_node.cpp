@@ -145,7 +145,7 @@ struct ChessBoardNode::Impl {
       }
     }
 
-    node::signal_ready(outer, io_context);
+    node::signal_ready_offmain(outer, io_context);
 
     auto end = std::chrono::steady_clock::now();
     auto elapsed = end - start;
