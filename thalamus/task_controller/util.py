@@ -284,17 +284,18 @@ def remove_by_is(collection: typing.Any, value: typing.Any) -> None:
 
 RETURN = typing.TypeVar('RETURN')
 
-def create_task_with_exc_handling(awaitable: 'typing.Awaitable[RETURN]') -> 'asyncio.Task[RETURN]':
+def create_task_with_exc_handling(awaitable: 'typing.Awaitable[RETURN]', label: typing.Optional[str] = None) -> 'asyncio.Task[RETURN]':
   '''
   Wraps the specified awaitable in a task that will call the exception handler on an unhandled exception.
   '''
+  prefix = f'{label}: ' if label is not None else ''
   async def inner() -> RETURN:
     try:
       return await awaitable
     except Exception as exc: #pylint: disable=broad-except
       if not isinstance(exc, IgnorableError):
         asyncio.get_event_loop().call_exception_handler({
-          'message': str(exc),
+          'message': f'{prefix}{str(exc)}',
           'exception': exc
         })
       raise

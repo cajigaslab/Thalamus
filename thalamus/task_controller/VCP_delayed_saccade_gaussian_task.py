@@ -131,10 +131,10 @@ class Converter:
 class State(enum.Enum):
   """Enumeration for task states."""
   ACQUIRE_FIXATION = enum.auto()
-  FIXATE1 = enum.auto()
+  FIXATE = enum.auto()
   TARGET_PRESENTATION = enum.auto()
   HOLD_TARGET0 = enum.auto()
-  FIXATE2 = enum.auto()
+  DELAY = enum.auto()
   ACQUIRE_TARGET = enum.auto()
   HOLD_TARGET = enum.auto()
   SUCCESS = enum.auto()
@@ -164,14 +164,14 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   """
   form = Form.build(task_config, ["Name:", "Min:", "Max:"],
     Form.Choice('Task group', 'task_group', list(zip(task_groups, task_groups))),                
-    Form.Uniform('\u23F0 Fixation Duration 1', 'fix1_duration', 500, 700, 'ms'),
+    Form.Uniform('\u23F0 Fixation Duration', 'fix_duration', 500, 700, 'ms'),
     Form.Uniform('\u23F0 Target Presentation Duration', 'target_present_dur', 375, 450, 'ms'), 
-    Form.Uniform('\u23F0 Fixation Duration 2', 'fix2_duration', 400, 500, 'ms'),
+    Form.Uniform('\u23F0 Delay Duration', 'del_duration', 400, 500, 'ms'),
     Form.Uniform('\u23F0 Target Hold Duration', 'target_hold_dur', 10, 20, 'ms'),
     Form.Uniform('\u23F0 Decision Timeout', 'decision_timeout', 4000, 4500, 'ms'),
     Form.Constant('\u23F0 Penalty Delay', 'penalty_delay', 1000,'ms'),
-    Form.Constant('\u23F0 Max allowed single blink duration', 'blink_dur_ms', 1, 'ms'),                
-    Form.Uniform('\U0001F4A7 Reward per trial', 'reward_per_trial_ms', 100, 150, 'ms'),  
+    Form.Constant('\u23F0 Max allowed single blink duration', 'blink_dur', 100, 'ms'),                
+    Form.Uniform('\U0001F4A7 Reward per trial', 'reward_per_trial', 100, 150, 'ms'),  
     Form.Constant('\U0001F3A3 Rate of catch trials', 'catch_trial_rate', 1),               
     Form.Uniform('\u23F0 Additional catch trial duration', 'catch_duration', 300, 400, 'ms'),  
     Form.Constant('\u25EF Fixation cross - Radius for gaze acceptance', 'accpt_fix_radius_deg', 2.75, '\u00B0'), # Define the radius in degrees of the area where gaze is accepted as being correct
@@ -225,12 +225,12 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   monitorsubj_H_pix_spinbox = form.findChild(QDoubleSpinBox, "monitorsubj_H_pix")
   monitorsubj_H_pix_spinbox.setRange(100, 4000)
   monitorsubj_H_pix_spinbox.setSingleStep(10)
-  reward_per_trial_ms_min_spinbox = form.findChild(QDoubleSpinBox, "reward_per_trial_ms_min")
-  reward_per_trial_ms_min_spinbox.setRange(10, 500)
-  reward_per_trial_ms_min_spinbox.setSingleStep(1)
-  reward_per_trial_ms_max_spinbox = form.findChild(QDoubleSpinBox, "reward_per_trial_ms_max")
-  reward_per_trial_ms_max_spinbox.setRange(100, 500)
-  reward_per_trial_ms_max_spinbox.setSingleStep(1)
+  reward_per_trial_min_spinbox = form.findChild(QDoubleSpinBox, "reward_per_trial_min")
+  reward_per_trial_min_spinbox.setRange(10, 500)
+  reward_per_trial_min_spinbox.setSingleStep(1)
+  reward_per_trial_max_spinbox = form.findChild(QDoubleSpinBox, "reward_per_trial_max")
+  reward_per_trial_max_spinbox.setRange(100, 500)
+  reward_per_trial_max_spinbox.setSingleStep(1)
   accpt_fix_radius_deg_spinbox = form.findChild(QDoubleSpinBox, "accpt_fix_radius_deg")
   accpt_fix_radius_deg_spinbox.setRange(.1, 60.0)
   accpt_fix_radius_deg_spinbox.setSingleStep(0.1)  
@@ -328,8 +328,8 @@ async def acquire_fixation_func(context, get_gaze, center, accpt_fix_radius_pix,
         if acquired:
             return
 
-async def fixate1_func(context, get_gaze, center, accpt_fix_radius_pix, duration, monitorsubj_W_pix, monitorsubj_H_pix):
-    # Maintain full fixation for 'duration' ms (if total duration not met, reset)
+async def fixate_func(context, get_gaze, center, accpt_fix_radius_pix, duration1, duration2, monitorsubj_W_pix, monitorsubj_H_pix):
+    # Maintain full fixation for 'fix_duration' ms 
     while True:
         success = await wait_for_hold(
             context,
@@ -337,8 +337,10 @@ async def fixate1_func(context, get_gaze, center, accpt_fix_radius_pix, duration
                 gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center,
                 gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix) - center
             )) ** .5 < accpt_fix_radius_pix,
-            timedelta(seconds=duration),
-            timedelta(seconds=0) # 0sec to ensure waiting indefinitely
+            # timedelta(seconds=duration),
+            # timedelta(seconds=0) # 0sec to ensure waiting indefinitely
+            timedelta(seconds=duration1),
+            timedelta(seconds=duration2) # allowed single blink duration
         )
         if success:
             return
@@ -359,7 +361,7 @@ async def present_target_func(context, task_group, get_gaze, center, accpt_fix_r
   # With Delay
   # Maintain fixation for 'duration' ms during target presentation
   # Wait for the gaze to hold within fixation cross tolerances for the target presentation duration
-  # if don't reacquire the target within blink_dur_ms, then ABORT the trial
+  # if don't reacquire the target within blink_dur, then ABORT the trial
   else:
     success = await wait_for_hold(
       context,
@@ -372,8 +374,8 @@ async def present_target_func(context, task_group, get_gaze, center, accpt_fix_r
     )
   return success
 
-async def fixate2_func(context, get_gaze, center, accpt_fix_radius_pix, duration1, duration2, monitorsubj_W_pix, monitorsubj_H_pix):
-  # Wait for the gaze to hold within the fixation window for the fix2 duration 
+async def delay_func(context, get_gaze, center, accpt_fix_radius_pix, duration1, duration2, monitorsubj_W_pix, monitorsubj_H_pix):
+  # Wait for the gaze to hold within the fixation window for the del_duration 
   success = await wait_for_hold(
       context,
       lambda: abs(QPoint.dotProduct(
@@ -460,27 +462,28 @@ async def handle_acquire_fixation(
     )
     return
 
-# Center fixation for 'fix1_duration' ms
-async def handle_fixate1(
+# Center fixation for 'fix_duration' ms
+async def handle_fixate(
     context,
     get_gaze,
     center,
     accpt_fix_radius_pix,
-    fix1_duration,
+    fix_duration,
+    blink_dur,
     monitorsubj_W_pix,
     monitorsubj_H_pix,
     widget,
     converter
 ):
     global state
-    state = State.FIXATE1
-    await context.log('BehavState=FIXATE1')
+    state = State.FIXATE
+    await context.log('BehavState=FIXATE')
     print(state)
     widget.update()
-    await fixate1_func(context, get_gaze, center, accpt_fix_radius_pix, fix1_duration, monitorsubj_W_pix, monitorsubj_H_pix)
+    await fixate_func(context, get_gaze, center, accpt_fix_radius_pix, fix_duration, blink_dur, monitorsubj_W_pix, monitorsubj_H_pix), 
     temp_gaze = gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix)
-    await context.log(f"Gaze[X,Y]_pix-abs_after-FIXATE1={temp_gaze}")
-    await context.log(f"Gaze[X,Y]_deg-abs_after-FIXATE1={converter.relpix_to_absdeg(temp_gaze.x(), temp_gaze.y())}")
+    await context.log(f"Gaze[X,Y]_pix-abs_after-FIXATE={temp_gaze}")
+    await context.log(f"Gaze[X,Y]_deg-abs_after-FIXATE={converter.relpix_to_absdeg(temp_gaze.x(), temp_gaze.y())}")
     return
 
 # Center fixation during target presentation for 'target_present_dur' ms
@@ -493,7 +496,7 @@ async def handle_present_target(
     accpt_gaze_radius_pix,
     targetpos_pix,
     target_present_dur,
-    blink_dur_ms,
+    blink_dur,
     monitorsubj_W_pix,
     monitorsubj_H_pix,
     widget,
@@ -504,34 +507,34 @@ async def handle_present_target(
     await context.log('BehavState=TARGET_PRESENTATION') # log the start of target presentation
     print(state)
     widget.update()
-    success = await present_target_func(context, task_group, get_gaze, center, accpt_fix_radius_pix, accpt_gaze_radius_pix, targetpos_pix, target_present_dur, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix)
+    success = await present_target_func(context, task_group, get_gaze, center, accpt_fix_radius_pix, accpt_gaze_radius_pix, targetpos_pix, target_present_dur, blink_dur, monitorsubj_W_pix, monitorsubj_H_pix)
     temp_gaze = gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix)
     await context.log(f"Gaze[X,Y]_pix-abs_after-acquiring-target={temp_gaze}")
     await context.log(f"Gaze[X,Y]_deg-abs_after-acquiring-target={converter.relpix_to_absdeg(temp_gaze.x(), temp_gaze.y())}")
     return success
 
-# Center fixation after target presentation for 'fix2_duration' ms
-async def handle_fixate2(
+# Center fixation after target presentation for 'del_duration' ms
+async def handle_delay(
     context,
     task_group,
     get_gaze,
     center,
     accpt_fix_radius_pix,
-    fix2_duration,
-    blink_dur_ms,
+    del_duration,
+    blink_dur,
     monitorsubj_W_pix,
     monitorsubj_H_pix,
     widget
 ):
     global state
-    state = State.FIXATE2
-    await context.log('BehavState=FIXATE2')
+    state = State.DELAY
+    await context.log('BehavState=DELAY')
     print(state)
     widget.update()
     if task_group == "Saccade - No Delay": # if we want to move gaze to the target without it disappearing
       success = True # we don't need to wait for the gaze to hold on the target
     else: # task_group == "Saccade - With Delay"
-      success = await fixate2_func(context, get_gaze, center, accpt_fix_radius_pix, fix2_duration, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix)    
+      success = await delay_func(context, get_gaze, center, accpt_fix_radius_pix, del_duration, blink_dur, monitorsubj_W_pix, monitorsubj_H_pix)    
       temp_gaze = gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix)
       await context.log(f"Gaze[X,Y]_pix-abs_after-acquiring-target={temp_gaze}")
       await context.log(f"Gaze[X,Y]_deg-abs_after-acquiring-target={converter.relpix_to_absdeg(temp_gaze.x(), temp_gaze.y())}")
@@ -548,7 +551,7 @@ async def handle_acquire_target(
     accpt_fix_radius_pix,
     accpt_gaze_radius_pix,
     decision_timeout,
-    blink_dur_ms,
+    blink_dur,
     catch_duration,
     monitorsubj_W_pix,
     monitorsubj_H_pix,
@@ -560,7 +563,7 @@ async def handle_acquire_target(
     await context.log('BehavState=ACQUIRE_TARGET')
     print(state)
     widget.update()
-    success = await acquire_target_func(context, trial_type, get_gaze, center, targetpos_pix, accpt_fix_radius_pix, accpt_gaze_radius_pix, decision_timeout, blink_dur_ms, catch_duration, monitorsubj_W_pix, monitorsubj_H_pix)
+    success = await acquire_target_func(context, trial_type, get_gaze, center, targetpos_pix, accpt_fix_radius_pix, accpt_gaze_radius_pix, decision_timeout, blink_dur, catch_duration, monitorsubj_W_pix, monitorsubj_H_pix)
     temp_gaze = gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix)
     await context.log(f"Gaze[X,Y]_pix-abs_after-acquiring-target={temp_gaze}")
     await context.log(f"Gaze[X,Y]_deg-abs_after-acquiring-target={converter.relpix_to_absdeg(temp_gaze.x(), temp_gaze.y())}")
@@ -577,7 +580,7 @@ async def handle_hold_target(
     accpt_fix_radius_pix,
     accpt_gaze_radius_pix,
     target_hold_dur,
-    blink_dur_ms,
+    blink_dur,
     monitorsubj_W_pix,
     monitorsubj_H_pix,
     widget,
@@ -588,7 +591,7 @@ async def handle_hold_target(
     await context.log('BehavState=HOLD_TARGET')
     print(state)
     widget.update()
-    success = await hold_target_func(context, trial_type, get_gaze, center, targetpos_pix, accpt_fix_radius_pix, accpt_gaze_radius_pix, target_hold_dur, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix)
+    success = await hold_target_func(context, trial_type, get_gaze, center, targetpos_pix, accpt_fix_radius_pix, accpt_gaze_radius_pix, target_hold_dur, blink_dur, monitorsubj_W_pix, monitorsubj_H_pix)
     temp_gaze = gaze_valid(get_gaze(), monitorsubj_W_pix, monitorsubj_H_pix)
     await context.log(f"Gaze[X,Y]_pix-abs_after-holding-target={temp_gaze}")
     await context.log(f"Gaze[X,Y]_deg-abs_after-holding-target={converter.relpix_to_absdeg(temp_gaze.x(), temp_gaze.y())}")
@@ -635,14 +638,8 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
         return True
 
   def get_valid_angles(step_deg, sector1_min, sector1_max, sector2_min, sector2_max):
-      all_angles = [i for i in range(0, 360, int(step_deg))]
-      valid_angles = []
-      for angle in all_angles:
-          if (angle_in_sector(angle, sector1_min, sector1_max) or
-              angle_in_sector(angle, sector2_min, sector2_max)):
-              valid_angles.append(angle)
-
-      return sorted(set(valid_angles))  # remove duplicates if overlapping
+      valid_angles = [i for i in range(int(sector1_min), int(sector1_max), int(step_deg))] + [i for i in range(int(sector2_min), int(sector2_max), int(step_deg))]
+      return sorted(set(valid_angles))  
 
   if converter is None: 
     # Everything below this line will be executed only once, when the task is started   
@@ -679,8 +676,8 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
 
     valid_angles_deg = get_valid_angles(target_loc_polar_step_deg, target_loc_angle_sector1_deg_min,
         target_loc_angle_sector1_deg_max, target_loc_angle_sector2_deg_min, target_loc_angle_sector2_deg_max) # Get valid angles in degrees
+    print(f"valid_angles_deg={valid_angles_deg}")
     valid_angles_rad = [np.deg2rad(a) for a in valid_angles_deg] # Convert degrees to radians
-
     # Generate random positions around a circle
     rand_pos = [
       (center.x() + radius*np.cos(angle), center.y() - radius*np.sin(angle))
@@ -688,6 +685,9 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       for angle in valid_angles_rad # Use pre-generated valid angles
     ]
     random.shuffle(rand_pos) # Shuffle the list of random positions to randomize their order
+    # print(valid_angles_deg)
+    # print(valid_angles_rad)
+    # print(rand_pos)
     
     # print("xxxxxxxxxxxxxxxxxxxxxxxxxrand_pos (pix)xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
     # print("xxxxxxxxxxxxxxxxxxxxxxxxxrand_pos (pix)xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
@@ -828,18 +828,18 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   
   # Get various timeouts from the context (user GUI)
   decision_timeout = context.get_value('decision_timeout') / 1000 # dividing by 1000x to convert from ms to s
-  fix1_duration = context.get_value('fix1_duration') / 1000
+  fix_duration = context.get_value('fix_duration') / 1000
   if task_group == "Saccade - No Delay": # catch_trial or saccade_trial without delay
-    fix2_duration = 0
+    del_duration = 0
   else: # task_group == "Saccade - With Delay" catch_trial or saccade_trial with delay
-    fix2_duration = context.get_value('fix2_duration') / 1000
+    del_duration = context.get_value('del_duration') / 1000
   target_present_dur = context.get_value('target_present_dur') / 1000
   target_hold_dur = context.get_value('target_hold_dur') / 1000
   penalty_delay = config['penalty_delay']/ 1000
-  blink_dur_ms = context.get_value('blink_dur_ms') / 1000  
+  blink_dur = config['blink_dur']/ 1000  
   catch_duration = context.get_value('catch_duration') / 1000
 
-  print(fix1_duration, target_present_dur, fix2_duration)
+  print(fix_duration, target_present_dur, del_duration)
 
   def pick_random_value(min_val, max_val, step):
     # Generate the range of possible values using numpy
@@ -849,7 +849,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
 
   # Create a Gaussian gradient for the target with randomly selected luminance, orientation, size and location
   # Random selection is based on user-defined range min...max and step size
-  reward_per_trial_ms = context.get_value('reward_per_trial_ms') # return a uniform random number
+  reward_per_trial = context.get_value('reward_per_trial') # return a uniform random number
   luminance_targ_per = pick_random_value(config['luminance_targ_per']['min'], config['luminance_targ_per']['max'], config['luminance_targ_step'])
   context.trial_summary_data.used_values['luminance_targ_per'] = luminance_targ_per # this command based on 'get_value()' from 'task_context.py' aalows to add values to task_config['used_values']
   orientation_targ_ran = pick_random_value(config['orientation_targ_ran']['min'], config['orientation_targ_ran']['max'], config['orientation_targ_step'])
@@ -942,15 +942,15 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
 
   # Initialize gaze position
   gaze = QPoint(99999,99999)
-  gaze_trace_store = []
+  # gaze_trace_store = []
   def gaze_handler(cursor: QPoint) -> None:
     nonlocal gaze
     gaze = cursor
     valid_gaze = gaze_valid(gaze, monitorsubj_W_pix, monitorsubj_H_pix)
 
     # store valid gaze samples for trace drawing
-    if valid_gaze.x() != 99999 and valid_gaze.y() != 99999:
-        gaze_trace_store.append(QPoint(valid_gaze))
+    # if valid_gaze.x() != 99999 and valid_gaze.y() != 99999:
+    #     gaze_trace_store.append(QPoint(valid_gaze))
   # Set the gaze listener to the gaze handler function
   widget.gaze_listener = gaze_handler
   
@@ -981,7 +981,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     # painter.fillRect(int(widget.width() - 100), int(widget.height()-100), 100, 100, photodiode_blinking_square) # Keep uncommented if want a constant white square for the photo-diode
 
     # Draw the fixation cross and Gaussian based on the current state
-    if state in (State.ACQUIRE_FIXATION, State.FIXATE1):
+    if state in (State.ACQUIRE_FIXATION, State.FIXATE):
       # Acquiring and fixating on the fixation cross
       pen = painter.pen()
       pen.setWidth(2)
@@ -1021,9 +1021,9 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
         # painter.drawLine(center_x, int(center_y - target_loc_eccentricity_pix_max), center_x, int(center_y + target_loc_eccentricity_pix_max))  # Vertical line
         # painter.drawLine(int(center_x - target_loc_eccentricity_pix_max), center_y, int(center_x + target_loc_eccentricity_pix_max), center_y)  # Horizontal line
         # endregion
-    elif state == State.FIXATE2:
+    elif state == State.DELAY:
       # Fixation after target presentation
-      # await context.log('BehavState=FIXATE2_start') # saving any variables / data from code
+      # await context.log('BehavState=DELAY_start') # saving any variables / data from code
       pen = painter.pen()
       pen.setWidth(2)
       pen.setColor(QColor(255, 0, 0))
@@ -1096,12 +1096,12 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       drawText(painter, f"Gaze (pix): x = {temp_gaze.x()}, y = {temp_gaze.y()}", QPoint(0, 190), background_color_qt)
 
       # Drawing the gaze trace of valid gaze samples
-      for gaze_qpoint in gaze_trace_store:
-        draw_gaze(
-            painter,
-            gaze_qpoint,
-            QColor(255, 255, 0, 120)
-        )
+      # for gaze_qpoint in gaze_trace_store:
+      #   draw_gaze(
+      #       painter,
+      #       gaze_qpoint,
+      #       QColor(255, 255, 0, 120)
+      #   )
         
       # Drawing the gaze position as a continuously moving point
       color_rgba = QColor(138, 43, 226, 255) # purple
@@ -1135,7 +1135,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     data = [float(trial_num), saccade_trial_success_rate, catch_success_rate, only_saccade_trial_success_rate],
     spans=[Span(begin=0, end=1, name='Trial Number'), Span(begin=1, end=2, name='Saccade trial success rate (%)'), \
             Span(begin=2, end=3, name='Catch trial success rate (%)'), Span(begin=3, end=4, name='Only Saccade trial success rate (%)')], sample_intervals=[0, 0, 0, 0]
-  )))
+  )), 'performance')
 
   # trial counters before the 1st "return" statement
   trial_num += 1 # Increment the trial counter
@@ -1155,28 +1155,28 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     data=[5,0], # 5 = HIGH, 0 = LOW voltages
     spans=[Span(begin=0,end=2,name='Time')], 
     sample_intervals=[1_000_000*20]) # multiplyin by 1_000_000 will give us nanoseconds (ns)
-  ))
+  ), 'ACQUIRE_FIXATION')
 
-  # Handles State.FIXATE1
+  # Handles State.FIXATE
   fix_start = time.perf_counter()
-  await handle_fixate1(context, lambda: gaze, center, accpt_fix_radius_pix, fix1_duration, monitorsubj_W_pix, monitorsubj_H_pix, widget, converter)
+  await handle_fixate(context, lambda: gaze, center, accpt_fix_radius_pix, fix_duration, blink_dur, monitorsubj_W_pix, monitorsubj_H_pix, widget, converter)
   create_task_with_exc_handling(context.inject_analog('state_in', AnalogResponse(
     data=[5,0], # 5 = HIGH, 0 = LOW voltages
     spans=[Span(begin=0,end=2,name='Time')], 
     sample_intervals=[1_000_000*20]) # multiplyin by 1_000_000 will give us nanoseconds (ns)
-  ))
+  ), 'FIXATE')
   fix_end = time.perf_counter()
   fix_dur = fix_end - fix_start
   # await context.log('Duration={:.2f}'.format(fix_dur*1000))
 
   # Handles State.TARGET_PRESENTATION
   targ_start = time.perf_counter()
-  success = await handle_present_target(context, task_group, lambda: gaze, center, accpt_fix_radius_pix, accpt_gaze_radius_pix, targetpos_pix, target_present_dur, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix, widget, converter)
+  success = await handle_present_target(context, task_group, lambda: gaze, center, accpt_fix_radius_pix, accpt_gaze_radius_pix, targetpos_pix, target_present_dur, blink_dur, monitorsubj_W_pix, monitorsubj_H_pix, widget, converter)
   create_task_with_exc_handling(context.inject_analog('state_in', AnalogResponse(
     data=[5,0], # 5 = HIGH, 0 = LOW voltages
     spans=[Span(begin=0,end=2,name='Time')], 
     sample_intervals=[1_000_000*20]) # multiplyin by 1_000_000 will give us nanoseconds (ns)
-  ))
+  ), 'TARGET_PRESENTATION')
   targ_end = time.perf_counter()
   targ_dur = targ_end - targ_start
   # await context.log('Duration={:.2f}'.format(targ_dur*1000))
@@ -1190,7 +1190,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       data=[5,0], # 5 = HIGH, 0 = LOW voltages
       spans=[Span(begin=0,end=2,name='Time')], 
       sample_intervals=[1_000_000*150]) # multiplyin by 1_000_000 will give us nanoseconds (ns)
-    ))
+    ), 'ABORT_TARGET')
       print(state)
       failure_sound.play()
       await context.log(f"TRIAL_NUM={trial_num}, \
@@ -1201,15 +1201,15 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
       await context.sleep(timedelta(seconds=penalty_delay))
       return TaskResult(False)
 
-  # Handles State.FIXATE2
+  # Handles State.DELAY
   delay_start = time.perf_counter()
-  success = await handle_fixate2(context, task_group, lambda: gaze, center, accpt_fix_radius_pix, fix2_duration, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix, widget)
+  success = await handle_delay(context, task_group, lambda: gaze, center, accpt_fix_radius_pix, del_duration, blink_dur, monitorsubj_W_pix, monitorsubj_H_pix, widget)
   print(state)
   create_task_with_exc_handling(context.inject_analog('state_in', AnalogResponse(
     data=[5,0], # 5 = HIGH, 0 = LOW voltages
     spans=[Span(begin=0,end=2,name='Time')], 
     sample_intervals=[1_000_000*20]) # multiplyin by 1_000_000 will give us nanoseconds (ns)
-  ))
+  ), 'DELAY')
 
   if not success:
     delay_end = time.perf_counter()
@@ -1221,7 +1221,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     data=[5,0], # 5 = HIGH, 0 = LOW voltages
     spans=[Span(begin=0,end=2,name='Time')], 
     sample_intervals=[1_000_000*300]) # multiplyin by 1_000_000 will give us nanoseconds (ns)
-  ))
+  ), 'ABORT_DELAY')
     print(state)
     abort_sound.play()
     await context.log(f"TRIAL_NUM={trial_num}, \
@@ -1234,15 +1234,15 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   else:
     delay_end = time.perf_counter()
     delay_dur = delay_end - delay_start
-    # await context.log('Duration={:.2f}'.format(delay_dur*1000))
+    await context.log('Duration={:.2f}'.format(delay_dur*1000))
 
   # Handles State.ACQUIRE_TARGET
-  success = await handle_acquire_target(context, trial_type, lambda: gaze, center, targetpos_pix, accpt_fix_radius_pix, accpt_gaze_radius_pix, decision_timeout, blink_dur_ms, catch_duration, monitorsubj_W_pix, monitorsubj_H_pix, widget, converter)
+  success = await handle_acquire_target(context, trial_type, lambda: gaze, center, targetpos_pix, accpt_fix_radius_pix, accpt_gaze_radius_pix, decision_timeout, blink_dur, catch_duration, monitorsubj_W_pix, monitorsubj_H_pix, widget, converter)
   create_task_with_exc_handling(context.inject_analog('state_in', AnalogResponse(
     data=[5,0], # 5 = HIGH, 0 = LOW voltages
     spans=[Span(begin=0,end=2,name='Time')], 
     sample_intervals=[1_000_000*20]) # multiplyin by 1_000_000 will give us nanoseconds (ns)
-  ))
+  ), 'ACQUIRE_TARGET')
 
   if not success:
     gaze_failure_store.append((gaze_valid(gaze, monitorsubj_W_pix, monitorsubj_H_pix), QColor(255, 69, 0, 128)))
@@ -1253,7 +1253,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     data=[5,0], # 5 = HIGH, 0 = LOW voltages
     spans=[Span(begin=0,end=2,name='Time')], 
     sample_intervals=[1_000_000*450]) # multiplyin by 1_000_000 will give us nanoseconds (ns)
-  ))
+  ), 'FAILURE_SACCADE')
     failure_sound.play()
     if trial_only_saccade_count > 1:
         trial_only_saccade_count -= 1 # decrement only saccade trial counter if the trial is failed at the target holding stage, which is unique for only saccade trials
@@ -1266,7 +1266,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
     return TaskResult(False)
 
   # Handles State.HOLD_TARGET
-  success = await handle_hold_target(context, trial_type, lambda: gaze, center, targetpos_pix, accpt_fix_radius_pix, accpt_gaze_radius_pix, target_hold_dur, blink_dur_ms, monitorsubj_W_pix, monitorsubj_H_pix, widget, converter)
+  success = await handle_hold_target(context, trial_type, lambda: gaze, center, targetpos_pix, accpt_fix_radius_pix, accpt_gaze_radius_pix, target_hold_dur, blink_dur, monitorsubj_W_pix, monitorsubj_H_pix, widget, converter)
 
   if not success:
     gaze_failure_store.append((gaze_valid(gaze, monitorsubj_W_pix, monitorsubj_H_pix), QColor(255, 69, 0, 128)))
@@ -1295,15 +1295,15 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   await context.sleep(timedelta(seconds=1)) # 1s delay to allow playing the sound; sound doesn't play without this delay
   
   # RELEASING REWARD
-  # reward_per_trial_ms = int(context.get_reward(0)) # define the channel (aka column) # to be read from the csv file 
-  reward_total_released_ms += reward_per_trial_ms
-  await context.log("starting_reward_release_of = %d ms, total_released = %d ms"%(int(reward_per_trial_ms), \
+  # reward_per_trial = int(context.get_reward(0)) # define the channel (aka column) # to be read from the csv file 
+  reward_total_released_ms += reward_per_trial
+  await context.log("starting_reward_release_of = %d ms, total_released = %d ms"%(int(reward_per_trial), \
                                                                         int(reward_total_released_ms)) )
   create_task_with_exc_handling(context.inject_analog('reward_in', AnalogResponse(
     data=[5,0], # 5 = HIGH, 0 = LOW voltages
     spans=[Span(begin=0,end=2,name='Reward')], 
-    sample_intervals=[1_000_000*int(reward_per_trial_ms)]) # multiplyin by 1_000_000 will give us nanoseconds (ns)
-  ))
+    sample_intervals=[1_000_000*int(reward_per_trial)]) # multiplyin by 1_000_000 will give us nanoseconds (ns)
+  ), 'reward')
 
   if trial_type == "saccade_trial":
     trial_saccade_success_count += 1
@@ -1317,6 +1317,10 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
                     SACCADE_TRIAL_SUCCESS_COUNT={trial_saccade_success_count}, SACCADE_TRIAL_NUM={trial_saccade_count}, SACCADE_SUCCESS_RATE={saccade_trial_success_rate:.2f}%, \
                       ONLY_SACCADE_TRIAL_SUCCESS_COUNT={trial_only_saccade_success_count}, ONLY_SACCADE_TRIAL_NUM={trial_only_saccade_count}, ONLY_SACCADE_SUCCESS_RATE={only_saccade_trial_success_rate:.2f}%, \
                       CATCH_TRIAL_SUCCESS_COUNT={trial_catch_success_count}, CATCH_TRIAL_NUM={trial_catch_count}, CATCH_SUCCESS_RATE={catch_success_rate:.2f}%") # saving any variables / data from code
+
+  print(f"TRIAL_NUM={trial_num}, \
+                    SACCADE_TRIAL_SUCCESS_COUNT={trial_saccade_success_count}, SACCADE_TRIAL_NUM={trial_saccade_count}, SACCADE_SUCCESS_RATE={saccade_trial_success_rate:.2f}%, \
+                    CATCH_TRIAL_SUCCESS_COUNT={trial_catch_success_count}, CATCH_TRIAL_NUM={trial_catch_count}, CATCH_SUCCESS_RATE={catch_success_rate:.2f}%")
 
   # "TaskResult" is used to determine whether the trial is or is not removed from the queue
   # If TaskResult(False), the trial is not removed from the queue. If TaskResult(True), the trial is removed from the queue.

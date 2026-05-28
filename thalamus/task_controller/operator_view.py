@@ -24,6 +24,7 @@ class ViewWidget(QWidget):
     super().__init__()
     self.target = target
     self.painting = False
+    self.image = None
 
   def paintEvent(self, _: QPaintEvent) -> None: # pylint: disable=invalid-name
     """
@@ -31,16 +32,18 @@ class ViewWidget(QWidget):
     """
     try:
       self.painting = True
-      # if USINGLEGACY_QT:
-      #   with self.target.canvas.masked(RenderOutput.OPERATOR):
-      #     image = self.target.canvas.grabFramebuffer()
-      # else:
-      #   image = QImage(self.target.width(), self.target.height(),
-      #                              QImage.Format.Format_RGB32) # type: ignore # pylint: disable=no-member
-      #   with self.target.canvas.masked(RenderOutput.OPERATOR):
-      #     self.target.canvas.render(image)
-      with self.target.canvas.masked(RenderOutput.OPERATOR):
-        image = self.target.canvas.grabFramebuffer()
+      if USINGLEGACY_QT:
+        with self.target.canvas.masked(RenderOutput.OPERATOR):
+          self.image = self.target.canvas.grabFramebuffer()
+      else:
+        if self.image is None or self.image.size() != self.target.size():
+          self.image = QImage(self.target.width(), self.target.height(),
+                              QImage.Format.Format_ARGB32) # type: ignore # pylint: disable=no-member
+        self.image.fill(Qt.GlobalColor.black) # Clear the image before rendering
+        with self.target.canvas.masked(RenderOutput.OPERATOR):
+          self.target.canvas.render(self.image)
+      #with self.target.canvas.masked(RenderOutput.OPERATOR):
+      #  image = self.target.canvas.grabFramebuffer()
 
 
       painter = QPainter(self)
@@ -51,7 +54,7 @@ class ViewWidget(QWidget):
       render_x = int((self.width() - render_width)/2)
       render_y = int((self.height() - render_height)/2)
       render_rect = QRect(render_x, render_y, render_width, render_height)
-      painter.drawImage(render_rect, image)
+      painter.drawImage(render_rect, self.image)
     finally:
       self.painting = False
 
@@ -95,12 +98,12 @@ class CentralWidget(QWidget):
 
     # Adding extra button to switch targets during eyetracker calibration
     # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-    def press_next_button():
-      target.canvas.next_target = True
-    next_button = QPushButton('Next') # this button was added to the Operator View to switch between targets for manual eyetracker calibration
-    layout.addWidget(next_button, 1, 2)
-    layout.setRowStretch(1, 0)
-    next_button.clicked.connect(press_next_button)
+    # def press_next_button():
+    #   target.canvas.next_target = True
+    # next_button = QPushButton('Next') # this button was added to the Operator View to switch between targets for manual eyetracker calibration
+    # layout.addWidget(next_button, 1, 2)
+    # layout.setRowStretch(1, 0)
+    # next_button.clicked.connect(press_next_button)
     # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
     
     # Adding a checkbox for controlling auto clearing of the canvas
@@ -116,45 +119,45 @@ class CentralWidget(QWidget):
 
     # Adding a checkbox for controlling visual feedback target highligting circle
     # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-    my_checkbox = QCheckBox('Draw Subject Feedback Circle')
-    layout.addWidget(my_checkbox, 1, 3)  # Place it in row 1, column 3 (or wherever you want)
+    # my_checkbox = QCheckBox('Draw Subject Feedback Circle')
+    # layout.addWidget(my_checkbox, 1, 3)  # Place it in row 1, column 3 (or wherever you want)
 
-    def checkbox_switch(v: bool) -> None:
-      """
-      Callback for when the checkbox is toggled
-      """
-      target.canvas.feedback_choice = v
+    # def checkbox_switch(v: bool) -> None:
+    #   """
+    #   Callback for when the checkbox is toggled
+    #   """
+    #   target.canvas.feedback_choice = v
 
-    my_checkbox.toggled.connect(checkbox_switch)
+    # my_checkbox.toggled.connect(checkbox_switch)
     # my_checkbox.toggled.connect(lambda v: eye_config.update({'Draw Subject Feedback Circle': v}))
 
-    def checkbox_switch_change(a, k, v):
-        if k == 'Draw Subject Feedback Circle':
-            my_checkbox.setChecked(v)
+    # def checkbox_switch_change(a, k, v):
+    #     if k == 'Draw Subject Feedback Circle':
+    #         my_checkbox.setChecked(v)
 
-    eye_config.add_observer(checkbox_switch_change, lambda: isdeleted(self))
-    eye_config.recap(checkbox_switch_change)
+    # eye_config.add_observer(checkbox_switch_change, lambda: isdeleted(self))
+    # eye_config.recap(checkbox_switch_change)
     # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
     # Adding a checkbox for controlling visual feedback fixation cross thickening
     # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-    my_checkbox2 = QCheckBox('Highlight Fixation Cross')
-    layout.addWidget(my_checkbox2, 2, 3)  # Place it in row 1, column 3 (or wherever you want)
+    # my_checkbox2 = QCheckBox('Highlight Fixation Cross')
+    # layout.addWidget(my_checkbox2, 2, 3)  # Place it in row 1, column 3 (or wherever you want)
 
-    def checkbox_switch2(v: bool) -> None:
-      """
-      Callback for when the checkbox is toggled
-      """
-      target.canvas.feedback_choice2 = v
+    # def checkbox_switch2(v: bool) -> None:
+    #   """
+    #   Callback for when the checkbox is toggled
+    #   """
+    #   target.canvas.feedback_choice2 = v
 
-    my_checkbox2.toggled.connect(checkbox_switch2)
+    # my_checkbox2.toggled.connect(checkbox_switch2)
 
-    def checkbox_switch_change2(a, k, v):
-        if k == 'Highlight Fixation Cross':
-            my_checkbox2.setChecked(v)
+    # def checkbox_switch_change2(a, k, v):
+    #     if k == 'Highlight Fixation Cross':
+    #         my_checkbox2.setChecked(v)
 
-    eye_config.add_observer(checkbox_switch_change2, lambda: isdeleted(self))
-    eye_config.recap(checkbox_switch_change2)
+    # eye_config.add_observer(checkbox_switch_change2, lambda: isdeleted(self))
+    # eye_config.recap(checkbox_switch_change2)
     # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
     quadrants = [

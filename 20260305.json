@@ -1,0 +1,393 @@
+{
+  "Orchestration": {
+    "Processes": [
+      {
+        "Command": "python C:\\Thalamus-jarl\\fiducial.py",
+        "Critial (Crash on Failure)": true
+      }
+    ],
+    "Remote Executor": false
+  },
+  "Persistence": {
+    "Cached": []
+  },
+  "data_views": [],
+  "eye_scaling": {
+    "Auto Clear": true,
+    "I": {
+      "x": 650.0,
+      "y": 400.0
+    },
+    "II": {
+      "x": 650.0,
+      "y": 400.0
+    },
+    "III": {
+      "x": 670.0,
+      "y": 700.0
+    },
+    "IV": {
+      "x": 700.0,
+      "y": 920.0
+    }
+  },
+  "node_widgets": [
+    {
+      "node": "storage",
+      "dock_area": "right",
+      "view_geometry": [
+        256,
+        22,
+        206,
+        746
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "Widget is Touchpad": false,
+      "name": "reward_in",
+      "type": "ANALOG"
+    },
+    {
+      "Channel": "Dev1/port0/line1",
+      "Fast Foward": false,
+      "Running": false,
+      "Source": "reward_in",
+      "Stims": [],
+      "View": false,
+      "name": "nidaqout",
+      "type": "NIDAQ_OUT"
+    },
+    {
+      "AcquisitionFrameRate": 20.24000358581543,
+      "Camera": "FLIR_GenTL_v140:21216978",
+      "Camera Values": {
+        "AcquisitionFrameRate": 20.24000358581543,
+        "ExposureTime": 20559.608936309814,
+        "Gain": 0.0,
+        "Height": 330,
+        "HeightMax": 1024,
+        "OffsetX": 438,
+        "OffsetY": 540,
+        "Width": 448,
+        "WidthMax": 1280
+      },
+      "ExposureTime": 20557.641983032227,
+      "Gain": 0.0,
+      "Height": 330,
+      "HeightMax": 1024,
+      "OffsetX": 439,
+      "OffsetY": 540,
+      "Running": false,
+      "View": true,
+      "Width": 455,
+      "WidthMax": 1280,
+      "name": "eye_cam",
+      "type": "GENICAM",
+      "view_geometry": [
+        686,
+        827,
+        400,
+        295
+      ]
+    },
+    {
+      "AcquisitionFrameRate": 20.24000358581543,
+      "Camera": "FLIR_GenTL_v140:17278856",
+      "Camera Values": {
+        "AcquisitionFrameRate": 20.24000358581543,
+        "ExposureTime": 20557.641983032227,
+        "Gain": 0.0,
+        "Height": 458,
+        "HeightMax": 1024,
+        "OffsetX": 376,
+        "OffsetY": 380,
+        "Width": 624,
+        "WidthMax": 1280
+      },
+      "ExposureTime": 20557.641983032227,
+      "Gain": 0.0,
+      "Height": 458,
+      "HeightMax": 1024,
+      "OffsetX": 376,
+      "OffsetY": 380,
+      "Running": false,
+      "View": true,
+      "Width": 624,
+      "WidthMax": 1280,
+      "name": "body_cam",
+      "type": "GENICAM",
+      "view_geometry": [
+        1484,
+        826,
+        400,
+        297
+      ]
+    },
+    {
+      "Computing": true,
+      "Invert X": true,
+      "Invert Y": true,
+      "Max Area": 10,
+      "Min Area": 0,
+      "Pix X": 271,
+      "Pix Y": 219,
+      "Render Thresholded": false,
+      "Source": "eye_cam",
+      "Threshold": 30,
+      "View": true,
+      "X Gain": 0.0,
+      "Y Gain": 0.0,
+      "name": "eye_tracker",
+      "type": "OCULOMATIC",
+      "view_geometry": [
+        1089,
+        823,
+        400,
+        301
+      ]
+    },
+    {
+      "Channel": "Dev1/ai0:4",
+      "Channel Type": "Voltage",
+      "Equation": "",
+      "Fast Foward": false,
+      "Parser Error": true,
+      "Poll Interval": 16,
+      "Running": false,
+      "Sample Rate": 1000.0,
+      "Shunt Resistor Location": "Default",
+      "Shunt Resistor Ohms": 1000.0,
+      "Source": "",
+      "Stims": [],
+      "Terminal Config": "Default",
+      "View": false,
+      "Zero Latency": false,
+      "name": "analog",
+      "type": "NIDAQ"
+    },
+    {
+      "Widget is Touchpad": false,
+      "name": "fiducial",
+      "type": "ANALOG"
+    },
+    {
+      "name": "log",
+      "type": "LOG"
+    },
+    {
+      "name": "intan",
+      "type": "INTAN",
+      "Connected": false,
+      "Running": false,
+      "Address": "192.168.0.5",
+      "Command Port": 5000,
+      "Waveform Port": 5001,
+      "Metadata Node": "",
+      "Channels": []
+    },
+    {
+      "name": "storage",
+      "type": "STORAGE2",
+      "Running": false,
+      "Output File": "E:\\Snorlax_Behavior_Rig2\\VCP_delayed_saccade_gaussian\\%y%m%d\\snorlax.tha",
+      "Compress Analog": false,
+      "Compress Video": false,
+      "Simple Copy": false,
+      "Sources": [
+        {
+          "Node": "analog",
+          "Time Series": true,
+          "Image": true,
+          "Motion": true,
+          "Text": true
+        },
+        {
+          "Node": "eye_tracker",
+          "Time Series": true,
+          "Image": true,
+          "Motion": true,
+          "Text": true
+        },
+        {
+          "Node": "log",
+          "Time Series": true,
+          "Image": true,
+          "Motion": true,
+          "Text": true
+        }
+      ],
+      "Files": [],
+      "Metadata": [
+        {
+          "Key": "Rec",
+          "Value": 1
+        }
+      ],
+      "rec": 1,
+      "start": 237555.7359716
+    }
+  ],
+  "queue": [],
+  "reward_schedule": {
+    "index": 0,
+    "schedules": [
+      [
+        0
+      ]
+    ]
+  },
+  "status": "",
+  "task_clusters": [
+    {
+      "name": "VCP",
+      "tasks": [
+        {
+          "Amplitude (uA)": 500.0,
+          "Duration (ms)": 500.0,
+          "Frequency (Hz)": 100.0,
+          "Interphase Delay (us)": 100.0,
+          "Lead": "Cathode-leading",
+          "Phase": "Biphasic",
+          "Polarity": "Monopolar",
+          "Pulse Width (us)": 100.0,
+          "Ratio": 1,
+          "Stimulation Channels": [],
+          "accpt_fix_radius_deg": 2.5,
+          "accpt_gaze_radius_deg": 3.5,
+          "background_color": [
+            31,
+            31,
+            31
+          ],
+          "blink_dur_ms": 100.0,
+          "blink_duration": 1.0,
+          "bottom_edge_deg": 0,
+          "catch_duration": {
+            "max": 400,
+            "min": 300
+          },
+          "catch_trial_rate": 1,
+          "cross_x_pos": 0,
+          "cross_y_pos": 0,
+          "decision_timeout": {
+            "max": 4500,
+            "min": 4000
+          },
+          "fix1_duration": {
+            "max": 700,
+            "min": 500
+          },
+          "fix2_duration": {
+            "max": 500.0,
+            "min": 400.0
+          },
+          "fix_duration": 500.0,
+          "goal": 10,
+          "height_targ_deg": {
+            "max": 2.5,
+            "min": 1.5
+          },
+          "heighttargdeg_step": 0.1,
+          "init_duration": 500,
+          "is_height_locked": false,
+          "left_edge_deg": -6.0,
+          "luminance_targ_per": {
+            "max": 100,
+            "min": 90
+          },
+          "luminance_targ_step": 10,
+          "monitoroper_H_pix": 1200,
+          "monitoroper_W_pix": 1920,
+          "monitoroper_model": "DELLU2412M",
+          "monitorsubj_H_pix": 1080,
+          "monitorsubj_W_pix": 1920,
+          "monitorsubj_brightness_perc": 100,
+          "monitorsubj_dist_m": 0.57,
+          "monitorsubj_model": "LG24GQ50B-B",
+          "monitorsubj_width_m": 0.5283,
+          "name": "StG",
+          "number_of_squares": 4,
+          "orientation_targ_ran": {
+            "max": 150,
+            "min": 0
+          },
+          "orientation_targ_step": 30,
+          "paint_all_targets": false,
+          "penalty_delay": 2500.0,
+          "presentation_duration": 250.0,
+          "repeats_per_location": 3,
+          "rest_duration": 50.0,
+          "reward_frequency_s": {
+            "max": 3,
+            "min": 2
+          },
+          "reward_ms": {
+            "max": 200,
+            "min": 100
+          },
+          "reward_per_trial_ms": {
+            "max": 150.0,
+            "min": 100.0
+          },
+          "right_edge_deg": 1.0,
+          "square_size": 1,
+          "step_size": 5,
+          "step_size_deg": 2,
+          "stim_trial_rate": 0.2,
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "target_hold_dur": {
+            "max": 20,
+            "min": 10
+          },
+          "target_loc_angle_sector1_deg": {
+            "max": 350.0,
+            "min": 10.0
+          },
+          "target_loc_angle_sector2_deg": {
+            "max": 350.0,
+            "min": 10.0
+          },
+          "target_loc_eccentric_circle_num": 3.0,
+          "target_loc_eccentricity_deg": {
+            "max": 9.0,
+            "min": 6.0
+          },
+          "target_loc_polar_step_deg": 20.0,
+          "target_present_dur": {
+            "max": 450,
+            "min": 375
+          },
+          "task_group": "Saccade - With Delay",
+          "task_type": "VCP_delayed_saccade_gaussian_task",
+          "top_edge_deg": 6.0,
+          "type": "task",
+          "width_targ_deg": {
+            "max": 2.5,
+            "min": 1.5
+          },
+          "widthtargdeg_step": 0.1,
+          "width_targ_deg_step": 0.1,
+          "height_targ_deg_step": 0.1
+        }
+      ],
+      "type": "task_cluster",
+      "weight": 0
+    }
+  ],
+  "thalamus_view_geometry": [
+    100,
+    100,
+    462,
+    768
+  ],
+  "touch_channels": [
+    0,
+    1
+  ]
+}

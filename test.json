@@ -1,0 +1,90 @@
+{
+  "nodes": [
+    {
+      "name": "Node 1",
+      "type": "WAVE",
+      "Running": true,
+      "Sample Rate": 1000.0,
+      "Poll Interval": 16,
+      "View": false,
+      "Waves": [
+        {
+          "Frequency": 1.0,
+          "Amplitude": 1.0,
+          "Shape": "Sine",
+          "Offset": 0.0,
+          "Duty Cycle": 0.5,
+          "Phase": 0.0
+        }
+      ]
+    },
+    {
+      "name": "Node 2",
+      "type": "STORAGE2",
+      "Running": true,
+      "Output File": "C:\\jarl\\test",
+      "Compress Analog": false,
+      "Compress Video": false,
+      "Simple Copy": false,
+      "Sources": [
+        {
+          "Node": "Node 1",
+          "Time Series": true,
+          "Image": true,
+          "Motion": true,
+          "Text": true
+        }
+      ],
+      "Files": [],
+      "Metadata": [],
+      "rec": 0,
+      "start": 626212.2416312
+    }
+  ],
+  "Persistence": {
+    "Cached": []
+  },
+  "thalamus_view_geometry": [
+    100,
+    100,
+    804,
+    768
+  ],
+  "data_views": [
+    {
+      "view_geometry": [
+        1233,
+        278,
+        400,
+        400
+      ],
+      "rows": 1,
+      "columns": 1,
+      "views": [
+        {
+          "row": 0,
+          "column": 0,
+          "selected_node": "Node 2",
+          "selected_channel": "",
+          "view_type": "Time Series",
+          "draw_value": false,
+          "static_range": false,
+          "range_min": 0,
+          "range_max": 10
+        }
+      ]
+    }
+  ],
+  "node_widgets": [
+    {
+      "node": "Node 2",
+      "dock_area": "right",
+      "view_geometry": [
+        405,
+        22,
+        399,
+        746
+      ]
+    }
+  ]
+}

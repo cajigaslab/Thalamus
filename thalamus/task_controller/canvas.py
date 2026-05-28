@@ -205,10 +205,10 @@ class CanvasPainter(QPainter):
     self.current_output_mask = RenderOutput.ANY
     self.output_mask = output_mask
     self.model_view = QMatrix4x4()
-    self.projection_matrix = opengl_config.projection_matrix
-    self.program = opengl_config.program
-    self.locations = opengl_config.locations
-    self.vbo_cache = opengl_config.vbo_cache
+    #self.projection_matrix = opengl_config.projection_matrix
+    #self.program = opengl_config.program
+    #self.locations = opengl_config.locations
+    #self.vbo_cache = opengl_config.vbo_cache
 
   def fillRect(self, *args: typing.Any, **kwargs: typing.Any) -> None: # pylint: disable=invalid-name
     '''
@@ -444,7 +444,7 @@ class Handles:
   def __repr__(self) -> str:
     return str(self)
 
-class Canvas(QOpenGLWidget):
+class Canvas(QWidget):
   """
   The QWidget the task will render on and that will generate mouse events on touch input
   """
@@ -605,18 +605,20 @@ class Canvas(QOpenGLWidget):
     self.opengl_config.proj.setToIdentity()
     self.opengl_config.proj.perspective(45.0, width / height, 0.01, 100.0)
 
-  def paintGL(self) -> None: # pylint: disable=invalid-name
+  def paintEvent(self, e) -> None: # pylint: disable=invalid-name
     '''
     Paints the task
     '''
-    assert self.opengl_config, 'opengl_config is None'
+    #assert self.opengl_config, 'opengl_config is None'
 
-    locations = GlslLocations(0, 1, self.opengl_config.color_loc, self.opengl_config.mv_matrix_loc,
-                              self.opengl_config.proj_matrix_loc, self.opengl_config.normal_matrix_loc)
+    #locations = GlslLocations(0, 1, self.opengl_config.color_loc, self.opengl_config.mv_matrix_loc,
+    #                          self.opengl_config.proj_matrix_loc, self.opengl_config.normal_matrix_loc)
     geometry = qt_screen_geometry()
     painter = CanvasPainter(self.current_output_mask,
-                            OpenGLConfig(self.opengl_config.proj, self.opengl_config.program, locations,
-                                         self.opengl_config.vbo_cache), self)
+                            None,
+                            #OpenGLConfig(self.opengl_config.proj, self.opengl_config.program, locations,
+                            #            self.opengl_config.vbo_cache), 
+                                        self)
     with painter:
       painter.fillRect(QRect(0, 0, 4000, 4000), QColor(0, 0, 0))
       self.listeners.renderer(painter)
@@ -625,8 +627,8 @@ class Canvas(QOpenGLWidget):
         painter.fillPath(self.input_config.touch_path, QColor(255, 0, 0))
 
         painter.setTransform(QTransform.fromTranslate(self.width()/2, self.height()/2))
-        # for path in self.input_config.gaze_paths: # drawing of gaze history as blue dots
-        #   painter.fillPath(path, QColor(0, 0, 255))
+        for path in self.input_config.gaze_paths: # drawing of gaze history as blue dots
+          painter.fillPath(path, QColor(0, 0, 255))
 
     if self.current_output_mask != RenderOutput.OPERATOR:
       for subscriber in self.listeners.paint_subscribers:
