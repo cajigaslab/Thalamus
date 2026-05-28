@@ -463,15 +463,19 @@ class ObservableCollection(abc.ABC):
       observer(ObservableCollection.Action.SET, k, v)
 
   def __notify(self, source: 'ObservableCollection', action: 'ObservableCollection.Action', key: typing.Any, value: typing.Any):
-    if source == self:
-      for observer in list(self.observers.values()):
-        observer(action, key, value)
+    
+    #This order of parent.__notify, recursive_observers, and observers used to be reversed.  This was changed so that
+    #The observer in Thalamus that sends changes to all clients needs to be triggered first.  That observer is the
+    #first observer added to the root.  This is kind of a hack, would like to improve it.
+    if self.parent is not None:
+      self.parent.__notify(source, action, key, value)
 
     for observer in list(self.recursive_observers.values()):
       observer(source, action, key, value)
 
-    if self.parent is not None:
-      self.parent.__notify(source, action, key, value)
+    if source == self:
+      for observer in list(self.observers.values()):
+        observer(action, key, value)
 
   def is_descendent(self, root):
     current = self
