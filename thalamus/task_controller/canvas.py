@@ -340,26 +340,34 @@ class AngularScalingConfig:
     if 'Angular Scaling' not in models:
       models['Angular Scaling'] = {
         'Angle': [],
-        'Scale': [],
+        'Scale X': [],
+        'Scale Y': [],
       }
+    model = models['Angular Scaling']
+    if 'Scale X' not in model:
+      model['Scale X'] = []
+    if 'Scale Y' not in model:
+      model['Scale Y'] = []
 
-    self.angle = models['Angular Scaling']['Angle']
-    self.scale = models['Angular Scaling']['Scale']
+    self.angle = model['Angle']
+    self.scalex = model['Scale X']
+    self.scaley = model['Scale Y']
 
   def paint(self, painter: QPainter, dims: QSize):
     painter.setTransform(QTransform.fromTranslate(dims.width()/2, dims.height()/2))
     painter.fillPath(self.gaze_path, QColor(0, 0, 255))
 
   def process(self, voltage_point: QPointF):
-    model_length = min(len(self.angle), len(self.scale))
+    model_length = min(len(self.angle), len(self.scalex), len(self.scaley))
     if model_length == 0:
       scaled_point = 10*voltage_point
     else:
       val = numpy.arctan2(voltage_point.y(), voltage_point.x())
       if val < 0:
         val = numpy.pi + (numpy.pi + val)
-      factor = numpy.interp(val, self.angle[:model_length], self.scale[:model_length], period=2*numpy.pi)
-      scaled_point = factor*voltage_point
+      factorx = numpy.interp(val, self.angle[:model_length], self.scalex[:model_length], period=2*numpy.pi)
+      factory = numpy.interp(val, self.angle[:model_length], self.scaley[:model_length], period=2*numpy.pi)
+      scaled_point = QPointF(factorx*voltage_point.x(), factory*voltage_point.y())
 
     self.gaze_path.addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
     return scaled_point
@@ -370,13 +378,21 @@ class AngularScalingConfig:
 
   def get_gaze_transform(self, from_center: QPoint):
     def transform(x, y):
-      val = numpy.arctan2(y, x)
-      if val < 0:
-        val = numpy.pi + (numpy.pi + val)
-      factor = numpy.interp(val, self.angle, self.scale, period=2*numpy.pi)
-      return factor*x, factor*y
+      model_length = min(len(self.angle), len(self.scalex), len(self.scaley))
+      if model_length == 0:
+        return 10*x, 10*y
+      else:
+        val = numpy.arctan2(y, x)
+        if val < 0:
+          val = numpy.pi + (numpy.pi + val)
+        factorx = numpy.interp(val, self.angle[:model_length], self.scalex[:model_length], period=2*numpy.pi)
+        factory = numpy.interp(val, self.angle[:model_length], self.scaley[:model_length], period=2*numpy.pi)
+        return factorx*x, factory*y
 
     return transform
+  
+  def describe(self):
+    return [list(self.angle), list(self.scalex), list(self.scaley)]
 
 class EyeProjectiveConfig:
   def __init__(self, config: ObservableCollection):
@@ -427,6 +443,9 @@ class EyeProjectiveConfig:
   def get_gaze_transform(self, from_center: QPoint):
     a, b, c, d, e, f, g, h = self.param_list
     return lambda x, y: ((a*x + b*y + c)/(g*x + h*y + 1), (d*x + e*y + f)/(g*x + h*y + 1))
+  
+  def describe(self):
+    return list(self.param_list)
   
 class EyeQuadrantScalingConfig:
   def __init__(self, config: ObservableCollection):
@@ -531,6 +550,11 @@ class EyeQuadrantScalingConfig:
         transform = self.gaze_transforms[3]
 
     return transform
+  
+  def describe(self):
+    return[
+      [tr.m11(), tr.m12(), tr.m13(), tr.m21(), tr.m22(), tr.m23(), tr.m31(), tr.m32(), tr.m33()]
+      for tr in self.gaze_transforms]
 
 class InputConfig():
   '''
@@ -584,6 +608,9 @@ class InputConfig():
 
   def get_gaze_transform(self, from_center: QPoint):
     return self.gaze_config.get_gaze_transform(from_center)
+  
+  def describe_gaze(self):
+    return self.gaze_config.describe()
 
   def __str__(self) -> str:
     return f'InputConfig(touch_channels={self.touch_channels})'
