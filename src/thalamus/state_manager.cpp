@@ -70,7 +70,7 @@ struct StateManager::Impl {
       std::vector<std::future<void>> futures;
       for (auto &change : in.changes()) {
         THALAMUS_LOG(trace)
-            << change.address() << " " << change.value() << std::endl;
+            << change.address() << change.action() << " " << change.value() << std::endl;
 
         boost::json::value parsed = boost::json::parse(change.value());
         auto value = ObservableCollection::from_json(parsed);
