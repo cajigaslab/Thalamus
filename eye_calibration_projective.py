@@ -27,7 +27,7 @@ QUAD_TO_LABEL = {
 }
 
 DEFAULT_PROJECTIVE = {
-  'Parameters': [.5, 0.0, 0.0, 0.0, .5, 0.0, 0.0, 0.0],
+  'Parameters': [0.5, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0],
   'Distance (m)': 1.0,
   'DPI': 100.0,
 }
@@ -65,17 +65,31 @@ class Task:
     self.training_data = []
 
     eye_scaling = config['eye_scaling']
+    models = None
+    projective = None
     def on_change(source, action, key, value):
-      if source is eye_scaling:
+      nonlocal models, projective
+
+      if source == eye_scaling:
+        if key == 'Models':
+          models = value
+          value.recap()
+        elif key == 'Selected Model':
+          self.model_name = value
+          self.rebuild()
+      elif source == models:
+        if key == 'Projective':
+          projective = value
+          value.recap()
+      elif source == projective:
         if key == 'Distance (m)':
           self.distance_m = value
           self.rebuild()
         elif key == 'DPI':
           self.dpi = value
           self.rebuild()
-        elif key == 'Selected Model':
-          self.model_name = value
-          self.rebuild()
+      print(key, value)
+      print('params', self.distance_m, self.dpi)
 
     eye_scaling.add_recursive_observer(on_change)
     eye_scaling.recap()
@@ -207,6 +221,7 @@ class Task:
   def oculomatic_to_pixels_from_center(self, x, y):
     model = self.get_model(self.model_name)
     if self.model_name == 'Projective':
+      #print(model)
       a, b, c, d, e, f, g, h = model['Parameters']
       #compute oculomatic -> angles
       tx = (a*x + b*y + c) / (g*x + h*y + 1)
@@ -287,6 +302,7 @@ class Task:
     model = self.get_model(self.model_name)
     print('reset', self.model_name, model)
     if self.model_name == 'Projective':
+      model.assign(DEFAULT_PROJECTIVE)
       pass
     elif self.model_name == 'Angular Scaling':
       model['Angle'].assign([], self.rebuild)
@@ -502,6 +518,7 @@ class OperatorWindow(QMainWindow):
     reward_widget.setRange(0, 10000)
     distance_widget = QDoubleSpinBox()
     distance_widget.setRange(0, 10000)
+    distance_widget.setDecimals(3)
     dpi_widget = QDoubleSpinBox()
     dpi_widget.setRange(0, 10000)
     clear_button = QPushButton('Clear')
@@ -517,9 +534,9 @@ class OperatorWindow(QMainWindow):
     layout.addWidget(saccade_radius_widget)
     layout.addWidget(QLabel('Reward (ms)'))
     layout.addWidget(reward_widget)
-    layout.addWidget(QLabel('Screen Distance (mm)'))
+    layout.addWidget(QLabel('Distance (mm)'))
     layout.addWidget(distance_widget)
-    layout.addWidget(QLabel('Screen DPI'))
+    layout.addWidget(QLabel('DPI'))
     layout.addWidget(dpi_widget)
     layout.addWidget(clear_button)
     central_widget.setLayout(layout)
@@ -534,10 +551,14 @@ class OperatorWindow(QMainWindow):
 
     eye_scaling = config['eye_scaling']
     def on_screen_distance(val):
-      eye_scaling['Screen Distance (m)'] = val/1000
+      nonlocal models, projective
+      if projective is not None:
+        projective['Distance (m)'] = val
 
     def on_dpi(val):
-      eye_scaling['Screen DPI'] = val
+      nonlocal models, projective
+      if projective is not None:
+        projective['DPI'] = val
 
     def on_clear():
       self.task.path.clear()
@@ -561,14 +582,26 @@ class OperatorWindow(QMainWindow):
     saccade_radius_widget.setValue(100)
     reward_widget.setValue(500)
 
+    models, projective = None, None
     def on_change(source, action, key, value):
+      nonlocal models, projective
+      print('OperatorWindow', source is projective, key, value)
+
       if source is eye_scaling:
-        if key == 'Screen Distance (m)':
-          distance_widget.setValue(1000*value)
-        elif key == 'Screen DPI':
-          dpi_widget.setValue(value)
+        if key == 'Models':
+          models = value
+          value.recap()
         elif key == 'Selected Model':
           model_label.setText(f'Model: {value}')
+      elif source is models:
+        if key == 'Projective':
+          projective = value
+          value.recap()
+      elif source is projective:
+        if key == 'Distance (m)':
+          distance_widget.setValue(value)
+        elif key == 'DPI':
+          dpi_widget.setValue(value)
 
     eye_scaling.add_recursive_observer(on_change)
     eye_scaling.recap()

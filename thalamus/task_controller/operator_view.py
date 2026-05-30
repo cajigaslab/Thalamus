@@ -25,6 +25,7 @@ class ViewWidget(QWidget):
     super().__init__()
     self.target = target
     self.painting = False
+    self.image = None
 
   def paintEvent(self, _: QPaintEvent) -> None: # pylint: disable=invalid-name
     """
@@ -35,22 +36,20 @@ class ViewWidget(QWidget):
       if USINGLEGACY_QT:
         with self.target.canvas.masked(RenderOutput.OPERATOR):
           image = self.target.canvas.grabFramebuffer()
+
+        render_width = int(self.target.width()*scale_factor)
+        render_height = int(self.target.height()*scale_factor)
+        render_x = int((self.width() - render_width)/2)
+        render_y = int((self.height() - render_height)/2)
+        render_rect = QRect(render_x, render_y, render_width, render_height)
+        painter.drawImage(render_rect, image)
       else:
-        image = QImage(self.target.width(), self.target.height(),
-                                   QImage.Format.Format_RGB32) # type: ignore # pylint: disable=no-member
+        painter = QPainter(self)
+        scale_factor = min(self.width()/self.target.width(), self.height()/self.target.height())
+        painter.scale(scale_factor, scale_factor)
         with self.target.canvas.masked(RenderOutput.OPERATOR):
-          self.target.canvas.render(image)
+          self.target.canvas.render(painter)
 
-
-      painter = QPainter(self)
-
-      scale_factor = min(self.width()/self.target.width(), self.height()/self.target.height())
-      render_width = int(self.target.width()*scale_factor)
-      render_height = int(self.target.height()*scale_factor)
-      render_x = int((self.width() - render_width)/2)
-      render_y = int((self.height() - render_height)/2)
-      render_rect = QRect(render_x, render_y, render_width, render_height)
-      painter.drawImage(render_rect, image)
     finally:
       self.painting = False
 
@@ -62,8 +61,8 @@ class AngularScalingModelWidget(QWidget):
     if 'Models' not in eye_config:
       eye_config['Models'] = {}
     
-    if 'Projective' not in eye_config['Models']:
-      eye_config['Models']['Projective'] = {
+    if 'Angular Scaling' not in eye_config['Models']:
+      eye_config['Models']['Angular Scaling'] = {
         'Angle': [],
         'Scale X': [],
         'Scale Y': [],
