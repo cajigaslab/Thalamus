@@ -92,7 +92,6 @@ async def async_main() -> None:
   done_future = asyncio.get_event_loop().create_future()
 
   asyncio.get_event_loop().set_exception_handler(exception_handler)
-  logging.basicConfig(level=logging.INFO, format='%(levelname)s %(asctime)s %(name)s:%(lineno)s %(message)s')
 
   arguments = parse_args()
 
@@ -108,6 +107,7 @@ async def async_main() -> None:
   elif arguments.log_level == 'fatal':
     log_level = logging.CRITICAL
 
+  logging.basicConfig(level=log_level, format='%(levelname)s %(asctime)s %(name)s:%(lineno)s %(message)s')
   logging.getLogger('matplotlib.font_manager').setLevel(log_level)
   
   ext_widgets = {}
