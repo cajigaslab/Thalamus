@@ -24,6 +24,7 @@ using WebSocket = boost::beast::websocket::stream<TcpSocket>;
 struct HttpException : public std::exception {
   const boost::beast::http::status status;
   const std::string message;
+  HttpException(const HttpException& that) : status(that.status), message(that.message) {}
   HttpException(boost::beast::http::status _status, const std::string& _message) : status(_status), message(_message) {}
   ~HttpException() override;
 

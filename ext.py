@@ -1,5 +1,5 @@
 import pathlib
-from thalamus.pipeline.thalamus_window import Factory, UserData, UserDataType
+from thalamus.pipeline.thalamus_window import Factory, UserData, UserDataType, get_node_names
 from thalamus.task_controller.task_context import TaskDescription
 #import ext_task
 import platform
@@ -14,6 +14,10 @@ def widgets():
     'EXT_SERIAL': Factory(None, [
       UserData(UserDataType.CHECK_BOX, 'Running', False, []),
       UserData(UserDataType.OPEN_FILE, 'Port', '', []),
+    ]),
+    'EXT_ALGEBRA': Factory(None, [
+      UserData(UserDataType.COMBO_BOX, 'Node', '', get_node_names),
+      UserData(UserDataType.DOUBLE_SPINBOX, 'Scale', 1.0, []),
     ])
   }
 

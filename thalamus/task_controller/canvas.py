@@ -204,10 +204,17 @@ class CanvasPainter(QPainter):
     self.current_output_mask = RenderOutput.ANY
     self.output_mask = output_mask
     self.model_view = QMatrix4x4()
-    self.projection_matrix = opengl_config.projection_matrix
-    self.program = opengl_config.program
-    self.locations = opengl_config.locations
-    self.vbo_cache = opengl_config.vbo_cache
+
+    if opengl_config is not None:
+      self.projection_matrix = opengl_config.projection_matrix
+      self.program = opengl_config.program
+      self.locations = opengl_config.locations
+      self.vbo_cache = opengl_config.vbo_cache
+    else:
+      self.projection_matrix = None
+      self.program = None
+      self.locations = None
+      self.vbo_cache = None
 
   def fillRect(self, *args: typing.Any, **kwargs: typing.Any) -> None: # pylint: disable=invalid-name
     '''
@@ -267,6 +274,8 @@ class CanvasPainter(QPainter):
     '''
     Draw an STL mesh
     '''
+    assert self.locations is not None, 'OpenGL is not enabled'
+
     if self.current_output_mask not in (RenderOutput.ANY, self.output_mask):
       return
 
@@ -329,16 +338,142 @@ class TouchCalibration():
 
   def __str__(self) -> str:
     return f'TouchCalibration(calibrating_touch={self.calibrating_touch})'
+  
+class AngularScalingConfig:
+  def __init__(self, config: ObservableCollection):
+    self.detached = False
+    self.gaze_path = QPainterPath()
+    self.gaze_path.setFillRule(Qt.FillRule.WindingFill)
 
-class InputConfig():
-  '''
-  Touch and eye input config
-  '''
-  def __init__(self, config: ObservableCollection) -> None:
-    self.touch_channels = config['touch_channels']
-    self.touch_path = QPainterPath()
-    self.touch_path.setFillRule(Qt.FillRule.WindingFill)
-    self.last_touch = QPoint(0, 0)
+    models = config['eye_scaling']['Models']
+    if 'Angular Scaling' not in models:
+      models['Angular Scaling'] = {
+        'Angle': [],
+        'Scale X': [],
+        'Scale Y': [],
+      }
+    model = models['Angular Scaling']
+    if 'Scale X' not in model:
+      model['Scale X'] = []
+    if 'Scale Y' not in model:
+      model['Scale Y'] = []
+
+    self.angle = model['Angle']
+    self.scalex = model['Scale X']
+    self.scaley = model['Scale Y']
+
+  def paint(self, painter: QPainter, dims: QSize):
+    painter.setTransform(QTransform.fromTranslate(dims.width()/2, dims.height()/2))
+    painter.fillPath(self.gaze_path, QColor(0, 0, 255))
+
+  def process(self, voltage_point: QPointF, is_pixels: bool):
+    model_length = min(len(self.angle), len(self.scalex), len(self.scaley))
+    if is_pixels:
+      scaled_point = voltage_point
+    elif model_length == 0:
+      scaled_point = 10*voltage_point
+    else:
+      val = numpy.arctan2(voltage_point.y(), voltage_point.x())
+      if val < 0:
+        val = numpy.pi + (numpy.pi + val)
+      factorx = numpy.interp(val, self.angle[:model_length], self.scalex[:model_length], period=2*numpy.pi)
+      factory = numpy.interp(val, self.angle[:model_length], self.scaley[:model_length], period=2*numpy.pi)
+      scaled_point = QPointF(factorx*voltage_point.x(), factory*voltage_point.y())
+
+    self.gaze_path.addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
+    return scaled_point
+
+  def clear(self):
+    self.gaze_path = QPainterPath()
+    self.gaze_path.setFillRule(Qt.FillRule.WindingFill)
+
+  def get_gaze_transform(self, from_center: QPoint):
+    def transform(x, y):
+      model_length = min(len(self.angle), len(self.scalex), len(self.scaley))
+      if model_length == 0:
+        return 10*x, 10*y
+      else:
+        val = numpy.arctan2(y, x)
+        if val < 0:
+          val = numpy.pi + (numpy.pi + val)
+        factorx = numpy.interp(val, self.angle[:model_length], self.scalex[:model_length], period=2*numpy.pi)
+        factory = numpy.interp(val, self.angle[:model_length], self.scaley[:model_length], period=2*numpy.pi)
+        return factorx*x, factory*y
+
+    return transform
+  
+  def describe(self):
+    return [list(self.angle), list(self.scalex), list(self.scaley)]
+
+class EyeProjectiveConfig:
+  def __init__(self, config: ObservableCollection):
+    self.detached = False
+    self.gaze_path = QPainterPath()
+    self.gaze_path.setFillRule(Qt.FillRule.WindingFill)
+
+    models = config['eye_scaling']['Models']
+    if 'Projective' not in models:
+      models['Projective'] = {
+        'Parameters': [0.5, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0],
+        'Distance (m)': 1.0,
+        'DPI': 100.0,
+      }
+    model = models['Projective']
+    if 'Parameters' not in model:
+      model['Parameters'] = [0.5, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0]
+
+    self.parameters = model['Parameters']
+    self.param_list = 8*[0.0]
+    self.distance_m = 0.0
+    self.dpi = 0.0
+    def on_change(source, action, key, value):
+      if key == 'Parameters':
+        value.recap()
+      elif source is self.parameters:
+        self.param_list[key] = value
+      elif key == 'Distance (m)':
+        self.distance_m = value
+      elif key == 'DPI':
+        self.dpi = value
+
+    models['Projective'].add_recursive_observer(on_change)
+    models['Projective'].recap()
+
+  def paint(self, painter: QPainter, dims: QSize):
+    painter.setTransform(QTransform.fromTranslate(dims.width()/2, dims.height()/2))
+    painter.fillPath(self.gaze_path, QColor(0, 0, 255))
+
+  def process(self, voltage_point: QPointF, is_pixels: bool):
+    x, y = voltage_point.x(), voltage_point.y()
+    a, b, c, d, e, f, g, h = self.param_list
+    if is_pixels:
+      scaled_point = voltage_point
+    else:
+      tx, ty = (a*x + b*y + c)/(g*x + h*y + 1), (d*x + e*y + f)/(g*x + h*y + 1)
+
+      distance_cm = 100*self.distance_m
+      distance_inches = distance_cm/2.54
+      px = numpy.tan(tx*numpy.pi/180)*distance_inches*self.dpi
+      py = numpy.tan(ty*numpy.pi/180)*distance_inches*self.dpi
+      scaled_point = QPointF(px, py)
+
+    self.gaze_path.addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
+    return scaled_point
+  
+  def clear(self):
+    self.gaze_path = QPainterPath()
+    self.gaze_path.setFillRule(Qt.FillRule.WindingFill)
+
+  def get_gaze_transform(self, from_center: QPoint):
+    a, b, c, d, e, f, g, h = self.param_list
+    return lambda x, y: ((a*x + b*y + c)/(g*x + h*y + 1), (d*x + e*y + f)/(g*x + h*y + 1))
+  
+  def describe(self):
+    return list(self.param_list)
+  
+class EyeQuadrantScalingConfig:
+  def __init__(self, config: ObservableCollection):
+    self.detached = False
     self.gaze_paths = [
       QPainterPath(), QPainterPath(), QPainterPath(), QPainterPath()]
     self.gaze_paths[0].setFillRule(Qt.FillRule.WindingFill)
@@ -351,14 +486,11 @@ class InputConfig():
       QTransform(),
       QTransform(),
       QTransform()]
-    self.touch_calibration = TouchCalibration(config)
 
-    if 'eye_scaling' not in config:
-      config['eye_scaling'] = {}
     for quadrant in ["I", "II", "III", "IV"]:
       if quadrant not in config['eye_scaling']:
         config['eye_scaling'][quadrant] = {'x': 1, 'y': 1}
-      config['eye_scaling'][quadrant].add_observer(functools.partial(self.on_eye_scaling_changed, quadrant))
+      config['eye_scaling'][quadrant].add_observer(functools.partial(self.on_eye_scaling_changed, quadrant), lambda: self.detached)
       self.on_eye_scaling_changed(quadrant, ObservableCollection.Action.SET, 'x', config['eye_scaling'][quadrant]['x'])
       self.on_eye_scaling_changed(quadrant, ObservableCollection.Action.SET, 'y', config['eye_scaling'][quadrant]['y'])
 
@@ -392,6 +524,117 @@ class InputConfig():
     for point in points:
       scaled_point = transform.map(point)
       path.addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
+
+  def paint(self, painter: QPainter, dims: QSize):
+    painter.setTransform(QTransform.fromTranslate(dims.width()/2, dims.height()/2))
+    for path in self.gaze_paths:
+      painter.fillPath(path, QColor(0, 0, 255))
+
+  def process(self, voltage_point: QPointF, is_pixels: bool):
+    if voltage_point.y() < 0:
+      if voltage_point.x() >= 0:
+        self.points[0].append(self.gaze_transforms[0].inverted()[0].map(voltage_point) if is_pixels else voltage_point)
+        scaled_point = voltage_point if is_pixels else self.gaze_transforms[0].map(voltage_point)
+        self.gaze_paths[0].addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
+      else:
+        self.points[1].append(self.gaze_transforms[1].inverted()[0].map(voltage_point) if is_pixels else voltage_point)
+        scaled_point = voltage_point if is_pixels else self.gaze_transforms[1].map(voltage_point)
+        self.gaze_paths[1].addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
+    else:
+      if voltage_point.x() < 0:
+        self.points[2].append(self.gaze_transforms[2].inverted()[0].map(voltage_point) if is_pixels else voltage_point)
+        scaled_point = voltage_point if is_pixels else self.gaze_transforms[2].map(voltage_point)
+        self.gaze_paths[2].addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
+      else:
+        self.points[3].append(self.gaze_transforms[3].inverted()[0].map(voltage_point) if is_pixels else voltage_point)
+        scaled_point = voltage_point if is_pixels else self.gaze_transforms[3].map(voltage_point)
+        self.gaze_paths[3].addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
+
+    return scaled_point
+  
+  def clear(self):
+    self.gaze_paths = [
+      QPainterPath(), QPainterPath(), QPainterPath(), QPainterPath()]
+    self.gaze_paths[0].setFillRule(Qt.FillRule.WindingFill)
+    self.gaze_paths[1].setFillRule(Qt.FillRule.WindingFill)
+    self.gaze_paths[2].setFillRule(Qt.FillRule.WindingFill)
+    self.gaze_paths[3].setFillRule(Qt.FillRule.WindingFill)
+    self.points = [[], [], [], []]
+
+  def get_gaze_transform(self, from_center: QPoint):
+    if from_center.y() >= 0:
+      if from_center.x() >= 0:
+        transform = self.gaze_transforms[0]
+      else:
+        transform = self.gaze_transforms[1]
+    else:
+      if from_center.x() < 0:
+        transform = self.gaze_transforms[2]
+      else:
+        transform = self.gaze_transforms[3]
+
+    return transform
+  
+  def describe(self):
+    return[
+      [tr.m11(), tr.m12(), tr.m13(), tr.m21(), tr.m22(), tr.m23(), tr.m31(), tr.m32(), tr.m33()]
+      for tr in self.gaze_transforms]
+
+class InputConfig():
+  '''
+  Touch and eye input config
+  '''
+  def __init__(self, config: ObservableCollection) -> None:
+    self.touch_channels = config['touch_channels']
+    self.touch_path = QPainterPath()
+    self.touch_path.setFillRule(Qt.FillRule.WindingFill)
+    self.last_touch = QPoint(0, 0)
+    self.touch_calibration = TouchCalibration(config)
+    self.gaze_config = None
+
+    if 'eye_scaling' not in config:
+      config['eye_scaling'] = {}
+    eye_config = config['eye_scaling']
+
+    if 'Selected Model' not in eye_config:
+      eye_config['Selected Model'] = 'Quadrant Scaling'
+    if 'Models' not in eye_config:
+      eye_config['Models'] = {}
+
+    def on_change(action, key, value):
+      if key == 'Selected Model':
+        if self.gaze_config is not None:
+          self.gaze_config.detached = True
+
+        if value == 'Quadrant Scaling':
+          self.gaze_config = EyeQuadrantScalingConfig(config)
+        elif value == 'Projective':
+          self.gaze_config = EyeProjectiveConfig(config)
+        elif value == 'Angular Scaling':
+          self.gaze_config = AngularScalingConfig(config)
+
+    eye_config.add_observer(on_change)
+    eye_config.recap(on_change)
+
+  def paint(self, painter: QPainter, dims: QSize):
+    with painter.masked(RenderOutput.OPERATOR):
+      painter.fillPath(self.touch_path, QColor(255, 0, 0))
+      self.gaze_config.paint(painter, dims)
+
+  def process_gaze(self, voltage_point: QPointF, is_pixels: bool):
+    return self.gaze_config.process(voltage_point, is_pixels)
+  
+  def clear(self):
+    self.gaze_config.clear()
+
+    self.touch_path = QPainterPath()
+    self.touch_path.setFillRule(Qt.FillRule.WindingFill)
+
+  def get_gaze_transform(self, from_center: QPoint):
+    return self.gaze_config.get_gaze_transform(from_center)
+  
+  def describe_gaze(self):
+    return self.gaze_config.describe()
 
   def __str__(self) -> str:
     return f'InputConfig(touch_channels={self.touch_channels})'
@@ -443,7 +686,11 @@ class Handles:
   def __repr__(self) -> str:
     return str(self)
 
-class Canvas(QOpenGLWidget):
+if True:
+  CanvasSuperClass = QWidget
+else:
+  CanvasSuperClass = QOpenGLWidget
+class Canvas(CanvasSuperClass):
   """
   The QWidget the task will render on and that will generate mouse events on touch input
   """
@@ -605,27 +852,26 @@ class Canvas(QOpenGLWidget):
     self.opengl_config.proj.perspective(45.0, width / height, 0.01, 100.0)
 
   def paintGL(self) -> None: # pylint: disable=invalid-name
+    self.paintEvent(None)
+
+  def paintEvent(self, e) -> None: # pylint: disable=invalid-name
     '''
     Paints the task
     '''
-    assert self.opengl_config, 'opengl_config is None'
+    #assert self.opengl_config, 'opengl_config is None'
 
-    locations = GlslLocations(0, 1, self.opengl_config.color_loc, self.opengl_config.mv_matrix_loc,
-                              self.opengl_config.proj_matrix_loc, self.opengl_config.normal_matrix_loc)
+    if self.opengl_config is not None:
+      locations = GlslLocations(0, 1, self.opengl_config.color_loc, self.opengl_config.mv_matrix_loc,
+                                self.opengl_config.proj_matrix_loc, self.opengl_config.normal_matrix_loc)
+      olgc = OpenGLConfig(self.opengl_config.proj, self.opengl_config.program, locations, self.opengl_config.vbo_cache)
+    else:
+      olgc = None
     geometry = qt_screen_geometry()
-    painter = CanvasPainter(self.current_output_mask,
-                            OpenGLConfig(self.opengl_config.proj, self.opengl_config.program, locations,
-                                         self.opengl_config.vbo_cache), self)
+    painter = CanvasPainter(self.current_output_mask, olgc, self)
     with painter:
       painter.fillRect(QRect(0, 0, 4000, 4000), QColor(0, 0, 0))
       self.listeners.renderer(painter)
-
-      with painter.masked(RenderOutput.OPERATOR):
-        painter.fillPath(self.input_config.touch_path, QColor(255, 0, 0))
-
-        painter.setTransform(QTransform.fromTranslate(self.width()/2, self.height()/2))
-        for path in self.input_config.gaze_paths:
-          painter.fillPath(path, QColor(0, 0, 255))
+      self.input_config.paint(painter, self.size())
 
     if self.current_output_mask != RenderOutput.OPERATOR:
       for subscriber in self.listeners.paint_subscribers:
@@ -840,7 +1086,7 @@ class Canvas(QOpenGLWidget):
     if self.task_context:
       self.task_context.process()
 
-  async def on_ros_gaze(self, messages: typing.AsyncIterable[thalamus_pb2.AnalogResponse]) -> None:
+  async def on_ros_gaze(self, messages: typing.AsyncIterable[thalamus_pb2.AnalogResponse], is_pixels=False) -> None:
     """
     Processes eye input
     """
@@ -857,28 +1103,7 @@ class Canvas(QOpenGLWidget):
 
         voltage_point = QPointF(x, -y)
 
-        if y >= 0:
-          if x >= 0:
-            self.input_config.points[0].append(voltage_point)
-            scaled_point = self.input_config.gaze_transforms[0].map(voltage_point)
-            self.input_config.gaze_paths[0].addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
-          else:
-            self.input_config.points[1].append(voltage_point)
-            scaled_point = self.input_config.gaze_transforms[1].map(voltage_point)
-            self.input_config.gaze_paths[1].addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
-        else:
-          if x < 0:
-            self.input_config.points[2].append(voltage_point)
-            scaled_point = self.input_config.gaze_transforms[2].map(voltage_point)
-            self.input_config.gaze_paths[2].addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
-          else:
-            self.input_config.points[3].append(voltage_point)
-            scaled_point = self.input_config.gaze_transforms[3].map(voltage_point)
-            self.input_config.gaze_paths[3].addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
-
-        #geometry = qt_screen_geometry()
-        #global_point = QPoint(scaled_point.x() + geometry.width()/2, scaled_point.y() + geometry.height()/2)
-        #local_point = self.mapFromGlobal(global_point)
+        scaled_point = self.input_config.process_gaze(voltage_point, is_pixels)
 
         local_point = QPoint(int(scaled_point.x()) + self.width()//2, int(scaled_point.y()) + self.height()//2)
 
@@ -898,16 +1123,7 @@ class Canvas(QOpenGLWidget):
     '''
     Clears the accumulation view
     '''
-    self.input_config.gaze_paths = [
-      QPainterPath(), QPainterPath(), QPainterPath(), QPainterPath()]
-    self.input_config.gaze_paths[0].setFillRule(Qt.FillRule.WindingFill)
-    self.input_config.gaze_paths[1].setFillRule(Qt.FillRule.WindingFill)
-    self.input_config.gaze_paths[2].setFillRule(Qt.FillRule.WindingFill)
-    self.input_config.gaze_paths[3].setFillRule(Qt.FillRule.WindingFill)
-    self.input_config.points = [[], [], [], []]
-
-    self.input_config.touch_path = QPainterPath()
-    self.input_config.touch_path.setFillRule(Qt.FillRule.WindingFill)
+    self.input_config.clear()
 
   def mousePressEvent(self, event: QMouseEvent) -> None: # pylint: disable=invalid-name
     self.mouseMoveEvent(event)
@@ -929,24 +1145,15 @@ class Canvas(QOpenGLWidget):
 
       from_center.setY(-from_center.y())
 
-      if from_center.y() >= 0:
-        if from_center.x() >= 0:
-          transform = self.input_config.gaze_transforms[0]
-        else:
-          transform = self.input_config.gaze_transforms[1]
-      else:
-        if from_center.x() < 0:
-          transform = self.input_config.gaze_transforms[2]
-        else:
-          transform = self.input_config.gaze_transforms[3]
+      transform = self.input_config.get_gaze_transform(from_center)
 
       gaze_message = thalamus_pb2.AnalogResponse(
-          data = [from_center.x()/transform.m11(), from_center.y()/transform.m22()],
+          data = [from_center.x(), from_center.y()],
           spans = [thalamus_pb2.Span(name='X', begin=0, end=1), thalamus_pb2.Span(name='Y', begin=1, end=2)]
       )
 
       async def async_yield(message):
         yield message
 
-      create_task_with_exc_handling(self.on_ros_gaze(async_yield(gaze_message)))
+      create_task_with_exc_handling(self.on_ros_gaze(async_yield(gaze_message), is_pixels=True))
 

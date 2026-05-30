@@ -74,32 +74,13 @@ class ThalamusServicer(thalamus_pb2_grpc.ThalamusServicer):
     return ''.join(f'[{repr(p)}]' for p in path)
 
   def install_observer(self, root):
-    the_open = [root]
-    the_closed = []
-
-    while the_open:
-      current = the_open.pop()
-      the_closed.append(current)
-      if isinstance(current, ObservableDict):
-        for k, v in current.items():
-          if isinstance(v, ObservableCollection):
-            the_open.append(v)
-      elif isinstance(current, ObservableList):
-        for k, v in enumerate(current):
-          if isinstance(v, ObservableCollection):
-            the_open.append(v)
-    
-    for current in the_closed:
-      observer = lambda a, k, v, current=current: self.on_change(current, a, k, v)
-      current.add_observer(observer)
+    root.add_recursive_observer(self.on_change)
 
   def on_change(self, config: ObservableCollection, action: ObservableCollection.Action, k: typing.Any, v: typing.Any) -> None:
     address = self.compute_address(config)
     value_address = self.__combine(address, k)
     if isinstance(v, ObservableCollection):
       value_string = json.dumps(v.unwrap())
-      if action == ObservableCollection.Action.SET:
-        self.install_observer(v)
     else:
       value_string = json.dumps(v)
 
@@ -160,15 +141,29 @@ class ThalamusServicer(thalamus_pb2_grpc.ThalamusServicer):
               continue
 
             for match in matches:
+              #LOGGER.debug('%s', match)
               if isinstance(match.value, ObservableCollection):
-                match.value.assign(value)
+                LOGGER.debug('%s', match.context.value)
+                if change.action == thalamus_pb2.ObservableChange.Action.Set:
+                  match.value.assign(value)
+                elif match.value.parent is not None:
+                  key = match.value.key_in_parent()
+                  del match.value.parent[key]
               elif isinstance(match.path, jsonpath_ng.Index):
-                if match.path.index == len(match.context.value):
-                  match.context.value.append(value)
+                LOGGER.debug('%s', match.context.value)
+                if change.action == thalamus_pb2.ObservableChange.Action.Set:
+                  if match.path.index == len(match.context.value):
+                    match.context.value.append(value)
+                  else:
+                    match.context.value[match.path.index] = value
                 else:
-                  match.context.value[match.path.index] = value
+                  del match.context.value[match.path.index]
               elif isinstance(match.path, jsonpath_ng.Fields):
-                match.context.value[match.path.fields[0]] = value
+                LOGGER.debug('%s', match.context.value)
+                if change.action == thalamus_pb2.ObservableChange.Action.Set:
+                  match.context.value[match.path.fields[0]] = value
+                else:
+                  del match.context.value[match.path.fields[0]]
           if self.pending_out:
             await asyncio.wait(self.pending_out)
           self.pending_out = []

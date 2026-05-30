@@ -44,7 +44,7 @@ class ThalamusThread:
       changes = [thalamus_pb2.ObservableChange(
         address = address,
         value = json.dumps(value),
-        action = thalamus_pb2.ObservableChange.Action.Set
+        action = thalamus_pb2.ObservableChange.Action.Set if action == ObservableCollection.Action.SET else thalamus_pb2.ObservableChange.Action.Delete
       )],
       id = self.next_id
     )
