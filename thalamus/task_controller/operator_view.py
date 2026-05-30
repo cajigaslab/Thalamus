@@ -106,6 +106,10 @@ class AngularScalingModelWidget(QWidget):
         path.lineTo(*coord)
     if end is not None:
       path.lineTo(*end)
+    path.moveTo(0, -radius)
+    path.lineTo(0, radius)
+    path.moveTo(-radius, 0)
+    path.lineTo(radius, 0)
 
     painter.translate(radius, radius)
     painter.drawPath(path)
