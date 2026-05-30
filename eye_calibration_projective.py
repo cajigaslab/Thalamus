@@ -34,7 +34,8 @@ DEFAULT_PROJECTIVE = {
 
 DEFAULT_ANGULAR_SCALING = {
   'Angle': [],
-  'Scale': [],
+  'Scale X': [],
+  'Scale Y': [],
 }
 
 class SaccadeTarget(typing.NamedTuple):
@@ -218,16 +219,17 @@ class Task:
       py = numpy.tan(ty*numpy.pi/180)*distance_inches*self.dpi
       return px, py
     elif self.model_name == 'Angular Scaling':
-      angle, scale = model['Angle'], model['Scale']
-      length = min(len(angle), len(scale))
+      angle, scalex, scaley = model['Angle'], model['Scale X'], model['Scale Y']
+      length = min(len(angle), len(scalex), len(scaley))
       if not length:
         return 10*x, 10*y
       
       val = numpy.arctan2(y, x)
       if val < 0:
         val = numpy.pi + (numpy.pi + val)
-      factor = numpy.interp(val, angle[:length], scale[:length], period=2*numpy.pi)
-      return factor*x, factor*y
+      factorx = numpy.interp(val, angle[:length], scalex[:length], period=2*numpy.pi)
+      factory = numpy.interp(val, angle[:length], scaley[:length], period=2*numpy.pi)
+      return factorx*x, factory*y
 
     
   def append_to_path(self, path, x, y):
@@ -288,8 +290,8 @@ class Task:
       pass
     elif self.model_name == 'Angular Scaling':
       model['Angle'].assign([], self.rebuild)
-      model['Scale'].assign([], self.rebuild)
-
+      model['Scale X'].assign([], self.rebuild)
+      model['Scale Y'].assign([], self.rebuild)
 
   def optimize(self):
     model = self.get_model(self.model_name)
@@ -315,17 +317,21 @@ class Task:
         return
       
       new_angles = []
-      new_scales = []
+      new_scalesx = []
+      new_scalesy = []
       for ocu, deg, target in self.training_data:
         angle = numpy.arctan2(ocu[1], ocu[0])
         if angle < 0:
           angle = numpy.pi + (numpy.pi + angle)
-        scale = ((target.x**2 + target.y**2)/(ocu[0]**2 + ocu[1]**2))**.5
+        scalex = target.x/ocu[0]
+        scaley = target.y/ocu[1]
 
         new_angles.append(angle)
-        new_scales.append(scale)
+        new_scalesx.append(scalex)
+        new_scalesy.append(scaley)
       model['Angle'].assign(new_angles, self.rebuild)
-      model['Scale'].assign(new_scales, self.rebuild)
+      model['Scale X'].assign(new_scalesx, self.rebuild)
+      model['Scale Y'].assign(new_scalesy, self.rebuild)
 
   async def run(self):
     async def eye_loop():

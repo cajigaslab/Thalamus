@@ -637,9 +637,7 @@ class TaskContext(TaskContextProtocol):
     the gaze and touch positions.
     """
     if self.widget and self.widget.input_config:
-      gaze_tforms= []
-      for tr in self.widget.input_config.gaze_transforms:
-        gaze_tforms.append([tr.m11(), tr.m12(), tr.m13(), tr.m21(), tr.m22(), tr.m23(), tr.m31(), tr.m32(), tr.m33()])
+      gaze_tforms= self.widget.input_config.describe_gaze()
 
       tr = self.widget.input_config.touch_calibration.touch_transform
       touch_tform = [tr.m11(), tr.m12(), tr.m13(), tr.m21(), tr.m22(), tr.m23(), tr.m31(), tr.m32(), tr.m33()]

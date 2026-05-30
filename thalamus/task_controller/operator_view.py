@@ -65,7 +65,8 @@ class AngularScalingModelWidget(QWidget):
     if 'Projective' not in eye_config['Models']:
       eye_config['Models']['Projective'] = {
         'Angle': [],
-        'Scale': [],
+        'Scale X': [],
+        'Scale Y': [],
       }
 
     self.model = eye_config['Models']['Angular Scaling']
@@ -80,24 +81,29 @@ class AngularScalingModelWidget(QWidget):
     painter = QPainter(self)
 
     anglef = self.model['Angle']
-    scalef = self.model['Scale']
-    length = min(len(anglef), len(scalef))
+    scalexf = self.model['Scale X']
+    scaleyf = self.model['Scale Y']
+    length = min(len(anglef), len(scalexf), len(scaleyf))
 
     diameter = min(self.width(), self.height()) - 10
     radius = diameter/2
 
     angles = numpy.linspace(0, 2*numpy.pi, 360)
     if length:
-      scales = numpy.interp(angles, anglef[:length], scalef[:length], period=2*numpy.pi)
-      scales /= scales.max()
+      scalesx = numpy.interp(angles, anglef[:length], scalexf[:length], period=2*numpy.pi)
+      scalesy = numpy.interp(angles, anglef[:length], scaleyf[:length], period=2*numpy.pi)
+      mag = (scalesx**2 + scalesy**2).max()**.5
+      scalesx /= mag
+      scalesy /= mag
     else:
-      scales = numpy.ones_like(angles)
+      scalesx = numpy.ones_like(angles)
+      scalesy = numpy.ones_like(angles)
 
     end = None
     first = True
     path = QPainterPath()
-    for a, s in zip(angles, scales):
-      coord = radius*numpy.cos(a)*s, radius*numpy.sin(a)*s
+    for a, sx, sy in zip(angles, scalesx, scalesy):
+      coord = radius*numpy.cos(a)*sx, radius*numpy.sin(a)*sy
       if first:
         end = coord
         path.moveTo(*coord)
