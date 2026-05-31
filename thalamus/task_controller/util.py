@@ -255,6 +255,11 @@ class TaskContextProtocol(metaclass=abc.ABCMeta):
     Send log to thalamus
     '''
 
+  def get_name() -> str:
+    '''
+    Get executor name
+    '''
+
 AnimateTarget = typing.Callable[[TaskContextProtocol],
                                 typing.Awaitable[TaskResult]]
 

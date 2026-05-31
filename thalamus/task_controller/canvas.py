@@ -362,9 +362,9 @@ class AngularScalingConfig:
     self.scalex = model['Scale X']
     self.scaley = model['Scale Y']
 
-  def paint(self, painter: QPainter, dims: QSize):
+  def paint(self, painter: QPainter, dims: QSize, opacity: int):
     painter.setTransform(QTransform.fromTranslate(dims.width()/2, dims.height()/2))
-    painter.fillPath(self.gaze_path, QColor(0, 0, 255))
+    painter.fillPath(self.gaze_path, QColor(0, 0, 255, opacity))
 
   def process(self, voltage_point: QPointF, is_pixels: bool):
     model_length = min(len(self.angle), len(self.scalex), len(self.scaley))
@@ -439,9 +439,9 @@ class EyeProjectiveConfig:
     models['Projective'].add_recursive_observer(on_change)
     models['Projective'].recap()
 
-  def paint(self, painter: QPainter, dims: QSize):
+  def paint(self, painter: QPainter, dims: QSize, opacity: int):
     painter.setTransform(QTransform.fromTranslate(dims.width()/2, dims.height()/2))
-    painter.fillPath(self.gaze_path, QColor(0, 0, 255))
+    painter.fillPath(self.gaze_path, QColor(0, 0, 255, opacity))
 
   def process(self, voltage_point: QPointF, is_pixels: bool):
     x, y = voltage_point.x(), voltage_point.y()
@@ -525,10 +525,10 @@ class EyeQuadrantScalingConfig:
       scaled_point = transform.map(point)
       path.addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
 
-  def paint(self, painter: QPainter, dims: QSize):
+  def paint(self, painter: QPainter, dims: QSize, opacity: int):
     painter.setTransform(QTransform.fromTranslate(dims.width()/2, dims.height()/2))
     for path in self.gaze_paths:
-      painter.fillPath(path, QColor(0, 0, 255))
+      painter.fillPath(path, QColor(0, 0, 255, opacity))
 
   def process(self, voltage_point: QPointF, is_pixels: bool):
     if voltage_point.y() < 0:
@@ -616,10 +616,10 @@ class InputConfig():
     eye_config.add_observer(on_change)
     eye_config.recap(on_change)
 
-  def paint(self, painter: QPainter, dims: QSize):
+  def paint(self, painter: QPainter, dims: QSize, opacity: int):
     with painter.masked(RenderOutput.OPERATOR):
-      painter.fillPath(self.touch_path, QColor(255, 0, 0))
-      self.gaze_config.paint(painter, dims)
+      painter.fillPath(self.touch_path, QColor(255, 0, 0, opacity))
+      self.gaze_config.paint(painter, dims, opacity)
 
   def process_gaze(self, voltage_point: QPointF, is_pixels: bool):
     return self.gaze_config.process(voltage_point, is_pixels)
@@ -704,6 +704,7 @@ class Canvas(CanvasSuperClass):
     self.config = config
 
     self.thalamus = thalamus
+    self.path_opacity = 255
 
     self.sent_images = set()
     self.recorder = recorder
@@ -871,7 +872,7 @@ class Canvas(CanvasSuperClass):
     with painter:
       painter.fillRect(QRect(0, 0, 4000, 4000), QColor(0, 0, 0))
       self.listeners.renderer(painter)
-      self.input_config.paint(painter, self.size())
+      self.input_config.paint(painter, self.size(), self.path_opacity)
 
     if self.current_output_mask != RenderOutput.OPERATOR:
       for subscriber in self.listeners.paint_subscribers:
@@ -1124,6 +1125,9 @@ class Canvas(CanvasSuperClass):
     Clears the accumulation view
     '''
     self.input_config.clear()
+
+  def set_path_opacity(self, value: int):
+    self.path_opacity = int(255*value/100)
 
   def mousePressEvent(self, event: QMouseEvent) -> None: # pylint: disable=invalid-name
     self.mouseMoveEvent(event)
