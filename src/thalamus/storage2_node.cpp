@@ -8,6 +8,7 @@
 #include <thalamus/thread.hpp>
 #include <thalamus/thread_pool.hpp>
 #include <thalamus/util.hpp>
+#include <thalamus_config.h>
 
 #ifdef _WIN32
 #include <WinSock2.h>
@@ -104,6 +105,7 @@ struct Storage2Node::Impl {
   boost::asio::steady_timer stats_timer;
   boost::asio::io_context &io_context;
   ThreadPool &pool;
+  std::optional<std::filesystem::path> rendered_filepath;
 
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
        NodeGraph *_graph, Storage2Node *_outer)
@@ -475,6 +477,17 @@ struct Storage2Node::Impl {
         return "";
       }
     }
+
+    auto proto_metadata = record.mutable_metadata();
+    auto proto_pair = proto_metadata->add_keyvalues();
+    proto_pair->set_key("Build Type");
+    proto_pair->set_text(THALAMUS_BUILD_TYPE);
+    proto_pair = proto_metadata->add_keyvalues();
+    proto_pair->set_key("Version");
+    proto_pair->set_text(THALAMUS_VERSION);
+    proto_pair = proto_metadata->add_keyvalues();
+    proto_pair->set_key("Commit");
+    proto_pair->set_text(THALAMUS_GIT_COMMIT_HASH);
 
     output_stream = std::ofstream(rendered, std::ios::trunc | std::ios::binary);
     this->outer->record(output_stream, record);
@@ -961,6 +974,10 @@ struct Storage2Node::Impl {
       return;
     }
     std::filesystem::path filepath(filename);
+    boost::asio::post(io_context, [this, filepath] {
+      this->rendered_filepath = std::filesystem::absolute(filepath);
+    });
+
     {
       std::ofstream config_output(filename + ".json");
       auto text = boost::json::serialize(config);
@@ -1299,6 +1316,7 @@ struct Storage2Node::Impl {
 
   void stop_thread(bool join = true) {
     is_running = false;
+    rendered_filepath.reset();
     if (join && _thread.joinable()) {
       _thread.join();
     }
@@ -1477,5 +1495,18 @@ std::span<const std::string> Storage2Node::get_recommended_channels() const {
 void Storage2Node::inject(const thalamus::vector<std::span<double const>> &,
                          const thalamus::vector<std::chrono::nanoseconds> &,
                          const thalamus::vector<std::string_view> &) {}
+
+void Storage2Node::process(const boost::json::value & request_value, std::function<void(const boost::json::value &)> callback) {
+  auto request = request_value.as_object();
+
+  auto type = request["type"].as_string();
+  if(type == "get_current_file") {
+    if(impl->rendered_filepath) {
+      callback(boost::json::string(impl->rendered_filepath->string()));
+      return;
+    }
+  }
+  callback(boost::json::value());
+}
 
 } // namespace thalamus
