@@ -95,6 +95,7 @@ class AngularScalingModelWidget(QWidget):
       scalesx /= mag
       scalesy /= mag
     else:
+      mag = 1
       scalesx = numpy.ones_like(angles)
       scalesy = numpy.ones_like(angles)
 
@@ -118,6 +119,15 @@ class AngularScalingModelWidget(QWidget):
 
     painter.translate(radius, radius)
     painter.drawPath(path)
+
+    path2 = QPainterPath()
+    for a, sx, sy in zip(anglef[:length], scalexf[:length], scaleyf[:length]):
+      path2.moveTo(0, 0)
+      path2.lineTo(radius*numpy.cos(a), radius*numpy.sin(a))
+      path2.lineTo(radius*numpy.cos(a)*sx/mag, radius*numpy.sin(a)*sy/mag)
+
+    painter.setPen(QColor(255, 0, 0))
+    painter.drawPath(path2)
 
 class EyeProjectiveModelWidget(QWidget):
   def __init__(self, eye_config: ObservableCollection) -> None:
