@@ -49,5 +49,7 @@ public:
               const thalamus::vector<std::chrono::nanoseconds> &,
               const thalamus::vector<std::string_view> &) override;
   size_t modalities() const override { return THALAMUS_MODALITY_ANALOG; }
+  
+  void process(const boost::json::value & request, std::function<void(const boost::json::value &)> callback) override;
 };
 } // namespace thalamus
