@@ -292,6 +292,8 @@ class TaskContext(TaskContextProtocol):
     self.running = False
     self.servicer = servicer
     self.stub = stub
+    self.control_widget = None
+    self.on_operator_widget: typing.Callable[[QWidget], None] = lambda w: None
     self.inject_analog_streams: typing.Dict[str, IterableQueue] = {}
     self.node_request_streams: typing.Dict[str, NodeRequestStream] = {}
     self.next_node_request_id = 1
@@ -404,6 +406,9 @@ class TaskContext(TaskContextProtocol):
 
   async def log(self, text: str):
     await self.log_queue.put(thalamus_pb2.Text(text=text,time=int(time.perf_counter()*1e9)))
+
+  def get_name(self) -> str:
+    return 'TASK_CONTROLLER'
 
   @property
   def behav_result(self) -> typing.Dict[str, typing.Any]:
@@ -615,6 +620,13 @@ class TaskContext(TaskContextProtocol):
 
     return result
 
+  def set_operator_widget(self, widget: QWidget):
+    self.on_operator_widget(widget)
+    if self.control_widget is not None:
+      self.control_widget.hide()
+      self.control_widget.deleteLater()
+    self.control_widget = widget
+
   def __update_status(self, success: bool) -> None:
     assert self.task_config is not None, 'self.task_config is None'
 
@@ -702,6 +714,7 @@ class TaskContext(TaskContextProtocol):
         except asyncio.CancelledError:
           LOGGER.debug('CANCELLED')
           was_cancelled = True
+        self.set_operator_widget(QWidget())
         self.widget.renderer = lambda w: None
         self.widget.touch_listener = lambda e: None
         self.widget.gaze_listener = lambda e: None

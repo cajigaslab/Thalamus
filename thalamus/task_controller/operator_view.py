@@ -246,24 +246,34 @@ class CentralWidget(QWidget):
       eye_config['Selected Model'] = 'Quadrant Scaling'
 
     layout = QGridLayout()
+    self.control_widget = None
+    self.layout = layout
     layout.addWidget(ViewWidget(target), 0, 0, 1, 4)
     layout.setRowStretch(0, 1)
 
     clear_button = QPushButton('Clear')
-    layout.addWidget(clear_button, 1, 0)
-    layout.setRowStretch(1, 0)
+    layout.addWidget(clear_button, 2, 0)
+    layout.setRowStretch(2, 0)
     clear_button.clicked.connect(target.canvas.clear_accumulation)
 
     auto_clear_checkbox = QCheckBox('Auto Clear')
-    layout.addWidget(auto_clear_checkbox, 1, 1)
+    layout.addWidget(auto_clear_checkbox, 2, 1)
     auto_clear_checkbox.toggled.connect(lambda v: eye_config.update({'Auto Clear': v}))
+    
+    layout.addWidget(QLabel('Gaze/Touch Opacity'), 2, 2)
+    layout.setColumnStretch(2, 0)
+    opacity_slider = QSlider(Qt.Orientation.Horizontal)
+    opacity_slider.setRange(0, 100)
+    layout.addWidget(opacity_slider, 2, 3)
+    opacity_slider.valueChanged.connect(target.canvas.set_path_opacity)
+    opacity_slider.setValue(100)
 
     model_combo = QComboBox()
     model_combo.addItem('Quadrant Scaling')
     model_combo.addItem('Angular Scaling')
     model_combo.addItem('Projective')
-    layout.addWidget(QLabel('Model:'), 2, 0)
-    layout.addWidget(model_combo, 2, 1)
+    layout.addWidget(QLabel('Model:'), 3, 0)
+    layout.addWidget(model_combo, 3, 1)
 
     model_combo.currentTextChanged.connect(lambda t: eye_config.update({'Selected Model': t}))
 
@@ -286,7 +296,7 @@ class CentralWidget(QWidget):
         
         if model_widget is None:
           model_widget = new_model_widget
-          layout.addWidget(model_widget, 3, 0, 1, 4)
+          layout.addWidget(model_widget, 4, 0, 1, 4)
         else:
           layout.replaceWidget(model_widget, new_model_widget)
           model_widget.deleteLater()
@@ -317,10 +327,21 @@ class Window(QMainWindow):
     except asyncio.CancelledError:
       pass
 
+  def set_control_widget(self, widget: QWidget):
+    if self.central_widget.control_widget is not None:
+      self.central_widget.layout.replaceWidget(self.central_widget.control_widget, widget)
+      self.central_widget.control_widget = widget
+    else:
+      self.central_widget.layout.addWidget(widget, 1, 0, 1, 4)
+      self.central_widget.control_widget = widget
+
   def closeEvent(self, event: QCloseEvent) -> None: # pylint: disable=invalid-name
     """
     Remove callback when window closes
     """
+    if self.central_widget.control_widget is not None:
+      self.central_widget.control_widget.setParent(None)
+
     self.closed = True
     self.render_loop.cancel()
     super().closeEvent(event)
