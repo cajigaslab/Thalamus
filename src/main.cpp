@@ -11,12 +11,10 @@ const auto HELP = "Thalamus native program, version " GIT_COMMIT_HASH "\n"
                   "  thalamus         Signal tool\n"
                   "  hydrate          Thalamus capture parsing\n"
                   "  ffmpeg           ffmpeg\n"
-                  "  ffprobe          ffprobe\n"
-                  "  ffplay           ffplay\n";
+                  "  ffprobe          ffprobe\n";
 
 extern "C" {
 int ffmpeg_main_impl(int argc, char **argv);
-int ffplay_main_impl(int argc, char **argv);
 int ffprobe_main_impl(int argc, char **argv);
 }
 
@@ -25,8 +23,7 @@ int main(int argc, char *argv[]) {
       {"thalamus", thalamus::main},
       {"hydrate", hydrate::main},
       {"ffmpeg", ffmpeg_main_impl},
-      {"ffprobe", ffprobe_main_impl},
-      {"ffplay", ffplay_main_impl}};
+      {"ffprobe", ffprobe_main_impl}};
 
   auto command = COMMANDS.find(argc < 2 ? "thalamus" : argv[1]);
   if (command == COMMANDS.end()) {

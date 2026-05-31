@@ -125,6 +125,8 @@ include(cmake/opencv.cmake)
 include(cmake/boost.cmake)
 include(cmake/hdf5.cmake)
 include(cmake/crashpad.cmake)
+include(cmake/vulkan.cmake)
+#find_package(Vulkan REQUIRED)
 
 execute_process(
   COMMAND git log -1 --format=%h
@@ -395,3 +397,27 @@ endif()
 add_executable(Rec_Stim Rec_Stim.cpp)
 target_link_libraries(Rec_Stim PRIVATE hdf5-static thalamus)
 target_include_directories(Rec_Stim PRIVATE "${CMAKE_SOURCE_DIR}/src")
+
+set(VERT_SPV "${CMAKE_BINARY_DIR}/texture.vert.spv")
+set(FRAG_SPV "${CMAKE_BINARY_DIR}/texture.frag.spv")
+add_custom_command(
+  OUTPUT "${VERT_SPV}"
+  COMMAND "${GLSL_COMPILER}" -V "${CMAKE_SOURCE_DIR}/src/shaders/texture.vert" -o "${VERT_SPV}"
+  DEPENDS "${CMAKE_SOURCE_DIR}/src/shaders/texture.vert")
+add_custom_command(
+  OUTPUT "${FRAG_SPV}"
+  COMMAND "${GLSL_COMPILER}" -V "${CMAKE_SOURCE_DIR}/src/shaders/texture.frag" -o "${FRAG_SPV}"
+  DEPENDS "${CMAKE_SOURCE_DIR}/src/shaders/texture.frag")
+add_custom_target(vulkan_hello_shaders DEPENDS "${VERT_SPV}" "${FRAG_SPV}")
+
+add_executable(vulkan_hello src/vulkan_hello.cpp)
+add_dependencies(vulkan_hello vulkan_hello_shaders)
+if(WIN32)
+  target_compile_definitions(vulkan_hello PRIVATE _WIN32_WINNT=0x0A00 NOMINMAX WIN32_LEAN_AND_MEAN)
+endif()
+target_compile_definitions(vulkan_hello PRIVATE
+  "VERT_SPV_PATH=\"${VERT_SPV}\""
+  "FRAG_SPV_PATH=\"${FRAG_SPV}\"")
+target_compile_options(vulkan_hello PRIVATE ${WARNING_FLAGS})
+target_include_directories(vulkan_hello PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(vulkan_hello PRIVATE vulkan sdl opencv zlib_processed)

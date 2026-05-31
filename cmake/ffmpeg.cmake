@@ -44,43 +44,29 @@ if(WIN32)
   message("ALL_C_LINK_OPTIONS_SPACED ${ALL_C_LINK_OPTIONS_SPACED}")
   message("FFMPEG_ALL_LINK_OPTIONS_SPACED ${FFMPEG_ALL_LINK_OPTIONS_SPACED}")
 
-  string(REGEX REPLACE "^([A-Z]):" "/\\1" FFMPEG_SDL_PKG_CONFIG_DIR "${SDL_PKG_CONFIG_DIR}")
-
-
   string(STRIP "${FFMPEG_ALL_COMPILE_OPTIONS_SPACED}" FFMPEG_ALL_COMPILE_OPTIONS_SPACED)
-  if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
-    string(APPEND FFMPEG_ALL_COMPILE_OPTIONS_SPACED " -FS")
-    add_custom_command(
-      OUTPUT "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
-      DEPENDS sdl
-      COMMAND
-      ${MSYS2_ROOT}\\msys2_shell.cmd -here -use-full-path -no-start -defterm -c "export 'PKG_CONFIG_PATH=${FFMPEG_SDL_PKG_CONFIG_DIR}' && '${CMAKE_SOURCE_DIR}/config_ffmpeg_msvc.bash' '${ffmpeg_SOURCE_DIR}/configure' '${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install' '-MT$<IF:$<CONFIG:Debug>,d,> ${FFMPEG_ALL_COMPILE_OPTIONS_SPACED}' $<IF:$<CONFIG:Debug>,--enable-debug,> '-MT$<IF:$<CONFIG:Debug>,d,> ${FFMPEG_ALL_LINK_OPTIONS_SPACED}'"
-      && cmake -E touch_nocreate "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
-      WORKING_DIRECTORY "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>")
-  else()
-    set(FFMPEG_ALL_LINK_OPTIONS_SPACED "${ALL_C_LINK_OPTIONS_SPACED}")
-    string(REPLACE "/DEBUG" "" FFMPEG_ALL_LINK_OPTIONS_SPACED "${ALL_C_LINK_OPTIONS_SPACED}")
+  set(FFMPEG_ALL_LINK_OPTIONS_SPACED "${ALL_C_LINK_OPTIONS_SPACED}")
+  string(REPLACE "/DEBUG" "" FFMPEG_ALL_LINK_OPTIONS_SPACED "${ALL_C_LINK_OPTIONS_SPACED}")
 
-    string(REPLACE "-Zi" "" FFMPEG_ALL_COMPILE_OPTIONS_SPACED "${FFMPEG_ALL_COMPILE_OPTIONS_SPACED}")
-    add_library(ffmpeg_m m_stub.cpp)
-    set_target_properties(ffmpeg_m PROPERTIES 
-      ARCHIVE_OUTPUT_DIRECTORY "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>"
-      LIBRARY_OUTPUT_DIRECTORY "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>"
-      OUTPUT_NAME m)
-    string(REGEX REPLACE "^([a-zA-Z]):" "/\\1" FFMPEG_COMPILER "${CMAKE_C_COMPILER}")
-    string(REPLACE "clang-cl" "clang" FFMPEG_COMPILER "${FFMPEG_COMPILER}")
-    string(REPLACE "Program Files (x86)" "Progra~2" FFMPEG_COMPILER "${FFMPEG_COMPILER}")
-    string(REPLACE "Program Files" "Progra~1" FFMPEG_COMPILER "${FFMPEG_COMPILER}")
-    add_custom_command(
-      OUTPUT "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
-      DEPENDS sdl ffmpeg_m
-      COMMAND
-      ${MSYS2_ROOT}\\msys2_shell.cmd -here -use-full-path -no-start -defterm -c "export 'PKG_CONFIG_PATH=${FFMPEG_SDL_PKG_CONFIG_DIR}' && '${ffmpeg_SOURCE_DIR}/configure' --enable-sdl --target-os=win64 --arch=x86_64 '--cc=${FFMPEG_COMPILER}' --enable-static --disable-shared '--prefix=${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install' '--extra-cflags=${FFMPEG_ALL_COMPILE_OPTIONS_SPACED}' '--extra-ldflags=${FFMPEG_ALL_LINK_OPTIONS_SPACED}' $<IF:$<CONFIG:Debug>,--enable-debug,>"
-      && cmake -E touch_nocreate "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
-      && ${MSYS2_ROOT}\\msys2_shell.cmd -here -use-full-path -no-start -defterm -c "sed -i s/LIBPREF=lib/LIBPREF=/ ffbuild/config.mak"
-      && ${MSYS2_ROOT}\\msys2_shell.cmd -here -use-full-path -no-start -defterm -c "sed -i s/LIBSUF=.a/LIBSUF=.lib/ ffbuild/config.mak"
-      WORKING_DIRECTORY "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>")
-  endif()
+  string(REPLACE "-Zi" "" FFMPEG_ALL_COMPILE_OPTIONS_SPACED "${FFMPEG_ALL_COMPILE_OPTIONS_SPACED}")
+  add_library(ffmpeg_m m_stub.cpp)
+  set_target_properties(ffmpeg_m PROPERTIES 
+    ARCHIVE_OUTPUT_DIRECTORY "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>"
+    LIBRARY_OUTPUT_DIRECTORY "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>"
+    OUTPUT_NAME m)
+  string(REGEX REPLACE "^([a-zA-Z]):" "/\\1" FFMPEG_COMPILER "${CMAKE_C_COMPILER}")
+  string(REPLACE "clang-cl" "clang" FFMPEG_COMPILER "${FFMPEG_COMPILER}")
+  string(REPLACE "Program Files (x86)" "Progra~2" FFMPEG_COMPILER "${FFMPEG_COMPILER}")
+  string(REPLACE "Program Files" "Progra~1" FFMPEG_COMPILER "${FFMPEG_COMPILER}")
+  add_custom_command(
+    OUTPUT "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
+    DEPENDS ffmpeg_m
+    COMMAND
+    ${MSYS2_ROOT}\\msys2_shell.cmd -here -use-full-path -no-start -defterm -c "'${ffmpeg_SOURCE_DIR}/configure' --target-os=win64 --arch=x86_64 '--cc=${FFMPEG_COMPILER}' --enable-static --disable-shared '--prefix=${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install' '--extra-cflags=${FFMPEG_ALL_COMPILE_OPTIONS_SPACED}' '--extra-ldflags=${FFMPEG_ALL_LINK_OPTIONS_SPACED}' $<IF:$<CONFIG:Debug>,--enable-debug,>"
+    && cmake -E touch_nocreate "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
+    && ${MSYS2_ROOT}\\msys2_shell.cmd -here -use-full-path -no-start -defterm -c "sed -i s/LIBPREF=lib/LIBPREF=/ ffbuild/config.mak"
+    && ${MSYS2_ROOT}\\msys2_shell.cmd -here -use-full-path -no-start -defterm -c "sed -i s/LIBSUF=.a/LIBSUF=.lib/ ffbuild/config.mak"
+    WORKING_DIRECTORY "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>")
   set(FFMPEG_MAKE_COMMAND ${MSYS2_ROOT}\\msys2_shell.cmd -here -use-full-path -no-start -defterm -c \"export VERBOSE=1 && make -j ${CPU_COUNT} && make install\")
 else()
   string(REPLACE "-nostdinc++" "" FFMPEG_COMPILE_OPTIONS_SPACED "${ALL_C_COMPILE_OPTIONS_SPACED}")
@@ -93,9 +79,9 @@ else()
 
   add_custom_command(
     OUTPUT "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
-    DEPENDS zlib_processed sdl
+    DEPENDS zlib_processed
     COMMAND cmake -E env 
-    "PKG_CONFIG_PATH=${ZLIB_PKG_CONFIG_DIR}:${SDL_PKG_CONFIG_DIR}"
+    "PKG_CONFIG_PATH=${ZLIB_PKG_CONFIG_DIR}"
     "${ffmpeg_SOURCE_DIR}/configure" ${FFMPEG_EXTRA_FLAGS} --cc=${CMAKE_C_COMPILER} "--extra-cflags=${FFMPEG_COMPILE_OPTIONS_SPACED}" "--extra-ldflags=${ALL_C_LINK_OPTIONS_SPACED}" --enable-static --disable-shared --disable-sndio $<IF:$<CONFIG:Debug>,--enable-debug,> --prefix=${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/install
     && cmake -E touch_nocreate "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
     WORKING_DIRECTORY "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>")
@@ -226,13 +212,6 @@ string(REPLACE "program_name" "ffprobe_program_name" THALAMUS_FFPROBE_C_SOURCE "
 string(REPLACE "program_birth_year" "ffprobe_program_birth_year" THALAMUS_FFPROBE_C_SOURCE "${THALAMUS_FFPROBE_C_SOURCE}")
 file(WRITE "${CMAKE_BINARY_DIR}/thalamus_ffprobe.c" "${THALAMUS_FFPROBE_C_SOURCE}")
 
-file(READ "${ffmpeg_SOURCE_DIR}/fftools/ffplay.c" FFPLAY_C_SOURCE)
-string(REPLACE "int main" "int ffplay_main_impl(int argc, char** argv);int ffplay_main_impl" THALAMUS_FFPLAY_C_SOURCE "${FFPLAY_C_SOURCE}")
-string(REPLACE "void show_help_default" "void ffplay_show_help_default(const char* opt, const char* arg);void ffplay_show_help_default" THALAMUS_FFPLAY_C_SOURCE "${THALAMUS_FFPLAY_C_SOURCE}")
-string(REPLACE "program_name" "ffplay_program_name" THALAMUS_FFPLAY_C_SOURCE "${THALAMUS_FFPLAY_C_SOURCE}")
-string(REPLACE "program_birth_year" "ffplay_program_birth_year" THALAMUS_FFPLAY_C_SOURCE "${THALAMUS_FFPLAY_C_SOURCE}")
-file(WRITE "${CMAKE_BINARY_DIR}/thalamus_ffplay.c" "${THALAMUS_FFPLAY_C_SOURCE}")
-
 add_custom_command(
   OUTPUT "${CMAKE_BINARY_DIR}/ffmpeg_$<CONFIG>.rsp"
   DEPENDS "${ffmpeg_BINARY_DIR}/$<CONFIG>/ffbuild/config.mak" 
@@ -254,17 +233,9 @@ add_custom_command(
   && cmake -E touch_nocreate "${CMAKE_BINARY_DIR}/thalamus_ffprobe_$<CONFIG>.o"
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
 
-add_custom_command(
-  OUTPUT "${CMAKE_BINARY_DIR}/thalamus_ffplay_$<CONFIG>.o"
-  DEPENDS "${CMAKE_BINARY_DIR}/ffmpeg_$<CONFIG>.rsp"
-  COMMAND "${CMAKE_C_COMPILER}" -c ${FFMPEG_OUT_ARG}thalamus_ffplay_$<CONFIG>.o "-I${SDL_INCLUDE}" "-I${ffmpeg_SOURCE_DIR}/fftools" "-I${ffmpeg_SOURCE_DIR}" "-I${ffmpeg_BINARY_DIR}/$<CONFIG>" "@${CMAKE_BINARY_DIR}/ffmpeg_$<CONFIG>.rsp" "${CMAKE_BINARY_DIR}/thalamus_ffplay.c"
-  && cmake -E touch_nocreate "${CMAKE_BINARY_DIR}/thalamus_ffplay_$<CONFIG>.o"
-  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
-
 add_library(thalamus_ffmpeg 
     "${CMAKE_BINARY_DIR}/thalamus_ffmpeg_$<CONFIG>.o"
     "${CMAKE_BINARY_DIR}/thalamus_ffprobe_$<CONFIG>.o"
-    "${CMAKE_BINARY_DIR}/thalamus_ffplay_$<CONFIG>.o"
     ${FFTOOL_OBJECTS})
 target_link_libraries(thalamus_ffmpeg PUBLIC ffmpeg)
 set_target_properties(thalamus_ffmpeg PROPERTIES LINKER_LANGUAGE C)
