@@ -39,10 +39,12 @@ void THALAMUS_ASSERT(bool condition, const absl::FormatSpec<Args...>& format, co
 #endif
 
 #define THALAMUS_ABORT(...)                                                    \
-  THALAMUS_LOG(fatal) << absl::StrFormat("" __VA_ARGS__) << "\n"               \
-                      << boost::stacktrace::stacktrace(                        \
-                             2, std::numeric_limits<size_t>::max());           \
-  std::abort()
+  do {                                                                         \
+    THALAMUS_LOG(fatal) << absl::StrFormat("" __VA_ARGS__) << "\n"             \
+                        << boost::stacktrace::stacktrace(                      \
+                               2, std::numeric_limits<size_t>::max());         \
+    std::abort();                                                              \
+  } while (0)
 
 #define THALAMUS_ABORT_WITH_SKIP(skip, ...)                                    \
   THALAMUS_LOG(fatal) << absl::StrFormat("" __VA_ARGS__) << "\n"               \

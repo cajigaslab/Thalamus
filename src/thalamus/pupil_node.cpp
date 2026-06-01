@@ -1,5 +1,6 @@
 #include <thalamus/modalities_util.hpp>
 #include <thalamus/pupil_node.hpp>
+#include <thalamus/image_viewer.hpp>
 #include <thalamus/thread_pool.hpp>
 
 #ifdef __clang__
@@ -54,6 +55,7 @@ struct PupilNode::Impl {
 
   ThreadPool &pool;
   boost::asio::steady_timer timer;
+  std::unique_ptr<ImageViewer> viewer;
 
   struct DeleteCairoSurface {
     void operator()(cairo_surface_t *p) { cairo_surface_destroy(p); }
@@ -143,6 +145,11 @@ struct PupilNode::Impl {
 
     outer->ready(outer);
 
+    if (viewer) {
+      viewer->poll_events();
+      viewer->update(outer);
+    }
+
     if (!is_running) {
       return;
     }
@@ -166,6 +173,14 @@ struct PupilNode::Impl {
       is_running = std::get<bool>(v);
       timer.expires_after(32ms);
       timer.async_wait(std::bind(&Impl::on_timer, this, _1));
+    } else if (key_str == "View") {
+      if (std::get<bool>(v)) {
+        if(!viewer) {
+          viewer = std::make_unique<ImageViewer>();
+        }
+      } else {
+        viewer.reset();
+      }
     } else if(key_str == "Random Saccade") {
       random_saccade = std::get<bool>(v);
     } else if(key_str == "Width") {

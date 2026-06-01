@@ -1468,12 +1468,13 @@ class ItemModel(QAbstractItemModel):
             selector = thalamus_pb2.NodeSelector(name=node['name'])
             modalities = await self.stub.get_modalities(selector)
             if thalamus_pb2.Modalities.ImageModality in modalities.values:
-              request = thalamus_pb2.NodeSelector(
-                name = node["name"]
-              )
-              self.procs[id(node)] = await process.create_subprocess_exec(
-                sys.executable, 
-                "-m", "thalamus.image_viewer", '--address', self.address, '--node', node['name'])
+              pass
+              #request = thalamus_pb2.NodeSelector(
+              #  name = node["name"]
+              #)
+              #self.procs[id(node)] = await process.create_subprocess_exec(
+              #  sys.executable, 
+              #  "-m", "thalamus.image_viewer", '--address', self.address, '--node', node['name'])
             elif thalamus_pb2.Modalities.MocapModality in modalities.values:
               request = thalamus_pb2.NodeSelector(
                 name = node["name"]

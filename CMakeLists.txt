@@ -296,11 +296,31 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/shared_library.hpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/shared_library.cpp"
                      "${CMAKE_SOURCE_DIR}/proto/thalamus.proto")
-target_sources(thalamus PRIVATE 
+target_sources(thalamus PRIVATE
                "${CMAKE_SOURCE_DIR}/src/thalamus/pupil_node.hpp"
                "${CMAKE_SOURCE_DIR}/src/thalamus/pupil_node.cpp"
                "${CMAKE_SOURCE_DIR}/src/thalamus/chessboard_node.hpp"
-               "${CMAKE_SOURCE_DIR}/src/thalamus/chessboard_node.cpp")
+               "${CMAKE_SOURCE_DIR}/src/thalamus/chessboard_node.cpp"
+               "${CMAKE_SOURCE_DIR}/src/thalamus/image_viewer.hpp"
+               "${CMAKE_SOURCE_DIR}/src/thalamus/image_viewer.cpp"
+               "${CMAKE_SOURCE_DIR}/src/thalamus/vulkan_instance.hpp"
+               "${CMAKE_SOURCE_DIR}/src/thalamus/vulkan_instance.cpp")
+
+
+set(VERT_SPV "${CMAKE_BINARY_DIR}/texture.vert.spv")
+set(FRAG_SPV "${CMAKE_BINARY_DIR}/texture.frag.spv")
+add_custom_command(
+  OUTPUT "${VERT_SPV}"
+  COMMAND "${GLSL_COMPILER}" -V "${CMAKE_SOURCE_DIR}/src/shaders/texture.vert" -o "${VERT_SPV}"
+  DEPENDS "${CMAKE_SOURCE_DIR}/src/shaders/texture.vert")
+add_custom_command(
+  OUTPUT "${FRAG_SPV}"
+  COMMAND "${GLSL_COMPILER}" -V "${CMAKE_SOURCE_DIR}/src/shaders/texture.frag" -o "${FRAG_SPV}"
+  DEPENDS "${CMAKE_SOURCE_DIR}/src/shaders/texture.frag")
+add_custom_target(thalamus_shaders DEPENDS "${VERT_SPV}" "${FRAG_SPV}")
+
+set_source_files_properties("${CMAKE_SOURCE_DIR}/src/thalamus/image_viewer.cpp" PROPERTIES
+  COMPILE_DEFINITIONS "VERT_SPV_PATH=\"${VERT_SPV}\";FRAG_SPV_PATH=\"${FRAG_SPV}\"")
 
 if(WIN32)
   target_compile_definitions(thalamus PRIVATE _WIN32_WINNT=0x0A00 _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN BOOST_STACKTRACE_USE_WINDBG)
@@ -332,7 +352,8 @@ target_compile_definitions(thalamus PRIVATE _USE_MATH_DEFINES)
 target_include_directories(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(thalamus opencv hdf5-static lua
   boost grpc++ grpc++_reflection inja
-  absl::str_format_internal absl::strings absl::str_format ffmpeg cairo perfetto crashpad)
+  absl::str_format_internal absl::strings absl::str_format ffmpeg cairo perfetto crashpad
+  vulkan sdl)
 
 if(NOT APPLE)
   target_link_libraries(thalamus zlib_processed)
@@ -398,20 +419,8 @@ add_executable(Rec_Stim Rec_Stim.cpp)
 target_link_libraries(Rec_Stim PRIVATE hdf5-static thalamus)
 target_include_directories(Rec_Stim PRIVATE "${CMAKE_SOURCE_DIR}/src")
 
-set(VERT_SPV "${CMAKE_BINARY_DIR}/texture.vert.spv")
-set(FRAG_SPV "${CMAKE_BINARY_DIR}/texture.frag.spv")
-add_custom_command(
-  OUTPUT "${VERT_SPV}"
-  COMMAND "${GLSL_COMPILER}" -V "${CMAKE_SOURCE_DIR}/src/shaders/texture.vert" -o "${VERT_SPV}"
-  DEPENDS "${CMAKE_SOURCE_DIR}/src/shaders/texture.vert")
-add_custom_command(
-  OUTPUT "${FRAG_SPV}"
-  COMMAND "${GLSL_COMPILER}" -V "${CMAKE_SOURCE_DIR}/src/shaders/texture.frag" -o "${FRAG_SPV}"
-  DEPENDS "${CMAKE_SOURCE_DIR}/src/shaders/texture.frag")
-add_custom_target(vulkan_hello_shaders DEPENDS "${VERT_SPV}" "${FRAG_SPV}")
-
 add_executable(vulkan_hello src/vulkan_hello.cpp)
-add_dependencies(vulkan_hello vulkan_hello_shaders)
+add_dependencies(vulkan_hello thalamus_shaders)
 if(WIN32)
   target_compile_definitions(vulkan_hello PRIVATE _WIN32_WINNT=0x0A00 NOMINMAX WIN32_LEAN_AND_MEAN)
 endif()

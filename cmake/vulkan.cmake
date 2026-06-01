@@ -159,8 +159,6 @@ add_custom_command(
 
 add_library(vulkan-loader INTERFACE "${VULKAN_LOADER_LIB}")
 target_link_libraries(vulkan-loader INTERFACE "${VULKAN_LOADER_LIB}" vulkan-headers)
-target_include_directories(vulkan-loader INTERFACE
-  "${vulkan_loader_BINARY_DIR}/$<CONFIG>/install/include")
 
 add_library(vulkan INTERFACE)
 target_link_libraries(vulkan INTERFACE vulkan-headers vulkan-loader)
