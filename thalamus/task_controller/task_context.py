@@ -9,6 +9,9 @@ import typing
 import random
 import logging
 import asyncio
+import inspect
+import pathlib
+import shutil
 import datetime
 import functools
 import collections
@@ -292,10 +295,13 @@ class TaskContext(TaskContextProtocol):
     self.running = False
     self.servicer = servicer
     self.stub = stub
+    self.control_widget = None
+    self.on_operator_widget: typing.Callable[[QWidget], None] = lambda w: None
     self.inject_analog_streams: typing.Dict[str, IterableQueue] = {}
     self.node_request_streams: typing.Dict[str, NodeRequestStream] = {}
     self.next_node_request_id = 1
     self.stim_streams: typing.Dict[str, IterableQueue] = {}
+    self.config = config
     self.task_config = ObservableDict({})
     self.channels: typing.Mapping[str, grpc.aio.Channel] = {}
     self.task: asyncio.tasks.Task[typing.Any] = create_task_with_exc_handling(asyncio.sleep(0))
@@ -404,6 +410,9 @@ class TaskContext(TaskContextProtocol):
 
   async def log(self, text: str):
     await self.log_queue.put(thalamus_pb2.Text(text=text,time=int(time.perf_counter()*1e9)))
+
+  def get_name(self) -> str:
+    return 'TASK_CONTROLLER'
 
   @property
   def behav_result(self) -> typing.Dict[str, typing.Any]:
@@ -615,6 +624,13 @@ class TaskContext(TaskContextProtocol):
 
     return result
 
+  def set_operator_widget(self, widget: QWidget):
+    self.on_operator_widget(widget)
+    if self.control_widget is not None:
+      self.control_widget.hide()
+      self.control_widget.deleteLater()
+    self.control_widget = widget
+
   def __update_status(self, success: bool) -> None:
     assert self.task_config is not None, 'self.task_config is None'
 
@@ -664,6 +680,34 @@ class TaskContext(TaskContextProtocol):
       #await asyncio.sleep(0.001)
       time.sleep(0.001)
       c.comedi_dio_write(self.it, self.comedi_subd, self.comedi_ch, 0)
+
+  async def save_task_source(self, task: TaskDescription):
+    if 'nodes' not in self.config:
+      return
+    
+    nodes = self.config['nodes']
+    storage_node = None
+    for node in nodes:
+      if node.get('type', None) == 'STORAGE2' and node.get('Running', False):
+        storage_node = node
+        break
+
+    if storage_node is None:
+      return
+    
+    response = await self.node_request(storage_node['name'], {'type': 'get_current_file'})
+    LOGGER.debug('current_file %s', response)
+    if not response:
+      return
+    
+    source_file = inspect.getsourcefile(task.run)
+    if source_file is None:
+      return
+    
+    source_path = pathlib.Path(source_file)
+    out_path = pathlib.Path(response + '.' + source_path.name)
+    if not out_path.exists():
+      shutil.copy(source_path, out_path)
     
   async def run(self) -> None:
     """
@@ -691,6 +735,7 @@ class TaskContext(TaskContextProtocol):
 
       if self.widget:
         task = self.task_descriptions_map[self.task_config['task_type']]
+        await self.save_task_source(task)
         try:
           await self.refresh_streams()
           LOGGER.debug('TRIAL START')
@@ -702,6 +747,7 @@ class TaskContext(TaskContextProtocol):
         except asyncio.CancelledError:
           LOGGER.debug('CANCELLED')
           was_cancelled = True
+        self.set_operator_widget(QWidget())
         self.widget.renderer = lambda w: None
         self.widget.touch_listener = lambda e: None
         self.widget.gaze_listener = lambda e: None

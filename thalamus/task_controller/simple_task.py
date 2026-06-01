@@ -142,6 +142,25 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
   """
   assert context.widget, 'Widget is None'
 
+  test_text = ''
+  if context.get_name() == 'TASK_CONTROLLER':
+    #Create QT6 UI
+    widget = QLineEdit()
+
+    def on_op_change():
+      nonlocal test_text
+      test_text = widget.text()
+      context.widget.update()
+
+    widget.editingFinished.connect(on_op_change)
+
+    context.set_operator_widget(widget)
+  else:
+    #Create IMGUI UI
+    def widget():
+      pass
+    context.set_operator_widget(widget)
+
   config = Config(
     datetime.timedelta(seconds=context.get_value('intertrial_timeout', RANDOM_DEFAULT)),
     datetime.timedelta(seconds=context.get_value('start_timeout', RANDOM_DEFAULT)),
@@ -169,6 +188,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
 
   show_target = False
   def renderer(painter: CanvasPainterProtocol) -> None:
+    painter.drawText(0, 10, test_text)
     if show_target:
       painter.fillRect(config.target_rectangle, config.target_color)
 
