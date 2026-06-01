@@ -255,9 +255,9 @@ class Task:
     path.moveTo(QPointF(x, y))
     path.lineTo(QPointF(x+1e-6, y))
 
-  def add_training_sample(self, x, y):
-    print('self.current_saccade', self.current_saccade)
-    if self.current_saccade < 0 or self.current_saccade >= len(self.saccades):
+  def add_training_sample(self, x, y, saccade_index: int):
+    print('saccade_index', saccade_index)
+    if saccade_index < 0 or saccade_index >= len(self.saccades):
       return
     
     min_distance, min_index = numpy.inf, -1
@@ -273,7 +273,7 @@ class Task:
     
     p = self.points[min_index]
     px, py = self.oculomatic_to_pixels_from_center(p[0], p[1])
-    target = self.saccades[self.current_saccade]
+    target = self.saccades[saccade_index]
 
     #target distance from center in meters
     from_center_m = target.x/self.dpi*2.54/100, target.y/self.dpi*2.54/100
@@ -284,6 +284,10 @@ class Task:
     self.append_to_path(self.training_path, px, py)
     self.training_path.lineTo(target.x, target.y)
     self.training_data.append((self.points[min_index], degrees, target))
+
+  def pop_training_sample(self):
+    self.training_data.pop()
+    self.rebuild()
 
   def rebuild(self):
     self.path.clear()
@@ -298,7 +302,8 @@ class Task:
     for p, _, target in self.training_data:
       px, py = self.oculomatic_to_pixels_from_center(p[0], p[1])
       self.append_to_path(self.training_path, px, py)
-      #self.training_path.lineTo(target.x, target.y)
+      if ((target.x - px)**2 + (target.y - py)**2)**.5 > 1:
+        self.training_path.lineTo(target.x, target.y)
 
   def reset(self):
     model = self.get_model(self.model_name)
@@ -479,6 +484,10 @@ class SubjectWindow(QMainWindow):
     if event.key() == Qt.Key.Key_Escape:
       self.toggle_fullscreen()
 
+class Action(typing.NamedTuple):
+  do: typing.Callable[[], None]
+  undo: typing.Callable[[], None]
+
 class OperatorView(QWidget):
   def __init__(self, task: Task, subject_view: QWidget, config: dict):
     super().__init__()
@@ -489,6 +498,8 @@ class OperatorView(QWidget):
     #self.editing_saccades = False
     self.drag_start: QPoint | None = None
     self.base_eye_scaling: dict | None = None
+    self.actions = []
+    self.actions_position = 0
 
   def paintEvent(self, e):
     painter = QPainter(self)
@@ -511,6 +522,22 @@ class OperatorView(QWidget):
     #self.subject_view.update()
     #self.update()
 
+  def do(self, action: Action):
+    self.actions = self.actions[:self.actions_position]
+    self.actions.append(action)
+    self.actions_position += 1
+    action.do()
+
+  def undo(self):
+    if self.actions_position > 0:
+      self.actions_position -= 1
+      self.actions[self.actions_position].undo()
+
+  def redo(self):
+    if self.actions_position < len(self.actions):
+      self.actions[self.actions_position].do()
+      self.actions_position += 1
+
   def keyReleaseEvent(self, a0: QKeyEvent):
     if a0.key() == Qt.Key.Key_Q:
       self.task.show_fixation = False
@@ -524,6 +551,16 @@ class OperatorView(QWidget):
       self.task.current_saccade = (self.task.current_saccade - 1) % len(self.task.saccades)
     elif a0.key() == Qt.Key.Key_Right:
       self.task.current_saccade = (self.task.current_saccade + 1) % len(self.task.saccades)
+    elif a0.key() == Qt.Key.Key_Z:
+      if a0.modifiers() & Qt.KeyboardModifier.ControlModifier:
+        if a0.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+          self.redo()
+        else:
+          self.undo()
+    elif a0.key() == Qt.Key.Key_Y:
+      if a0.modifiers() & Qt.KeyboardModifier.ControlModifier:
+        self.redo()
+
     #self.subject_view.update()
     #self.update()
 
@@ -545,12 +582,15 @@ class OperatorView(QWidget):
     editing_saccades = event.modifiers() & Qt.KeyboardModifier.ControlModifier
     if editing_saccades:
       if event.button() == Qt.MouseButton.LeftButton: # type: ignore
-        self.task.add_target(x, y)
+        self.do(Action(lambda: self.task.add_target(x, y), lambda: self.task.remove_target(x, y)))
       elif event.button() == Qt.MouseButton.RightButton:
-        self.task.remove_target(x, y)
+        self.do(Action(lambda: self.task.remove_target(x, y), lambda: self.task.add_target(x, y)))
     else:
       if event.button() == Qt.MouseButton.RightButton:
-        self.task.add_training_sample(x, y)
+        saccade_index=self.task.current_saccade
+        self.do(Action(
+          lambda: self.task.add_training_sample(x, y, saccade_index),
+          lambda: self.task.pop_training_sample()))
 
     #self.subject_view.update()
     #self.update()
@@ -629,6 +669,7 @@ class OperatorWindow(QMainWindow):
       self.task.training_path.clear()
       del self.task.points[:]
       del self.task.training_data[:]
+      self.view.actions = []
 
     def on_reward(val):
       self.task.reward_ms = val
