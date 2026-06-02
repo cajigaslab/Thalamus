@@ -18,11 +18,11 @@
 # -- Project information -----------------------------------------------------
 
 project = 'Thalamus'
-copyright = '2024, Jarl Haggerty'
+copyright = '2024-2026, Jarl Haggerty'
 author = 'Jarl Haggerty'
 
 # The full version, including alpha/beta/rc tags
-release = '0.3'
+release = '1.0.15'
 
 
 # -- General configuration ---------------------------------------------------

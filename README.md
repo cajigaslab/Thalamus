@@ -1,6 +1,10 @@
 # Thalamus
 
-Thalamus is an open-source Python program designed for real-time, synchronized, closed-loop multimodal data capture, specifically tailored to meet the stringent demands of neurosurgical environments.
+Thalamus is an open-source program designed for real-time, synchronized, closed-loop multimodal data capture, specifically tailored to meet the stringent demands of neurosurgical environments.
+
+📖 **Full documentation:** https://cajigaslab.github.io/Thalamus/
+📦 **Downloads / releases:** https://github.com/cajigaslab/Thalamus/releases
+📰 **Published paper:** [*Thalamus: a real-time, closed-loop platform for synchronized multimodal data acquisition* (Communications Engineering, Nature)](https://www.nature.com/articles/s44172-026-00646-z)
 
 # Overview
 Thalamus facilitates the advancement of clinical applications of Brain-Computer Interface (BCI) technology by integrating behavioral and electrophysiological data streams. Thalamus prioritizes the following design requirements:
@@ -15,49 +19,76 @@ Thalamus facilitates the advancement of clinical applications of Brain-Computer 
 9. Embodies best practice in software engineering using unit tests and validation checks​
 10. Supports advances in translational applications and, hence, also operates in research domains​
 
+## How it works
+
+Thalamus is built around a **pipeline of nodes**.  Each node is a small, configurable unit that either *generates* data (e.g. a hardware acquisition device or signal generator), *consumes* data (e.g. disk storage), *transforms* data (e.g. eye tracking, math expressions, coordinate mapping), or *controls* the pipeline (e.g. starting/stopping groups of nodes).  You assemble an experiment by adding nodes, configuring them, and subscribing consumers to the producers they care about.  See the [Node Reference](https://cajigaslab.github.io/Thalamus/nodes/index.html) for the full catalog of node types.
+
+Recorded data is written to a compact `.tha` capture file and can be converted to analysis-friendly formats (HDF5, CSV, Parquet, etc.) with the bundled tooling.
+
 # System Requirements
 ## Hardware Requirements
 Thalamus requires only a standard computer with enough RAM to support the in-memory operations.
-External hardware devices for data aquisition are dependent on the goals of individual projects.
+External hardware devices for data acquisition are dependent on the goals of individual projects.
 
 ## Software Requirements
-Thalamus requires Python.
+Thalamus requires Python 3.10 or newer.  Drivers and runtimes for integration with third party devices (e.g. GenTL/GenICam cameras, National Instruments DAQs) must be installed separately.
 
 ### OS Requirements
-We provide auto builds for Linux (glibc 2.35) and Windows (10).
+We provide auto builds for **Linux** (manylinux), **Windows** (10+), and **macOS** (arm64).
 
 ### Python Dependencies
-**requirements.txt** includes required dependencies if installing from Github. However, all dependencies have been packaged into the auto builds.
+**requirements.txt** lists the dependencies needed when installing from source.  The published wheels bundle all required dependencies.
 
 # Installation Guide
 ## Install from Build
-Download appropriate (Windows or Linux) build directly from actions tab or under Releases.
+Download the appropriate wheel for your platform from the [Releases](https://github.com/cajigaslab/Thalamus/releases) page (or the Actions tab).  The package is published as `thalamus_neuro`; the importable module remains `thalamus`.
 
-For Windows:
+We recommend installing into a virtual environment so the bundled `grpc` version is not disturbed:
 
-```python -m pip install thalamus-0.3.0-py3-none-win_amd64.whl```
+```
+python -m venv venv-thalamus
+# Linux/macOS
+source venv-thalamus/bin/activate
+# Windows
+call venv-thalamus/scripts/activate
+```
 
-For Linux:
+Then install the wheel for your platform, for example:
 
-```python -m pip install thalamus-0.3.0-py3-none-manylunux_2_27.whl```
+```
+# Linux
+python -m pip install thalamus_neuro-1.0.15-py3-none-manylinux_2_39_x86_64.whl
+# Windows
+python -m pip install thalamus_neuro-1.0.15-py3-none-win_amd64.whl
+# macOS (arm64)
+python -m pip install thalamus_neuro-1.0.15-py3-none-macosx_12_0_arm64.whl
+```
 
-You should now be able to run any of the Thalamus tools
+You should now be able to run any of the Thalamus tools:
 
-```python -m thalamus.pipeline # Data pipeline, no task controller```
+```
+python -m thalamus.pipeline          # Data pipeline (no task controller)
+python -m thalamus.task_controller   # Data pipeline and task controller
+python -m thalamus.hydrate FILE      # Convert a .tha capture file to HDF5
+python -m thalamus.dataframe ...      # Export a node's data to CSV/Parquet/etc.
+python -m thalamus.record_reader2 FILE  # Inspect the contents of a .tha file
+```
 
-```python -m thalamus.task_controller # Data pipeline and task controller```
+Approximately 1 hour set-up time.
 
-```python -m thalamus.hydrate # Convert capture files to sharable formats```
+# Documentation
+The code repository for Thalamus is hosted on GitHub at https://github.com/cajigaslab/thalamus. Detailed documentation lives at https://cajigaslab.github.io/Thalamus/:
 
-Approximately 1 hour set-up time
+- [Quick Start](https://cajigaslab.github.io/Thalamus/quickstart.html) — install, build a pipeline, record, and analyze your first dataset.
+- [Examples](https://cajigaslab.github.io/Thalamus/examples/index.html) — runnable, copy-paste tutorials (including a hardware-free walkthrough).
+- [Node Reference](https://cajigaslab.github.io/Thalamus/nodes/index.html) — catalog of every node type and its configuration.
 
-
-# Documentaton
-The code respository for Thalamus is hosted on GitHub at https://github.com/cajigaslab/thalamus. For detailed documentation of Thalamus visit https://cajigaslab.github.io/Thalamus/.
-For additional examples and generation of figures in our paper, refer to the **SimpleUseCase** folder in the repo.
+Runnable example scripts also live in the [`examples/`](examples/) folder of this repository.  For the figures in our paper, refer to the [`SimpleUseCase`](SimpleUseCase/) folder.
 
 # License
-If you use Thalamus in your work, please remember to cite the repository in any publications.
+Thalamus is released under the GPL-3.0 license (see [LICENSE](LICENSE)). If you use Thalamus in your work, please cite our paper:
+
+> *Thalamus: a real-time, closed-loop platform for synchronized multimodal data acquisition.* Communications Engineering (Nature). https://www.nature.com/articles/s44172-026-00646-z
 
 # Issues
 Like all open-source projects, Thalamus will benefit from your involvement, suggestions and contributions. This platform is intended as a repository for extensions to the program based on your code contributions as well as for flagging and tracking open issues. Please use the **Issues** tab as fit.
