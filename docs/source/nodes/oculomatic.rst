@@ -1,5 +1,8 @@
 OCULOMATIC
 ==========
+|ui|
+
+.. |ui| image:: oculomatic_ui.png
 
 The OCULOMATIC node is an eye-tracking transformer.  It consumes an image stream
 (typically an eye camera) and produces an analog stream containing the detected

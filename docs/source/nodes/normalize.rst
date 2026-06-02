@@ -1,5 +1,8 @@
 NORMALIZE
 =========
+|ui|
+
+.. |ui| image:: normalize_ui.png
 
 The NORMALIZE node is a transformer that linearly rescales an input signal so that
 its observed range maps onto a configured output range.  It is useful for putting a

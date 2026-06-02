@@ -1,5 +1,8 @@
 RUNNER2
 =======
+|ui|
+
+.. |ui| image:: runner2_ui.png
 
 The RUNNER2 node is a controller that lets you start and stop many nodes with a
 single action.  Whenever its **Running** state changes it propagates that state to

@@ -1,5 +1,8 @@
 SYNC
 ====
+|ui|
+
+.. |ui| image:: sync_ui.png
 
 The SYNC node measures the timing alignment between pairs of channels coming from
 different nodes.  It is useful for quantifying latency and verifying that two data

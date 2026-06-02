@@ -1,5 +1,8 @@
 SAMPLE_MONITOR
 ==============
+|ui|
+
+.. |ui| image:: sample_monitor_ui.png
 
 The SAMPLE_MONITOR node is a diagnostic that watches the sample rate of other nodes
 and raises an alert when a node's rate falls outside expected parameters.  Use it to

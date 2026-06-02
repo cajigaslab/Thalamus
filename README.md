@@ -90,5 +90,7 @@ Thalamus is released under the GPL-3.0 license (see [LICENSE](LICENSE)). If you 
 
 > *Thalamus: a real-time, closed-loop platform for synchronized multimodal data acquisition.* Communications Engineering (Nature). https://www.nature.com/articles/s44172-026-00646-z
 
-# Issues
-Like all open-source projects, Thalamus will benefit from your involvement, suggestions and contributions. This platform is intended as a repository for extensions to the program based on your code contributions as well as for flagging and tracking open issues. Please use the **Issues** tab as fit.
+# Contributing
+Like all open-source projects, Thalamus will benefit from your involvement, suggestions and contributions. This platform is intended as a repository for extensions to the program based on your code contributions as well as for flagging and tracking open issues. Please use the **Issues** tab to report bugs and request features.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the repository layout, how to set up a development environment, how to add a new node type, and the pull-request and release process.

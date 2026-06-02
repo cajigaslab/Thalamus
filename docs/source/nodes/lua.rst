@@ -1,5 +1,8 @@
 LUA
 ===
+|ui|
+
+.. |ui| image:: lua_ui.png
 
 The LUA node is a scriptable transformer.  It evaluates Lua expressions on incoming
 data and emits the results as new channels.  Unlike the ALGEBRA node, Lua scripts

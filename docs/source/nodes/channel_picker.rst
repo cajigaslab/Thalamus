@@ -1,5 +1,8 @@
 CHANNEL_PICKER
 ==============
+|ui|
+
+.. |ui| image:: channel_picker_ui.png
 
 The CHANNEL_PICKER node selects channels from one or more upstream nodes and
 re-publishes them as a single, reordered output stream.  It is a transformer: use
@@ -9,11 +12,15 @@ and assign them stable output positions.
 Usage
 -----
 
-Add the source nodes you want to pull from; the node tracks them under its
-**Sources** configuration.  For each selected channel you assign an **Out Channel**
-(its index/position in the output stream).  The node prevents two selected channels
-from being mapped to the same output position, automatically resolving conflicts to
-the next free index.
+Use the dropdown to choose a source node and **Add** the channels you want.  Each
+row in the table has three columns:
+
+* **Input**: The source channel being mapped.
+* **Channel**: The output channel index/position it is placed at.
+* **Name**: The name given to the output channel.
+
+The node prevents two selected channels from being mapped to the same output
+position, automatically resolving conflicts to the next free index.
 
 The result is a clean, consistently ordered stream that downstream nodes (such as
 STORAGE2 or a data view) can subscribe to.

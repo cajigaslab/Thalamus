@@ -1,5 +1,8 @@
 ALGEBRA
 =======
+|ui|
+
+.. |ui| image:: algebra_ui.png
 
 The ALGEBRA node is a transformer that evaluates a user-supplied algebraic
 expression on each incoming sample.  It is a quick way to scale, offset, or
