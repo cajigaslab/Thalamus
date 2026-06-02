@@ -118,8 +118,8 @@ class OculomaticWidget(QWidget):
         self.max_area_slider.setValue(value)
     elif key == 'X Gain':
       if self.x_gain_slider.value() != value:
-        self.x_gain_slider.setValue(value)
+        self.x_gain_slider.setValue(int(value))
     elif key == 'Y Gain':
       if self.y_gain_slider.value() != value:
-        self.y_gain_slider.setValue(value)
+        self.y_gain_slider.setValue(int(value))
 
