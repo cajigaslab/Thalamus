@@ -23,7 +23,19 @@ detailed pages below for commonly used nodes.
    sync
    genicam
    aruco
+   chessboard
+   distortion
    intan
    spikeglx
    delsys
    xsens
+   pupil
+   wallclock
+   analog
+   toggle
+   frequency
+   nidaq_out
+   task_controller
+   ophanim
+   hexascope
+   ros2

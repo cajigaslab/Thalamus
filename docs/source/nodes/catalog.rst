@@ -28,7 +28,7 @@ Generators
    * - ``NIDAQ (NIDAQMX)``
      - Reads analog signals from a National Instruments DAQ.  See :doc:`nidaq`.
    * - ``WALLCLOCK``
-     - Emits the current time (system clock, NTP, or PTP) as a time series for synchronization.
+     - Emits the current time (system clock, NTP, or PTP) as a time series for synchronization.  See :doc:`wallclock`.
    * - ``INTAN``
      - Streams neural recordings from an Intan RHX acquisition system over TCP.  See :doc:`intan`.
    * - ``SPIKEGLX``
@@ -46,7 +46,7 @@ Generators
    * - ``HAND_ENGINE``
      - Streams hand/finger pose data from StretchSense Hand Engine.
    * - ``PUPIL``
-     - Detects pupil position and size from a video stream.
+     - Generates a synthetic eye image with a moving pupil (optionally random saccades) for testing eye-tracking pipelines.  See :doc:`pupil`.
    * - ``REMOTE``
      - Proxies a data stream from another Thalamus instance over gRPC.
    * - ``SAMPLE_MONITOR``
@@ -66,7 +66,7 @@ Consumers
    * - ``STORAGE``
      - Earlier-generation storage node (retained for backward compatibility).
    * - ``NIDAQ_OUT (NIDAQMX)``
-     - Writes analog signals from Thalamus out to a National Instruments DAQ.
+     - Writes analog signals from Thalamus out to a National Instruments DAQ.  See :doc:`nidaq_out`.
    * - ``LOG``
      - Receives and displays text log messages.
    * - ``REMOTE_LOG``
@@ -76,9 +76,9 @@ Consumers
    * - ``TOUCH_SCREEN``
      - Maps raw touch-screen coordinates to calibrated screen coordinates.  See :doc:`touch_screen`.
    * - ``OPHANIM``
-     - Drives a panoramic/sphere projection display over gRPC.
+     - Drives a panoramic/sphere projection display over gRPC.  See :doc:`ophanim`.
    * - ``TASK_CONTROLLER``
-     - Starts/stops an external behavioral task-controller service.
+     - Starts/stops an external behavioral task-controller service.  See :doc:`task_controller`.
 
 Transformers
 ------------
@@ -96,13 +96,13 @@ Transformers
    * - ``NORMALIZE``
      - Linearly rescales an input range to a configured output range, with calibration caching.  See :doc:`normalize`.
    * - ``ANALOG``
-     - Pass-through / touchpad analog node that can inject synthetic input from the mouse.
+     - Pass-through / touchpad analog node that can inject synthetic input from the mouse.  See :doc:`analog`.
    * - ``TOGGLE``
-     - Emits a binary 0/1 state based on a threshold.
+     - Emits a binary 0/1 state based on a threshold.  See :doc:`toggle`.
    * - ``CHANNEL_PICKER``
      - Selects and reorders channels from one or more upstream sources.  See :doc:`channel_picker`.
    * - ``FREQUENCY``
-     - Monitors a channel's frequency and flags drift outside configured margins.
+     - Monitors a channel's frequency and flags drift outside configured margins.  See :doc:`frequency`.
    * - ``SYNC``
      - Cross-correlates paired channels from different nodes to measure timing alignment.  See :doc:`sync`.
    * - ``OCULOMATIC``
@@ -110,15 +110,15 @@ Transformers
    * - ``ARUCO``
      - Detects ArUco/AprilTag fiducial markers in images and outputs board poses.  See :doc:`aruco`.
    * - ``CHESSBOARD``
-     - Detects chessboard corners in images for camera calibration / pose estimation.
+     - Detects chessboard corners in images for camera calibration / pose estimation.  See :doc:`chessboard`.
    * - ``DISTORTION``
-     - Applies camera-distortion correction to image streams.
+     - Applies camera-distortion correction to image streams.  See :doc:`distortion`.
    * - ``HEXASCOPE``
-     - Servos a motorized mirror platform to track a target from a motion-capture source.
+     - Servos a motorized mirror platform to track a target from a motion-capture source.  See :doc:`hexascope`.
    * - ``CECI``
      - Generates multi-channel biphasic electrical stimulation with MUX/digital control.
    * - ``ROS2``
-     - Bridges Thalamus data (images, gaze, transforms) to/from ROS 2 topics and TF2.
+     - Bridges Thalamus data (images, gaze, transforms) to/from ROS 2 topics and TF2.  See :doc:`ros2`.
 
 Controllers and Utilities
 --------------------------

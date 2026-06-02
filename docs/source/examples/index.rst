@@ -132,3 +132,120 @@ From here you can apply any analysis you like (NumPy, SciPy, pandas, MATLAB).  F
 worked analyses on real recordings -- including the figures from our paper -- see
 the `SimpleUseCase <https://github.com/cajigaslab/Thalamus/tree/main/SimpleUseCase>`_
 folder.
+
+Record event markers (text)
+---------------------------
+
+Experiments often interleave a continuous signal with discrete *event markers*
+such as ``trial_start`` or ``reward``.  Thalamus stores these as ``text`` records on
+the same timeline as the analog data.  ``examples/event_markers.py`` writes a
+recording with five markers on an ``events`` node plus a continuous ``reward``
+analog channel on a ``daq`` node:
+
+.. code-block::
+
+   python examples/event_markers.py -o events.tha
+
+Export the markers to a table with the ``text`` data type:
+
+.. code-block::
+
+   python -m thalamus.dataframe -n events -t text -i events.tha -f csv
+
+::
+
+   counter,text
+   200000000,trial_start
+   400000000,cue_on
+   600000000,cue_off
+   800000000,reward
+   1000000000,trial_end
+
+Record a synthetic video stream (images)
+----------------------------------------
+
+Camera data is stored as ``image`` records, each carrying the raw frame bytes plus
+width, height, pixel format, and frame interval.  ``examples/synthetic_video.py``
+writes a short ``Gray`` clip (no camera required) and extracts one frame to a PNG so
+you can see how to decode image records:
+
+.. code-block::
+
+   python examples/synthetic_video.py -o video.tha --frame 15 --png frame.png
+
+The key decode step is reshaping the raw bytes into a 2-D array:
+
+.. code-block:: python
+
+   import numpy
+   from thalamus.record_reader2 import SimpleRecordReader
+
+   with SimpleRecordReader("video.tha") as reader:
+       frames = [r for r in reader if r.WhichOneof("body") == "image"]
+   image = frames[15].image
+   arr = numpy.frombuffer(image.data[0], dtype=numpy.uint8).reshape(image.height, image.width)
+
+Record several nodes at once
+----------------------------
+
+A real session records many nodes into one file -- each tagged with its node name.
+``examples/multinode_recording.py`` writes an ``eye`` node (channels ``x`` and ``y``)
+and an ``emg`` node (channel ``ch0``):
+
+.. code-block::
+
+   python examples/multinode_recording.py -o session.tha
+
+Export each node independently by name:
+
+.. code-block::
+
+   python -m thalamus.dataframe -n eye -i session.tha -f csv -o eye.csv
+   python -m thalamus.dataframe -n emg -i session.tha -f csv -o emg.csv
+
+Summarize any capture file
+--------------------------
+
+When you receive an unfamiliar recording, ``examples/capture_summary.py`` reports
+its nodes, data types, analog channels, duration, and metadata:
+
+.. code-block::
+
+   python examples/capture_summary.py session.tha
+
+::
+
+   File: session.tha
+   Records: 627  {'metadata': 1, 'analog': 626}
+   Duration: 4.984 s
+   Metadata: [('Rec', 1)]
+   Nodes:
+     emg: {'analog': 313}  channels=['ch0']
+     eye: {'analog': 313}  channels=['x', 'y']
+     storage: {'metadata': 1}
+
+Measure closed-loop latency
+---------------------------
+
+Quantifying the latency of a closed loop -- a trigger fires and a downstream system
+responds some milliseconds later -- is a core Thalamus use case.
+``examples/closed_loop_latency.py`` synthesizes a recording with a ``trigger`` and a
+``response`` channel offset by a known delay, then recovers that delay by detecting
+and pairing rising edges (the same analysis behind the closed-loop performance
+figures in the paper):
+
+.. code-block::
+
+   python examples/closed_loop_latency.py
+
+::
+
+   Synthesized .../loop.tha (response lags trigger by 5 ms)
+   trigger edges: 5, response edges: 5
+   latency (ms): mean=5.000 std=0.000 min=5.000 max=5.000
+
+Pass a path to analyze your own recording instead:
+
+.. code-block::
+
+   python examples/closed_loop_latency.py recording.tha -n daq --trigger trigger --response response
