@@ -14,7 +14,7 @@ Properties
 * **Output File**: The base name of the output file (the recording suffix is appended
   as with STORAGE2).
 * **Compress Analog**: Compress time-series data with zlib.
-* **Compress Video**: Compress image data with H.264.
+* **Compress Video**: Compress image data with MPEG-4 video encoding.
 * **Running**: Begin recording.
 
 While running, the node reports its output queue depth (**Output Queue Bytes** /

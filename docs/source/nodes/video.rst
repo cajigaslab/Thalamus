@@ -9,9 +9,9 @@ Properties
 ----------
 
 * **File Name**: Path to the video file to play.
-* **Framerate**: The rate at which frames are emitted.
 * **Running**: Begin playback.
 
-The node reports its measured throughput (``BPS``) while running.  For ingesting
+The node plays back at the file's native frame timing and reports the resulting
+``Framerate`` and its measured throughput (``BPS``) while running.  For ingesting
 live capture devices or a wider range of container/codec inputs, see the
 :doc:`FFMPEG <ffmpeg>` node.

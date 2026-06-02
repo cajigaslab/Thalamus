@@ -1,16 +1,16 @@
 LOOP_TEST
 =========
 
-The LOOP_TEST node is a diagnostic used to verify signal routing and measure
-round-trip latency through a loop.  It generates a sinusoidal test signal and can
-compare it against a returning signal, which is useful for validating that data
-flows correctly through a chain of nodes (or out to hardware and back).
+The LOOP_TEST node is a diagnostic signal generator.  It emits a sinusoidal test
+signal (a single ``Sin`` output channel) whose frequency is taken from an input
+value, which is useful for exercising and validating signal routing through a
+pipeline.
 
 Properties
 ----------
 
-* **Source**: The node carrying the returning signal to compare against.
-* **Channel**: The channel of the source to use.
+* **Source**: The node whose value sets the frequency of the generated sinusoid.
+* **Channel**: The channel of the source to read the frequency from.
 
-The generated test signal is a sinusoid (``Sin``) that the node emits and watches for
-on the source.
+The most recent value read from the selected source/channel is used as the
+frequency of the emitted ``Sin`` signal.

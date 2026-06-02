@@ -15,9 +15,9 @@ Properties
   screen-capture backend).  Leave unset to let FFmpeg infer it from the input.
 * **Options**: Additional FFmpeg input options (key/value pairs passed to the
   demuxer/decoder).
-* **Target Framerate**: The desired output frame rate.
 * **Time Source**: How frame timestamps are assigned.
 * **Running**: Begin decoding.
 
-The node reports the **Actual Framerate** and throughput while running.  To replay a
-plain video file, the simpler :doc:`VIDEO <video>` node is usually sufficient.
+The node reports the **Target Framerate** (derived from the input stream) and its
+throughput while running.  To replay a plain video file, the simpler
+:doc:`VIDEO <video>` node is usually sufficient.

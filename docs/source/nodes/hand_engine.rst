@@ -13,8 +13,11 @@ Properties
   is ``9000``).
 * **Running**: Connect to Hand Engine and begin streaming.
 
-The node also exposes haptic-feedback controls used to drive the glove's actuators:
+In addition to the MOCAP segments, the node emits analog channels derived from the
+pose: a ``Pose Change`` channel and per-finger distance channels (``Thumb Distance
+(m)``, ``Index Distance (m)``, etc.).  Two parameters shape the emitted ``Pose
+Change`` signal:
 
-* **Num Props**: Number of feedback props/actuators.
-* **Amplitude**: Feedback amplitude.
-* **Duration (ms)**: Feedback duration in milliseconds.
+* **Amplitude**: The value emitted on the ``Pose Change`` channel when a pose change
+  occurs.
+* **Duration (ms)**: How long, in milliseconds, that emitted pose-change pulse lasts.
