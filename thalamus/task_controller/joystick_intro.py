@@ -61,10 +61,18 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
 
   if "control_mode" not in task_config:
     task_config["control_mode"] = "direct"
+  if "cursor_only_mode" not in task_config:
+    task_config["cursor_only_mode"] = False
+  if "free_play_end_key" not in task_config:
+    task_config["free_play_end_key"] = "space"
   if "cursor_diameter_ratio" not in task_config:
     task_config["cursor_diameter_ratio"] = 0.1
   if "reset_cursor_each_trial" not in task_config:
     task_config["reset_cursor_each_trial"] = True
+  if "require_center_before_trial" not in task_config:
+    task_config["require_center_before_trial"] = False
+  if "center_gate_radius_ratio" not in task_config:
+    task_config["center_gate_radius_ratio"] = 0.15
   if "direct_recenter_when_idle" not in task_config:
     task_config["direct_recenter_when_idle"] = True
   if "task_region_x" not in task_config:
@@ -86,6 +94,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       task_config["ignore_idle_trial_failures"] = bool(task_config["pause_timeout_while_idle"])
     else:
       task_config["ignore_idle_trial_failures"] = False
+  if "ignored_idle_sample_clear_threshold" not in task_config:
+    task_config["ignored_idle_sample_clear_threshold"] = 50
   if "animations_enabled" not in task_config:
     task_config["animations_enabled"] = False
   if "task_animation_enabled" not in task_config:
@@ -108,16 +118,31 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     task_config["show_success_pop"] = True
   if "success_pop_duration_s" not in task_config:
     task_config["success_pop_duration_s"] = 0.12
-  if "free_play_reward_enabled" not in task_config:
-    task_config["free_play_reward_enabled"] = False
-  if "free_play_reward_policy" not in task_config:
-    task_config["free_play_reward_policy"] = "touch_bouts"
-  if "free_play_reward_threshold" not in task_config:
-    task_config["free_play_reward_threshold"] = 0.0
-  if "free_play_reward_cooldown_s" not in task_config:
-    task_config["free_play_reward_cooldown_s"] = 1.0
-  if "free_play_reward_channel" not in task_config:
-    task_config["free_play_reward_channel"] = int(task_config.get("reward_channel", 0))
+  legacy_free_play_reward_enabled = bool(task_config.get("free_play_reward_enabled", False))
+  legacy_free_play_reward_policy = str(task_config.get("free_play_reward_policy", "touch_bouts"))
+  legacy_free_play_reward_channel = int(task_config.get("free_play_reward_channel", task_config.get("reward_channel", 0)))
+  legacy_free_play_reward_threshold = float(task_config.get("free_play_reward_threshold", 0.0))
+  legacy_free_play_reward_cooldown_s = float(task_config.get("free_play_reward_cooldown_s", 1.0))
+  if "free_play_active_threshold" not in task_config:
+    task_config["free_play_active_threshold"] = legacy_free_play_reward_threshold
+  if "free_play_first_touch_reward_enabled" not in task_config:
+    task_config["free_play_first_touch_reward_enabled"] = legacy_free_play_reward_enabled and legacy_free_play_reward_policy == "first_touch"
+  if "free_play_first_touch_reward_channel" not in task_config:
+    task_config["free_play_first_touch_reward_channel"] = legacy_free_play_reward_channel
+  if "free_play_bout_reward_enabled" not in task_config:
+    task_config["free_play_bout_reward_enabled"] = legacy_free_play_reward_enabled and legacy_free_play_reward_policy == "touch_bouts"
+  if "free_play_bout_reward_channel" not in task_config:
+    task_config["free_play_bout_reward_channel"] = legacy_free_play_reward_channel
+  if "free_play_bout_cooldown_s" not in task_config:
+    task_config["free_play_bout_cooldown_s"] = legacy_free_play_reward_cooldown_s
+  if "free_play_sustain_reward_enabled" not in task_config:
+    task_config["free_play_sustain_reward_enabled"] = legacy_free_play_reward_enabled and legacy_free_play_reward_policy == "timed_active"
+  if "free_play_sustain_reward_channel" not in task_config:
+    task_config["free_play_sustain_reward_channel"] = legacy_free_play_reward_channel
+  if "free_play_sustain_initial_delay_s" not in task_config:
+    task_config["free_play_sustain_initial_delay_s"] = 0.0
+  if "free_play_sustain_interval_s" not in task_config:
+    task_config["free_play_sustain_interval_s"] = legacy_free_play_reward_cooldown_s
 
   form = Form.build(
     task_config, ["Parameter", "Value"],
@@ -126,21 +151,6 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       ("Cumulative", "cumulative"),
       ("Direct", "direct"),
     ]),
-    Form.Bool("Cursor-Only Free Play", "cursor_only_mode", False),
-    Form.Choice("Free Play End Key", "free_play_end_key", [
-      ("Space", "space"),
-      ("Q", "q"),
-      ("Enter", "enter"),
-    ]),
-    Form.Bool("Free Play Reward Enabled", "free_play_reward_enabled", False),
-    Form.Choice("Free Play Reward Policy", "free_play_reward_policy", [
-      ("Touch Bouts", "touch_bouts"),
-      ("First Touch", "first_touch"),
-      ("Timed Active", "timed_active"),
-    ]),
-    Form.Constant("Free Play Reward Threshold", "free_play_reward_threshold", 0.0, precision=3),
-    Form.Constant("Free Play Reward Cooldown (s)", "free_play_reward_cooldown_s", 1.0, "s", precision=3),
-    Form.Constant("Free Play Reward Channel", "free_play_reward_channel", 0, precision=0),
     Form.Constant("Cumulative Speed", "cumulative_speed", 0.70, precision=3),
     Form.Bool("Zero-Drift Mode", "zero_drift_mode", True),
     Form.Constant("Zero-Drift Buffer", "zero_drift_buffer", 0.05, precision=3),
@@ -148,6 +158,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Bool("Direct Recenter When Idle", "direct_recenter_when_idle", True),
     Form.Constant("Cursor Diameter Ratio", "cursor_diameter_ratio", 0.1, precision=3),
     Form.Bool("Reset Cursor Each Trial", "reset_cursor_each_trial", True),
+    Form.Bool("Require Center Before Trial", "require_center_before_trial", False),
+    Form.Constant("Center Gate Radius Ratio", "center_gate_radius_ratio", 0.15, precision=3),
     Form.Color("Cursor Color", "cursor_color", QColor(255, 70, 70)),
     Form.Constant("Task Region Center X", "task_region_x", 0.5, precision=3),
     Form.Constant("Task Region Center Y", "task_region_y", 0.270, precision=3),
@@ -158,9 +170,130 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Constant("Reward Channel", "reward_channel", 0, precision=0),
     Form.Constant("Trial Timeout (s)", "trial_timeout", 0.5, "s", precision=3),
     Form.Bool("Ignore Idle Trial Failures", "ignore_idle_trial_failures", False),
+    Form.Constant("Idle Sample Clear Threshold", "ignored_idle_sample_clear_threshold", 50, precision=0),
     Form.Constant("Intertrial Interval (s)", "intertrial_interval", 1.0, "s", precision=3),
   )
   layout.addWidget(form)
+
+  free_play_group = QGroupBox("Cursor-Only Free Play")
+  free_play_group_layout = QVBoxLayout(free_play_group)
+  free_play_enable_row = QWidget()
+  free_play_enable_layout = QHBoxLayout(free_play_enable_row)
+  free_play_enable_layout.setContentsMargins(0, 0, 0, 0)
+  cursor_only_checkbox = QCheckBox("Enable Cursor-Only Free Play")
+  cursor_only_checkbox.setObjectName("cursor_only_mode")
+  cursor_only_checkbox.setChecked(bool(task_config.get("cursor_only_mode", False)))
+  free_play_enable_layout.addWidget(cursor_only_checkbox)
+  free_play_enable_layout.addStretch(1)
+  free_play_group_layout.addWidget(free_play_enable_row)
+
+  free_play_details = QWidget()
+  free_play_layout = QGridLayout(free_play_details)
+  free_play_layout.setContentsMargins(0, 0, 0, 0)
+  free_play_layout.setColumnStretch(1, 1)
+
+  def add_free_play_section(row: int, text: str) -> int:
+    label = QLabel(text)
+    font = QFont(label.font())
+    font.setBold(True)
+    label.setFont(font)
+    free_play_layout.addWidget(label, row, 0, 1, 3)
+    return row + 1
+
+  def add_free_play_bool(row: int, label_text: str, config_key: str) -> int:
+    box = QCheckBox()
+    box.setChecked(bool(task_config.get(config_key, False)))
+    box.toggled.connect(lambda v, k=config_key: task_config.update({k: bool(v)}))
+    free_play_layout.addWidget(QLabel(label_text), row, 0)
+    free_play_layout.addWidget(box, row, 1, 1, 2)
+    return row + 1
+
+  def add_free_play_channel(row: int, label_text: str, config_key: str) -> int:
+    spin = QSpinBox()
+    spin.setRange(0, 255)
+    spin.setSingleStep(1)
+    spin.setValue(max(0, min(255, int(task_config.get(config_key, task_config.get("reward_channel", 0))))))
+    spin.valueChanged.connect(lambda v, k=config_key: task_config.update({k: int(v)}))
+    free_play_layout.addWidget(QLabel(label_text), row, 0)
+    free_play_layout.addWidget(spin, row, 1, 1, 2)
+    return row + 1
+
+  def add_free_play_seconds(row: int, label_text: str, config_key: str, default: float) -> int:
+    spin = QDoubleSpinBox()
+    spin.setRange(0.0, 1000.0)
+    spin.setDecimals(3)
+    spin.setSingleStep(0.05)
+    spin.setSuffix(" s")
+    spin.setValue(max(0.0, float(task_config.get(config_key, default))))
+    spin.valueChanged.connect(lambda v, k=config_key: task_config.update({k: float(v)}))
+    free_play_layout.addWidget(QLabel(label_text), row, 0)
+    free_play_layout.addWidget(spin, row, 1, 1, 2)
+    return row + 1
+
+  def add_free_play_choice(row: int, label_text: str, config_key: str, options: typing.List[typing.Tuple[str, str]]) -> int:
+    combo = QComboBox()
+    for label, value in options:
+      combo.addItem(label, value)
+      if value == str(task_config.get(config_key, options[0][1])):
+        combo.setCurrentIndex(combo.count() - 1)
+    combo.currentIndexChanged.connect(lambda i, c=combo, k=config_key: task_config.update({k: c.itemData(i)}))
+    free_play_layout.addWidget(QLabel(label_text), row, 0)
+    free_play_layout.addWidget(combo, row, 1, 1, 2)
+    return row + 1
+
+  def add_free_play_threshold(row: int) -> int:
+    slider = QSlider(Qt.Orientation.Horizontal)
+    slider.setRange(0, 100)
+    slider.setSingleStep(1)
+    slider.setPageStep(5)
+    value = max(0.0, min(1.0, float(task_config.get("free_play_active_threshold", 0.0))))
+    slider.setValue(int(round(value * 100.0)))
+    value_label = QLabel(f"{value:.2f}")
+    value_label.setMinimumWidth(44)
+
+    def on_threshold_changed(v: int) -> None:
+      threshold = max(0.0, min(1.0, float(v) / 100.0))
+      task_config.update({"free_play_active_threshold": threshold})
+      value_label.setText(f"{threshold:.2f}")
+
+    slider.valueChanged.connect(on_threshold_changed)
+    free_play_layout.addWidget(QLabel("Active Threshold"), row, 0)
+    free_play_layout.addWidget(slider, row, 1)
+    free_play_layout.addWidget(value_label, row, 2)
+    return row + 1
+
+  free_play_row = 0
+  free_play_row = add_free_play_choice(free_play_row, "End Key", "free_play_end_key", [
+    ("Space", "space"),
+    ("Q", "q"),
+    ("Enter", "enter"),
+  ])
+  free_play_row = add_free_play_threshold(free_play_row)
+  threshold_note = QLabel("0.00 uses the same movement threshold as zero-drift; higher values require stronger joystick modulation.")
+  threshold_note.setWordWrap(True)
+  free_play_layout.addWidget(threshold_note, free_play_row, 0, 1, 3)
+  free_play_row += 1
+
+  free_play_row = add_free_play_section(free_play_row, "First Touch")
+  free_play_row = add_free_play_bool(free_play_row, "Reward First Touch", "free_play_first_touch_reward_enabled")
+  free_play_row = add_free_play_channel(free_play_row, "First Touch Channel", "free_play_first_touch_reward_channel")
+
+  free_play_row = add_free_play_section(free_play_row, "Bout Starts")
+  free_play_row = add_free_play_bool(free_play_row, "Reward Each Bout Start", "free_play_bout_reward_enabled")
+  free_play_row = add_free_play_channel(free_play_row, "Bout Channel", "free_play_bout_reward_channel")
+  free_play_row = add_free_play_seconds(free_play_row, "Bout Cooldown", "free_play_bout_cooldown_s", 1.0)
+
+  free_play_row = add_free_play_section(free_play_row, "Sustained Active")
+  free_play_row = add_free_play_bool(free_play_row, "Reward While Active", "free_play_sustain_reward_enabled")
+  free_play_row = add_free_play_channel(free_play_row, "Sustain Channel", "free_play_sustain_reward_channel")
+  free_play_row = add_free_play_seconds(free_play_row, "Initial Delay", "free_play_sustain_initial_delay_s", 0.0)
+  free_play_row = add_free_play_seconds(free_play_row, "Repeat Interval", "free_play_sustain_interval_s", 1.0)
+
+  free_play_details.setVisible(bool(task_config.get("cursor_only_mode", False)))
+  cursor_only_checkbox.toggled.connect(lambda v: task_config.update({"cursor_only_mode": bool(v)}))
+  cursor_only_checkbox.toggled.connect(free_play_details.setVisible)
+  free_play_group_layout.addWidget(free_play_details)
+  layout.addWidget(free_play_group)
 
   # Direction influence (0-100%) for each cardinal direction.
   # Backwards compatibility with legacy disable_* booleans:
@@ -1488,24 +1621,30 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   direct_recenter_when_idle = bool(task_config.get("direct_recenter_when_idle", True))
   cursor_diameter_ratio = float(task_config.get("cursor_diameter_ratio", 0.1))
   reset_cursor_each_trial = bool(task_config.get("reset_cursor_each_trial", True))
+  require_center_before_trial = bool(task_config.get("require_center_before_trial", False))
+  center_gate_radius_ratio = max(0.001, min(1.0, float(task_config.get("center_gate_radius_ratio", 0.15))))
   cursor_color = QColor(*task_config.get("cursor_color", [255, 70, 70]))
   task_region_x = float(task_config.get("task_region_x", 0.5))
   task_region_y = float(task_config.get("task_region_y", 0.270))
   task_region_width = float(task_config.get("task_region_width", 0.5))
   task_region_height = float(task_config.get("task_region_height", 0.67))
   reward_channel = int(task_config.get("reward_channel", 0))
-  free_play_reward_enabled = bool(task_config.get("free_play_reward_enabled", False))
-  free_play_reward_policy = str(task_config.get("free_play_reward_policy", "touch_bouts"))
-  if free_play_reward_policy not in ("first_touch", "touch_bouts", "timed_active"):
-    free_play_reward_policy = "touch_bouts"
-  free_play_reward_channel = max(0, int(task_config.get("free_play_reward_channel", reward_channel)))
-  free_play_reward_config_threshold = max(0.0, float(task_config.get("free_play_reward_threshold", 0.0)))
-  free_play_reward_cooldown_s = max(0.0, float(task_config.get("free_play_reward_cooldown_s", 1.0)))
+  free_play_active_config_threshold = max(0.0, min(1.0, float(task_config.get("free_play_active_threshold", task_config.get("free_play_reward_threshold", 0.0)))))
+  free_play_first_touch_reward_enabled = bool(task_config.get("free_play_first_touch_reward_enabled", False))
+  free_play_first_touch_reward_channel = max(0, int(task_config.get("free_play_first_touch_reward_channel", reward_channel)))
+  free_play_bout_reward_enabled = bool(task_config.get("free_play_bout_reward_enabled", False))
+  free_play_bout_reward_channel = max(0, int(task_config.get("free_play_bout_reward_channel", reward_channel)))
+  free_play_bout_cooldown_s = max(0.0, float(task_config.get("free_play_bout_cooldown_s", 1.0)))
+  free_play_sustain_reward_enabled = bool(task_config.get("free_play_sustain_reward_enabled", False))
+  free_play_sustain_reward_channel = max(0, int(task_config.get("free_play_sustain_reward_channel", reward_channel)))
+  free_play_sustain_initial_delay_s = max(0.0, float(task_config.get("free_play_sustain_initial_delay_s", 0.0)))
+  free_play_sustain_interval_s = max(0.001, float(task_config.get("free_play_sustain_interval_s", task_config.get("free_play_reward_cooldown_s", 1.0))))
   target_radius_ratio = DEFAULT_TARGET_RADIUS_RATIO
   target_color = QColor(*DEFAULT_TARGET_COLOR)
   hold_time = DEFAULT_TARGET_HOLD_TIME
   trial_timeout = float(task_config.get("trial_timeout", 0.5))
   ignore_idle_trial_failures = bool(task_config.get("ignore_idle_trial_failures", False))
+  ignored_idle_sample_clear_threshold = max(0, int(task_config.get("ignored_idle_sample_clear_threshold", 50)))
   intertrial_interval = float(task_config.get("intertrial_interval", 1.0))
   configured_targets = task_config.get("targets", [])
   animations_enabled = bool(task_config.get("animations_enabled", False))
@@ -1537,7 +1676,9 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   trial_start = time.perf_counter()
   last_tick = trial_start
   state = "intertrial"
-  iti_end = trial_start + intertrial_interval
+  iti_countdown_start: typing.Optional[float] = None if require_center_before_trial else trial_start
+  iti_end = math.inf if require_center_before_trial else trial_start + intertrial_interval
+  intertrial_center_ready = False
   current_target_radius_ratio = target_radius_ratio
   current_hold_time = hold_time
   current_target_color = target_color
@@ -1560,6 +1701,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   state_brightness = 0
   current_target_index = -1
   trial_index = 0
+  ignored_idle_trial_count = 0
   target_entry_count = 0
   first_movement_time: typing.Optional[float] = None
   first_target_entry_time: typing.Optional[float] = None
@@ -1567,17 +1709,29 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   previous_cursor_inside_target = False
   current_attempt: typing.Optional[typing.Dict[str, typing.Any]] = None
   free_play_was_active = False
-  free_play_last_reward_time: typing.Optional[float] = None
-  free_play_reward_count = 0
-  free_play_reward_threshold = (
-    free_play_reward_config_threshold
-    if free_play_reward_config_threshold > 0.0
+  free_play_active_bout_start: typing.Optional[float] = None
+  free_play_first_touch_delivered = False
+  free_play_last_bout_reward_time: typing.Optional[float] = None
+  free_play_last_sustain_reward_time: typing.Optional[float] = None
+  free_play_first_touch_reward_count = 0
+  free_play_bout_reward_count = 0
+  free_play_sustain_reward_count = 0
+  free_play_total_reward_count = 0
+  free_play_active_bout_count = 0
+  free_play_total_active_time_s = 0.0
+  free_play_active_threshold = (
+    free_play_active_config_threshold
+    if free_play_active_config_threshold > 0.0
     else (zero_drift_buffer if zero_drift_mode else 0.02)
   )
   behav_result: typing.Dict[str, typing.Any] = {
     "task": "joystick_intro",
     "control_mode": control_mode,
     "cursor_only_mode": cursor_only_mode,
+    "require_center_before_trial": require_center_before_trial,
+    "center_gate_radius_ratio": center_gate_radius_ratio,
+    "ignored_idle_sample_clear_threshold": ignored_idle_sample_clear_threshold,
+    "ignored_idle_sample_clear_events": [],
     "trial_attempt_count": 0,
     "attempts": [],
     "joystick_samples": [],
@@ -1785,6 +1939,54 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     behav_result["final_attempt"] = current_attempt
     context.behav_result = behav_result
 
+  def clear_joystick_samples_for_prolonged_idle(now: float) -> None:
+    cleared_count = len(behav_result["joystick_samples"])
+    if cleared_count <= 0:
+      return
+    clear_events = behav_result.get("ignored_idle_sample_clear_events", [])
+    if not isinstance(clear_events, list):
+      clear_events = []
+      behav_result["ignored_idle_sample_clear_events"] = clear_events
+    clear_events.append({
+      "time_perf_counter": now,
+      "time_since_session_start_s": max(0.0, now - session_start),
+      "ignored_idle_trial_count": ignored_idle_trial_count,
+      "cleared_sample_count": cleared_count,
+    })
+    behav_result["joystick_samples"].clear()
+    context.behav_result = behav_result
+
+  def reset_intertrial_gate(now: float) -> None:
+    nonlocal iti_countdown_start
+    nonlocal iti_end
+    nonlocal intertrial_center_ready
+
+    if require_center_before_trial:
+      iti_countdown_start = None
+      iti_end = math.inf
+      intertrial_center_ready = False
+    else:
+      iti_countdown_start = now
+      iti_end = now + intertrial_interval
+      intertrial_center_ready = True
+
+  def update_intertrial_gate(now: float, cursor_centered: bool) -> None:
+    nonlocal iti_countdown_start
+    nonlocal iti_end
+    nonlocal intertrial_center_ready
+
+    if not require_center_before_trial:
+      return
+    if cursor_centered:
+      if not intertrial_center_ready:
+        intertrial_center_ready = True
+        iti_countdown_start = now
+        iti_end = now + intertrial_interval
+      return
+    intertrial_center_ready = False
+    iti_countdown_start = None
+    iti_end = math.inf
+
   def place_target() -> typing.Tuple[int, float, float, float, float, int, QColor]:
     enabled_targets = []
     for index, target in enumerate(configured_targets):
@@ -1836,6 +2038,45 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     elif jy < 0.0:
       jy *= down_influence
     return jx, jy
+
+  async def trigger_free_play_reward(
+    event_name: str,
+    now: float,
+    channel: int,
+    reward_kind: str,
+    analog_magnitude: float,
+  ) -> None:
+    nonlocal free_play_first_touch_reward_count
+    nonlocal free_play_bout_reward_count
+    nonlocal free_play_sustain_reward_count
+    nonlocal free_play_total_reward_count
+
+    await deliver_reward_repeats(channel, 1)
+    success_sound.play()
+    free_play_total_reward_count += 1
+    if reward_kind == "first_touch":
+      free_play_first_touch_reward_count += 1
+    elif reward_kind == "bout":
+      free_play_bout_reward_count += 1
+    elif reward_kind == "sustain":
+      free_play_sustain_reward_count += 1
+
+    if current_attempt is not None:
+      current_attempt["free_play_first_touch_reward_count"] = free_play_first_touch_reward_count
+      current_attempt["free_play_bout_reward_count"] = free_play_bout_reward_count
+      current_attempt["free_play_sustain_reward_count"] = free_play_sustain_reward_count
+      current_attempt["free_play_total_reward_count"] = free_play_total_reward_count
+    append_event(
+      event_name,
+      now,
+      reward_count=1,
+      reward_channel=channel,
+      reward_kind=reward_kind,
+      total_free_play_reward_count=free_play_total_reward_count,
+      joystick_x=analog_joystick_x,
+      joystick_y=analog_joystick_y,
+      joystick_magnitude=analog_magnitude,
+    )
 
   def get_current_target_name() -> str:
     if 0 <= current_target_index < len(configured_targets):
@@ -2014,12 +2255,22 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     if cursor_only_mode:
       reset_attempt_tracking(session_start)
       if current_attempt is not None:
-        current_attempt["free_play_reward_enabled"] = free_play_reward_enabled
-        current_attempt["free_play_reward_policy"] = free_play_reward_policy
-        current_attempt["free_play_reward_threshold"] = free_play_reward_threshold
-        current_attempt["free_play_reward_cooldown_s"] = free_play_reward_cooldown_s
-        current_attempt["free_play_reward_channel"] = free_play_reward_channel
-        current_attempt["free_play_reward_count"] = 0
+        current_attempt["free_play_active_threshold"] = free_play_active_threshold
+        current_attempt["free_play_first_touch_reward_enabled"] = free_play_first_touch_reward_enabled
+        current_attempt["free_play_first_touch_reward_channel"] = free_play_first_touch_reward_channel
+        current_attempt["free_play_bout_reward_enabled"] = free_play_bout_reward_enabled
+        current_attempt["free_play_bout_reward_channel"] = free_play_bout_reward_channel
+        current_attempt["free_play_bout_cooldown_s"] = free_play_bout_cooldown_s
+        current_attempt["free_play_sustain_reward_enabled"] = free_play_sustain_reward_enabled
+        current_attempt["free_play_sustain_reward_channel"] = free_play_sustain_reward_channel
+        current_attempt["free_play_sustain_initial_delay_s"] = free_play_sustain_initial_delay_s
+        current_attempt["free_play_sustain_interval_s"] = free_play_sustain_interval_s
+        current_attempt["free_play_first_touch_reward_count"] = 0
+        current_attempt["free_play_bout_reward_count"] = 0
+        current_attempt["free_play_sustain_reward_count"] = 0
+        current_attempt["free_play_total_reward_count"] = 0
+        current_attempt["free_play_active_bout_count"] = 0
+        current_attempt["free_play_total_active_time_s"] = 0.0
       append_event("free_play_start", session_start)
     await context.log("BehavState=intertrial")
     while True:
@@ -2071,11 +2322,35 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       target_radius_px = int(current_target_radius_ratio * min_dim)
       cursor_px_x, cursor_px_y = to_region_pixels(cursor_x, cursor_y, w, h)
       target_px_x, target_px_y = to_region_pixels(target_x, target_y, w, h)
+      center_px_x, center_px_y = to_region_pixels(0.5, 0.5, w, h)
+      center_gate_radius_px = max(1, int(center_gate_radius_ratio * min_dim))
+      cursor_centered_for_next_trial = (
+        math.hypot(cursor_px_x - center_px_x, cursor_px_y - center_px_y)
+        <= center_gate_radius_px
+      )
       cursor_inside_target = False
       hold_progress_ratio = 0.0
 
       if cursor_only_mode:
-        free_play_is_active = analog_magnitude >= free_play_reward_threshold
+        free_play_is_active = analog_magnitude >= free_play_active_threshold
+        free_play_started = free_play_is_active and not free_play_was_active
+        free_play_ended = (not free_play_is_active) and free_play_was_active
+
+        if free_play_started:
+          free_play_active_bout_start = now
+          free_play_active_bout_count += 1
+          free_play_last_sustain_reward_time = None
+          if current_attempt is not None:
+            current_attempt["free_play_active_bout_count"] = free_play_active_bout_count
+          append_event(
+            "free_play_active_start",
+            now,
+            active_bout_count=free_play_active_bout_count,
+            joystick_x=analog_joystick_x,
+            joystick_y=analog_joystick_y,
+            joystick_magnitude=analog_magnitude,
+          )
+
         if free_play_is_active and not joystick_active_this_trial:
           first_movement_time = now
           append_event(
@@ -2090,46 +2365,90 @@ async def run(context: TaskContextProtocol) -> TaskResult:
           if current_attempt is not None:
             current_attempt["joystick_active"] = True
 
-        cooldown_elapsed = (
-          free_play_last_reward_time is None
-          or now - free_play_last_reward_time >= free_play_reward_cooldown_s
-        )
-        should_reward_free_play = False
-        if free_play_reward_enabled and free_play_is_active and cooldown_elapsed:
-          if free_play_reward_policy == "first_touch":
-            should_reward_free_play = free_play_reward_count == 0
-          elif free_play_reward_policy == "timed_active":
-            should_reward_free_play = True
-          else:
-            should_reward_free_play = not free_play_was_active
-
-        if should_reward_free_play:
-          await deliver_reward_repeats(free_play_reward_channel, 1)
-          success_sound.play()
-          free_play_last_reward_time = now
-          free_play_reward_count += 1
-          if current_attempt is not None:
-            current_attempt["free_play_reward_count"] = free_play_reward_count
-          append_event(
-            "free_play_reward_triggered",
+        if free_play_started and free_play_first_touch_reward_enabled and not free_play_first_touch_delivered:
+          await trigger_free_play_reward(
+            "free_play_first_touch_reward_triggered",
             now,
-            reward_count=1,
-            reward_channel=free_play_reward_channel,
-            total_free_play_reward_count=free_play_reward_count,
+            free_play_first_touch_reward_channel,
+            "first_touch",
+            analog_magnitude,
+          )
+          free_play_first_touch_delivered = True
+
+        bout_cooldown_elapsed = (
+          free_play_last_bout_reward_time is None
+          or now - free_play_last_bout_reward_time >= free_play_bout_cooldown_s
+        )
+        if free_play_started and free_play_bout_reward_enabled and bout_cooldown_elapsed:
+          await trigger_free_play_reward(
+            "free_play_bout_reward_triggered",
+            now,
+            free_play_bout_reward_channel,
+            "bout",
+            analog_magnitude,
+          )
+          free_play_last_bout_reward_time = now
+
+        if free_play_is_active and free_play_sustain_reward_enabled and free_play_active_bout_start is not None:
+          active_duration_s = max(0.0, now - free_play_active_bout_start)
+          sustain_delay_elapsed = active_duration_s >= free_play_sustain_initial_delay_s
+          sustain_interval_elapsed = (
+            free_play_last_sustain_reward_time is None
+            or now - free_play_last_sustain_reward_time >= free_play_sustain_interval_s
+          )
+          if sustain_delay_elapsed and sustain_interval_elapsed:
+            await trigger_free_play_reward(
+              "free_play_sustain_reward_triggered",
+              now,
+              free_play_sustain_reward_channel,
+              "sustain",
+              analog_magnitude,
+            )
+            free_play_last_sustain_reward_time = now
+
+        if free_play_ended:
+          bout_duration_s = 0.0 if free_play_active_bout_start is None else max(0.0, now - free_play_active_bout_start)
+          free_play_total_active_time_s += bout_duration_s
+          if current_attempt is not None:
+            current_attempt["free_play_total_active_time_s"] = free_play_total_active_time_s
+          append_event(
+            "free_play_active_end",
+            now,
+            active_bout_count=free_play_active_bout_count,
+            active_bout_duration_s=bout_duration_s,
+            total_active_time_s=free_play_total_active_time_s,
             joystick_x=analog_joystick_x,
             joystick_y=analog_joystick_y,
             joystick_magnitude=analog_magnitude,
-            policy=free_play_reward_policy,
           )
+          free_play_active_bout_start = None
+          free_play_last_sustain_reward_time = None
         free_play_was_active = free_play_is_active
 
         if free_play_end_requested:
+          if free_play_is_active and free_play_active_bout_start is not None:
+            bout_duration_s = max(0.0, now - free_play_active_bout_start)
+            free_play_total_active_time_s += bout_duration_s
+            if current_attempt is not None:
+              current_attempt["free_play_total_active_time_s"] = free_play_total_active_time_s
+            append_event(
+              "free_play_active_end",
+              now,
+              active_bout_count=free_play_active_bout_count,
+              active_bout_duration_s=bout_duration_s,
+              total_active_time_s=free_play_total_active_time_s,
+              joystick_x=analog_joystick_x,
+              joystick_y=analog_joystick_y,
+              joystick_magnitude=analog_magnitude,
+            )
+            free_play_active_bout_start = None
           append_event("free_play_end_requested", now)
           finalize_attempt("success", now)
           success_sound.play()
           await context.log("BehavState=success")
           return TaskResult(success=True)
       elif state == "intertrial":
+        update_intertrial_gate(now, cursor_centered_for_next_trial)
         if now >= iti_end:
           current_target_index, target_x, target_y, current_target_radius_ratio, current_hold_time, current_reward_channel, current_target_color = consume_next_target()
           hold_start = None
@@ -2162,6 +2481,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
           await context.log("BehavState=start_on")
       else:
         if joystick_is_active and not joystick_active_this_trial:
+          ignored_idle_trial_count = 0
           first_movement_time = now
           append_event("first_joystick_movement", now, joystick_x=jx, joystick_y=jy)
         if joystick_is_active:
@@ -2226,12 +2546,15 @@ async def run(context: TaskContextProtocol) -> TaskResult:
 
         if now - trial_start >= trial_timeout:
           if ignore_idle_trial_failures and not joystick_active_this_trial:
+            ignored_idle_trial_count += 1
             hold_start = None
             state = "intertrial"
-            iti_end = now + intertrial_interval
+            reset_intertrial_gate(now)
             state_brightness = 0
-            append_event("ignored_idle_timeout", now)
+            append_event("ignored_idle_timeout", now, ignored_idle_trial_count=ignored_idle_trial_count)
             finalize_attempt("ignored_idle", now, failure_reason="timeout_without_movement")
+            if ignored_idle_trial_count > ignored_idle_sample_clear_threshold:
+              clear_joystick_samples_for_prolonged_idle(now)
             await context.log("BehavState=intertrial")
             continue
           streak_count = 0

@@ -331,12 +331,12 @@
       "Camera Values": {
         "WidthMax": 1280,
         "HeightMax": 1024,
-        "Width": 520,
-        "Height": 258,
-        "OffsetX": 488,
-        "OffsetY": 534,
-        "ExposureTime": 6000.005,
-        "AcquisitionFrameRate": 149.9999250000375,
+        "Width": 1280,
+        "Height": 1024,
+        "OffsetX": 0,
+        "OffsetY": 0,
+        "ExposureTime": 19999.935,
+        "AcquisitionFrameRate": 49.76044822619428,
         "Gain": 0.0
       }
     },
@@ -364,7 +364,7 @@
       "Sources": [
         {
           "Node": "Cam Rear",
-          "Time Series": true,
+          "Time Series": false,
           "Image": true,
           "Motion": true,
           "Text": true
@@ -385,7 +385,7 @@
         },
         {
           "Node": "Cam Eye",
-          "Time Series": true,
+          "Time Series": false,
           "Image": true,
           "Motion": true,
           "Text": true
@@ -454,13 +454,13 @@
           "Text": true
         }
       ],
-      "rec": 1,
-      "start": 4070909.254781225,
+      "rec": 3,
+      "start": 948293.130895367,
       "Files": [],
       "Metadata": [
         {
           "Key": "Rec",
-          "Value": 1
+          "Value": 3
         }
       ],
       "Simple Copy": false
@@ -713,7 +713,7 @@
       "type": "ARUCO",
       "Running": false,
       "Marker Mode": false,
-      "View": true,
+      "View": false,
       "Source": "Distortion Cam Top",
       "Dictionary": "DICT_4X4_50",
       "Boards": [
@@ -756,7 +756,7 @@
       "type": "ARUCO",
       "Running": false,
       "Marker Mode": false,
-      "View": true,
+      "View": false,
       "Source": "Distortion Cam Left",
       "Dictionary": "DICT_4X4_50",
       "Boards": [
@@ -796,9 +796,9 @@
     }
   ],
   "thalamus_view_geometry": [
-    100,
-    100,
-    506,
+    18,
+    244,
+    494,
     768
   ],
   "data_views": [
@@ -882,12 +882,12 @@
       ]
     },
     {
-      "node": "Cam Rear",
+      "node": "Storage",
       "dock_area": "right",
       "view_geometry": [
-        190,
+        300,
         23,
-        316,
+        194,
         745
       ]
     }
@@ -896,8 +896,8 @@
     {
       "task_type": "joystick_intro",
       "type": "task",
-      "goal": 1,
-      "name": "Cursor",
+      "goal": 98,
+      "name": "Grid",
       "intertrial_timeout": {
         "min": 1,
         "max": 1
@@ -961,8 +961,8 @@
         {
           "name": "Target 1 Copy",
           "enabled": true,
-          "x_norm": 0.5059523809523809,
-          "y_norm": 0.8448160980810234,
+          "x_norm": 0.506,
+          "y_norm": 0.845,
           "radius_ratio": 0.2,
           "hold_time": 0.1,
           "reward_channel": 2,
@@ -975,8 +975,8 @@
         {
           "name": "Target 1 Copy",
           "enabled": true,
-          "x_norm": 0.5044642857142857,
-          "y_norm": 0.20515724946695102,
+          "x_norm": 0.504,
+          "y_norm": 0.205,
           "radius_ratio": 0.2,
           "hold_time": 0.1,
           "reward_channel": 2,
@@ -1003,7 +1003,7 @@
       ],
       "joystick_node": "Joystick",
       "control_mode": "direct",
-      "cursor_only_mode": true,
+      "cursor_only_mode": false,
       "free_play_end_key": "space",
       "cumulative_speed": 0.7,
       "zero_drift_mode": true,
@@ -1037,10 +1037,10 @@
       "show_hold_progress_ring": true,
       "show_success_pop": true,
       "success_pop_duration_s": 0.12,
-      "up_influence_pct": 100,
-      "down_influence_pct": 100,
-      "left_influence_pct": 100,
-      "right_influence_pct": 100,
+      "up_influence_pct": 80,
+      "down_influence_pct": 79,
+      "left_influence_pct": 0,
+      "right_influence_pct": 0,
       "ignore_idle_trial_failures": true,
       "state_indicator_x": 30.0,
       "state_indicator_y": 70.0,
@@ -1052,13 +1052,34 @@
         "width": 1195,
         "height": 1081
       },
-      "free_play_reward_enabled": true,
+      "free_play_reward_enabled": false,
       "free_play_reward_policy": "touch_bouts",
       "free_play_reward_threshold": 0.0,
       "free_play_reward_cooldown_s": 1.0,
       "free_play_reward_channel": 2,
+      "free_play_active_threshold": 0.0,
+      "free_play_first_touch_reward_enabled": false,
+      "free_play_first_touch_reward_channel": 2,
+      "free_play_bout_reward_enabled": false,
+      "free_play_bout_reward_channel": 2,
+      "free_play_bout_cooldown_s": 1.0,
+      "free_play_sustain_reward_enabled": false,
+      "free_play_sustain_reward_channel": 2,
+      "free_play_sustain_initial_delay_s": 0.0,
+      "free_play_sustain_interval_s": 1.0,
+      "require_center_before_trial": false,
+      "center_gate_radius_ratio": 0.15,
       "task_cluster_name": "Joy",
-      "queue_index": 0
+      "queue_index": 0,
+      "_streak_count": 0,
+      "_last_cursor_x": 0.5,
+      "_last_cursor_y": 0.476392578125,
+      "_operator_keys_pressed": {
+        "left": false,
+        "right": false,
+        "up": false,
+        "down": false
+      }
     }
   ],
   "reward_schedule": {
@@ -1100,7 +1121,7 @@
         50.0
       ]
     ],
-    "index": 0
+    "index": 1
   },
   "touch_channels": [
     0,
@@ -1153,7 +1174,7 @@
     },
     "Auto Clear": true
   },
-  "status": "",
+  "status": "Joy/Grid = 1/7",
   "Persistence": {
     "Cached": []
   },
@@ -7349,7 +7370,7 @@
           ],
           "joystick_node": "Joystick",
           "control_mode": "direct",
-          "cursor_only_mode": false,
+          "cursor_only_mode": true,
           "free_play_end_key": "space",
           "cumulative_speed": 0.7,
           "zero_drift_mode": true,
@@ -7396,7 +7417,19 @@
           "free_play_reward_policy": "touch_bouts",
           "free_play_reward_threshold": 0.0,
           "free_play_reward_cooldown_s": 1.0,
-          "free_play_reward_channel": 2
+          "free_play_reward_channel": 2,
+          "free_play_active_threshold": 0.1,
+          "free_play_first_touch_reward_enabled": false,
+          "free_play_first_touch_reward_channel": 2,
+          "free_play_bout_reward_enabled": false,
+          "free_play_bout_reward_channel": 2,
+          "free_play_bout_cooldown_s": 1.0,
+          "free_play_sustain_reward_enabled": true,
+          "free_play_sustain_reward_channel": 3,
+          "free_play_sustain_initial_delay_s": 0.0,
+          "free_play_sustain_interval_s": 1.0,
+          "require_center_before_trial": false,
+          "center_gate_radius_ratio": 0.15
         },
         {
           "task_type": "joystick_intro",
@@ -7597,7 +7630,19 @@
           "free_play_reward_policy": "touch_bouts",
           "free_play_reward_threshold": 0.0,
           "free_play_reward_cooldown_s": 1.0,
-          "free_play_reward_channel": 2
+          "free_play_reward_channel": 2,
+          "free_play_active_threshold": 0.0,
+          "free_play_first_touch_reward_enabled": false,
+          "free_play_first_touch_reward_channel": 2,
+          "free_play_bout_reward_enabled": false,
+          "free_play_bout_reward_channel": 2,
+          "free_play_bout_cooldown_s": 1.0,
+          "free_play_sustain_reward_enabled": false,
+          "free_play_sustain_reward_channel": 2,
+          "free_play_sustain_initial_delay_s": 0.0,
+          "free_play_sustain_interval_s": 1.0,
+          "require_center_before_trial": false,
+          "center_gate_radius_ratio": 0.15
         },
         {
           "task_type": "joystick_intro",
@@ -7756,7 +7801,19 @@
           "free_play_reward_policy": "touch_bouts",
           "free_play_reward_threshold": 0.0,
           "free_play_reward_cooldown_s": 1.0,
-          "free_play_reward_channel": 2
+          "free_play_reward_channel": 2,
+          "free_play_active_threshold": 0.0,
+          "free_play_first_touch_reward_enabled": false,
+          "free_play_first_touch_reward_channel": 2,
+          "free_play_bout_reward_enabled": false,
+          "free_play_bout_reward_channel": 2,
+          "free_play_bout_cooldown_s": 1.0,
+          "free_play_sustain_reward_enabled": false,
+          "free_play_sustain_reward_channel": 2,
+          "free_play_sustain_initial_delay_s": 0.0,
+          "free_play_sustain_interval_s": 1.0,
+          "require_center_before_trial": false,
+          "center_gate_radius_ratio": 0.15
         },
         {
           "task_type": "joystick_intro",
@@ -7826,8 +7883,8 @@
             {
               "name": "Target 1 Copy",
               "enabled": true,
-              "x_norm": 0.5059523809523809,
-              "y_norm": 0.8448160980810234,
+              "x_norm": 0.506,
+              "y_norm": 0.845,
               "radius_ratio": 0.2,
               "hold_time": 0.1,
               "reward_channel": 2,
@@ -7840,8 +7897,8 @@
             {
               "name": "Target 1 Copy",
               "enabled": true,
-              "x_norm": 0.5044642857142857,
-              "y_norm": 0.20515724946695102,
+              "x_norm": 0.504,
+              "y_norm": 0.205,
               "radius_ratio": 0.2,
               "hold_time": 0.1,
               "reward_channel": 2,
@@ -7921,7 +7978,19 @@
           "free_play_reward_policy": "touch_bouts",
           "free_play_reward_threshold": 0.0,
           "free_play_reward_cooldown_s": 1.0,
-          "free_play_reward_channel": 2
+          "free_play_reward_channel": 2,
+          "free_play_active_threshold": 0.0,
+          "free_play_first_touch_reward_enabled": false,
+          "free_play_first_touch_reward_channel": 2,
+          "free_play_bout_reward_enabled": false,
+          "free_play_bout_reward_channel": 2,
+          "free_play_bout_cooldown_s": 1.0,
+          "free_play_sustain_reward_enabled": false,
+          "free_play_sustain_reward_channel": 2,
+          "free_play_sustain_initial_delay_s": 0.0,
+          "free_play_sustain_interval_s": 1.0,
+          "require_center_before_trial": false,
+          "center_gate_radius_ratio": 0.15
         },
         {
           "task_type": "joystick_intro",
@@ -8430,7 +8499,19 @@
           "free_play_reward_policy": "touch_bouts",
           "free_play_reward_threshold": 0.0,
           "free_play_reward_cooldown_s": 1.0,
-          "free_play_reward_channel": 2
+          "free_play_reward_channel": 2,
+          "free_play_active_threshold": 0.0,
+          "free_play_first_touch_reward_enabled": false,
+          "free_play_first_touch_reward_channel": 2,
+          "free_play_bout_reward_enabled": false,
+          "free_play_bout_reward_channel": 2,
+          "free_play_bout_cooldown_s": 1.0,
+          "free_play_sustain_reward_enabled": false,
+          "free_play_sustain_reward_channel": 2,
+          "free_play_sustain_initial_delay_s": 0.0,
+          "free_play_sustain_interval_s": 1.0,
+          "require_center_before_trial": false,
+          "center_gate_radius_ratio": 0.15
         },
         {
           "task_type": "joystick_intro",
@@ -8581,7 +8662,19 @@
           "free_play_reward_policy": "touch_bouts",
           "free_play_reward_threshold": 0.0,
           "free_play_reward_cooldown_s": 1.0,
-          "free_play_reward_channel": 2
+          "free_play_reward_channel": 2,
+          "free_play_active_threshold": 0.0,
+          "free_play_first_touch_reward_enabled": false,
+          "free_play_first_touch_reward_channel": 2,
+          "free_play_bout_reward_enabled": false,
+          "free_play_bout_reward_channel": 2,
+          "free_play_bout_cooldown_s": 1.0,
+          "free_play_sustain_reward_enabled": false,
+          "free_play_sustain_reward_channel": 2,
+          "free_play_sustain_initial_delay_s": 0.0,
+          "free_play_sustain_interval_s": 1.0,
+          "require_center_before_trial": false,
+          "center_gate_radius_ratio": 0.15
         },
         {
           "task_type": "joystick_intro",
@@ -8746,7 +8839,19 @@
           "free_play_reward_policy": "touch_bouts",
           "free_play_reward_threshold": 0.0,
           "free_play_reward_cooldown_s": 1.0,
-          "free_play_reward_channel": 2
+          "free_play_reward_channel": 2.0,
+          "free_play_active_threshold": 0.3,
+          "free_play_first_touch_reward_enabled": false,
+          "free_play_first_touch_reward_channel": 3,
+          "free_play_bout_reward_enabled": false,
+          "free_play_bout_reward_channel": 4,
+          "free_play_bout_cooldown_s": 1.0,
+          "free_play_sustain_reward_enabled": true,
+          "free_play_sustain_reward_channel": 2,
+          "free_play_sustain_initial_delay_s": 0.0,
+          "free_play_sustain_interval_s": 2.5,
+          "require_center_before_trial": false,
+          "center_gate_radius_ratio": 0.15
         }
       ]
     },

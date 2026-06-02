@@ -8,6 +8,7 @@ The joystick intro task teaches the subject that moving the joystick controls a 
 
 In normal task mode:
 - The task waits between trials.
+- If center-gated trial starts are enabled, the cursor must first return near the task-region center before the intertrial timer begins.
 - A target appears.
 - The subject moves the cursor into the target.
 - The cursor must stay inside the target for a required hold time.
@@ -98,6 +99,7 @@ Definitions:
 The task is between trials.
 This is the waiting period before the next target appears.
 The task starts in this state.
+If `require_center_before_trial` is enabled, the intertrial countdown only runs while the cursor is inside the center gate.
 
 ### `start_on`
 The target becomes visible.
@@ -116,12 +118,23 @@ In this task, the most common failure is timeout before successful hold completi
 
 ### Normal target-based mode
 1. The task begins in `intertrial`.
-2. After the intertrial interval, a target is selected and shown.
-3. The task logs `BehavState=start_on`.
-4. The subject moves the cursor with the joystick.
-5. If the cursor enters the target, the task starts timing the hold.
-6. If the cursor stays in long enough, the task succeeds, delivers reward, and logs `BehavState=success`.
-7. If the timeout is reached first, the task logs `BehavState=fail`.
+2. If center-gated trial starts are enabled, the task waits until the cursor is back near center.
+3. After the intertrial interval, a target is selected and shown.
+4. The task logs `BehavState=start_on`.
+5. The subject moves the cursor with the joystick.
+6. If the cursor enters the target, the task starts timing the hold.
+7. If the cursor stays in long enough, the task succeeds, delivers reward, and logs `BehavState=success`.
+8. If the timeout is reached first, the task logs `BehavState=fail`.
+
+## Center-Gated Trial Starts
+
+The `Require Center Before Trial` checkbox adds a return-to-center requirement before a new target can appear.
+When enabled, the intertrial interval starts only after the cursor is inside the center gate.
+If the cursor leaves the center gate during that interval, the countdown resets and waits for the cursor to return again.
+
+The center gate is controlled by `center_gate_radius_ratio`.
+It is a radius around the task-region center, expressed as a fraction of the task region's smaller display dimension.
+The default value is `0.15`.
 
 ### Free-play mode
 1. A single free-play attempt record is created.
@@ -138,29 +151,43 @@ This reward path is only used when `cursor_only_mode` is `true`. Normal target-b
 
 ### Free-play reward settings
 
-### `free_play_reward_enabled`
-Whether joystick exploration reward is enabled during cursor-only free play.
-The default is `false`, preserving the previous free-play behavior.
+The cursor-only free-play controls are grouped together in the task UI. The enable checkbox is always visible in that group, and the end-key plus reward controls are shown underneath it when cursor-only free play is enabled.
 
-### `free_play_reward_policy`
-How free-play joystick activity is rewarded.
-
-Supported values:
-- `touch_bouts`: reward each time the analog joystick crosses from inactive to active, subject to cooldown
-- `first_touch`: reward only the first active joystick contact in the free-play attempt
-- `timed_active`: reward repeatedly while the analog joystick remains active, subject to cooldown
-
-### `free_play_reward_threshold`
+### `free_play_active_threshold`
 Analog joystick magnitude needed to count as active for free-play reward.
+The UI presents this as a slider from `0.00` to `1.00`.
 If this is `0.0`, the task uses the same movement threshold as the zero-drift setting.
 
-### `free_play_reward_cooldown_s`
-Minimum time between free-play rewards.
-This prevents reward from being delivered every frame.
+### First-touch reward
 
-### `free_play_reward_channel`
-Reward channel used for free-play rewards.
-By default, this follows the top-level `reward_channel`.
+First-touch reward is controlled by:
+- `free_play_first_touch_reward_enabled`
+- `free_play_first_touch_reward_channel`
+
+When enabled, the task rewards the first inactive-to-active joystick transition in the free-play attempt.
+This is useful for shaping initial joystick contact.
+
+### Bout-start reward
+
+Bout-start reward is controlled by:
+- `free_play_bout_reward_enabled`
+- `free_play_bout_reward_channel`
+- `free_play_bout_cooldown_s`
+
+When enabled, the task rewards each inactive-to-active joystick transition, subject to the cooldown.
+This is useful for shaping repeated re-engagement with the joystick.
+
+### Sustained-active reward
+
+Sustained-active reward is controlled by:
+- `free_play_sustain_reward_enabled`
+- `free_play_sustain_reward_channel`
+- `free_play_sustain_initial_delay_s`
+- `free_play_sustain_interval_s`
+
+When enabled, the task rewards repeatedly while the analog joystick remains active.
+The initial delay controls how long the joystick must remain active before the first sustained reward, and the interval controls repeated rewards after that.
+This is useful for shaping continued joystick holding or manipulation.
 
 ### Important free-play reward note
 
@@ -325,29 +352,69 @@ If no hold ever began, this is `None`.
 For successful attempts, this matches the attempt duration.
 For non-successful attempts, this is `None`.
 
-### `free_play_reward_enabled`
-Only used in cursor-only free-play mode.
-Whether exploratory joystick reward was enabled for the attempt.
-
-### `free_play_reward_policy`
-Only used in cursor-only free-play mode.
-The free-play reward policy used for the attempt.
-
-### `free_play_reward_threshold`
+### `free_play_active_threshold`
 Only used in cursor-only free-play mode.
 Joystick magnitude threshold used to count analog joystick activity.
 
-### `free_play_reward_cooldown_s`
+### `free_play_first_touch_reward_enabled`
 Only used in cursor-only free-play mode.
-Minimum seconds between exploratory rewards.
+Whether first-touch reward was enabled for the attempt.
 
-### `free_play_reward_channel`
+### `free_play_first_touch_reward_channel`
 Only used in cursor-only free-play mode.
-Reward channel used for exploratory rewards.
+Reward channel used for first-touch reward.
 
-### `free_play_reward_count`
+### `free_play_bout_reward_enabled`
 Only used in cursor-only free-play mode.
-Number of exploratory rewards triggered during the free-play attempt.
+Whether bout-start reward was enabled for the attempt.
+
+### `free_play_bout_reward_channel`
+Only used in cursor-only free-play mode.
+Reward channel used for bout-start rewards.
+
+### `free_play_bout_cooldown_s`
+Only used in cursor-only free-play mode.
+Minimum seconds between bout-start rewards.
+
+### `free_play_sustain_reward_enabled`
+Only used in cursor-only free-play mode.
+Whether sustained-active reward was enabled for the attempt.
+
+### `free_play_sustain_reward_channel`
+Only used in cursor-only free-play mode.
+Reward channel used for sustained-active rewards.
+
+### `free_play_sustain_initial_delay_s`
+Only used in cursor-only free-play mode.
+Seconds of continuous activity required before sustained-active reward begins.
+
+### `free_play_sustain_interval_s`
+Only used in cursor-only free-play mode.
+Seconds between sustained-active reward requests while the joystick remains active.
+
+### `free_play_first_touch_reward_count`
+Only used in cursor-only free-play mode.
+Number of first-touch rewards triggered during the free-play attempt.
+
+### `free_play_bout_reward_count`
+Only used in cursor-only free-play mode.
+Number of bout-start rewards triggered during the free-play attempt.
+
+### `free_play_sustain_reward_count`
+Only used in cursor-only free-play mode.
+Number of sustained-active rewards triggered during the free-play attempt.
+
+### `free_play_total_reward_count`
+Only used in cursor-only free-play mode.
+Total exploratory rewards triggered during the free-play attempt.
+
+### `free_play_active_bout_count`
+Only used in cursor-only free-play mode.
+Number of inactive-to-active joystick bouts detected during the free-play attempt.
+
+### `free_play_total_active_time_s`
+Only used in cursor-only free-play mode.
+Total time the analog joystick was active across completed active bouts.
 
 ## Rich Event Names Stored in `events`
 
@@ -391,6 +458,23 @@ The event includes the `reward_channel` used for those reward requests.
 ### `ignored_idle_timeout`
 The trial timed out without meaningful movement, and the task was configured to ignore idle failures.
 This attempt is saved, but the task returns to `intertrial` instead of producing a canonical `fail`.
+The event includes the current consecutive ignored-idle trial count.
+
+### Prolonged ignored-idle sample clearing
+
+When `ignore_idle_trial_failures` is enabled, the task may stay in the same run across many unattended idle trials.
+Raw joystick samples are collected throughout the run, so a prolonged idle period can make the final trial summary too large for the gRPC log message limit.
+
+`ignored_idle_sample_clear_threshold` controls when the task trims the raw joystick sample buffer during consecutive ignored-idle trials.
+The default is `50`.
+When the consecutive ignored-idle count is greater than this threshold, `joystick_samples` is cleared after each ignored-idle attempt.
+The task still keeps the ignored-idle attempt records and stores a summary entry in `ignored_idle_sample_clear_events`.
+
+Each clear event stores:
+- task-side clear time
+- seconds since session start
+- consecutive ignored-idle trial count
+- number of raw joystick samples cleared
 
 ### `free_play_start`
 Marks the start of the free-play attempt.
@@ -400,10 +484,27 @@ Only used in cursor-only free-play mode.
 Marks the end-key release that requests free-play exit.
 Only used in cursor-only free-play mode.
 
-### `free_play_reward_triggered`
-An exploratory free-play reward was requested because analog joystick activity satisfied the configured reward policy.
+### `free_play_active_start`
+The analog joystick crossed from inactive to active.
 Only used in cursor-only free-play mode.
-The event includes reward channel, reward count, total free-play reward count, joystick x/y values, joystick magnitude, and policy.
+
+### `free_play_active_end`
+The analog joystick crossed from active to inactive.
+Only used in cursor-only free-play mode.
+The event includes the bout duration and total active time so far.
+
+### `free_play_first_touch_reward_triggered`
+A first-touch exploratory reward was requested.
+Only used in cursor-only free-play mode.
+
+### `free_play_bout_reward_triggered`
+A bout-start exploratory reward was requested.
+Only used in cursor-only free-play mode.
+
+### `free_play_sustain_reward_triggered`
+A sustained-active exploratory reward was requested.
+Only used in cursor-only free-play mode.
+Free-play reward events include reward channel, reward count, total free-play reward count, joystick x/y values, joystick magnitude, and reward kind.
 
 ## What Is Stored Per Joystick Sample
 
