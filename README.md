@@ -80,8 +80,11 @@ Approximately 1 hour set-up time.
 The code repository for Thalamus is hosted on GitHub at https://github.com/cajigaslab/thalamus. Detailed documentation lives at https://cajigaslab.github.io/Thalamus/:
 
 - [Quick Start](https://cajigaslab.github.io/Thalamus/quickstart.html) — install, build a pipeline, record, and analyze your first dataset.
+- [Concepts and Architecture](https://cajigaslab.github.io/Thalamus/concepts.html) — the node pipeline, data model, capture-file format, and tooling.
 - [Examples](https://cajigaslab.github.io/Thalamus/examples/index.html) — runnable, copy-paste tutorials (including a hardware-free walkthrough).
 - [Node Reference](https://cajigaslab.github.io/Thalamus/nodes/index.html) — catalog of every node type and its configuration.
+
+Release history is recorded in [CHANGELOG.md](CHANGELOG.md).
 
 Runnable example scripts also live in the [`examples/`](examples/) folder of this repository.  For the figures in our paper, refer to the [`SimpleUseCase`](SimpleUseCase/) folder.
 
