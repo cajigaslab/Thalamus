@@ -34,25 +34,25 @@ Generators
    * - ``SPIKEGLX``
      - Streams high-density electrophysiology data from a SpikeGLX / Neuropixels system.  See :doc:`spikeglx`.
    * - ``BRAINPRODUCTS``
-     - Streams EEG/biosignal data from Brain Products amplifiers.
+     - Streams EEG/biosignal data from Brain Products amplifiers.  See :doc:`brainproducts`.
    * - ``DELSYS``
      - Streams wireless EMG data from Delsys sensors.  See :doc:`delsys`.
    * - ``GENICAM``
      - Acquires image streams from GenICam/GenTL-compliant cameras.  See :doc:`genicam`.
    * - ``VIDEO`` / ``FFMPEG``
-     - Decodes video/image streams from files or capture devices via FFmpeg.
+     - Decodes video/image streams from files or capture devices via FFmpeg.  See :doc:`video` / :doc:`ffmpeg`.
    * - ``XSENS`` / ``MOCAP``
      - Streams motion-capture pose data (segment positions and quaternion rotations).  See :doc:`xsens`.
    * - ``HAND_ENGINE``
-     - Streams hand/finger pose data from StretchSense Hand Engine.
+     - Streams hand/finger pose data from StretchSense Hand Engine.  See :doc:`hand_engine`.
    * - ``PUPIL``
      - Generates a synthetic eye image with a moving pupil (optionally random saccades) for testing eye-tracking pipelines.  See :doc:`pupil`.
    * - ``CHESSBOARD``
      - Renders a chessboard calibration-target image (for displaying a known pattern, e.g. for camera/display calibration).  See :doc:`chessboard`.
    * - ``REMOTE``
-     - Proxies a data stream from another Thalamus instance over gRPC.
+     - Proxies a data stream from another Thalamus instance over gRPC.  See :doc:`remote`.
    * - ``SAMPLE_MONITOR``
-     - Reports sample counts and timing statistics from upstream nodes (diagnostic).
+     - Monitors node sample rates and alerts when they drift from expectation (diagnostic).  See :doc:`sample_monitor`.
 
 Consumers
 ---------
@@ -66,15 +66,15 @@ Consumers
    * - ``STORAGE2``
      - Primary node for recording data to a ``.tha`` capture file, with per-modality selection, file copying, and metadata.  See :doc:`storage2`.
    * - ``STORAGE``
-     - Earlier-generation storage node (retained for backward compatibility).
+     - Earlier-generation storage node (retained for backward compatibility).  See :doc:`storage`.
    * - ``NIDAQ_OUT (NIDAQMX)``
      - Writes analog signals from Thalamus out to a National Instruments DAQ.  See :doc:`nidaq_out`.
    * - ``LOG``
-     - Receives and displays text log messages.
+     - Receives and displays text log messages.  See :doc:`log`.
    * - ``REMOTE_LOG``
-     - Aggregates log messages from a remote Thalamus instance.
+     - Aggregates log messages from a remote Thalamus instance.  See :doc:`remote_log`.
    * - ``STIM_PRINTER``
-     - Logs JSON-formatted electrical stimulation declarations.
+     - Logs JSON-formatted electrical stimulation declarations.  See :doc:`stim_printer`.
    * - ``TOUCH_SCREEN``
      - Maps raw touch-screen coordinates to calibrated screen coordinates.  See :doc:`touch_screen`.
    * - ``OPHANIM``
@@ -116,7 +116,7 @@ Transformers
    * - ``HEXASCOPE``
      - Servos a motorized mirror platform to track a target from a motion-capture source.  See :doc:`hexascope`.
    * - ``CECI``
-     - Generates multi-channel biphasic electrical stimulation with MUX/digital control.
+     - Generates multi-channel biphasic electrical stimulation with MUX/digital control.  See :doc:`ceci`.
    * - ``ROS2``
      - Bridges Thalamus data (images, gaze, transforms) to/from ROS 2 topics and TF2.  See :doc:`ros2`.
 
@@ -132,10 +132,10 @@ Controllers and Utilities
    * - ``RUNNER2``
      - Propagates its Running state to a configured list of (possibly remote) nodes so multiple nodes start/stop together.  See :doc:`runner2`.
    * - ``RUNNER``
-     - Simpler controller that mirrors its Running state to a list of local node names.
+     - Simpler controller that mirrors its Running state to a list of local node names.  See :doc:`runner`.
    * - ``NONE``
      - The default empty node; does nothing until you choose a type.
    * - ``THREAD_POOL``
-     - Exposes the shared worker thread pool (system/diagnostic).
+     - Exposes the shared worker thread pool (system/diagnostic).  See :doc:`thread_pool`.
    * - ``LOOP_TEST`` / ``TEST_PULSE_NODE``
-     - Diagnostic nodes that generate test signals for verifying signal routing and latency.
+     - Diagnostic nodes that generate test signals for verifying signal routing and latency.  See :doc:`loop_test` / :doc:`test_pulse`.
