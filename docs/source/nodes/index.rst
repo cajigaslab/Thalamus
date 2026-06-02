@@ -1,11 +1,56 @@
 Nodes
 =====
 
+Nodes are the building blocks of a Thalamus pipeline.  Start with the
+:doc:`catalog` for an overview of every available node type, then see the
+detailed pages below for commonly used nodes.
+
 .. toctree::
    :maxdepth: 2
    :caption: Nodes:
 
+   catalog
    wave
    storage2
    nidaq
-
+   oculomatic
+   touch_screen
+   runner2
+   algebra
+   normalize
+   lua
+   channel_picker
+   sync
+   genicam
+   aruco
+   chessboard
+   distortion
+   intan
+   spikeglx
+   delsys
+   xsens
+   pupil
+   wallclock
+   analog
+   toggle
+   frequency
+   nidaq_out
+   task_controller
+   ophanim
+   hexascope
+   ros2
+   video
+   ffmpeg
+   hand_engine
+   brainproducts
+   remote
+   remote_log
+   runner
+   sample_monitor
+   storage
+   log
+   stim_printer
+   ceci
+   thread_pool
+   loop_test
+   test_pulse

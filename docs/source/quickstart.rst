@@ -22,9 +22,14 @@ First, create a python virtual environment and activate it.  This is commonly ne
 
 From the releases page download the whl file for your platform and install it.  https://github.com/cajigaslab/Thalamus/releases
 
+.. note::
+
+   The distributed package is named ``thalamus_neuro`` (the importable Python module remains ``thalamus``).
+   Builds are published for Linux (manylinux), Windows, and macOS (arm64).
+
 .. code-block::
 
-   python -m pip install thalamus-0.3.37-py3-none-manylinux_2_27_x86_64.whl 
+   python -m pip install thalamus_neuro-1.0.15-py3-none-manylinux_2_39_x86_64.whl
 
 You should now be able to run the pipeline program and see a window appear with an empty node list.
 
