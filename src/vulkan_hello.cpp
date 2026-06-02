@@ -10,20 +10,36 @@
 #pragma clang diagnostic pop
 #endif
 
+#include <algorithm>
 #include <cstring>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <vector>
+#include <texture.vert.spv.h>
+#include <texture.frag.spv.h>
 
-static std::vector<char> readFile(const char* path) {
-    std::ifstream f(path, std::ios::binary | std::ios::ate);
-    if (!f) throw std::runtime_error(std::string("Cannot open: ") + path);
-    auto size = static_cast<std::streamsize>(f.tellg());
-    std::vector<char> buf(static_cast<size_t>(size));
-    f.seekg(0);
-    f.read(buf.data(), size);
-    return buf;
+static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
+    VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+    VkDebugUtilsMessageTypeFlagsEXT,
+    const VkDebugUtilsMessengerCallbackDataEXT* data,
+    void*)
+{
+    const char* prefix = (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)   ? "ERROR"   :
+                         (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) ? "WARNING" :
+                         (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)    ? "INFO"    : "VERBOSE";
+    std::cerr << "[Vulkan " << prefix << "] " << data->pMessage << '\n';
+    return VK_FALSE;
+}
+
+static bool layerAvailable(const char* name) {
+    uint32_t n = 0;
+    vkEnumerateInstanceLayerProperties(&n, nullptr);
+    std::vector<VkLayerProperties> layers(n);
+    vkEnumerateInstanceLayerProperties(&n, layers.data());
+    for (auto& l : layers)
+        if (std::strcmp(l.layerName, name) == 0) return true;
+    return false;
 }
 
 static uint32_t findMemoryType(VkPhysicalDevice phys, uint32_t typeBits, VkMemoryPropertyFlags props) {
@@ -118,15 +134,47 @@ int main(int, char*[]) {
     // Instance
     Uint32 extCount = 0;
     const char* const* sdlExts = SDL_Vulkan_GetInstanceExtensions(&extCount);
+    std::vector<const char*> extensions(sdlExts, sdlExts + extCount);
+
+    const char* validationLayer = "VK_LAYER_KHRONOS_validation";
+    bool validationEnabled = layerAvailable(validationLayer);
+    if (validationEnabled) {
+        extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+        std::cerr << "[Vulkan] Validation layer enabled\n";
+    } else {
+        std::cerr << "[Vulkan] Validation layer not available\n";
+    }
+
+    VkDebugUtilsMessengerCreateInfoEXT messengerCI{VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT};
+    messengerCI.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |
+                                  VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+                                  VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
+    messengerCI.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                              VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                              VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    messengerCI.pfnUserCallback = debugCallback;
+
     VkApplicationInfo appInfo{VK_STRUCTURE_TYPE_APPLICATION_INFO};
     appInfo.apiVersion = VK_API_VERSION_1_0;
     VkInstanceCreateInfo instCI{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
     instCI.pApplicationInfo = &appInfo;
-    instCI.enabledExtensionCount = extCount;
-    instCI.ppEnabledExtensionNames = sdlExts;
+    instCI.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+    instCI.ppEnabledExtensionNames = extensions.data();
+    if (validationEnabled) {
+        instCI.enabledLayerCount = 1;
+        instCI.ppEnabledLayerNames = &validationLayer;
+        instCI.pNext = &messengerCI;  // catch messages during instance create/destroy
+    }
     VkInstance instance;
     if (vkCreateInstance(&instCI, nullptr, &instance) != VK_SUCCESS)
         throw std::runtime_error("vkCreateInstance failed");
+
+    VkDebugUtilsMessengerEXT messenger = VK_NULL_HANDLE;
+    if (validationEnabled) {
+        auto fn = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
+            vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT"));
+        if (fn) fn(instance, &messengerCI, nullptr, &messenger);
+    }
 
     VkSurfaceKHR surface;
     if (!SDL_Vulkan_CreateSurface(window, instance, nullptr, &surface))
@@ -316,20 +364,31 @@ int main(int, char*[]) {
     std::vector<VkImage> scImages;
     std::vector<VkImageView> scViews;
     std::vector<VkFramebuffer> framebuffers;
+    std::vector<VkSemaphore> renderDone;  // one per swapchain image, not per frame
 
     auto destroySwapchainDeps = [&]() {
         for (auto fb : framebuffers) vkDestroyFramebuffer(dev, fb, nullptr);
         framebuffers.clear();
         for (auto iv : scViews) vkDestroyImageView(dev, iv, nullptr);
         scViews.clear();
+        for (auto s : renderDone) vkDestroySemaphore(dev, s, nullptr);
+        renderDone.clear();
     };
 
     auto buildSwapchain = [&]() -> bool {
         VkSurfaceCapabilitiesKHR caps;
         vkGetPhysicalDeviceSurfaceCapabilitiesKHR(phys, surface, &caps);
-        if (caps.currentExtent.width == 0 || caps.currentExtent.height == 0)
+        if (caps.currentExtent.width == UINT32_MAX) {
+            // Surface has flexible extent — ask the window for its pixel size
+            int w = 0, h = 0;
+            SDL_GetWindowSizeInPixels(window, &w, &h);
+            extent.width  = std::clamp(static_cast<uint32_t>(w), caps.minImageExtent.width,  caps.maxImageExtent.width);
+            extent.height = std::clamp(static_cast<uint32_t>(h), caps.minImageExtent.height, caps.maxImageExtent.height);
+        } else {
+            extent = caps.currentExtent;
+        }
+        if (extent.width == 0 || extent.height == 0)
             return false;
-        extent = caps.currentExtent;
 
         VkSwapchainCreateInfoKHR scCI{VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR};
         scCI.surface = surface;
@@ -381,6 +440,12 @@ int main(int, char*[]) {
             fbCI.layers = 1;
             vkCreateFramebuffer(dev, &fbCI, nullptr, &framebuffers[i]);
         }
+
+        renderDone.resize(nImg);
+        VkSemaphoreCreateInfo rdSemCI{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+        for (uint32_t i = 0; i < nImg; i++)
+            vkCreateSemaphore(dev, &rdSemCI, nullptr, &renderDone[i]);
+
         return true;
     };
 
@@ -393,17 +458,16 @@ int main(int, char*[]) {
     buildSwapchain();
 
     // Pipeline with dynamic viewport/scissor
-    auto makeShader = [&](const char* path) {
-        auto code = readFile(path);
+    auto makeShader = [&](auto&& code) {
         VkShaderModuleCreateInfo smCI{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-        smCI.codeSize = code.size();
-        smCI.pCode = reinterpret_cast<const uint32_t*>(code.data());
+        smCI.codeSize = std::size(code) * sizeof(uint32_t);
+        smCI.pCode = code;
         VkShaderModule sm;
         vkCreateShaderModule(dev, &smCI, nullptr, &sm);
         return sm;
     };
-    VkShaderModule vertSM = makeShader(VERT_SPV_PATH);
-    VkShaderModule fragSM = makeShader(FRAG_SPV_PATH);
+    VkShaderModule vertSM = makeShader(vert_shader_data);
+    VkShaderModule fragSM = makeShader(frag_shader_data);
 
     VkPipelineShaderStageCreateInfo stages[2]{};
     stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -476,14 +540,13 @@ int main(int, char*[]) {
     vkAllocateCommandBuffers(dev, &cbAI, cmdBufs);
 
     // Sync objects
-    VkSemaphore imageAvail[MAX_FRAMES], renderDone[MAX_FRAMES];
+    VkSemaphore imageAvail[MAX_FRAMES];
     VkFence inFlight[MAX_FRAMES];
     VkSemaphoreCreateInfo semCI{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
     VkFenceCreateInfo fenCI{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
     fenCI.flags = VK_FENCE_CREATE_SIGNALED_BIT;
     for (int i = 0; i < MAX_FRAMES; i++) {
         vkCreateSemaphore(dev, &semCI, nullptr, &imageAvail[i]);
-        vkCreateSemaphore(dev, &semCI, nullptr, &renderDone[i]);
         vkCreateFence(dev, &fenCI, nullptr, &inFlight[i]);
     }
 
@@ -571,12 +634,12 @@ int main(int, char*[]) {
         si.commandBufferCount = 1;
         si.pCommandBuffers = &cb;
         si.signalSemaphoreCount = 1;
-        si.pSignalSemaphores = &renderDone[frame];
+        si.pSignalSemaphores = &renderDone[imgIdx];
         vkQueueSubmit(queue, 1, &si, inFlight[frame]);
 
         VkPresentInfoKHR pi{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
         pi.waitSemaphoreCount = 1;
-        pi.pWaitSemaphores = &renderDone[frame];
+        pi.pWaitSemaphores = &renderDone[imgIdx];
         pi.swapchainCount = 1;
         pi.pSwapchains = &swapchain;
         pi.pImageIndices = &imgIdx;
@@ -593,7 +656,6 @@ int main(int, char*[]) {
 
     for (int i = 0; i < MAX_FRAMES; i++) {
         vkDestroySemaphore(dev, imageAvail[i], nullptr);
-        vkDestroySemaphore(dev, renderDone[i], nullptr);
         vkDestroyFence(dev, inFlight[i], nullptr);
     }
     vkDestroyPipeline(dev, pipeline, nullptr);
@@ -610,6 +672,11 @@ int main(int, char*[]) {
     vkDestroySwapchainKHR(dev, swapchain, nullptr);
     vkDestroySurfaceKHR(instance, surface, nullptr);
     vkDestroyDevice(dev, nullptr);
+    if (messenger != VK_NULL_HANDLE) {
+        auto fn = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
+            vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT"));
+        if (fn) fn(instance, messenger, nullptr);
+    }
     vkDestroyInstance(instance, nullptr);
     SDL_DestroyWindow(window);
     SDL_Quit();

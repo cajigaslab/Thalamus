@@ -13,9 +13,12 @@
 #include <thalamus/image_viewer.hpp>
 #include <thalamus/vulkan_instance.hpp>
 #include <thalamus/assert.hpp>
+#include <algorithm>
 #include <cstring>
 #include <fstream>
 #include <vector>
+#include <texture.vert.spv.h>
+#include <texture.frag.spv.h>
 
 namespace thalamus {
 
@@ -84,15 +87,6 @@ static void transitionLayout(VkDevice dev, VkCommandPool pool, VkQueue queue,
   }
   vkCmdPipelineBarrier(cb, src, dst, 0, 0, nullptr, 0, nullptr, 1, &b);
   endOneShot(dev, pool, queue, cb);
-}
-
-static std::vector<char> readFile(const char* path) {
-  std::ifstream f(path, std::ios::binary | std::ios::ate);
-  if (!f) THALAMUS_ABORT("Cannot open shader: %s", path);
-  auto size = static_cast<std::streamsize>(f.tellg());
-  std::vector<char> buf(static_cast<size_t>(size));
-  f.seekg(0); f.read(buf.data(), size);
-  return buf;
 }
 
 // --- Format conversion ---
@@ -177,7 +171,7 @@ struct ImageViewer::Impl {
   static constexpr int MAX_FRAMES = 2;
   VkCommandBuffer cmd_bufs[MAX_FRAMES]{};
   VkSemaphore image_avail[MAX_FRAMES]{};
-  VkSemaphore render_done[MAX_FRAMES]{};
+  std::vector<VkSemaphore> render_done;  // one per swapchain image, not per frame
   VkFence in_flight[MAX_FRAMES]{};
   int frame = 0;
 
@@ -186,13 +180,22 @@ struct ImageViewer::Impl {
     framebuffers.clear();
     for (auto iv : sc_views) vkDestroyImageView(dev, iv, nullptr);
     sc_views.clear();
+    for (auto s : render_done) vkDestroySemaphore(dev, s, nullptr);
+    render_done.clear();
   }
 
   bool buildSwapchain() {
     VkSurfaceCapabilitiesKHR caps;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(phys, surface, &caps);
-    if (caps.currentExtent.width == 0 || caps.currentExtent.height == 0) return false;
-    extent = caps.currentExtent;
+    if (caps.currentExtent.width == UINT32_MAX) {
+      int w = 0, h = 0;
+      SDL_GetWindowSizeInPixels(window, &w, &h);
+      extent.width  = std::clamp(static_cast<uint32_t>(w), caps.minImageExtent.width,  caps.maxImageExtent.width);
+      extent.height = std::clamp(static_cast<uint32_t>(h), caps.minImageExtent.height, caps.maxImageExtent.height);
+    } else {
+      extent = caps.currentExtent;
+    }
+    if (extent.width == 0 || extent.height == 0) return false;
 
     VkSwapchainCreateInfoKHR scCI{VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR};
     scCI.surface = surface;
@@ -212,7 +215,10 @@ struct ImageViewer::Impl {
     scCI.oldSwapchain = swapchain;
 
     VkSwapchainKHR newSC;
-    if (vkCreateSwapchainKHR(dev, &scCI, nullptr, &newSC) != VK_SUCCESS) return false;
+    auto result = vkCreateSwapchainKHR(dev, &scCI, nullptr, &newSC);
+    if (result != VK_SUCCESS) {
+      THALAMUS_ABORT("vkCreateSwapchainKHR: %d", result);
+    }
     if (swapchain != VK_NULL_HANDLE) vkDestroySwapchainKHR(dev, swapchain, nullptr);
     swapchain = newSC;
 
@@ -238,6 +244,12 @@ struct ImageViewer::Impl {
       fbCI.width = extent.width; fbCI.height = extent.height; fbCI.layers = 1;
       vkCreateFramebuffer(dev, &fbCI, nullptr, &framebuffers[i]);
     }
+
+    render_done.resize(nImg);
+    VkSemaphoreCreateInfo rdSemCI{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+    for (uint32_t i = 0; i < nImg; i++)
+      vkCreateSemaphore(dev, &rdSemCI, nullptr, &render_done[i]);
+
     return true;
   }
 
@@ -440,17 +452,16 @@ ImageViewer::ImageViewer()
   vkAllocateDescriptorSets(impl->dev, &dsAI, &impl->desc_set);
 
   // Pipeline
-  auto makeShader = [&](const char* path) {
-    auto code = readFile(path);
+  auto makeShader = [&](std::span<const uint32_t> code) {
     VkShaderModuleCreateInfo smCI{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-    smCI.codeSize = code.size();
-    smCI.pCode = reinterpret_cast<const uint32_t*>(code.data());
+    smCI.codeSize = code.size_bytes();
+    smCI.pCode = code.data();
     VkShaderModule sm;
     vkCreateShaderModule(impl->dev, &smCI, nullptr, &sm);
     return sm;
   };
-  VkShaderModule vertSM = makeShader(VERT_SPV_PATH);
-  VkShaderModule fragSM = makeShader(FRAG_SPV_PATH);
+  VkShaderModule vertSM = makeShader(std::span<const uint32_t>(vert_shader_data));
+  VkShaderModule fragSM = makeShader(std::span<const uint32_t>(frag_shader_data));
 
   VkPipelineShaderStageCreateInfo stages[2]{};
   stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -506,7 +517,6 @@ ImageViewer::ImageViewer()
   fenCI.flags = VK_FENCE_CREATE_SIGNALED_BIT;
   for (int i = 0; i < Impl::MAX_FRAMES; i++) {
     vkCreateSemaphore(impl->dev, &semCI, nullptr, &impl->image_avail[i]);
-    vkCreateSemaphore(impl->dev, &semCI, nullptr, &impl->render_done[i]);
     vkCreateFence(impl->dev, &fenCI, nullptr, &impl->in_flight[i]);
   }
 
@@ -523,7 +533,6 @@ ImageViewer::~ImageViewer() {
   impl->destroyTexture();
   for (int i = 0; i < Impl::MAX_FRAMES; i++) {
     vkDestroySemaphore(impl->dev, impl->image_avail[i], nullptr);
-    vkDestroySemaphore(impl->dev, impl->render_done[i], nullptr);
     vkDestroyFence(impl->dev, impl->in_flight[i], nullptr);
   }
   vkDestroyPipeline(impl->dev, impl->pipeline, nullptr);
@@ -620,11 +629,11 @@ void ImageViewer::update(ImageNode* node) {
   si.waitSemaphoreCount = 1; si.pWaitSemaphores = &impl->image_avail[f];
   si.pWaitDstStageMask = &waitStage;
   si.commandBufferCount = 1; si.pCommandBuffers = &cb;
-  si.signalSemaphoreCount = 1; si.pSignalSemaphores = &impl->render_done[f];
+  si.signalSemaphoreCount = 1; si.pSignalSemaphores = &impl->render_done[imgIdx];
   vkQueueSubmit(impl->queue, 1, &si, impl->in_flight[f]);
 
   VkPresentInfoKHR pi{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
-  pi.waitSemaphoreCount = 1; pi.pWaitSemaphores = &impl->render_done[f];
+  pi.waitSemaphoreCount = 1; pi.pWaitSemaphores = &impl->render_done[imgIdx];
   pi.swapchainCount = 1; pi.pSwapchains = &impl->swapchain; pi.pImageIndices = &imgIdx;
   res = vkQueuePresentKHR(impl->queue, &pi);
   if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR)

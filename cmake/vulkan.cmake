@@ -1,3 +1,10 @@
+find_package(Vulkan)
+if(Vulkan_FOUND)
+  message("Vulkan SDK found")
+  return()
+endif()
+message("Vulkan SDK not found, will build from source")
+
 if(CMAKE_VERSION VERSION_LESS "3.19")
   message(FATAL_ERROR "vulkan.cmake requires CMake 3.19+ for JSON support")
 endif()
@@ -44,9 +51,9 @@ set(GLSLANG_URL "https://github.com/KhronosGroup/glslang/releases/download/main-
 
 set(GLSLANG_EXTRACT_DIR "${CMAKE_BINARY_DIR}/glslang")
 if(WIN32)
-  set(GLSL_COMPILER "${GLSLANG_EXTRACT_DIR}/bin/glslang.exe")
+  set(Vulkan_GLSLANG_VALIDATOR_EXECUTABLE "${GLSLANG_EXTRACT_DIR}/bin/glslangValidator.exe")
 else()
-  set(GLSL_COMPILER "${GLSLANG_EXTRACT_DIR}/bin/glslang")
+  set(Vulkan_GLSLANG_VALIDATOR_EXECUTABLE "${GLSLANG_EXTRACT_DIR}/bin/glslangValidator")
 endif()
 
 if(NOT EXISTS "${GLSLANG_DOWNLOAD_PATH}")
@@ -60,15 +67,15 @@ if(NOT EXISTS "${GLSLANG_DOWNLOAD_PATH}")
   endif()
 endif()
 
-if(EXISTS "${GLSLANG_DOWNLOAD_PATH}" AND NOT EXISTS "${GLSL_COMPILER}")
+if(EXISTS "${GLSLANG_DOWNLOAD_PATH}" AND NOT EXISTS "${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE}")
   message(STATUS "Extracting glslang to ${GLSLANG_EXTRACT_DIR}")
   file(ARCHIVE_EXTRACT INPUT "${GLSLANG_DOWNLOAD_PATH}" DESTINATION "${GLSLANG_EXTRACT_DIR}")
 endif()
 
-if(EXISTS "${GLSL_COMPILER}")
-  message(STATUS "GLSL_COMPILER: ${GLSL_COMPILER}")
+if(EXISTS "${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE}")
+  message(STATUS "Vulkan_GLSLANG_VALIDATOR_EXECUTABLE : ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE}")
 else()
-  message(WARNING "glslang compiler not found at ${GLSL_COMPILER}")
+  message(WARNING "glslc compiler not found at ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE}")
 endif()
 
 # --- Vulkan-Headers ---
@@ -162,6 +169,7 @@ target_link_libraries(vulkan-loader INTERFACE "${VULKAN_LOADER_LIB}" vulkan-head
 
 add_library(vulkan INTERFACE)
 target_link_libraries(vulkan INTERFACE vulkan-headers vulkan-loader)
+add_library(Vulkan::Vulkan ALIAS vulkan)
 ## --- Vulkan-ValidationLayers ---
 #FetchContent_Declare(
 #  vulkan_validationlayers

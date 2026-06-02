@@ -257,6 +257,8 @@ def main():
     subprocess.check_call(['sudo', 'apt', 'install', '-y', 
                           'python3-pip', 'git', 'wget', 'sudo', 'curl', 'ninja-build', 'lsb-release',
                           'libsm-dev', 'libice-dev', 'libudev-dev', 'libdbus-1-dev', 'libzstd-dev', 'libbz2-dev',
+                          'libdecor-0-dev',
+                          'libxrandr-dev',
                           'libgles2-mesa-dev',
                           'libcurl4-openssl-dev',
                           'libfontconfig1-dev',

@@ -126,7 +126,6 @@ include(cmake/boost.cmake)
 include(cmake/hdf5.cmake)
 include(cmake/crashpad.cmake)
 include(cmake/vulkan.cmake)
-#find_package(Vulkan REQUIRED)
 
 execute_process(
   COMMAND git log -1 --format=%h
@@ -186,6 +185,18 @@ add_dependencies(hydrate protoc_generated)
 target_compile_definitions(hydrate PRIVATE _USE_MATH_DEFINES NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS _GNU_SOURCE)
 target_include_directories(hydrate PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_compile_options(hydrate PRIVATE ${WARNING_FLAGS})
+
+set(VERT_SPV "${CMAKE_BINARY_DIR}/texture.vert.spv.h")
+set(FRAG_SPV "${CMAKE_BINARY_DIR}/texture.frag.spv.h")
+add_custom_command(
+  OUTPUT "${VERT_SPV}"
+  COMMAND "${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE}" -V "${CMAKE_SOURCE_DIR}/src/shaders/texture.vert" -o "${VERT_SPV}" --vn vert_shader_data
+  DEPENDS "${CMAKE_SOURCE_DIR}/src/shaders/texture.vert")
+add_custom_command(
+  OUTPUT "${FRAG_SPV}"
+  COMMAND "${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE}" -V "${CMAKE_SOURCE_DIR}/src/shaders/texture.frag" -o "${FRAG_SPV}" --vn frag_shader_data
+  DEPENDS "${CMAKE_SOURCE_DIR}/src/shaders/texture.frag")
+add_custom_target(thalamus_shaders DEPENDS "${VERT_SPV}" "${FRAG_SPV}")
   
 add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/node_graph_impl.hpp"
@@ -295,29 +306,17 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/samplemonitor_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/shared_library.hpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/shared_library.cpp"
-                     "${CMAKE_SOURCE_DIR}/proto/thalamus.proto")
-target_sources(thalamus PRIVATE
-               "${CMAKE_SOURCE_DIR}/src/thalamus/pupil_node.hpp"
-               "${CMAKE_SOURCE_DIR}/src/thalamus/pupil_node.cpp"
-               "${CMAKE_SOURCE_DIR}/src/thalamus/chessboard_node.hpp"
-               "${CMAKE_SOURCE_DIR}/src/thalamus/chessboard_node.cpp"
-               "${CMAKE_SOURCE_DIR}/src/thalamus/image_viewer.hpp"
-               "${CMAKE_SOURCE_DIR}/src/thalamus/image_viewer.cpp"
-               "${CMAKE_SOURCE_DIR}/src/thalamus/vulkan_instance.hpp"
-               "${CMAKE_SOURCE_DIR}/src/thalamus/vulkan_instance.cpp")
-
-
-set(VERT_SPV "${CMAKE_BINARY_DIR}/texture.vert.spv")
-set(FRAG_SPV "${CMAKE_BINARY_DIR}/texture.frag.spv")
-add_custom_command(
-  OUTPUT "${VERT_SPV}"
-  COMMAND "${GLSL_COMPILER}" -V "${CMAKE_SOURCE_DIR}/src/shaders/texture.vert" -o "${VERT_SPV}"
-  DEPENDS "${CMAKE_SOURCE_DIR}/src/shaders/texture.vert")
-add_custom_command(
-  OUTPUT "${FRAG_SPV}"
-  COMMAND "${GLSL_COMPILER}" -V "${CMAKE_SOURCE_DIR}/src/shaders/texture.frag" -o "${FRAG_SPV}"
-  DEPENDS "${CMAKE_SOURCE_DIR}/src/shaders/texture.frag")
-add_custom_target(thalamus_shaders DEPENDS "${VERT_SPV}" "${FRAG_SPV}")
+                     "${CMAKE_SOURCE_DIR}/proto/thalamus.proto"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/pupil_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/pupil_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/chessboard_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/chessboard_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/image_viewer.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/image_viewer.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/vulkan_instance.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/vulkan_instance.cpp"
+                     "${VERT_SPV}"
+                     "${FRAG_SPV}")
 
 set_source_files_properties("${CMAKE_SOURCE_DIR}/src/thalamus/image_viewer.cpp" PROPERTIES
   COMPILE_DEFINITIONS "VERT_SPV_PATH=\"${VERT_SPV}\";FRAG_SPV_PATH=\"${FRAG_SPV}\"")
@@ -353,7 +352,7 @@ target_include_directories(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(thalamus opencv hdf5-static lua
   boost grpc++ grpc++_reflection inja
   absl::str_format_internal absl::strings absl::str_format ffmpeg cairo perfetto crashpad
-  vulkan sdl)
+  Vulkan::Vulkan sdl)
 
 if(NOT APPLE)
   target_link_libraries(thalamus zlib_processed)
@@ -429,4 +428,5 @@ target_compile_definitions(vulkan_hello PRIVATE
   "FRAG_SPV_PATH=\"${FRAG_SPV}\"")
 target_compile_options(vulkan_hello PRIVATE ${WARNING_FLAGS})
 target_include_directories(vulkan_hello PRIVATE "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(vulkan_hello PRIVATE vulkan sdl opencv zlib_processed)
+target_link_libraries(vulkan_hello PRIVATE Vulkan::Vulkan sdl opencv zlib_processed)
+
