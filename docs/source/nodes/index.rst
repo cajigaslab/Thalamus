@@ -18,3 +18,12 @@ detailed pages below for commonly used nodes.
    runner2
    algebra
    normalize
+   lua
+   channel_picker
+   sync
+   genicam
+   aruco
+   intan
+   spikeglx
+   delsys
+   xsens

@@ -30,19 +30,19 @@ Generators
    * - ``WALLCLOCK``
      - Emits the current time (system clock, NTP, or PTP) as a time series for synchronization.
    * - ``INTAN``
-     - Streams neural recordings from an Intan RHX acquisition system over TCP.
+     - Streams neural recordings from an Intan RHX acquisition system over TCP.  See :doc:`intan`.
    * - ``SPIKEGLX``
-     - Streams high-density electrophysiology data from a SpikeGLX / Neuropixels system.
+     - Streams high-density electrophysiology data from a SpikeGLX / Neuropixels system.  See :doc:`spikeglx`.
    * - ``BRAINPRODUCTS``
      - Streams EEG/biosignal data from Brain Products amplifiers.
    * - ``DELSYS``
-     - Streams wireless EMG data from Delsys sensors.
+     - Streams wireless EMG data from Delsys sensors.  See :doc:`delsys`.
    * - ``GENICAM``
-     - Acquires image streams from GenICam/GenTL-compliant cameras.
+     - Acquires image streams from GenICam/GenTL-compliant cameras.  See :doc:`genicam`.
    * - ``VIDEO`` / ``FFMPEG``
      - Decodes video/image streams from files or capture devices via FFmpeg.
    * - ``XSENS`` / ``MOCAP``
-     - Streams motion-capture pose data (segment positions and quaternion rotations).
+     - Streams motion-capture pose data (segment positions and quaternion rotations).  See :doc:`xsens`.
    * - ``HAND_ENGINE``
      - Streams hand/finger pose data from StretchSense Hand Engine.
    * - ``PUPIL``
@@ -92,7 +92,7 @@ Transformers
    * - ``ALGEBRA``
      - Evaluates a user-supplied algebraic expression on incoming samples.  See :doc:`algebra`.
    * - ``LUA``
-     - Evaluates Lua expressions on incoming samples, with state preserved across samples.
+     - Evaluates Lua expressions on incoming samples, with state preserved across samples.  See :doc:`lua`.
    * - ``NORMALIZE``
      - Linearly rescales an input range to a configured output range, with calibration caching.  See :doc:`normalize`.
    * - ``ANALOG``
@@ -100,15 +100,15 @@ Transformers
    * - ``TOGGLE``
      - Emits a binary 0/1 state based on a threshold.
    * - ``CHANNEL_PICKER``
-     - Selects, reorders, and renames channels from upstream sources.
+     - Selects and reorders channels from one or more upstream sources.  See :doc:`channel_picker`.
    * - ``FREQUENCY``
      - Monitors a channel's frequency and flags drift outside configured margins.
    * - ``SYNC``
-     - Cross-correlates paired channels from different nodes to measure timing alignment.
+     - Cross-correlates paired channels from different nodes to measure timing alignment.  See :doc:`sync`.
    * - ``OCULOMATIC``
      - Detects gaze position from an eye-camera video stream and outputs scaled analog coordinates.  See :doc:`oculomatic`.
    * - ``ARUCO``
-     - Detects ArUco/AprilTag fiducial markers in images and outputs board poses.
+     - Detects ArUco/AprilTag fiducial markers in images and outputs board poses.  See :doc:`aruco`.
    * - ``CHESSBOARD``
      - Detects chessboard corners in images for camera calibration / pose estimation.
    * - ``DISTORTION``
