@@ -47,6 +47,8 @@ Generators
      - Streams hand/finger pose data from StretchSense Hand Engine.
    * - ``PUPIL``
      - Generates a synthetic eye image with a moving pupil (optionally random saccades) for testing eye-tracking pipelines.  See :doc:`pupil`.
+   * - ``CHESSBOARD``
+     - Renders a chessboard calibration-target image (for displaying a known pattern, e.g. for camera/display calibration).  See :doc:`chessboard`.
    * - ``REMOTE``
      - Proxies a data stream from another Thalamus instance over gRPC.
    * - ``SAMPLE_MONITOR``
@@ -98,7 +100,7 @@ Transformers
    * - ``ANALOG``
      - Pass-through / touchpad analog node that can inject synthetic input from the mouse.  See :doc:`analog`.
    * - ``TOGGLE``
-     - Emits a binary 0/1 state based on a threshold.  See :doc:`toggle`.
+     - Flip-flop that toggles its output (0 / 3.3) on each rising threshold crossing of the input.  See :doc:`toggle`.
    * - ``CHANNEL_PICKER``
      - Selects and reorders channels from one or more upstream sources.  See :doc:`channel_picker`.
    * - ``FREQUENCY``
@@ -109,8 +111,6 @@ Transformers
      - Detects gaze position from an eye-camera video stream and outputs scaled analog coordinates.  See :doc:`oculomatic`.
    * - ``ARUCO``
      - Detects ArUco/AprilTag fiducial markers in images and outputs board poses.  See :doc:`aruco`.
-   * - ``CHESSBOARD``
-     - Detects chessboard corners in images for camera calibration / pose estimation.  See :doc:`chessboard`.
    * - ``DISTORTION``
      - Applies camera-distortion correction to image streams.  See :doc:`distortion`.
    * - ``HEXASCOPE``

@@ -12,9 +12,9 @@ Properties
 
 * **Source**: The node whose data is written to the DAQ.
 * **Channel**: A list of DAQ output channels (and channel ranges) to write to.
-* **Channel Type**: Output as voltage or current.
-* **Sample Rate**: The output sample rate.
-* **Poll Interval**: How often, in milliseconds, data is pushed to the device.
+* **Digital**: Write to digital output lines instead of analog output channels.
 * **Running**: Begin writing to the DAQ.
 
-All input spans being written must share the same length and sample interval.
+The output sample rate follows from the source node's data; the timing parameters
+(``Sample Rate``, ``Poll Interval``, ``Channel Type``) configured on the
+:doc:`NIDAQ <nidaq>` input node do not apply here.

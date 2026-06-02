@@ -1,14 +1,18 @@
 TOGGLE
 ======
 
-The TOGGLE node is a transformer that converts an analog signal into a binary
-0/1 state by comparing it against a threshold.  It is useful for turning a
-continuous signal (such as a button voltage or a detector output) into a clean
-digital event channel.
+The TOGGLE node is a transformer that behaves like a flip-flop driven by an analog
+signal.  Each time the input makes a debounced rising crossing of the threshold, the
+node flips its output state.  This turns a stream of pulses (such as repeated button
+presses) into a latched on/off signal.
 
 Properties
 ----------
 
 * **Source**: The node supplying the input samples.
-* **Threshold**: The comparison level.  Samples on one side of the threshold produce
-  ``0`` and samples on the other side produce ``1``.
+* **Threshold**: The level the input must rise through to trigger a toggle.  A
+  debounce interval prevents a single noisy edge from toggling repeatedly.
+
+The output is ``3.3`` when the node is in its "on" state and ``0`` when it is "off".
+The state changes only on rising threshold crossings, so the same input level can
+correspond to either output depending on the toggle history.

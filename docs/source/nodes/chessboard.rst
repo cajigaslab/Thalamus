@@ -1,18 +1,16 @@
 CHESSBOARD
 ==========
 
-The CHESSBOARD node detects the corners of a chessboard calibration target in an
-image stream.  It is a transformer used for camera calibration and pose estimation:
-the detected corner grid provides the correspondences needed to solve for a
-camera's geometry, and can also track the board's pose over time.
+The CHESSBOARD node is a generator that *renders* a chessboard pattern as an image
+stream.  It produces the calibration target itself (rather than detecting one),
+which is useful for displaying a known pattern on a screen or projector -- for
+example to calibrate a camera or a display with the :doc:`distortion` node.
 
 Properties
 ----------
 
-* **Source**: The camera node to analyze.
-* **Rows** / **Columns**: The number of internal corners along each dimension of the
-  chessboard.
-* **Running**: Begin detecting corners.
-
-For full lens-distortion correction built on chessboard detection, see the
-:doc:`distortion` node.
+* **Running**: Generate frames (the pattern is redrawn on a timer at roughly 60 Hz).
+* **Rows** / **Columns**: The number of squares drawn along each dimension of the
+  board.
+* **Height**: The height of the generated image; the square size and overall width
+  follow from the height and the row/column counts.
