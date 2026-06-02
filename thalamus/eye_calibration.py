@@ -63,6 +63,8 @@ class Task:
     self.model_name = 'Projective'
     self.config = config
     self.training_data = []
+    self.nudge_index = -1
+    self.nudge_start_value = None
 
     eye_scaling = config['eye_scaling']
     models = None
@@ -88,8 +90,8 @@ class Task:
         elif key == 'DPI':
           self.dpi = value
           self.rebuild()
-      print(key, value)
-      print('params', self.distance_m, self.dpi)
+      #print(key, value)
+      #print('params', self.distance_m, self.dpi)
 
     eye_scaling.add_recursive_observer(on_change)
     eye_scaling.recap()
@@ -253,9 +255,9 @@ class Task:
     path.moveTo(QPointF(x, y))
     path.lineTo(QPointF(x+1e-6, y))
 
-  def add_training_sample(self, x, y):
-    print('self.current_saccade', self.current_saccade)
-    if self.current_saccade < 0 or self.current_saccade >= len(self.saccades):
+  def add_training_sample(self, x, y, saccade_index: int):
+    print('saccade_index', saccade_index)
+    if saccade_index < 0 or saccade_index >= len(self.saccades):
       return
     
     min_distance, min_index = numpy.inf, -1
@@ -271,7 +273,7 @@ class Task:
     
     p = self.points[min_index]
     px, py = self.oculomatic_to_pixels_from_center(p[0], p[1])
-    target = self.saccades[self.current_saccade]
+    target = self.saccades[saccade_index]
 
     #target distance from center in meters
     from_center_m = target.x/self.dpi*2.54/100, target.y/self.dpi*2.54/100
@@ -282,6 +284,10 @@ class Task:
     self.append_to_path(self.training_path, px, py)
     self.training_path.lineTo(target.x, target.y)
     self.training_data.append((self.points[min_index], degrees, target))
+
+  def pop_training_sample(self):
+    self.training_data.pop()
+    self.rebuild()
 
   def rebuild(self):
     self.path.clear()
@@ -296,7 +302,8 @@ class Task:
     for p, _, target in self.training_data:
       px, py = self.oculomatic_to_pixels_from_center(p[0], p[1])
       self.append_to_path(self.training_path, px, py)
-      #self.training_path.lineTo(target.x, target.y)
+      if ((target.x - px)**2 + (target.y - py)**2)**.5 > 1:
+        self.training_path.lineTo(target.x, target.y)
 
   def reset(self):
     model = self.get_model(self.model_name)
@@ -308,6 +315,51 @@ class Task:
       model['Angle'].assign([], self.rebuild)
       model['Scale X'].assign([], self.rebuild)
       model['Scale Y'].assign([], self.rebuild)
+
+  def start_nudge(self, start_point: typing.Tuple[int, int]):
+    model = self.get_model(self.model_name)
+    if self.model_name != 'Angular Scaling':
+      return
+
+    sx, sy = start_point
+
+    length = min(len(model['Angle']), len(model['Scale X']), len(model['Scale Y']))
+    
+    min_distance, min_index = numpy.inf, -1
+    for i in range(length):
+      model_angle, scalex, scaley = model['Angle'][i], model['Scale X'][i], model['Scale Y'][i]
+
+      start_angle = numpy.arctan2(sy/scaley, sx/scalex)
+      if start_angle < 0:
+        start_angle = numpy.pi + (numpy.pi + start_angle)
+
+      distance = abs(model_angle - start_angle)
+      if distance < min_distance:
+        min_distance = distance
+        min_index = i
+
+    if min_index == -1:
+      return
+
+    self.nudge_index = min_index
+    self.nudge_start_value = model['Scale X'][self.nudge_index], model['Scale Y'][self.nudge_index]
+
+  def stop_nudge(self):
+    self.nudge_index = -1
+
+  def nudge(self, start_point: typing.Tuple[int, int], current_point: typing.Tuple[int, int]):
+    #print('self.current_saccade', self.current_saccade)
+    if self.nudge_index == -1:
+      return
+
+    sx, sy = start_point
+    cx, cy = current_point
+    xscale, yscale = cx/sx, cy/sy
+
+    model = self.get_model(self.model_name)
+    if self.model_name == 'Angular Scaling':
+      model['Scale X'].setitem(self.nudge_index, self.nudge_start_value[0]*xscale, self.rebuild)
+      model['Scale Y'].setitem(self.nudge_index, self.nudge_start_value[1]*yscale, self.rebuild)
 
   def optimize(self):
     model = self.get_model(self.model_name)
@@ -432,6 +484,10 @@ class SubjectWindow(QMainWindow):
     if event.key() == Qt.Key.Key_Escape:
       self.toggle_fullscreen()
 
+class Action(typing.NamedTuple):
+  do: typing.Callable[[], None]
+  undo: typing.Callable[[], None]
+
 class OperatorView(QWidget):
   def __init__(self, task: Task, subject_view: QWidget, config: dict):
     super().__init__()
@@ -439,9 +495,11 @@ class OperatorView(QWidget):
     self.config = config
     self.task = task
     self.subject_view = subject_view
-    self.editing_saccades = False
+    #self.editing_saccades = False
     self.drag_start: QPoint | None = None
     self.base_eye_scaling: dict | None = None
+    self.actions = []
+    self.actions_position = 0
 
   def paintEvent(self, e):
     painter = QPainter(self)
@@ -459,42 +517,88 @@ class OperatorView(QWidget):
       self.task.show_fixation = True
     elif a0.key() == Qt.Key.Key_W:
       self.task.show_saccade = True
-    elif a0.key() == Qt.Key.Key_E:
-      self.editing_saccades = True
+    #elif a0.key() == Qt.Key.Key_E:
+    #  self.editing_saccades = True
     #self.subject_view.update()
     #self.update()
+
+  def do(self, action: Action):
+    self.actions = self.actions[:self.actions_position]
+    self.actions.append(action)
+    self.actions_position += 1
+    action.do()
+
+  def undo(self):
+    if self.actions_position > 0:
+      self.actions_position -= 1
+      self.actions[self.actions_position].undo()
+
+  def redo(self):
+    if self.actions_position < len(self.actions):
+      self.actions[self.actions_position].do()
+      self.actions_position += 1
 
   def keyReleaseEvent(self, a0: QKeyEvent):
     if a0.key() == Qt.Key.Key_Q:
       self.task.show_fixation = False
     elif a0.key() == Qt.Key.Key_W:
       self.task.show_saccade = False
-    elif a0.key() == Qt.Key.Key_E:
-      self.editing_saccades = False
+    #elif a0.key() == Qt.Key.Key_E:
+    #  self.editing_saccades = False
     elif a0.key() == Qt.Key.Key_R:
       create_task_with_exc_handling(self.task.deliver_reward())
     elif a0.key() == Qt.Key.Key_Left:
       self.task.current_saccade = (self.task.current_saccade - 1) % len(self.task.saccades)
     elif a0.key() == Qt.Key.Key_Right:
       self.task.current_saccade = (self.task.current_saccade + 1) % len(self.task.saccades)
+    elif a0.key() == Qt.Key.Key_Z:
+      if a0.modifiers() & Qt.KeyboardModifier.ControlModifier:
+        if a0.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+          self.redo()
+        else:
+          self.undo()
+    elif a0.key() == Qt.Key.Key_Y:
+      if a0.modifiers() & Qt.KeyboardModifier.ControlModifier:
+        self.redo()
+
     #self.subject_view.update()
     #self.update()
+
+  def scale_to_subject(self, x, y):
+      scale = min(self.width()/self.subject_view.width(), self.height()/self.subject_view.height())
+      return int(x/scale - self.subject_view.width()/2), int(y/scale - self.subject_view.height()/2)
+
+  def mousePressEvent(self, event: QMouseEvent):
+    if event.button() == Qt.MouseButton.LeftButton and event.modifiers() == Qt.KeyboardModifier.NoModifier: # type: ignore
+      self.drag_start = self.scale_to_subject(event.pos().x(), event.pos().y())
+      self.task.start_nudge(self.drag_start)
 
   def mouseReleaseEvent(self, event: QMouseEvent) -> None: # pylint: disable=invalid-name
     print(event, event.button())
-    scale = min(self.width()/self.subject_view.width(), self.height()/self.subject_view.height())
-    x, y = int(event.pos().x()/scale - self.subject_view.width()/2), int(event.pos().y()/scale - self.subject_view.height()/2)
+    x, y = self.scale_to_subject(event.pos().x(), event.pos().y())
     print(x, y)
-    if self.editing_saccades:
+    self.drag_start = None
+    self.task.stop_nudge()
+    editing_saccades = event.modifiers() & Qt.KeyboardModifier.ControlModifier
+    if editing_saccades:
       if event.button() == Qt.MouseButton.LeftButton: # type: ignore
-        self.task.add_target(x, y)
+        self.do(Action(lambda: self.task.add_target(x, y), lambda: self.task.remove_target(x, y)))
       elif event.button() == Qt.MouseButton.RightButton:
-        self.task.remove_target(x, y)
+        self.do(Action(lambda: self.task.remove_target(x, y), lambda: self.task.add_target(x, y)))
     else:
-      self.task.add_training_sample(x, y)
+      if event.button() == Qt.MouseButton.RightButton:
+        saccade_index=self.task.current_saccade
+        self.do(Action(
+          lambda: self.task.add_training_sample(x, y, saccade_index),
+          lambda: self.task.pop_training_sample()))
 
     #self.subject_view.update()
     #self.update()
+
+  def mouseMoveEvent(self, event: QMouseEvent):
+    if self.drag_start is not None:
+      drag_current = self.scale_to_subject(event.pos().x(), event.pos().y())
+      self.task.nudge(self.drag_start, drag_current)
 
   def closeEvent(self, e):
     self.task.stop()
@@ -565,6 +669,7 @@ class OperatorWindow(QMainWindow):
       self.task.training_path.clear()
       del self.task.points[:]
       del self.task.training_data[:]
+      self.view.actions = []
 
     def on_reward(val):
       self.task.reward_ms = val
@@ -585,7 +690,7 @@ class OperatorWindow(QMainWindow):
     models, projective = None, None
     def on_change(source, action, key, value):
       nonlocal models, projective
-      print('OperatorWindow', source is projective, key, value)
+      #print('OperatorWindow', source is projective, key, value)
 
       if source is eye_scaling:
         if key == 'Models':
