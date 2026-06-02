@@ -16,6 +16,8 @@
 #include <cstring>
 #include <fstream>
 #include <vector>
+#include <texture.frag.spv.h>
+#include <texture.vert.spv.h>
 
 namespace thalamus {
 
@@ -84,15 +86,6 @@ static void transitionLayout(VkDevice dev, VkCommandPool pool, VkQueue queue,
   }
   vkCmdPipelineBarrier(cb, src, dst, 0, 0, nullptr, 0, nullptr, 1, &b);
   endOneShot(dev, pool, queue, cb);
-}
-
-static std::vector<char> readFile(const char* path) {
-  std::ifstream f(path, std::ios::binary | std::ios::ate);
-  if (!f) THALAMUS_ABORT("Cannot open shader: %s", path);
-  auto size = static_cast<std::streamsize>(f.tellg());
-  std::vector<char> buf(static_cast<size_t>(size));
-  f.seekg(0); f.read(buf.data(), size);
-  return buf;
 }
 
 // --- Format conversion ---
@@ -212,7 +205,10 @@ struct ImageViewer::Impl {
     scCI.oldSwapchain = swapchain;
 
     VkSwapchainKHR newSC;
-    if (vkCreateSwapchainKHR(dev, &scCI, nullptr, &newSC) != VK_SUCCESS) return false;
+    auto result = vkCreateSwapchainKHR(dev, &scCI, nullptr, &newSC);
+    if (result != VK_SUCCESS) {
+      THALAMUS_ABORT("vkCreateSwapchainKHR: %d", result);
+    }
     if (swapchain != VK_NULL_HANDLE) vkDestroySwapchainKHR(dev, swapchain, nullptr);
     swapchain = newSC;
 
@@ -440,17 +436,16 @@ ImageViewer::ImageViewer()
   vkAllocateDescriptorSets(impl->dev, &dsAI, &impl->desc_set);
 
   // Pipeline
-  auto makeShader = [&](const char* path) {
-    auto code = readFile(path);
+  auto makeShader = [&](std::span<const uint32_t> code) {
     VkShaderModuleCreateInfo smCI{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
     smCI.codeSize = code.size();
-    smCI.pCode = reinterpret_cast<const uint32_t*>(code.data());
+    smCI.pCode = code.data();
     VkShaderModule sm;
     vkCreateShaderModule(impl->dev, &smCI, nullptr, &sm);
     return sm;
   };
-  VkShaderModule vertSM = makeShader(VERT_SPV_PATH);
-  VkShaderModule fragSM = makeShader(FRAG_SPV_PATH);
+  VkShaderModule vertSM = makeShader(std::span<const uint32_t>(vert_shader_data));
+  VkShaderModule fragSM = makeShader(std::span<const uint32_t>(frag_shader_data));
 
   VkPipelineShaderStageCreateInfo stages[2]{};
   stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;

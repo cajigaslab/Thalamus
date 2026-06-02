@@ -186,6 +186,18 @@ add_dependencies(hydrate protoc_generated)
 target_compile_definitions(hydrate PRIVATE _USE_MATH_DEFINES NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS _GNU_SOURCE)
 target_include_directories(hydrate PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_compile_options(hydrate PRIVATE ${WARNING_FLAGS})
+
+set(VERT_SPV "${CMAKE_BINARY_DIR}/texture.vert.spv.h")
+set(FRAG_SPV "${CMAKE_BINARY_DIR}/texture.frag.spv.h")
+add_custom_command(
+  OUTPUT "${VERT_SPV}"
+  COMMAND "${GLSL_COMPILER}" -V "${CMAKE_SOURCE_DIR}/src/shaders/texture.vert" -o "${VERT_SPV}"  --vn frag_shader_data
+  DEPENDS "${CMAKE_SOURCE_DIR}/src/shaders/texture.vert")
+add_custom_command(
+  OUTPUT "${FRAG_SPV}"
+  COMMAND "${GLSL_COMPILER}" -V "${CMAKE_SOURCE_DIR}/src/shaders/texture.frag" -o "${FRAG_SPV}"  --vn vert_shader_data
+  DEPENDS "${CMAKE_SOURCE_DIR}/src/shaders/texture.frag")
+add_custom_target(thalamus_shaders DEPENDS "${VERT_SPV}" "${FRAG_SPV}")
   
 add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/node_graph_impl.hpp"
@@ -295,29 +307,17 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/samplemonitor_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/shared_library.hpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/shared_library.cpp"
-                     "${CMAKE_SOURCE_DIR}/proto/thalamus.proto")
-target_sources(thalamus PRIVATE
-               "${CMAKE_SOURCE_DIR}/src/thalamus/pupil_node.hpp"
-               "${CMAKE_SOURCE_DIR}/src/thalamus/pupil_node.cpp"
-               "${CMAKE_SOURCE_DIR}/src/thalamus/chessboard_node.hpp"
-               "${CMAKE_SOURCE_DIR}/src/thalamus/chessboard_node.cpp"
-               "${CMAKE_SOURCE_DIR}/src/thalamus/image_viewer.hpp"
-               "${CMAKE_SOURCE_DIR}/src/thalamus/image_viewer.cpp"
-               "${CMAKE_SOURCE_DIR}/src/thalamus/vulkan_instance.hpp"
-               "${CMAKE_SOURCE_DIR}/src/thalamus/vulkan_instance.cpp")
-
-
-set(VERT_SPV "${CMAKE_BINARY_DIR}/texture.vert.spv")
-set(FRAG_SPV "${CMAKE_BINARY_DIR}/texture.frag.spv")
-add_custom_command(
-  OUTPUT "${VERT_SPV}"
-  COMMAND "${GLSL_COMPILER}" -V "${CMAKE_SOURCE_DIR}/src/shaders/texture.vert" -o "${VERT_SPV}"
-  DEPENDS "${CMAKE_SOURCE_DIR}/src/shaders/texture.vert")
-add_custom_command(
-  OUTPUT "${FRAG_SPV}"
-  COMMAND "${GLSL_COMPILER}" -V "${CMAKE_SOURCE_DIR}/src/shaders/texture.frag" -o "${FRAG_SPV}"
-  DEPENDS "${CMAKE_SOURCE_DIR}/src/shaders/texture.frag")
-add_custom_target(thalamus_shaders DEPENDS "${VERT_SPV}" "${FRAG_SPV}")
+                     "${CMAKE_SOURCE_DIR}/proto/thalamus.proto"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/pupil_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/pupil_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/chessboard_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/chessboard_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/image_viewer.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/image_viewer.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/vulkan_instance.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/vulkan_instance.cpp"
+                     "${VERT_SPV}"
+                     "${FRAG_SPV}")
 
 set_source_files_properties("${CMAKE_SOURCE_DIR}/src/thalamus/image_viewer.cpp" PROPERTIES
   COMPILE_DEFINITIONS "VERT_SPV_PATH=\"${VERT_SPV}\";FRAG_SPV_PATH=\"${FRAG_SPV}\"")

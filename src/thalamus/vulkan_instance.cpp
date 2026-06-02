@@ -42,7 +42,6 @@ VkInstance* get_vk_instance() {
     inst_ci.enabledExtensionCount = ext_count;
     inst_ci.ppEnabledExtensionNames = sdl_exts;
 
-#ifndef NDEBUG
     static const char* validation_layer = "VK_LAYER_KHRONOS_validation";
 
     uint32_t layer_count = 0;
@@ -55,10 +54,12 @@ VkInstance* get_vk_instance() {
       if (strcmp(l.layerName, validation_layer) == 0) { found = true; break; }
     }
     if (found) {
+      THALAMUS_LOG(info) << validation_layer << " Enabled";
       inst_ci.enabledLayerCount = 1;
       inst_ci.ppEnabledLayerNames = &validation_layer;
+    } else {
+      THALAMUS_LOG(info) << validation_layer << " Disabled";
     }
-#endif
 
     vkCreateInstance(&inst_ci, nullptr, &holder.instance);
   });
