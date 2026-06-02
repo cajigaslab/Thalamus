@@ -5,11 +5,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Welcome to Thalamus’s documentation! &#8212; Thalamus 0.3 documentation</title>
+    <title>Welcome to Thalamus’s documentation! &#8212; Thalamus 1.0.15 documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d1102ebc" />
     <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
-    <script src="_static/documentation_options.js?v=b489f392"></script>
+    <script src="_static/documentation_options.js?v=6f77e80e"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="genindex.html" />
@@ -53,10 +53,70 @@
 <li class="toctree-l2"><a class="reference internal" href="quickstart.html#saving-experiments">Saving Experiments</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="concepts.html">Concepts and Architecture</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="concepts.html#the-node-pipeline">The node pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="concepts.html#the-data-model">The data model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="concepts.html#time">Time</a></li>
+<li class="toctree-l2"><a class="reference internal" href="concepts.html#the-capture-file-format">The capture-file format</a></li>
+<li class="toctree-l2"><a class="reference internal" href="concepts.html#reading-and-converting-recordings">Reading and converting recordings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="concepts.html#persistence">Persistence</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="examples/index.html">Examples</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="examples/index.html#synthesize-and-analyze-a-recording-without-hardware">Synthesize and analyze a recording without hardware</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/index.html#record-event-markers-text">Record event markers (text)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/index.html#record-a-synthetic-video-stream-images">Record a synthetic video stream (images)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/index.html#record-several-nodes-at-once">Record several nodes at once</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/index.html#summarize-any-capture-file">Summarize any capture file</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/index.html#measure-closed-loop-latency">Measure closed-loop latency</a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="nodes/index.html">Nodes</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="nodes/catalog.html">Node Catalog</a></li>
 <li class="toctree-l2"><a class="reference internal" href="nodes/wave.html">WAVE</a></li>
 <li class="toctree-l2"><a class="reference internal" href="nodes/storage2.html">STORAGE2</a></li>
 <li class="toctree-l2"><a class="reference internal" href="nodes/nidaq.html">NIDAQ</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/oculomatic.html">OCULOMATIC</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/touch_screen.html">TOUCH_SCREEN</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/runner2.html">RUNNER2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/algebra.html">ALGEBRA</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/normalize.html">NORMALIZE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/lua.html">LUA</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/channel_picker.html">CHANNEL_PICKER</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/sync.html">SYNC</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/genicam.html">GENICAM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/aruco.html">ARUCO</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/chessboard.html">CHESSBOARD</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/distortion.html">DISTORTION</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/intan.html">INTAN</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/spikeglx.html">SPIKEGLX</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/delsys.html">DELSYS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/xsens.html">XSENS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/pupil.html">PUPIL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/wallclock.html">WALLCLOCK</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/analog.html">ANALOG</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/toggle.html">TOGGLE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/frequency.html">FREQUENCY</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/nidaq_out.html">NIDAQ_OUT</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/task_controller.html">TASK_CONTROLLER</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/ophanim.html">OPHANIM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/hexascope.html">HEXASCOPE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/ros2.html">ROS2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/video.html">VIDEO</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/ffmpeg.html">FFMPEG</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/hand_engine.html">HAND_ENGINE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/brainproducts.html">BRAINPRODUCTS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/remote.html">REMOTE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/remote_log.html">REMOTE_LOG</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/runner.html">RUNNER</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/sample_monitor.html">SAMPLE_MONITOR</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/storage.html">STORAGE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/log.html">LOG</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/stim_printer.html">STIM_PRINTER</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/ceci.html">CECI</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/thread_pool.html">THREAD_POOL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/loop_test.html">LOOP_TEST</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nodes/test_pulse.html">TEST_PULSE_NODE</a></li>
 </ul>
 </li>
 </ul>
@@ -100,6 +160,8 @@
 <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="concepts.html">Concepts and Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/index.html">Examples</a></li>
 <li class="toctree-l1"><a class="reference internal" href="nodes/index.html">Nodes</a></li>
 </ul>
 
@@ -124,7 +186,7 @@
       <div class="clearer"></div>
     </div>
     <div class="footer">
-      &#169;2024, Jarl Haggerty.
+      &#169;2024-2026, Jarl Haggerty.
       
       |
       Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>

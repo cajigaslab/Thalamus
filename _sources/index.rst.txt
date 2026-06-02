@@ -11,6 +11,8 @@ Welcome to Thalamus's documentation!
    :caption: Contents:
 
    quickstart
+   concepts
+   examples/index
    nodes/index
 
 Indices and tables

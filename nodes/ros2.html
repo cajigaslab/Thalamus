@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>ROS2 &#8212; Thalamus 1.0.15 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d1102ebc" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=27fed22d" />
+    <script src="../_static/documentation_options.js?v=6f77e80e"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="VIDEO" href="video.html" />
+    <link rel="prev" title="HEXASCOPE" href="hexascope.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="ros2">
+<h1>ROS2<a class="headerlink" href="#ros2" title="Link to this heading">¶</a></h1>
+<p><img alt="ui" src="nodes/ros2_ui.png" /></p>
+<p>The ROS2 node bridges Thalamus to a ROS 2 system.  It is a transformer that
+republishes data from Thalamus nodes onto ROS 2 topics (and TF2 frames), so that
+robots and other ROS 2 components can consume Thalamus data in real time.</p>
+<section id="usage">
+<h2>Usage<a class="headerlink" href="#usage" title="Link to this heading">¶</a></h2>
+<p>Add the Thalamus nodes you want to bridge under the node’s <strong>Sources</strong>.  For each
+source you configure the ROS 2 topics it should be published to:</p>
+<ul class="simple">
+<li><p><strong>Image Topic</strong>: Topic to publish the source’s image stream on.</p></li>
+<li><p><strong>Camera Info Topic</strong>: Topic to publish the associated camera calibration info on.</p></li>
+<li><p><strong>Gaze Topic</strong>: Topic to publish gaze / coordinate data on.</p></li>
+</ul>
+<p>Leave a topic blank to skip publishing that stream for a given source.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">Thalamus</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../concepts.html">Concepts and Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/index.html">Examples</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Nodes</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="catalog.html">Node Catalog</a></li>
+<li class="toctree-l2"><a class="reference internal" href="wave.html">WAVE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="storage2.html">STORAGE2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nidaq.html">NIDAQ</a></li>
+<li class="toctree-l2"><a class="reference internal" href="oculomatic.html">OCULOMATIC</a></li>
+<li class="toctree-l2"><a class="reference internal" href="touch_screen.html">TOUCH_SCREEN</a></li>
+<li class="toctree-l2"><a class="reference internal" href="runner2.html">RUNNER2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="algebra.html">ALGEBRA</a></li>
+<li class="toctree-l2"><a class="reference internal" href="normalize.html">NORMALIZE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lua.html">LUA</a></li>
+<li class="toctree-l2"><a class="reference internal" href="channel_picker.html">CHANNEL_PICKER</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sync.html">SYNC</a></li>
+<li class="toctree-l2"><a class="reference internal" href="genicam.html">GENICAM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="aruco.html">ARUCO</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chessboard.html">CHESSBOARD</a></li>
+<li class="toctree-l2"><a class="reference internal" href="distortion.html">DISTORTION</a></li>
+<li class="toctree-l2"><a class="reference internal" href="intan.html">INTAN</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spikeglx.html">SPIKEGLX</a></li>
+<li class="toctree-l2"><a class="reference internal" href="delsys.html">DELSYS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="xsens.html">XSENS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pupil.html">PUPIL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="wallclock.html">WALLCLOCK</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analog.html">ANALOG</a></li>
+<li class="toctree-l2"><a class="reference internal" href="toggle.html">TOGGLE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="frequency.html">FREQUENCY</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nidaq_out.html">NIDAQ_OUT</a></li>
+<li class="toctree-l2"><a class="reference internal" href="task_controller.html">TASK_CONTROLLER</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ophanim.html">OPHANIM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="hexascope.html">HEXASCOPE</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">ROS2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="video.html">VIDEO</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ffmpeg.html">FFMPEG</a></li>
+<li class="toctree-l2"><a class="reference internal" href="hand_engine.html">HAND_ENGINE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="brainproducts.html">BRAINPRODUCTS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="remote.html">REMOTE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="remote_log.html">REMOTE_LOG</a></li>
+<li class="toctree-l2"><a class="reference internal" href="runner.html">RUNNER</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sample_monitor.html">SAMPLE_MONITOR</a></li>
+<li class="toctree-l2"><a class="reference internal" href="storage.html">STORAGE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="log.html">LOG</a></li>
+<li class="toctree-l2"><a class="reference internal" href="stim_printer.html">STIM_PRINTER</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ceci.html">CECI</a></li>
+<li class="toctree-l2"><a class="reference internal" href="thread_pool.html">THREAD_POOL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="loop_test.html">LOOP_TEST</a></li>
+<li class="toctree-l2"><a class="reference internal" href="test_pulse.html">TEST_PULSE_NODE</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Nodes</a><ul>
+      <li>Previous: <a href="hexascope.html" title="previous chapter">HEXASCOPE</a></li>
+      <li>Next: <a href="video.html" title="next chapter">VIDEO</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2024-2026, Jarl Haggerty.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../_sources/nodes/ros2.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

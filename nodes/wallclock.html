@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>WALLCLOCK &#8212; Thalamus 1.0.15 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d1102ebc" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=27fed22d" />
+    <script src="../_static/documentation_options.js?v=6f77e80e"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="ANALOG" href="analog.html" />
+    <link rel="prev" title="PUPIL" href="pupil.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="wallclock">
+<h1>WALLCLOCK<a class="headerlink" href="#wallclock" title="Link to this heading">¶</a></h1>
+<p>The WALLCLOCK node is a generator that emits the current time as an analog time
+series.  It is primarily used as a synchronization reference so that a recording
+can be aligned to an absolute clock.</p>
+<section id="properties">
+<h2>Properties<a class="headerlink" href="#properties" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>Type</strong>: The clock source to read.</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">System</span></code>: The local system clock.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">NTP</span></code>: A network time (NTP) source.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">PTP</span></code>: A Precision Time Protocol source.</p></li>
+</ul>
+</li>
+<li><p><strong>Integer Values</strong>: Emit the time as integer values instead of floating point.</p></li>
+</ul>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">Thalamus</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../concepts.html">Concepts and Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/index.html">Examples</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Nodes</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="catalog.html">Node Catalog</a></li>
+<li class="toctree-l2"><a class="reference internal" href="wave.html">WAVE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="storage2.html">STORAGE2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nidaq.html">NIDAQ</a></li>
+<li class="toctree-l2"><a class="reference internal" href="oculomatic.html">OCULOMATIC</a></li>
+<li class="toctree-l2"><a class="reference internal" href="touch_screen.html">TOUCH_SCREEN</a></li>
+<li class="toctree-l2"><a class="reference internal" href="runner2.html">RUNNER2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="algebra.html">ALGEBRA</a></li>
+<li class="toctree-l2"><a class="reference internal" href="normalize.html">NORMALIZE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lua.html">LUA</a></li>
+<li class="toctree-l2"><a class="reference internal" href="channel_picker.html">CHANNEL_PICKER</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sync.html">SYNC</a></li>
+<li class="toctree-l2"><a class="reference internal" href="genicam.html">GENICAM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="aruco.html">ARUCO</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chessboard.html">CHESSBOARD</a></li>
+<li class="toctree-l2"><a class="reference internal" href="distortion.html">DISTORTION</a></li>
+<li class="toctree-l2"><a class="reference internal" href="intan.html">INTAN</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spikeglx.html">SPIKEGLX</a></li>
+<li class="toctree-l2"><a class="reference internal" href="delsys.html">DELSYS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="xsens.html">XSENS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pupil.html">PUPIL</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">WALLCLOCK</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analog.html">ANALOG</a></li>
+<li class="toctree-l2"><a class="reference internal" href="toggle.html">TOGGLE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="frequency.html">FREQUENCY</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nidaq_out.html">NIDAQ_OUT</a></li>
+<li class="toctree-l2"><a class="reference internal" href="task_controller.html">TASK_CONTROLLER</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ophanim.html">OPHANIM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="hexascope.html">HEXASCOPE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ros2.html">ROS2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="video.html">VIDEO</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ffmpeg.html">FFMPEG</a></li>
+<li class="toctree-l2"><a class="reference internal" href="hand_engine.html">HAND_ENGINE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="brainproducts.html">BRAINPRODUCTS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="remote.html">REMOTE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="remote_log.html">REMOTE_LOG</a></li>
+<li class="toctree-l2"><a class="reference internal" href="runner.html">RUNNER</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sample_monitor.html">SAMPLE_MONITOR</a></li>
+<li class="toctree-l2"><a class="reference internal" href="storage.html">STORAGE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="log.html">LOG</a></li>
+<li class="toctree-l2"><a class="reference internal" href="stim_printer.html">STIM_PRINTER</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ceci.html">CECI</a></li>
+<li class="toctree-l2"><a class="reference internal" href="thread_pool.html">THREAD_POOL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="loop_test.html">LOOP_TEST</a></li>
+<li class="toctree-l2"><a class="reference internal" href="test_pulse.html">TEST_PULSE_NODE</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Nodes</a><ul>
+      <li>Previous: <a href="pupil.html" title="previous chapter">PUPIL</a></li>
+      <li>Next: <a href="analog.html" title="next chapter">ANALOG</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2024-2026, Jarl Haggerty.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../_sources/nodes/wallclock.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

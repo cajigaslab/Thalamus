@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Concepts and Architecture &#8212; Thalamus 1.0.15 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d1102ebc" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=6f77e80e"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Examples" href="examples/index.html" />
+    <link rel="prev" title="Quick Start" href="quickstart.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="concepts-and-architecture">
+<h1>Concepts and Architecture<a class="headerlink" href="#concepts-and-architecture" title="Link to this heading">¶</a></h1>
+<p>This page explains how Thalamus is put together: the node pipeline, the data model
+that flows through it, the capture-file format, and the tooling that turns
+recordings into analysis-ready data.  It complements the <a class="reference internal" href="quickstart.html"><span class="doc">Quick Start</span></a> (which
+walks through using the program) and the <a class="reference internal" href="nodes/index.html"><span class="doc">Node Reference</span></a> (which
+documents each node type).</p>
+<section id="the-node-pipeline">
+<h2>The node pipeline<a class="headerlink" href="#the-node-pipeline" title="Link to this heading">¶</a></h2>
+<p>A Thalamus session is a <strong>pipeline of nodes</strong>.  Each node is a small, independently
+configurable unit, and every node plays one of four roles:</p>
+<ul class="simple">
+<li><p><strong>Generators</strong> produce data – hardware acquisition (NIDAQ, INTAN, SPIKEGLX,
+GENICAM, …) or software sources (WAVE, WALLCLOCK, PUPIL).</p></li>
+<li><p><strong>Consumers</strong> terminate data – recording it (STORAGE2), logging it (LOG), or
+driving an output device (NIDAQ_OUT, OPHANIM).</p></li>
+<li><p><strong>Transformers</strong> consume data and produce new data – analysis and mapping
+(OCULOMATIC, ALGEBRA, LUA, NORMALIZE, ARUCO, …).</p></li>
+<li><p><strong>Controllers</strong> coordinate the pipeline – starting and stopping groups of nodes
+(RUNNER, RUNNER2, TASK_CONTROLLER).</p></li>
+</ul>
+<p>You build an experiment by adding nodes, setting each node’s type and properties,
+and <strong>subscribing</strong> consumers/transformers to the producers whose data they need.
+Most nodes have a small set of inline properties; nodes with richer configuration
+also provide a <em>node widget</em> that appears when the node is selected.  See the
+<a class="reference internal" href="nodes/catalog.html"><span class="doc">Node Catalog</span></a> for the full list of types.</p>
+<p>Because nodes are decoupled and communicate over gRPC, a pipeline can also span
+machines: a <a class="reference internal" href="nodes/remote.html"><span class="doc">REMOTE</span></a> node proxies another instance’s stream, and
+a <a class="reference internal" href="nodes/runner2.html"><span class="doc">RUNNER2</span></a> node can start/stop nodes on remote instances.</p>
+</section>
+<section id="the-data-model">
+<h2>The data model<a class="headerlink" href="#the-data-model" title="Link to this heading">¶</a></h2>
+<p>All data is carried in a single message type, <code class="docutils literal notranslate"><span class="pre">StorageRecord</span></code>.  Every record has a
+<code class="docutils literal notranslate"><span class="pre">node</span></code> (the producing node’s name), a <code class="docutils literal notranslate"><span class="pre">time</span></code> (see below), and exactly one <em>body</em>
+that determines the kind of data:</p>
+<ul class="simple">
+<li><p><strong>analog</strong> – time-series samples.  An <code class="docutils literal notranslate"><span class="pre">AnalogResponse</span></code> holds a flat <code class="docutils literal notranslate"><span class="pre">data</span></code>
+array, a list of <code class="docutils literal notranslate"><span class="pre">spans</span></code> that name each channel and mark its slice of <code class="docutils literal notranslate"><span class="pre">data</span></code>
+(<code class="docutils literal notranslate"><span class="pre">begin</span></code>/<code class="docutils literal notranslate"><span class="pre">end</span></code>), and a <code class="docutils literal notranslate"><span class="pre">sample_intervals</span></code> array giving each channel’s sample
+period in nanoseconds.  (Integer-valued streams use <code class="docutils literal notranslate"><span class="pre">int_data</span></code> / <code class="docutils literal notranslate"><span class="pre">ulong_data</span></code>.)</p></li>
+<li><p><strong>image</strong> – a video/camera frame, with raw bytes, <code class="docutils literal notranslate"><span class="pre">width</span></code>, <code class="docutils literal notranslate"><span class="pre">height</span></code>,
+pixel <code class="docutils literal notranslate"><span class="pre">format</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">Gray</span></code>, <code class="docutils literal notranslate"><span class="pre">RGB</span></code>, <code class="docutils literal notranslate"><span class="pre">MPEG4</span></code>), and <code class="docutils literal notranslate"><span class="pre">frame_interval</span></code>.</p></li>
+<li><p><strong>text</strong> – a string message (log lines, event markers).</p></li>
+<li><p><strong>xsens</strong> – motion-capture pose data: body segments with position and quaternion
+rotation.</p></li>
+<li><p><strong>metadata</strong> – key/value pairs (string, integer, or decimal).</p></li>
+<li><p><strong>compressed</strong> – a compressed payload wrapping one of the above (used when analog
+or video compression is enabled).</p></li>
+</ul>
+<p>This uniform model is why the same tools work across modalities, and why a single
+recording can interleave signals, video, markers, and motion on one timeline.</p>
+</section>
+<section id="time">
+<h2>Time<a class="headerlink" href="#time" title="Link to this heading">¶</a></h2>
+<p>Record timestamps are expressed in <strong>nanoseconds from a steady clock</strong>, not a Unix
+epoch.  The clock is monotonic relative to an arbitrary start point, which makes it
+ideal for measuring intervals and latencies but means timestamps are not wall-clock
+dates.  To anchor a recording to absolute time, include a <a class="reference internal" href="nodes/wallclock.html"><span class="doc">WALLCLOCK</span></a> node.  For an analog record, the <code class="docutils literal notranslate"><span class="pre">time</span></code> marks the moment of the
+record’s last sample, so the time of every sample can be reconstructed from the
+sample interval.</p>
+</section>
+<section id="the-capture-file-format">
+<h2>The capture-file format<a class="headerlink" href="#the-capture-file-format" title="Link to this heading">¶</a></h2>
+<p>A recording is a <code class="docutils literal notranslate"><span class="pre">.tha</span></code> capture file: a flat sequence of records, each written as
+an 8-byte big-endian length prefix followed by the serialized <code class="docutils literal notranslate"><span class="pre">StorageRecord</span></code>
+protobuf.  A STORAGE2 node writes one record every time a node it is subscribed to
+produces data, so the file is an interleaved, append-only log.</p>
+<p>By convention the first record carries a <code class="docutils literal notranslate"><span class="pre">metadata</span></code> body with the recording
+number (the <code class="docutils literal notranslate"><span class="pre">Rec</span></code> key), and a companion <code class="docutils literal notranslate"><span class="pre">&lt;file&gt;.YYYYMMDD.R.json</span></code> snapshot of the
+configuration is written alongside the capture.  See the <a class="reference internal" href="quickstart.html"><span class="doc">Quick Start</span></a> for an
+annotated example of the records in a file.</p>
+</section>
+<section id="reading-and-converting-recordings">
+<h2>Reading and converting recordings<a class="headerlink" href="#reading-and-converting-recordings" title="Link to this heading">¶</a></h2>
+<p>Several bundled modules turn a <code class="docutils literal notranslate"><span class="pre">.tha</span></code> file into analysis-ready data:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">thalamus.record_reader2</span> <span class="pre">FILE</span></code> – iterate over and print raw records.
+In Python, <code class="docutils literal notranslate"><span class="pre">thalamus.record_reader2.SimpleRecordReader</span></code> yields <code class="docutils literal notranslate"><span class="pre">StorageRecord</span></code>
+messages (use it as a context manager).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">thalamus.dataframe</span> <span class="pre">-n</span> <span class="pre">NODE</span> <span class="pre">-i</span> <span class="pre">FILE</span></code> – export one node’s analog (or
+text) channels to CSV, Parquet, and other tabular formats.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">thalamus.hydrate</span> <span class="pre">FILE</span></code> – convert an entire capture into a single
+HDF5 file.  For each analog channel it writes a <code class="docutils literal notranslate"><span class="pre">data</span></code> dataset of samples and a
+<code class="docutils literal notranslate"><span class="pre">received</span></code> dataset of per-record timing, from which exact sample times can be
+reconstructed.</p></li>
+</ul>
+<p>The <a class="reference internal" href="examples/index.html"><span class="doc">Examples</span></a> page shows each of these end to end, and the
+<code class="docutils literal notranslate"><span class="pre">examples/</span></code> folder in the repository contains runnable scripts.</p>
+</section>
+<section id="persistence">
+<h2>Persistence<a class="headerlink" href="#persistence" title="Link to this heading">¶</a></h2>
+<p>Node configurations and window layouts can be saved and reloaded, so an experiment’s
+full setup is reproducible.  When a node’s configuration must change in a
+backward-incompatible way, a new numbered node type is introduced (for example
+STORAGE → STORAGE2) so existing setups keep working.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Thalamus</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Concepts and Architecture</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#the-node-pipeline">The node pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#the-data-model">The data model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#time">Time</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#the-capture-file-format">The capture-file format</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#reading-and-converting-recordings">Reading and converting recordings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#persistence">Persistence</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="examples/index.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="nodes/index.html">Nodes</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="quickstart.html" title="previous chapter">Quick Start</a></li>
+      <li>Next: <a href="examples/index.html" title="next chapter">Examples</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2024-2026, Jarl Haggerty.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/concepts.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
