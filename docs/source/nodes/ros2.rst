@@ -1,5 +1,8 @@
 ROS2
 ====
+|ui|
+
+.. |ui| image:: ros2_ui.png
 
 The ROS2 node bridges Thalamus to a ROS 2 system.  It is a transformer that
 republishes data from Thalamus nodes onto ROS 2 topics (and TF2 frames), so that

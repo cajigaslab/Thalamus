@@ -1,5 +1,8 @@
 GENICAM
 =======
+|ui|
+
+.. |ui| image:: genicam_ui.png
 
 The GENICAM node acquires image streams from cameras that implement the GenICam /
 GenTL standard (many machine-vision USB3, GigE, and CoaXPress cameras).  It is a
@@ -16,6 +19,7 @@ Properties
 * **Frame Rate**: Acquisition frame rate.
 * **Exposure**: Exposure time (the value is stored internally as ``ExposureTime`` in
   microseconds).
+* **Gain**: Sensor gain.
 * **Region of interest**: ``OffsetX``, ``OffsetY``, ``Width``, and ``Height`` define the
   acquired image region.  ``WidthMax`` / ``HeightMax`` reflect the sensor's maximum
   dimensions.  The node widget lets you drag the ROI rectangle directly on the live

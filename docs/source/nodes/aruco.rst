@@ -1,5 +1,8 @@
 ARUCO
 =====
+|ui|
+
+.. |ui| image:: aruco_ui.png
 
 The ARUCO node detects ArUco / AprilTag fiducial markers in an image stream and
 outputs the pose (position and rotation) of each configured marker board.  It is a

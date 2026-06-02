@@ -1,5 +1,8 @@
 HEXASCOPE
 =========
+|ui|
+
+.. |ui| image:: hexascope_ui.png
 
 The HEXASCOPE node controls a motorized mirror platform that steers an optical path
 to follow a moving target.  It is a transformer that consumes motion-capture pose

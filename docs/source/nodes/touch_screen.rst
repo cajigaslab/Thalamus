@@ -1,5 +1,8 @@
 TOUCH_SCREEN
 ============
+|ui|
+
+.. |ui| image:: touch_screen_ui.png
 
 The TOUCH_SCREEN node maps raw touch coordinates produced by a touch device into
 calibrated screen coordinates.  It consumes a stream of raw ``(X, Y)`` points and

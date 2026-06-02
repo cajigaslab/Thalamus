@@ -1,5 +1,8 @@
 DISTORTION
 ==========
+|ui|
+
+.. |ui| image:: distortion_ui.png
 
 The DISTORTION node corrects camera lens distortion in an image stream.  It is a
 transformer: it consumes images from a camera node and republishes an undistorted

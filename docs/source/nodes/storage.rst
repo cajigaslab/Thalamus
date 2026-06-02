@@ -1,5 +1,8 @@
 STORAGE
 =======
+|ui|
+
+.. |ui| image:: storage_ui.png
 
 STORAGE is the earlier-generation recording node.  It saves data from a set of
 source nodes to a ``.tha`` capture file.  New experiments should prefer the
