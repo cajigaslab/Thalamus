@@ -11,6 +11,7 @@ import logging
 import asyncio
 import datetime
 import threading
+import functools
 import contextlib
 
 from ..qt import *
@@ -490,6 +491,7 @@ def animate(frequency: int) -> typing.Callable[[AnimateTarget], AnimateTarget]:
       context.widget.update()
 
   def decorator(func: AnimateTarget) -> AnimateTarget:
+    @functools.wraps(func)
     async def wrapper(context: TaskContextProtocol) -> TaskResult:
       animate_task = asyncio.get_event_loop().create_task(animator(context))
       try:

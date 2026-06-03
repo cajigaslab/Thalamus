@@ -700,7 +700,7 @@ class TaskContext(TaskContextProtocol):
     if not response:
       return
     
-    source_file = inspect.getsourcefile(task.run)
+    source_file = inspect.getsourcefile(inspect.unwrap(task.run))
     if source_file is None:
       return
     
