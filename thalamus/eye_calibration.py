@@ -607,6 +607,7 @@ class OperatorWindow(QMainWindow):
   def __init__(self, task: Task, view: QWidget, subject_view: QWidget, config: dict):
     super().__init__()
     self.task = task
+    self.view = view
     view.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
     central_widget = QWidget()
@@ -670,6 +671,7 @@ class OperatorWindow(QMainWindow):
       del self.task.points[:]
       del self.task.training_data[:]
       self.view.actions = []
+      self.view.actions_position = 0
 
     def on_reward(val):
       self.task.reward_ms = val
