@@ -1,47 +1,64 @@
 <svg width="1280" height="360" viewBox="0 0 1280 360" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Thalamus — real-time, closed-loop multimodal data acquisition">
   <rect width="1280" height="360" rx="20" fill="#FCFDFE" stroke="#E5EBF3" stroke-width="1.5"/>
-  <!-- faint circuit texture, top-right -->
   <g stroke="#29ABE2" stroke-opacity="0.08" stroke-width="1.5" fill="none">
-    <path d="M1180 40 H1080 V120 M1220 90 H1130 V170 M1180 200 H1100"/>
-    <circle cx="1080" cy="120" r="4" fill="#29ABE2" fill-opacity="0.1" stroke="none"/>
+    <path d="M1190 44 H1090 V120 M1228 92 H1138 V172 M1188 204 H1108"/>
   </g>
 
-  <!-- ===== BRAIN MARK (left) ===== -->
-  <g transform="translate(96,42) scale(0.92)">
-    <!-- left hemisphere: anatomical gyri (navy) -->
-    <g stroke="#16294C" fill="none" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M176 44 C150 28 120 30 104 46 C86 40 66 52 64 72 C44 78 36 100 48 116 C30 128 30 152 50 162 C38 180 48 204 70 206 C74 226 96 236 114 226 C130 244 160 244 176 226"/>
-      <path d="M150 70 C128 64 112 78 118 96 C100 100 96 120 112 128 C98 140 104 160 122 160"/>
-      <path d="M150 104 C134 102 126 116 136 126 C124 134 128 150 142 150"/>
-      <path d="M150 140 C138 140 132 152 142 160"/>
-      <path d="M96 92 C84 100 86 116 98 118"/>
-      <path d="M78 130 C70 140 76 154 88 154"/>
-      <path d="M104 176 C98 188 108 200 120 196"/>
+  <!-- ===== BRAIN MARK: left neurons / right circuit ===== -->
+  <g transform="translate(60,16) scale(0.82)">
+    <defs>
+      <path id="hemi" d="M198 54 C180 38 150 32 124 42 C96 32 68 50 72 80 C44 86 36 118 58 134 C38 152 42 186 66 198 C50 222 64 254 90 258 C94 286 132 302 156 286 C176 300 198 292 200 266 C201 196 200 122 198 54 Z"/>
+    </defs>
+    <use href="#hemi" stroke="#16294C" stroke-width="7" fill="none" stroke-linejoin="round"/>
+    <use href="#hemi" stroke="#16294C" stroke-width="7" fill="none" stroke-linejoin="round" transform="translate(420,0) scale(-1,1)"/>
+
+    <!-- left neurons -->
+    <g stroke="#16294C" fill="none" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M150 112 C140 96 134 82 138 68"/><path d="M134 82 C124 78 116 82 110 74"/>
+      <path d="M150 112 C130 104 116 106 104 96"/><path d="M150 112 C128 116 110 116 96 124"/>
+      <path d="M110 116 C104 124 96 126 90 138"/><path d="M150 112 C154 96 150 82 158 72"/>
+      <path d="M124 186 C108 176 96 178 86 168"/><path d="M124 186 C106 188 94 198 96 210"/>
+      <path d="M96 198 C88 200 82 196 76 200"/><path d="M124 186 C118 204 122 220 112 230"/>
+      <path d="M124 186 C140 182 150 188 160 182"/>
+      <path d="M168 166 C152 160 140 170 128 164"/><path d="M168 166 C170 148 164 136 170 126"/>
+      <path d="M168 166 C170 186 162 202 168 214"/>
+      <path d="M150 246 C134 240 124 250 114 246"/><path d="M150 246 C150 264 142 278 148 288"/>
+      <path d="M150 246 C166 242 176 250 184 244"/>
     </g>
-    <!-- right hemisphere: circuit traces (cyan) + navy outline -->
-    <path stroke="#16294C" fill="none" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"
-          d="M184 44 C210 28 240 30 256 46 C274 40 294 52 296 72 C316 78 324 100 312 116 C330 128 330 152 310 162 C322 180 312 204 290 206 C286 226 264 236 246 226 C230 244 200 244 184 226"/>
-    <g stroke="#29ABE2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M184 92 H236 V70"/><path d="M184 112 H260 V150"/><path d="M184 132 H248 V196"/>
-      <path d="M184 152 H236"/><path d="M184 172 H224 V204"/><path d="M236 92 L268 60"/>
-      <path d="M260 112 L292 96"/><path d="M248 132 L298 132"/><path d="M236 152 L300 168"/>
+    <g fill="#16294C">
+      <circle cx="150" cy="112" r="6.5"/><circle cx="124" cy="186" r="6.5"/><circle cx="168" cy="166" r="5.5"/><circle cx="150" cy="246" r="6"/>
+      <circle cx="138" cy="68" r="3.4"/><circle cx="110" cy="74" r="3.4"/><circle cx="104" cy="96" r="3.4"/>
+      <circle cx="96" cy="124" r="3.4"/><circle cx="90" cy="138" r="3.4"/><circle cx="158" cy="72" r="3.4"/>
+      <circle cx="86" cy="168" r="3.4"/><circle cx="96" cy="210" r="3.4"/><circle cx="76" cy="200" r="3.4"/>
+      <circle cx="112" cy="230" r="3.4"/><circle cx="128" cy="164" r="3.4"/><circle cx="170" cy="126" r="3.4"/>
+      <circle cx="168" cy="214" r="3.4"/><circle cx="114" cy="246" r="3.4"/><circle cx="148" cy="288" r="3.4"/>
+    </g>
+
+    <!-- right circuit -->
+    <g stroke="#29ABE2" fill="none" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M226 96 H252 V72"/><path d="M252 72 V58"/><path d="M226 120 H280 L302 102"/>
+      <path d="M226 144 H264 V196"/><path d="M226 168 H320"/><path d="M226 192 H252 V222"/>
+      <path d="M226 216 H300 V242"/><path d="M264 144 H326"/><path d="M280 120 V102"/><path d="M320 168 L342 152"/>
     </g>
     <g fill="#29ABE2">
-      <circle cx="236" cy="70" r="6"/><circle cx="268" cy="60" r="6"/><circle cx="292" cy="96" r="6"/>
-      <circle cx="298" cy="132" r="6"/><circle cx="300" cy="168" r="6"/><circle cx="224" cy="204" r="6"/>
-      <circle cx="248" cy="196" r="6"/><circle cx="260" cy="150" r="6"/>
+      <circle cx="252" cy="58" r="6.5"/><circle cx="280" cy="102" r="6.5"/><circle cx="302" cy="102" r="6.5"/>
+      <circle cx="264" cy="196" r="6.5"/><circle cx="320" cy="168" r="6.5"/><circle cx="252" cy="222" r="6.5"/>
+      <circle cx="326" cy="144" r="6.5"/><circle cx="342" cy="152" r="6.5"/><circle cx="300" cy="242" r="6.5"/>
     </g>
-    <!-- central almond, split navy/cyan -->
-    <path d="M180 94 C166 132 166 168 180 206 Z" fill="#16294C"/>
-    <path d="M180 94 C194 132 194 168 180 206 Z" fill="#29ABE2"/>
+
+    <!-- central almond -->
+    <path d="M210 104 C184 140 186 226 210 262 Z" fill="#16294C"/>
+    <path d="M210 104 C236 140 234 226 210 262 Z" fill="#29ABE2"/>
+    <g fill="#0B1428"><circle cx="219" cy="156" r="3.4"/><circle cx="217" cy="196" r="3.4"/></g>
+    <path d="M210 156 H219 M210 196 H217" stroke="#0B1428" stroke-width="2.4" stroke-linecap="round"/>
   </g>
 
-  <!-- ===== WORDMARK + TAGLINE (right) ===== -->
-  <text x="486" y="138" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace"
+  <!-- wordmark + tagline -->
+  <text x="500" y="138" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace"
         font-size="15" letter-spacing="6" fill="#1683BE">REAL&#8209;TIME · CLOSED&#8209;LOOP · MULTIMODAL</text>
-  <text x="482" y="216" font-family="'Segoe UI', system-ui, -apple-system, Arial, sans-serif"
+  <text x="496" y="216" font-family="'Segoe UI', system-ui, -apple-system, Arial, sans-serif"
         font-size="76" font-weight="800" letter-spacing="11" fill="#16294C">THALAMUS</text>
-  <rect x="486" y="240" width="120" height="3" rx="1.5" fill="#29ABE2"/>
-  <text x="486" y="284" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace"
+  <rect x="500" y="240" width="120" height="3" rx="1.5" fill="#29ABE2"/>
+  <text x="500" y="284" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace"
         font-size="17" letter-spacing="1" fill="#5A6B86">Synchronized data acquisition &amp; closed-loop control</text>
 </svg>
