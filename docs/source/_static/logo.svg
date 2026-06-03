@@ -1,38 +1,33 @@
 <svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Thalamus logo">
   <defs>
     <linearGradient id="tile" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#16294C"/>
-      <stop offset="1" stop-color="#0B1428"/>
+      <stop stop-color="#16294C"/><stop offset="1" stop-color="#0B1428"/>
     </linearGradient>
-    <linearGradient id="trace" x1="14" y1="64" x2="114" y2="64" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#1683BE"/>
-      <stop offset="0.5" stop-color="#29ABE2"/>
-      <stop offset="1" stop-color="#7DD3FC"/>
-    </linearGradient>
-    <radialGradient id="node" cx="0.5" cy="0.5" r="0.5">
-      <stop stop-color="#7DD3FC"/>
-      <stop offset="1" stop-color="#29ABE2"/>
-    </radialGradient>
-    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="2.4" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
   </defs>
-
   <rect x="2" y="2" width="124" height="124" rx="28" fill="url(#tile)" stroke="#26416E" stroke-width="1.5"/>
 
-  <!-- circuit grid -->
-  <g stroke="#29ABE2" stroke-opacity="0.12" stroke-width="1">
-    <path d="M30 18V110M64 18V110M98 18V110"/>
-    <path d="M18 40H110M18 64H110M18 88H110"/>
+  <g transform="translate(-6,14) scale(0.369)">
+    <!-- left hemisphere gyri (light) -->
+    <g stroke="#E3ECF8" fill="none" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M176 44 C150 28 120 30 104 46 C86 40 66 52 64 72 C44 78 36 100 48 116 C30 128 30 152 50 162 C38 180 48 204 70 206 C74 226 96 236 114 226 C130 244 160 244 176 226"/>
+      <path d="M150 70 C128 64 112 78 118 96 C100 100 96 120 112 128 C98 140 104 160 122 160"/>
+      <path d="M150 104 C134 102 126 116 136 126 C124 134 128 150 142 150"/>
+      <path d="M96 92 C84 100 86 116 98 118"/>
+      <path d="M78 130 C70 140 76 154 88 154"/>
+    </g>
+    <!-- right hemisphere circuit (cyan) -->
+    <path stroke="#9FB8D9" fill="none" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"
+          d="M184 44 C210 28 240 30 256 46 C274 40 294 52 296 72 C316 78 324 100 312 116 C330 128 330 152 310 162 C322 180 312 204 290 206 C286 226 264 236 246 226 C230 244 200 244 184 226"/>
+    <g stroke="#5CC9F2" fill="none" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M184 92 H236 V70"/><path d="M184 116 H260 V152"/><path d="M184 140 H248 V196"/>
+      <path d="M236 92 L268 62"/><path d="M260 116 L294 100"/><path d="M248 140 L300 140"/>
+    </g>
+    <g fill="#5CC9F2">
+      <circle cx="236" cy="70" r="7"/><circle cx="268" cy="62" r="7"/><circle cx="294" cy="100" r="7"/>
+      <circle cx="300" cy="140" r="7"/><circle cx="248" cy="196" r="7"/><circle cx="260" cy="152" r="7"/>
+    </g>
+    <!-- central almond -->
+    <path d="M180 90 C166 132 166 168 180 210 Z" fill="#E3ECF8"/>
+    <path d="M180 90 C194 132 194 168 180 210 Z" fill="#29ABE2"/>
   </g>
-
-  <!-- signal trace through the relay node -->
-  <path d="M14 78 L34 78 L44 44 L58 96 L70 30 L82 64 L114 64"
-        fill="none" stroke="url(#trace)" stroke-width="5.5"
-        stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
-
-  <!-- relay node -->
-  <circle cx="82" cy="64" r="9.5" fill="url(#node)" filter="url(#glow)"/>
-  <circle cx="82" cy="64" r="3.4" fill="#0B1428"/>
 </svg>

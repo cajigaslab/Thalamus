@@ -1,15 +1,18 @@
-<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Thalamus favicon">
   <defs>
     <linearGradient id="t" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
       <stop stop-color="#16294C"/><stop offset="1" stop-color="#0B1428"/>
     </linearGradient>
-    <linearGradient id="s" x1="8" y1="32" x2="56" y2="32" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#1683BE"/><stop offset="1" stop-color="#7DD3FC"/>
-    </linearGradient>
   </defs>
   <rect width="64" height="64" rx="15" fill="url(#t)"/>
-  <path d="M7 39 L18 39 L23 21 L31 49 L37 16 L43 32 L57 32"
-        fill="none" stroke="url(#s)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="43" cy="32" r="6" fill="#29ABE2"/>
-  <circle cx="43" cy="32" r="2.1" fill="#0B1428"/>
+  <!-- left hemisphere (light) -->
+  <path d="M30 16 C20 16 13 23 13 32 C13 41 20 48 30 48 Z" fill="#E3ECF8"/>
+  <!-- right hemisphere (cyan) -->
+  <path d="M34 16 C44 16 51 23 51 32 C51 41 44 48 34 48 Z" fill="#29ABE2"/>
+  <!-- midline -->
+  <rect x="31" y="15" width="2" height="34" rx="1" fill="#0B1428"/>
+  <!-- circuit pads on the cyan side -->
+  <g fill="#0B1428">
+    <circle cx="42" cy="25" r="2.4"/><circle cx="45" cy="34" r="2.4"/><circle cx="41" cy="41" r="2.4"/>
+  </g>
 </svg>

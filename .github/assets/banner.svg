@@ -1,58 +1,47 @@
 <svg width="1280" height="360" viewBox="0 0 1280 360" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Thalamus — real-time, closed-loop multimodal data acquisition">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1280" y2="360" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#16294C"/>
-      <stop offset="0.55" stop-color="#0F1F3C"/>
-      <stop offset="1" stop-color="#0B1428"/>
-    </linearGradient>
-    <linearGradient id="trace" x1="0" y1="300" x2="1280" y2="300" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#1683BE" stop-opacity="0"/>
-      <stop offset="0.1" stop-color="#1683BE"/>
-      <stop offset="0.5" stop-color="#29ABE2"/>
-      <stop offset="0.9" stop-color="#7DD3FC"/>
-      <stop offset="1" stop-color="#7DD3FC" stop-opacity="0"/>
-    </linearGradient>
-    <radialGradient id="node" cx="0.5" cy="0.5" r="0.5">
-      <stop stop-color="#BFE9FF"/><stop offset="1" stop-color="#29ABE2"/>
-    </radialGradient>
-    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
-      <stop stop-color="#29ABE2" stop-opacity="0.20"/><stop offset="1" stop-color="#29ABE2" stop-opacity="0"/>
-    </radialGradient>
-    <filter id="glow" x="-40%" y="-120%" width="180%" height="340%">
-      <feGaussianBlur stdDeviation="3" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-  </defs>
-
-  <rect width="1280" height="360" rx="20" fill="url(#bg)"/>
-  <ellipse cx="640" cy="120" rx="560" ry="220" fill="url(#halo)"/>
-
-  <!-- circuit grid -->
-  <g stroke="#29ABE2" stroke-opacity="0.07" stroke-width="1">
-    <path d="M80 60H1200M80 120H1200M80 180H1200M80 240H1200M80 300H1200"/>
-    <path d="M200 40V320M320 40V320M440 40V320M560 40V320M680 40V320M800 40V320M920 40V320M1040 40V320"/>
+  <rect width="1280" height="360" rx="20" fill="#FCFDFE" stroke="#E5EBF3" stroke-width="1.5"/>
+  <!-- faint circuit texture, top-right -->
+  <g stroke="#29ABE2" stroke-opacity="0.08" stroke-width="1.5" fill="none">
+    <path d="M1180 40 H1080 V120 M1220 90 H1130 V170 M1180 200 H1100"/>
+    <circle cx="1080" cy="120" r="4" fill="#29ABE2" fill-opacity="0.1" stroke="none"/>
   </g>
 
-  <!-- eyebrow -->
-  <text x="640" y="86" text-anchor="middle"
-        font-family="ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace"
-        font-size="16" letter-spacing="7" fill="#5CC9F2" fill-opacity="0.95">REAL&#8209;TIME · CLOSED&#8209;LOOP · MULTIMODAL</text>
+  <!-- ===== BRAIN MARK (left) ===== -->
+  <g transform="translate(96,42) scale(0.92)">
+    <!-- left hemisphere: anatomical gyri (navy) -->
+    <g stroke="#16294C" fill="none" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M176 44 C150 28 120 30 104 46 C86 40 66 52 64 72 C44 78 36 100 48 116 C30 128 30 152 50 162 C38 180 48 204 70 206 C74 226 96 236 114 226 C130 244 160 244 176 226"/>
+      <path d="M150 70 C128 64 112 78 118 96 C100 100 96 120 112 128 C98 140 104 160 122 160"/>
+      <path d="M150 104 C134 102 126 116 136 126 C124 134 128 150 142 150"/>
+      <path d="M150 140 C138 140 132 152 142 160"/>
+      <path d="M96 92 C84 100 86 116 98 118"/>
+      <path d="M78 130 C70 140 76 154 88 154"/>
+      <path d="M104 176 C98 188 108 200 120 196"/>
+    </g>
+    <!-- right hemisphere: circuit traces (cyan) + navy outline -->
+    <path stroke="#16294C" fill="none" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"
+          d="M184 44 C210 28 240 30 256 46 C274 40 294 52 296 72 C316 78 324 100 312 116 C330 128 330 152 310 162 C322 180 312 204 290 206 C286 226 264 236 246 226 C230 244 200 244 184 226"/>
+    <g stroke="#29ABE2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M184 92 H236 V70"/><path d="M184 112 H260 V150"/><path d="M184 132 H248 V196"/>
+      <path d="M184 152 H236"/><path d="M184 172 H224 V204"/><path d="M236 92 L268 60"/>
+      <path d="M260 112 L292 96"/><path d="M248 132 L298 132"/><path d="M236 152 L300 168"/>
+    </g>
+    <g fill="#29ABE2">
+      <circle cx="236" cy="70" r="6"/><circle cx="268" cy="60" r="6"/><circle cx="292" cy="96" r="6"/>
+      <circle cx="298" cy="132" r="6"/><circle cx="300" cy="168" r="6"/><circle cx="224" cy="204" r="6"/>
+      <circle cx="248" cy="196" r="6"/><circle cx="260" cy="150" r="6"/>
+    </g>
+    <!-- central almond, split navy/cyan -->
+    <path d="M180 94 C166 132 166 168 180 206 Z" fill="#16294C"/>
+    <path d="M180 94 C194 132 194 168 180 206 Z" fill="#29ABE2"/>
+  </g>
 
-  <!-- wordmark -->
-  <text x="646" y="172" text-anchor="middle"
-        font-family="'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif"
-        font-size="78" font-weight="800" letter-spacing="14" fill="#F4F8FD">THALAMUS</text>
-
-  <!-- divider -->
-  <rect x="584" y="200" width="120" height="3" rx="1.5" fill="#29ABE2"/>
-
-  <!-- tagline -->
-  <text x="640" y="242" text-anchor="middle"
-        font-family="ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace"
-        font-size="19" letter-spacing="1.5" fill="#AFC1DC">Synchronized data acquisition &amp; closed-loop control · for the OR and the lab</text>
-
-  <!-- signal trace band -->
-  <path d="M80 300 L300 300 L322 300 L340 276 L358 300 L560 300 L582 300 L600 282 L620 300 L860 300 L882 300 L900 268 L922 300 L1200 300"
-        fill="none" stroke="url(#trace)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="900" cy="268" r="6.5" fill="url(#node)" filter="url(#glow)"/>
+  <!-- ===== WORDMARK + TAGLINE (right) ===== -->
+  <text x="486" y="138" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace"
+        font-size="15" letter-spacing="6" fill="#1683BE">REAL&#8209;TIME · CLOSED&#8209;LOOP · MULTIMODAL</text>
+  <text x="482" y="216" font-family="'Segoe UI', system-ui, -apple-system, Arial, sans-serif"
+        font-size="76" font-weight="800" letter-spacing="11" fill="#16294C">THALAMUS</text>
+  <rect x="486" y="240" width="120" height="3" rx="1.5" fill="#29ABE2"/>
+  <text x="486" y="284" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace"
+        font-size="17" letter-spacing="1" fill="#5A6B86">Synchronized data acquisition &amp; closed-loop control</text>
 </svg>
