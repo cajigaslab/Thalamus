@@ -3,50 +3,47 @@
     <linearGradient id="tile" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
       <stop stop-color="#16294C"/><stop offset="1" stop-color="#0B1428"/>
     </linearGradient>
-    <path id="hemiL" d="M198 54 C180 38 150 32 124 42 C96 32 68 50 72 80 C44 86 36 118 58 134 C38 152 42 186 66 198 C50 222 64 254 90 258 C94 286 132 302 156 286 C176 300 198 292 200 266 C201 196 200 122 198 54 Z"/>
+    <path id="hemiL" d="M194 34 C188 26 178 24 170 30 C150 22 124 30 116 50 C92 50 74 70 80 92 C54 98 46 130 64 146 C44 164 50 196 72 206 C60 228 74 254 98 256 C104 282 138 294 158 278 C178 290 196 282 196 258 C197 200 196 110 194 34 Z"/>
   </defs>
   <rect x="2" y="2" width="124" height="124" rx="28" fill="url(#tile)" stroke="#26416E" stroke-width="1.5"/>
 
-  <g transform="translate(2,8) scale(0.3)">
+  <g transform="translate(2,6) scale(0.3)">
     <use href="#hemiL" stroke="#9FB6DA" stroke-width="8" fill="none" stroke-linejoin="round"/>
     <use href="#hemiL" stroke="#9FB6DA" stroke-width="8" fill="none" stroke-linejoin="round" transform="translate(420,0) scale(-1,1)"/>
 
-    <!-- left neurons (light) -->
-    <g stroke="#E3ECF8" fill="none" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M184 126 C162 116 152 100 156 82"/><path d="M156 96 C144 88 130 90 120 80"/>
-      <path d="M156 82 C152 68 144 60 134 57"/><path d="M184 126 C164 128 148 122 134 130"/>
-      <path d="M148 122 C138 114 124 114 114 120"/><path d="M134 130 C124 136 112 134 102 142"/>
-      <path d="M120 80 C112 72 101 72 93 78"/><path d="M184 110 C168 102 152 98 142 88"/>
-      <path d="M156 82 C158 68 154 58 162 50"/><path d="M142 88 C138 74 130 66 122 62"/>
-      <path d="M184 156 C160 152 142 160 126 152"/><path d="M142 160 C132 168 118 168 108 178"/>
-      <path d="M126 152 C116 146 104 148 96 140"/><path d="M96 140 C88 148 88 160 80 166"/>
-      <path d="M184 180 C162 182 146 194 130 190"/><path d="M146 194 C136 202 124 204 114 214"/>
-      <path d="M130 190 C122 198 118 210 108 216"/><path d="M180 202 C162 212 152 230 154 248"/>
-      <path d="M154 230 C144 238 140 252 130 258"/><path d="M154 248 C152 264 144 276 148 288"/>
+    <g stroke="#E3ECF8" fill="none" stroke-width="4.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M184 128 C162 118 152 102 156 84"/><path d="M156 98 C144 90 130 92 120 82"/>
+      <path d="M156 84 C152 70 144 62 134 59"/><path d="M184 128 C164 130 148 124 134 132"/>
+      <path d="M148 124 C138 116 124 116 114 122"/><path d="M134 132 C124 138 112 136 102 144"/>
+      <path d="M120 82 C112 74 101 74 93 80"/><path d="M184 112 C168 104 152 100 142 90"/>
+      <path d="M156 84 C158 70 154 60 162 52"/><path d="M142 90 C138 76 130 68 122 64"/>
+      <path d="M184 158 C160 154 142 162 126 154"/><path d="M142 162 C132 170 118 170 108 180"/>
+      <path d="M126 154 C116 148 104 150 96 142"/><path d="M96 142 C88 150 88 162 80 168"/>
+      <path d="M184 182 C162 184 146 196 130 192"/><path d="M146 196 C136 204 124 206 114 216"/>
+      <path d="M130 192 C122 200 118 212 108 218"/><path d="M180 204 C162 214 152 232 154 250"/>
+      <path d="M154 232 C144 240 140 254 130 260"/><path d="M154 250 C152 266 144 276 148 286"/>
     </g>
     <g fill="#E3ECF8">
-      <circle cx="156" cy="96" r="5.5"/><circle cx="148" cy="122" r="5.5"/><circle cx="142" cy="160" r="5.5"/>
-      <circle cx="146" cy="194" r="5.5"/><circle cx="154" cy="230" r="5.5"/>
-      <circle cx="134" cy="57" r="3.6"/><circle cx="93" cy="78" r="3.6"/><circle cx="102" cy="142" r="3.6"/>
-      <circle cx="142" cy="88" r="3.6"/><circle cx="80" cy="166" r="3.6"/><circle cx="108" cy="178" r="3.6"/>
-      <circle cx="114" cy="214" r="3.6"/><circle cx="130" cy="258" r="3.6"/><circle cx="148" cy="288" r="3.6"/>
-      <circle cx="162" cy="50" r="3.6"/><circle cx="122" cy="62" r="3.6"/>
+      <circle cx="156" cy="98" r="5.5"/><circle cx="148" cy="124" r="5.5"/><circle cx="142" cy="162" r="5.5"/>
+      <circle cx="146" cy="196" r="5.5"/><circle cx="154" cy="232" r="5.5"/>
+      <circle cx="134" cy="59" r="3.6"/><circle cx="93" cy="80" r="3.6"/><circle cx="102" cy="144" r="3.6"/>
+      <circle cx="142" cy="90" r="3.6"/><circle cx="80" cy="168" r="3.6"/><circle cx="108" cy="180" r="3.6"/>
+      <circle cx="114" cy="216" r="3.6"/><circle cx="130" cy="260" r="3.6"/><circle cx="148" cy="286" r="3.6"/>
+      <circle cx="162" cy="52" r="3.6"/><circle cx="122" cy="64" r="3.6"/>
     </g>
 
-    <!-- right circuit (cyan) -->
-    <g stroke="#5CC9F2" fill="none" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M236 96 H256 V60"/><path d="M236 96 H272 V82"/><path d="M236 118 H290 L308 102"/>
-      <path d="M236 140 H262 V112"/><path d="M236 140 H316"/><path d="M236 162 H286 V210"/>
-      <path d="M236 206 H300 V236"/><path d="M286 162 H330"/><path d="M316 140 L338 126"/>
+    <g stroke="#5CC9F2" fill="none" stroke-width="4.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M236 98 H256 V62"/><path d="M236 98 H272 V84"/><path d="M236 120 H290 L308 104"/>
+      <path d="M236 142 H262 V114"/><path d="M236 142 H316"/><path d="M236 164 H286 V212"/>
+      <path d="M236 208 H300 V238"/><path d="M286 164 H330"/><path d="M316 142 L338 128"/>
     </g>
     <g fill="#5CC9F2">
-      <circle cx="256" cy="60" r="6.5"/><circle cx="272" cy="82" r="6.5"/><circle cx="308" cy="102" r="6.5"/>
-      <circle cx="262" cy="112" r="6.5"/><circle cx="316" cy="140" r="6.5"/><circle cx="338" cy="126" r="6.5"/>
-      <circle cx="286" cy="210" r="6.5"/><circle cx="300" cy="236" r="6.5"/><circle cx="330" cy="162" r="6.5"/>
+      <circle cx="256" cy="62" r="6.5"/><circle cx="272" cy="84" r="6.5"/><circle cx="308" cy="104" r="6.5"/>
+      <circle cx="262" cy="114" r="6.5"/><circle cx="316" cy="142" r="6.5"/><circle cx="338" cy="128" r="6.5"/>
+      <circle cx="286" cy="212" r="6.5"/><circle cx="300" cy="238" r="6.5"/><circle cx="330" cy="164" r="6.5"/>
     </g>
 
-    <!-- central almond -->
-    <path d="M210 102 C182 140 184 228 210 266 Z" fill="#E3ECF8"/>
-    <path d="M210 102 C238 140 236 228 210 266 Z" fill="#29ABE2"/>
+    <path d="M210 96 C186 136 182 240 210 278 Z" fill="#E3ECF8"/>
+    <path d="M210 96 C234 136 238 240 210 278 Z" fill="#29ABE2"/>
   </g>
 </svg>
