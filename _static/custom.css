@@ -1,1 +1,217 @@
-/* This file intentionally left blank. */
+/* ============================================================================
+   Thalamus documentation theme (layered over Furo)
+   Brand: anatomical-navy + circuit-cyan on white, matching the Thalamus logo.
+   Type: geometric sans headings (Sora) · technical body/mono (IBM Plex).
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+/* ----- Palette + typography tokens ------------------------------------- */
+:root {
+  --tha-navy:        #16294C;
+  --tha-navy-deep:   #0E1B34;
+  --tha-cyan:        #1683BE;   /* readable accent / links on white */
+  --tha-cyan-bright: #29ABE2;   /* logo cyan — markers, dark-mode accent */
+  --tha-cyan-light:  #7DD3FC;
+  --tha-ink:         #0B1428;   /* dark-mode background */
+  --tha-warn:        #E08A2B;   /* semantic warning only (not brand) */
+
+  --font-stack: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-stack--monospace: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-stack--headings: "Sora", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* Light theme */
+body, body[data-theme="light"] {
+  --color-brand-primary: var(--tha-cyan);
+  --color-brand-content: var(--tha-cyan);
+  --color-brand-visited: var(--tha-navy);
+  --color-background-primary: #FCFDFE;
+  --color-background-secondary: #EEF2F8;
+  --color-foreground-primary: #15233C;
+  --color-foreground-secondary: #46566f;
+  --color-api-name: var(--tha-cyan);
+  --color-highlight-on-target: #eaf6fd;
+}
+
+/* Dark theme */
+body[data-theme="dark"] {
+  --color-brand-primary: #38BDF8;
+  --color-brand-content: #38BDF8;
+  --color-brand-visited: var(--tha-cyan-light);
+  --color-background-primary: #0B1428;
+  --color-background-secondary: #0F1C36;
+  --color-foreground-primary: #E7EEF8;
+  --color-foreground-secondary: #9FB3CE;
+  --color-highlight-on-target: #102338;
+}
+@media (prefers-color-scheme: dark) {
+  body:not([data-theme="light"]) {
+    --color-brand-primary: #38BDF8;
+    --color-brand-content: #38BDF8;
+    --color-background-primary: #0B1428;
+    --color-background-secondary: #0F1C36;
+    --color-foreground-primary: #E7EEF8;
+    --color-foreground-secondary: #9FB3CE;
+  }
+}
+
+/* ----- Signature scanline across the top of the page ------------------- */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  z-index: 50;
+  background: linear-gradient(90deg, var(--tha-navy) 0%, var(--tha-cyan) 50%, var(--tha-cyan-light) 100%);
+}
+
+/* ----- Headings -------------------------------------------------------- */
+h1, h2, h3, h4, h5, h6,
+.sidebar-brand-text {
+  font-family: var(--font-stack--headings);
+  font-weight: 700;
+  letter-spacing: -0.014em;
+}
+h1 {
+  font-size: 2.4rem;
+  line-height: 1.12;
+  background: linear-gradient(115deg, var(--tha-navy) 55%, var(--tha-cyan));
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+body[data-theme="dark"] h1 {
+  background: linear-gradient(115deg, #EAF2FB 50%, #38BDF8);
+  -webkit-background-clip: text; background-clip: text;
+}
+/* Accent tick before section headings */
+h2::before {
+  content: "";
+  display: inline-block;
+  width: 0.6em; height: 0.6em;
+  margin-right: 0.5em;
+  border-radius: 2px;
+  background: var(--tha-cyan-bright);
+  transform: translateY(-0.06em);
+}
+
+/* ----- Brand / sidebar logo ------------------------------------------- */
+.sidebar-brand { padding-top: 1.1rem; }
+.sidebar-logo { border-radius: 14px; box-shadow: 0 6px 20px rgba(22,41,76,0.16); }
+.sidebar-brand-text { font-size: 1.4rem; letter-spacing: 0.02em; }
+
+/* ----- Links ----------------------------------------------------------- */
+a { text-decoration-thickness: 1px; text-underline-offset: 2px; }
+a:hover { text-decoration-color: var(--tha-cyan-bright); }
+
+/* ----- Inline code + literals ----------------------------------------- */
+code.literal {
+  background: color-mix(in srgb, var(--tha-cyan) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tha-cyan) 26%, transparent);
+  border-radius: 7px;
+  padding: 0.06em 0.38em;
+  font-size: 0.86em;
+}
+.highlight { border-radius: 8px; box-shadow: inset 3px 0 0 var(--tha-cyan); }
+
+/* ----- Tables (node catalog, property lists) -------------------------- */
+table.docutils {
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 0 var(--color-background-border), 0 8px 24px rgba(15,28,54,0.07);
+}
+table.docutils thead th {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tha-cyan) 16%, transparent), transparent);
+  font-family: var(--font-stack--monospace);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-bottom: 2px solid var(--tha-cyan) !important;
+}
+table.docutils tbody tr:hover {
+  background: color-mix(in srgb, var(--tha-cyan) 8%, transparent);
+}
+table.docutils td:first-child { border-left: 3px solid transparent; }
+table.docutils tbody tr:hover td:first-child { border-left-color: var(--tha-cyan-bright); }
+table.docutils td code.literal { white-space: nowrap; }
+
+/* ----- Admonitions ----------------------------------------------------- */
+.admonition, div.admonition {
+  border-radius: 12px;
+  border: 1px solid var(--color-background-border);
+  border-left-width: 4px;
+  box-shadow: 0 6px 18px rgba(15,28,54,0.05);
+}
+.admonition.note { border-left-color: var(--tha-cyan); }
+.admonition.warning, .admonition.caution { border-left-color: var(--tha-warn); }
+.admonition > .admonition-title { font-family: var(--font-stack--monospace); letter-spacing: 0.02em; }
+
+/* ----- Screenshots / figures ------------------------------------------ */
+.body img, article img {
+  border-radius: 10px;
+  border: 1px solid var(--color-background-border);
+  box-shadow: 0 8px 24px rgba(15,28,54,0.10);
+}
+.body img[src*="logo"], .body img[src*="favicon"] { border: 0; box-shadow: none; }
+
+/* ----- Landing-page hero ----------------------------------------------- */
+.tha-hero {
+  margin: 0 0 2.2rem;
+  padding: 1.9rem 2rem;
+  border-radius: 18px;
+  color: #EAF2FB;
+  background:
+    radial-gradient(120% 140% at 82% 0%, rgba(41,171,226,0.22), transparent 60%),
+    linear-gradient(135deg, #16294C, #0B1428);
+  border: 1px solid #1E3358;
+  position: relative;
+  overflow: hidden;
+}
+.tha-hero::after {
+  content: "";
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(41,171,226,0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(41,171,226,0.07) 1px, transparent 1px);
+  background-size: 38px 38px;
+  pointer-events: none;
+}
+.tha-hero .tha-eyebrow {
+  font-family: var(--font-stack--monospace);
+  font-size: 0.72rem; letter-spacing: 0.34em; text-transform: uppercase;
+  color: #5CC9F2;
+}
+.tha-hero p {
+  font-family: var(--font-stack--monospace);
+  color: #AFC1DC; margin: 0.5rem 0 0; max-width: 54ch;
+}
+.tha-hero strong { color: #FFFFFF; font-weight: 600; }
+
+/* ----- Hero call-to-action buttons ------------------------------------ */
+.tha-cta { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1.25rem; position: relative; z-index: 1; }
+.tha-btn {
+  font-family: var(--font-stack--monospace);
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  padding: 0.5rem 1rem;
+  border-radius: 9px;
+  text-decoration: none !important;
+  color: #D7E8F5 !important;
+  border: 1px solid rgba(92,201,242,0.4);
+  background: rgba(41,171,226,0.08);
+  transition: transform .12s ease, background .15s ease, border-color .15s ease;
+}
+.tha-btn:hover { transform: translateY(-1px); background: rgba(41,171,226,0.18); border-color: rgba(92,201,242,0.8); }
+.tha-btn--primary {
+  color: #04283b !important;
+  background: linear-gradient(120deg, #5CC9F2, #29ABE2);
+  border-color: transparent;
+  font-weight: 600;
+}
+.tha-btn--primary:hover { background: linear-gradient(120deg, #7fd6f6, #34b5ea); }
+
+/* ----- Misc polish ----------------------------------------------------- */
+.sidebar-search { border-radius: 10px; }
+.toc-tree li.current > a { border-left-color: var(--tha-cyan-bright); }
