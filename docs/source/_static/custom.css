@@ -1,0 +1,220 @@
+/* ============================================================================
+   Thalamus documentation — "Signal Lab" theme (layered over Furo)
+   Editorial serif headings (Fraunces) · technical body/mono (IBM Plex)
+   Ink / teal / amber palette with an oscilloscope motif.
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+/* ----- Palette + typography tokens ------------------------------------- */
+:root {
+  --tha-ink:        #0B1220;
+  --tha-teal:       #0D9488;
+  --tha-teal-deep:  #0F766E;
+  --tha-teal-bright:#2DD4BF;
+  --tha-amber:      #D97706;
+  --tha-amber-soft: #F59E0B;
+
+  --font-stack: "IBM Plex Sans", system-ui, -apple-system, Segoe UI, sans-serif;
+  --font-stack--monospace: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-stack--headings: "Fraunces", Georgia, "Times New Roman", serif;
+}
+
+/* Light theme */
+body, body[data-theme="light"] {
+  --color-brand-primary: var(--tha-teal-deep);
+  --color-brand-content: var(--tha-teal-deep);
+  --color-brand-visited: var(--tha-teal);
+  --color-background-primary: #FBFAF7;
+  --color-background-secondary: #F3F1EC;
+  --color-foreground-primary: #11192a;
+  --color-foreground-secondary: #45526b;
+  --color-api-name: var(--tha-teal-deep);
+  --color-highlight-on-target: #fff7e6;
+}
+
+/* Dark theme */
+body[data-theme="dark"] {
+  --color-brand-primary: var(--tha-teal-bright);
+  --color-brand-content: var(--tha-teal-bright);
+  --color-brand-visited: #5EEAD4;
+  --color-background-primary: #0B1220;
+  --color-background-secondary: #0E1726;
+  --color-foreground-primary: #E6EEF6;
+  --color-foreground-secondary: #9FB3C8;
+  --color-highlight-on-target: #1f2a18;
+}
+@media (prefers-color-scheme: dark) {
+  body:not([data-theme="light"]) {
+    --color-brand-primary: var(--tha-teal-bright);
+    --color-brand-content: var(--tha-teal-bright);
+    --color-background-primary: #0B1220;
+    --color-background-secondary: #0E1726;
+    --color-foreground-primary: #E6EEF6;
+    --color-foreground-secondary: #9FB3C8;
+  }
+}
+
+/* ----- Signature scanline across the top of the page ------------------- */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  z-index: 50;
+  background: linear-gradient(90deg, var(--tha-teal-deep) 0%, var(--tha-teal-bright) 45%, var(--tha-amber-soft) 100%);
+}
+
+/* ----- Headings -------------------------------------------------------- */
+h1, h2, h3, h4, h5, h6,
+.sidebar-brand-text {
+  font-family: var(--font-stack--headings);
+  font-weight: 600;
+  letter-spacing: -0.012em;
+}
+h1 {
+  font-size: 2.5rem;
+  line-height: 1.12;
+  font-weight: 700;
+  background: linear-gradient(120deg, var(--color-foreground-primary) 60%, var(--tha-teal-deep));
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+body[data-theme="dark"] h1 {
+  background: linear-gradient(120deg, #F4F8FB 55%, var(--tha-teal-bright));
+  -webkit-background-clip: text; background-clip: text;
+}
+/* Accent tick before section headings */
+h2::before {
+  content: "";
+  display: inline-block;
+  width: 0.62em; height: 0.62em;
+  margin-right: 0.5em;
+  border-radius: 2px;
+  background: var(--tha-amber-soft);
+  transform: translateY(-0.06em);
+}
+
+/* ----- Brand / sidebar logo ------------------------------------------- */
+.sidebar-brand { padding-top: 1.1rem; }
+.sidebar-logo { border-radius: 16px; box-shadow: 0 6px 20px rgba(13,148,136,0.22); }
+.sidebar-brand-text { font-size: 1.45rem; letter-spacing: 0.01em; }
+
+/* ----- Links ----------------------------------------------------------- */
+a { text-decoration-thickness: 1px; text-underline-offset: 2px; }
+a:hover { text-decoration-color: var(--tha-amber-soft); }
+
+/* ----- Inline code + literals ----------------------------------------- */
+code.literal, .highlight {
+  border-radius: 8px;
+}
+code.literal {
+  background: color-mix(in srgb, var(--tha-teal) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tha-teal) 24%, transparent);
+  padding: 0.06em 0.38em;
+  font-size: 0.86em;
+}
+.highlight { box-shadow: inset 3px 0 0 var(--tha-teal); }
+
+/* ----- Tables (node catalog, property lists) -------------------------- */
+table.docutils {
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 0 var(--color-background-border), 0 8px 24px rgba(11,18,32,0.06);
+}
+table.docutils thead th {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tha-teal) 16%, transparent), transparent);
+  font-family: var(--font-stack--monospace);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-bottom: 2px solid var(--tha-teal) !important;
+}
+table.docutils tbody tr:hover {
+  background: color-mix(in srgb, var(--tha-teal) 7%, transparent);
+}
+table.docutils td:first-child { border-left: 3px solid transparent; }
+table.docutils tbody tr:hover td:first-child { border-left-color: var(--tha-amber-soft); }
+table.docutils td code.literal { white-space: nowrap; }
+
+/* ----- Admonitions: crisp, flat, accent-led --------------------------- */
+.admonition, div.admonition {
+  border-radius: 12px;
+  border: 1px solid var(--color-background-border);
+  border-left-width: 4px;
+  box-shadow: 0 6px 18px rgba(11,18,32,0.05);
+}
+.admonition.note { border-left-color: var(--tha-teal); }
+.admonition.warning, .admonition.caution { border-left-color: var(--tha-amber); }
+.admonition > .admonition-title { font-family: var(--font-stack--monospace); letter-spacing: 0.02em; }
+
+/* ----- Screenshots / figures ------------------------------------------ */
+.body img, article img {
+  border-radius: 10px;
+  border: 1px solid var(--color-background-border);
+  box-shadow: 0 8px 24px rgba(11,18,32,0.10);
+}
+.body img[src*="logo"], .body img[src*="favicon"] { border: 0; box-shadow: none; }
+
+/* ----- Landing-page hero (see index.rst .tha-hero) -------------------- */
+.tha-hero {
+  margin: 0 0 2.2rem;
+  padding: 1.9rem 2rem;
+  border-radius: 18px;
+  color: #EAF2F1;
+  background:
+    radial-gradient(120% 140% at 80% 0%, rgba(45,212,191,0.18), transparent 60%),
+    linear-gradient(135deg, #0E1A2B, #0A1320);
+  border: 1px solid #1E3A3A;
+  position: relative;
+  overflow: hidden;
+}
+.tha-hero::after {
+  content: "";
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(45,212,191,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(45,212,191,0.06) 1px, transparent 1px);
+  background-size: 38px 38px;
+  pointer-events: none;
+}
+.tha-hero .tha-eyebrow {
+  font-family: var(--font-stack--monospace);
+  font-size: 0.72rem; letter-spacing: 0.34em; text-transform: uppercase;
+  color: #5EEAD4;
+}
+.tha-hero h1, .tha-hero p { all: revert; }
+.tha-hero p {
+  font-family: var(--font-stack--monospace);
+  color: #A9BBD0; margin: 0.5rem 0 0; max-width: 52ch;
+}
+.tha-hero strong { color: #F7FAF9; font-weight: 600; }
+
+/* ----- Hero call-to-action buttons ------------------------------------ */
+.tha-cta { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1.25rem; position: relative; z-index: 1; }
+.tha-btn {
+  font-family: var(--font-stack--monospace);
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  padding: 0.5rem 1rem;
+  border-radius: 9px;
+  text-decoration: none !important;
+  color: #D7E6E3 !important;
+  border: 1px solid rgba(94,234,212,0.35);
+  background: rgba(45,212,191,0.06);
+  transition: transform .12s ease, background .15s ease, border-color .15s ease;
+}
+.tha-btn:hover { transform: translateY(-1px); background: rgba(45,212,191,0.14); border-color: rgba(94,234,212,0.7); }
+.tha-btn--primary {
+  color: #06231f !important;
+  background: linear-gradient(120deg, #5EEAD4, #2DD4BF);
+  border-color: transparent;
+  font-weight: 600;
+}
+.tha-btn--primary:hover { background: linear-gradient(120deg, #7df0de, #34e3cd); }
+
+/* ----- Misc polish ----------------------------------------------------- */
+.sidebar-search { border-radius: 10px; }
+.toc-tree li.current > a { border-left-color: var(--tha-amber-soft); }
