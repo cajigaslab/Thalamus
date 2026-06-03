@@ -1,17 +1,17 @@
 <svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Thalamus logo">
   <defs>
     <linearGradient id="tile" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#0E1A2B"/>
-      <stop offset="1" stop-color="#0A1320"/>
+      <stop stop-color="#16294C"/>
+      <stop offset="1" stop-color="#0B1428"/>
     </linearGradient>
     <linearGradient id="trace" x1="14" y1="64" x2="114" y2="64" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#0D9488"/>
-      <stop offset="0.5" stop-color="#2DD4BF"/>
-      <stop offset="1" stop-color="#5EEAD4"/>
+      <stop stop-color="#1683BE"/>
+      <stop offset="0.5" stop-color="#29ABE2"/>
+      <stop offset="1" stop-color="#7DD3FC"/>
     </linearGradient>
     <radialGradient id="node" cx="0.5" cy="0.5" r="0.5">
-      <stop stop-color="#FCD34D"/>
-      <stop offset="1" stop-color="#F59E0B"/>
+      <stop stop-color="#7DD3FC"/>
+      <stop offset="1" stop-color="#29ABE2"/>
     </radialGradient>
     <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
       <feGaussianBlur stdDeviation="2.4" result="b"/>
@@ -19,20 +19,20 @@
     </filter>
   </defs>
 
-  <rect x="2" y="2" width="124" height="124" rx="28" fill="url(#tile)" stroke="#1E3A3A" stroke-width="1.5"/>
+  <rect x="2" y="2" width="124" height="124" rx="28" fill="url(#tile)" stroke="#26416E" stroke-width="1.5"/>
 
-  <!-- oscilloscope grid -->
-  <g stroke="#2DD4BF" stroke-opacity="0.10" stroke-width="1">
+  <!-- circuit grid -->
+  <g stroke="#29ABE2" stroke-opacity="0.12" stroke-width="1">
     <path d="M30 18V110M64 18V110M98 18V110"/>
     <path d="M18 40H110M18 64H110M18 88H110"/>
   </g>
 
-  <!-- signal trace passing through the relay node -->
+  <!-- signal trace through the relay node -->
   <path d="M14 78 L34 78 L44 44 L58 96 L70 30 L82 64 L114 64"
         fill="none" stroke="url(#trace)" stroke-width="5.5"
         stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
 
-  <!-- central relay node -->
+  <!-- relay node -->
   <circle cx="82" cy="64" r="9.5" fill="url(#node)" filter="url(#glow)"/>
-  <circle cx="82" cy="64" r="3.4" fill="#0A1320"/>
+  <circle cx="82" cy="64" r="3.4" fill="#0B1428"/>
 </svg>

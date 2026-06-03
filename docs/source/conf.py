@@ -62,12 +62,12 @@ html_favicon = '_static/favicon.svg'
 html_theme_options = {
     'sidebar_hide_name': False,
     'light_css_variables': {
-        'color-brand-primary': '#0F766E',
-        'color-brand-content': '#0F766E',
+        'color-brand-primary': '#1683BE',
+        'color-brand-content': '#1683BE',
     },
     'dark_css_variables': {
-        'color-brand-primary': '#2DD4BF',
-        'color-brand-content': '#2DD4BF',
+        'color-brand-primary': '#38BDF8',
+        'color-brand-content': '#38BDF8',
     },
     'footer_icons': [
         {
