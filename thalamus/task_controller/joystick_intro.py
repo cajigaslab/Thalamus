@@ -96,6 +96,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       task_config["ignore_idle_trial_failures"] = False
   if "ignored_idle_sample_clear_threshold" not in task_config:
     task_config["ignored_idle_sample_clear_threshold"] = 50
+  if "fail_on_touch_input" not in task_config:
+    task_config["fail_on_touch_input"] = False
   if "animations_enabled" not in task_config:
     task_config["animations_enabled"] = False
   if "task_animation_enabled" not in task_config:
@@ -171,6 +173,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Constant("Trial Timeout (s)", "trial_timeout", 0.5, "s", precision=3),
     Form.Bool("Ignore Idle Trial Failures", "ignore_idle_trial_failures", False),
     Form.Constant("Idle Sample Clear Threshold", "ignored_idle_sample_clear_threshold", 50, precision=0),
+    Form.Bool("Fail On Touch Input", "fail_on_touch_input", False),
     Form.Constant("Intertrial Interval (s)", "intertrial_interval", 1.0, "s", precision=3),
   )
   layout.addWidget(form)
@@ -1645,6 +1648,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   trial_timeout = float(task_config.get("trial_timeout", 0.5))
   ignore_idle_trial_failures = bool(task_config.get("ignore_idle_trial_failures", False))
   ignored_idle_sample_clear_threshold = max(0, int(task_config.get("ignored_idle_sample_clear_threshold", 50)))
+  fail_on_touch_input = bool(task_config.get("fail_on_touch_input", False))
   intertrial_interval = float(task_config.get("intertrial_interval", 1.0))
   configured_targets = task_config.get("targets", [])
   animations_enabled = bool(task_config.get("animations_enabled", False))
@@ -1694,6 +1698,9 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   operator_cursor_latched = False
   joystick_active_this_trial = False
   cursor_inside_target = False
+  touch_detected_this_trial = False
+  last_touch_pos = QPoint()
+  last_touch_time: typing.Optional[float] = None
   hold_progress_ratio = 0.0
   success_pop_start: typing.Optional[float] = None
   success_pop_x = 0.5
@@ -1732,6 +1739,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     "center_gate_radius_ratio": center_gate_radius_ratio,
     "ignored_idle_sample_clear_threshold": ignored_idle_sample_clear_threshold,
     "ignored_idle_sample_clear_events": [],
+    "fail_on_touch_input": fail_on_touch_input,
     "trial_attempt_count": 0,
     "attempts": [],
     "joystick_samples": [],
@@ -1803,6 +1811,16 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     elif key == Qt.Key.Key_Down:
       operator_down_pressed = True
     persist_operator_key_state()
+
+  def touch_handler(cursor: QPoint) -> None:
+    nonlocal touch_detected_this_trial
+    nonlocal last_touch_pos
+    nonlocal last_touch_time
+    if cursor.x() < 0:
+      return
+    touch_detected_this_trial = True
+    last_touch_pos = cursor
+    last_touch_time = time.perf_counter()
 
   async def analog_processor(stream: typing.Any) -> None:
     nonlocal analog_joystick_x, analog_joystick_y
@@ -1955,6 +1973,24 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     })
     behav_result["joystick_samples"].clear()
     context.behav_result = behav_result
+
+  async def fail_for_touch_input(now: float) -> TaskResult:
+    nonlocal streak_count
+    touch_time = now if last_touch_time is None else last_touch_time
+    append_event(
+      "touch_input_fail",
+      now,
+      touch_x=last_touch_pos.x(),
+      touch_y=last_touch_pos.y(),
+      touch_time_perf_counter=touch_time,
+      touch_time_since_session_start_s=max(0.0, touch_time - session_start),
+    )
+    streak_count = 0
+    task_config["_streak_count"] = 0
+    finalize_attempt("fail", now, failure_reason="touch_input")
+    fail_sound.play()
+    await context.log("BehavState=fail")
+    return TaskResult(success=False)
 
   def reset_intertrial_gate(now: float) -> None:
     nonlocal iti_countdown_start
@@ -2238,6 +2274,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   context.widget.renderer = renderer
   context.widget.key_release_handler = on_key_release
   context.widget.key_press_handler = on_key_press
+  context.widget.touch_listener = touch_handler
   context.widget.setFocus()
 
   channel = context.get_channel('localhost:50050')
@@ -2332,6 +2369,9 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       hold_progress_ratio = 0.0
 
       if cursor_only_mode:
+        if fail_on_touch_input and touch_detected_this_trial:
+          return await fail_for_touch_input(now)
+
         free_play_is_active = analog_magnitude >= free_play_active_threshold
         free_play_started = free_play_is_active and not free_play_was_active
         free_play_ended = (not free_play_is_active) and free_play_was_active
@@ -2455,6 +2495,9 @@ async def run(context: TaskContextProtocol) -> TaskResult:
           trial_start = now
           reset_attempt_tracking(now)
           joystick_active_this_trial = False
+          touch_detected_this_trial = False
+          last_touch_pos = QPoint()
+          last_touch_time = None
           state = "start_on"
           state_brightness = toggle_brightness(state_brightness)
           if current_attempt is not None:
@@ -2480,6 +2523,9 @@ async def run(context: TaskContextProtocol) -> TaskResult:
           )
           await context.log("BehavState=start_on")
       else:
+        if fail_on_touch_input and touch_detected_this_trial:
+          return await fail_for_touch_input(now)
+
         if joystick_is_active and not joystick_active_this_trial:
           ignored_idle_trial_count = 0
           first_movement_time = now

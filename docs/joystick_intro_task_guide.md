@@ -21,6 +21,8 @@ In free-play mode:
 - Free-play can optionally reward joystick exploration without any target.
 - The task ends when the configured key is released.
 
+If `fail_on_touch_input` is enabled, touch-screen input produces a failed outcome and plays the failure sound in both normal target-guided mode and cursor-only free-play mode.
+
 ## Operator View Overlay
 
 When this task is shown in Operator View, it now draws a white text overlay in the top-right corner of the operator display only.
@@ -143,11 +145,23 @@ The default value is `0.15`.
 4. If free-play reward is enabled, analog joystick activity can trigger reward.
 5. When the configured end key is released, the run ends as a successful free-play exit.
 
+## Touch-Input Failure
+
+The `Fail On Touch Input` checkbox can be used to discourage reaching to the touch screen during joystick shaping.
+When enabled, any valid touch-screen input during cursor-only free play fails the free-play run, plays the failure sound, and logs `BehavState=fail`.
+
+In normal target-guided mode, touch input fails the active target attempt.
+Touches during intertrial are ignored so the punishment is tied to the visible joystick trial.
+
+Touch failures are stored with `failure_reason` set to `touch_input`.
+
 ## Cursor-Only Free-Play Reward
 
 Cursor-only free-play mode can optionally reward joystick exploration. This is intended for the earliest learning stage, where simply contacting or moving the joystick should be reinforced before target acquisition is required.
 
 This reward path is only used when `cursor_only_mode` is `true`. Normal target-based trials are unchanged.
+
+Reward channels in this task are looked up through the shared task-controller reward schedule. See [Reward Schedule Configuration](reward_schedule_configuration.md) for how schedule files, channel indexes, and reward durations are currently wired together.
 
 ### Free-play reward settings
 
@@ -505,6 +519,12 @@ Only used in cursor-only free-play mode.
 A sustained-active exploratory reward was requested.
 Only used in cursor-only free-play mode.
 Free-play reward events include reward channel, reward count, total free-play reward count, joystick x/y values, joystick magnitude, and reward kind.
+
+### `touch_input_fail`
+Touch-screen input was detected while touch failure was enabled.
+The event includes the touch x/y position and task-side touch timestamp.
+In normal target-guided mode this fails the active target attempt.
+In cursor-only free-play mode this fails the free-play run.
 
 ## What Is Stored Per Joystick Sample
 

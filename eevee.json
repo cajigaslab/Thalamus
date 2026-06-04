@@ -4,7 +4,7 @@
       "name": "Cam Rear",
       "type": "GENICAM",
       "Running": true,
-      "View": true,
+      "View": false,
       "Camera": "Spinnaker_GenTL:17278772",
       "WidthMax": 1280,
       "HeightMax": 1024,
@@ -213,6 +213,14 @@
         {
           "Name": "Joystick",
           "Address": ""
+        },
+        {
+          "Name": "Aruco Top",
+          "Address": ""
+        },
+        {
+          "Name": "Aruco Left",
+          "Address": ""
         }
       ],
       "tab": 1
@@ -257,10 +265,10 @@
       "AcquisitionFrameRate": 60.0,
       "Gain": 0.0,
       "view_geometry": [
-        66,
-        1232,
-        557,
-        446
+        69,
+        1237,
+        597,
+        470
       ],
       "Camera Values": {
         "WidthMax": 1280,
@@ -290,10 +298,10 @@
       "AcquisitionFrameRate": 60.0,
       "Gain": 0.0,
       "view_geometry": [
-        66,
-        1722,
-        566,
-        455
+        69,
+        1752,
+        595,
+        487
       ],
       "Camera Values": {
         "WidthMax": 1280,
@@ -452,15 +460,29 @@
           "Image": true,
           "Motion": true,
           "Text": true
+        },
+        {
+          "Node": "Aruco Left",
+          "Time Series": false,
+          "Image": false,
+          "Motion": true,
+          "Text": false
+        },
+        {
+          "Node": "Aruco Top",
+          "Time Series": false,
+          "Image": false,
+          "Motion": true,
+          "Text": false
         }
       ],
-      "rec": 3,
-      "start": 948293.130895367,
+      "rec": 5,
+      "start": 1033979.115926974,
       "Files": [],
       "Metadata": [
         {
           "Key": "Rec",
-          "Value": 3
+          "Value": 5
         }
       ],
       "Simple Copy": false
@@ -711,7 +733,7 @@
     {
       "name": "Aruco Top",
       "type": "ARUCO",
-      "Running": false,
+      "Running": true,
       "Marker Mode": false,
       "View": false,
       "Source": "Distortion Cam Top",
@@ -745,16 +767,16 @@
         }
       ],
       "view_geometry": [
-        2807,
-        1381,
-        694,
-        676
+        66,
+        1738,
+        595,
+        483
       ]
     },
     {
       "name": "Aruco Left",
       "type": "ARUCO",
-      "Running": false,
+      "Running": true,
       "Marker Mode": false,
       "View": false,
       "Source": "Distortion Cam Left",
@@ -788,25 +810,25 @@
         }
       ],
       "view_geometry": [
-        2279,
-        1403,
-        400,
-        408
+        66,
+        1235,
+        596,
+        463
       ]
     }
   ],
   "thalamus_view_geometry": [
-    18,
-    244,
-    494,
+    38,
+    26,
+    506,
     768
   ],
   "data_views": [
     {
       "view_geometry": [
-        499,
-        7,
-        1028,
+        538,
+        9,
+        964,
         194
       ],
       "rows": 1,
@@ -838,8 +860,8 @@
     },
     {
       "view_geometry": [
-        17,
-        0,
+        1389,
+        1267,
         488,
         187
       ],
@@ -882,12 +904,12 @@
       ]
     },
     {
-      "node": "Storage",
+      "node": "Cam Left",
       "dock_area": "right",
       "view_geometry": [
-        300,
+        190,
         23,
-        194,
+        316,
         745
       ]
     }
@@ -896,7 +918,7 @@
     {
       "task_type": "joystick_intro",
       "type": "task",
-      "goal": 98,
+      "goal": 79,
       "name": "Grid",
       "intertrial_timeout": {
         "min": 1,
@@ -950,7 +972,7 @@
           "x_norm": 0.17,
           "y_norm": 0.496,
           "radius_ratio": 0.2,
-          "hold_time": 0.1,
+          "hold_time": 0.2,
           "reward_channel": 2,
           "target_color": [
             255,
@@ -959,12 +981,12 @@
           ]
         },
         {
-          "name": "Target 1 Copy",
+          "name": "Top 2",
           "enabled": true,
           "x_norm": 0.506,
-          "y_norm": 0.845,
-          "radius_ratio": 0.2,
-          "hold_time": 0.1,
+          "y_norm": 0.9,
+          "radius_ratio": 0.15,
+          "hold_time": 0.2,
           "reward_channel": 2,
           "target_color": [
             255,
@@ -973,12 +995,12 @@
           ]
         },
         {
-          "name": "Target 1 Copy",
+          "name": "Bot",
           "enabled": true,
           "x_norm": 0.504,
           "y_norm": 0.205,
           "radius_ratio": 0.2,
-          "hold_time": 0.1,
+          "hold_time": 0.2,
           "reward_channel": 2,
           "target_color": [
             255,
@@ -992,7 +1014,21 @@
           "x_norm": 0.826,
           "y_norm": 0.505,
           "radius_ratio": 0.2,
-          "hold_time": 0.1,
+          "hold_time": 0.2,
+          "reward_channel": 2,
+          "target_color": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "name": "Top 1",
+          "enabled": true,
+          "x_norm": 0.506,
+          "y_norm": 0.7,
+          "radius_ratio": 0.15,
+          "hold_time": 0.2,
           "reward_channel": 2,
           "target_color": [
             255,
@@ -1021,7 +1057,7 @@
       "task_region_height": 0.67,
       "reward_channel": 2.0,
       "trial_timeout": 8.0,
-      "intertrial_interval": 1.0,
+      "intertrial_interval": 1.5,
       "disable_up": true,
       "disable_down": true,
       "disable_left": false,
@@ -1037,10 +1073,10 @@
       "show_hold_progress_ring": true,
       "show_success_pop": true,
       "success_pop_duration_s": 0.12,
-      "up_influence_pct": 80,
-      "down_influence_pct": 79,
-      "left_influence_pct": 0,
-      "right_influence_pct": 0,
+      "up_influence_pct": 100,
+      "down_influence_pct": 100,
+      "left_influence_pct": 7,
+      "right_influence_pct": 6,
       "ignore_idle_trial_failures": true,
       "state_indicator_x": 30.0,
       "state_indicator_y": 70.0,
@@ -1069,11 +1105,12 @@
       "free_play_sustain_interval_s": 1.0,
       "require_center_before_trial": false,
       "center_gate_radius_ratio": 0.15,
+      "ignored_idle_sample_clear_threshold": 50,
       "task_cluster_name": "Joy",
       "queue_index": 0,
       "_streak_count": 0,
       "_last_cursor_x": 0.5,
-      "_last_cursor_y": 0.476392578125,
+      "_last_cursor_y": 0.5228515625,
       "_operator_keys_pressed": {
         "left": false,
         "right": false,
@@ -1121,7 +1158,7 @@
         50.0
       ]
     ],
-    "index": 1
+    "index": 0
   },
   "touch_channels": [
     0,
@@ -1174,7 +1211,7 @@
     },
     "Auto Clear": true
   },
-  "status": "Joy/Grid = 1/7",
+  "status": "Joy/Grid = 143/11",
   "Persistence": {
     "Cached": []
   },
@@ -7429,7 +7466,8 @@
           "free_play_sustain_initial_delay_s": 0.0,
           "free_play_sustain_interval_s": 1.0,
           "require_center_before_trial": false,
-          "center_gate_radius_ratio": 0.15
+          "center_gate_radius_ratio": 0.15,
+          "ignored_idle_sample_clear_threshold": 50
         },
         {
           "task_type": "joystick_intro",
@@ -7642,7 +7680,8 @@
           "free_play_sustain_initial_delay_s": 0.0,
           "free_play_sustain_interval_s": 1.0,
           "require_center_before_trial": false,
-          "center_gate_radius_ratio": 0.15
+          "center_gate_radius_ratio": 0.15,
+          "ignored_idle_sample_clear_threshold": 50
         },
         {
           "task_type": "joystick_intro",
@@ -7813,7 +7852,8 @@
           "free_play_sustain_initial_delay_s": 0.0,
           "free_play_sustain_interval_s": 1.0,
           "require_center_before_trial": false,
-          "center_gate_radius_ratio": 0.15
+          "center_gate_radius_ratio": 0.15,
+          "ignored_idle_sample_clear_threshold": 50
         },
         {
           "task_type": "joystick_intro",
@@ -7872,7 +7912,7 @@
               "x_norm": 0.17,
               "y_norm": 0.496,
               "radius_ratio": 0.2,
-              "hold_time": 0.1,
+              "hold_time": 0.2,
               "reward_channel": 2,
               "target_color": [
                 255,
@@ -7881,12 +7921,12 @@
               ]
             },
             {
-              "name": "Target 1 Copy",
+              "name": "Top 2",
               "enabled": true,
               "x_norm": 0.506,
-              "y_norm": 0.845,
-              "radius_ratio": 0.2,
-              "hold_time": 0.1,
+              "y_norm": 0.9,
+              "radius_ratio": 0.15,
+              "hold_time": 0.2,
               "reward_channel": 2,
               "target_color": [
                 255,
@@ -7895,12 +7935,12 @@
               ]
             },
             {
-              "name": "Target 1 Copy",
+              "name": "Bot",
               "enabled": true,
               "x_norm": 0.504,
               "y_norm": 0.205,
               "radius_ratio": 0.2,
-              "hold_time": 0.1,
+              "hold_time": 0.2,
               "reward_channel": 2,
               "target_color": [
                 255,
@@ -7914,7 +7954,21 @@
               "x_norm": 0.826,
               "y_norm": 0.505,
               "radius_ratio": 0.2,
-              "hold_time": 0.1,
+              "hold_time": 0.2,
+              "reward_channel": 2,
+              "target_color": [
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "name": "Top 1",
+              "enabled": true,
+              "x_norm": 0.506,
+              "y_norm": 0.7,
+              "radius_ratio": 0.15,
+              "hold_time": 0.2,
               "reward_channel": 2,
               "target_color": [
                 255,
@@ -7943,7 +7997,7 @@
           "task_region_height": 0.67,
           "reward_channel": 2.0,
           "trial_timeout": 8.0,
-          "intertrial_interval": 1.0,
+          "intertrial_interval": 1.5,
           "disable_up": true,
           "disable_down": true,
           "disable_left": false,
@@ -7959,10 +8013,10 @@
           "show_hold_progress_ring": true,
           "show_success_pop": true,
           "success_pop_duration_s": 0.12,
-          "up_influence_pct": 80,
-          "down_influence_pct": 79,
-          "left_influence_pct": 0,
-          "right_influence_pct": 0,
+          "up_influence_pct": 100,
+          "down_influence_pct": 100,
+          "left_influence_pct": 7,
+          "right_influence_pct": 6,
           "ignore_idle_trial_failures": true,
           "state_indicator_x": 30.0,
           "state_indicator_y": 70.0,
@@ -7990,7 +8044,8 @@
           "free_play_sustain_initial_delay_s": 0.0,
           "free_play_sustain_interval_s": 1.0,
           "require_center_before_trial": false,
-          "center_gate_radius_ratio": 0.15
+          "center_gate_radius_ratio": 0.15,
+          "ignored_idle_sample_clear_threshold": 50
         },
         {
           "task_type": "joystick_intro",
@@ -8511,7 +8566,8 @@
           "free_play_sustain_initial_delay_s": 0.0,
           "free_play_sustain_interval_s": 1.0,
           "require_center_before_trial": false,
-          "center_gate_radius_ratio": 0.15
+          "center_gate_radius_ratio": 0.15,
+          "ignored_idle_sample_clear_threshold": 50
         },
         {
           "task_type": "joystick_intro",
@@ -8674,7 +8730,8 @@
           "free_play_sustain_initial_delay_s": 0.0,
           "free_play_sustain_interval_s": 1.0,
           "require_center_before_trial": false,
-          "center_gate_radius_ratio": 0.15
+          "center_gate_radius_ratio": 0.15,
+          "ignored_idle_sample_clear_threshold": 50
         },
         {
           "task_type": "joystick_intro",
@@ -8851,7 +8908,8 @@
           "free_play_sustain_initial_delay_s": 0.0,
           "free_play_sustain_interval_s": 2.5,
           "require_center_before_trial": false,
-          "center_gate_radius_ratio": 0.15
+          "center_gate_radius_ratio": 0.15,
+          "ignored_idle_sample_clear_threshold": 50
         }
       ]
     },
@@ -8967,10 +9025,10 @@
     "capture_mode": "framebuffer",
     "show_eye_scaling": false,
     "view_geometry": [
-      626,
-      1232,
-      833,
-      573
+      665,
+      1235,
+      669,
+      515
     ],
     "auto_launch": true
   }
