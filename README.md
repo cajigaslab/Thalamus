@@ -1,7 +1,7 @@
 <div align="center">
 
 <a href="https://cajigaslab.github.io/Thalamus/">
-  <img src=".github/assets/banner.svg" alt="Thalamus — real-time, closed-loop, multimodal data acquisition" width="100%">
+  <img src=".github/assets/banner.png" alt="Thalamus — real-time, closed-loop, multimodal data acquisition" width="100%">
 </a>
 
 <p><em>Real-time, synchronized, closed-loop multimodal data acquisition — built for the operating room and the research lab.</em></p>
