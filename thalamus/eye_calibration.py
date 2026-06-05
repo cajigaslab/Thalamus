@@ -36,6 +36,7 @@ DEFAULT_ANGULAR_SCALING = {
   'Angle': [],
   'Scale X': [],
   'Scale Y': [],
+  'Scale Default': 100.0
 }
 
 class SaccadeTarget(typing.NamedTuple):
@@ -239,7 +240,8 @@ class Task:
       angle, scalex, scaley = model['Angle'], model['Scale X'], model['Scale Y']
       length = min(len(angle), len(scalex), len(scaley))
       if not length:
-        return 10*x, 10*y
+        scale_default = model.get('Scale Default', 100.0)
+        return scale_default*x, scale_default*y
       
       val = numpy.arctan2(y, x)
       if val < 0:
@@ -622,6 +624,7 @@ class OperatorWindow(QMainWindow):
     reward_widget = QSpinBox()
     reward_widget.setRange(0, 10000)
     distance_widget = QDoubleSpinBox()
+    default_scale_widget = QDoubleSpinBox()
     distance_widget.setRange(0, 10000)
     distance_widget.setDecimals(3)
     dpi_widget = QDoubleSpinBox()
@@ -643,6 +646,8 @@ class OperatorWindow(QMainWindow):
     layout.addWidget(distance_widget)
     layout.addWidget(QLabel('DPI'))
     layout.addWidget(dpi_widget)
+    layout.addWidget(QLabel('Default Scale'))
+    layout.addWidget(default_scale_widget)
     layout.addWidget(clear_button)
     central_widget.setLayout(layout)
     self.setCentralWidget(central_widget)
@@ -665,6 +670,9 @@ class OperatorWindow(QMainWindow):
       if projective is not None:
         projective['DPI'] = val
 
+    def on_default_scale(val):
+      projective['Scale Default'] = val
+
     def on_clear():
       self.task.path.clear()
       self.task.training_path.clear()
@@ -684,12 +692,13 @@ class OperatorWindow(QMainWindow):
     reset_button.clicked.connect(self.task.reset)
     distance_widget.valueChanged.connect(on_screen_distance)
     dpi_widget.valueChanged.connect(on_dpi)
+    default_scale_widget.valueChanged.connect(on_default_scale)
     
     fixation_radius_widget.setValue(50)
     saccade_radius_widget.setValue(100)
     reward_widget.setValue(500)
 
-    models, projective = None, None
+    models, projective, angular = None, None, None
     def on_change(source, action, key, value):
       nonlocal models, projective
       #print('OperatorWindow', source is projective, key, value)
@@ -704,11 +713,17 @@ class OperatorWindow(QMainWindow):
         if key == 'Projective':
           projective = value
           value.recap()
+        if key == 'Angular Scaling':
+          angular = value
+          value.recap()
       elif source is projective:
         if key == 'Distance (m)':
           distance_widget.setValue(value)
         elif key == 'DPI':
           dpi_widget.setValue(value)
+      elif source is angular:
+        if key == 'Scale Default':
+          distance_widget.setValue(value)
 
     eye_scaling.add_recursive_observer(on_change)
     eye_scaling.recap()
