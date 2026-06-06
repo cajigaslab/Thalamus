@@ -63,9 +63,8 @@ class AngularScalingModelWidget(QWidget):
     
     if 'Angular Scaling' not in eye_config['Models']:
       eye_config['Models']['Angular Scaling'] = {
-        'Angle': [],
-        'Scale X': [],
-        'Scale Y': [],
+        'Pins': [],
+        'Scale Default': 100.0
       }
 
     self.model = eye_config['Models']['Angular Scaling']
@@ -79,9 +78,7 @@ class AngularScalingModelWidget(QWidget):
   def paintEvent(self, e):
     painter = QPainter(self)
 
-    anglef = self.model['Angle']
-    scalexf = self.model['Scale X']
-    scaleyf = self.model['Scale Y']
+    pins = numpy.array(self.model['Pins'])
     length = min(len(anglef), len(scalexf), len(scaleyf))
 
     diameter = min(self.width(), self.height()) - 10

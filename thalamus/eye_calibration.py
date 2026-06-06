@@ -8,6 +8,7 @@ import datetime
 import grpc
 
 import numpy
+import scipy.spatial.transform
 
 from thalamus.qt import *
 from thalamus import thalamus_pb2
@@ -35,9 +36,7 @@ DEFAULT_PROJECTIVE = {
 }
 
 DEFAULT_ANGULAR_SCALING = {
-  'Angle': [],
-  'Scale X': [],
-  'Scale Y': [],
+  'Pins': [],
   'Scale Default': 100.0
 }
 
@@ -75,10 +74,11 @@ class Task:
     models = None
     projective = None
     angular = None
-    self.scale_x_updater = None
-    self.scale_y_updater = None
+    pins = None
+    self.pins_updater = None
+    self.pins_matrix = None
     def on_change(source, action, key, value):
-      nonlocal models, projective, angular
+      nonlocal models, projective, angular, pins
 
       if source == eye_scaling:
         if key == 'Models':
@@ -102,10 +102,15 @@ class Task:
           self.dpi = value
           self.rebuild()
       elif source is angular:
-        if key == 'Scale X':
-          self.scale_x_updater = MeteredUpdater(value, datetime.timedelta(seconds=1), lambda: False)
-        elif key == 'Scale Y':
-          self.scale_y_updater = MeteredUpdater(value, datetime.timedelta(seconds=1), lambda: False)
+        if key == 'Pins':
+          self.pins_updater = MeteredUpdater(value, datetime.timedelta(seconds=1), lambda: False)
+          pins = value
+          value.recap()
+      elif source is pins:
+        self.pins_matrix = numpy.array(value)
+      elif source.parent is pins:
+        self.pins_matrix = numpy.array(source)
+
       #print(key, value)
       #print('params', self.distance_m, self.dpi)
 
@@ -114,12 +119,12 @@ class Task:
 
   async def prepare_reward(self):
     self.stub.inject_analog(self.reward_queue)
-    await self.reward_queue.put(thalamus_pb2.InjectAnalogRequest(node='Reward'))
+    await self.reward_queue.put(thalamus_pb2.InjectAnalogRequest(node='reward_in'))
 
   async def deliver_reward(self):
     await self.reward_queue.put(thalamus_pb2.InjectAnalogRequest(signal=thalamus_pb2.AnalogResponse(
       data=[5,0],
-      spans=[thalamus_pb2.Span(begin=0,end=2,name='Reward')],
+      spans=[thalamus_pb2.Span(begin=0,end=2,name='reward_in')],
       sample_intervals=[1_000_000*self.reward_ms])))
 
   def render(self, painter: QPainter, size: QSize, output: RenderOutput):
@@ -268,20 +273,22 @@ class Task:
       py = numpy.tan(ty*numpy.pi/180)*distance_inches*self.dpi
       return int(px), int(py)
     elif self.model_name == 'Angular Scaling':
-      angle, scalex, scaley = model['Angle'], model['Scale X'], model['Scale Y']
-      length = min(len(angle), len(scalex), len(scaley))
-      if not length:
+      if self.pins_matrix is None:
         scale_default = model.get('Scale Default', 100.0)
         return int(scale_default*x), int(scale_default*y)
       
       val = numpy.arctan2(y, x)
       if val < 0:
-        val = numpy.pi + (numpy.pi + val)
-      factorx = numpy.interp(val, angle[:length], scalex[:length], period=2*numpy.pi)
-      factory = numpy.interp(val, angle[:length], scaley[:length], period=2*numpy.pi)
-      return int(factorx*x), int(factory*y)
+        val = 2*numpy.pi + val
+      scale = numpy.interp(val, self.pins_matrix[:,0], self.pins_matrix[:,1], period=2*numpy.pi)
+      rotation = numpy.interp(val, self.pins_matrix[:,0], self.pins_matrix[:,2], period=2*numpy.pi)
 
-    
+      cos = numpy.cos(rotation)
+      sin = numpy.sin(rotation)
+      x = scale*(x*cos - y*sin)
+      y = scale*(x*sin + y*cos)
+      return int(x), int(y)
+
   def append_to_path(self, path, x, y):
     #Move to px, py, then draw an extremely short line.  With Round pen caps the result should be a circle the
     #size of the pen width.  If the pen is set to cosmetic then the circle size won't change with scale factors.
@@ -348,28 +355,28 @@ class Task:
       model.assign(DEFAULT_PROJECTIVE)
       pass
     elif self.model_name == 'Angular Scaling':
-      model['Angle'].assign([], self.rebuild)
-      self.scale_x_updater.assign([], self.rebuild)
-      self.scale_y_updater.assign([], self.rebuild)
+      self.pins_updater.assign([], self.rebuild)
 
   def start_nudge(self, start_point: typing.Tuple[int, int]):
     model = self.get_model(self.model_name)
     if self.model_name != 'Angular Scaling':
       return
 
+    if self.pins_matrix is None:
+      return
+
     sx, sy = start_point
+    start_angle = numpy.arctan2(sy, sx)
+    if start_angle < 0:
+      start_angle = numpy.pi + (numpy.pi + start_angle)
 
-    length = min(len(model['Angle']), len(model['Scale X']), len(model['Scale Y']))
-    
     min_distance, min_index = numpy.inf, -1
-    for i in range(length):
-      model_angle, scalex, scaley = model['Angle'][i], model['Scale X'][i], model['Scale Y'][i]
+    for i in range(self.pins_matrix.size[0]):
+      model_angle = self.pins_matrix[i, 0]
+      rotation = self.pins_matrix[i, 2]
+      origin_angle = start_angle - rotation
 
-      start_angle = numpy.arctan2(sy/scaley, sx/scalex)
-      if start_angle < 0:
-        start_angle = numpy.pi + (numpy.pi + start_angle)
-
-      distance = abs(model_angle - start_angle)
+      distance = abs(model_angle - origin_angle)
       if distance < min_distance:
         min_distance = distance
         min_index = i
@@ -378,7 +385,7 @@ class Task:
       return
 
     self.nudge_index = min_index
-    self.nudge_start_value = model['Scale X'][self.nudge_index], model['Scale Y'][self.nudge_index]
+    self.nudge_start_value = tuple(self.pins_matrix[min_index])
 
   def stop_nudge(self):
     self.nudge_index = -1
@@ -390,12 +397,17 @@ class Task:
 
     sx, sy = start_point
     cx, cy = current_point
-    xscale, yscale = cx/sx, cy/sy
 
-    model = self.get_model(self.model_name)
+    smag = (sx**2 + sy**2)**.5
+    cmag = (cx**2 + cy**2)**.5
+    cos = (sx*cx + sy*cy)/(smag*cmag)
+    delta_rotation = numpy.arccos(cos)
+    delta_scale = cmag/smag
+
+    new_pin = self.nudge_start_value[0], self.nudge_start_value[1]*delta_scale,  self.nudge_start_value[2] + delta_rotation
+
     if self.model_name == 'Angular Scaling':
-      self.scale_x_updater.setitem(self.nudge_index, self.nudge_start_value[0]*xscale, self.rebuild)
-      self.scale_y_updater.setitem(self.nudge_index, self.nudge_start_value[1]*yscale, self.rebuild)
+      self.pins_updater.setitem(self.nudge_index, new_pin, self.rebuild)
 
   def optimize(self):
     model = self.get_model(self.model_name)
@@ -420,22 +432,17 @@ class Task:
       if not self.training_data:
         return
       
-      new_angles = []
-      new_scalesx = []
-      new_scalesy = []
+      new_pins = []
       for ocu, deg, target in self.training_data:
-        angle = numpy.arctan2(ocu[1], ocu[0])
-        if angle < 0:
-          angle = numpy.pi + (numpy.pi + angle)
-        scalex = target.x/ocu[0]
-        scaley = target.y/ocu[1]
+        ocu_mag = (ocu[0]**2 + ocu[1]**2)**.5
+        target_mag = (target.x**2 + target.y**2)**.5
 
-        new_angles.append(angle)
-        new_scalesx.append(scalex)
-        new_scalesy.append(scaley)
-      model['Angle'].assign(new_angles, self.rebuild)
-      self.scale_x_updater.assign(new_scalesx, self.rebuild)
-      self.scale_y_updater.assign(new_scalesy, self.rebuild)
+        ocu_angle = numpy.arctan2(ocu[1], ocu[0])
+        target_angle = numpy.arctan2(target.y, target.x)
+
+        new_pins.append([ocu_angle, target_mag/ocu_mag, target_angle-ocu_angle])
+
+      self.pins_updater.assign(new_pins, self.rebuild)
 
   async def run(self):
     async def path_cleaner():
@@ -474,7 +481,6 @@ class Task:
 
     await asyncio.gather(path_cleaner(), eye_loop())
     #await asyncio.gather(eye_loop(), state_loop(self.stub), main_loop())
-
 
 class SubjectView(QWidget):
   def __init__(self, task: Task):
