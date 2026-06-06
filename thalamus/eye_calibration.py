@@ -3,6 +3,7 @@ import sys
 import asyncio
 import typing
 import json
+import datetime
 
 import grpc
 
@@ -12,6 +13,7 @@ from thalamus.qt import *
 from thalamus import thalamus_pb2
 from thalamus import thalamus_pb2_grpc
 from thalamus.task_controller.util import RenderOutput, create_task_with_exc_handling
+from thalamus.util import MeteredUpdater
 
 from thalamus.util import IterableQueue
 
@@ -66,12 +68,17 @@ class Task:
     self.training_data = []
     self.nudge_index = -1
     self.nudge_start_value = None
+    self.mouse_pos = None
+    self.seen_points = set()
 
     eye_scaling = config['eye_scaling']
     models = None
     projective = None
+    angular = None
+    self.scale_x_updater = None
+    self.scale_y_updater = None
     def on_change(source, action, key, value):
-      nonlocal models, projective
+      nonlocal models, projective, angular
 
       if source == eye_scaling:
         if key == 'Models':
@@ -80,17 +87,25 @@ class Task:
         elif key == 'Selected Model':
           self.model_name = value
           self.rebuild()
-      elif source == models:
+      elif source is models:
         if key == 'Projective':
           projective = value
           value.recap()
-      elif source == projective:
+        elif key == 'Angular Scaling':
+          angular = value
+          value.recap()
+      elif source is projective:
         if key == 'Distance (m)':
           self.distance_m = value
           self.rebuild()
         elif key == 'DPI':
           self.dpi = value
           self.rebuild()
+      elif source is angular:
+        if key == 'Scale X':
+          self.scale_x_updater = MeteredUpdater(value, datetime.timedelta(seconds=1), lambda: False)
+        elif key == 'Scale Y':
+          self.scale_y_updater = MeteredUpdater(value, datetime.timedelta(seconds=1), lambda: False)
       #print(key, value)
       #print('params', self.distance_m, self.dpi)
 
@@ -119,6 +134,22 @@ class Task:
     saccade_shape = QRect(0, 0,
                            2*self.saccade_radius, 2*self.saccade_radius)
     if output == RenderOutput.OPERATOR:
+
+      painter.save()
+      painter.resetTransform()
+      if self.mouse_pos:
+        keyboard_modifiers = QGuiApplication.queryKeyboardModifiers()
+        font_metrics = painter.fontMetrics()
+        if keyboard_modifiers & Qt.KeyboardModifier.ControlModifier:
+          text = 'Left: Add Target\nRight: Remove Target'
+        else:
+          text = 'Left: Nudge\nRight: Pin'
+        rect = font_metrics.boundingRect(QRect(0, 0, 1000000, 1000000), Qt.AlignmentFlag.AlignLeft | Qt.TextFlag.TextWordWrap, text)
+        rect.moveTo(self.mouse_pos.x() - rect.width(), self.mouse_pos.y())
+        painter.drawText(rect, Qt.AlignmentFlag.AlignLeft | Qt.TextFlag.TextWordWrap, text)
+
+      painter.restore()
+
       painter.save()
       painter.setPen(Qt.GlobalColor.yellow)
       painter.drawLine(0, size.height()//2, size.width(), size.height()//2)
@@ -235,20 +266,20 @@ class Task:
       distance_inches = distance_cm/2.54
       px = numpy.tan(tx*numpy.pi/180)*distance_inches*self.dpi
       py = numpy.tan(ty*numpy.pi/180)*distance_inches*self.dpi
-      return px, py
+      return int(px), int(py)
     elif self.model_name == 'Angular Scaling':
       angle, scalex, scaley = model['Angle'], model['Scale X'], model['Scale Y']
       length = min(len(angle), len(scalex), len(scaley))
       if not length:
         scale_default = model.get('Scale Default', 100.0)
-        return scale_default*x, scale_default*y
+        return int(scale_default*x), int(scale_default*y)
       
       val = numpy.arctan2(y, x)
       if val < 0:
         val = numpy.pi + (numpy.pi + val)
       factorx = numpy.interp(val, angle[:length], scalex[:length], period=2*numpy.pi)
       factory = numpy.interp(val, angle[:length], scaley[:length], period=2*numpy.pi)
-      return factorx*x, factory*y
+      return int(factorx*x), int(factory*y)
 
     
   def append_to_path(self, path, x, y):
@@ -308,6 +339,9 @@ class Task:
         self.training_path.lineTo(target.x, target.y)
 
   def reset(self):
+    self.training_path.clear()
+    del self.training_data[:]
+
     model = self.get_model(self.model_name)
     print('reset', self.model_name, model)
     if self.model_name == 'Projective':
@@ -315,8 +349,8 @@ class Task:
       pass
     elif self.model_name == 'Angular Scaling':
       model['Angle'].assign([], self.rebuild)
-      model['Scale X'].assign([], self.rebuild)
-      model['Scale Y'].assign([], self.rebuild)
+      self.scale_x_updater.assign([], self.rebuild)
+      self.scale_y_updater.assign([], self.rebuild)
 
   def start_nudge(self, start_point: typing.Tuple[int, int]):
     model = self.get_model(self.model_name)
@@ -360,8 +394,8 @@ class Task:
 
     model = self.get_model(self.model_name)
     if self.model_name == 'Angular Scaling':
-      model['Scale X'].setitem(self.nudge_index, self.nudge_start_value[0]*xscale, self.rebuild)
-      model['Scale Y'].setitem(self.nudge_index, self.nudge_start_value[1]*yscale, self.rebuild)
+      self.scale_x_updater.setitem(self.nudge_index, self.nudge_start_value[0]*xscale, self.rebuild)
+      self.scale_y_updater.setitem(self.nudge_index, self.nudge_start_value[1]*yscale, self.rebuild)
 
   def optimize(self):
     model = self.get_model(self.model_name)
@@ -400,10 +434,18 @@ class Task:
         new_scalesx.append(scalex)
         new_scalesy.append(scaley)
       model['Angle'].assign(new_angles, self.rebuild)
-      model['Scale X'].assign(new_scalesx, self.rebuild)
-      model['Scale Y'].assign(new_scalesy, self.rebuild)
+      self.scale_x_updater.assign(new_scalesx, self.rebuild)
+      self.scale_y_updater.assign(new_scalesy, self.rebuild)
 
   async def run(self):
+    async def path_cleaner():
+      while True:
+        await asyncio.sleep(1)
+        #Given a 60 Hz signal this is about 1 minute
+        self.points = self.points[-3600:]
+        #print(len(self.points))
+        self.rebuild()
+
     async def eye_loop():
       eye_stream = self.stub.analog(thalamus_pb2.AnalogRequest(node=thalamus_pb2.NodeSelector(type='OCULOMATIC')))
       async for m in eye_stream:
@@ -418,14 +460,19 @@ class Task:
           continue
 
         y *= -1
-        self.points.append((x, y))
         p = self.oculomatic_to_pixels_from_center(x, y)
+        #if p in self.seen_points:
+        #  continue
+        #self.seen_points.add(p)
+
+        self.points.append((x, y))
+        #print('p', p)
         if p is None:
           continue
         px, py = p
         self.append_to_path(self.path, px, py)
 
-    await eye_loop()
+    await asyncio.gather(path_cleaner(), eye_loop())
     #await asyncio.gather(eye_loop(), state_loop(self.stub), main_loop())
 
 
@@ -502,6 +549,7 @@ class OperatorView(QWidget):
     self.base_eye_scaling: dict | None = None
     self.actions = []
     self.actions_position = 0
+    self.setMouseTracking(True)
 
   def paintEvent(self, e):
     painter = QPainter(self)
@@ -598,6 +646,7 @@ class OperatorView(QWidget):
     #self.update()
 
   def mouseMoveEvent(self, event: QMouseEvent):
+    self.task.mouse_pos = event.pos()
     if self.drag_start is not None:
       drag_current = self.scale_to_subject(event.pos().x(), event.pos().y())
       self.task.nudge(self.drag_start, drag_current)
@@ -625,6 +674,8 @@ class OperatorWindow(QMainWindow):
     reward_widget.setRange(0, 10000)
     distance_widget = QDoubleSpinBox()
     default_scale_widget = QDoubleSpinBox()
+    default_scale_widget.setRange(0, 10000)
+    default_scale_widget.setValue(100.0)
     distance_widget.setRange(0, 10000)
     distance_widget.setDecimals(3)
     dpi_widget = QDoubleSpinBox()
@@ -671,15 +722,18 @@ class OperatorWindow(QMainWindow):
         projective['DPI'] = val
 
     def on_default_scale(val):
-      projective['Scale Default'] = val
+      if angular is not None:
+        angular['Scale Default'] = val
+      self.task.rebuild()
 
     def on_clear():
       self.task.path.clear()
-      self.task.training_path.clear()
+      #self.task.training_path.clear()
       del self.task.points[:]
-      del self.task.training_data[:]
+      #del self.task.training_data[:]
       self.view.actions = []
       self.view.actions_position = 0
+      self.task.seen_points.clear()
 
     def on_reward(val):
       self.task.reward_ms = val
@@ -700,7 +754,7 @@ class OperatorWindow(QMainWindow):
 
     models, projective, angular = None, None, None
     def on_change(source, action, key, value):
-      nonlocal models, projective
+      nonlocal models, projective, angular
       #print('OperatorWindow', source is projective, key, value)
 
       if source is eye_scaling:
@@ -723,7 +777,7 @@ class OperatorWindow(QMainWindow):
           dpi_widget.setValue(value)
       elif source is angular:
         if key == 'Scale Default':
-          distance_widget.setValue(value)
+          default_scale_widget.setValue(value)
 
     eye_scaling.add_recursive_observer(on_change)
     eye_scaling.recap()
