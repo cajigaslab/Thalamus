@@ -26,7 +26,8 @@ namespace thalamus {
 class Service : public thalamus_grpc::Thalamus::WithCallbackMethod_node_request_stream<
                        thalamus_grpc::Thalamus::WithCallbackMethod_analog<
                        thalamus_grpc::Thalamus::WithCallbackMethod_graph<
-                         thalamus_grpc::Thalamus::Service>>> {
+                       thalamus_grpc::Thalamus::WithCallbackMethod_inject_analog<
+                         thalamus_grpc::Thalamus::Service>>>> {
   struct Impl;
   std::unique_ptr<Impl> impl;
   friend class ContextGuard;
@@ -134,10 +135,8 @@ public:
   ::grpc::Status notification(
       ::grpc::ServerContext *context, const ::thalamus_grpc::Empty *request,
       ::grpc::ServerWriter<::thalamus_grpc::Notification> *writer) override;
-  ::grpc::Status inject_analog(
-      ::grpc::ServerContext *context,
-      ::grpc::ServerReader<::thalamus_grpc::InjectAnalogRequest> *reader,
-      ::thalamus_grpc::Empty *) override;
+  ::grpc::ServerReadReactor< ::thalamus_grpc::InjectAnalogRequest>* inject_analog(
+      ::grpc::CallbackServerContext*, ::thalamus_grpc::Empty*) override;
   ::grpc::Status inject_motion_capture(
       ::grpc::ServerContext *context,
       ::grpc::ServerReader<::thalamus_grpc::InjectMotionCaptureRequest> *reader,

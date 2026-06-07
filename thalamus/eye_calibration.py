@@ -3,6 +3,7 @@ import sys
 import asyncio
 import typing
 import json
+import time
 import datetime
 
 import grpc
@@ -13,7 +14,7 @@ import scipy.spatial.transform
 from thalamus.qt import *
 from thalamus import thalamus_pb2
 from thalamus import thalamus_pb2_grpc
-from thalamus.task_controller.util import RenderOutput, create_task_with_exc_handling
+from thalamus.task_controller.util import RenderOutput
 from thalamus.util import MeteredUpdater
 
 from thalamus.util import IterableQueue
@@ -70,8 +71,11 @@ class Task:
     self.mouse_pos = None
     self.mouse_pos_scaled = None
     self.seen_points = set()
+    self.hold = False
 
     eye_scaling = config['eye_scaling']
+    if 'Reward Node' not in eye_scaling:
+      eye_scaling['Reward Node'] = 'reward_in'
     models = None
     projective = None
     angular = None
@@ -88,6 +92,8 @@ class Task:
         elif key == 'Selected Model':
           self.model_name = value
           self.rebuild()
+        elif key == 'Reward Node':
+          asyncio.create_task(self.reward_queue.put(thalamus_pb2.InjectAnalogRequest(node=value)))
       elif source is models:
         if key == 'Projective':
           projective = value
@@ -118,12 +124,11 @@ class Task:
 
   async def prepare_reward(self):
     self.stub.inject_analog(self.reward_queue)
-    await self.reward_queue.put(thalamus_pb2.InjectAnalogRequest(node='reward_in'))
 
   async def deliver_reward(self):
     await self.reward_queue.put(thalamus_pb2.InjectAnalogRequest(signal=thalamus_pb2.AnalogResponse(
       data=[5,0],
-      spans=[thalamus_pb2.Span(begin=0,end=2,name='reward_in')],
+      spans=[thalamus_pb2.Span(begin=0,end=2,name='Reward')],
       sample_intervals=[1_000_000*self.reward_ms])))
 
   def render(self, painter: QPainter, size: QSize, output: RenderOutput):
@@ -365,6 +370,7 @@ class Task:
     return Action(do, undo)
 
   def rebuild(self):
+    start = time.perf_counter()
     self.path.clear()
     self.training_path.clear()
     if self.get_model(self.model_name) is None:
@@ -379,6 +385,8 @@ class Task:
       self.append_to_path(self.training_path, px, py)
       if ((target.x - px)**2 + (target.y - py)**2)**.5 > 1:
         self.training_path.lineTo(target.x, target.y)
+    end = time.perf_counter()
+    print('Rebuild duration', end - start)
 
   def reset(self):
     model = self.get_model(self.model_name)
@@ -514,8 +522,10 @@ class Task:
     async def path_cleaner():
       while True:
         await asyncio.sleep(1)
+        if self.hold:
+          continue
         #Given a 60 Hz signal this is about 1 minute
-        self.points = self.points[-3600:]
+        self.points = self.points[-600:]
         #print(len(self.points))
         self.rebuild()
 
@@ -623,8 +633,12 @@ class OperatorView(QWidget):
     self.actions_position = 0
     self.setMouseTracking(True)
     self.last_nudge = None
+    self.paint_time_sum = 0.0
+    self.paint_time_count = 0
+    self.paint_time_print = time.perf_counter()
 
   def paintEvent(self, e):
+    start_time = time.perf_counter()
     painter = QPainter(self)
     try:
       painter.setBrush(Qt.GlobalColor.gray)
@@ -634,6 +648,15 @@ class OperatorView(QWidget):
       self.task.render(painter, self.subject_view.size(), RenderOutput.OPERATOR)
     finally:
       painter.end()
+      now = time.perf_counter()
+      self.paint_time_sum += now - start_time
+      self.paint_time_count += 1
+      if now - self.paint_time_print >= 1:
+        if self.paint_time_count:
+          print('Paint duration', self.paint_time_sum/self.paint_time_count)
+        self.paint_time_sum = 0.0
+        self.paint_time_count = 0
+        self.paint_time_print = now
 
   def keyPressEvent(self, a0: QKeyEvent):
     if a0.key() == Qt.Key.Key_Q:
@@ -670,7 +693,7 @@ class OperatorView(QWidget):
     #elif a0.key() == Qt.Key.Key_E:
     #  self.editing_saccades = False
     elif a0.key() == Qt.Key.Key_R:
-      create_task_with_exc_handling(self.task.deliver_reward())
+      asyncio.create_task(self.task.deliver_reward())
     elif a0.key() == Qt.Key.Key_Left:
       self.task.current_saccade = (self.task.current_saccade - 1) % len(self.task.saccades)
     elif a0.key() == Qt.Key.Key_Right:
@@ -763,6 +786,7 @@ class OperatorWindow(QMainWindow):
     saccade_radius_widget.setRange(0, 10000)
     reward_widget = QSpinBox()
     reward_widget.setRange(0, 10000)
+    reward_node_widget = QLineEdit()
     distance_widget = QDoubleSpinBox()
     default_scale_widget = QDoubleSpinBox()
     default_scale_widget.setRange(0, 10000)
@@ -775,6 +799,7 @@ class OperatorWindow(QMainWindow):
     fit_button = QPushButton('Fit')
     reset_button = QPushButton('Reset')
     model_label = QLabel('Model:')
+    hold = QCheckBox('Hold')
     layout.addWidget(model_label)
     layout.addWidget(fit_button)
     layout.addWidget(reset_button)
@@ -784,6 +809,8 @@ class OperatorWindow(QMainWindow):
     layout.addWidget(saccade_radius_widget)
     layout.addWidget(QLabel('Reward (ms)'))
     layout.addWidget(reward_widget)
+    layout.addWidget(QLabel('Reward Node'))
+    layout.addWidget(reward_node_widget)
     layout.addWidget(QLabel('Distance (mm)'))
     layout.addWidget(distance_widget)
     layout.addWidget(QLabel('DPI'))
@@ -791,9 +818,14 @@ class OperatorWindow(QMainWindow):
     layout.addWidget(QLabel('Default Scale'))
     layout.addWidget(default_scale_widget)
     layout.addWidget(clear_button)
+    layout.addWidget(hold)
     central_widget.setLayout(layout)
     self.setCentralWidget(central_widget)
     central_widget.setFocusProxy(view)
+
+    def on_hold(val):
+      self.task.hold = val
+    hold.toggled.connect(on_hold)
 
     def on_fixation_radius(val):
       self.task.fixation_radius = val
@@ -829,6 +861,10 @@ class OperatorWindow(QMainWindow):
     def on_reward(val):
       self.task.reward_ms = val
 
+    def on_reward_node():
+      eye_scaling['Reward Node'] = reward_node_widget.text()
+      view.setFocus()
+
     fixation_radius_widget.valueChanged.connect(on_fixation_radius)
     fixation_radius_widget.editingFinished.connect(view.setFocus)
     saccade_radius_widget.valueChanged.connect(on_saccade_radius)
@@ -847,6 +883,7 @@ class OperatorWindow(QMainWindow):
     dpi_widget.editingFinished.connect(view.setFocus)
     default_scale_widget.valueChanged.connect(on_default_scale)
     default_scale_widget.editingFinished.connect(view.setFocus)
+    reward_node_widget.editingFinished.connect(on_reward_node)
     
     fixation_radius_widget.setValue(50)
     saccade_radius_widget.setValue(100)
@@ -863,6 +900,8 @@ class OperatorWindow(QMainWindow):
           value.recap()
         elif key == 'Selected Model':
           model_label.setText(f'Model: {value}')
+        elif key == 'Reward Node':
+          reward_node_widget.setText(value)
       elif source is models:
         if key == 'Projective':
           projective = value
