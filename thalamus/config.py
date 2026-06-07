@@ -173,6 +173,9 @@ class ObservableCollection(abc.ABC):
     if isinstance(value, ObservableCollection):
       value.parent = self
       value.set_remote_storage(self.remote_storage)
+    old_value = self.get(key, None)
+    if isinstance(old_value, ObservableCollection):
+      old_value.parent = None
     self.content[key] = value
 
     self.__notify(self, ObservableCollection.Action.SET, key, value)

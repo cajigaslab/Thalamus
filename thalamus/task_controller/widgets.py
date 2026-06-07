@@ -8,7 +8,7 @@ import functools
 
 from ..qt import *
 
-from ..config import ObservableCollection
+from ..config import ObservableCollection, ObservableDict
 from .util import remove_by_is, isdeleted
 
 LOGGER = logging.getLogger(__name__)
@@ -163,6 +163,9 @@ class Form(QWidget):
     '''
     if config.field not in self.config:
       self.config[config.field] = {}
+    if not isinstance(self.config[config.field], ObservableDict):
+      self.config[config.field] = {}
+
     if 'min' not in self.config[config.field]:
       self.config[config.field]['min'] = config.min
     if 'max' not in self.config[config.field]:
