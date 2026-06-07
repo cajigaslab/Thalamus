@@ -46,6 +46,8 @@ async def main():
 
   thread = ThalamusThread(args.address)
   task = await thread.async_start()
+  
+  print('Path:', args.path)
 
   try:
     jsonpath_expr = jsonpath_ng.parse(args.path)
