@@ -348,37 +348,56 @@ class AngularScalingConfig:
     models = config['eye_scaling']['Models']
     if 'Angular Scaling' not in models:
       models['Angular Scaling'] = {
-        'Angle': [],
-        'Scale X': [],
-        'Scale Y': [],
+        'Pins': [],
+        'Scale Default': 100.0
       }
     model = models['Angular Scaling']
-    if 'Scale X' not in model:
-      model['Scale X'] = []
-    if 'Scale Y' not in model:
-      model['Scale Y'] = []
+    if 'Pins' not in model:
+      model['Pins'] = []
+    if 'Scale Default' not in model:
+      model['Scale Default'] = 100.0
 
-    self.angle = model['Angle']
-    self.scalex = model['Scale X']
-    self.scaley = model['Scale Y']
+    pins = model['Pins']
+    self.scale_default = model['Scale Default']
+    self.pins_matrix = numpy.array(pins)
+
+    def on_change(source, action, key, value):
+      nonlocal model, pins
+      if source is model:
+        if key == 'Scale Default':
+          self.scale_default = value
+        elif key == 'Pins':
+          pins = value
+          pins.recap(functools.partial(on_change, pins))
+      elif source is pins or source.parent is pins:
+        self.pins_matrix = numpy.array(pins)
+
+    model.add_recursive_observer(on_change, lambda: self.detached)
+    model.recap(functools.partial(on_change, model))
 
   def paint(self, painter: QPainter, dims: QSize, opacity: int):
     painter.setTransform(QTransform.fromTranslate(dims.width()/2, dims.height()/2))
     painter.fillPath(self.gaze_path, QColor(0, 0, 255, opacity))
 
   def process(self, voltage_point: QPointF, is_pixels: bool):
-    model_length = min(len(self.angle), len(self.scalex), len(self.scaley))
     if is_pixels:
       scaled_point = voltage_point
-    elif model_length == 0:
-      scaled_point = 10*voltage_point
+    elif self.pins_matrix.size == 0:
+      scaled_point = self.scale_default*voltage_point
     else:
       val = numpy.arctan2(voltage_point.y(), voltage_point.x())
       if val < 0:
         val = numpy.pi + (numpy.pi + val)
-      factorx = numpy.interp(val, self.angle[:model_length], self.scalex[:model_length], period=2*numpy.pi)
-      factory = numpy.interp(val, self.angle[:model_length], self.scaley[:model_length], period=2*numpy.pi)
-      scaled_point = QPointF(factorx*voltage_point.x(), factory*voltage_point.y())
+      scale = numpy.interp(val, self.pins_matrix[:,0], self.pins_matrix[:,1], period=2*numpy.pi)
+      rotation = numpy.interp(val, self.pins_matrix[:,0], self.pins_matrix[:,2], period=2*numpy.pi)
+
+      x, y = voltage_point.x(), voltage_point.y()
+      cos = numpy.cos(rotation)
+      sin = numpy.sin(rotation)
+      newx = scale*(x*cos - y*sin)
+      newy = scale*(x*sin + y*cos)
+
+      scaled_point = QPointF(newx, newy)
 
     self.gaze_path.addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
     return scaled_point
@@ -1148,8 +1167,6 @@ class Canvas(CanvasSuperClass):
       from_center = local_point - QPoint(self.width()//2, self.height()//2)
 
       from_center.setY(-from_center.y())
-
-      transform = self.input_config.get_gaze_transform(from_center)
 
       gaze_message = thalamus_pb2.AnalogResponse(
           data = [from_center.x(), from_center.y()],
