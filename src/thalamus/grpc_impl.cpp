@@ -1024,93 +1024,58 @@ struct JConnection : public boost::signals2::scoped_connection {
   return ::grpc::Status::OK;
 }
 
-::grpc::Status Service::inject_analog(
-    ::grpc::ServerContext *context,
-    ::grpc::ServerReader<::thalamus_grpc::InjectAnalogRequest> *reader,
-    ::thalamus_grpc::Empty *) {
-  set_current_thread_name("inject_analog");
-  ContextGuard guard(this, context);
-  ::thalamus_grpc::InjectAnalogRequest request;
-  std::string node_name;
-  if (!reader->Read(&request)) {
-    THALAMUS_LOG(error) << "Couldn't read name of node to inject into";
-    return ::grpc::Status::OK;
+struct InjectAnalogSession : public NodeReadSession<AnalogNode, thalamus_grpc::InjectAnalogRequest> {
+  thalamus::vector<std::span<const double>> spans;
+  thalamus::vector<std::chrono::nanoseconds> sample_intervals;
+  thalamus::vector<std::string_view> names;
+  bool first = true;
+
+  InjectAnalogSession(NodeGraph& graph, boost::asio::io_context& _io_context, ::grpc::CallbackServerContext& _context, ContextGuard&& guard)
+  : NodeReadSession<AnalogNode, thalamus_grpc::InjectAnalogRequest>(graph, _io_context, _context, std::move(guard))
+  {}
+
+  ~InjectAnalogSession() override;
+
+  void on_read(thalamus_grpc::InjectAnalogRequest&& request) override {
+    if (request.has_node()) {
+      first = true;
+      thalamus_grpc::NodeSelector selector;
+      selector.set_name(request.node());
+      NodeReadSession<AnalogNode, thalamus_grpc::InjectAnalogRequest>::set_selector(selector);
+      return;
+    }
+    auto lock = this->lock();
+    if(!lock) {
+      return;
+    }
+
+    auto &data = request.signal().data();
+    spans.clear();
+    names.clear();
+    for (auto &span : request.signal().spans()) {
+      spans.emplace_back(data.begin() + span.begin(),
+                         data.begin() + span.end());
+      names.emplace_back(span.name().begin(), span.name().end());
+    }
+    sample_intervals.clear();
+    for (auto &interval : request.signal().sample_intervals()) {
+      sample_intervals.emplace_back(interval);
+    }
+
+    if (first || request.signal().channels_changed()) {
+      typed_node->channels_changed(typed_node);
+      first = false;
+    }
+    typed_node->inject(spans, sample_intervals, names);
   }
-  if (!request.has_node()) {
-    THALAMUS_LOG(error)
-        << "First message of inject_analog request should contain node name";
-    return ::grpc::Status::OK;
-  }
+};
 
-  node_name = request.node();
+InjectAnalogSession::~InjectAnalogSession() {}
 
-  while (!context->IsCancelled()) {
-    std::promise<void> promise;
-    auto future = promise.get_future();
-    std::shared_ptr<Node> raw_node;
-    boost::asio::post(impl->io_context, [&] {
-      impl->node_graph.get_node(node_name, [&](auto ptr) {
-        raw_node = ptr.lock();
-        promise.set_value();
-      });
-    });
-    THALAMUS_LOG(info) << "Waiting for node";
-    while (future.wait_for(1s) == std::future_status::timeout &&
-           !context->IsCancelled()) {
-      if (impl->io_context.stopped()) {
-        return ::grpc::Status::OK;
-      }
-    }
-    if (context->IsCancelled()) {
-      continue;
-    }
-    THALAMUS_LOG(info) << "Got node";
-
-    AnalogNode *node = node_cast<AnalogNode *>(raw_node.get());
-    if (!node) {
-      std::this_thread::sleep_for(1s);
-      continue;
-    }
-
-    thalamus::vector<std::span<const double>> spans;
-    thalamus::vector<std::chrono::nanoseconds> sample_intervals;
-    thalamus::vector<std::string_view> names;
-    bool first = true;
-    while (reader->Read(&request)) {
-      if (request.has_node()) {
-        node_name = request.node();
-        break;
-      }
-
-      auto &data = request.signal().data();
-      spans.clear();
-      names.clear();
-      for (auto &span : request.signal().spans()) {
-        spans.emplace_back(data.begin() + span.begin(),
-                           data.begin() + span.end());
-        names.emplace_back(span.name().begin(), span.name().end());
-      }
-      sample_intervals.clear();
-      for (auto &interval : request.signal().sample_intervals()) {
-        sample_intervals.emplace_back(interval);
-      }
-
-      std::promise<void> inject_promise;
-      auto inject_future = inject_promise.get_future();
-      boost::asio::post(impl->io_context, [&] {
-        if (first || request.signal().channels_changed()) {
-          node->channels_changed(node);
-          first = false;
-        }
-        node->inject(spans, sample_intervals, names);
-        inject_promise.set_value();
-      });
-      while (inject_future.wait_for(1s) == std::future_status::timeout &&
-             !context->IsCancelled()) {
-      }
-    }
-  }
-  return ::grpc::Status::OK;
+::grpc::ServerReadReactor< ::thalamus_grpc::InjectAnalogRequest>* Service::inject_analog(::grpc::CallbackServerContext* context, ::thalamus_grpc::Empty*) {
+  auto result = new InjectAnalogSession(impl->node_graph, impl->io_context, *context, ContextGuard(this, context));
+  result->start();
+  return result;
 }
 
 struct Counter {
