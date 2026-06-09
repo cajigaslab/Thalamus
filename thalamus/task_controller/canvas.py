@@ -15,6 +15,7 @@ import itertools
 import functools
 import contextlib
 import collections
+import bisect
 
 import os.path
 
@@ -358,22 +359,45 @@ class AngularScalingConfig:
       model['Scale Default'] = 100.0
 
     pins = model['Pins']
+    self.model = model
     self.scale_default = model['Scale Default']
-    self.pins_matrix = numpy.array(pins)
+    self.pin_angles = numpy.array([])
+    self.pin_notches = []
+    self.update_pins()
 
     def on_change(source, action, key, value):
       nonlocal model, pins
+      self.update_pins()
       if source is model:
         if key == 'Scale Default':
           self.scale_default = value
         elif key == 'Pins':
           pins = value
           pins.recap(functools.partial(on_change, pins))
-      elif source is pins or source.parent is pins:
-        self.pins_matrix = numpy.array(pins)
 
     model.add_recursive_observer(on_change, lambda: self.detached)
     model.recap(functools.partial(on_change, model))
+    
+  def update_pins(self):
+    if 'Pins' not in self.model:
+      return
+    
+    pins = self.model['Pins']
+    if len(pins) != 0 and not isinstance(pins[0], ObservableDict):
+      return
+    
+    self.pin_angles = []
+    self.pin_notches = []
+
+    for pin in pins:
+      self.pin_angles.append([pin['Angle'], pin['Rotation']])
+      self.pin_notches.append([[0.0, 0.0]])
+      for notch in pin['Notches']:
+        self.pin_notches[-1].append([notch["Eye"], notch["Screen"]])
+
+    self.pin_angles = numpy.array(self.pin_angles)
+    print(self.pin_notches)
+    self.pin_notches = [numpy.array(n) for n in self.pin_notches]
 
   def paint(self, painter: QPainter, dims: QSize, opacity: int):
     painter.setTransform(QTransform.fromTranslate(dims.width()/2, dims.height()/2))
@@ -382,21 +406,60 @@ class AngularScalingConfig:
   def process(self, voltage_point: QPointF, is_pixels: bool):
     if is_pixels:
       scaled_point = voltage_point
-    elif self.pins_matrix.size == 0:
+    elif self.pin_angles.size == 0:
       scaled_point = self.scale_default*voltage_point
     else:
-      val = numpy.arctan2(voltage_point.y(), voltage_point.x())
-      if val < 0:
-        val = numpy.pi + (numpy.pi + val)
-      scale = numpy.interp(val, self.pins_matrix[:,0], self.pins_matrix[:,1], period=2*numpy.pi)
-      rotation = numpy.interp(val, self.pins_matrix[:,0], self.pins_matrix[:,2], period=2*numpy.pi)
-
       x, y = voltage_point.x(), voltage_point.y()
+      val = numpy.arctan2(y, x)
+      if val < 0:
+        val = 2*numpy.pi + val
+
+      mag = (x**2 + y**2)**.5
+      if mag == 0.0:
+        scaled_point = QPointF(0.0, 0.0)
+        self.gaze_path.addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
+        return scaled_point
+      
+      eye_angles = self.pin_angles[:,0]
+      screen_angles = self.pin_angles[:,1]
+      i = bisect.bisect_left(eye_angles, val)
+      if i == len(self.pin_notches) or i == 0:
+        lower_i, upper_i = -1, 0
+        eye_angles_lower = eye_angles[lower_i] - 2*numpy.pi
+        if val > numpy.pi:
+          val -= 2*numpy.pi
+      elif len(self.pin_angles) == 1:
+        lower_i, upper_i = 0, 0
+        eye_angles_lower = eye_angles[lower_i]
+      else:
+        lower_i, upper_i = i-1, i
+        eye_angles_lower = eye_angles[lower_i]
+      lower_notches = self.pin_notches[lower_i]
+      upper_notches = self.pin_notches[upper_i]
+
+      if mag > lower_notches[-1,0]:
+        lower_scale = mag*(lower_notches[-1,1] - lower_notches[-2,1])/(lower_notches[-1,0] - lower_notches[-2,0])
+      else:
+        lower_scale = numpy.interp(mag, lower_notches[:,0], lower_notches[:,1])
+      if mag > upper_notches[-1,0]:
+        upper_scale = mag*(upper_notches[-1,1] - upper_notches[-2,1])/(upper_notches[-1,0] - upper_notches[-2,0])
+      else:
+        upper_scale = numpy.interp(mag, upper_notches[:,0], upper_notches[:,1])
+
+      scale = numpy.interp(val, [eye_angles_lower, eye_angles[upper_i]], [lower_scale, upper_scale])
+      rotation = numpy.interp(val, [eye_angles_lower, eye_angles[upper_i]],
+                                   [screen_angles[lower_i], screen_angles[upper_i]])
+      if rotation > numpy.pi:
+        rotation -= 2*numpy.pi
+      elif rotation < -numpy.pi:
+        rotation += 2*numpy.pi
+
+      #print(val, rotation, scale, [lower_scale, upper_scale], [eye_angles_lower, eye_angles[upper_i]])
+      #print(val, lower_i)
       cos = numpy.cos(rotation)
       sin = numpy.sin(rotation)
-      newx = scale*(x*cos - y*sin)
-      newy = scale*(x*sin + y*cos)
-
+      newx = scale*(x*cos - y*sin)/mag
+      newy = scale*(x*sin + y*cos)/mag
       scaled_point = QPointF(newx, newy)
 
     self.gaze_path.addEllipse(scaled_point, POINT_SIZE, POINT_SIZE)
@@ -405,24 +468,9 @@ class AngularScalingConfig:
   def clear(self):
     self.gaze_path = QPainterPath()
     self.gaze_path.setFillRule(Qt.FillRule.WindingFill)
-
-  def get_gaze_transform(self, from_center: QPoint):
-    def transform(x, y):
-      model_length = min(len(self.angle), len(self.scalex), len(self.scaley))
-      if model_length == 0:
-        return 10*x, 10*y
-      else:
-        val = numpy.arctan2(y, x)
-        if val < 0:
-          val = numpy.pi + (numpy.pi + val)
-        factorx = numpy.interp(val, self.angle[:model_length], self.scalex[:model_length], period=2*numpy.pi)
-        factory = numpy.interp(val, self.angle[:model_length], self.scaley[:model_length], period=2*numpy.pi)
-        return factorx*x, factory*y
-
-    return transform
   
   def describe(self):
-    return [list(self.angle), list(self.scalex), list(self.scaley)]
+    return [self.model['Pins'].unwrap()]
 
 class EyeProjectiveConfig:
   def __init__(self, config: ObservableCollection):
@@ -482,10 +530,6 @@ class EyeProjectiveConfig:
   def clear(self):
     self.gaze_path = QPainterPath()
     self.gaze_path.setFillRule(Qt.FillRule.WindingFill)
-
-  def get_gaze_transform(self, from_center: QPoint):
-    a, b, c, d, e, f, g, h = self.param_list
-    return lambda x, y: ((a*x + b*y + c)/(g*x + h*y + 1), (d*x + e*y + f)/(g*x + h*y + 1))
   
   def describe(self):
     return list(self.param_list)
@@ -579,20 +623,6 @@ class EyeQuadrantScalingConfig:
     self.gaze_paths[2].setFillRule(Qt.FillRule.WindingFill)
     self.gaze_paths[3].setFillRule(Qt.FillRule.WindingFill)
     self.points = [[], [], [], []]
-
-  def get_gaze_transform(self, from_center: QPoint):
-    if from_center.y() >= 0:
-      if from_center.x() >= 0:
-        transform = self.gaze_transforms[0]
-      else:
-        transform = self.gaze_transforms[1]
-    else:
-      if from_center.x() < 0:
-        transform = self.gaze_transforms[2]
-      else:
-        transform = self.gaze_transforms[3]
-
-    return transform
   
   def describe(self):
     return[
@@ -648,9 +678,6 @@ class InputConfig():
 
     self.touch_path = QPainterPath()
     self.touch_path.setFillRule(Qt.FillRule.WindingFill)
-
-  def get_gaze_transform(self, from_center: QPoint):
-    return self.gaze_config.get_gaze_transform(from_center)
   
   def describe_gaze(self):
     return self.gaze_config.describe()

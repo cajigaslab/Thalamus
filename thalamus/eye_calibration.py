@@ -3,8 +3,10 @@ import sys
 import asyncio
 import typing
 import json
+import bisect
 import time
 import datetime
+import copy
 
 import grpc
 
@@ -15,9 +17,9 @@ from thalamus.qt import *
 from thalamus import thalamus_pb2
 from thalamus import thalamus_pb2_grpc
 from thalamus.task_controller.util import RenderOutput
-from thalamus.util import MeteredUpdater
 
-from thalamus.util import IterableQueue
+from thalamus.util import IterableQueue, MeteredUpdater
+from thalamus.config import ObservableDict
 
 from thalamus.thread import ThalamusThread
 print(thalamus_pb2.__file__)
@@ -72,18 +74,24 @@ class Task:
     self.mouse_pos_scaled = None
     self.seen_points = set()
     self.hold = False
+    self.eye_opacity = 192
 
     eye_scaling = config['eye_scaling']
     if 'Reward Node' not in eye_scaling:
       eye_scaling['Reward Node'] = 'reward_in'
     models = None
     projective = None
-    angular = None
+    self.angular = None
     self.pins = None
     self.pins_updater = None
-    self.pins_matrix = numpy.array([])
+    self.pin_angles = numpy.array([])
+    self.pin_notches = []
+
+    def on_angular_change(source, action, key, value):
+      self.update_pins()
+
     def on_change(source, action, key, value):
-      nonlocal models, projective, angular
+      nonlocal models, projective
 
       if source == eye_scaling:
         if key == 'Models':
@@ -99,7 +107,8 @@ class Task:
           projective = value
           value.recap()
         elif key == 'Angular Scaling':
-          angular = value
+          self.angular = value
+          self.angular.add_recursive_observer(on_angular_change)
           value.recap()
       elif source is projective:
         if key == 'Distance (m)':
@@ -108,19 +117,37 @@ class Task:
         elif key == 'DPI':
           self.dpi = value
           self.rebuild()
-      elif source is angular:
+      elif source is self.angular:
         if key == 'Pins':
-          self.pins_updater = MeteredUpdater(value, datetime.timedelta(seconds=1), lambda: False)
           self.pins = value
-          value.recap()
-      elif source is self.pins or source.parent is self.pins:
-        self.pins_matrix = numpy.array(self.pins)
+          self.pins_updater = MeteredUpdater(value, datetime.timedelta(seconds=1), lambda: False)
 
       #print(key, value)
       #print('params', self.distance_m, self.dpi)
 
     eye_scaling.add_recursive_observer(on_change)
     eye_scaling.recap()
+
+  def update_pins(self):
+    if 'Pins' not in self.angular:
+      return
+    
+    pins = self.angular['Pins']
+    if len(pins) != 0 and not isinstance(pins[0], ObservableDict):
+      return
+    
+    self.pin_angles = []
+    self.pin_notches = []
+
+    for pin in pins:
+
+      self.pin_angles.append([pin['Angle'], pin['Rotation']])
+      self.pin_notches.append([[0.0, 0.0]])
+      for notch in pin['Notches']:
+        self.pin_notches[-1].append([notch["Eye"], notch["Screen"]])
+
+    self.pin_angles = numpy.array(self.pin_angles)
+    self.pin_notches = [numpy.array(n) for n in self.pin_notches]
 
   async def prepare_reward(self):
     self.stub.inject_analog(self.reward_queue)
@@ -145,22 +172,6 @@ class Task:
     saccade_shape = QRect(0, 0,
                            2*self.saccade_radius, 2*self.saccade_radius)
     if output == RenderOutput.OPERATOR:
-
-      painter.save()
-      painter.resetTransform()
-      if self.mouse_pos:
-        keyboard_modifiers = QGuiApplication.queryKeyboardModifiers()
-        font_metrics = painter.fontMetrics()
-        if keyboard_modifiers & Qt.KeyboardModifier.ControlModifier:
-          text = 'Left: Add Target\nRight: Remove Target'
-        else:
-          text = 'Left: Nudge\nRight: Pin'
-        rect = font_metrics.boundingRect(QRect(0, 0, 1000000, 1000000), Qt.AlignmentFlag.AlignLeft | Qt.TextFlag.TextWordWrap, text)
-        rect.moveTo(self.mouse_pos.x() - rect.width(), self.mouse_pos.y())
-        painter.drawText(rect, Qt.AlignmentFlag.AlignLeft | Qt.TextFlag.TextWordWrap, text)
-
-      painter.restore()
-
       painter.save()
       painter.setPen(Qt.GlobalColor.yellow)
       painter.drawLine(0, size.height()//2, size.width(), size.height()//2)
@@ -201,35 +212,36 @@ class Task:
       pen = painter.pen()
       pen.setCosmetic(True)
       pen.setWidth(POINT_SIZE)
-      pen.setColor(Qt.GlobalColor.blue)
+      pen.setColor(QColor(0, 0, 255, self.eye_opacity))
       pen.setCapStyle(Qt.PenCapStyle.RoundCap)
       painter.setPen(pen)
       painter.translate(size.width()//2, size.height()//2)
 
       painter.save()
-      painter.setPen(Qt.GlobalColor.green)
-      for angle, scale, rotation in self.pins_matrix:
+      for p1, p2 in zip(self.pin_angles, self.pin_notches):
+        painter.setPen(Qt.GlobalColor.green)
+        angle, rotation = p1
         total_angle = angle + rotation
         x, y = radius*numpy.cos(total_angle), radius*numpy.sin(total_angle)
         painter.drawLine(0, 0, int(x), int(y))
 
+        painter.setPen(Qt.GlobalColor.white)
+        for notch in p2:
+          screen_notch = int(notch[1])
+          rect = QRect(-screen_notch, -screen_notch, 2*screen_notch, 2*screen_notch)
+          painter.drawArc(rect, int((2*numpy.pi - total_angle)*180/numpy.pi - 5)*16, 10*16)
+
+      painter.setPen(Qt.GlobalColor.green)
       if self.mouse_pos_scaled is not None:
-        nudge_index = self.get_start_nudge_index((self.mouse_pos_scaled[0], self.mouse_pos_scaled[1]))
+        nudge_index, notch_nudge_index = self.get_start_nudge_index((self.mouse_pos_scaled[0],
+                                                                     self.mouse_pos_scaled[1]))
         if nudge_index != -1:
-          angle, scale, rotation = self.pins_matrix[nudge_index]
-          x, y = self.mouse_pos_scaled
-          mouse_arc = numpy.arctan2(y, x)
-          if mouse_arc < 0:
-            mouse_arc = 2*numpy.pi + mouse_arc
-          radius = int((x**2 + y**2)**.5)
-          rect = QRect(-radius, -radius, 2*radius, 2*radius)
-          angles = sorted([int((2*numpy.pi - angle - rotation)*180/numpy.pi*16), int((2*numpy.pi - mouse_arc)*180/numpy.pi*16)])
-          if angles[1] - angles[0] > 180*16:
-            angles[1] -= 360*16
-          if angles[1] - angles[0] < -180*16:
-            angles[1] += 360*16
-          #painter.drawRect(rect)
-          painter.drawArc(rect, angles[0], angles[1]-angles[0])
+          angle, rotation = self.pin_angles[nudge_index]
+          total_angle = angle + rotation
+          mag = self.pin_notches[nudge_index][notch_nudge_index+1,1]
+          x = mag*numpy.cos(total_angle)
+          y = mag*numpy.sin(total_angle)
+          painter.drawLine(self.mouse_pos_scaled[0], self.mouse_pos_scaled[1], int(x), int(y))
       painter.restore()
 
       painter.drawPath(self.path)
@@ -306,24 +318,57 @@ class Task:
       py = numpy.tan(ty*numpy.pi/180)*distance_inches*self.dpi
       return int(px), int(py)
     elif self.model_name == 'Angular Scaling':
-      if self.pins_matrix.size == 0:
+      if self.pin_angles.size == 0:
         scale_default = model.get('Scale Default', 100.0)
         return int(scale_default*x), int(scale_default*y)
       
       val = numpy.arctan2(y, x)
       if val < 0:
         val = 2*numpy.pi + val
-      scale = numpy.interp(val, self.pins_matrix[:,0], self.pins_matrix[:,1], period=2*numpy.pi)
-      rotation = numpy.interp(val, self.pins_matrix[:,0], self.pins_matrix[:,2], period=2*numpy.pi)
+
+      mag = (x**2 + y**2)**.5
+      if mag == 0.0:
+        return 0.0, 0.0
+      eye_angles = self.pin_angles[:,0]
+      screen_angles = self.pin_angles[:,1]
+      i = bisect.bisect_left(eye_angles, val)
+      if i == len(self.pin_notches) or i == 0:
+        lower_i, upper_i = -1, 0
+        eye_angles_lower = eye_angles[lower_i] - 2*numpy.pi
+        if val > numpy.pi:
+          val -= 2*numpy.pi
+      elif len(self.pin_angles) == 1:
+        lower_i, upper_i = 0, 0
+        eye_angles_lower = eye_angles[lower_i]
+      else:
+        lower_i, upper_i = i-1, i
+        eye_angles_lower = eye_angles[lower_i]
+      lower_notches = self.pin_notches[lower_i]
+      upper_notches = self.pin_notches[upper_i]
+
+      if mag > lower_notches[-1,0]:
+        lower_scale = mag*(lower_notches[-1,1] - lower_notches[-2,1])/(lower_notches[-1,0] - lower_notches[-2,0])
+      else:
+        lower_scale = numpy.interp(mag, lower_notches[:,0], lower_notches[:,1])
+      if mag > upper_notches[-1,0]:
+        upper_scale = mag*(upper_notches[-1,1] - upper_notches[-2,1])/(upper_notches[-1,0] - upper_notches[-2,0])
+      else:
+        upper_scale = numpy.interp(mag, upper_notches[:,0], upper_notches[:,1])
+
+      scale = numpy.interp(val, [eye_angles_lower, eye_angles[upper_i]], [lower_scale, upper_scale])
+      rotation = numpy.interp(val, [eye_angles_lower, eye_angles[upper_i]],
+                                   [screen_angles[lower_i], screen_angles[upper_i]])
       if rotation > numpy.pi:
         rotation -= 2*numpy.pi
       elif rotation < -numpy.pi:
         rotation += 2*numpy.pi
 
+      #print(val, rotation, scale, [lower_scale, upper_scale], [eye_angles_lower, eye_angles[upper_i]])
+      #print(val, lower_i)
       cos = numpy.cos(rotation)
       sin = numpy.sin(rotation)
-      newx = scale*(x*cos - y*sin)
-      newy = scale*(x*sin + y*cos)
+      newx = scale*(x*cos - y*sin)/mag
+      newy = scale*(x*sin + y*cos)/mag
       return int(newx), int(newy)
 
   def append_to_path(self, path, x, y):
@@ -347,7 +392,7 @@ class Task:
 
     if min_index == -1:
       return
-    
+
     p = self.points[min_index]
     px, py = self.oculomatic_to_pixels_from_center(p[0], p[1])
     target = self.saccades[saccade_index]
@@ -397,33 +442,35 @@ class Task:
     elif self.model_name == 'Angular Scaling':
       old_pins = self.pins.copy()
       return Action(lambda: self.pins_updater.assign([], self.rebuild), lambda: self.pins_updater.assign(old_pins, self.rebuild))
-      
+
 
   def start_nudge(self, start_point: typing.Tuple[int, int]):
-    min_index = self.get_start_nudge_index(start_point)
+    min_index, notch_nudge_index = self.get_start_nudge_index(start_point)
     if min_index == -1:
       return
 
     self.nudge_index = min_index
-    self.nudge_start_value = tuple(self.pins_matrix[min_index])
+    self.notch_nudge_index = notch_nudge_index
+    self.nudge_start_value = self.angular['Pins'][min_index].unwrap()
 
   def get_start_nudge_index(self, start_point: typing.Tuple[int, int]):
     model = self.get_model(self.model_name)
     if self.model_name != 'Angular Scaling':
-      return -1
+      return -1, -1
 
-    if self.pins_matrix.size == 0:
-      return -1
+    if self.pin_angles.size == 0:
+      return -1, -1
 
     sx, sy = start_point
+    mag = (sx**2 + sy**2)**.5
     start_angle = numpy.arctan2(sy, sx)
     if start_angle < 0:
       start_angle = 2*numpy.pi + start_angle
 
-    min_distance, min_index = numpy.inf, -1
-    for i in range(self.pins_matrix.shape[0]):
-      model_angle = self.pins_matrix[i, 0]
-      rotation = self.pins_matrix[i, 2]
+    min_distance, min_index, nudge_index = numpy.inf, -1, -1
+    for i in range(self.pin_angles.shape[0]):
+      model_angle = self.pin_angles[i, 0]
+      rotation = self.pin_angles[i, 1]
       origin_angle = start_angle - rotation
 
       distance = model_angle - origin_angle
@@ -437,7 +484,10 @@ class Task:
         min_distance = distance
         min_index = i
 
-    return min_index
+        projected = numpy.cos(distance)*mag
+        nudge_index = numpy.argmin(numpy.abs(self.pin_notches[i][1:,1] - projected))
+
+    return min_index, nudge_index
 
   def stop_nudge(self):
     self.nudge_index = -1
@@ -459,8 +509,18 @@ class Task:
       delta_rotation += 2*numpy.pi
     delta_scale = cmag/smag
 
-    old_pin = self.nudge_start_value[0], self.nudge_start_value[1],  self.nudge_start_value[2]
-    new_pin = self.nudge_start_value[0], self.nudge_start_value[1]*delta_scale,  self.nudge_start_value[2] + delta_rotation
+    old_pin = self.nudge_start_value
+    old_notches = old_pin['Notches']
+    old_notch = old_notches[self.notch_nudge_index]['Screen']
+    if self.notch_nudge_index+1 < len(old_pin['Notches']):
+      next_notch = old_notches[self.notch_nudge_index+1]['Screen']
+    else:
+      next_notch = numpy.inf
+
+    new_pin = copy.deepcopy(self.nudge_start_value)
+    print(new_pin['Rotation'], delta_rotation)
+    new_pin['Rotation'] += delta_rotation
+    new_pin['Notches'][self.notch_nudge_index]['Screen'] = min(old_notch*delta_scale, next_notch*.99)
 
     if self.model_name == 'Angular Scaling':
       nudge_index = self.nudge_index
@@ -509,14 +569,43 @@ class Task:
         if ocu_angle < 0:
           ocu_angle = 2*numpy.pi + ocu_angle
 
-        new_pins.append([ocu_angle, target_mag/ocu_mag, rotation])
+        new_pins.append({
+          'Angle': ocu_angle,
+          'Rotation': rotation,
+          'Notches': [{'Eye': ocu_mag, 'Screen': target_mag}]
+        })
 
-      new_pins = sorted(new_pins, key=lambda r: r[0])
+      new_pins = sorted(new_pins, key=lambda r: r['Angle'])
       def do():
         self.pins_updater.assign(new_pins, self.rebuild)
       def undo():
         self.pins_updater.assign(old_pins, self.rebuild)
       return Action(do, undo)
+    
+  def add_notch(self, x, y):
+    nudge_index, _ = self.get_start_nudge_index((x, y))
+    if nudge_index != -1:
+      mag = (x**2 + y**2)**.5
+      insertion = bisect.bisect_left(self.pin_notches[nudge_index][1:,1], mag)
+
+      if mag > self.pin_notches[nudge_index][-1,1]:
+        num = self.pin_notches[nudge_index][-1,0] - self.pin_notches[nudge_index][-2,0]
+        dem = self.pin_notches[nudge_index][-1,1] - self.pin_notches[nudge_index][-2,1]
+        eye = mag*num/dem
+      else:
+        eye = numpy.interp(mag, self.pin_notches[nudge_index][:,1], self.pin_notches[nudge_index][:,0])
+
+      
+      old_pin = self.pins[nudge_index].unwrap()
+      pin = copy.deepcopy(old_pin)
+      pin['Notches'].insert(insertion, {
+        'Screen': mag, 'Eye': eye
+      })
+
+      return Action(
+        lambda: self.pins_updater.setitem(nudge_index, pin),
+        lambda: self.pins_updater.setitem(nudge_index, old_pin),
+      )
 
   async def run(self):
     async def path_cleaner():
@@ -637,6 +726,42 @@ class OperatorView(QWidget):
     self.paint_time_count = 0
     self.paint_time_print = time.perf_counter()
 
+  def contextMenuEvent(self, event):
+    x, y = self.scale_to_subject(event.pos().x(), event.pos().y())
+
+    def on_pin():
+      saccade_index=self.task.current_saccade
+      action = self.task.add_training_sample(x, y, saccade_index)
+      if action is not None:
+        self.do(action)
+
+    def on_notch():
+      action = self.task.add_notch(x, y)
+      if action is not None:
+        self.do(action)
+
+    menu = QMenu(self)
+
+    action = QAction('Add Target', self)
+    action.triggered.connect(
+      lambda: self.do(Action(lambda: self.task.add_target(x, y), lambda: self.task.remove_target(x, y))))
+    menu.addAction(action)
+
+    action = QAction('Remove Target', self)
+    action.triggered.connect(
+      lambda: self.do(Action(lambda: self.task.remove_target(x, y), lambda: self.task.add_target(x, y))))
+    menu.addAction(action)
+
+    action = QAction('Pin', self)
+    action.triggered.connect(on_pin)
+    menu.addAction(action)
+
+    action = QAction('Add Notch', self)
+    action.triggered.connect(on_notch)
+    menu.addAction(action)
+
+    menu.exec(event.globalPos())
+
   def paintEvent(self, e):
     start_time = time.perf_counter()
     painter = QPainter(self)
@@ -690,8 +815,6 @@ class OperatorView(QWidget):
       self.task.show_fixation = False
     elif a0.key() == Qt.Key.Key_W:
       self.task.show_saccade = False
-    #elif a0.key() == Qt.Key.Key_E:
-    #  self.editing_saccades = False
     elif a0.key() == Qt.Key.Key_R:
       asyncio.create_task(self.task.deliver_reward())
     elif a0.key() == Qt.Key.Key_Left:
@@ -726,18 +849,6 @@ class OperatorView(QWidget):
     print(x, y)
     self.drag_start = None
     self.task.stop_nudge()
-    editing_saccades = event.modifiers() & Qt.KeyboardModifier.ControlModifier
-    if editing_saccades:
-      if event.button() == Qt.MouseButton.LeftButton: # type: ignore
-        self.do(Action(lambda: self.task.add_target(x, y), lambda: self.task.remove_target(x, y)))
-      elif event.button() == Qt.MouseButton.RightButton:
-        self.do(Action(lambda: self.task.remove_target(x, y), lambda: self.task.add_target(x, y)))
-    else:
-      if event.button() == Qt.MouseButton.RightButton:
-        saccade_index=self.task.current_saccade
-        action = self.task.add_training_sample(x, y, saccade_index)
-        if action is not None:
-          self.do(action)
     
     if self.last_nudge is not None:
       self.do(self.last_nudge, False)
@@ -779,6 +890,16 @@ class OperatorWindow(QMainWindow):
 
     layout = QVBoxLayout()
     layout.addWidget(view, 1)
+
+    hwidget = QWidget()
+    hlayout = QHBoxLayout()
+    hlayout.addWidget(QLabel('Eye Opacity:'))
+    eye_opacity_widget = QSlider(Qt.Orientation.Horizontal)
+    eye_opacity_widget.setRange(0, 255)
+    eye_opacity_widget.setValue(192)
+    hlayout.addWidget(eye_opacity_widget)
+    hwidget.setLayout(hlayout)
+    layout.addWidget(hwidget)
 
     fixation_radius_widget = QSpinBox()
     fixation_radius_widget.setRange(0, 10000)
@@ -823,6 +944,9 @@ class OperatorWindow(QMainWindow):
     self.setCentralWidget(central_widget)
     central_widget.setFocusProxy(view)
 
+    def on_opacity_changed(val):
+      self.task.eye_opacity = val
+
     def on_hold(val):
       self.task.hold = val
     hold.toggled.connect(on_hold)
@@ -865,6 +989,7 @@ class OperatorWindow(QMainWindow):
       eye_scaling['Reward Node'] = reward_node_widget.text()
       view.setFocus()
 
+    eye_opacity_widget.valueChanged.connect(on_opacity_changed)
     fixation_radius_widget.valueChanged.connect(on_fixation_radius)
     fixation_radius_widget.editingFinished.connect(view.setFocus)
     saccade_radius_widget.valueChanged.connect(on_saccade_radius)
@@ -932,6 +1057,9 @@ async def main():
   
   thread = ThalamusThread('localhost:50050')
   thread_task = await thread.async_start()
+  pins = thread.config.get('eye_scaling', {}).get('Models', {}).get('Angular Scaling', {}).get('Pins', [])
+  if len(pins) > 0 and not isinstance(pins[0], ObservableDict):
+    pins.assign([])
   try:
     #thread.config['eye_scaling'].add_recursive_observer(print)
     #thread.config['eye_scaling'].recap()
