@@ -11,9 +11,6 @@ If you use Thalamus in your work, please cite our paper:
 acquisition <https://www.nature.com/articles/s44172-026-00646-z>`_
 (Communications Engineering, Nature).
 
-.. contents::
-   :local:
-
 .. note::
 
    The example scripts live in the `examples/ <https://github.com/cajigaslab/Thalamus/tree/main/examples>`_
