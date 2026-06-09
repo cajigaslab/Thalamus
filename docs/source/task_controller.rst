@@ -9,6 +9,13 @@ reward/stimulation, and logging every trial into the recording.
 It is the system behind the :doc:`TASK_CONTROLLER <nodes/task_controller>` node: the
 node starts/stops the controller, while the controller hosts the tasks themselves.
 
+.. admonition:: When would I use this?
+
+   Reach for the Task Controller when your experiment isn't just *recording* signals
+   but *running a paradigm* -- presenting stimuli, requiring the subject to fixate /
+   reach / choose, and delivering reward or stimulation -- all synchronized with the
+   data pipeline so every trial is timestamped into the recording.
+
 Running the controller
 ----------------------
 
@@ -127,3 +134,14 @@ A task can surface its own operator-facing control by calling
 ``context.set_operator_widget(widget)``; the control window mounts it in the operator
 view for the duration of the task.  This is how experimenters get task-specific
 buttons/inputs without baking them into the controller.
+
+Verifying a trial was recorded
+------------------------------
+
+With a STORAGE2 node running, each ``await context.log('BehavState=...')`` becomes a
+``text`` record in the capture file.  After a run you can confirm trials were logged
+by exporting that node's text channel (see :doc:`tools`):
+
+.. code-block::
+
+   python -m thalamus.dataframe -n task_controller -t text -i recording.tha -f csv

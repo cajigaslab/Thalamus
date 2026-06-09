@@ -24,17 +24,23 @@ saccade targets) and an **operator view** (the interactive calibration interface
 Calibration models
 -------------------
 
-The model is chosen with the **Model** dropdown and stored under
-``eye_scaling`` in the configuration.
+The active model is set by the ``Selected Model`` key under ``eye_scaling`` in the
+configuration; the operator window shows which model is in use.
 
 * **Projective** -- an 8-parameter projective (homography) mapping from raw eye
   coordinates to eye angles, followed by an angle-to-pixel conversion that uses the
   screen **Distance (m)** and **DPI**.  Fitting solves a least-squares problem over
-  the collected fixation/target pairs.
+  the collected fixation/target pairs.  *Use this* when a single global mapping fits
+  the data well -- it is the simplest, most common choice.
 * **Angular Scaling** -- a polar model: the raw signal's angle selects an
   interpolated **scale** and **rotation** from a set of *pins*, allowing the gain to
   vary by direction (independent X/Y behavior).  Interpolation wraps around the
-  circle, and a **Scale Default** is used before any pins are set.
+  circle, and a **Scale Default** is used before any pins are set.  *Use this* when
+  the eye signal is non-uniform across directions and a single projective fit leaves
+  systematic error.
+
+You can tell the calibration is good when, after fitting, the live gaze trace lands
+on each saccade target as the subject fixates it.
 
 The fitted parameters (the projective ``Parameters`` / ``Distance (m)`` / ``DPI``, or
 the Angular-Scaling ``Pins`` / ``Scale Default``) live in the pipeline config, so the
@@ -56,7 +62,8 @@ Workflow
 Operator controls
 -----------------
 
-* **Model** -- select the calibration model.
+* **Model** -- a read-only display of the active model (set via the
+  ``Selected Model`` configuration).
 * **Fit** / **Reset** -- fit the model to the samples / restore defaults.
 * **Clear** -- clear the displayed gaze trace.
 * **Hold** -- keep accumulating the gaze trace instead of trimming it to the most

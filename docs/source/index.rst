@@ -28,6 +28,25 @@ If you use Thalamus in your work, please cite our paper:
 acquisition <https://www.nature.com/articles/s44172-026-00646-z>`_
 (Communications Engineering, Nature).
 
+Start here
+----------
+
+New to Thalamus?  Follow this path -- each step builds on the last, and the later
+pages (behavioral tasks, plugins) are **not** prerequisites for getting started.
+
+#. :doc:`Quick Start <quickstart>` -- install Thalamus and make your first recording.
+#. :doc:`Concepts & Architecture <concepts>` -- the mental model: nodes, the data
+   model, and the ``.tha`` capture file.
+#. :doc:`Examples <examples/index>` -- analyze recordings with the bundled tools
+   (runnable, no hardware required).
+#. :doc:`Task Controller <task_controller>` and :doc:`Eye Calibration
+   <eye_calibration>` -- run behavioral, gaze-contingent experiments.
+#. :doc:`Command-line tools <tools>` and :doc:`Plugins <plugins>` -- tune a live
+   pipeline and extend Thalamus with native code.
+
+Stuck?  See :doc:`Troubleshooting & FAQ <troubleshooting>` and the
+:doc:`Glossary <glossary>`.
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
@@ -40,6 +59,8 @@ acquisition <https://www.nature.com/articles/s44172-026-00646-z>`_
    eye_calibration
    tools
    plugins
+   troubleshooting
+   glossary
 
 Indices and tables
 ==================

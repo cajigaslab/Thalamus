@@ -7,6 +7,13 @@ recordings into analysis-ready data.  It complements the :doc:`quickstart` (whic
 walks through using the program) and the :doc:`Node Reference <nodes/index>` (which
 documents each node type).
 
+.. admonition:: Mental model
+
+   Think of a Thalamus session as a **directed graph of nodes on one shared
+   nanosecond timeline**.  Producers generate data; consumers and transformers
+   *subscribe* to the producers whose data they need; and a STORAGE2 node writes
+   every message from the nodes it is subscribed to into the ``.tha`` capture log.
+
 The node pipeline
 -----------------
 

@@ -9,7 +9,8 @@ registry — live state editing
 The ``registry`` tool reads and edits the configuration of a **running** Thalamus
 pipeline over gRPC, using `JSONPath <https://github.com/h2non/jsonpath-ng>`_ to
 address any part of the state tree.  This lets you inspect or change node parameters
-(thresholds, addresses, task settings, ...) live, without restarting.
+(thresholds, addresses, task settings, ...) live, without restarting.  Reach for it
+to tune a parameter mid-experiment, or to script changes to a running pipeline.
 
 .. code-block::
 

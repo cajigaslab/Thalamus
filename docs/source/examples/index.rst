@@ -14,6 +14,14 @@ acquisition <https://www.nature.com/articles/s44172-026-00646-z>`_
 .. contents::
    :local:
 
+.. note::
+
+   The example scripts live in the `examples/ <https://github.com/cajigaslab/Thalamus/tree/main/examples>`_
+   folder of the repository (they are not shipped in the installed wheel).  Run them
+   from the repo root.  The first walkthrough below is the recommended starting point;
+   later sections build on the same ``.tha`` workflow.
+
+
 Synthesize and analyze a recording without hardware
 ----------------------------------------------------
 
