@@ -9,6 +9,20 @@ some patch versions contain only build/CI or internal changes and are omitted be
 
 ## 1.0.x
 
+### 1.0.16 — 2026-06-08
+- Eye calibration: finished polar interpolation in Angular Scaling mode, added a
+  default scaling parameter, tooltips, and a reward node with hold parameters;
+  further undo/redo improvements.
+- Plugins can now read analog data from other nodes, inject analog with a callback
+  interface, and pass requests through to other nodes (e.g. OCULOMATIC device
+  queries) without blocking shutdown.
+- Fixed the task-controller undo/redo stack being lost on *Clear*, and the saving of
+  decorated task source (now resolved with ``functools.wraps`` / ``inspect.unwrap``).
+- ``ObservableCollection`` fixes (parent detachment on replacement; insert no longer
+  overwrites following values).
+- Documentation: full visual redesign, the official brain/circuit logo, and the
+  node/example coverage from the 1.0.15 docs overhaul.
+
 ### 1.0.15 — 2026-06-02
 - Eye calibration: added undo/redo.
 - Fixed an OCULOMATIC crash when the X/Y gain was a floating-point value.

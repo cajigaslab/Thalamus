@@ -22,7 +22,7 @@ copyright = '2024-2026, Jarl Haggerty'
 author = 'Jarl Haggerty'
 
 # The full version, including alpha/beta/rc tags
-release = '1.0.15'
+release = '1.0.16'
 
 
 # -- General configuration ---------------------------------------------------

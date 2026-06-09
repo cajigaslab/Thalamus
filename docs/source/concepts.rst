@@ -7,6 +7,13 @@ recordings into analysis-ready data.  It complements the :doc:`quickstart` (whic
 walks through using the program) and the :doc:`Node Reference <nodes/index>` (which
 documents each node type).
 
+.. admonition:: Mental model
+
+   Think of a Thalamus session as a **directed graph of nodes on one shared
+   nanosecond timeline**.  Producers generate data; consumers and transformers
+   *subscribe* to the producers whose data they need; and a STORAGE2 node writes
+   every message from the nodes it is subscribed to into the ``.tha`` capture log.
+
 The node pipeline
 -----------------
 
@@ -39,10 +46,14 @@ All data is carried in a single message type, ``StorageRecord``.  Every record h
 ``node`` (the producing node's name), a ``time`` (see below), and exactly one *body*
 that determines the kind of data:
 
+.. _ulong-data:
+
 * **analog** -- time-series samples.  An ``AnalogResponse`` holds a flat ``data``
   array, a list of ``spans`` that name each channel and mark its slice of ``data``
   (``begin``/``end``), and a ``sample_intervals`` array giving each channel's sample
-  period in nanoseconds.  (Integer-valued streams use ``int_data`` / ``ulong_data``.)
+  period in nanoseconds.  Integer-valued streams use ``int_data`` (32-bit signed) or
+  ``ulong_data`` (64-bit unsigned, for counters/timestamps and other large integer
+  values); ``thalamus.record_reader2`` and ``thalamus.dataframe`` read all three.
 * **image** -- a video/camera frame, with raw bytes, ``width``, ``height``,
   pixel ``format`` (e.g. ``Gray``, ``RGB``, ``MPEG4``), and ``frame_interval``.
 * **text** -- a string message (log lines, event markers).
