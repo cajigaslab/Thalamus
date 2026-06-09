@@ -36,6 +36,10 @@ acquisition <https://www.nature.com/articles/s44172-026-00646-z>`_
    concepts
    examples/index
    nodes/index
+   task_controller
+   eye_calibration
+   tools
+   plugins
 
 Indices and tables
 ==================

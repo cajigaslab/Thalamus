@@ -31,6 +31,27 @@ Thalamus is an open-source platform for real-time, synchronized, closed-loop
 multimodal data capture, specifically tailored to meet the stringent demands of
 neurosurgical environments — while serving equally well in the research lab.
 
+## What's new
+
+Highlights from the most recent releases (see [CHANGELOG.md](CHANGELOG.md) for the
+full history):
+
+- **Behavioral tasks** — author and run trial-based experiments with the
+  [Task Controller](https://cajigaslab.github.io/Thalamus/task_controller.html):
+  a Qt task runtime, a library of ready paradigms, and a simple async task API.
+- **Eye calibration** — an interactive
+  [calibration tool](https://cajigaslab.github.io/Thalamus/eye_calibration.html)
+  that maps raw eye-camera signal to gaze/screen coordinates (Projective and
+  Angular-Scaling models, point nudging, undo/redo, reward delivery).
+- **Live state editing** — inspect and change a running pipeline's configuration
+  from the command line with the
+  [`registry`](https://cajigaslab.github.io/Thalamus/tools.html) tool.
+- **Extensible plugins** — the
+  [plugin API](https://cajigaslab.github.io/Thalamus/plugins.html) lets native
+  extensions read analog data from other nodes and inject data back in.
+- **Reproducible recordings** — every recording now stores the build type, version,
+  and git commit, and archives the exact task code that ran.
+
 ## How it works
 
 Thalamus assembles experiments from a **pipeline of nodes**. Each node is a small,
@@ -94,11 +115,11 @@ Then install the wheel for your platform, for example:
 
 ```bash
 # Linux
-python -m pip install thalamus_neuro-1.0.15-py3-none-manylinux_2_39_x86_64.whl
+python -m pip install thalamus_neuro-1.0.16-py3-none-manylinux_2_39_x86_64.whl
 # Windows
-python -m pip install thalamus_neuro-1.0.15-py3-none-win_amd64.whl
+python -m pip install thalamus_neuro-1.0.16-py3-none-win_amd64.whl
 # macOS (arm64)
-python -m pip install thalamus_neuro-1.0.15-py3-none-macosx_12_0_arm64.whl
+python -m pip install thalamus_neuro-1.0.16-py3-none-macosx_12_0_arm64.whl
 ```
 
 > **Note** — Drivers and runtimes for third-party devices (e.g. GenTL/GenICam

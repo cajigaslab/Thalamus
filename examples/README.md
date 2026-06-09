@@ -14,6 +14,8 @@ All scripts assume Thalamus is installed (`pip install thalamus_neuro`).
 | [`multinode_recording.py`](multinode_recording.py) | Record several nodes into one file and export each by name. |
 | [`capture_summary.py`](capture_summary.py) | Summarize any `.tha` file: nodes, data types, channels, duration, and metadata. |
 | [`closed_loop_latency.py`](closed_loop_latency.py) | Recover the latency between a trigger and its response by pairing rising edges. |
+| [`ulong_counter.py`](ulong_counter.py) | Record and read back a uint64 (`ulong`) analog counter channel. |
+| [`hello_world_task.py`](hello_world_task.py) | A minimal Task Controller behavioral task (loaded with `--ext`). |
 
 ## Quick start (no hardware required)
 

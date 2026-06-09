@@ -50,3 +50,10 @@ Use the add button to add a row and remove to remove rows.  Double click the cel
 When a recording starts a metadata record will be generated containing the contents of this table. Additionally, at
 the start of every recording a ``Rec`` key with the current recording number will be generated.
 
+For provenance, every recording also automatically records the Thalamus **Build
+Type**, **Version**, and git **Commit** in this metadata.  And when the
+:doc:`Task Controller <../task_controller>` is driving an experiment, the source file
+of each task that runs is copied into the recording's output directory -- so a
+recording carries both the build it was produced with and the exact task code that
+ran.
+
