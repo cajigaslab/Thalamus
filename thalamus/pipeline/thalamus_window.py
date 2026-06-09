@@ -357,6 +357,7 @@ FACTORIES = {
     UserData(UserDataType.CHECK_BOX, 'Computing', False, []),
     UserData(UserDataType.DEFAULT, 'Source', '', []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Framerate', 10.0, []),
   ]),
   'THREAD_POOL': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
