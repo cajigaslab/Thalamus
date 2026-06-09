@@ -37,7 +37,13 @@ This overlay is not shown on the subject display.
 
 ## Target Authoring Workflow
 
-Targets are still stored as rows in `task_config["targets"]`, and the existing table-based editing workflow is unchanged.
+Targets are still stored as rows in `task_config["targets"]`, and the table-based editing workflow now includes both static and active display style.
+
+Each target has two visual states:
+- static style: `target_color` plus `target_opacity`, used while the cursor is outside the target
+- active style: `target_active_color` plus `target_active_opacity`, used immediately when the cursor enters the target
+
+The active style switch is deterministic visual feedback and does not depend on the animation settings. The animation settings still control optional effects such as the hold progress ring and success pop.
 
 The Target Layout Editor now supports two complementary ways of building layouts:
 
@@ -65,7 +71,7 @@ The generator is meant to accelerate initial layout creation while preserving th
 - `Preview` shows generated targets as a temporary dashed overlay in the layout editor before they are committed
 - `Apply Preview` commits the current preview using the selected append or replace behavior
 - `Clear Preview` discards the current generator preview without changing the draft targets
-- `Use selected target style` copies radius, hold time, reward channel, enabled state, and color from the selected target when generating new targets
+- `Use selected target style` copies radius, hold time, reward channel, enabled state, static style, and active style from the selected target when generating new targets
 - generated targets are still editable afterward through the same table fields and drag-based layout preview
 
 ### Editing conveniences
@@ -317,8 +323,20 @@ If an older target config does not provide this field, the task falls back to th
 In cursor-only free-play mode, target reward fields are not used; free-play reward fields describe exploratory reward instead.
 
 ### `target_color_rgb`
-The displayed target color at target onset.
+The static target color selected at target onset.
 Stored as `[R, G, B]`, integer values from `0` to `255`.
+
+### `target_opacity`
+The static target opacity selected at target onset.
+Stored from `0.0` fully transparent to `1.0` fully opaque.
+
+### `target_active_color_rgb`
+The active target color used when the cursor is inside the target.
+Stored as `[R, G, B]`, integer values from `0` to `255`.
+
+### `target_active_opacity`
+The active target opacity used when the cursor is inside the target.
+Stored from `0.0` fully transparent to `1.0` fully opaque.
 
 ### `events`
 List of rich within-attempt events.

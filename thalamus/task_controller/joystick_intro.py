@@ -37,12 +37,41 @@ LOGGER = logging.getLogger(__name__)
 
 DEFAULT_TARGET_RADIUS_RATIO = 0.08
 DEFAULT_TARGET_COLOR = [0, 220, 60]
+DEFAULT_TARGET_OPACITY = 1.0
+DEFAULT_TARGET_ACTIVE_COLOR = [255, 255, 255]
+DEFAULT_TARGET_ACTIVE_OPACITY = 1.0
 DEFAULT_TARGET_HOLD_TIME = 0.40
 KEYBOARD_JOYSTICK_MAGNITUDE = 1.0
 OPERATOR_KEYBOARD_CURSOR_SPEED = 0.85
 
 def toggle_brightness(brightness: int) -> int:
   return 0 if brightness == 255 else 255
+
+def clamp_float(v: typing.Any, lo: float, hi: float, default: float) -> float:
+  try:
+    value = float(v)
+  except (TypeError, ValueError):
+    value = default
+  return max(lo, min(hi, value))
+
+def normalize_rgb(value: typing.Any, default: typing.Sequence[int]) -> typing.List[int]:
+  if isinstance(value, QColor):
+    return [value.red(), value.green(), value.blue()]
+  if isinstance(value, (list, tuple)) and len(value) >= 3:
+    try:
+      return [
+        max(0, min(255, int(value[0]))),
+        max(0, min(255, int(value[1]))),
+        max(0, min(255, int(value[2]))),
+      ]
+    except (TypeError, ValueError):
+      pass
+  return [int(default[0]), int(default[1]), int(default[2])]
+
+def color_with_opacity(rgb: typing.Sequence[int], opacity: float) -> QColor:
+  color = QColor(int(rgb[0]), int(rgb[1]), int(rgb[2]))
+  color.setAlpha(int(round(255 * clamp_float(opacity, 0.0, 1.0, 1.0))))
+  return color
 
 def create_widget(task_config: ObservableCollection) -> QWidget:
   class NoWheelChangeFilter(QWidget):
@@ -354,14 +383,29 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         "radius_ratio": DEFAULT_TARGET_RADIUS_RATIO,
         "hold_time": DEFAULT_TARGET_HOLD_TIME,
         "reward_channel": int(task_config.get("reward_channel", 0)),
-        "target_color": DEFAULT_TARGET_COLOR.copy()
+        "target_color": DEFAULT_TARGET_COLOR.copy(),
+        "target_opacity": DEFAULT_TARGET_OPACITY,
+        "target_active_color": DEFAULT_TARGET_ACTIVE_COLOR.copy(),
+        "target_active_opacity": DEFAULT_TARGET_ACTIVE_OPACITY,
       }
     ]
 
   targets = task_config["targets"]
   target_table = QTableWidget()
-  target_table.setColumnCount(8)
-  target_table.setHorizontalHeaderLabels(["Enabled", "Name", "X", "Y", "Radius", "Hold (s)", "Reward Channel", "Color"])
+  target_table.setColumnCount(11)
+  target_table.setHorizontalHeaderLabels([
+    "Enabled",
+    "Name",
+    "X",
+    "Y",
+    "Radius",
+    "Hold (s)",
+    "Reward Channel",
+    "Static Color",
+    "Static Opacity",
+    "Active Color",
+    "Active Opacity",
+  ])
   target_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
   target_table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
   target_table.horizontalHeader().setStretchLastSection(True)
@@ -374,15 +418,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
 
   def normalize_target(target: typing.Any) -> typing.Dict[str, typing.Any]:
     t = dict(target) if isinstance(target, dict) else {}
-    raw_color = t.get("target_color", DEFAULT_TARGET_COLOR)
-    if isinstance(raw_color, (list, tuple)) and len(raw_color) >= 3:
-      color = [
-        max(0, min(255, int(raw_color[0]))),
-        max(0, min(255, int(raw_color[1]))),
-        max(0, min(255, int(raw_color[2]))),
-      ]
-    else:
-      color = [0, 220, 60]
+    color = normalize_rgb(t.get("target_color", DEFAULT_TARGET_COLOR), DEFAULT_TARGET_COLOR)
+    active_color = normalize_rgb(t.get("target_active_color", DEFAULT_TARGET_ACTIVE_COLOR), DEFAULT_TARGET_ACTIVE_COLOR)
     return {
       "name": str(t.get("name", "")),
       "enabled": bool(t.get("enabled", True)),
@@ -392,6 +429,14 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       "hold_time": clamp(float(t.get("hold_time", DEFAULT_TARGET_HOLD_TIME)), 0.01, 10.0),
       "reward_channel": max(0, int(t.get("reward_channel", task_config.get("reward_channel", 0)))),
       "target_color": color,
+      "target_opacity": clamp_float(t.get("target_opacity", DEFAULT_TARGET_OPACITY), 0.0, 1.0, DEFAULT_TARGET_OPACITY),
+      "target_active_color": active_color,
+      "target_active_opacity": clamp_float(
+        t.get("target_active_opacity", DEFAULT_TARGET_ACTIVE_OPACITY),
+        0.0,
+        1.0,
+        DEFAULT_TARGET_ACTIVE_OPACITY,
+      ),
     }
 
   def make_default_target(index: int) -> typing.Dict[str, typing.Any]:
@@ -404,6 +449,9 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       "hold_time": DEFAULT_TARGET_HOLD_TIME,
       "reward_channel": int(task_config.get("reward_channel", 0)),
       "target_color": DEFAULT_TARGET_COLOR.copy(),
+      "target_opacity": DEFAULT_TARGET_OPACITY,
+      "target_active_color": DEFAULT_TARGET_ACTIVE_COLOR.copy(),
+      "target_active_opacity": DEFAULT_TARGET_ACTIVE_OPACITY,
     }
 
   def make_target_from_template(
@@ -656,9 +704,9 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         center = self._target_center(region_rect, target)
         radius = self._target_radius_px(region_rect, target)
         rgb = target.get("target_color", DEFAULT_TARGET_COLOR)
-        color = QColor(int(rgb[0]), int(rgb[1]), int(rgb[2]))
+        color = color_with_opacity(rgb, float(target.get("target_opacity", DEFAULT_TARGET_OPACITY)))
         if not bool(target.get("enabled", True)):
-          color.setAlpha(80)
+          color.setAlpha(min(color.alpha(), 80))
         painter.setPen(QPen(QColor(255, 255, 255) if i == self.selected_index else color, 2))
         painter.setBrush(color)
         painter.drawEllipse(center, radius, radius)
@@ -666,6 +714,13 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
           painter.setPen(QPen(QColor(255, 255, 255), 2, Qt.PenStyle.DashLine))
           painter.setBrush(Qt.BrushStyle.NoBrush)
           painter.drawEllipse(center, radius + 6.0, radius + 6.0)
+          active_rgb = target.get("target_active_color", DEFAULT_TARGET_ACTIVE_COLOR)
+          active_color = color_with_opacity(active_rgb, float(target.get("target_active_opacity", DEFAULT_TARGET_ACTIVE_OPACITY)))
+          active_radius = max(5.0, min(14.0, radius * 0.42))
+          active_center = QPointF(center.x() - radius * 0.35, center.y() - radius * 0.35)
+          painter.setPen(QPen(QColor(255, 255, 255), 1))
+          painter.setBrush(active_color)
+          painter.drawEllipse(active_center, active_radius, active_radius)
         painter.setPen(QPen(QColor(255, 255, 255), 1))
         label = str(target.get("name", f"T{i + 1}"))
         painter.drawText(int(center.x() + radius + 6.0), int(center.y() - radius - 4.0), label)
@@ -796,7 +851,10 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     radius_spin = QDoubleSpinBox()
     hold_spin = QDoubleSpinBox()
     reward_channel_spin = QSpinBox()
-    color_button = QPushButton("Choose Color")
+    static_color_button = QPushButton("Choose Static Color")
+    static_opacity_spin = QDoubleSpinBox()
+    active_color_button = QPushButton("Choose Active Color")
+    active_opacity_spin = QDoubleSpinBox()
     enable_drag_box = QCheckBox("Enable drag move")
     enable_drag_box.setChecked(True)
 
@@ -812,7 +870,13 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     hold_spin.setSingleStep(0.05)
     reward_channel_spin.setRange(0, 255)
     reward_channel_spin.setSingleStep(1)
+    for spin in (static_opacity_spin, active_opacity_spin):
+      spin.setRange(0.0, 1.0)
+      spin.setDecimals(2)
+      spin.setSingleStep(0.05)
     for spin in (x_spin, y_spin, radius_spin, hold_spin, reward_channel_spin):
+      spin.setKeyboardTracking(False)
+    for spin in (static_opacity_spin, active_opacity_spin):
       spin.setKeyboardTracking(False)
     name_edit.setToolTip("Name shown in the target list and operator overlay.")
     enabled_box.setToolTip("Disabled targets stay in the table but are not eligible for trial selection.")
@@ -821,7 +885,10 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     radius_spin.setToolTip("Target radius as a fraction of the task region's smaller dimension.")
     hold_spin.setToolTip("How long the cursor must stay inside the target to complete it.")
     reward_channel_spin.setToolTip("Reward output channel used when this target succeeds.")
-    color_button.setToolTip("Choose the display color for the selected target.")
+    static_color_button.setToolTip("Choose the target color when the cursor is outside it.")
+    static_opacity_spin.setToolTip("Target opacity when the cursor is outside it.")
+    active_color_button.setToolTip("Choose the target color when the cursor is inside it.")
+    active_opacity_spin.setToolTip("Target opacity when the cursor is inside it.")
     enable_drag_box.setToolTip("Disable this to select targets in the preview without accidentally moving them.")
 
     form_layout.addRow("Name", name_edit)
@@ -831,7 +898,10 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     form_layout.addRow("Radius", radius_spin)
     form_layout.addRow("Hold (s)", hold_spin)
     form_layout.addRow("Reward Channel", reward_channel_spin)
-    form_layout.addRow("Color", color_button)
+    form_layout.addRow("Static Color", static_color_button)
+    form_layout.addRow("Static Opacity", static_opacity_spin)
+    form_layout.addRow("Active Color", active_color_button)
+    form_layout.addRow("Active Opacity", active_opacity_spin)
     side_layout.addWidget(form_panel)
 
     cursor_panel = QGroupBox("Cursor Reference")
@@ -861,7 +931,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     generator_mode_combo.setToolTip("Choose how target coordinates are generated.")
     generator_operation_combo.setToolTip("Append adds to the current draft. Replace swaps the draft for generated targets when you apply the preview.")
     name_prefix_edit.setToolTip("Base name used when new generated targets are created.")
-    use_selected_style_box.setToolTip("Copy size, hold, reward, enabled state, and color from the selected target.")
+    use_selected_style_box.setToolTip("Copy size, hold, reward, enabled state, static style, and active style from the selected target.")
 
     annulus_ring_count_spin = QSpinBox()
     annulus_ring_count_spin.setRange(1, 20)
@@ -977,18 +1047,36 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         target_list.setCurrentRow(selected_index)
       target_list.blockSignals(False)
 
-    def update_color_button() -> None:
+    def update_color_buttons() -> None:
       if 0 <= selected_index < len(draft_targets):
-        rgb = draft_targets[selected_index].get("target_color", DEFAULT_TARGET_COLOR)
+        static_rgb = draft_targets[selected_index].get("target_color", DEFAULT_TARGET_COLOR)
+        active_rgb = draft_targets[selected_index].get("target_active_color", DEFAULT_TARGET_ACTIVE_COLOR)
       else:
-        rgb = DEFAULT_TARGET_COLOR
-      color_button.setStyleSheet(
-        f"background-color: rgb({int(rgb[0])}, {int(rgb[1])}, {int(rgb[2])});"
+        static_rgb = DEFAULT_TARGET_COLOR
+        active_rgb = DEFAULT_TARGET_ACTIVE_COLOR
+      static_color_button.setStyleSheet(
+        f"background-color: rgb({int(static_rgb[0])}, {int(static_rgb[1])}, {int(static_rgb[2])});"
+      )
+      active_color_button.setStyleSheet(
+        f"background-color: rgb({int(active_rgb[0])}, {int(active_rgb[1])}, {int(active_rgb[2])});"
       )
 
     def populate_controls() -> None:
       controls_enabled = 0 <= selected_index < len(draft_targets)
-      for widget in (name_edit, enabled_box, x_spin, y_spin, radius_spin, hold_spin, reward_channel_spin, color_button, remove_button):
+      for widget in (
+        name_edit,
+        enabled_box,
+        x_spin,
+        y_spin,
+        radius_spin,
+        hold_spin,
+        reward_channel_spin,
+        static_color_button,
+        static_opacity_spin,
+        active_color_button,
+        active_opacity_spin,
+        remove_button,
+      ):
         widget.setEnabled(controls_enabled)
       if not controls_enabled:
         target_list.blockSignals(True)
@@ -999,6 +1087,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         radius_spin.blockSignals(True)
         hold_spin.blockSignals(True)
         reward_channel_spin.blockSignals(True)
+        static_opacity_spin.blockSignals(True)
+        active_opacity_spin.blockSignals(True)
         name_edit.setText("")
         enabled_box.setChecked(False)
         x_spin.setValue(0.0)
@@ -1006,6 +1096,10 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         radius_spin.setValue(DEFAULT_TARGET_RADIUS_RATIO)
         hold_spin.setValue(DEFAULT_TARGET_HOLD_TIME)
         reward_channel_spin.setValue(int(task_config.get("reward_channel", 0)))
+        static_opacity_spin.setValue(DEFAULT_TARGET_OPACITY)
+        active_opacity_spin.setValue(DEFAULT_TARGET_ACTIVE_OPACITY)
+        active_opacity_spin.blockSignals(False)
+        static_opacity_spin.blockSignals(False)
         reward_channel_spin.blockSignals(False)
         hold_spin.blockSignals(False)
         radius_spin.blockSignals(False)
@@ -1014,7 +1108,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         enabled_box.blockSignals(False)
         name_edit.blockSignals(False)
         target_list.blockSignals(False)
-        update_color_button()
+        update_color_buttons()
         if preview is not None:
           preview.set_selected_index(-1)
         return
@@ -1028,6 +1122,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       radius_spin.blockSignals(True)
       hold_spin.blockSignals(True)
       reward_channel_spin.blockSignals(True)
+      static_opacity_spin.blockSignals(True)
+      active_opacity_spin.blockSignals(True)
       name_edit.setText(str(target.get("name", "")))
       enabled_box.setChecked(bool(target.get("enabled", True)))
       x_spin.setValue(float(target.get("x_norm", 0.75)))
@@ -1035,6 +1131,10 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       radius_spin.setValue(float(target.get("radius_ratio", DEFAULT_TARGET_RADIUS_RATIO)))
       hold_spin.setValue(float(target.get("hold_time", DEFAULT_TARGET_HOLD_TIME)))
       reward_channel_spin.setValue(int(target.get("reward_channel", task_config.get("reward_channel", 0))))
+      static_opacity_spin.setValue(float(target.get("target_opacity", DEFAULT_TARGET_OPACITY)))
+      active_opacity_spin.setValue(float(target.get("target_active_opacity", DEFAULT_TARGET_ACTIVE_OPACITY)))
+      active_opacity_spin.blockSignals(False)
+      static_opacity_spin.blockSignals(False)
       reward_channel_spin.blockSignals(False)
       hold_spin.blockSignals(False)
       radius_spin.blockSignals(False)
@@ -1042,7 +1142,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       x_spin.blockSignals(False)
       enabled_box.blockSignals(False)
       name_edit.blockSignals(False)
-      update_color_button()
+      update_color_buttons()
       target_list.setCurrentRow(selected_index)
       target_list.blockSignals(False)
       if preview is not None:
@@ -1118,18 +1218,31 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         "radius_ratio": radius_spin.value(),
         "hold_time": hold_spin.value(),
         "reward_channel": reward_channel_spin.value(),
+        "target_opacity": static_opacity_spin.value(),
+        "target_active_opacity": active_opacity_spin.value(),
       })
       clear_generated_preview()
       refresh_editor()
 
-    def choose_color() -> None:
+    def choose_static_color() -> None:
       if not (0 <= selected_index < len(draft_targets)):
         return
       current_rgb = draft_targets[selected_index].get("target_color", DEFAULT_TARGET_COLOR)
-      selected = QColorDialog.getColor(QColor(*current_rgb), dialog, "Select Target Color")
+      selected = QColorDialog.getColor(QColor(*current_rgb), dialog, "Select Static Target Color")
       if not selected.isValid():
         return
       draft_targets[selected_index]["target_color"] = [selected.red(), selected.green(), selected.blue()]
+      clear_generated_preview()
+      refresh_editor()
+
+    def choose_active_color() -> None:
+      if not (0 <= selected_index < len(draft_targets)):
+        return
+      current_rgb = draft_targets[selected_index].get("target_active_color", DEFAULT_TARGET_ACTIVE_COLOR)
+      selected = QColorDialog.getColor(QColor(*current_rgb), dialog, "Select Active Target Color")
+      if not selected.isValid():
+        return
+      draft_targets[selected_index]["target_active_color"] = [selected.red(), selected.green(), selected.blue()]
       clear_generated_preview()
       refresh_editor()
 
@@ -1140,7 +1253,10 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     radius_spin.editingFinished.connect(apply_field_changes)
     hold_spin.editingFinished.connect(apply_field_changes)
     reward_channel_spin.editingFinished.connect(apply_field_changes)
-    color_button.clicked.connect(choose_color)
+    static_opacity_spin.editingFinished.connect(apply_field_changes)
+    active_opacity_spin.editingFinished.connect(apply_field_changes)
+    static_color_button.clicked.connect(choose_static_color)
+    active_color_button.clicked.connect(choose_active_color)
     target_list.itemSelectionChanged.connect(update_selected_index_from_list)
 
     def on_cursor_radius_changed(value: float) -> None:
@@ -1317,23 +1433,36 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     target_table.setItem(row, 4, QTableWidgetItem(f"{target['radius_ratio']:.3f}"))
     target_table.setItem(row, 5, QTableWidgetItem(f"{target['hold_time']:.3f}"))
     target_table.setItem(row, 6, QTableWidgetItem(str(int(target.get("reward_channel", task_config.get("reward_channel", 0))))))
-    color_button = QPushButton()
-    rgb = target["target_color"]
-    color_button.setStyleSheet(f"background-color: rgb({rgb[0]}, {rgb[1]}, {rgb[2]});")
-    color_button.setText("")
+    target_table.setItem(row, 8, QTableWidgetItem(f"{float(target.get('target_opacity', DEFAULT_TARGET_OPACITY)):.2f}"))
+    target_table.setItem(row, 10, QTableWidgetItem(f"{float(target.get('target_active_opacity', DEFAULT_TARGET_ACTIVE_OPACITY)):.2f}"))
 
-    def on_pick_color() -> None:
-      if row < 0 or row >= len(targets):
-        return
-      current_rgb = targets[row].get("target_color", DEFAULT_TARGET_COLOR)
-      selected = QColorDialog.getColor(QColor(*current_rgb), result, "Select Target Color")
-      if selected.isValid():
-        new_rgb = [selected.red(), selected.green(), selected.blue()]
-        targets[row]["target_color"] = new_rgb
-        color_button.setStyleSheet(f"background-color: rgb({new_rgb[0]}, {new_rgb[1]}, {new_rgb[2]});")
+    def make_color_button(
+      color_key: str,
+      default_color: typing.Sequence[int],
+      title: str,
+    ) -> QPushButton:
+      button = QPushButton()
+      rgb = target[color_key]
+      button.setStyleSheet(f"background-color: rgb({rgb[0]}, {rgb[1]}, {rgb[2]});")
+      button.setText("")
 
-    color_button.clicked.connect(on_pick_color)
-    target_table.setCellWidget(row, 7, color_button)
+      def on_pick_color() -> None:
+        if row < 0 or row >= len(targets):
+          return
+        normalized = normalize_target(targets[row])
+        current_rgb = normalized.get(color_key, list(default_color))
+        selected = QColorDialog.getColor(QColor(*current_rgb), result, title)
+        if selected.isValid():
+          new_rgb = [selected.red(), selected.green(), selected.blue()]
+          targets[row] = normalized
+          targets[row][color_key] = new_rgb
+          button.setStyleSheet(f"background-color: rgb({new_rgb[0]}, {new_rgb[1]}, {new_rgb[2]});")
+
+      button.clicked.connect(on_pick_color)
+      return button
+
+    target_table.setCellWidget(row, 7, make_color_button("target_color", DEFAULT_TARGET_COLOR, "Select Static Target Color"))
+    target_table.setCellWidget(row, 9, make_color_button("target_active_color", DEFAULT_TARGET_ACTIVE_COLOR, "Select Active Target Color"))
 
   def sync_table_from_config() -> None:
     target_table.blockSignals(True)
@@ -1355,7 +1484,9 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     radius_item = target_table.item(row, 4)
     hold_item = target_table.item(row, 5)
     reward_channel_item = target_table.item(row, 6)
-    if not all((enabled_item, name_item, x_item, y_item, radius_item, hold_item, reward_channel_item)):
+    static_opacity_item = target_table.item(row, 8)
+    active_opacity_item = target_table.item(row, 10)
+    if not all((enabled_item, name_item, x_item, y_item, radius_item, hold_item, reward_channel_item, static_opacity_item, active_opacity_item)):
       return
     try:
       x_val = clamp(float(x_item.text()), 0.0, 1.0)
@@ -1363,11 +1494,14 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       radius_val = clamp(float(radius_item.text()), 0.01, 0.5)
       hold_val = clamp(float(hold_item.text()), 0.01, 10.0)
       reward_channel_val = max(0, int(float(reward_channel_item.text())))
+      static_opacity_val = clamp(float(static_opacity_item.text()), 0.0, 1.0)
+      active_opacity_val = clamp(float(active_opacity_item.text()), 0.0, 1.0)
     except ValueError:
       target_table.blockSignals(True)
       write_table_row(row, normalize_target(targets[row]))
       target_table.blockSignals(False)
       return
+    normalized = normalize_target(targets[row])
     targets[row] = {
       "name": str(name_item.text()),
       "enabled": enabled_item.checkState() == Qt.CheckState.Checked,
@@ -1376,14 +1510,17 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       "radius_ratio": radius_val,
       "hold_time": hold_val,
       "reward_channel": reward_channel_val,
-      "target_color": normalize_target(targets[row]).get("target_color", DEFAULT_TARGET_COLOR.copy()),
+      "target_color": normalized.get("target_color", DEFAULT_TARGET_COLOR.copy()),
+      "target_opacity": static_opacity_val,
+      "target_active_color": normalized.get("target_active_color", DEFAULT_TARGET_ACTIVE_COLOR.copy()),
+      "target_active_opacity": active_opacity_val,
     }
     target_table.blockSignals(True)
     write_table_row(row, targets[row])
     target_table.blockSignals(False)
 
   def on_item_changed(item: QTableWidgetItem) -> None:
-    if item.column() == 7:
+    if item.column() in (7, 9):
       return
     sync_row_to_config(item.row())
 
@@ -1405,7 +1542,10 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     "Radius",
     "Hold (s)",
     "Reward Channel",
-    "Color",
+    "Static Color",
+    "Static Opacity",
+    "Active Color",
+    "Active Opacity",
   ])
   bulk_field_combo.setCurrentText("Radius")
   apply_to_all_button = QPushButton("Apply Field to All")
@@ -1498,11 +1638,26 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       for i in range(len(targets)):
         targets[i] = normalize_target(targets[i])
         targets[i]["reward_channel"] = int(source["reward_channel"])
-    elif field == "Color":
+    elif field == "Static Color":
       rgb = list(source["target_color"])
       for i in range(len(targets)):
         targets[i] = normalize_target(targets[i])
         targets[i]["target_color"] = rgb.copy()
+    elif field == "Static Opacity":
+      opacity = float(source["target_opacity"])
+      for i in range(len(targets)):
+        targets[i] = normalize_target(targets[i])
+        targets[i]["target_opacity"] = opacity
+    elif field == "Active Color":
+      rgb = list(source["target_active_color"])
+      for i in range(len(targets)):
+        targets[i] = normalize_target(targets[i])
+        targets[i]["target_active_color"] = rgb.copy()
+    elif field == "Active Opacity":
+      opacity = float(source["target_active_opacity"])
+      for i in range(len(targets)):
+        targets[i] = normalize_target(targets[i])
+        targets[i]["target_active_opacity"] = opacity
 
     sync_table_from_config()
     if target_table.rowCount() > 0:
@@ -1548,27 +1703,20 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   add_anim_checkbox(5, "Reset Streak After Bonus", "streak_reset_on_bonus")
   add_anim_checkbox(6, "Enable Target Animations", "target_animation_enabled")
 
-  animation_layout.addWidget(QLabel("Inside Tint Strength (%)"), 7, 0)
-  inside_tint_spin = QSpinBox()
-  inside_tint_spin.setRange(0, 100)
-  inside_tint_spin.setValue(int(max(0, min(100, int(task_config.get("inside_tint_strength_pct", 20))))))
-  inside_tint_spin.valueChanged.connect(lambda v: task_config.update({"inside_tint_strength_pct": int(v)}))
-  animation_layout.addWidget(inside_tint_spin, 7, 1)
+  add_anim_checkbox(7, "Show Hold Progress Ring", "show_hold_progress_ring")
+  add_anim_checkbox(8, "Show Success Pop", "show_success_pop")
 
-  add_anim_checkbox(8, "Show Hold Progress Ring", "show_hold_progress_ring")
-  add_anim_checkbox(9, "Show Success Pop", "show_success_pop")
-
-  animation_layout.addWidget(QLabel("Success Pop Duration (s)"), 10, 0)
+  animation_layout.addWidget(QLabel("Success Pop Duration (s)"), 9, 0)
   success_pop_spin = QDoubleSpinBox()
   success_pop_spin.setRange(0.0, 1.0)
   success_pop_spin.setSingleStep(0.01)
   success_pop_spin.setDecimals(3)
   success_pop_spin.setValue(float(max(0.0, min(1.0, float(task_config.get("success_pop_duration_s", 0.12))))))
   success_pop_spin.valueChanged.connect(lambda v: task_config.update({"success_pop_duration_s": float(v)}))
-  animation_layout.addWidget(success_pop_spin, 10, 1)
+  animation_layout.addWidget(success_pop_spin, 9, 1)
 
   animation_note = QLabel("Set master to OFF for animation-free behavior.")
-  animation_layout.addWidget(animation_note, 11, 0, 1, 2)
+  animation_layout.addWidget(animation_note, 10, 0, 1, 2)
 
   layout.addWidget(animation_group)
   sync_table_from_config()
@@ -1658,7 +1806,6 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   streak_bonus_threshold = max(0, int(task_config.get("streak_bonus_threshold", 0)))
   streak_bonus_reward_count = max(1, int(task_config.get("streak_bonus_reward_count", 1)))
   streak_reset_on_bonus = bool(task_config.get("streak_reset_on_bonus", False))
-  inside_tint_strength = max(0.0, min(1.0, float(task_config.get("inside_tint_strength_pct", 20)) / 100.0))
   show_hold_progress_ring = bool(task_config.get("show_hold_progress_ring", True))
   show_success_pop = bool(task_config.get("show_success_pop", True))
   success_pop_duration_s = max(0.0, min(1.0, float(task_config.get("success_pop_duration_s", 0.12))))
@@ -1686,8 +1833,12 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   current_target_radius_ratio = target_radius_ratio
   current_hold_time = hold_time
   current_target_color = target_color
+  current_target_opacity = DEFAULT_TARGET_OPACITY
+  current_target_active_color = QColor(*DEFAULT_TARGET_ACTIVE_COLOR)
+  current_target_active_opacity = DEFAULT_TARGET_ACTIVE_OPACITY
   current_reward_channel = reward_channel
-  next_target_preview: typing.Optional[typing.Tuple[int, float, float, float, float, int, QColor]] = None
+  TargetSelection = typing.Tuple[int, float, float, float, float, int, QColor, float, QColor, float]
+  next_target_preview: typing.Optional[TargetSelection] = None
   free_play_end_requested = False
   analog_joystick_x = 0.0
   analog_joystick_y = 0.0
@@ -1920,6 +2071,9 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       "hold_time_s": None,
       "reward_channel": None,
       "target_color_rgb": None,
+      "target_opacity": None,
+      "target_active_color_rgb": None,
+      "target_active_opacity": None,
       "events": [],
       "joystick_active": False,
       "target_entry_count": 0,
@@ -2023,7 +2177,12 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     iti_countdown_start = None
     iti_end = math.inf
 
-  def place_target() -> typing.Tuple[int, float, float, float, float, int, QColor]:
+  def parse_target_color(target: typing.Dict[str, typing.Any], key: str, default_color: QColor) -> QColor:
+    raw_color = target.get(key, [default_color.red(), default_color.green(), default_color.blue()])
+    rgb = normalize_rgb(raw_color, [default_color.red(), default_color.green(), default_color.blue()])
+    return QColor(rgb[0], rgb[1], rgb[2])
+
+  def place_target() -> TargetSelection:
     enabled_targets = []
     for index, target in enumerate(configured_targets):
       if not isinstance(target, dict):
@@ -2035,26 +2194,37 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       tr = max(0.01, min(0.5, float(target.get("radius_ratio", target_radius_ratio))))
       th = max(0.01, min(10.0, float(target.get("hold_time", hold_time))))
       rc = max(0, int(target.get("reward_channel", reward_channel)))
-      raw_color = target.get("target_color", [target_color.red(), target_color.green(), target_color.blue()])
-      if isinstance(raw_color, (list, tuple)) and len(raw_color) >= 3:
-        tc = QColor(
-          max(0, min(255, int(raw_color[0]))),
-          max(0, min(255, int(raw_color[1]))),
-          max(0, min(255, int(raw_color[2]))),
-        )
-      else:
-        tc = target_color
-      enabled_targets.append((index, tx, ty, tr, th, rc, tc))
+      tc = parse_target_color(target, "target_color", target_color)
+      target_opacity = clamp_float(target.get("target_opacity", DEFAULT_TARGET_OPACITY), 0.0, 1.0, DEFAULT_TARGET_OPACITY)
+      active_color = parse_target_color(target, "target_active_color", QColor(*DEFAULT_TARGET_ACTIVE_COLOR))
+      active_opacity = clamp_float(
+        target.get("target_active_opacity", DEFAULT_TARGET_ACTIVE_OPACITY),
+        0.0,
+        1.0,
+        DEFAULT_TARGET_ACTIVE_OPACITY,
+      )
+      enabled_targets.append((index, tx, ty, tr, th, rc, tc, target_opacity, active_color, active_opacity))
     if enabled_targets:
       return random.choice(enabled_targets)
-    return -1, 0.75, 0.50, target_radius_ratio, hold_time, reward_channel, target_color
+    return (
+      -1,
+      0.75,
+      0.50,
+      target_radius_ratio,
+      hold_time,
+      reward_channel,
+      target_color,
+      DEFAULT_TARGET_OPACITY,
+      QColor(*DEFAULT_TARGET_ACTIVE_COLOR),
+      DEFAULT_TARGET_ACTIVE_OPACITY,
+    )
 
   def ensure_next_target_preview() -> None:
     nonlocal next_target_preview
     if next_target_preview is None:
       next_target_preview = place_target()
 
-  def consume_next_target() -> typing.Tuple[int, float, float, float, float, int, QColor]:
+  def consume_next_target() -> TargetSelection:
     nonlocal next_target_preview
     ensure_next_target_preview()
     assert next_target_preview is not None
@@ -2189,12 +2359,12 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     painter.drawRect(left_px, top_px, region_w_px, region_h_px)
 
     if (not cursor_only_mode) and state == "start_on":
-      draw_target_color = QColor(current_target_color)
-      if target_animation_enabled and cursor_inside_target and inside_tint_strength > 0.0:
-        r = int(draw_target_color.red() + (255 - draw_target_color.red()) * inside_tint_strength)
-        g = int(draw_target_color.green() + (255 - draw_target_color.green()) * inside_tint_strength)
-        b = int(draw_target_color.blue() + (255 - draw_target_color.blue()) * inside_tint_strength)
-        draw_target_color = QColor(r, g, b)
+      if cursor_inside_target:
+        draw_target_color = QColor(current_target_active_color)
+        draw_target_color.setAlpha(int(round(255 * current_target_active_opacity)))
+      else:
+        draw_target_color = QColor(current_target_color)
+        draw_target_color.setAlpha(int(round(255 * current_target_opacity)))
       painter.setPen(QPen(draw_target_color, 1))
       painter.setBrush(draw_target_color)
       painter.drawEllipse(tx - target_radius_px, ty - target_radius_px, 2 * target_radius_px, 2 * target_radius_px)
@@ -2490,7 +2660,18 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       elif state == "intertrial":
         update_intertrial_gate(now, cursor_centered_for_next_trial)
         if now >= iti_end:
-          current_target_index, target_x, target_y, current_target_radius_ratio, current_hold_time, current_reward_channel, current_target_color = consume_next_target()
+          (
+            current_target_index,
+            target_x,
+            target_y,
+            current_target_radius_ratio,
+            current_hold_time,
+            current_reward_channel,
+            current_target_color,
+            current_target_opacity,
+            current_target_active_color,
+            current_target_active_opacity,
+          ) = consume_next_target()
           hold_start = None
           trial_start = now
           reset_attempt_tracking(now)
@@ -2511,6 +2692,13 @@ async def run(context: TaskContextProtocol) -> TaskResult:
               current_target_color.green(),
               current_target_color.blue(),
             ]
+            current_attempt["target_opacity"] = current_target_opacity
+            current_attempt["target_active_color_rgb"] = [
+              current_target_active_color.red(),
+              current_target_active_color.green(),
+              current_target_active_color.blue(),
+            ]
+            current_attempt["target_active_opacity"] = current_target_active_opacity
           append_event(
             "target_on",
             now,
@@ -2520,6 +2708,18 @@ async def run(context: TaskContextProtocol) -> TaskResult:
             target_radius_ratio=current_target_radius_ratio,
             hold_time_s=current_hold_time,
             reward_channel=current_reward_channel,
+            target_color_rgb=[
+              current_target_color.red(),
+              current_target_color.green(),
+              current_target_color.blue(),
+            ],
+            target_opacity=current_target_opacity,
+            target_active_color_rgb=[
+              current_target_active_color.red(),
+              current_target_active_color.green(),
+              current_target_active_color.blue(),
+            ],
+            target_active_opacity=current_target_active_opacity,
           )
           await context.log("BehavState=start_on")
       else:
