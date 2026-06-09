@@ -51,6 +51,17 @@ class MeteredUpdater:
       self.config.setitem(key, value, callback, from_remote)
     self.updates.append((key, update))
 
+  def delitem(self, key, callback = lambda: None, from_remote = False):
+    for i, kv in enumerate(self.updates):
+      k, v = kv
+      if k == key:
+        del self.updates[i]
+        break
+
+    def update():
+      self.config.delitem(key, callback, from_remote)
+    self.updates.append((key, update))
+
   def __setitem__(self, key, value):
     for i, kv in enumerate(self.updates):
       k, v = kv

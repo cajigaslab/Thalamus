@@ -290,7 +290,7 @@ def remove_by_is(collection: typing.Any, value: typing.Any) -> None:
 
 RETURN = typing.TypeVar('RETURN')
 
-def create_task_with_exc_handling(awaitable: 'typing.Awaitable[RETURN]') -> 'asyncio.Task[RETURN]':
+def create_task_with_exc_handling(awaitable: 'typing.Awaitable[RETURN]', label: typing.Optional[str] = None) -> 'asyncio.Task[RETURN]':
   '''
   Wraps the specified awaitable in a task that will call the exception handler on an unhandled exception.
   '''
