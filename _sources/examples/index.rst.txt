@@ -14,6 +14,14 @@ acquisition <https://www.nature.com/articles/s44172-026-00646-z>`_
 .. contents::
    :local:
 
+.. note::
+
+   The example scripts live in the `examples/ <https://github.com/cajigaslab/Thalamus/tree/main/examples>`_
+   folder of the repository (they are not shipped in the installed wheel).  Run them
+   from the repo root.  The first walkthrough below is the recommended starting point;
+   later sections build on the same ``.tha`` workflow.
+
+
 Synthesize and analyze a recording without hardware
 ----------------------------------------------------
 
@@ -249,3 +257,45 @@ Pass a path to analyze your own recording instead:
 .. code-block::
 
    python examples/closed_loop_latency.py recording.tha -n daq --trigger trigger --response response
+
+Record a uint64 (``ulong``) counter channel
+--------------------------------------------
+
+Analog streams can carry 64-bit unsigned integers (``ulong_data`` /
+``is_ulong_data``) for counters, hardware timestamps, or event tallies.
+``examples/ulong_counter.py`` writes a ``.tha`` whose ``counter`` node emits a uint64
+sample counter, then it can be read back and exported like any other channel:
+
+.. code-block::
+
+   python examples/ulong_counter.py -o counter.tha
+   python -m thalamus.dataframe -n counter -i counter.tha -f csv -o counter.csv
+
+::
+
+   counter,samples
+   1000000,0
+   2000000,1
+   ...
+
+Both ``thalamus.record_reader2`` and ``thalamus.dataframe`` read the ulong path
+(``record.analog.is_ulong_data`` is ``True`` and the values live in
+``record.analog.ulong_data``).
+
+Write a behavioral task
+-----------------------
+
+``examples/hello_world_task.py`` is the smallest useful :doc:`Task Controller
+<../task_controller>` task: it draws a square, waits for a touch (or a 5 second
+timeout), logs the trial, and returns success/failure.  It is loaded by the Task
+Controller rather than run standalone:
+
+.. code-block::
+
+   python -m thalamus.task_controller --ext examples/hello_world_task.py
+
+It demonstrates the task API: ``create_widget`` for the control UI, an async
+``run(context)`` returning a ``TaskResult``, drawing via ``context.widget.renderer``,
+input via ``context.widget.touch_listener``, timing with ``context.any`` /
+``context.until`` / ``context.sleep``, and ``context.log`` for trial events.  See the
+:doc:`Task Controller <../task_controller>` guide for the full API.

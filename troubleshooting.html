@@ -3,11 +3,11 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Quick Start" href="quickstart.html">
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Glossary" href="glossary.html"><link rel="prev" title="Plugins (native extensions)" href="plugins.html">
         <link rel="prefetch" href="_static/logo.svg" as="image">
 
     <link rel="shortcut icon" href="_static/favicon.svg"><!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>Thalamus</title>
+        <title>Troubleshooting &amp; FAQ - Thalamus</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=acfd86a5" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -169,7 +169,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="#"><div class="brand">Thalamus</div></a>
+      <a href="index.html"><div class="brand">Thalamus</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -188,7 +188,7 @@
   <aside class="sidebar-drawer">
     <div class="sidebar-container">
       
-      <div class="sidebar-sticky"><a class="sidebar-brand" href="#">
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
   <div class="sidebar-logo-container">
     <img class="sidebar-logo" src="_static/logo.svg" alt="Logo"/>
   </div>
@@ -202,7 +202,7 @@
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
   <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
-<ul>
+<ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start</a></li>
 <li class="toctree-l1"><a class="reference internal" href="concepts.html">Concepts and Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="examples/index.html">Examples</a></li>
@@ -258,7 +258,7 @@
 <li class="toctree-l1"><a class="reference internal" href="eye_calibration.html">Eye Calibration</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tools.html">Command-line tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="plugins.html">Plugins (native extensions)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting &amp; FAQ</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Troubleshooting &amp; FAQ</a></li>
 <li class="toctree-l1"><a class="reference internal" href="glossary.html">Glossary</a></li>
 </ul>
 
@@ -280,7 +280,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="_sources/index.rst.txt" title="View this page">
+  <a class="muted-link" href="_sources/troubleshooting.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -298,177 +298,62 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="thalamus">
-<h1>Thalamus<a class="headerlink" href="#thalamus" title="Link to this heading">¶</a></h1>
-<div class="tha-hero">
-  <div class="tha-eyebrow">Real-time · Closed-loop · Multimodal</div>
-  <p><strong>Thalamus</strong> is an open-source platform for real-time, synchronized,
-  closed-loop multimodal data capture &mdash; built for the demands of the operating
-  room and the research lab.</p>
-  <div class="tha-cta">
-    <a class="tha-btn tha-btn--primary" href="quickstart.html">Quick Start &rarr;</a>
-    <a class="tha-btn" href="concepts.html">How it works</a>
-    <a class="tha-btn" href="nodes/index.html">Node reference</a>
-    <a class="tha-btn" href="examples/index.html">Examples</a>
-  </div>
-</div><p>Thalamus assembles experiments from a <strong>pipeline of nodes</strong> — small, configurable
-units that acquire, transform, record, or control data streams.  Recordings are
-written to a compact <code class="docutils literal notranslate"><span class="pre">.tha</span></code> capture file and converted to analysis-ready formats
-(HDF5, CSV, Parquet, …) with the bundled tooling.</p>
-<p>If you use Thalamus in your work, please cite our paper:
-<a class="reference external" href="https://www.nature.com/articles/s44172-026-00646-z">Thalamus: a real-time, closed-loop platform for synchronized multimodal data
-acquisition</a>
-(Communications Engineering, Nature).</p>
-<section id="start-here">
-<h2>Start here<a class="headerlink" href="#start-here" title="Link to this heading">¶</a></h2>
-<p>New to Thalamus?  Follow this path – each step builds on the last, and the later
-pages (behavioral tasks, plugins) are <strong>not</strong> prerequisites for getting started.</p>
-<ol class="arabic simple">
-<li><p><a class="reference internal" href="quickstart.html"><span class="doc">Quick Start</span></a> – install Thalamus and make your first recording.</p></li>
-<li><p><a class="reference internal" href="concepts.html"><span class="doc">Concepts &amp; Architecture</span></a> – the mental model: nodes, the data
-model, and the <code class="docutils literal notranslate"><span class="pre">.tha</span></code> capture file.</p></li>
-<li><p><a class="reference internal" href="examples/index.html"><span class="doc">Examples</span></a> – analyze recordings with the bundled tools
-(runnable, no hardware required).</p></li>
-<li><p><a class="reference internal" href="task_controller.html"><span class="doc">Task Controller</span></a> and <a class="reference internal" href="eye_calibration.html"><span class="doc">Eye Calibration</span></a> – run behavioral, gaze-contingent experiments.</p></li>
-<li><p><a class="reference internal" href="tools.html"><span class="doc">Command-line tools</span></a> and <a class="reference internal" href="plugins.html"><span class="doc">Plugins</span></a> – tune a live
-pipeline and extend Thalamus with native code.</p></li>
-</ol>
-<p>Stuck?  See <a class="reference internal" href="troubleshooting.html"><span class="doc">Troubleshooting &amp; FAQ</span></a> and the
-<a class="reference internal" href="glossary.html"><span class="doc">Glossary</span></a>.</p>
-<div class="toctree-wrapper compound">
-<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#prerequisites">Prerequisites</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#installation">Installation</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#adding-a-node">Adding a Node</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#creating-nodes">Creating Nodes</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#node-properties">Node Properties</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#node-widgets">Node Widgets</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#data-view">Data View</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#recording">Recording</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#file-format">File Format</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#hydration">Hydration</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#data-frame">Data Frame</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#starting-and-stopping-multiple-nodes">Starting and Stopping Multiple Nodes</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#saving-experiments">Saving Experiments</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#next-steps">Next steps</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="concepts.html">Concepts and Architecture</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="concepts.html#the-node-pipeline">The node pipeline</a></li>
-<li class="toctree-l2"><a class="reference internal" href="concepts.html#the-data-model">The data model</a></li>
-<li class="toctree-l2"><a class="reference internal" href="concepts.html#time">Time</a></li>
-<li class="toctree-l2"><a class="reference internal" href="concepts.html#the-capture-file-format">The capture-file format</a></li>
-<li class="toctree-l2"><a class="reference internal" href="concepts.html#reading-and-converting-recordings">Reading and converting recordings</a></li>
-<li class="toctree-l2"><a class="reference internal" href="concepts.html#persistence">Persistence</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="examples/index.html">Examples</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="examples/index.html#synthesize-and-analyze-a-recording-without-hardware">Synthesize and analyze a recording without hardware</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples/index.html#record-event-markers-text">Record event markers (text)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples/index.html#record-a-synthetic-video-stream-images">Record a synthetic video stream (images)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples/index.html#record-several-nodes-at-once">Record several nodes at once</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples/index.html#summarize-any-capture-file">Summarize any capture file</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples/index.html#measure-closed-loop-latency">Measure closed-loop latency</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples/index.html#record-a-uint64-ulong-counter-channel">Record a uint64 (<code class="docutils literal notranslate"><span class="pre">ulong</span></code>) counter channel</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples/index.html#write-a-behavioral-task">Write a behavioral task</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="nodes/index.html">Nodes</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="nodes/catalog.html">Node Catalog</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/wave.html">WAVE</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/storage2.html">STORAGE2</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/nidaq.html">NIDAQ</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/oculomatic.html">OCULOMATIC</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/touch_screen.html">TOUCH_SCREEN</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/runner2.html">RUNNER2</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/algebra.html">ALGEBRA</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/normalize.html">NORMALIZE</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/lua.html">LUA</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/channel_picker.html">CHANNEL_PICKER</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/sync.html">SYNC</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/genicam.html">GENICAM</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/aruco.html">ARUCO</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/chessboard.html">CHESSBOARD</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/distortion.html">DISTORTION</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/intan.html">INTAN</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/spikeglx.html">SPIKEGLX</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/delsys.html">DELSYS</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/xsens.html">XSENS</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/pupil.html">PUPIL</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/wallclock.html">WALLCLOCK</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/analog.html">ANALOG</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/toggle.html">TOGGLE</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/frequency.html">FREQUENCY</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/nidaq_out.html">NIDAQ_OUT</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/task_controller.html">TASK_CONTROLLER</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/ophanim.html">OPHANIM</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/hexascope.html">HEXASCOPE</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/ros2.html">ROS2</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/video.html">VIDEO</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/ffmpeg.html">FFMPEG</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/hand_engine.html">HAND_ENGINE</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/brainproducts.html">BRAINPRODUCTS</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/remote.html">REMOTE</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/remote_log.html">REMOTE_LOG</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/runner.html">RUNNER</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/sample_monitor.html">SAMPLE_MONITOR</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/storage.html">STORAGE</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/log.html">LOG</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/stim_printer.html">STIM_PRINTER</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/ceci.html">CECI</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/thread_pool.html">THREAD_POOL</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/loop_test.html">LOOP_TEST</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/test_pulse.html">TEST_PULSE_NODE</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="task_controller.html">Task Controller</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="task_controller.html#running-the-controller">Running the controller</a></li>
-<li class="toctree-l2"><a class="reference internal" href="task_controller.html#tasks-and-task-clusters">Tasks and task clusters</a></li>
-<li class="toctree-l2"><a class="reference internal" href="task_controller.html#reproducibility">Reproducibility</a></li>
-<li class="toctree-l2"><a class="reference internal" href="task_controller.html#writing-a-task">Writing a task</a></li>
-<li class="toctree-l2"><a class="reference internal" href="task_controller.html#operator-controls">Operator controls</a></li>
-<li class="toctree-l2"><a class="reference internal" href="task_controller.html#verifying-a-trial-was-recorded">Verifying a trial was recorded</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="eye_calibration.html">Eye Calibration</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="eye_calibration.html#running-it">Running it</a></li>
-<li class="toctree-l2"><a class="reference internal" href="eye_calibration.html#calibration-models">Calibration models</a></li>
-<li class="toctree-l2"><a class="reference internal" href="eye_calibration.html#workflow">Workflow</a></li>
-<li class="toctree-l2"><a class="reference internal" href="eye_calibration.html#operator-controls">Operator controls</a></li>
-<li class="toctree-l2"><a class="reference internal" href="eye_calibration.html#relationship-to-the-rest-of-thalamus">Relationship to the rest of Thalamus</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="tools.html">Command-line tools</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="tools.html#registry-live-state-editing">registry — live state editing</a></li>
-<li class="toctree-l2"><a class="reference internal" href="tools.html#data-tools">Data tools</a></li>
-<li class="toctree-l2"><a class="reference internal" href="tools.html#applications">Applications</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="plugins.html">Plugins (native extensions)</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="plugins.html#the-c-api">The C API</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting &amp; FAQ</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#faq">FAQ</a></li>
-<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#install-startup">Install &amp; startup</a></li>
-<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#running-examples">Running examples</a></li>
-<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#connecting-tools-to-a-pipeline">Connecting tools to a pipeline</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="glossary.html">Glossary</a></li>
-</ul>
+          <section id="troubleshooting-faq">
+<h1>Troubleshooting &amp; FAQ<a class="headerlink" href="#troubleshooting-faq" title="Link to this heading">¶</a></h1>
+<section id="faq">
+<h2>FAQ<a class="headerlink" href="#faq" title="Link to this heading">¶</a></h2>
+<dl class="simple">
+<dt><strong>Do I need hardware to try Thalamus?</strong></dt><dd><p>No.  You can install the package, run the pipeline, generate signals with a WAVE
+node, record, and analyze – all in software.  The <a class="reference internal" href="examples/index.html"><span class="doc">Examples</span></a> are
+runnable with no acquisition hardware.</p>
+</dd>
+<dt><strong>What is a</strong> <code class="docutils literal notranslate"><span class="pre">.tha</span></code> <strong>file?</strong></dt><dd><p>Thalamus’s capture/recording format: an append-only log of length-prefixed
+protobuf records.  See <a class="reference internal" href="concepts.html"><span class="doc">Concepts and Architecture</span></a> and convert it to HDF5/CSV/Parquet with the
+bundled <a class="reference internal" href="tools.html"><span class="doc">tools</span></a>.</p>
+</dd>
+<dt><strong>Which wheel do I download?</strong></dt><dd><p>Pick the file on the <a class="reference external" href="https://github.com/cajigaslab/Thalamus/releases">Releases page</a> that matches your OS and Python
+– e.g. <code class="docutils literal notranslate"><span class="pre">...manylinux...</span></code> for Linux, <code class="docutils literal notranslate"><span class="pre">...win_amd64...</span></code> for Windows,
+<code class="docutils literal notranslate"><span class="pre">...macosx...arm64...</span></code> for Apple Silicon.  The version in the docs is just an
+example; always grab the current release.</p>
+</dd>
+<dt><strong>Do Windows and Linux differ?</strong></dt><dd><p>The tools and node types are the same; only the virtual-environment activation
+command and some third-party device drivers differ.</p>
+</dd>
+</dl>
+</section>
+<section id="install-startup">
+<h2>Install &amp; startup<a class="headerlink" href="#install-startup" title="Link to this heading">¶</a></h2>
+<p><strong>Verify your install.</strong>  After installing the wheel, check the import works:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="o">-</span><span class="n">c</span> <span class="s2">&quot;import thalamus; print(&#39;thalamus OK&#39;)&quot;</span>
+</pre></div>
 </div>
+<p>Then launch the pipeline; you should see a window with an empty node list (see
+<a class="reference internal" href="quickstart.html"><span class="doc">Quick Start</span></a>):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">thalamus</span><span class="o">.</span><span class="n">pipeline</span>
+</pre></div>
+</div>
+<p><strong>grpc version conflicts.</strong>  Thalamus bundles a specific <code class="docutils literal notranslate"><span class="pre">grpc</span></code> build.  Installing
+into a fresh virtual environment (as the <a class="reference internal" href="quickstart.html"><span class="doc">Quick Start</span></a> shows) avoids a mismatched
+system <code class="docutils literal notranslate"><span class="pre">grpcio</span></code> that can cause import or connection errors.</p>
+<p><strong>No window appears.</strong>  The pipeline and task controller are Qt GUI applications and
+need a display.  On a headless machine or over SSH without X forwarding no window can
+open – run on a desktop session, or forward the display.  If you only need data
+conversion/analysis, the command-line <a class="reference internal" href="tools.html"><span class="doc">tools</span></a> and <a class="reference internal" href="examples/index.html"><span class="doc">examples</span></a> do not require a display.</p>
 </section>
+<section id="running-examples">
+<h2>Running examples<a class="headerlink" href="#running-examples" title="Link to this heading">¶</a></h2>
+<p>The example scripts live in the <a class="reference external" href="https://github.com/cajigaslab/Thalamus/tree/main/examples">examples/</a> folder of the
+repository (they are not shipped inside the installed wheel).  Clone the repo, or
+copy a script, then run it from the repo root, e.g. <code class="docutils literal notranslate"><span class="pre">python</span>
+<span class="pre">examples/synthetic_recording.py</span></code>.</p>
 </section>
-<section id="indices-and-tables">
-<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Link to this heading">¶</a></h1>
-<ul class="simple">
-<li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
-<li><p><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></p></li>
-<li><p><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></p></li>
-</ul>
+<section id="connecting-tools-to-a-pipeline">
+<h2>Connecting tools to a pipeline<a class="headerlink" href="#connecting-tools-to-a-pipeline" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">registry</span></code> and other clients connect to a <strong>running</strong> pipeline over gRPC (default
+<code class="docutils literal notranslate"><span class="pre">localhost:50050</span></code>).  Start <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">thalamus.pipeline</span></code> (or
+<code class="docutils literal notranslate"><span class="pre">thalamus.task_controller</span></code>) first; if a client cannot connect, confirm the pipeline
+is running and that the <code class="docutils literal notranslate"><span class="pre">--address</span></code> / <code class="docutils literal notranslate"><span class="pre">--port</span></code> match.</p>
+</section>
 </section>
 
         </article>
@@ -476,16 +361,26 @@ pipeline and extend Thalamus with native code.</p></li>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="quickstart.html">
+          <a class="next-page" href="glossary.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">Quick Start</div>
+                <div class="title">Glossary</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          
+          <a class="prev-page" href="plugins.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Plugins (native extensions)</div>
+                
+              </div>
+            </a>
         </div>
         <div class="bottom-of-page">
           <div class="left-details">
@@ -519,11 +414,13 @@ pipeline and extend Thalamus with native code.</p></li>
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">Thalamus</a><ul>
-<li><a class="reference internal" href="#start-here">Start here</a></li>
+<li><a class="reference internal" href="#">Troubleshooting &amp; FAQ</a><ul>
+<li><a class="reference internal" href="#faq">FAQ</a></li>
+<li><a class="reference internal" href="#install-startup">Install &amp; startup</a></li>
+<li><a class="reference internal" href="#running-examples">Running examples</a></li>
+<li><a class="reference internal" href="#connecting-tools-to-a-pipeline">Connecting tools to a pipeline</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
 </ul>
 
           </div>

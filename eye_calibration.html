@@ -3,11 +3,11 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Quick Start" href="quickstart.html">
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Command-line tools" href="tools.html"><link rel="prev" title="Task Controller" href="task_controller.html">
         <link rel="prefetch" href="_static/logo.svg" as="image">
 
     <link rel="shortcut icon" href="_static/favicon.svg"><!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>Thalamus</title>
+        <title>Eye Calibration - Thalamus</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=acfd86a5" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -169,7 +169,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="#"><div class="brand">Thalamus</div></a>
+      <a href="index.html"><div class="brand">Thalamus</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -188,7 +188,7 @@
   <aside class="sidebar-drawer">
     <div class="sidebar-container">
       
-      <div class="sidebar-sticky"><a class="sidebar-brand" href="#">
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
   <div class="sidebar-logo-container">
     <img class="sidebar-logo" src="_static/logo.svg" alt="Logo"/>
   </div>
@@ -202,7 +202,7 @@
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
   <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
-<ul>
+<ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start</a></li>
 <li class="toctree-l1"><a class="reference internal" href="concepts.html">Concepts and Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="examples/index.html">Examples</a></li>
@@ -255,7 +255,7 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="task_controller.html">Task Controller</a></li>
-<li class="toctree-l1"><a class="reference internal" href="eye_calibration.html">Eye Calibration</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Eye Calibration</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tools.html">Command-line tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="plugins.html">Plugins (native extensions)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting &amp; FAQ</a></li>
@@ -280,7 +280,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="_sources/index.rst.txt" title="View this page">
+  <a class="muted-link" href="_sources/eye_calibration.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -298,177 +298,90 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="thalamus">
-<h1>Thalamus<a class="headerlink" href="#thalamus" title="Link to this heading">¶</a></h1>
-<div class="tha-hero">
-  <div class="tha-eyebrow">Real-time · Closed-loop · Multimodal</div>
-  <p><strong>Thalamus</strong> is an open-source platform for real-time, synchronized,
-  closed-loop multimodal data capture &mdash; built for the demands of the operating
-  room and the research lab.</p>
-  <div class="tha-cta">
-    <a class="tha-btn tha-btn--primary" href="quickstart.html">Quick Start &rarr;</a>
-    <a class="tha-btn" href="concepts.html">How it works</a>
-    <a class="tha-btn" href="nodes/index.html">Node reference</a>
-    <a class="tha-btn" href="examples/index.html">Examples</a>
-  </div>
-</div><p>Thalamus assembles experiments from a <strong>pipeline of nodes</strong> — small, configurable
-units that acquire, transform, record, or control data streams.  Recordings are
-written to a compact <code class="docutils literal notranslate"><span class="pre">.tha</span></code> capture file and converted to analysis-ready formats
-(HDF5, CSV, Parquet, …) with the bundled tooling.</p>
-<p>If you use Thalamus in your work, please cite our paper:
-<a class="reference external" href="https://www.nature.com/articles/s44172-026-00646-z">Thalamus: a real-time, closed-loop platform for synchronized multimodal data
-acquisition</a>
-(Communications Engineering, Nature).</p>
-<section id="start-here">
-<h2>Start here<a class="headerlink" href="#start-here" title="Link to this heading">¶</a></h2>
-<p>New to Thalamus?  Follow this path – each step builds on the last, and the later
-pages (behavioral tasks, plugins) are <strong>not</strong> prerequisites for getting started.</p>
-<ol class="arabic simple">
-<li><p><a class="reference internal" href="quickstart.html"><span class="doc">Quick Start</span></a> – install Thalamus and make your first recording.</p></li>
-<li><p><a class="reference internal" href="concepts.html"><span class="doc">Concepts &amp; Architecture</span></a> – the mental model: nodes, the data
-model, and the <code class="docutils literal notranslate"><span class="pre">.tha</span></code> capture file.</p></li>
-<li><p><a class="reference internal" href="examples/index.html"><span class="doc">Examples</span></a> – analyze recordings with the bundled tools
-(runnable, no hardware required).</p></li>
-<li><p><a class="reference internal" href="task_controller.html"><span class="doc">Task Controller</span></a> and <a class="reference internal" href="eye_calibration.html"><span class="doc">Eye Calibration</span></a> – run behavioral, gaze-contingent experiments.</p></li>
-<li><p><a class="reference internal" href="tools.html"><span class="doc">Command-line tools</span></a> and <a class="reference internal" href="plugins.html"><span class="doc">Plugins</span></a> – tune a live
-pipeline and extend Thalamus with native code.</p></li>
-</ol>
-<p>Stuck?  See <a class="reference internal" href="troubleshooting.html"><span class="doc">Troubleshooting &amp; FAQ</span></a> and the
-<a class="reference internal" href="glossary.html"><span class="doc">Glossary</span></a>.</p>
-<div class="toctree-wrapper compound">
-<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#prerequisites">Prerequisites</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#installation">Installation</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#adding-a-node">Adding a Node</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#creating-nodes">Creating Nodes</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#node-properties">Node Properties</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#node-widgets">Node Widgets</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#data-view">Data View</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#recording">Recording</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#file-format">File Format</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#hydration">Hydration</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#data-frame">Data Frame</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#starting-and-stopping-multiple-nodes">Starting and Stopping Multiple Nodes</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#saving-experiments">Saving Experiments</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#next-steps">Next steps</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="concepts.html">Concepts and Architecture</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="concepts.html#the-node-pipeline">The node pipeline</a></li>
-<li class="toctree-l2"><a class="reference internal" href="concepts.html#the-data-model">The data model</a></li>
-<li class="toctree-l2"><a class="reference internal" href="concepts.html#time">Time</a></li>
-<li class="toctree-l2"><a class="reference internal" href="concepts.html#the-capture-file-format">The capture-file format</a></li>
-<li class="toctree-l2"><a class="reference internal" href="concepts.html#reading-and-converting-recordings">Reading and converting recordings</a></li>
-<li class="toctree-l2"><a class="reference internal" href="concepts.html#persistence">Persistence</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="examples/index.html">Examples</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="examples/index.html#synthesize-and-analyze-a-recording-without-hardware">Synthesize and analyze a recording without hardware</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples/index.html#record-event-markers-text">Record event markers (text)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples/index.html#record-a-synthetic-video-stream-images">Record a synthetic video stream (images)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples/index.html#record-several-nodes-at-once">Record several nodes at once</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples/index.html#summarize-any-capture-file">Summarize any capture file</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples/index.html#measure-closed-loop-latency">Measure closed-loop latency</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples/index.html#record-a-uint64-ulong-counter-channel">Record a uint64 (<code class="docutils literal notranslate"><span class="pre">ulong</span></code>) counter channel</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples/index.html#write-a-behavioral-task">Write a behavioral task</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="nodes/index.html">Nodes</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="nodes/catalog.html">Node Catalog</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/wave.html">WAVE</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/storage2.html">STORAGE2</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/nidaq.html">NIDAQ</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/oculomatic.html">OCULOMATIC</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/touch_screen.html">TOUCH_SCREEN</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/runner2.html">RUNNER2</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/algebra.html">ALGEBRA</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/normalize.html">NORMALIZE</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/lua.html">LUA</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/channel_picker.html">CHANNEL_PICKER</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/sync.html">SYNC</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/genicam.html">GENICAM</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/aruco.html">ARUCO</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/chessboard.html">CHESSBOARD</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/distortion.html">DISTORTION</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/intan.html">INTAN</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/spikeglx.html">SPIKEGLX</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/delsys.html">DELSYS</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/xsens.html">XSENS</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/pupil.html">PUPIL</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/wallclock.html">WALLCLOCK</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/analog.html">ANALOG</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/toggle.html">TOGGLE</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/frequency.html">FREQUENCY</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/nidaq_out.html">NIDAQ_OUT</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/task_controller.html">TASK_CONTROLLER</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/ophanim.html">OPHANIM</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/hexascope.html">HEXASCOPE</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/ros2.html">ROS2</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/video.html">VIDEO</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/ffmpeg.html">FFMPEG</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/hand_engine.html">HAND_ENGINE</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/brainproducts.html">BRAINPRODUCTS</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/remote.html">REMOTE</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/remote_log.html">REMOTE_LOG</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/runner.html">RUNNER</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/sample_monitor.html">SAMPLE_MONITOR</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/storage.html">STORAGE</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/log.html">LOG</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/stim_printer.html">STIM_PRINTER</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/ceci.html">CECI</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/thread_pool.html">THREAD_POOL</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/loop_test.html">LOOP_TEST</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/test_pulse.html">TEST_PULSE_NODE</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="task_controller.html">Task Controller</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="task_controller.html#running-the-controller">Running the controller</a></li>
-<li class="toctree-l2"><a class="reference internal" href="task_controller.html#tasks-and-task-clusters">Tasks and task clusters</a></li>
-<li class="toctree-l2"><a class="reference internal" href="task_controller.html#reproducibility">Reproducibility</a></li>
-<li class="toctree-l2"><a class="reference internal" href="task_controller.html#writing-a-task">Writing a task</a></li>
-<li class="toctree-l2"><a class="reference internal" href="task_controller.html#operator-controls">Operator controls</a></li>
-<li class="toctree-l2"><a class="reference internal" href="task_controller.html#verifying-a-trial-was-recorded">Verifying a trial was recorded</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="eye_calibration.html">Eye Calibration</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="eye_calibration.html#running-it">Running it</a></li>
-<li class="toctree-l2"><a class="reference internal" href="eye_calibration.html#calibration-models">Calibration models</a></li>
-<li class="toctree-l2"><a class="reference internal" href="eye_calibration.html#workflow">Workflow</a></li>
-<li class="toctree-l2"><a class="reference internal" href="eye_calibration.html#operator-controls">Operator controls</a></li>
-<li class="toctree-l2"><a class="reference internal" href="eye_calibration.html#relationship-to-the-rest-of-thalamus">Relationship to the rest of Thalamus</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="tools.html">Command-line tools</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="tools.html#registry-live-state-editing">registry — live state editing</a></li>
-<li class="toctree-l2"><a class="reference internal" href="tools.html#data-tools">Data tools</a></li>
-<li class="toctree-l2"><a class="reference internal" href="tools.html#applications">Applications</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="plugins.html">Plugins (native extensions)</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="plugins.html#the-c-api">The C API</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting &amp; FAQ</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#faq">FAQ</a></li>
-<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#install-startup">Install &amp; startup</a></li>
-<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#running-examples">Running examples</a></li>
-<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#connecting-tools-to-a-pipeline">Connecting tools to a pipeline</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="glossary.html">Glossary</a></li>
-</ul>
+          <section id="eye-calibration">
+<h1>Eye Calibration<a class="headerlink" href="#eye-calibration" title="Link to this heading">¶</a></h1>
+<p>The eye-calibration tool maps the <strong>raw eye-camera signal</strong> produced by the
+<a class="reference internal" href="nodes/oculomatic.html"><span class="doc">OCULOMATIC</span></a> node into <strong>gaze / screen coordinates</strong>, so that
+gaze can be used for gaze-contingent behavioral tasks and analysis.  It is an
+interactive application: an operator collects a few known fixations, fits a
+calibration model, and refines it live.</p>
+<section id="running-it">
+<h2>Running it<a class="headerlink" href="#running-it" title="Link to this heading">¶</a></h2>
+<p>Start a Thalamus pipeline that includes an OCULOMATIC node (producing <code class="docutils literal notranslate"><span class="pre">X</span></code> / <code class="docutils literal notranslate"><span class="pre">Y</span></code>
+gaze channels), then launch the calibrator, which connects to the pipeline over gRPC
+(default <code class="docutils literal notranslate"><span class="pre">localhost:50050</span></code>):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">thalamus</span><span class="o">.</span><span class="n">eye_calibration</span>
+</pre></div>
 </div>
+<p>Two windows open: a <strong>subject view</strong> (what the subject sees – fixation point and
+saccade targets) and an <strong>operator view</strong> (the interactive calibration interface).</p>
 </section>
-</section>
-<section id="indices-and-tables">
-<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Link to this heading">¶</a></h1>
+<section id="calibration-models">
+<h2>Calibration models<a class="headerlink" href="#calibration-models" title="Link to this heading">¶</a></h2>
+<p>The active model is set by the <code class="docutils literal notranslate"><span class="pre">Selected</span> <span class="pre">Model</span></code> key under <code class="docutils literal notranslate"><span class="pre">eye_scaling</span></code> in the
+configuration; the operator window shows which model is in use.</p>
 <ul class="simple">
-<li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
-<li><p><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></p></li>
-<li><p><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></p></li>
+<li><p><strong>Projective</strong> – an 8-parameter projective (homography) mapping from raw eye
+coordinates to eye angles, followed by an angle-to-pixel conversion that uses the
+screen <strong>Distance (m)</strong> and <strong>DPI</strong>.  Fitting solves a least-squares problem over
+the collected fixation/target pairs.  <em>Use this</em> when a single global mapping fits
+the data well – it is the simplest, most common choice.</p></li>
+<li><p><strong>Angular Scaling</strong> – a polar model: the raw signal’s angle selects an
+interpolated <strong>scale</strong> and <strong>rotation</strong> from a set of <em>pins</em>, allowing the gain to
+vary by direction (independent X/Y behavior).  Interpolation wraps around the
+circle, and a <strong>Scale Default</strong> is used before any pins are set.  <em>Use this</em> when
+the eye signal is non-uniform across directions and a single projective fit leaves
+systematic error.</p></li>
 </ul>
+<p>You can tell the calibration is good when, after fitting, the live gaze trace lands
+on each saccade target as the subject fixates it.</p>
+<p>The fitted parameters (the projective <code class="docutils literal notranslate"><span class="pre">Parameters</span></code> / <code class="docutils literal notranslate"><span class="pre">Distance</span> <span class="pre">(m)</span></code> / <code class="docutils literal notranslate"><span class="pre">DPI</span></code>, or
+the Angular-Scaling <code class="docutils literal notranslate"><span class="pre">Pins</span></code> / <code class="docutils literal notranslate"><span class="pre">Scale</span> <span class="pre">Default</span></code>) live in the pipeline config, so the
+calibration is saved with the experiment and reused downstream.</p>
+</section>
+<section id="workflow">
+<h2>Workflow<a class="headerlink" href="#workflow" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple">
+<li><p><strong>Show targets.</strong> Add saccade targets in the operator view and cycle through them
+so the subject fixates each in turn.</p></li>
+<li><p><strong>Collect samples.</strong> With the subject fixating a target, record the current gaze
+as a training sample for that target.</p></li>
+<li><p><strong>Fit.</strong> Press <strong>Fit</strong> to solve the selected model from the collected samples.</p></li>
+<li><p><strong>Refine.</strong> For Angular Scaling you can <strong>nudge</strong> pins by dragging to locally
+adjust scale/rotation; <strong>undo/redo</strong> is available for every change.</p></li>
+<li><p><strong>Reset / Clear.</strong> <strong>Reset</strong> restores the model to defaults; <strong>Clear</strong> wipes the
+accumulated gaze trace without discarding the calibration.</p></li>
+</ol>
+</section>
+<section id="operator-controls">
+<h2>Operator controls<a class="headerlink" href="#operator-controls" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>Model</strong> – a read-only display of the active model (set via the
+<code class="docutils literal notranslate"><span class="pre">Selected</span> <span class="pre">Model</span></code> configuration).</p></li>
+<li><p><strong>Fit</strong> / <strong>Reset</strong> – fit the model to the samples / restore defaults.</p></li>
+<li><p><strong>Clear</strong> – clear the displayed gaze trace.</p></li>
+<li><p><strong>Hold</strong> – keep accumulating the gaze trace instead of trimming it to the most
+recent points.</p></li>
+<li><p><strong>Fixation Radius</strong> / <strong>Saccade Radius</strong> – on-screen sizes of the fixation point
+and the saccade targets.</p></li>
+<li><p><strong>Reward (ms)</strong> and <strong>Reward Node</strong> – duration of the reward pulse and the name of
+the node it is injected into.  A keypress in the operator view delivers a reward,
+which is injected as an analog signal on the reward node – useful for shaping
+behavior during calibration.</p></li>
+</ul>
+<p>Keyboard shortcuts in the operator view cover undo/redo, delivering a reward, and
+cycling the active saccade target.</p>
+</section>
+<section id="relationship-to-the-rest-of-thalamus">
+<h2>Relationship to the rest of Thalamus<a class="headerlink" href="#relationship-to-the-rest-of-thalamus" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>Input comes from the <a class="reference internal" href="nodes/oculomatic.html"><span class="doc">OCULOMATIC</span></a> node’s gaze channels.</p></li>
+<li><p>The <strong>reward</strong> is delivered by injecting an analog signal into a node you nominate
+(e.g. a <a class="reference internal" href="nodes/nidaq_out.html"><span class="doc">NIDAQ_OUT</span></a> channel driving a reward device).</p></li>
+<li><p>The resulting calibration is consumed by the <a class="reference internal" href="task_controller.html"><span class="doc">Task Controller</span></a> so behavioral tasks can use calibrated gaze in screen
+coordinates.</p></li>
+</ul>
+</section>
 </section>
 
         </article>
@@ -476,16 +389,26 @@ pipeline and extend Thalamus with native code.</p></li>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="quickstart.html">
+          <a class="next-page" href="tools.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">Quick Start</div>
+                <div class="title">Command-line tools</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          
+          <a class="prev-page" href="task_controller.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Task Controller</div>
+                
+              </div>
+            </a>
         </div>
         <div class="bottom-of-page">
           <div class="left-details">
@@ -519,11 +442,14 @@ pipeline and extend Thalamus with native code.</p></li>
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">Thalamus</a><ul>
-<li><a class="reference internal" href="#start-here">Start here</a></li>
+<li><a class="reference internal" href="#">Eye Calibration</a><ul>
+<li><a class="reference internal" href="#running-it">Running it</a></li>
+<li><a class="reference internal" href="#calibration-models">Calibration models</a></li>
+<li><a class="reference internal" href="#workflow">Workflow</a></li>
+<li><a class="reference internal" href="#operator-controls">Operator controls</a></li>
+<li><a class="reference internal" href="#relationship-to-the-rest-of-thalamus">Relationship to the rest of Thalamus</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
 </ul>
 
           </div>

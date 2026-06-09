@@ -3,11 +3,11 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Quick Start" href="quickstart.html">
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Eye Calibration" href="eye_calibration.html"><link rel="prev" title="TEST_PULSE_NODE" href="nodes/test_pulse.html">
         <link rel="prefetch" href="_static/logo.svg" as="image">
 
     <link rel="shortcut icon" href="_static/favicon.svg"><!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>Thalamus</title>
+        <title>Task Controller - Thalamus</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=acfd86a5" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -169,7 +169,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="#"><div class="brand">Thalamus</div></a>
+      <a href="index.html"><div class="brand">Thalamus</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -188,7 +188,7 @@
   <aside class="sidebar-drawer">
     <div class="sidebar-container">
       
-      <div class="sidebar-sticky"><a class="sidebar-brand" href="#">
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
   <div class="sidebar-logo-container">
     <img class="sidebar-logo" src="_static/logo.svg" alt="Logo"/>
   </div>
@@ -202,7 +202,7 @@
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
   <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
-<ul>
+<ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start</a></li>
 <li class="toctree-l1"><a class="reference internal" href="concepts.html">Concepts and Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="examples/index.html">Examples</a></li>
@@ -254,7 +254,7 @@
 <li class="toctree-l2"><a class="reference internal" href="nodes/test_pulse.html">TEST_PULSE_NODE</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="task_controller.html">Task Controller</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Task Controller</a></li>
 <li class="toctree-l1"><a class="reference internal" href="eye_calibration.html">Eye Calibration</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tools.html">Command-line tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="plugins.html">Plugins (native extensions)</a></li>
@@ -280,7 +280,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="_sources/index.rst.txt" title="View this page">
+  <a class="muted-link" href="_sources/task_controller.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -298,177 +298,140 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="thalamus">
-<h1>Thalamus<a class="headerlink" href="#thalamus" title="Link to this heading">¶</a></h1>
-<div class="tha-hero">
-  <div class="tha-eyebrow">Real-time · Closed-loop · Multimodal</div>
-  <p><strong>Thalamus</strong> is an open-source platform for real-time, synchronized,
-  closed-loop multimodal data capture &mdash; built for the demands of the operating
-  room and the research lab.</p>
-  <div class="tha-cta">
-    <a class="tha-btn tha-btn--primary" href="quickstart.html">Quick Start &rarr;</a>
-    <a class="tha-btn" href="concepts.html">How it works</a>
-    <a class="tha-btn" href="nodes/index.html">Node reference</a>
-    <a class="tha-btn" href="examples/index.html">Examples</a>
-  </div>
-</div><p>Thalamus assembles experiments from a <strong>pipeline of nodes</strong> — small, configurable
-units that acquire, transform, record, or control data streams.  Recordings are
-written to a compact <code class="docutils literal notranslate"><span class="pre">.tha</span></code> capture file and converted to analysis-ready formats
-(HDF5, CSV, Parquet, …) with the bundled tooling.</p>
-<p>If you use Thalamus in your work, please cite our paper:
-<a class="reference external" href="https://www.nature.com/articles/s44172-026-00646-z">Thalamus: a real-time, closed-loop platform for synchronized multimodal data
-acquisition</a>
-(Communications Engineering, Nature).</p>
-<section id="start-here">
-<h2>Start here<a class="headerlink" href="#start-here" title="Link to this heading">¶</a></h2>
-<p>New to Thalamus?  Follow this path – each step builds on the last, and the later
-pages (behavioral tasks, plugins) are <strong>not</strong> prerequisites for getting started.</p>
-<ol class="arabic simple">
-<li><p><a class="reference internal" href="quickstart.html"><span class="doc">Quick Start</span></a> – install Thalamus and make your first recording.</p></li>
-<li><p><a class="reference internal" href="concepts.html"><span class="doc">Concepts &amp; Architecture</span></a> – the mental model: nodes, the data
-model, and the <code class="docutils literal notranslate"><span class="pre">.tha</span></code> capture file.</p></li>
-<li><p><a class="reference internal" href="examples/index.html"><span class="doc">Examples</span></a> – analyze recordings with the bundled tools
-(runnable, no hardware required).</p></li>
-<li><p><a class="reference internal" href="task_controller.html"><span class="doc">Task Controller</span></a> and <a class="reference internal" href="eye_calibration.html"><span class="doc">Eye Calibration</span></a> – run behavioral, gaze-contingent experiments.</p></li>
-<li><p><a class="reference internal" href="tools.html"><span class="doc">Command-line tools</span></a> and <a class="reference internal" href="plugins.html"><span class="doc">Plugins</span></a> – tune a live
-pipeline and extend Thalamus with native code.</p></li>
-</ol>
-<p>Stuck?  See <a class="reference internal" href="troubleshooting.html"><span class="doc">Troubleshooting &amp; FAQ</span></a> and the
-<a class="reference internal" href="glossary.html"><span class="doc">Glossary</span></a>.</p>
-<div class="toctree-wrapper compound">
-<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#prerequisites">Prerequisites</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#installation">Installation</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#adding-a-node">Adding a Node</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#creating-nodes">Creating Nodes</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#node-properties">Node Properties</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#node-widgets">Node Widgets</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#data-view">Data View</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#recording">Recording</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#file-format">File Format</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#hydration">Hydration</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#data-frame">Data Frame</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#starting-and-stopping-multiple-nodes">Starting and Stopping Multiple Nodes</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#saving-experiments">Saving Experiments</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#next-steps">Next steps</a></li>
+          <section id="task-controller">
+<h1>Task Controller<a class="headerlink" href="#task-controller" title="Link to this heading">¶</a></h1>
+<p>The <strong>Task Controller</strong> is Thalamus’s behavioral-task runtime.  It runs trial-based
+experiments (reaches, saccades, fixation, stimulation, …) alongside the data
+pipeline, drawing stimuli to a screen, reading touch/gaze input, delivering
+reward/stimulation, and logging every trial into the recording.</p>
+<p>It is the system behind the <a class="reference internal" href="nodes/task_controller.html"><span class="doc">TASK_CONTROLLER</span></a> node: the
+node starts/stops the controller, while the controller hosts the tasks themselves.</p>
+<div class="admonition-when-would-i-use-this admonition">
+<p class="admonition-title">When would I use this?</p>
+<p>Reach for the Task Controller when your experiment isn’t just <em>recording</em> signals
+but <em>running a paradigm</em> – presenting stimuli, requiring the subject to fixate /
+reach / choose, and delivering reward or stimulation – all synchronized with the
+data pipeline so every trial is timestamped into the recording.</p>
+</div>
+<section id="running-the-controller">
+<h2>Running the controller<a class="headerlink" href="#running-the-controller" title="Link to this heading">¶</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">thalamus</span><span class="o">.</span><span class="n">task_controller</span> <span class="p">[</span><span class="n">options</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>Common options:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">-c,</span> <span class="pre">--config</span> <span class="pre">PATH</span></code> – load a saved configuration (nodes + task clusters).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">-p,</span> <span class="pre">--port</span> <span class="pre">PORT</span></code> – data-pipeline gRPC port (default <code class="docutils literal notranslate"><span class="pre">50050</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">-u,</span> <span class="pre">--ui-port</span> <span class="pre">PORT</span></code> – UI gRPC port (default <code class="docutils literal notranslate"><span class="pre">50051</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">-y,</span> <span class="pre">--pypipeline</span></code> – use the Python pipeline instead of the native one.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">-l,</span> <span class="pre">--log-level</span> <span class="pre">LEVEL</span></code> – <code class="docutils literal notranslate"><span class="pre">trace</span></code> / <code class="docutils literal notranslate"><span class="pre">debug</span></code> / <code class="docutils literal notranslate"><span class="pre">info</span></code> / <code class="docutils literal notranslate"><span class="pre">warning</span></code> /
+<code class="docutils literal notranslate"><span class="pre">error</span></code> / <code class="docutils literal notranslate"><span class="pre">fatal</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--ext</span> <span class="pre">MODULE</span></code> – load an extension module that adds custom tasks/widgets.</p></li>
 </ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="concepts.html">Concepts and Architecture</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="concepts.html#the-node-pipeline">The node pipeline</a></li>
-<li class="toctree-l2"><a class="reference internal" href="concepts.html#the-data-model">The data model</a></li>
-<li class="toctree-l2"><a class="reference internal" href="concepts.html#time">Time</a></li>
-<li class="toctree-l2"><a class="reference internal" href="concepts.html#the-capture-file-format">The capture-file format</a></li>
-<li class="toctree-l2"><a class="reference internal" href="concepts.html#reading-and-converting-recordings">Reading and converting recordings</a></li>
-<li class="toctree-l2"><a class="reference internal" href="concepts.html#persistence">Persistence</a></li>
+<p>The controller opens a <strong>control window</strong> (where you assemble <em>task clusters</em> and a
+run queue) and a <strong>subject window</strong> (the stimulus display).  An optional
+<strong>operator view</strong> mirrors the subject display with extra operator-only overlays
+(gaze/touch traces and any task-provided controls).</p>
+</section>
+<section id="tasks-and-task-clusters">
+<h2>Tasks and task clusters<a class="headerlink" href="#tasks-and-task-clusters" title="Link to this heading">¶</a></h2>
+<p>A <strong>task</strong> is one trial paradigm.  Thalamus ships a library of tasks, registered in
+<code class="docutils literal notranslate"><span class="pre">thalamus/task_controller/tasks.py</span></code>, including <code class="docutils literal notranslate"><span class="pre">simple</span></code>, <code class="docutils literal notranslate"><span class="pre">delayed_reach</span></code>,
+<code class="docutils literal notranslate"><span class="pre">delayed_saccade</span></code>, <code class="docutils literal notranslate"><span class="pre">delayed_reach_and_saccade</span></code>, <code class="docutils literal notranslate"><span class="pre">double_step_reach</span></code>,
+<code class="docutils literal notranslate"><span class="pre">context_dependent_reach</span></code>, <code class="docutils literal notranslate"><span class="pre">distractor_suppression_reach</span></code>, <code class="docutils literal notranslate"><span class="pre">gaze_anchoring</span></code>,
+<code class="docutils literal notranslate"><span class="pre">ceci_stim_task</span></code> (video + synchronized stimulation), <code class="docutils literal notranslate"><span class="pre">stim_task</span></code>, <code class="docutils literal notranslate"><span class="pre">null</span></code>, and
+more.</p>
+<p>In the control window you build <strong>task clusters</strong> – weighted groups of tasks – and
+the controller samples from them to schedule trials.  Each task exposes a
+configuration widget for its parameters (timeouts, target positions, colors, …).</p>
+</section>
+<section id="reproducibility">
+<h2>Reproducibility<a class="headerlink" href="#reproducibility" title="Link to this heading">¶</a></h2>
+<p>When a recording is running (a <a class="reference internal" href="nodes/storage2.html"><span class="doc">STORAGE2</span></a> node), the controller
+copies the <strong>source file of each task</strong> that executes into the recording’s output
+directory the first time it runs.  Together with the build/version/commit metadata
+that STORAGE2 writes, this means a recording archives the exact task code that
+produced it.</p>
+</section>
+<section id="writing-a-task">
+<h2>Writing a task<a class="headerlink" href="#writing-a-task" title="Link to this heading">¶</a></h2>
+<p>A task is a Python module that exports two things:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">create_widget(task_config)</span> <span class="pre">-&gt;</span> <span class="pre">QWidget</span></code> – builds the Qt widget used to edit the
+task’s parameters in the control window.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">async</span> <span class="pre">def</span> <span class="pre">run(context)</span> <span class="pre">-&gt;</span> <span class="pre">TaskResult</span></code> – the trial itself: an async coroutine
+that draws stimuli, waits on input/timers, logs events, and returns a
+<code class="xref py py-class docutils literal notranslate"><span class="pre">TaskResult</span></code> (success/failure).</p></li>
 </ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="examples/index.html">Examples</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="examples/index.html#synthesize-and-analyze-a-recording-without-hardware">Synthesize and analyze a recording without hardware</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples/index.html#record-event-markers-text">Record event markers (text)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples/index.html#record-a-synthetic-video-stream-images">Record a synthetic video stream (images)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples/index.html#record-several-nodes-at-once">Record several nodes at once</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples/index.html#summarize-any-capture-file">Summarize any capture file</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples/index.html#measure-closed-loop-latency">Measure closed-loop latency</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples/index.html#record-a-uint64-ulong-counter-channel">Record a uint64 (<code class="docutils literal notranslate"><span class="pre">ulong</span></code>) counter channel</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples/index.html#write-a-behavioral-task">Write a behavioral task</a></li>
+<p>The <code class="docutils literal notranslate"><span class="pre">context</span></code> (a <code class="docutils literal notranslate"><span class="pre">TaskContextProtocol</span></code>, in
+<code class="docutils literal notranslate"><span class="pre">thalamus/task_controller/util.py</span></code>) is how a task interacts with the system:</p>
+<ul class="simple">
+<li><p><strong>Timing</strong> – <code class="docutils literal notranslate"><span class="pre">await</span> <span class="pre">context.sleep(timedelta(...))</span></code> and
+<code class="docutils literal notranslate"><span class="pre">await</span> <span class="pre">context.until(lambda:</span> <span class="pre">condition)</span></code>.</p></li>
+<li><p><strong>Parameters</strong> – <code class="docutils literal notranslate"><span class="pre">context.get_value(key,</span> <span class="pre">default)</span></code>,
+<code class="docutils literal notranslate"><span class="pre">context.get_target_value(itarg,</span> <span class="pre">key,</span> <span class="pre">default)</span></code> and
+<code class="docutils literal notranslate"><span class="pre">context.get_color(key,</span> <span class="pre">default)</span></code> read (and randomize within ranges) the values
+configured in the task’s widget.</p></li>
+<li><p><strong>Drawing &amp; input</strong> – assign <code class="docutils literal notranslate"><span class="pre">context.widget.renderer</span></code>,
+<code class="docutils literal notranslate"><span class="pre">context.widget.touch_listener</span></code> and <code class="docutils literal notranslate"><span class="pre">context.widget.gaze_listener</span></code> to a
+function; call <code class="docutils literal notranslate"><span class="pre">context.widget.update()</span></code> to repaint.</p></li>
+<li><p><strong>Logging</strong> – <code class="docutils literal notranslate"><span class="pre">await</span> <span class="pre">context.log('BehavState=...')</span></code> writes trial events into the
+recording.</p></li>
 </ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="nodes/index.html">Nodes</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="nodes/catalog.html">Node Catalog</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/wave.html">WAVE</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/storage2.html">STORAGE2</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/nidaq.html">NIDAQ</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/oculomatic.html">OCULOMATIC</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/touch_screen.html">TOUCH_SCREEN</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/runner2.html">RUNNER2</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/algebra.html">ALGEBRA</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/normalize.html">NORMALIZE</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/lua.html">LUA</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/channel_picker.html">CHANNEL_PICKER</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/sync.html">SYNC</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/genicam.html">GENICAM</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/aruco.html">ARUCO</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/chessboard.html">CHESSBOARD</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/distortion.html">DISTORTION</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/intan.html">INTAN</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/spikeglx.html">SPIKEGLX</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/delsys.html">DELSYS</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/xsens.html">XSENS</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/pupil.html">PUPIL</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/wallclock.html">WALLCLOCK</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/analog.html">ANALOG</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/toggle.html">TOGGLE</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/frequency.html">FREQUENCY</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/nidaq_out.html">NIDAQ_OUT</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/task_controller.html">TASK_CONTROLLER</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/ophanim.html">OPHANIM</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/hexascope.html">HEXASCOPE</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/ros2.html">ROS2</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/video.html">VIDEO</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/ffmpeg.html">FFMPEG</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/hand_engine.html">HAND_ENGINE</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/brainproducts.html">BRAINPRODUCTS</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/remote.html">REMOTE</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/remote_log.html">REMOTE_LOG</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/runner.html">RUNNER</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/sample_monitor.html">SAMPLE_MONITOR</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/storage.html">STORAGE</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/log.html">LOG</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/stim_printer.html">STIM_PRINTER</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/ceci.html">CECI</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/thread_pool.html">THREAD_POOL</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/loop_test.html">LOOP_TEST</a></li>
-<li class="toctree-l2"><a class="reference internal" href="nodes/test_pulse.html">TEST_PULSE_NODE</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="task_controller.html">Task Controller</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="task_controller.html#running-the-controller">Running the controller</a></li>
-<li class="toctree-l2"><a class="reference internal" href="task_controller.html#tasks-and-task-clusters">Tasks and task clusters</a></li>
-<li class="toctree-l2"><a class="reference internal" href="task_controller.html#reproducibility">Reproducibility</a></li>
-<li class="toctree-l2"><a class="reference internal" href="task_controller.html#writing-a-task">Writing a task</a></li>
-<li class="toctree-l2"><a class="reference internal" href="task_controller.html#operator-controls">Operator controls</a></li>
-<li class="toctree-l2"><a class="reference internal" href="task_controller.html#verifying-a-trial-was-recorded">Verifying a trial was recorded</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="eye_calibration.html">Eye Calibration</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="eye_calibration.html#running-it">Running it</a></li>
-<li class="toctree-l2"><a class="reference internal" href="eye_calibration.html#calibration-models">Calibration models</a></li>
-<li class="toctree-l2"><a class="reference internal" href="eye_calibration.html#workflow">Workflow</a></li>
-<li class="toctree-l2"><a class="reference internal" href="eye_calibration.html#operator-controls">Operator controls</a></li>
-<li class="toctree-l2"><a class="reference internal" href="eye_calibration.html#relationship-to-the-rest-of-thalamus">Relationship to the rest of Thalamus</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="tools.html">Command-line tools</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="tools.html#registry-live-state-editing">registry — live state editing</a></li>
-<li class="toctree-l2"><a class="reference internal" href="tools.html#data-tools">Data tools</a></li>
-<li class="toctree-l2"><a class="reference internal" href="tools.html#applications">Applications</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="plugins.html">Plugins (native extensions)</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="plugins.html#the-c-api">The C API</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting &amp; FAQ</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#faq">FAQ</a></li>
-<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#install-startup">Install &amp; startup</a></li>
-<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#running-examples">Running examples</a></li>
-<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#connecting-tools-to-a-pipeline">Connecting tools to a pipeline</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="glossary.html">Glossary</a></li>
-</ul>
+<p>For tasks that animate continuously, decorate <code class="docutils literal notranslate"><span class="pre">run</span></code> with <code class="docutils literal notranslate"><span class="pre">&#64;animate(frequency)</span></code>
+(from <code class="docutils literal notranslate"><span class="pre">util.py</span></code>) to repaint the canvas at a fixed rate.</p>
+<section id="a-minimal-task">
+<h3>A minimal task<a class="headerlink" href="#a-minimal-task" title="Link to this heading">¶</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">datetime</span>
+<span class="kn">from</span> <span class="nn">thalamus.task_controller.util</span> <span class="kn">import</span> <span class="n">TaskContextProtocol</span><span class="p">,</span> <span class="n">TaskResult</span>
+<span class="kn">from</span> <span class="nn">thalamus.qt</span> <span class="kn">import</span> <span class="n">QWidget</span><span class="p">,</span> <span class="n">QVBoxLayout</span><span class="p">,</span> <span class="n">QLabel</span><span class="p">,</span> <span class="n">QColor</span><span class="p">,</span> <span class="n">QRect</span>
+
+<span class="k">def</span> <span class="nf">create_widget</span><span class="p">(</span><span class="n">task_config</span><span class="p">):</span>
+    <span class="n">w</span> <span class="o">=</span> <span class="n">QWidget</span><span class="p">()</span>
+    <span class="n">layout</span> <span class="o">=</span> <span class="n">QVBoxLayout</span><span class="p">(</span><span class="n">w</span><span class="p">)</span>
+    <span class="n">layout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">QLabel</span><span class="p">(</span><span class="s2">&quot;Hello World task&quot;</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">w</span>
+
+<span class="k">async</span> <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="n">context</span><span class="p">:</span> <span class="n">TaskContextProtocol</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TaskResult</span><span class="p">:</span>
+    <span class="n">hit</span> <span class="o">=</span> <span class="kc">False</span>
+
+    <span class="k">def</span> <span class="nf">renderer</span><span class="p">(</span><span class="n">painter</span><span class="p">):</span>
+        <span class="n">painter</span><span class="o">.</span><span class="n">fillRect</span><span class="p">(</span><span class="n">QRect</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">80</span><span class="p">),</span> <span class="n">QColor</span><span class="p">(</span><span class="mi">41</span><span class="p">,</span> <span class="mi">171</span><span class="p">,</span> <span class="mi">226</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">on_touch</span><span class="p">(</span><span class="n">point</span><span class="p">):</span>
+        <span class="k">nonlocal</span> <span class="n">hit</span>
+        <span class="n">hit</span> <span class="o">=</span> <span class="n">QRect</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">80</span><span class="p">)</span><span class="o">.</span><span class="n">contains</span><span class="p">(</span><span class="n">point</span><span class="p">)</span>
+
+    <span class="n">context</span><span class="o">.</span><span class="n">widget</span><span class="o">.</span><span class="n">renderer</span> <span class="o">=</span> <span class="n">renderer</span>
+    <span class="n">context</span><span class="o">.</span><span class="n">widget</span><span class="o">.</span><span class="n">touch_listener</span> <span class="o">=</span> <span class="n">on_touch</span>
+    <span class="n">context</span><span class="o">.</span><span class="n">widget</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+
+    <span class="k">await</span> <span class="n">context</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s1">&#39;BehavState=start&#39;</span><span class="p">)</span>
+    <span class="k">await</span> <span class="n">context</span><span class="o">.</span><span class="n">until</span><span class="p">(</span><span class="k">lambda</span><span class="p">:</span> <span class="n">hit</span><span class="p">)</span>        <span class="c1"># wait for the target to be touched</span>
+    <span class="k">await</span> <span class="n">context</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s1">&#39;BehavState=success&#39;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">TaskResult</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Register a new task by adding a <code class="docutils literal notranslate"><span class="pre">TaskDescription</span></code> entry to
+<code class="docutils literal notranslate"><span class="pre">thalamus/task_controller/tasks.py</span></code> (or load it at runtime with <code class="docutils literal notranslate"><span class="pre">--ext</span></code>).</p>
+</section>
+</section>
+<section id="operator-controls">
+<h2>Operator controls<a class="headerlink" href="#operator-controls" title="Link to this heading">¶</a></h2>
+<p>A task can surface its own operator-facing control by calling
+<code class="docutils literal notranslate"><span class="pre">context.set_operator_widget(widget)</span></code>; the control window mounts it in the operator
+view for the duration of the task.  This is how experimenters get task-specific
+buttons/inputs without baking them into the controller.</p>
+</section>
+<section id="verifying-a-trial-was-recorded">
+<h2>Verifying a trial was recorded<a class="headerlink" href="#verifying-a-trial-was-recorded" title="Link to this heading">¶</a></h2>
+<p>With a STORAGE2 node running, each <code class="docutils literal notranslate"><span class="pre">await</span> <span class="pre">context.log('BehavState=...')</span></code> becomes a
+<code class="docutils literal notranslate"><span class="pre">text</span></code> record in the capture file.  After a run you can confirm trials were logged
+by exporting that node’s text channel (see <a class="reference internal" href="tools.html"><span class="doc">Command-line tools</span></a>):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">thalamus</span><span class="o">.</span><span class="n">dataframe</span> <span class="o">-</span><span class="n">n</span> <span class="n">task_controller</span> <span class="o">-</span><span class="n">t</span> <span class="n">text</span> <span class="o">-</span><span class="n">i</span> <span class="n">recording</span><span class="o">.</span><span class="n">tha</span> <span class="o">-</span><span class="n">f</span> <span class="n">csv</span>
+</pre></div>
 </div>
 </section>
-</section>
-<section id="indices-and-tables">
-<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Link to this heading">¶</a></h1>
-<ul class="simple">
-<li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
-<li><p><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></p></li>
-<li><p><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></p></li>
-</ul>
 </section>
 
         </article>
@@ -476,16 +439,26 @@ pipeline and extend Thalamus with native code.</p></li>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="quickstart.html">
+          <a class="next-page" href="eye_calibration.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">Quick Start</div>
+                <div class="title">Eye Calibration</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          
+          <a class="prev-page" href="nodes/test_pulse.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">TEST_PULSE_NODE</div>
+                
+              </div>
+            </a>
         </div>
         <div class="bottom-of-page">
           <div class="left-details">
@@ -519,11 +492,18 @@ pipeline and extend Thalamus with native code.</p></li>
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">Thalamus</a><ul>
-<li><a class="reference internal" href="#start-here">Start here</a></li>
+<li><a class="reference internal" href="#">Task Controller</a><ul>
+<li><a class="reference internal" href="#running-the-controller">Running the controller</a></li>
+<li><a class="reference internal" href="#tasks-and-task-clusters">Tasks and task clusters</a></li>
+<li><a class="reference internal" href="#reproducibility">Reproducibility</a></li>
+<li><a class="reference internal" href="#writing-a-task">Writing a task</a><ul>
+<li><a class="reference internal" href="#a-minimal-task">A minimal task</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
+<li><a class="reference internal" href="#operator-controls">Operator controls</a></li>
+<li><a class="reference internal" href="#verifying-a-trial-was-recorded">Verifying a trial was recorded</a></li>
+</ul>
+</li>
 </ul>
 
           </div>

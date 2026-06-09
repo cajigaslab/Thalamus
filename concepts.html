@@ -254,6 +254,12 @@
 <li class="toctree-l2"><a class="reference internal" href="nodes/test_pulse.html">TEST_PULSE_NODE</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="task_controller.html">Task Controller</a></li>
+<li class="toctree-l1"><a class="reference internal" href="eye_calibration.html">Eye Calibration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tools.html">Command-line tools</a></li>
+<li class="toctree-l1"><a class="reference internal" href="plugins.html">Plugins (native extensions)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting &amp; FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="glossary.html">Glossary</a></li>
 </ul>
 
 </div>
@@ -299,6 +305,13 @@ that flows through it, the capture-file format, and the tooling that turns
 recordings into analysis-ready data.  It complements the <a class="reference internal" href="quickstart.html"><span class="doc">Quick Start</span></a> (which
 walks through using the program) and the <a class="reference internal" href="nodes/index.html"><span class="doc">Node Reference</span></a> (which
 documents each node type).</p>
+<div class="admonition-mental-model admonition">
+<p class="admonition-title">Mental model</p>
+<p>Think of a Thalamus session as a <strong>directed graph of nodes on one shared
+nanosecond timeline</strong>.  Producers generate data; consumers and transformers
+<em>subscribe</em> to the producers whose data they need; and a STORAGE2 node writes
+every message from the nodes it is subscribed to into the <code class="docutils literal notranslate"><span class="pre">.tha</span></code> capture log.</p>
+</div>
 <section id="the-node-pipeline">
 <h2>The node pipeline<a class="headerlink" href="#the-node-pipeline" title="Link to this heading">¶</a></h2>
 <p>A Thalamus session is a <strong>pipeline of nodes</strong>.  Each node is a small, independently
@@ -327,11 +340,13 @@ a <a class="reference internal" href="nodes/runner2.html"><span class="doc">RUNN
 <p>All data is carried in a single message type, <code class="docutils literal notranslate"><span class="pre">StorageRecord</span></code>.  Every record has a
 <code class="docutils literal notranslate"><span class="pre">node</span></code> (the producing node’s name), a <code class="docutils literal notranslate"><span class="pre">time</span></code> (see below), and exactly one <em>body</em>
 that determines the kind of data:</p>
-<ul class="simple">
+<ul class="simple" id="ulong-data">
 <li><p><strong>analog</strong> – time-series samples.  An <code class="docutils literal notranslate"><span class="pre">AnalogResponse</span></code> holds a flat <code class="docutils literal notranslate"><span class="pre">data</span></code>
 array, a list of <code class="docutils literal notranslate"><span class="pre">spans</span></code> that name each channel and mark its slice of <code class="docutils literal notranslate"><span class="pre">data</span></code>
 (<code class="docutils literal notranslate"><span class="pre">begin</span></code>/<code class="docutils literal notranslate"><span class="pre">end</span></code>), and a <code class="docutils literal notranslate"><span class="pre">sample_intervals</span></code> array giving each channel’s sample
-period in nanoseconds.  (Integer-valued streams use <code class="docutils literal notranslate"><span class="pre">int_data</span></code> / <code class="docutils literal notranslate"><span class="pre">ulong_data</span></code>.)</p></li>
+period in nanoseconds.  Integer-valued streams use <code class="docutils literal notranslate"><span class="pre">int_data</span></code> (32-bit signed) or
+<code class="docutils literal notranslate"><span class="pre">ulong_data</span></code> (64-bit unsigned, for counters/timestamps and other large integer
+values); <code class="docutils literal notranslate"><span class="pre">thalamus.record_reader2</span></code> and <code class="docutils literal notranslate"><span class="pre">thalamus.dataframe</span></code> read all three.</p></li>
 <li><p><strong>image</strong> – a video/camera frame, with raw bytes, <code class="docutils literal notranslate"><span class="pre">width</span></code>, <code class="docutils literal notranslate"><span class="pre">height</span></code>,
 pixel <code class="docutils literal notranslate"><span class="pre">format</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">Gray</span></code>, <code class="docutils literal notranslate"><span class="pre">RGB</span></code>, <code class="docutils literal notranslate"><span class="pre">MPEG4</span></code>), and <code class="docutils literal notranslate"><span class="pre">frame_interval</span></code>.</p></li>
 <li><p><strong>text</strong> – a string message (log lines, event markers).</p></li>
@@ -466,7 +481,7 @@ STORAGE → STORAGE2) so existing setups keep working.</p>
       
     </aside>
   </div>
-</div><script src="_static/documentation_options.js?v=6f77e80e"></script>
+</div><script src="_static/documentation_options.js?v=588f6264"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/scripts/furo.js?v=46bd48cc"></script>
