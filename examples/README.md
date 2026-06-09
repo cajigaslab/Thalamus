@@ -9,6 +9,7 @@ All scripts assume Thalamus is installed (`pip install thalamus_neuro`).
 | --- | --- |
 | [`synthetic_recording.py`](synthetic_recording.py) | Generate a synthetic `.tha` capture file (a 2 Hz sine and a 1 Hz square pulse) with no acquisition hardware. |
 | [`analyze_recording.py`](analyze_recording.py) | Read a `.tha` file with `thalamus.record_reader2` and plot its analog channels. |
+| [`closed_loop_demo.py`](closed_loop_demo.py) | Simulate and record a closed control loop (bang-bang/hysteresis) — no hardware. |
 | [`event_markers.py`](event_markers.py) | Record discrete behavioral event markers as `text` records alongside an analog channel. |
 | [`synthetic_video.py`](synthetic_video.py) | Record a synthetic grayscale video stream as `image` records and extract a frame to PNG. |
 | [`multinode_recording.py`](multinode_recording.py) | Record several nodes into one file and export each by name. |

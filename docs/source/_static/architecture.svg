@@ -1,0 +1,72 @@
+<svg width="940" height="430" viewBox="0 0 940 430" fill="none" xmlns="http://www.w3.org/2000/svg" font-family="'IBM Plex Sans', system-ui, Segoe UI, sans-serif" role="img" aria-label="Thalamus pipeline architecture">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5A6B86"/>
+    </marker>
+    <marker id="arrowc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#D97706"/>
+    </marker>
+    <style>
+      .lbl  { fill:#16294C; font-size:15px; font-weight:600; }
+      .cap  { fill:#5A6B86; font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
+      .sub  { fill:#5A6B86; font-size:11.5px; }
+      .gen  { fill:#DCFCE7; stroke:#16A34A; }
+      .tra  { fill:#EDE9FE; stroke:#7C3AED; }
+      .con  { fill:#DBEAFE; stroke:#2563EB; }
+      .ctl  { fill:#FEF3C7; stroke:#D97706; }
+      rect.node { rx:9; stroke-width:2; }
+      .flow { stroke:#5A6B86; stroke-width:2; fill:none; }
+    </style>
+  </defs>
+
+  <!-- column captions -->
+  <text class="cap" x="120" y="44" text-anchor="middle">Generators</text>
+  <text class="cap" x="440" y="44" text-anchor="middle">Transformers</text>
+  <text class="cap" x="770" y="44" text-anchor="middle">Consumers</text>
+
+  <!-- generators -->
+  <rect class="node gen" x="44" y="70"  width="152" height="48"/>
+  <text class="lbl" x="120" y="99" text-anchor="middle">WAVE</text>
+  <rect class="node gen" x="44" y="190" width="152" height="48"/>
+  <text class="lbl" x="120" y="219" text-anchor="middle">GENICAM</text>
+
+  <!-- transformers -->
+  <rect class="node tra" x="364" y="70"  width="152" height="48"/>
+  <text class="lbl" x="440" y="99" text-anchor="middle">ALGEBRA</text>
+  <rect class="node tra" x="364" y="190" width="152" height="48"/>
+  <text class="lbl" x="440" y="219" text-anchor="middle">OCULOMATIC</text>
+
+  <!-- consumers -->
+  <rect class="node con" x="694" y="70"  width="152" height="48"/>
+  <text class="lbl" x="770" y="99" text-anchor="middle">STORAGE2</text>
+  <rect class="node con" x="694" y="190" width="152" height="48"/>
+  <text class="lbl" x="770" y="219" text-anchor="middle">NIDAQ_OUT</text>
+
+  <!-- .tha file -->
+  <rect x="700" y="300" width="140" height="54" rx="9" fill="#FFFFFF" stroke="#94A3B8" stroke-width="2" stroke-dasharray="5 4"/>
+  <text class="lbl" x="770" y="324" text-anchor="middle">.tha capture</text>
+  <text class="sub" x="770" y="342" text-anchor="middle">append-only record log</text>
+
+  <!-- controller -->
+  <rect class="node ctl" x="364" y="320" width="152" height="48"/>
+  <text class="lbl" x="440" y="349" text-anchor="middle">RUNNER2</text>
+  <text class="cap" x="440" y="392" text-anchor="middle" fill="#D97706">Controller · start / stop</text>
+
+  <!-- data-flow arrows (subscriptions) -->
+  <path class="flow" d="M196 94  H364" marker-end="url(#arrow)"/>
+  <path class="flow" d="M196 214 H364" marker-end="url(#arrow)"/>
+  <path class="flow" d="M516 94  H694" marker-end="url(#arrow)"/>
+  <!-- oculomatic gaze -> storage and -> nidaq_out -->
+  <path class="flow" d="M516 210 C600 200 620 110 694 98" marker-end="url(#arrow)"/>
+  <path class="flow" d="M516 218 H694" marker-end="url(#arrow)"/>
+  <!-- storage2 writes the file -->
+  <path class="flow" d="M770 118 V300" marker-end="url(#arrow)"/>
+
+  <!-- controller start/stop (dashed amber) -->
+  <path d="M414 320 C400 280 300 150 196 110" stroke="#D97706" stroke-width="1.8" stroke-dasharray="5 4" fill="none" marker-end="url(#arrowc)"/>
+  <path d="M466 320 C520 270 660 160 694 122" stroke="#D97706" stroke-width="1.8" stroke-dasharray="5 4" fill="none" marker-end="url(#arrowc)"/>
+
+  <!-- flow caption -->
+  <text class="sub" x="280" y="84" text-anchor="middle">subscribe</text>
+  <text class="sub" x="605" y="84" text-anchor="middle">subscribe</text>
+</svg>
