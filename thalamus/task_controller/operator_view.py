@@ -76,6 +76,7 @@ class AngularScalingModelWidget(QWidget):
     self.model.recap()
 
   def paintEvent(self, e):
+    return
     painter = QPainter(self)
 
     pins = numpy.array(self.model['Pins'])
