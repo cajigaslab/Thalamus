@@ -14,6 +14,10 @@ documents each node type).
    *subscribe* to the producers whose data they need; and a STORAGE2 node writes
    every message from the nodes it is subscribed to into the ``.tha`` capture log.
 
+.. image:: _static/architecture.svg
+   :width: 100%
+   :alt: A Thalamus pipeline: generators feed transformers feed consumers, STORAGE2 writes the .tha capture, and a controller starts/stops the nodes.
+
 The node pipeline
 -----------------
 

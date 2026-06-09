@@ -127,6 +127,33 @@ A minimal task
 Register a new task by adding a ``TaskDescription`` entry to
 ``thalamus/task_controller/tasks.py`` (or load it at runtime with ``--ext``).
 
+Tutorial: run your first task
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Using the ready-made ``examples/hello_world_task.py`` (the task above), end to end:
+
+#. **Launch** the controller with the task loaded::
+
+      python -m thalamus.task_controller --ext examples/hello_world_task.py
+
+#. **Add a STORAGE2 node** and start it recording, so the trial events are saved.
+#. **Build a task cluster.** In the control window, create a cluster and add the
+   *Hello World* task to it; the controller schedules trials by sampling from your
+   clusters.
+#. **Run.** Start the run queue.  The subject window shows the cyan square; touching
+   it (or clicking, with a touch device) completes the trial successfully, otherwise
+   it times out after 5 seconds.
+#. **Verify.** Stop recording and confirm the logged trial states landed in the
+   capture (see :doc:`tools`)::
+
+      python -m thalamus.dataframe -n task_controller -t text -i recording.tha -f csv
+
+   You should see the ``BehavState=start`` / ``BehavState=success`` events your task
+   logged.
+
+From here, edit ``run`` to add stimuli, timing, and reward, and read parameters from
+``create_widget`` via ``context.get_value`` so the task is configurable.
+
 Operator controls
 -----------------
 

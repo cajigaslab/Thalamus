@@ -141,6 +141,39 @@ worked analyses on real recordings -- including the figures from our paper -- se
 the `SimpleUseCase <https://github.com/cajigaslab/Thalamus/tree/main/SimpleUseCase>`_
 folder.
 
+Close a loop
+------------
+
+Thalamus's defining capability is *real-time closed-loop control*: a value is
+measured, a rule decides on an action, and that action feeds back and changes the
+value.  In a live pipeline you wire it as ``sensor → ALGEBRA/TOGGLE (decide) →
+output`` (see the pipeline diagram in :doc:`../concepts`), with the output driving
+hardware that affects the sensor.
+
+``examples/closed_loop_demo.py`` simulates exactly that loop in software so you can
+run and inspect it without hardware: a process variable drifts up, a hysteresis
+(bang-bang) controller switches a ``control`` output on above an upper threshold and
+off below a lower one, and the control output pulls the process variable back down --
+closing the loop.
+
+.. code-block::
+
+   python examples/closed_loop_demo.py -o loop.tha
+   python examples/analyze_recording.py loop.tha -n loop -o loop.png
+
+::
+
+   Controller switched 4 times; the loop held the process variable in [0.00, 1.00]
+   around the [0.0, 1.0] band.
+
+.. image:: closed_loop_demo.png
+   :width: 100%
+   :alt: A closed control loop: the process variable ramps up and down within the hysteresis band as the controller switches the control output on and off.
+
+The ``process`` and ``control`` channels are recorded together, so the loop is fully
+reconstructable from the capture.  To *measure the latency* of a loop (the delay
+between a trigger and its response), see :ref:`closed-loop-latency` below.
+
 Record event markers (text)
 ---------------------------
 
@@ -231,6 +264,8 @@ its nodes, data types, analog channels, duration, and metadata:
      emg: {'analog': 313}  channels=['ch0']
      eye: {'analog': 313}  channels=['x', 'y']
      storage: {'metadata': 1}
+
+.. _closed-loop-latency:
 
 Measure closed-loop latency
 ---------------------------
