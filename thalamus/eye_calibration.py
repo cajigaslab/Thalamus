@@ -74,6 +74,7 @@ class Task:
     self.mouse_pos_scaled = None
     self.seen_points = set()
     self.hold = False
+    self.eye_opacity = 192
 
     eye_scaling = config['eye_scaling']
     if 'Reward Node' not in eye_scaling:
@@ -211,7 +212,7 @@ class Task:
       pen = painter.pen()
       pen.setCosmetic(True)
       pen.setWidth(POINT_SIZE)
-      pen.setColor(QColor(0, 0, 255, 192))
+      pen.setColor(QColor(0, 0, 255, self.eye_opacity))
       pen.setCapStyle(Qt.PenCapStyle.RoundCap)
       painter.setPen(pen)
       painter.translate(size.width()//2, size.height()//2)
@@ -890,6 +891,16 @@ class OperatorWindow(QMainWindow):
     layout = QVBoxLayout()
     layout.addWidget(view, 1)
 
+    hwidget = QWidget()
+    hlayout = QHBoxLayout()
+    hlayout.addWidget(QLabel('Eye Opacity:'))
+    eye_opacity_widget = QSlider(Qt.Orientation.Horizontal)
+    eye_opacity_widget.setRange(0, 255)
+    eye_opacity_widget.setValue(192)
+    hlayout.addWidget(eye_opacity_widget)
+    hwidget.setLayout(hlayout)
+    layout.addWidget(hwidget)
+
     fixation_radius_widget = QSpinBox()
     fixation_radius_widget.setRange(0, 10000)
     saccade_radius_widget = QSpinBox()
@@ -933,6 +944,9 @@ class OperatorWindow(QMainWindow):
     self.setCentralWidget(central_widget)
     central_widget.setFocusProxy(view)
 
+    def on_opacity_changed(val):
+      self.task.eye_opacity = val
+
     def on_hold(val):
       self.task.hold = val
     hold.toggled.connect(on_hold)
@@ -975,6 +989,7 @@ class OperatorWindow(QMainWindow):
       eye_scaling['Reward Node'] = reward_node_widget.text()
       view.setFocus()
 
+    eye_opacity_widget.valueChanged.connect(on_opacity_changed)
     fixation_radius_widget.valueChanged.connect(on_fixation_radius)
     fixation_radius_widget.editingFinished.connect(view.setFocus)
     saccade_radius_widget.valueChanged.connect(on_saccade_radius)
