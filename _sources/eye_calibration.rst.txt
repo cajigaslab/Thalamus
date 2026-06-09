@@ -7,6 +7,10 @@ gaze can be used for gaze-contingent behavioral tasks and analysis.  It is an
 interactive application: an operator collects a few known fixations, fits a
 calibration model, and refines it live.
 
+.. image:: _static/gaze_pipeline.svg
+   :width: 100%
+   :alt: Gaze pipeline: eye camera to OCULOMATIC to eye calibration to the task controller to a reward node.
+
 Running it
 ----------
 
@@ -77,6 +81,32 @@ Operator controls
 
 Keyboard shortcuts in the operator view cover undo/redo, delivering a reward, and
 cycling the active saccade target.
+
+Walkthrough: a calibration session (no eye tracker required)
+------------------------------------------------------------
+
+You can exercise the whole gaze pipeline in software using the synthetic-eye
+:doc:`PUPIL <nodes/pupil>` node, which renders a moving pupil for OCULOMATIC to
+detect -- no camera or subject needed.
+
+#. **Build the pipeline.** In ``python -m thalamus.pipeline`` add a :doc:`PUPIL
+   <nodes/pupil>` node (turn on *Random Saccade* so the pupil moves), and an
+   :doc:`OCULOMATIC <nodes/oculomatic>` node with PUPIL as its source.  Start both;
+   OCULOMATIC should now publish ``X`` / ``Y`` gaze channels.
+#. **Launch the calibrator.** Run ``python -m thalamus.eye_calibration``.  The
+   operator and subject windows open and the operator view fills with the live gaze
+   trace from OCULOMATIC.
+#. **Place targets and collect.** Add a few saccade targets, and for each one record
+   a training sample while the (synthetic) gaze sits on it.
+#. **Fit.** Press **Fit** to solve the selected model; the mapped gaze should now
+   land on the targets.  For Angular Scaling, drag pins to refine, using undo/redo
+   freely.
+#. **Use it.** The fitted ``eye_scaling`` parameters are saved with the
+   configuration, so the :doc:`Task Controller <task_controller>` can drive
+   gaze-contingent tasks from calibrated, screen-space gaze.
+
+Swapping PUPIL for a real eye camera + OCULOMATIC later changes nothing about this
+workflow.
 
 Relationship to the rest of Thalamus
 ------------------------------------

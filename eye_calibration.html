@@ -305,6 +305,8 @@
 gaze can be used for gaze-contingent behavioral tasks and analysis.  It is an
 interactive application: an operator collects a few known fixations, fits a
 calibration model, and refines it live.</p>
+<a class="reference internal image-reference" href="_images/gaze_pipeline.svg"><img alt="Gaze pipeline: eye camera to OCULOMATIC to eye calibration to the task controller to a reward node." src="_images/gaze_pipeline.svg" style="width: 100%;" />
+</a>
 <section id="running-it">
 <h2>Running it<a class="headerlink" href="#running-it" title="Link to this heading">¶</a></h2>
 <p>Start a Thalamus pipeline that includes an OCULOMATIC node (producing <code class="docutils literal notranslate"><span class="pre">X</span></code> / <code class="docutils literal notranslate"><span class="pre">Y</span></code>
@@ -371,6 +373,30 @@ behavior during calibration.</p></li>
 </ul>
 <p>Keyboard shortcuts in the operator view cover undo/redo, delivering a reward, and
 cycling the active saccade target.</p>
+</section>
+<section id="walkthrough-a-calibration-session-no-eye-tracker-required">
+<h2>Walkthrough: a calibration session (no eye tracker required)<a class="headerlink" href="#walkthrough-a-calibration-session-no-eye-tracker-required" title="Link to this heading">¶</a></h2>
+<p>You can exercise the whole gaze pipeline in software using the synthetic-eye
+<a class="reference internal" href="nodes/pupil.html"><span class="doc">PUPIL</span></a> node, which renders a moving pupil for OCULOMATIC to
+detect – no camera or subject needed.</p>
+<ol class="arabic simple">
+<li><p><strong>Build the pipeline.</strong> In <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">thalamus.pipeline</span></code> add a <a class="reference internal" href="nodes/pupil.html"><span class="doc">PUPIL</span></a> node (turn on <em>Random Saccade</em> so the pupil moves), and an
+<a class="reference internal" href="nodes/oculomatic.html"><span class="doc">OCULOMATIC</span></a> node with PUPIL as its source.  Start both;
+OCULOMATIC should now publish <code class="docutils literal notranslate"><span class="pre">X</span></code> / <code class="docutils literal notranslate"><span class="pre">Y</span></code> gaze channels.</p></li>
+<li><p><strong>Launch the calibrator.</strong> Run <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">thalamus.eye_calibration</span></code>.  The
+operator and subject windows open and the operator view fills with the live gaze
+trace from OCULOMATIC.</p></li>
+<li><p><strong>Place targets and collect.</strong> Add a few saccade targets, and for each one record
+a training sample while the (synthetic) gaze sits on it.</p></li>
+<li><p><strong>Fit.</strong> Press <strong>Fit</strong> to solve the selected model; the mapped gaze should now
+land on the targets.  For Angular Scaling, drag pins to refine, using undo/redo
+freely.</p></li>
+<li><p><strong>Use it.</strong> The fitted <code class="docutils literal notranslate"><span class="pre">eye_scaling</span></code> parameters are saved with the
+configuration, so the <a class="reference internal" href="task_controller.html"><span class="doc">Task Controller</span></a> can drive
+gaze-contingent tasks from calibrated, screen-space gaze.</p></li>
+</ol>
+<p>Swapping PUPIL for a real eye camera + OCULOMATIC later changes nothing about this
+workflow.</p>
 </section>
 <section id="relationship-to-the-rest-of-thalamus">
 <h2>Relationship to the rest of Thalamus<a class="headerlink" href="#relationship-to-the-rest-of-thalamus" title="Link to this heading">¶</a></h2>
@@ -447,6 +473,7 @@ coordinates.</p></li>
 <li><a class="reference internal" href="#calibration-models">Calibration models</a></li>
 <li><a class="reference internal" href="#workflow">Workflow</a></li>
 <li><a class="reference internal" href="#operator-controls">Operator controls</a></li>
+<li><a class="reference internal" href="#walkthrough-a-calibration-session-no-eye-tracker-required">Walkthrough: a calibration session (no eye tracker required)</a></li>
 <li><a class="reference internal" href="#relationship-to-the-rest-of-thalamus">Relationship to the rest of Thalamus</a></li>
 </ul>
 </li>

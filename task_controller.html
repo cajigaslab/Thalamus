@@ -415,6 +415,34 @@ recording.</p></li>
 <p>Register a new task by adding a <code class="docutils literal notranslate"><span class="pre">TaskDescription</span></code> entry to
 <code class="docutils literal notranslate"><span class="pre">thalamus/task_controller/tasks.py</span></code> (or load it at runtime with <code class="docutils literal notranslate"><span class="pre">--ext</span></code>).</p>
 </section>
+<section id="tutorial-run-your-first-task">
+<h3>Tutorial: run your first task<a class="headerlink" href="#tutorial-run-your-first-task" title="Link to this heading">¶</a></h3>
+<p>Using the ready-made <code class="docutils literal notranslate"><span class="pre">examples/hello_world_task.py</span></code> (the task above), end to end:</p>
+<ol class="arabic">
+<li><p><strong>Launch</strong> the controller with the task loaded:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">thalamus</span><span class="o">.</span><span class="n">task_controller</span> <span class="o">--</span><span class="n">ext</span> <span class="n">examples</span><span class="o">/</span><span class="n">hello_world_task</span><span class="o">.</span><span class="n">py</span>
+</pre></div>
+</div>
+</li>
+<li><p><strong>Add a STORAGE2 node</strong> and start it recording, so the trial events are saved.</p></li>
+<li><p><strong>Build a task cluster.</strong> In the control window, create a cluster and add the
+<em>Hello World</em> task to it; the controller schedules trials by sampling from your
+clusters.</p></li>
+<li><p><strong>Run.</strong> Start the run queue.  The subject window shows the cyan square; touching
+it (or clicking, with a touch device) completes the trial successfully, otherwise
+it times out after 5 seconds.</p></li>
+<li><p><strong>Verify.</strong> Stop recording and confirm the logged trial states landed in the
+capture (see <a class="reference internal" href="tools.html"><span class="doc">Command-line tools</span></a>):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">thalamus</span><span class="o">.</span><span class="n">dataframe</span> <span class="o">-</span><span class="n">n</span> <span class="n">task_controller</span> <span class="o">-</span><span class="n">t</span> <span class="n">text</span> <span class="o">-</span><span class="n">i</span> <span class="n">recording</span><span class="o">.</span><span class="n">tha</span> <span class="o">-</span><span class="n">f</span> <span class="n">csv</span>
+</pre></div>
+</div>
+<p>You should see the <code class="docutils literal notranslate"><span class="pre">BehavState=start</span></code> / <code class="docutils literal notranslate"><span class="pre">BehavState=success</span></code> events your task
+logged.</p>
+</li>
+</ol>
+<p>From here, edit <code class="docutils literal notranslate"><span class="pre">run</span></code> to add stimuli, timing, and reward, and read parameters from
+<code class="docutils literal notranslate"><span class="pre">create_widget</span></code> via <code class="docutils literal notranslate"><span class="pre">context.get_value</span></code> so the task is configurable.</p>
+</section>
 </section>
 <section id="operator-controls">
 <h2>Operator controls<a class="headerlink" href="#operator-controls" title="Link to this heading">¶</a></h2>
@@ -498,6 +526,7 @@ by exporting that node’s text channel (see <a class="reference internal" href=
 <li><a class="reference internal" href="#reproducibility">Reproducibility</a></li>
 <li><a class="reference internal" href="#writing-a-task">Writing a task</a><ul>
 <li><a class="reference internal" href="#a-minimal-task">A minimal task</a></li>
+<li><a class="reference internal" href="#tutorial-run-your-first-task">Tutorial: run your first task</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#operator-controls">Operator controls</a></li>
