@@ -43,6 +43,7 @@ DEFAULT_TARGET_ACTIVE_OPACITY = 1.0
 DEFAULT_TARGET_HOLD_TIME = 0.40
 KEYBOARD_JOYSTICK_MAGNITUDE = 1.0
 OPERATOR_KEYBOARD_CURSOR_SPEED = 0.85
+DEFAULT_MAX_LOGGED_JOYSTICK_SAMPLES = 2000
 
 def toggle_brightness(brightness: int) -> int:
   return 0 if brightness == 255 else 255
@@ -125,6 +126,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       task_config["ignore_idle_trial_failures"] = False
   if "ignored_idle_sample_clear_threshold" not in task_config:
     task_config["ignored_idle_sample_clear_threshold"] = 50
+  if "max_logged_joystick_samples" not in task_config:
+    task_config["max_logged_joystick_samples"] = DEFAULT_MAX_LOGGED_JOYSTICK_SAMPLES
   if "fail_on_touch_input" not in task_config:
     task_config["fail_on_touch_input"] = False
   if "animations_enabled" not in task_config:
@@ -202,6 +205,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Constant("Trial Timeout (s)", "trial_timeout", 0.5, "s", precision=3),
     Form.Bool("Ignore Idle Trial Failures", "ignore_idle_trial_failures", False),
     Form.Constant("Idle Sample Clear Threshold", "ignored_idle_sample_clear_threshold", 50, precision=0),
+    Form.Constant("Max Logged Joystick Samples", "max_logged_joystick_samples", DEFAULT_MAX_LOGGED_JOYSTICK_SAMPLES, precision=0),
     Form.Bool("Fail On Touch Input", "fail_on_touch_input", False),
     Form.Constant("Intertrial Interval (s)", "intertrial_interval", 1.0, "s", precision=3),
   )
@@ -587,7 +591,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       self.selected_index = -1
       self.drag_index = -1
       self.drag_enabled = True
-      self.setMinimumSize(420, 420)
+      self.setMinimumSize(360, 320)
+      self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
       self.setMouseTracking(True)
 
     def set_selected_index(self, index: int) -> None:
@@ -603,14 +608,29 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     def _region_rect(self) -> QRectF:
       w = float(max(1, self.width()))
       h = float(max(1, self.height()))
-      margin = 18.0
+      margin = 14.0
       avail_w = max(1.0, w - 2.0 * margin)
       avail_h = max(1.0, h - 2.0 * margin)
       cfg_w = max(0.05, min(1.0, float(task_config.get("task_region_width", 0.5))))
       cfg_h = max(0.05, min(1.0, float(task_config.get("task_region_height", 0.67))))
-      scale = min(avail_w / cfg_w, avail_h / cfg_h)
-      region_w = cfg_w * scale
-      region_h = cfg_h * scale
+      screen_aspect = 1.0
+      screen = self.screen() if hasattr(self, "screen") else None
+      if screen is not None:
+        screen_geometry = screen.geometry()
+        screen_h = max(1, int(screen_geometry.height()))
+        screen_aspect = max(0.1, min(10.0, float(screen_geometry.width()) / float(screen_h)))
+      else:
+        try:
+          screen_geometry = qt_screen_geometry()
+          screen_h = max(1, int(screen_geometry.height()))
+          screen_aspect = max(0.1, min(10.0, float(screen_geometry.width()) / float(screen_h)))
+        except Exception:
+          screen_aspect = 1.0
+      canvas_w = cfg_w * screen_aspect
+      canvas_h = cfg_h
+      scale = min(avail_w / canvas_w, avail_h / canvas_h)
+      region_w = canvas_w * scale
+      region_h = canvas_h * scale
       left = (w - region_w) / 2.0
       top = (h - region_h) / 2.0
       return QRectF(left, top, region_w, region_h)
@@ -828,6 +848,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     pending_generator_operation = "append"
 
     dialog_layout = QHBoxLayout(dialog)
+    dialog_layout.setContentsMargins(8, 8, 8, 8)
+    dialog_layout.setSpacing(8)
     preview: typing.Optional[LayoutPreview] = None
     selected_index = 0 if draft_targets else -1
     draft_cursor_radius = max(0.005, min(0.5, float(task_config.get("cursor_diameter_ratio", 0.1)) / 2.0))
@@ -835,15 +857,47 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     side_panel = QWidget(dialog)
     side_layout = QVBoxLayout(side_panel)
     side_layout.setContentsMargins(0, 0, 0, 0)
+    side_layout.setSpacing(5)
+    side_panel.setMinimumWidth(245)
+    side_panel.setMaximumWidth(310)
+    compact_font = QFont(side_panel.font())
+    if compact_font.pointSize() > 0:
+      compact_font.setPointSize(max(8, compact_font.pointSize() - 2))
+    side_panel.setFont(compact_font)
+    side_panel.setStyleSheet(
+      "QWidget { font-size: 10px; }"
+      "QGroupBox { margin-top: 8px; padding-top: 8px; }"
+      "QGroupBox::title { subcontrol-origin: margin; left: 6px; padding: 0 2px; }"
+      "QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox { min-height: 18px; max-height: 22px; }"
+      "QPushButton { min-height: 20px; padding: 1px 5px; }"
+      "QCheckBox { spacing: 4px; }"
+    )
 
     target_list = QListWidget()
     target_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
     target_list.setToolTip("Select one or more targets. Drag in the preview to reposition the current target.")
+    target_list.setMaximumHeight(120)
     side_layout.addWidget(QLabel("Targets"))
-    side_layout.addWidget(target_list, 1)
+    side_layout.addWidget(target_list)
+
+    settings_widget = QWidget(side_panel)
+    settings_layout = QVBoxLayout(settings_widget)
+    settings_layout.setContentsMargins(0, 0, 0, 0)
+    settings_layout.setSpacing(5)
+
+    settings_scroll = QScrollArea(side_panel)
+    settings_scroll.setWidgetResizable(True)
+    no_frame = QFrame.Shape.NoFrame if hasattr(QFrame, "Shape") else QFrame.NoFrame
+    settings_scroll.setFrameShape(no_frame)
+    settings_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    settings_scroll.setWidget(settings_widget)
 
     form_panel = QGroupBox("Selected Target")
     form_layout = QFormLayout(form_panel)
+    form_layout.setContentsMargins(6, 10, 6, 6)
+    form_layout.setHorizontalSpacing(6)
+    form_layout.setVerticalSpacing(3)
+    form_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
     name_edit = QLineEdit()
     enabled_box = QCheckBox("Enabled")
     x_spin = QDoubleSpinBox()
@@ -856,7 +910,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     active_color_button = QPushButton("Choose Active Color")
     active_opacity_spin = QDoubleSpinBox()
     enable_drag_box = QCheckBox("Enable drag move")
-    enable_drag_box.setChecked(True)
+    enable_drag_box.setChecked(bool(task_config.get("target_layout_editor_drag_enabled", True)))
 
     for spin in (x_spin, y_spin):
       spin.setRange(0.0, 1.0)
@@ -902,10 +956,13 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     form_layout.addRow("Static Opacity", static_opacity_spin)
     form_layout.addRow("Active Color", active_color_button)
     form_layout.addRow("Active Opacity", active_opacity_spin)
-    side_layout.addWidget(form_panel)
+    settings_layout.addWidget(form_panel)
 
     cursor_panel = QGroupBox("Cursor Reference")
     cursor_layout = QFormLayout(cursor_panel)
+    cursor_layout.setContentsMargins(6, 10, 6, 6)
+    cursor_layout.setHorizontalSpacing(6)
+    cursor_layout.setVerticalSpacing(3)
     cursor_radius_spin = QDoubleSpinBox()
     cursor_radius_spin.setRange(0.005, 0.5)
     cursor_radius_spin.setDecimals(3)
@@ -914,10 +971,14 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     cursor_radius_spin.setToolTip("Reference cursor radius shown in the layout preview center.")
     cursor_layout.addRow("Cursor Radius", cursor_radius_spin)
     cursor_layout.addRow("", enable_drag_box)
-    side_layout.addWidget(cursor_panel)
+    settings_layout.addWidget(cursor_panel)
 
     generator_panel = QGroupBox("Target Generator")
     generator_layout = QFormLayout(generator_panel)
+    generator_layout.setContentsMargins(6, 10, 6, 6)
+    generator_layout.setHorizontalSpacing(6)
+    generator_layout.setVerticalSpacing(3)
+    generator_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
     generator_mode_combo = QComboBox()
     generator_mode_combo.addItem("Annulus / Rings", "annulus")
     generator_mode_combo.addItem("Rectangular Grid", "grid")
@@ -1012,7 +1073,9 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     preview_button_row_layout.addWidget(apply_preview_button)
     preview_button_row_layout.addWidget(clear_preview_button)
     generator_layout.addRow("", preview_button_row)
-    side_layout.addWidget(generator_panel)
+    settings_layout.addWidget(generator_panel)
+    settings_layout.addStretch(1)
+    side_layout.addWidget(settings_scroll, 1)
 
     button_row = QWidget()
     button_row_layout = QHBoxLayout(button_row)
@@ -1266,7 +1329,12 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         preview.update()
 
     cursor_radius_spin.valueChanged.connect(on_cursor_radius_changed)
-    enable_drag_box.toggled.connect(preview.set_drag_enabled)
+
+    def on_drag_enabled_changed(enabled: bool) -> None:
+      task_config["target_layout_editor_drag_enabled"] = bool(enabled)
+      preview.set_drag_enabled(enabled)
+
+    enable_drag_box.toggled.connect(on_drag_enabled_changed)
 
     def add_layout_target() -> None:
       nonlocal selected_index
@@ -1796,6 +1864,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   trial_timeout = float(task_config.get("trial_timeout", 0.5))
   ignore_idle_trial_failures = bool(task_config.get("ignore_idle_trial_failures", False))
   ignored_idle_sample_clear_threshold = max(0, int(task_config.get("ignored_idle_sample_clear_threshold", 50)))
+  max_logged_joystick_samples = max(0, int(task_config.get("max_logged_joystick_samples", DEFAULT_MAX_LOGGED_JOYSTICK_SAMPLES)))
   fail_on_touch_input = bool(task_config.get("fail_on_touch_input", False))
   intertrial_interval = float(task_config.get("intertrial_interval", 1.0))
   configured_targets = task_config.get("targets", [])
@@ -1889,11 +1958,15 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     "require_center_before_trial": require_center_before_trial,
     "center_gate_radius_ratio": center_gate_radius_ratio,
     "ignored_idle_sample_clear_threshold": ignored_idle_sample_clear_threshold,
+    "max_logged_joystick_samples": max_logged_joystick_samples,
     "ignored_idle_sample_clear_events": [],
     "fail_on_touch_input": fail_on_touch_input,
     "trial_attempt_count": 0,
     "attempts": [],
     "joystick_samples": [],
+    "joystick_sample_count": 0,
+    "joystick_samples_dropped": 0,
+    "joystick_samples_kept": 0,
     "session_start_perf_counter": session_start,
     "final_outcome": None,
   }
@@ -1973,6 +2046,26 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     last_touch_pos = cursor
     last_touch_time = time.perf_counter()
 
+  def append_joystick_sample(sample_time: float, sample_x: float, sample_y: float) -> None:
+    behav_result["joystick_sample_count"] += 1
+    if max_logged_joystick_samples <= 0:
+      behav_result["joystick_samples_dropped"] += 1
+      behav_result["joystick_samples_kept"] = 0
+      return
+
+    samples = behav_result["joystick_samples"]
+    samples.append({
+      "time_perf_counter": sample_time,
+      "time_since_session_start_s": max(0.0, sample_time - session_start),
+      "x": sample_x,
+      "y": sample_y,
+    })
+    if len(samples) > max_logged_joystick_samples:
+      overflow = len(samples) - max_logged_joystick_samples
+      del samples[:overflow]
+      behav_result["joystick_samples_dropped"] += overflow
+    behav_result["joystick_samples_kept"] = len(samples)
+
   async def analog_processor(stream: typing.Any) -> None:
     nonlocal analog_joystick_x, analog_joystick_y
     try:
@@ -1998,23 +2091,13 @@ async def run(context: TaskContextProtocol) -> TaskResult:
             sample_time = start_time + sample_interval_s * i if sample_interval_s > 0.0 else sample_received_at
             sample_x = float(x_values[i])
             sample_y = float(y_values[i])
-            behav_result["joystick_samples"].append({
-              "time_perf_counter": sample_time,
-              "time_since_session_start_s": max(0.0, sample_time - session_start),
-              "x": sample_x,
-              "y": sample_y,
-            })
+            append_joystick_sample(sample_time, sample_x, sample_y)
             analog_joystick_x = sample_x
             analog_joystick_y = sample_y
         elif len(message.data) >= 2:
           analog_joystick_x = float(message.data[0])
           analog_joystick_y = float(message.data[1])
-          behav_result["joystick_samples"].append({
-            "time_perf_counter": sample_received_at,
-            "time_since_session_start_s": max(0.0, sample_received_at - session_start),
-            "x": analog_joystick_x,
-            "y": analog_joystick_y,
-          })
+          append_joystick_sample(sample_received_at, analog_joystick_x, analog_joystick_y)
     finally:
       stream.cancel()
 
@@ -2126,6 +2209,8 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       "cleared_sample_count": cleared_count,
     })
     behav_result["joystick_samples"].clear()
+    behav_result["joystick_samples_dropped"] += cleared_count
+    behav_result["joystick_samples_kept"] = 0
     context.behav_result = behav_result
 
   async def fail_for_touch_input(now: float) -> TaskResult:
