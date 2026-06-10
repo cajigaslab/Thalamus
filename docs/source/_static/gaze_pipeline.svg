@@ -1,0 +1,47 @@
+<svg width="940" height="170" viewBox="0 0 940 170" fill="none" xmlns="http://www.w3.org/2000/svg" font-family="'IBM Plex Sans', system-ui, Segoe UI, sans-serif" role="img" aria-label="Gaze calibration to task loop">
+  <defs>
+    <marker id="ga" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5A6B86"/>
+    </marker>
+    <style>
+      .lbl { fill:#16294C; font-size:14px; font-weight:600; }
+      .flw { fill:#1683BE; font-size:11.5px; font-weight:600; }
+      .gen { fill:#DCFCE7; stroke:#16A34A; }
+      .tra { fill:#EDE9FE; stroke:#7C3AED; }
+      .cal { fill:#CFFAFE; stroke:#0891B2; }
+      .ctl { fill:#FEF3C7; stroke:#D97706; }
+      .con { fill:#DBEAFE; stroke:#2563EB; }
+      rect.b { rx:9; stroke-width:2; }
+      .a { stroke:#5A6B86; stroke-width:2; fill:none; }
+    </style>
+  </defs>
+
+  <rect class="b gen" x="20"  y="56" width="140" height="50"/>
+  <text class="lbl" x="90"  y="79" text-anchor="middle">PUPIL /</text>
+  <text class="lbl" x="90"  y="96" text-anchor="middle">GENICAM</text>
+
+  <rect class="b tra" x="220" y="56" width="140" height="50"/>
+  <text class="lbl" x="290" y="86" text-anchor="middle">OCULOMATIC</text>
+
+  <rect class="b cal" x="420" y="56" width="150" height="50"/>
+  <text class="lbl" x="495" y="79" text-anchor="middle">Eye</text>
+  <text class="lbl" x="495" y="96" text-anchor="middle">Calibration</text>
+
+  <rect class="b ctl" x="630" y="56" width="150" height="50"/>
+  <text class="lbl" x="705" y="79" text-anchor="middle">Task</text>
+  <text class="lbl" x="705" y="96" text-anchor="middle">Controller</text>
+
+  <rect class="b con" x="840" y="56" width="90" height="50"/>
+  <text class="lbl" x="885" y="79" text-anchor="middle">Reward</text>
+  <text class="lbl" x="885" y="96" text-anchor="middle">node</text>
+
+  <path class="a" d="M160 81 H220" marker-end="url(#ga)"/>
+  <path class="a" d="M360 81 H420" marker-end="url(#ga)"/>
+  <path class="a" d="M570 81 H630" marker-end="url(#ga)"/>
+  <path class="a" d="M780 81 H840" marker-end="url(#ga)"/>
+
+  <text class="flw" x="190" y="48" text-anchor="middle">eye image</text>
+  <text class="flw" x="390" y="48" text-anchor="middle">raw gaze</text>
+  <text class="flw" x="600" y="48" text-anchor="middle">screen coords</text>
+  <text class="flw" x="810" y="48" text-anchor="middle">reward pulse</text>
+</svg>

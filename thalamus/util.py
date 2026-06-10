@@ -17,6 +17,8 @@ Executable = typing.Callable[[], None]
 
 LOGGER = logging.getLogger(__name__)
 
+SENTINEL = object()
+
 class MeteredUpdater:
   def __init__(self, config: ObservableCollection, interval: datetime.timedelta, stop_when: typing.Callable[[], bool]):
     self.config = config
@@ -32,6 +34,33 @@ class MeteredUpdater:
         v()
       self.updates = []
       await asyncio.sleep(self.interval.total_seconds())
+
+  def assign(self, value, callback = lambda: None, from_remote = False):
+    def update():
+      self.config.assign(value, callback, from_remote)
+    self.updates = [(SENTINEL, update)]
+
+  def setitem(self, key, value, callback = lambda: None, from_remote = False):
+    for i, kv in enumerate(self.updates):
+      k, v = kv
+      if k == key:
+        del self.updates[i]
+        break
+
+    def update():
+      self.config.setitem(key, value, callback, from_remote)
+    self.updates.append((key, update))
+
+  def delitem(self, key, callback = lambda: None, from_remote = False):
+    for i, kv in enumerate(self.updates):
+      k, v = kv
+      if k == key:
+        del self.updates[i]
+        break
+
+    def update():
+      self.config.delitem(key, callback, from_remote)
+    self.updates.append((key, update))
 
   def __setitem__(self, key, value):
     for i, kv in enumerate(self.updates):

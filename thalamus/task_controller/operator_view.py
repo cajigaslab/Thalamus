@@ -63,9 +63,8 @@ class AngularScalingModelWidget(QWidget):
     
     if 'Angular Scaling' not in eye_config['Models']:
       eye_config['Models']['Angular Scaling'] = {
-        'Angle': [],
-        'Scale X': [],
-        'Scale Y': [],
+        'Pins': [],
+        'Scale Default': 100.0
       }
 
     self.model = eye_config['Models']['Angular Scaling']
@@ -77,39 +76,38 @@ class AngularScalingModelWidget(QWidget):
     self.model.recap()
 
   def paintEvent(self, e):
+    return
     painter = QPainter(self)
 
-    anglef = self.model['Angle']
-    scalexf = self.model['Scale X']
-    scaleyf = self.model['Scale Y']
-    length = min(len(anglef), len(scalexf), len(scaleyf))
+    pins = numpy.array(self.model['Pins'])
 
     diameter = min(self.width(), self.height()) - 10
     radius = diameter/2
 
     angles = numpy.linspace(0, 2*numpy.pi, 360)
-    if length:
-      scalesx = numpy.interp(angles, anglef[:length], scalexf[:length], period=2*numpy.pi)
-      scalesy = numpy.interp(angles, anglef[:length], scaleyf[:length], period=2*numpy.pi)
-      mag = (scalesx**2 + scalesy**2).max()**.5
-      scalesx /= mag
-      scalesy /= mag
+    if pins.size > 0:
+      scale = numpy.interp(angles, pins[:,0], pins[:,1], period=2*numpy.pi)
+      rotation = numpy.interp(angles, pins[:,0], pins[:,2], period=2*numpy.pi)
+      mag = scale.max()
+      cos = numpy.cos(angles + rotation)
+      sin = numpy.sin(angles + rotation)
+      scalesx = cos*scale/mag*radius
+      scalesy = sin*scale/mag*radius
     else:
       mag = 1
-      scalesx = numpy.ones_like(angles)
-      scalesy = numpy.ones_like(angles)
+      scalesx = numpy.ones_like(angles)*radius
+      scalesy = numpy.ones_like(angles)*radius
 
     end = None
     first = True
     path = QPainterPath()
     for a, sx, sy in zip(angles, scalesx, scalesy):
-      coord = radius*numpy.cos(a)*sx, radius*numpy.sin(a)*sy
       if first:
-        end = coord
-        path.moveTo(*coord)
+        end = sx, sy
+        path.moveTo(sx, sy)
         first = False
       else:
-        path.lineTo(*coord)
+        path.lineTo(sx, sy)
     if end is not None:
       path.lineTo(*end)
     path.moveTo(0, -radius)
@@ -121,10 +119,10 @@ class AngularScalingModelWidget(QWidget):
     painter.drawPath(path)
 
     path2 = QPainterPath()
-    for a, sx, sy in zip(anglef[:length], scalexf[:length], scaleyf[:length]):
+    for a, scale, rot in pins:
       path2.moveTo(0, 0)
       path2.lineTo(radius*numpy.cos(a), radius*numpy.sin(a))
-      path2.lineTo(radius*numpy.cos(a)*sx/mag, radius*numpy.sin(a)*sy/mag)
+      path2.lineTo(radius*numpy.cos(a+rot)*scale/mag, radius*numpy.sin(a+rot)*scale/mag)
 
     painter.setPen(QColor(255, 0, 0))
     painter.drawPath(path2)

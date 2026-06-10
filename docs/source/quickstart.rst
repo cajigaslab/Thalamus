@@ -22,9 +22,14 @@ First, create a python virtual environment and activate it.  This is commonly ne
 
 From the releases page download the whl file for your platform and install it.  https://github.com/cajigaslab/Thalamus/releases
 
+.. note::
+
+   The distributed package is named ``thalamus_neuro`` (the importable Python module remains ``thalamus``).
+   Builds are published for Linux (manylinux), Windows, and macOS (arm64).
+
 .. code-block::
 
-   python -m pip install thalamus-0.3.37-py3-none-manylinux_2_27_x86_64.whl 
+   python -m pip install thalamus_neuro-1.0.16-py3-none-manylinux_2_39_x86_64.whl
 
 You should now be able to run the pipeline program and see a window appear with an empty node list.
 
@@ -319,3 +324,18 @@ Node configurations and window layout's can be saved and reloaded
 
 
 
+
+Next steps
+----------
+
+You've installed Thalamus, built a pipeline, recorded data, and seen it stream.
+From here:
+
+* **Understand the model** -- :doc:`concepts` explains nodes, subscriptions, the
+  ``.tha`` capture format, and the time base.
+* **Analyze a recording** -- the :doc:`examples/index` walk through reading,
+  exporting, hydrating, and plotting captures (no hardware needed).
+* **Run experiments** -- the :doc:`Task Controller <task_controller>` and
+  :doc:`Eye Calibration <eye_calibration>` add behavioral, gaze-contingent paradigms.
+
+If something doesn't work, see :doc:`troubleshooting`.

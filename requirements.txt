@@ -29,3 +29,5 @@ meson
 ninja
 oslex
 psutil
+pandas
+pyarrow

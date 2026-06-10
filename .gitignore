@@ -23,3 +23,9 @@ dotnet/dotnet/bin
 dotnet/dotnet/obj
 test.tha.*
 *.perfetto-trace
+
+# Documentation assets (screenshots, figures, logo) are tracked despite the
+# global *.png / *.mp4 ignores above.
+!docs/source/**/*.png
+!docs/source/**/*.mp4
+!.github/assets/**/*.png

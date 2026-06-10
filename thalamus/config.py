@@ -12,6 +12,12 @@ import itertools
 
 RemoteStorage = typing.Callable[['ObservableCollection.Action', str, typing.Any, typing.Callable[[], None]], bool]
 
+def get_storage_type(value) -> typing.Type:
+  if isinstance(value, dict):
+    return dict
+  elif isinstance(value, (list, tuple)):
+    return list
+
 class ObservableCollection(abc.ABC):
   """
   Wrapper for lists and dicts that allows observers to be notified when the contents change
@@ -35,7 +41,7 @@ class ObservableCollection(abc.ABC):
       initial_content = initial.content
     else:
       initial_content = initial
-    self.content: typing.Collection[typing.Any] = type(initial_content)()
+    self.content: typing.Collection[typing.Any] = get_storage_type(initial_content)()
     self.next_observer_id = 1
     self.observers: typing.Dict[int, typing.Callable[[ObservableCollection.Action, typing.Any, typing.Any], None]] = {}
     self.recursive_observers: typing.Dict[int, typing.Callable[[ObservableCollection, ObservableCollection.Action, typing.Any, typing.Any], None]] = {}
@@ -59,7 +65,7 @@ class ObservableCollection(abc.ABC):
         self.content[key] = ObservableList(value.get_content(), self)
       elif isinstance(value, dict):
         self.content[key] = ObservableDict(value, self)
-      elif isinstance(value, list):
+      elif isinstance(value, (list, tuple)):
         self.content[key] = ObservableList(value, self)
       else:
         self.content[key] = value
@@ -76,7 +82,7 @@ class ObservableCollection(abc.ABC):
         self.content.append(ObservableList(value.get_content(), self))
       elif isinstance(value, dict):
         self.content.append(ObservableDict(value, self))
-      elif isinstance(value, list):
+      elif isinstance(value, (list, tuple)):
         self.content.append(ObservableList(value, self))
       else:
         self.content.append(value)
@@ -161,12 +167,15 @@ class ObservableCollection(abc.ABC):
     if not isinstance(value, ObservableCollection):
       if isinstance(value, dict):
         value = ObservableDict(value, self)
-      elif isinstance(value, list):
+      elif isinstance(value, (list, tuple)):
         value = ObservableList(value, self)
 
     if isinstance(value, ObservableCollection):
       value.parent = self
       value.set_remote_storage(self.remote_storage)
+    old_value = self.get(key, None)
+    if isinstance(old_value, ObservableCollection):
+      old_value.parent = None
     self.content[key] = value
 
     self.__notify(self, ObservableCollection.Action.SET, key, value)
@@ -240,7 +249,7 @@ class ObservableCollection(abc.ABC):
     if not isinstance(value, ObservableCollection):
       if isinstance(value, dict):
         value = ObservableDict(value, self)
-      elif isinstance(value, list):
+      elif isinstance(value, (list, tuple)):
         value = ObservableList(value, self)
 
     if isinstance(value, ObservableCollection):
@@ -248,8 +257,8 @@ class ObservableCollection(abc.ABC):
       value.set_remote_storage(self.remote_storage)
     self.content.insert(i, value)
 
-    for j in range(i, len(self.content)):
-      self.__notify(self, ObservableCollection.Action.SET, j, value)
+    for j, v in enumerate(self.content[i:]):
+      self.__notify(self, ObservableCollection.Action.SET, i+j, v)
     callback()
 
   def remove(self, value: typing.Any, callback: typing.Callable[[], None] = lambda: None, from_remote = False) -> None:

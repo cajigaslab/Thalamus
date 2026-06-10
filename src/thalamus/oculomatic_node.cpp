@@ -29,6 +29,7 @@ struct OculomaticNode::Impl {
   boost::signals2::scoped_connection options_connection;
   boost::signals2::scoped_connection source_connection;
   ImageNode *image_source;
+  std::weak_ptr<Node> image_source_weak;
   bool is_running = false;
   OculomaticNode *outer;
   std::chrono::nanoseconds time;
@@ -70,7 +71,7 @@ struct OculomaticNode::Impl {
 
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
        OculomaticNode *_outer, NodeGraph *_graph)
-      : io_context(_io_context), state(_state), outer(_outer), graph(_graph),
+      : io_context(_io_context), state(_state), image_source(nullptr), outer(_outer), graph(_graph),
         current_result(Result{0, 0, 0, cv::Mat(), false, false, 0ns, 0ns}),
         pool(graph->get_thread_pool()) {
     using namespace std::placeholders;
@@ -417,6 +418,7 @@ struct OculomaticNode::Impl {
 
         if (node_cast<ImageNode *>(locked_source.get()) != nullptr) {
           image_source = node_cast<ImageNode *>(locked_source.get());
+          image_source_weak = source;
           source_connection =
               locked_source->ready.connect(std::bind(&Impl::on_data, this, _1));
         }
@@ -547,6 +549,11 @@ boost::json::value OculomaticNode::process(const boost::json::value & request) {
   auto object = request.as_object();
   if((object.contains("type") && object["type"] == "recenter") || object.contains("keydown")) {
     impl->need_recenter = true;
+    return boost::json::value();
+  }
+  auto locked = impl->image_source_weak.lock();
+  if(locked != nullptr) {
+    return locked->process(request);
   }
 
   return boost::json::value();
