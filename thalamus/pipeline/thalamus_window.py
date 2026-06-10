@@ -296,14 +296,14 @@ FACTORIES = {
     UserData(UserDataType.DEFAULT, 'Sources', '', []),
     UserData(UserDataType.DEFAULT, 'Output File', 'test.tha', []),
     UserData(UserDataType.CHECK_BOX, 'Compress Analog', False, []),
-    UserData(UserDataType.CHECK_BOX, 'Compress Video', False, []),
+    UserData(UserDataType.CHECK_BOX, 'Compress Video', True, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, [])
   ]),
   'STORAGE2': Factory(Storage2Widget, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.SAVE_FILE, 'Output File', 'test.tha', []),
     UserData(UserDataType.CHECK_BOX, 'Compress Analog', False, []),
-    UserData(UserDataType.CHECK_BOX, 'Compress Video', False, []),
+    UserData(UserDataType.CHECK_BOX, 'Compress Video', True, []),
     UserData(UserDataType.CHECK_BOX, 'Simple Copy', False, []),
   ]),
   'STARTER': Factory(None, [
