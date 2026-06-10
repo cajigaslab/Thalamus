@@ -603,7 +603,8 @@ class ControlWindow(QMainWindow):
     Save the current config to a new file
     """
     file_name = QFileDialog.getSaveFileName(self, "Save Config", "", "*.json *.mat")
-    if file_name:
+    print('on_save_as_config', file_name)
+    if file_name and file_name[0]:
       save(file_name[0], self.task_context.config)
       self.config_data = ConfigData(self.config_data.user_config, file_name[0])
       self.setWindowTitle(f'Task Controller: {self.config_data.file_name}')
