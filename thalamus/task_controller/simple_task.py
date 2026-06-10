@@ -188,6 +188,7 @@ async def run(context: TaskContextProtocol) -> TaskResult: #pylint: disable=too-
 
   show_target = False
   def renderer(painter: CanvasPainterProtocol) -> None:
+    painter.setPen(config.target_color)
     painter.drawText(0, 10, test_text)
     if show_target:
       painter.fillRect(config.target_rectangle, config.target_color)

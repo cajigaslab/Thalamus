@@ -7,6 +7,7 @@ import bisect
 import time
 import datetime
 import copy
+import dataclasses
 
 import grpc
 
@@ -43,9 +44,11 @@ DEFAULT_ANGULAR_SCALING = {
   'Scale Default': 100.0
 }
 
-class SaccadeTarget(typing.NamedTuple):
+@dataclasses.dataclass
+class SaccadeTarget:
   x: int
   y: int
+  pin: int
 
 class Task:
   def __init__(self, stub: thalamus_pb2_grpc.ThalamusStub, config: dict):
@@ -278,7 +281,7 @@ class Task:
     self.task = asyncio.create_task(self.run())
 
   def add_target(self, x: int, y: int):
-    self.saccades.append(SaccadeTarget(x, y))
+    self.saccades.append(SaccadeTarget(x, y, -1))
     print(self.saccades)
 
   def remove_target(self, x: int, y: int):
@@ -442,6 +445,9 @@ class Task:
     elif self.model_name == 'Angular Scaling':
       old_pins = self.pins.copy()
       return Action(lambda: self.pins_updater.assign([], self.rebuild), lambda: self.pins_updater.assign(old_pins, self.rebuild))
+    
+    for target in self.saccades:
+      target.pin = -1
 
 
   def start_nudge(self, start_point: typing.Tuple[int, int]):
@@ -521,6 +527,14 @@ class Task:
     print(new_pin['Rotation'], delta_rotation)
     new_pin['Rotation'] += delta_rotation
     new_pin['Notches'][self.notch_nudge_index]['Screen'] = min(old_notch*delta_scale, next_notch*.99)
+    for ocu, _, target in self.training_data:
+      if target.pin == self.nudge_index:
+        for notch in new_pin['Notches']:
+          if notch.get('Init', False):
+            angle = new_pin['Angle'] + new_pin['Rotation']
+            scale = notch['Screen']
+            target.x, target.y = scale*numpy.cos(angle), scale*numpy.sin(angle)
+        break
 
     if self.model_name == 'Angular Scaling':
       nudge_index = self.nudge_index
@@ -569,13 +583,36 @@ class Task:
         if ocu_angle < 0:
           ocu_angle = 2*numpy.pi + ocu_angle
 
-        new_pins.append({
-          'Angle': ocu_angle,
-          'Rotation': rotation,
-          'Notches': [{'Eye': ocu_mag, 'Screen': target_mag}]
-        })
+        new_notch = {'Eye': ocu_mag, 'Screen': target_mag, 'Init': True}
+        if target.pin >= 0:
+          new_pin = old_pins[target.pin].copy()
+          new_pin['Angle'] = ocu_angle
+          new_pin['Rotation'] = rotation
 
-      new_pins = sorted(new_pins, key=lambda r: r['Angle'])
+          notches = new_pin['Notches']
+          for notch in notches:
+            if notch.get('Init', False):
+              notch.assign(new_notch)
+              break
+        else:
+          new_pin = {
+            'Angle': ocu_angle,
+            'Rotation': rotation,
+            'Notches': [new_notch]
+          }
+
+
+        new_pins.append(new_pin)
+
+      angles = numpy.array([p['Angle'] for p in new_pins])
+      sorted_indices = numpy.argsort(angles)
+
+      for i, d in zip(sorted_indices, self.training_data):
+        _, _, target = d
+        target.pin = i
+
+      new_pins = [new_pins[i] for i in sorted_indices]
+
       def do():
         self.pins_updater.assign(new_pins, self.rebuild)
       def undo():
@@ -599,7 +636,7 @@ class Task:
       old_pin = self.pins[nudge_index].unwrap()
       pin = copy.deepcopy(old_pin)
       pin['Notches'].insert(insertion, {
-        'Screen': mag, 'Eye': eye
+        'Screen': mag, 'Eye': eye, 'Init': False
       })
 
       return Action(
