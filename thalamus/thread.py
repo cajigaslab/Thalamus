@@ -40,6 +40,7 @@ class ThalamusThread:
   def send_change(self, action: ObservableCollection.Action, address: str, value: typing.Any, callback: typing.Callable[[], None]) -> bool:
     assert self.queue is not None
 
+    value = value.unwrap() if isinstance(value, ObservableCollection) else value
     transaction = thalamus_pb2.ObservableTransaction(
       changes = [thalamus_pb2.ObservableChange(
         address = address,
