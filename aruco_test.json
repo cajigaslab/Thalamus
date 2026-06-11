@@ -278,8 +278,8 @@
         "Height": 1024,
         "OffsetX": 0,
         "OffsetY": 0,
-        "ExposureTime": 16545.772552490234,
-        "AcquisitionFrameRate": 60.0,
+        "ExposureTime": 16565.85931777954,
+        "AcquisitionFrameRate": 40.0,
         "Gain": 0.0
       },
       "View Rotation": "0"
@@ -300,10 +300,10 @@
       "AcquisitionFrameRate": 60.0,
       "Gain": 0.0,
       "view_geometry": [
-        66,
-        1749,
-        607,
-        494
+        71,
+        1745,
+        595,
+        487
       ],
       "Camera Values": {
         "WidthMax": 1280,
@@ -321,36 +321,36 @@
     {
       "name": "Cam Eye",
       "type": "GENICAM",
-      "Running": true,
-      "View": true,
+      "Running": false,
+      "View": false,
       "Camera": "VimbaUSBTL:DEV_1AB228001040",
       "WidthMax": 1280,
       "HeightMax": 1024,
-      "Width": 575,
-      "Height": 915,
-      "OffsetX": 0,
-      "OffsetY": 0,
+      "Width": 523,
+      "Height": 258,
+      "OffsetX": 492,
+      "OffsetY": 535,
       "ExposureTime": 6000.0,
       "AcquisitionFrameRate": 150.0,
       "Gain": 0.0,
       "view_geometry": [
-        1348,
-        1263,
-        299,
-        190
+        1492,
+        1599,
+        368,
+        212
       ],
       "Camera Values": {
         "WidthMax": 1280,
         "HeightMax": 1024,
-        "Width": 568,
-        "Height": 914,
+        "Width": 1280,
+        "Height": 1024,
         "OffsetX": 0,
         "OffsetY": 0,
-        "ExposureTime": 6000.005,
-        "AcquisitionFrameRate": 149.9999250000375,
+        "ExposureTime": 19999.935,
+        "AcquisitionFrameRate": 49.76044822619428,
         "Gain": 0.0
       },
-      "View Rotation": 90
+      "View Rotation": "0"
     },
     {
       "name": "Node 1",
@@ -397,7 +397,7 @@
         },
         {
           "Node": "Cam Eye",
-          "Time Series": true,
+          "Time Series": false,
           "Image": true,
           "Motion": true,
           "Text": true
@@ -481,7 +481,7 @@
         }
       ],
       "rec": 7,
-      "start": 1640708.646844653,
+      "start": 1120911.618106594,
       "Files": [],
       "Metadata": [
         {
@@ -640,7 +640,7 @@
     {
       "name": "Distortion Cam Left",
       "type": "DISTORTION",
-      "Threshold": 118,
+      "Threshold": 45,
       "Invert": false,
       "Rows": 4,
       "Columns": 5,
@@ -651,14 +651,14 @@
       "Show Threshold": false,
       "Camera Matrix": [
         [
-          1708.9912922491867,
+          1724.65258967415,
           0.0,
-          648.4222821702813
+          671.047479355904
         ],
         [
           0.0,
-          1706.9306458271005,
-          529.7165366598182
+          1730.0996008738705,
+          541.7114053541408
         ],
         [
           0.0,
@@ -666,18 +666,12 @@
           1.0
         ]
       ],
-      "Distortion Coefficients": [
-        -0.10622832307379407,
-        0.057289051908832406,
-        -0.003062092514782193,
-        0.003978705351185812,
-        0.8068127263608563
-      ],
+      "Distortion Coefficients": [],
       "view_geometry": [
-        520,
-        1283,
-        495,
-        406
+        485,
+        1287,
+        799,
+        659
       ],
       "Framerate": 1.0
     },
@@ -689,20 +683,20 @@
       "Rows": 4,
       "Columns": 5,
       "Collecting": false,
-      "Computing": true,
+      "Computing": false,
       "Source": "Cam Top",
       "View": false,
       "Show Threshold": false,
       "Camera Matrix": [
         [
-          1757.7507298090761,
+          1715.9764860649582,
           0.0,
-          655.3599304903297
+          603.7094376314207
         ],
         [
           0.0,
-          1761.9728285622227,
-          516.0319569621217
+          1714.587366830173,
+          574.3216870370644
         ],
         [
           0.0,
@@ -710,18 +704,12 @@
           1.0
         ]
       ],
-      "Distortion Coefficients": [
-        -0.11165217285761321,
-        0.2614908153652442,
-        0.0002039866326668003,
-        0.0019141007684302155,
-        -0.552094103295801
-      ],
+      "Distortion Coefficients": [],
       "view_geometry": [
-        591,
-        1818,
-        397,
-        322
+        461,
+        1316,
+        908,
+        769
       ],
       "Framerate": 1.0
     },
@@ -799,10 +787,10 @@
         }
       ],
       "view_geometry": [
-        72,
-        1990,
-        309,
-        239
+        163,
+        1284,
+        1018,
+        854
       ]
     },
     {
@@ -868,17 +856,17 @@
         }
       ],
       "view_geometry": [
-        81,
-        1522,
-        236,
-        177
+        76,
+        1466,
+        256,
+        196
       ]
     }
   ],
   "thalamus_view_geometry": [
-    13,
-    245,
-    581,
+    41,
+    33,
+    793,
     768
   ],
   "data_views": [
@@ -918,8 +906,8 @@
     },
     {
       "view_geometry": [
-        17,
-        7,
+        1389,
+        1267,
         488,
         187
       ],
@@ -962,386 +950,17 @@
       ]
     },
     {
-      "node": "Cam Eye",
+      "node": "Distortion Cam Left",
       "dock_area": "right",
       "view_geometry": [
-        269,
+        599,
         23,
-        312,
+        194,
         745
       ]
     }
   ],
-  "queue": [
-    {
-      "task_type": "joystick_intro",
-      "type": "task",
-      "goal": 60,
-      "name": "Grid",
-      "intertrial_timeout": {
-        "min": 1,
-        "max": 1
-      },
-      "start_timeout": {
-        "min": 1,
-        "max": 1
-      },
-      "hold_timeout": {
-        "min": 1,
-        "max": 1
-      },
-      "blink_timeout": {
-        "min": 1,
-        "max": 1
-      },
-      "fail_timeout": {
-        "min": 1,
-        "max": 1
-      },
-      "success_timeout": {
-        "min": 1,
-        "max": 1
-      },
-      "target_x": {
-        "min": 1,
-        "max": 1
-      },
-      "target_y": {
-        "min": 1,
-        "max": 1
-      },
-      "target_width": {
-        "min": 1,
-        "max": 1
-      },
-      "target_height": {
-        "min": 1,
-        "max": 1
-      },
-      "target_color": [
-        255,
-        255,
-        255
-      ],
-      "targets": [
-        {
-          "name": "L",
-          "enabled": false,
-          "x_norm": 0.2,
-          "y_norm": 0.5,
-          "radius_ratio": 0.2,
-          "hold_time": 0.3,
-          "reward_channel": 2,
-          "target_color": [
-            154,
-            153,
-            150
-          ],
-          "target_opacity": 1.0,
-          "target_active_color": [
-            255,
-            255,
-            255
-          ],
-          "target_active_opacity": 1.0
-        },
-        {
-          "name": "Top 2",
-          "enabled": false,
-          "x_norm": 0.506,
-          "y_norm": 0.9,
-          "radius_ratio": 0.15,
-          "hold_time": 0.3,
-          "reward_channel": 2,
-          "target_color": [
-            154,
-            153,
-            150
-          ],
-          "target_opacity": 1.0,
-          "target_active_color": [
-            255,
-            255,
-            255
-          ],
-          "target_active_opacity": 1.0
-        },
-        {
-          "name": "Bot",
-          "enabled": false,
-          "x_norm": 0.5,
-          "y_norm": 0.05,
-          "radius_ratio": 0.4,
-          "hold_time": 0.3,
-          "reward_channel": 2,
-          "target_color": [
-            154,
-            153,
-            150
-          ],
-          "target_opacity": 1.0,
-          "target_active_color": [
-            255,
-            255,
-            255
-          ],
-          "target_active_opacity": 1.0
-        },
-        {
-          "name": "R",
-          "enabled": true,
-          "x_norm": 0.965,
-          "y_norm": 0.484,
-          "radius_ratio": 0.5,
-          "hold_time": 0.3,
-          "reward_channel": 2,
-          "target_color": [
-            154,
-            153,
-            150
-          ],
-          "target_opacity": 1.0,
-          "target_active_color": [
-            255,
-            255,
-            255
-          ],
-          "target_active_opacity": 1.0
-        },
-        {
-          "name": "Top 1",
-          "enabled": true,
-          "x_norm": 0.5,
-          "y_norm": 0.95,
-          "radius_ratio": 0.2,
-          "hold_time": 0.3,
-          "reward_channel": 3,
-          "target_color": [
-            154,
-            153,
-            150
-          ],
-          "target_opacity": 1.0,
-          "target_active_color": [
-            255,
-            255,
-            255
-          ],
-          "target_active_opacity": 1.0
-        },
-        {
-          "name": "Top 2 L",
-          "enabled": true,
-          "x_norm": 0.4,
-          "y_norm": 0.9,
-          "radius_ratio": 0.15,
-          "hold_time": 0.3,
-          "reward_channel": 2,
-          "target_color": [
-            154,
-            153,
-            150
-          ],
-          "target_opacity": 1.0,
-          "target_active_color": [
-            255,
-            255,
-            255
-          ],
-          "target_active_opacity": 1.0
-        },
-        {
-          "name": "L2",
-          "enabled": true,
-          "x_norm": 0.15,
-          "y_norm": 0.4,
-          "radius_ratio": 0.2,
-          "hold_time": 0.3,
-          "reward_channel": 2,
-          "target_color": [
-            154,
-            153,
-            150
-          ],
-          "target_opacity": 1.0,
-          "target_active_color": [
-            255,
-            255,
-            255
-          ],
-          "target_active_opacity": 1.0
-        },
-        {
-          "name": "LT",
-          "enabled": true,
-          "x_norm": 0.14165666266506602,
-          "y_norm": 0.8167834297898263,
-          "radius_ratio": 0.2,
-          "hold_time": 0.3,
-          "reward_channel": 2,
-          "target_color": [
-            154,
-            153,
-            150
-          ],
-          "target_opacity": 1.0,
-          "target_active_color": [
-            255,
-            255,
-            255
-          ],
-          "target_active_opacity": 1.0
-        },
-        {
-          "name": "Top 11",
-          "enabled": true,
-          "x_norm": 0.65,
-          "y_norm": 0.95,
-          "radius_ratio": 0.25,
-          "hold_time": 0.3,
-          "reward_channel": 2,
-          "target_color": [
-            154,
-            153,
-            150
-          ],
-          "target_opacity": 1.0,
-          "target_active_color": [
-            255,
-            255,
-            255
-          ],
-          "target_active_opacity": 1.0
-        },
-        {
-          "name": "Top 2 L Copy",
-          "enabled": true,
-          "x_norm": 0.5,
-          "y_norm": 0.76,
-          "radius_ratio": 0.2,
-          "hold_time": 0.3,
-          "reward_channel": 2,
-          "target_color": [
-            154,
-            153,
-            150
-          ],
-          "target_opacity": 1.0,
-          "target_active_color": [
-            255,
-            255,
-            255
-          ],
-          "target_active_opacity": 1.0
-        },
-        {
-          "name": "Top 2 L Copy Copy",
-          "enabled": true,
-          "x_norm": 0.6,
-          "y_norm": 0.76,
-          "radius_ratio": 0.25,
-          "hold_time": 0.3,
-          "reward_channel": 2,
-          "target_color": [
-            154,
-            153,
-            150
-          ],
-          "target_opacity": 1.0,
-          "target_active_color": [
-            255,
-            255,
-            255
-          ],
-          "target_active_opacity": 1.0
-        }
-      ],
-      "joystick_node": "Joystick",
-      "control_mode": "direct",
-      "cursor_only_mode": false,
-      "free_play_end_key": "space",
-      "cumulative_speed": 0.7,
-      "zero_drift_mode": true,
-      "zero_drift_buffer": 0.05,
-      "direct_range": 0.45,
-      "cursor_diameter_ratio": 0.08,
-      "cursor_color": [
-        153,
-        193,
-        241
-      ],
-      "task_region_x": 0.5,
-      "task_region_y": 0.27,
-      "task_region_width": 0.5,
-      "task_region_height": 0.67,
-      "reward_channel": 2.0,
-      "trial_timeout": 12.0,
-      "intertrial_interval": 1.5,
-      "disable_up": true,
-      "disable_down": true,
-      "disable_left": false,
-      "disable_right": false,
-      "animations_enabled": true,
-      "task_animation_enabled": true,
-      "target_animation_enabled": true,
-      "show_streak_hud": true,
-      "streak_bonus_threshold": 0,
-      "streak_bonus_reward_count": 1,
-      "streak_reset_on_bonus": false,
-      "inside_tint_strength_pct": 20,
-      "show_hold_progress_ring": true,
-      "show_success_pop": true,
-      "success_pop_duration_s": 0.12,
-      "up_influence_pct": 100,
-      "down_influence_pct": 100,
-      "left_influence_pct": 100,
-      "right_influence_pct": 100,
-      "ignore_idle_trial_failures": true,
-      "state_indicator_x": 30.0,
-      "state_indicator_y": 70.0,
-      "reset_cursor_each_trial": false,
-      "direct_recenter_when_idle": false,
-      "target_layout_editor_geometry": {
-        "x": 373,
-        "y": 216,
-        "width": 1195,
-        "height": 910
-      },
-      "free_play_reward_enabled": false,
-      "free_play_reward_policy": "touch_bouts",
-      "free_play_reward_threshold": 0.0,
-      "free_play_reward_cooldown_s": 1.0,
-      "free_play_reward_channel": 2,
-      "free_play_active_threshold": 0.0,
-      "free_play_first_touch_reward_enabled": false,
-      "free_play_first_touch_reward_channel": 2,
-      "free_play_bout_reward_enabled": false,
-      "free_play_bout_reward_channel": 2,
-      "free_play_bout_cooldown_s": 1.0,
-      "free_play_sustain_reward_enabled": false,
-      "free_play_sustain_reward_channel": 2,
-      "free_play_sustain_initial_delay_s": 0.0,
-      "free_play_sustain_interval_s": 1.0,
-      "require_center_before_trial": false,
-      "center_gate_radius_ratio": 0.15,
-      "ignored_idle_sample_clear_threshold": 50,
-      "fail_on_touch_input": true,
-      "max_logged_joystick_samples": 2000,
-      "show_success_particles": true,
-      "target_layout_editor_drag_enabled": true,
-      "task_cluster_name": "Joy",
-      "queue_index": 0,
-      "_streak_count": 0,
-      "_last_cursor_x": 0.528125,
-      "_last_cursor_y": 0.5,
-      "_operator_keys_pressed": {
-        "left": false,
-        "right": false,
-        "up": false,
-        "down": false
-      }
-    }
-  ],
+  "queue": [],
   "reward_schedule": {
     "schedules": [
       [
@@ -1381,7 +1000,7 @@
         50.0
       ]
     ],
-    "index": 1
+    "index": 0
   },
   "touch_channels": [
     0,
@@ -1434,7 +1053,7 @@
     },
     "Auto Clear": true
   },
-  "status": "Joy/Grid = 216/102",
+  "status": "",
   "Persistence": {
     "Cached": []
   },
@@ -7761,9 +7380,7 @@
           "require_center_before_trial": false,
           "center_gate_radius_ratio": 0.15,
           "ignored_idle_sample_clear_threshold": 50,
-          "fail_on_touch_input": false,
-          "max_logged_joystick_samples": 2000,
-          "show_success_particles": true
+          "fail_on_touch_input": false
         },
         {
           "task_type": "joystick_intro",
@@ -7964,9 +7581,7 @@
           "require_center_before_trial": false,
           "center_gate_radius_ratio": 0.15,
           "ignored_idle_sample_clear_threshold": 50,
-          "fail_on_touch_input": false,
-          "max_logged_joystick_samples": 2000,
-          "show_success_particles": true
+          "fail_on_touch_input": false
         },
         {
           "task_type": "joystick_intro",
@@ -8021,10 +7636,10 @@
           "targets": [
             {
               "name": "L",
-              "enabled": false,
-              "x_norm": 0.2,
+              "enabled": true,
+              "x_norm": 0.05,
               "y_norm": 0.5,
-              "radius_ratio": 0.2,
+              "radius_ratio": 0.25,
               "hold_time": 0.3,
               "reward_channel": 2,
               "target_color": [
@@ -8034,9 +7649,9 @@
               ],
               "target_opacity": 1.0,
               "target_active_color": [
-                255,
-                255,
-                255
+                0,
+                220,
+                60
               ],
               "target_active_opacity": 1.0
             },
@@ -8055,9 +7670,9 @@
               ],
               "target_opacity": 1.0,
               "target_active_color": [
-                255,
-                255,
-                255
+                0,
+                220,
+                60
               ],
               "target_active_opacity": 1.0
             },
@@ -8066,7 +7681,7 @@
               "enabled": false,
               "x_norm": 0.5,
               "y_norm": 0.05,
-              "radius_ratio": 0.4,
+              "radius_ratio": 0.35,
               "hold_time": 0.3,
               "reward_channel": 2,
               "target_color": [
@@ -8076,17 +7691,17 @@
               ],
               "target_opacity": 1.0,
               "target_active_color": [
-                255,
-                255,
-                255
+                0,
+                220,
+                60
               ],
               "target_active_opacity": 1.0
             },
             {
               "name": "R",
-              "enabled": true,
-              "x_norm": 0.965,
-              "y_norm": 0.484,
+              "enabled": false,
+              "x_norm": 0.95,
+              "y_norm": 0.5,
               "radius_ratio": 0.5,
               "hold_time": 0.3,
               "reward_channel": 2,
@@ -8097,9 +7712,9 @@
               ],
               "target_opacity": 1.0,
               "target_active_color": [
-                255,
-                255,
-                255
+                0,
+                220,
+                60
               ],
               "target_active_opacity": 1.0
             },
@@ -8108,9 +7723,9 @@
               "enabled": true,
               "x_norm": 0.5,
               "y_norm": 0.95,
-              "radius_ratio": 0.2,
+              "radius_ratio": 0.25,
               "hold_time": 0.3,
-              "reward_channel": 3,
+              "reward_channel": 2,
               "target_color": [
                 154,
                 153,
@@ -8118,15 +7733,15 @@
               ],
               "target_opacity": 1.0,
               "target_active_color": [
-                255,
-                255,
-                255
+                0,
+                220,
+                60
               ],
               "target_active_opacity": 1.0
             },
             {
               "name": "Top 2 L",
-              "enabled": true,
+              "enabled": false,
               "x_norm": 0.4,
               "y_norm": 0.9,
               "radius_ratio": 0.15,
@@ -8139,18 +7754,18 @@
               ],
               "target_opacity": 1.0,
               "target_active_color": [
-                255,
-                255,
-                255
+                0,
+                220,
+                60
               ],
               "target_active_opacity": 1.0
             },
             {
               "name": "L2",
               "enabled": true,
-              "x_norm": 0.15,
-              "y_norm": 0.4,
-              "radius_ratio": 0.2,
+              "x_norm": 0.05,
+              "y_norm": 0.25,
+              "radius_ratio": 0.3,
               "hold_time": 0.3,
               "reward_channel": 2,
               "target_color": [
@@ -8160,18 +7775,18 @@
               ],
               "target_opacity": 1.0,
               "target_active_color": [
-                255,
-                255,
-                255
+                0,
+                220,
+                60
               ],
               "target_active_opacity": 1.0
             },
             {
               "name": "LT",
               "enabled": true,
-              "x_norm": 0.14165666266506602,
-              "y_norm": 0.8167834297898263,
-              "radius_ratio": 0.2,
+              "x_norm": 0.1,
+              "y_norm": 0.9,
+              "radius_ratio": 0.35,
               "hold_time": 0.3,
               "reward_channel": 2,
               "target_color": [
@@ -8181,16 +7796,16 @@
               ],
               "target_opacity": 1.0,
               "target_active_color": [
-                255,
-                255,
-                255
+                0,
+                220,
+                60
               ],
               "target_active_opacity": 1.0
             },
             {
               "name": "Top 11",
               "enabled": true,
-              "x_norm": 0.65,
+              "x_norm": 0.7,
               "y_norm": 0.95,
               "radius_ratio": 0.25,
               "hold_time": 0.3,
@@ -8202,51 +7817,9 @@
               ],
               "target_opacity": 1.0,
               "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "Top 2 L Copy",
-              "enabled": true,
-              "x_norm": 0.5,
-              "y_norm": 0.76,
-              "radius_ratio": 0.2,
-              "hold_time": 0.3,
-              "reward_channel": 2,
-              "target_color": [
-                154,
-                153,
-                150
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "Top 2 L Copy Copy",
-              "enabled": true,
-              "x_norm": 0.6,
-              "y_norm": 0.76,
-              "radius_ratio": 0.25,
-              "hold_time": 0.3,
-              "reward_channel": 2,
-              "target_color": [
-                154,
-                153,
-                150
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
+                0,
+                220,
+                60
               ],
               "target_active_opacity": 1.0
             }
@@ -8297,10 +7870,10 @@
           "reset_cursor_each_trial": false,
           "direct_recenter_when_idle": false,
           "target_layout_editor_geometry": {
-            "x": 373,
-            "y": 216,
+            "x": 342,
+            "y": 154,
             "width": 1195,
-            "height": 910
+            "height": 1179
           },
           "free_play_reward_enabled": false,
           "free_play_reward_policy": "touch_bouts",
@@ -8320,10 +7893,7 @@
           "require_center_before_trial": false,
           "center_gate_radius_ratio": 0.15,
           "ignored_idle_sample_clear_threshold": 50,
-          "fail_on_touch_input": true,
-          "max_logged_joystick_samples": 2000,
-          "show_success_particles": true,
-          "target_layout_editor_drag_enabled": true
+          "fail_on_touch_input": true
         },
         {
           "task_type": "joystick_intro",
@@ -9049,9 +8619,7 @@
           "require_center_before_trial": false,
           "center_gate_radius_ratio": 0.15,
           "ignored_idle_sample_clear_threshold": 50,
-          "fail_on_touch_input": false,
-          "max_logged_joystick_samples": 2000,
-          "show_success_particles": true
+          "fail_on_touch_input": false
         },
         {
           "task_type": "joystick_intro",
@@ -9258,9 +8826,7 @@
           "require_center_before_trial": false,
           "center_gate_radius_ratio": 0.15,
           "ignored_idle_sample_clear_threshold": 50,
-          "fail_on_touch_input": false,
-          "max_logged_joystick_samples": 2000,
-          "show_success_particles": true
+          "fail_on_touch_input": false
         },
         {
           "task_type": "joystick_intro",
@@ -9551,9 +9117,7 @@
           "require_center_before_trial": false,
           "center_gate_radius_ratio": 0.15,
           "ignored_idle_sample_clear_threshold": 50,
-          "fail_on_touch_input": true,
-          "max_logged_joystick_samples": 2000,
-          "show_success_particles": true
+          "fail_on_touch_input": true
         }
       ]
     },

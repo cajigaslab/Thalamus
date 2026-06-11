@@ -150,6 +150,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     task_config["show_hold_progress_ring"] = True
   if "show_success_pop" not in task_config:
     task_config["show_success_pop"] = True
+  if "show_success_particles" not in task_config:
+    task_config["show_success_particles"] = True
   if "success_pop_duration_s" not in task_config:
     task_config["success_pop_duration_s"] = 0.12
   legacy_free_play_reward_enabled = bool(task_config.get("free_play_reward_enabled", False))
@@ -1773,18 +1775,19 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
 
   add_anim_checkbox(7, "Show Hold Progress Ring", "show_hold_progress_ring")
   add_anim_checkbox(8, "Show Success Pop", "show_success_pop")
+  add_anim_checkbox(9, "Show Success Particles", "show_success_particles")
 
-  animation_layout.addWidget(QLabel("Success Pop Duration (s)"), 9, 0)
+  animation_layout.addWidget(QLabel("Success Pop Duration (s)"), 10, 0)
   success_pop_spin = QDoubleSpinBox()
   success_pop_spin.setRange(0.0, 1.0)
   success_pop_spin.setSingleStep(0.01)
   success_pop_spin.setDecimals(3)
   success_pop_spin.setValue(float(max(0.0, min(1.0, float(task_config.get("success_pop_duration_s", 0.12))))))
   success_pop_spin.valueChanged.connect(lambda v: task_config.update({"success_pop_duration_s": float(v)}))
-  animation_layout.addWidget(success_pop_spin, 9, 1)
+  animation_layout.addWidget(success_pop_spin, 10, 1)
 
   animation_note = QLabel("Set master to OFF for animation-free behavior.")
-  animation_layout.addWidget(animation_note, 10, 0, 1, 2)
+  animation_layout.addWidget(animation_note, 11, 0, 1, 2)
 
   layout.addWidget(animation_group)
   sync_table_from_config()
@@ -1877,6 +1880,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   streak_reset_on_bonus = bool(task_config.get("streak_reset_on_bonus", False))
   show_hold_progress_ring = bool(task_config.get("show_hold_progress_ring", True))
   show_success_pop = bool(task_config.get("show_success_pop", True))
+  show_success_particles = bool(task_config.get("show_success_particles", True))
   success_pop_duration_s = max(0.0, min(1.0, float(task_config.get("success_pop_duration_s", 0.12))))
   streak_count = max(0, int(task_config.get("_streak_count", 0)))
   state_indicator_x = max(0, int(task_config.get("state_indicator_x", 30)))
@@ -1925,6 +1929,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   success_pop_start: typing.Optional[float] = None
   success_pop_x = 0.5
   success_pop_y = 0.5
+  success_particles: typing.List[typing.Dict[str, typing.Any]] = []
   state_brightness = 0
   current_target_index = -1
   trial_index = 0
@@ -2423,6 +2428,32 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       )
     painter.setFont(original_font)
 
+  def spawn_success_particles(start_time: float) -> None:
+    success_particles.clear()
+    duration_s = max(0.18, min(0.45, success_pop_duration_s if success_pop_duration_s > 0.0 else 0.26))
+    active_rgb = [
+      current_target_active_color.red(),
+      current_target_active_color.green(),
+      current_target_active_color.blue(),
+    ]
+    static_rgb = [
+      current_target_color.red(),
+      current_target_color.green(),
+      current_target_color.blue(),
+    ]
+    particle_count = 16
+    for i in range(particle_count):
+      base_angle = (2.0 * math.pi * i) / float(particle_count)
+      angle = base_angle + random.uniform(-0.12, 0.12)
+      success_particles.append({
+        "start": start_time,
+        "duration": duration_s * random.uniform(0.82, 1.08),
+        "angle": angle,
+        "travel": random.uniform(1.15, 2.15),
+        "size": random.uniform(0.055, 0.095),
+        "color": active_rgb if i % 3 else static_rgb,
+      })
+
   def renderer(painter: CanvasPainterProtocol) -> None:
     nonlocal success_pop_start
     w = context.widget.width()
@@ -2454,18 +2485,31 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       painter.setBrush(draw_target_color)
       painter.drawEllipse(tx - target_radius_px, ty - target_radius_px, 2 * target_radius_px, 2 * target_radius_px)
       if target_animation_enabled and show_hold_progress_ring and hold_progress_ratio > 0.0:
-        ring_radius = target_radius_px + max(3, int(0.015 * min_dim))
-        ring_width = max(2, int(0.008 * min_dim))
-        painter.setPen(QPen(QColor(255, 255, 255, 220), ring_width))
-        painter.setBrush(Qt.BrushStyle.NoBrush)
+        progress = max(0.0, min(1.0, hold_progress_ratio))
+        eased_progress = progress * progress * (3.0 - 2.0 * progress)
+        ring_radius = target_radius_px + max(5, int(0.022 * min_dim))
+        ring_width = max(4, int(max(0.014 * min_dim, target_radius_px * 0.18)))
         diameter = 2 * ring_radius
+
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(QColor(0, 0, 0, 150), ring_width + 4))
+        painter.drawEllipse(tx - ring_radius, ty - ring_radius, diameter, diameter)
+        painter.setPen(QPen(QColor(255, 255, 255, 92), max(1, ring_width + 1)))
+        painter.drawEllipse(tx - ring_radius, ty - ring_radius, diameter, diameter)
+        painter.setPen(QPen(QColor(0, 0, 0, 110), max(1, ring_width - 2)))
+        painter.drawEllipse(tx - ring_radius, ty - ring_radius, diameter, diameter)
+
+        progress_color = QColor(current_target_active_color)
+        progress_color.setAlpha(245)
+        painter.setPen(QPen(progress_color, ring_width))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawArc(
           tx - ring_radius,
           ty - ring_radius,
           diameter,
           diameter,
           90 * 16,
-          -int(360 * 16 * max(0.0, min(1.0, hold_progress_ratio))),
+          -int(360 * 16 * eased_progress),
         )
 
     if target_animation_enabled and show_success_pop and success_pop_start is not None and success_pop_duration_s > 0.0:
@@ -2481,6 +2525,38 @@ async def run(context: TaskContextProtocol) -> TaskResult:
         painter.drawEllipse(pop_center_x - pop_radius, pop_center_y - pop_radius, 2 * pop_radius, 2 * pop_radius)
       else:
         success_pop_start = None
+
+    if target_animation_enabled and show_success_particles and success_particles:
+      active_particles: typing.List[typing.Dict[str, typing.Any]] = []
+      now_perf = time.perf_counter()
+      particle_center_x, particle_center_y = to_region_pixels(success_pop_x, success_pop_y, w, h)
+      for particle in success_particles:
+        duration = max(0.001, float(particle.get("duration", 0.26)))
+        elapsed = now_perf - float(particle.get("start", now_perf))
+        if elapsed > duration:
+          continue
+        active_particles.append(particle)
+        progress = max(0.0, min(1.0, elapsed / duration))
+        eased = 1.0 - pow(1.0 - progress, 3.0)
+        alpha = int(230 * pow(1.0 - progress, 1.4))
+        angle = float(particle.get("angle", 0.0))
+        travel_px = float(particle.get("travel", 1.5)) * target_radius_px * eased
+        px = particle_center_x + int(math.cos(angle) * travel_px)
+        py = particle_center_y + int(math.sin(angle) * travel_px)
+        size_px = max(2, int(target_radius_px * float(particle.get("size", 0.07)) * (1.2 - 0.45 * progress)))
+        rgb = particle.get("color", DEFAULT_TARGET_ACTIVE_COLOR)
+        particle_color = QColor(int(rgb[0]), int(rgb[1]), int(rgb[2]), alpha)
+        painter.setPen(QPen(QColor(255, 255, 255, min(180, alpha)), max(1, size_px // 2)))
+        painter.drawLine(
+          particle_center_x + int(math.cos(angle) * travel_px * 0.72),
+          particle_center_y + int(math.sin(angle) * travel_px * 0.72),
+          px,
+          py,
+        )
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(particle_color)
+        painter.drawEllipse(px - size_px, py - size_px, 2 * size_px, 2 * size_px)
+      success_particles[:] = active_particles
 
     r = cursor_diameter_px // 2
     painter.setPen(QPen(cursor_color, 1))
@@ -2851,12 +2927,26 @@ async def run(context: TaskContextProtocol) -> TaskResult:
               if streak_reset_on_bonus:
                 streak_count = 0
                 task_config["_streak_count"] = 0
-            if target_animation_enabled and show_success_pop and success_pop_duration_s > 0.0:
+            success_visual_duration_s = 0.0
+            if target_animation_enabled and (
+              (show_success_pop and success_pop_duration_s > 0.0)
+              or show_success_particles
+            ):
               success_pop_x = target_x
               success_pop_y = target_y
-              success_pop_start = time.perf_counter()
-              pop_end_time = success_pop_start + success_pop_duration_s
-              while time.perf_counter() < pop_end_time:
+              visual_start_time = time.perf_counter()
+              if show_success_pop and success_pop_duration_s > 0.0:
+                success_pop_start = visual_start_time
+                success_visual_duration_s = max(success_visual_duration_s, success_pop_duration_s)
+              if show_success_particles:
+                spawn_success_particles(visual_start_time)
+                if success_particles:
+                  success_visual_duration_s = max(
+                    success_visual_duration_s,
+                    max(float(particle.get("duration", 0.26)) for particle in success_particles),
+                  )
+              visual_end_time = visual_start_time + success_visual_duration_s
+              while time.perf_counter() < visual_end_time:
                 context.widget.update()
                 await context.sleep(datetime.timedelta(seconds=0.01))
             append_event("success", now, streak_count=streak_count)

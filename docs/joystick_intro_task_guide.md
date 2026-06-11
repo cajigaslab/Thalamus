@@ -43,7 +43,9 @@ Each target has two visual states:
 - static style: `target_color` plus `target_opacity`, used while the cursor is outside the target
 - active style: `target_active_color` plus `target_active_opacity`, used immediately when the cursor enters the target
 
-The active style switch is deterministic visual feedback and does not depend on the animation settings. The animation settings still control optional effects such as the hold progress ring and success pop.
+The active style switch is deterministic visual feedback and does not depend on the animation settings. The animation settings still control optional effects such as the hold progress ring, success pop, and success particle burst.
+
+The hold progress ring is drawn more prominently when enabled, using the active target color plus contrast outlines so hold progress remains visible across different target colors. `show_success_particles` enables a short radial burst at successful target completion. These effects still respect the animation master switch and the target-animation switch.
 
 The Target Layout Editor now supports two complementary ways of building layouts:
 
