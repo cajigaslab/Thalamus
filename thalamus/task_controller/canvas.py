@@ -438,11 +438,11 @@ class AngularScalingConfig:
       upper_notches = self.pin_notches[upper_i]
 
       if mag > lower_notches[-1,0]:
-        lower_scale = mag*(lower_notches[-1,1] - lower_notches[-2,1])/(lower_notches[-1,0] - lower_notches[-2,0])
+        lower_scale = (mag - lower_notches[-1,0])*(lower_notches[-1,1] - lower_notches[-2,1])/(lower_notches[-1,0] - lower_notches[-2,0]) + lower_notches[-1,1]
       else:
         lower_scale = numpy.interp(mag, lower_notches[:,0], lower_notches[:,1])
       if mag > upper_notches[-1,0]:
-        upper_scale = mag*(upper_notches[-1,1] - upper_notches[-2,1])/(upper_notches[-1,0] - upper_notches[-2,0])
+        upper_scale = (mag - upper_notches[-1,0])*(upper_notches[-1,1] - upper_notches[-2,1])/(upper_notches[-1,0] - upper_notches[-2,0]) + upper_notches[-1,1]
       else:
         upper_scale = numpy.interp(mag, upper_notches[:,0], upper_notches[:,1])
 
