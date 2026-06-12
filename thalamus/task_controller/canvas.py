@@ -396,7 +396,7 @@ class AngularScalingConfig:
         self.pin_notches[-1].append([notch["Eye"], notch["Screen"]])
 
     self.pin_angles = numpy.array(self.pin_angles)
-    print(self.pin_notches)
+    #print(self.pin_notches)
     self.pin_notches = [numpy.array(n) for n in self.pin_notches]
 
   def paint(self, painter: QPainter, dims: QSize, opacity: int):
