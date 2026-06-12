@@ -80,6 +80,7 @@ class Task:
     self.seen_points = set()
     self.hold = False
     self.eye_opacity = 192
+    self.grid = QPainterPath()
 
     eye_scaling = config['eye_scaling']
     if 'Reward Node' not in eye_scaling:
@@ -183,6 +184,14 @@ class Task:
       painter.drawLine(size.width()//2, 0, size.width()//2, size.height())
       painter.drawLine(0, 0, size.width(), size.height())
       painter.drawLine(0, size.height(), size.width(), 0)
+      painter.drawArc(QRect(0, 0, size.width(), size.height()), 0, 360*16)
+      painter.restore()
+
+      painter.save()
+      painter.setPen(Qt.GlobalColor.magenta)
+      painter.setBrush(Qt.BrushStyle.NoBrush)
+      painter.translate(size.width()//2, size.height()//2)
+      painter.drawPath(self.grid)
       painter.restore()
 
       if not self.show_fixation:
@@ -207,7 +216,10 @@ class Task:
         painter.save()
         painter.setBrush(saccade_color)
         if i == self.current_saccade:
-          painter.setPen(Qt.GlobalColor.green)
+          pen = painter.pen()
+          pen.setColor(Qt.GlobalColor.green)
+          pen.setWidth(10)
+          painter.setPen(pen)
         painter.drawEllipse(saccade_shape.adjusted(saccade.x - self.saccade_radius + size.width()//2,
                                                    saccade.y - self.saccade_radius + size.height()//2,
                                                    saccade.x - self.saccade_radius + size.width()//2,
@@ -466,6 +478,52 @@ class Task:
       if ((target.x - px)**2 + (target.y - py)**2)**.5 > 1:
         self.training_path.lineTo(target.x, target.y)
     end = time.perf_counter()
+  
+    edge = 3
+    self.grid.clear()
+    for ox in numpy.arange(-edge, edge + .1, .3):
+      first = True
+      for oy in numpy.arange(-edge, edge + .01, .3/5):
+        px, py = self.oculomatic_to_pixels_from_center(ox, oy)
+        if first:
+          self.grid.moveTo(px, py)
+          first = False
+        else:
+          self.grid.lineTo(px, py)
+
+    for oy in numpy.arange(-edge, edge + .1, .3):
+      first = True
+      for ox in numpy.arange(-edge, edge + .01, .3/5):
+        px, py = self.oculomatic_to_pixels_from_center(ox, oy)
+        if first:
+          self.grid.moveTo(px, py)
+          first = False
+        else:
+          self.grid.lineTo(px, py)
+
+    #for angle in numpy.arange(0, 2*numpy.pi, 2*numpy.pi/12):
+    #  first = True
+    #  for radius in numpy.arange(0, 5, .2):
+    #    x, y = radius*numpy.cos(angle), radius*numpy.sin(angle)
+    #    px, py = self.oculomatic_to_pixels_from_center(x, y)
+    #    if first:
+    #      self.grid.moveTo(px, py)
+    #      first = False
+    #    else:
+    #      self.grid.lineTo(px, py)
+#
+    #for radius in numpy.arange(0, 5, 1):
+    #  first = True
+    #  for angle in numpy.arange(0, 2*numpy.pi, 2*numpy.pi/48):
+    #    x, y = radius*numpy.cos(angle), radius*numpy.sin(angle)
+    #    px, py = self.oculomatic_to_pixels_from_center(x, y)
+    #    if first:
+    #      self.grid.moveTo(px, py)
+    #      first = False
+    #    else:
+    #      self.grid.lineTo(px, py)
+
+
     print('Rebuild duration', end - start)
 
   def reset(self):
@@ -563,7 +621,7 @@ class Task:
       next_notch = numpy.inf
 
     new_pin = copy.deepcopy(self.nudge_start_value)
-    print(new_pin['Rotation'], delta_rotation)
+    #print(new_pin['Rotation'], delta_rotation)
     new_pin['Rotation'] += delta_rotation
     scale = min(old_notch['Screen']*delta_scale, next_notch*.99)
     new_pin['Notches'][self.notch_nudge_index]['Screen'] = scale
@@ -579,7 +637,7 @@ class Task:
 
     if self.model_name == 'Angular Scaling':
       nudge_index = self.nudge_index
-      print(nudge_index, linked_target)
+      #print(nudge_index, linked_target)
       def do():
         self.pins_updater.setitem(nudge_index, new_pin, self.rebuild)
         if linked_target is not None:
@@ -867,6 +925,12 @@ class OperatorView(QWidget):
       scale = min(self.width()/self.subject_view.width(), self.height()/self.subject_view.height())
       painter.scale(scale, scale)
       self.task.render(painter, self.subject_view.size(), RenderOutput.OPERATOR)
+      if not self.hasFocus():
+        font = painter.font()
+        font.setPointSize(36)
+        painter.setFont(font)
+        metrics = QFontMetrics(font)
+        painter.drawText(0,metrics.height(), "Unfocused")
     finally:
       painter.end()
       now = time.perf_counter()
@@ -1017,25 +1081,37 @@ class OperatorWindow(QMainWindow):
     reset_button = QPushButton('Reset')
     model_label = QLabel('Model:')
     hold = QCheckBox('Hold')
+
     layout.addWidget(model_label)
-    layout.addWidget(fit_button)
-    layout.addWidget(reset_button)
-    layout.addWidget(QLabel('Fixation Radius'))
-    layout.addWidget(fixation_radius_widget)
-    layout.addWidget(QLabel('Saccade Radius'))
-    layout.addWidget(saccade_radius_widget)
-    layout.addWidget(QLabel('Reward (ms)'))
-    layout.addWidget(reward_widget)
-    layout.addWidget(QLabel('Reward Node'))
-    layout.addWidget(reward_node_widget)
-    layout.addWidget(QLabel('Distance (mm)'))
-    layout.addWidget(distance_widget)
-    layout.addWidget(QLabel('DPI'))
-    layout.addWidget(dpi_widget)
-    layout.addWidget(QLabel('Default Scale'))
-    layout.addWidget(default_scale_widget)
-    layout.addWidget(clear_button)
-    layout.addWidget(hold)
+
+    layout2 = QHBoxLayout()
+    layout2.addWidget(fit_button)
+    layout2.addWidget(reset_button)
+    layout.addLayout(layout2)
+
+    layout2 = QGridLayout()
+    layout2.addWidget(QLabel('Fixation Radius'), 0, 0)
+    layout2.addWidget(fixation_radius_widget, 0, 1)
+    layout2.addWidget(QLabel('Saccade Radius'), 0, 2)
+    layout2.addWidget(saccade_radius_widget, 0, 3)
+
+    layout2.addWidget(QLabel('Reward (ms)'), 1, 0)
+    layout2.addWidget(reward_widget, 1, 1)
+    layout2.addWidget(QLabel('Reward Node'), 1, 2)
+    layout2.addWidget(reward_node_widget, 1, 3)
+
+    layout2.addWidget(QLabel('Distance (m)'), 2, 0)
+    layout2.addWidget(distance_widget, 2, 1)
+    layout2.addWidget(QLabel('DPI'), 2, 2)
+    layout2.addWidget(dpi_widget, 2, 3)
+
+    layout2.addWidget(QLabel('Default Scale'), 3, 0)
+    layout2.addWidget(default_scale_widget, 3, 1)
+    layout2.addWidget(clear_button, 3, 2)
+    layout2.addWidget(hold, 3, 3)
+
+    layout.addLayout(layout2)
+
     central_widget.setLayout(layout)
     self.setCentralWidget(central_widget)
     central_widget.setFocusProxy(view)
