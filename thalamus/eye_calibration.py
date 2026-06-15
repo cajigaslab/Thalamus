@@ -169,6 +169,7 @@ class Task:
     painter.drawRect(0, 0, size.width(), size.height())
 
     radius = max(size.width(), size.height())
+    reticle_radius = min(size.width(), size.height())//2
     
     fixation_color = QColor(Qt.GlobalColor.red)
     fixation_shape = QRect(size.width()//2 - self.fixation_radius, size.height()//2 - self.fixation_radius,
@@ -179,18 +180,17 @@ class Task:
                            2*self.saccade_radius, 2*self.saccade_radius)
     if output == RenderOutput.OPERATOR:
       painter.save()
-      painter.setPen(Qt.GlobalColor.yellow)
-      painter.drawLine(0, size.height()//2, size.width(), size.height()//2)
-      painter.drawLine(size.width()//2, 0, size.width()//2, size.height())
-      painter.drawLine(0, 0, size.width(), size.height())
-      painter.drawLine(0, size.height(), size.width(), 0)
-      painter.drawArc(QRect(0, 0, size.width(), size.height()), 0, 360*16)
-      painter.restore()
 
-      painter.save()
+      painter.setPen(Qt.GlobalColor.yellow)
+      painter.translate(size.width()//2, size.height()//2)
+      painter.drawLine(-size.width()//2, 0, size.width()//2, 0)
+      painter.drawLine(0, -size.height()//2, 0, size.height()//2)
+      painter.drawLine(-reticle_radius, -reticle_radius, reticle_radius, reticle_radius)
+      painter.drawLine(-reticle_radius, reticle_radius, reticle_radius, -reticle_radius)
+      painter.drawArc(QRect(-reticle_radius, -reticle_radius, 2*reticle_radius, 2*reticle_radius), 0, 360*16)
+
       painter.setPen(Qt.GlobalColor.magenta)
       painter.setBrush(Qt.BrushStyle.NoBrush)
-      painter.translate(size.width()//2, size.height()//2)
       painter.drawPath(self.grid)
       painter.restore()
 
@@ -282,7 +282,7 @@ class Task:
         painter.drawLine(fixation_shape.center().x(), fixation_shape.top(), fixation_shape.center().x(), fixation_shape.bottom())
         painter.restore()
 
-      if self.saccades and self.show_saccade:
+      if self.saccades and self.show_saccade and self.current_saccade >= 0 and self.current_saccade < len(self.saccades):
         painter.setBrush(saccade_color)
         saccade = self.saccades[self.current_saccade]
         painter.drawEllipse(saccade_shape.adjusted(saccade.x - self.saccade_radius + size.width()//2,
@@ -297,18 +297,39 @@ class Task:
     self.task = asyncio.create_task(self.run())
 
   def add_target(self, x: int, y: int):
-    self.saccades.append(SaccadeTarget(x, y, -1, False))
+    def do():
+      self.saccades.append(SaccadeTarget(x, y, -1, False))
+    def undo():
+      self.saccades.pop()
+
     print(self.saccades)
+    return Action(do, undo)
 
   def remove_target(self, x: int, y: int):
+    remove_index = -1
+    remove_item = None
     for i, target in list(enumerate(self.saccades))[::-1]:
       distance = (target.x - x)**2 + (target.y - y)**2
       print(distance)
       if distance < self.saccade_radius**2:
-        del self.saccades[i]
-        if i <= self.current_saccade:
-          self.current_saccade -= 1
+        remove_index = i
+        remove_item = target
         break
+
+    if remove_index == -1:
+      return None
+    
+    def do():
+      del self.saccades[remove_index]
+      if remove_index < self.current_saccade:
+        self.current_saccade -= 1
+
+    def undo():
+      self.saccades.insert(remove_index, remove_item)
+      if remove_index >= self.current_saccade:
+        self.current_saccade += 1
+
+    return Action(do, undo)
 
   def pin_here(self, x: int, y: int):
     target = SaccadeTarget(x, y, -1, True)
@@ -317,7 +338,7 @@ class Task:
     def do():
       self.training_data.append((ocu, None, target))
       self.append_to_path(self.training_path, x, y)
-      self.training_path.lineTo(x, y)
+      #self.training_path.lineTo(x, y)
 
     def undo():
       self.training_data.pop()
@@ -535,15 +556,15 @@ class Task:
     elif self.model_name == 'Angular Scaling':
       old_pins = self.pins.copy()
 
-      target_pins = [t.pin for t in self.saccades]
+      target_pins = [t[2].pin for t in self.training_data]
       def do():
         self.pins_updater.assign([], self.rebuild)
-        for target in self.saccades:
-          target.pin = -1
+        for target in self.training_data:
+          target[2].pin = -1
       def undo():
         self.pins_updater.assign(old_pins, self.rebuild)
-        for target, p in zip(self.saccades, target_pins):
-          target.pin = p
+        for target, p in zip(self.training_data, target_pins):
+          target[2].pin = p
 
       return Action(do, undo)
 
@@ -894,13 +915,56 @@ class OperatorView(QWidget):
 
     action = QAction('Add Target', self)
     action.triggered.connect(
-      lambda: self.do(Action(lambda: self.task.add_target(x, y), lambda: self.task.remove_target(x, y))))
+      lambda: self.do(self.task.add_target(x, y)))
     menu.addAction(action)
 
     action = QAction('Remove Target', self)
     action.triggered.connect(
-      lambda: self.do(Action(lambda: self.task.remove_target(x, y), lambda: self.task.add_target(x, y))))
+      lambda: self.do(self.task.remove_target(x, y)))
     menu.addAction(action)
+
+    preset_menu = menu.addMenu('Presets')
+
+    width, height = self.subject_view.width(), self.subject_view.height()
+    radius = min(width, height)//2 - self.task.saccade_radius
+    cornerx = int(radius*numpy.cos(numpy.pi/4))
+    cornery = int(radius*numpy.sin(numpy.pi/4))
+    eight_target = lambda: [
+        self.task.add_target(radius, 0),
+        self.task.add_target(cornerx, -cornery),
+        self.task.add_target(0, -radius),
+        self.task.add_target(-cornerx, -cornery),
+        self.task.add_target(-radius, 0),
+        self.task.add_target(-cornerx, cornery),
+        self.task.add_target(0, radius),
+        self.task.add_target(cornerx, cornery),
+      ]
+
+    four_targets_quad = lambda: [
+        self.task.add_target(cornerx, -cornery),
+        self.task.add_target(-cornerx, -cornery),
+        self.task.add_target(-cornerx, cornery),
+        self.task.add_target(cornerx, cornery),
+      ]
+
+    four_targets_axis = lambda: [
+        self.task.add_target(radius, 0),
+        self.task.add_target(0, -radius),
+        self.task.add_target(-radius, 0),
+        self.task.add_target(0, radius),
+      ]
+
+    action = QAction('8 Targets', self)
+    action.triggered.connect(lambda: self.do_multi(eight_target()))
+    preset_menu.addAction(action)
+    action = QAction('4 Targets On Axes', self)
+    action.triggered.connect(lambda: self.do_multi(four_targets_axis()))
+    preset_menu.addAction(action)
+    action = QAction('4 Targets On Corners', self)
+    action.triggered.connect(lambda: self.do_multi(four_targets_quad()))
+    preset_menu.addAction(action)
+    
+    menu.addSeparator()
 
     action = QAction('Pin', self)
     action.triggered.connect(on_pin)
@@ -909,6 +973,8 @@ class OperatorView(QWidget):
     action = QAction('Pin Here', self)
     action.triggered.connect(on_pin_here)
     menu.addAction(action)
+
+    menu.addSeparator()
 
     action = QAction('Add Notch', self)
     action.triggered.connect(on_notch)
@@ -954,11 +1020,27 @@ class OperatorView(QWidget):
     #self.update()
 
   def do(self, action: Action, invoke = True):
+    if action is None:
+      return
     self.actions = self.actions[:self.actions_position]
     self.actions.append(action)
     self.actions_position += 1
     if invoke:
       action.do()
+
+  def do_multi(self, actions: typing.List[Action]):
+    if len(actions) == 0:
+      return
+    
+    def do():
+      for a in actions:
+        a.do()
+
+    def undo():
+      for a in actions[::-1]:
+        a.undo()
+    
+    self.do(Action(do, undo))
 
   def undo(self):
     if self.actions_position > 0:
@@ -978,9 +1060,11 @@ class OperatorView(QWidget):
     elif a0.key() == Qt.Key.Key_R:
       asyncio.create_task(self.task.deliver_reward())
     elif a0.key() == Qt.Key.Key_Left:
-      self.task.current_saccade = (self.task.current_saccade - 1) % len(self.task.saccades)
+      if len(self.task.saccades) > 0:
+        self.task.current_saccade = (self.task.current_saccade - 1) % len(self.task.saccades)
     elif a0.key() == Qt.Key.Key_Right:
-      self.task.current_saccade = (self.task.current_saccade + 1) % len(self.task.saccades)
+      if len(self.task.saccades) > 0:
+        self.task.current_saccade = (self.task.current_saccade + 1) % len(self.task.saccades)
     elif a0.key() == Qt.Key.Key_Z:
       if a0.modifiers() & Qt.KeyboardModifier.ControlModifier:
         if a0.modifiers() & Qt.KeyboardModifier.ShiftModifier:
