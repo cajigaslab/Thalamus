@@ -53,7 +53,7 @@ class SaccadeTarget:
   hidden: bool
 
 class Task:
-  def __init__(self, stub: thalamus_pb2_grpc.ThalamusStub, config: dict):
+  def __init__(self, stub: thalamus_pb2_grpc.ThalamusStub, config: ObservableDict):
     self.stub = stub
     self.oculomatic_task: asyncio.Task | None = None
     self.task: asyncio.Task | None = None
@@ -81,6 +81,11 @@ class Task:
     self.hold = False
     self.eye_opacity = 192
     self.grid = QPainterPath()
+    self.oculomatic_node_name = ''
+
+    for node in config.get('nodes', []):
+      if node.get('type', None) == 'OCULOMATIC':
+        self.oculomatic_node_name = node['name']
 
     eye_scaling = config['eye_scaling']
     if 'Reward Node' not in eye_scaling:
@@ -154,6 +159,10 @@ class Task:
 
     self.pin_angles = numpy.array(self.pin_angles)
     self.pin_notches = [numpy.array(n) for n in self.pin_notches]
+
+  async def recenter(self):
+    response = await self.stub.node_request(thalamus_pb2.NodeRequest(node=self.oculomatic_node_name, json='{"type":"recenter"}'))
+    print('Recenter Response:', response)
 
   async def prepare_reward(self):
     self.stub.inject_analog(self.reward_queue)
@@ -676,19 +685,27 @@ class Task:
     if self.model_name == 'Projective':
       if not self.training_data:
         return
-      
+
       # Fit projective
       n = len(self.training_data)
-      A = numpy.zeros((2*n, 8))
-      b = numpy.zeros(2*n)
+      A = numpy.zeros((2*(n+1), 6))
+      b = numpy.zeros(2*(n+1))
       for i in range(n):
-          x, y = self.training_data[i][0]
-          tx, ty = self.training_data[i][1]
-          A[2*i]   = [x, y, 1, 0, 0, 0, -tx*x, -tx*y]
-          b[2*i]   = tx
-          A[2*i+1] = [0, 0, 0, x, y, 1, -ty*x, -ty*y]
-          b[2*i+1] = ty
+        x, y = self.training_data[i][0]
+        tx, ty = self.training_data[i][1]
+        A[2*i]   = [x, y, 0, 0, -tx*x, -tx*y]
+        b[2*i]   = tx
+        A[2*i+1] = [0, 0, x, y, -ty*x, -ty*y]
+        b[2*i+1] = ty
+
+      A[2*n] = [0, 0, 0, 0, 0, 0]
+      b[2*n] = 0
+      A[2*n+1] = [0, 0, 0, 0, 0, 0]
+      b[2*n+1] = 0
       params, _, _, _ = numpy.linalg.lstsq(A, b, rcond=None)
+      params = params.tolist()
+      params.insert(2, 0.0)
+      params.insert(5, 0.0)
       model['Parameters'].assign(params, self.rebuild)
     elif self.model_name == 'Angular Scaling':
       if not self.training_data:
@@ -834,7 +851,7 @@ class SubjectView(QWidget):
 class SubjectWindow(QMainWindow):
   def __init__(self, task: Task, view: QWidget):
     super().__init__()
-    self.setWindowTitle('Subject')
+    self.setWindowTitle('Eye Calibration: Subject')
     self.task = task
 
     self.setCentralWidget(view)
@@ -879,7 +896,7 @@ class Action(typing.NamedTuple):
 class OperatorView(QWidget):
   def __init__(self, task: Task, subject_view: QWidget, config: dict):
     super().__init__()
-    self.setWindowTitle('Operator')
+    self.setWindowTitle('Eye Calibration: Operator')
     self.config = config
     self.task = task
     self.subject_view = subject_view
@@ -1126,6 +1143,7 @@ class OperatorView(QWidget):
 class OperatorWindow(QMainWindow):
   def __init__(self, task: Task, view: QWidget, subject_view: QWidget, config: dict):
     super().__init__()
+    self.setWindowTitle('Eye Calibration: Operator')
     self.task = task
     self.view = view
     view.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -1160,6 +1178,7 @@ class OperatorWindow(QMainWindow):
     distance_widget.setDecimals(3)
     dpi_widget = QDoubleSpinBox()
     dpi_widget.setRange(0, 10000)
+    recenter_button = QPushButton('Recenter')
     clear_button = QPushButton('Clear')
     fit_button = QPushButton('Fit')
     reset_button = QPushButton('Reset')
@@ -1171,6 +1190,8 @@ class OperatorWindow(QMainWindow):
     layout2 = QHBoxLayout()
     layout2.addWidget(fit_button)
     layout2.addWidget(reset_button)
+    layout2.addWidget(clear_button)
+    layout2.addWidget(recenter_button)
     layout.addLayout(layout2)
 
     layout2 = QGridLayout()
@@ -1191,8 +1212,8 @@ class OperatorWindow(QMainWindow):
 
     layout2.addWidget(QLabel('Default Scale'), 3, 0)
     layout2.addWidget(default_scale_widget, 3, 1)
-    layout2.addWidget(clear_button, 3, 2)
-    layout2.addWidget(hold, 3, 3)
+    #layout2.addWidget(clear_button, 3, 2)
+    layout2.addWidget(hold, 3, 2)
 
     layout.addLayout(layout2)
 
@@ -1254,6 +1275,9 @@ class OperatorWindow(QMainWindow):
       eye_scaling['Reward Node'] = reward_node_widget.text()
       view.setFocus()
 
+    def on_recenter():
+      asyncio.create_task(self.task.recenter())
+
     eye_opacity_widget.valueChanged.connect(on_opacity_changed)
     fixation_radius_widget.editingFinished.connect(on_fixation_radius)
     saccade_radius_widget.editingFinished.connect(on_saccade_radius)
@@ -1271,6 +1295,8 @@ class OperatorWindow(QMainWindow):
     default_scale_widget.valueChanged.connect(on_default_scale)
     default_scale_widget.editingFinished.connect(view.setFocus)
     reward_node_widget.editingFinished.connect(on_reward_node)
+    recenter_button.clicked.connect(on_recenter)
+    recenter_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
     
     if 'Fixation Radius' not in eye_scaling:
       eye_scaling['Fixation Radius'] = 50
