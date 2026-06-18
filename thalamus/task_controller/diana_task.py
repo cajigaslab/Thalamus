@@ -352,7 +352,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
           if i == current_target_to_highlight:
               color = all_target_colors[i]  #highlighted
           else:
-              color = QColor(50, 50, 50)  #gray
+              color = QColor(10, 10, 10)  #gray
           
           stl_mesh = all_target_stls[i]
           if stl_mesh:
@@ -501,7 +501,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       return task_context.TaskResult(False)
     #go cue aka dimmed center
     await context.log(f'BehavState=step_{step_idx}_go_cue')
-    center_brightness = 50
+    center_brightness = 10
     context.widget.update()
     #wait for peripheral target
     await context.log(f'BehavState=step_{step_idx}_reach')
