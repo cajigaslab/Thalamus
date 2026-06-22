@@ -37,6 +37,7 @@ Config = typing.NamedTuple('Config', [
   ('success_timeout', datetime.timedelta), #time after success
   ('sequence_length', int),                        #how many reaches
   ('is_random_sequence', bool),                    #random vs fixed
+  ('last_target_hold_timeout', datetime.timedelta) #last target hold
 ])
 
 RANDOM_DEFAULT = {'min': 1, 'max':1}
@@ -121,6 +122,7 @@ def create_widget(task_config: config.ObservableCollection) -> QWidget:
     Form.Uniform('Center Hold Interval', 'center_hold_timeout', 1, 1, 's'),    
     Form.Uniform('Reach Timeout', 'reach_timeout', 2, 2, 's'),
     Form.Uniform('Target Hold Interval', 'target_hold_timeout', 0.3, 0.3, 's'),
+    Form.Uniform('Last Target Hold', 'last_target_hold_timeout', 0.3, 0.3, 's'), #last target hold
     Form.Uniform('Blink Interval', 'blink_timeout', 1, 1, 's'),
     Form.Uniform('Cue Delay', 'cue_delay', 0.4, 2.0, 's'), #cue delay for element
     Form.Uniform('Fail Interval', 'fail_timeout', 1, 1, 's'),
@@ -214,6 +216,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     datetime.timedelta(seconds=context.get_value('center_hold_timeout', 1.0)),
     datetime.timedelta(seconds=context.get_value('reach_timeout', 2.0)),
     datetime.timedelta(seconds=context.get_value('target_hold_timeout', 0.3)),
+    datetime.timedelta(seconds=context.get_value('last_target_hold_timeout',0.3)), #last target hold
     datetime.timedelta(seconds=context.get_value('blink_timeout', 0.1)),
     datetime.timedelta(seconds=context.get_value('cue_delay', 0.4)),   
     datetime.timedelta(seconds=context.get_value('fail_timeout', 1.0)),
@@ -301,9 +304,9 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
       nonlocal target_acquired
       nonlocal i_selected_target
       nonlocal touch_pos
-
+      
       touch_pos = cursor #moved up
-    
+      
       #check acquisition of center target - is it within window of target?
       center_acquired = distance(all_target_rects[i_center_target].center(), cursor) < all_target_windows[i_center_target]
 
@@ -520,7 +523,8 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
     #hold at target
     await context.log(f'BehavState=step_{step_idx}_target_hold')
     target_hold_check = lambda: (i_selected_target == target_idx and target_acquired)
-    success = await wait_for_hold(context, target_hold_check, config.target_hold_timeout, config.blink_timeout)
+    hold_duration = config.last_target_hold_timeout if step_idx == len(sequence) - 1 else config.target_hold_timeout
+    success = await wait_for_hold(context, target_hold_check, hold_duration, config.blink_timeout) #last hold
     if not success:
       await fail_trial('target_hold_break')
       return task_context.TaskResult(False)
