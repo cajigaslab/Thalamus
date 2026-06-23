@@ -190,7 +190,7 @@ class BoardsModel(QAbstractItemModel):
           return 'Quality Check'
         return None
 
-      if role != Qt.ItemDataRole.DisplayRole:
+      if role not in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole):
         return None
       if index.column() == 0:
         return board['Rows']
@@ -225,7 +225,7 @@ class BoardsModel(QAbstractItemModel):
           return None
         return markers[mi][MARKER_KEYS[c]]
 
-    if role != Qt.ItemDataRole.DisplayRole:
+    if role not in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole):
       return None
     if index.column() == 0 and index.row() == 1:
       return 'End Effector Transform:'
@@ -370,8 +370,9 @@ class BoardsModel(QAbstractItemModel):
         if index.column() == 1:
           return base | Qt.ItemFlag.ItemIsUserCheckable
         return base
-      # Grid top-level: preserve original editability behavior.
-      if index.row() == 0 or index.column() > 3:
+      # Grid top-level: Rows/Columns/Marker Size/Marker Separation are editable
+      # on every board (the original code accidentally locked the first board).
+      if index.column() > 3:
         return base
       return base | Qt.ItemFlag.ItemIsEditable
 
