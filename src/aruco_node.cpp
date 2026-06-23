@@ -427,7 +427,7 @@ struct ArucoNode::Impl {
     const int cell_w = 480, cell_h = 360;
     cv::Mat canvas(rows * cell_h, cols * cell_w, CV_8UC3, cv::Scalar(0, 0, 0));
     for (int i = 0; i < n; ++i) {
-      const cv::Mat &img = tiles[i]->color;
+      const cv::Mat &img = tiles[size_t(i)]->color;
       double scale =
           std::min(double(cell_w) / img.cols, double(cell_h) / img.rows);
       int w = std::max(1, int(img.cols * scale));
