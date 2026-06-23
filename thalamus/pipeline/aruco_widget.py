@@ -1,7 +1,9 @@
 from ..qt import *
 from ..config import *
+from ..observable_item_models import FlatObservableCollectionModel
 import functools
 #import cv2.aruco
+import bisect
 import pathlib
 import traceback
 import numpy
@@ -504,6 +506,22 @@ class ArucoWidget(QWidget):
     remove_button = QPushButton('Remove')
     save_button = QPushButton('Generate Board')
 
+    # Cameras: each entry is the name of a source node (typically a DistortionNode,
+    # which supplies both the image and that camera's intrinsics).  The same Boards
+    # config is detected on every listed camera.
+    if 'Sources' not in config:
+      config['Sources'] = []
+    sources = config['Sources']
+
+    source_combo = QComboBox()
+    source_combo.setModel(FlatObservableCollectionModel(config.parent, lambda n: n['name']))
+    source_view = QTreeView()
+    source_view.setHeaderHidden(True)
+    source_view.setRootIsDecorated(False)
+    source_view.setModel(FlatObservableCollectionModel(sources, lambda n: n))
+    source_add_button = QPushButton('Add Camera')
+    source_remove_button = QPushButton('Remove Camera')
+
     layout = QGridLayout()
     layout.addWidget(QLabel('Dictionary:'), 0, 0)
     layout.addWidget(dict_combo, 0, 1)
@@ -514,6 +532,23 @@ class ArucoWidget(QWidget):
     layout.addWidget(add_marker_button, 3, 1)
     layout.addWidget(remove_marker_button, 4, 0)
     layout.addWidget(save_button, 4, 1)
+    layout.addWidget(QLabel('Cameras (Sources):'), 5, 0, 1, 2)
+    layout.addWidget(source_combo, 6, 0, 1, 2)
+    layout.addWidget(source_view, 7, 0, 1, 2)
+    layout.addWidget(source_add_button, 8, 0)
+    layout.addWidget(source_remove_button, 8, 1)
+
+    def on_add_source():
+      name = source_combo.currentText()
+      if name and name not in sources:
+        i = bisect.bisect_left(sources, name)
+        sources.insert(i, name)
+    source_add_button.clicked.connect(on_add_source)
+
+    def on_remove_source():
+      for item in list(source_view.selectedIndexes())[::-1]:
+        del sources[item.row()]
+    source_remove_button.clicked.connect(on_remove_source)
 
     def max_marker_id():
       max_id = 0

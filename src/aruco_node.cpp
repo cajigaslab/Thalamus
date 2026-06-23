@@ -22,10 +22,13 @@
 #pragma clang diagnostic pop
 #endif
 
+#include <algorithm>
 #include <cmath>
 #include <iomanip>
+#include <memory>
 #include <set>
 #include <sstream>
+#include <variant>
 
 using namespace thalamus;
 
@@ -40,18 +43,29 @@ struct ArucoNode::Impl {
   NodeGraph *graph;
   ArucoNode *outer;
   std::string pose_name;
-  NodeGraph::NodeConnection get_source_connection;
-  ImageNode *source;
-  DistortionNode *distortion_source;
-  boost::signals2::scoped_connection source_connection;
+
+  // One camera == one source node (typically a DistortionNode, which is both an
+  // ImageNode and the intrinsics provider).  The same Boards config is detected
+  // on every camera.
+  struct SourceBinding {
+    std::string name;
+    ImageNode *image = nullptr;
+    DistortionNode *distortion = nullptr;
+    NodeGraph::NodeConnection get_connection;
+    boost::signals2::scoped_connection ready_connection;
+  };
+  std::map<std::string, std::unique_ptr<SourceBinding>> source_bindings;
+  std::vector<std::string> source_order; // stable camera index for outputs
+  std::string single_source;             // legacy "Source" field
+  ObservableListPtr sources_list;        // "Sources" list
+  boost::signals2::scoped_connection sources_connection;
+
   cv::aruco::PredefinedDictionaryType dict_type = cv::aruco::DICT_6X6_250;
   cv::aruco::Dictionary dict;
   cv::aruco::DetectorParameters detector_parameters;
   std::shared_ptr<cv::aruco::ArucoDetector> detector;
   bool running = false;
   ThreadPool &pool;
-  size_t next_input_frame = 0;
-  size_t next_output_frame = 0;
   struct Frame {
     cv::Mat mat;
     std::chrono::nanoseconds interval;
@@ -61,7 +75,17 @@ struct ArucoNode::Impl {
     // (std::map) so analog channel indexing is deterministic across frames.
     std::map<std::string, double> metrics;
   };
-  std::map<size_t, Frame> output_frames;
+
+  // Latest detection result for each camera, merged into current_frame on every
+  // camera update (last-writer-wins per camera).
+  struct CameraResult {
+    cv::Mat color;
+    std::vector<Segment> segments;
+    std::map<std::string, double> metrics;
+    std::chrono::nanoseconds time{0};
+    std::chrono::nanoseconds interval{0};
+  };
+  std::map<std::string, CameraResult> camera_results;
 
   enum class BoardType { Grid, Layout };
 
@@ -259,29 +283,14 @@ struct ArucoNode::Impl {
           std::bind(&Impl::on_boards_change, this, _1, _2, _3));
       value_list->recap(std::bind(&Impl::on_boards_change, this, _1, _2, _3));
     } else if (key_str == "Source") {
-      std::string source_str = std::get<std::string>(value);
-      auto token = std::string(absl::StripAsciiWhitespace(source_str));
-
-      get_source_connection = graph->get_node_scoped(token, [this, token](
-                                                                auto _source) {
-        auto locked_source = _source.lock();
-        if (!locked_source) {
-          return;
-        }
-
-        if (node_cast<ImageNode *>(locked_source.get()) != nullptr) {
-          this->source = node_cast<ImageNode *>(locked_source.get());
-          source_connection =
-              locked_source->ready.connect(std::bind(&Impl::on_data, this, _1));
-        }
-
-        if (dynamic_cast<DistortionNode *>(locked_source.get()) != nullptr) {
-          this->distortion_source =
-              dynamic_cast<DistortionNode *>(locked_source.get());
-        } else {
-          this->distortion_source = nullptr;
-        }
-      });
+      single_source = std::string(
+          absl::StripAsciiWhitespace(std::get<std::string>(value)));
+      rebuild_sources();
+    } else if (key_str == "Sources") {
+      sources_list = std::get<ObservableListPtr>(value);
+      sources_connection = sources_list->changed.connect(
+          [this](auto, auto, auto) { rebuild_sources(); });
+      rebuild_sources();
     } else if (key_str == "Dictionary") {
       auto value_str = std::get<std::string>(value);
       if (value_str == "DICT_4X4_50") {
@@ -339,6 +348,129 @@ struct ArucoNode::Impl {
     }
   }
 
+  void rebuild_sources() {
+    TRACE_EVENT("thalamus", "ArucoNode::rebuild_sources");
+    std::vector<std::string> desired;
+    std::set<std::string> seen;
+    auto add = [&](const std::string &raw) {
+      auto t = std::string(absl::StripAsciiWhitespace(raw));
+      if (!t.empty() && seen.insert(t).second) {
+        desired.push_back(t);
+      }
+    };
+    add(single_source);
+    if (sources_list) {
+      for (size_t i = 0; i < sources_list->size(); ++i) {
+        auto v = sources_list->at(i).get();
+        if (std::holds_alternative<std::string>(v)) {
+          add(std::get<std::string>(v));
+        }
+      }
+    }
+
+    for (auto it = source_bindings.begin(); it != source_bindings.end();) {
+      if (!seen.count(it->first)) {
+        camera_results.erase(it->first);
+        it = source_bindings.erase(it);
+      } else {
+        ++it;
+      }
+    }
+
+    for (const auto &name : desired) {
+      if (source_bindings.count(name)) {
+        continue;
+      }
+      auto binding = std::make_unique<SourceBinding>();
+      binding->name = name;
+      auto *bp = binding.get();
+      bp->get_connection =
+          graph->get_node_scoped(name, [this, bp, name](auto weak) {
+            auto locked = weak.lock();
+            if (!locked) {
+              bp->image = nullptr;
+              bp->distortion = nullptr;
+              return;
+            }
+            bp->image = node_cast<ImageNode *>(locked.get());
+            bp->distortion = dynamic_cast<DistortionNode *>(locked.get());
+            if (bp->image) {
+              bp->ready_connection = locked->ready.connect(
+                  [this, name](Node *) { this->on_data(name); });
+            }
+          });
+      source_bindings[name] = std::move(binding);
+    }
+
+    source_order = desired;
+  }
+
+  // Tile every camera's latest annotated frame into a single grid image, merge
+  // their segments (segment_id = camera_index*100 + board_index) and metrics
+  // (prefixed with the camera name), then publish as the current frame.
+  void combine_and_emit() {
+    TRACE_EVENT("thalamus", "ArucoNode::combine_and_emit");
+    std::vector<const CameraResult *> tiles;
+    for (const auto &name : source_order) {
+      auto it = camera_results.find(name);
+      if (it != camera_results.end() && !it->second.color.empty()) {
+        tiles.push_back(&it->second);
+      }
+    }
+    if (tiles.empty()) {
+      return;
+    }
+
+    int n = int(tiles.size());
+    int cols = int(std::ceil(std::sqrt(double(n))));
+    int rows = (n + cols - 1) / cols;
+    const int cell_w = 480, cell_h = 360;
+    cv::Mat canvas(rows * cell_h, cols * cell_w, CV_8UC3, cv::Scalar(0, 0, 0));
+    for (int i = 0; i < n; ++i) {
+      const cv::Mat &img = tiles[i]->color;
+      double scale =
+          std::min(double(cell_w) / img.cols, double(cell_h) / img.rows);
+      int w = std::max(1, int(img.cols * scale));
+      int h = std::max(1, int(img.rows * scale));
+      cv::Mat resized;
+      cv::resize(img, resized, cv::Size(w, h));
+      int r = i / cols, c = i % cols;
+      int x = c * cell_w + (cell_w - w) / 2;
+      int y = r * cell_h + (cell_h - h) / 2;
+      resized.copyTo(canvas(cv::Rect(x, y, w, h)));
+    }
+
+    std::vector<Segment> merged_segments;
+    std::map<std::string, double> merged_metrics;
+    std::chrono::nanoseconds latest_time{0}, latest_interval{0};
+    int cam_index = 0;
+    for (const auto &name : source_order) {
+      auto it = camera_results.find(name);
+      if (it == camera_results.end()) {
+        ++cam_index;
+        continue;
+      }
+      auto &res = it->second;
+      for (auto seg : res.segments) {
+        seg.segment_id = uint32_t(cam_index * 100) + seg.segment_id;
+        merged_segments.push_back(seg);
+      }
+      for (const auto &kv : res.metrics) {
+        merged_metrics[name + "_" + kv.first] = kv.second;
+      }
+      latest_time = std::max(latest_time, res.time);
+      latest_interval = res.interval;
+      ++cam_index;
+    }
+
+    current_frame.mat = canvas;
+    current_frame.segments = std::move(merged_segments);
+    current_frame.metrics = std::move(merged_metrics);
+    current_frame.time = latest_time;
+    current_frame.interval = latest_interval;
+    outer->ready(outer);
+  }
+
   Frame current_frame;
   unsigned int frame = 0;
   static unsigned int global_frame;
@@ -357,11 +489,18 @@ struct ArucoNode::Impl {
     }
   }
 
-  void on_data(Node *) {
+  void on_data(const std::string &source_name) {
+    auto binding_it = source_bindings.find(source_name);
+    if (binding_it == source_bindings.end()) {
+      return;
+    }
+    ImageNode *source = binding_it->second->image;
+    DistortionNode *distortion_source = binding_it->second->distortion;
+
     auto id = get_unique_id();
     TRACE_EVENT_BEGIN("thalamus", "ArucoNode::on_data",
                       perfetto::Flow::ProcessScoped(id));
-    if (!source->has_image_data() ||
+    if (!source || !source->has_image_data() ||
         source->format() != ImageNode::Format::Gray) {
       TRACE_EVENT_END("thalamus");
       return;
@@ -384,13 +523,11 @@ struct ArucoNode::Impl {
                           : std::span<const double>();
 
     TRACE_EVENT_END("thalamus");
-    pool.push([frame_id = next_input_frame++, in, id, _boards = this->boards,
+    pool.push([this, source_name, in, id, _boards = this->boards,
                _dict = this->dict, _running = this->running,
                _detector = this->detector, &_io_context = this->io_context,
-               &_output_frames = this->output_frames,
-               &_next_output_frame = this->next_output_frame,
-               &_current_frame = this->current_frame, frame_interval,
-               camera_matrix, _frame = this->frame, time = source->time(),
+               frame_interval, camera_matrix, _frame = this->frame,
+               time = source->time(),
                _distortion_parameters = std::vector<double>(
                    distortion_parameters.begin(), distortion_parameters.end()),
                _outer = outer->shared_from_this()] {
@@ -694,28 +831,19 @@ struct ArucoNode::Impl {
         }
       }
       TRACE_EVENT_END("thalamus");
-      boost::asio::post(_io_context, [frame_id, id, color, &_output_frames,
-                                      &_next_output_frame, &_current_frame,
-                                      _outer, frame_interval,
+      boost::asio::post(_io_context, [this, id, source_name, color, _outer,
+                                      frame_interval,
                                       returned_segments = std::move(_segments),
                                       returned_metrics = std::move(_metrics),
                                       time] {
         TRACE_EVENT("thalamus", "ArucoNode Post Main",
                     perfetto::TerminatingFlow::ProcessScoped(id));
-        _output_frames[frame_id] =
-            Frame{color, frame_interval, std::move(returned_segments), time,
-                  std::move(returned_metrics)};
-        for (auto i = _output_frames.begin(); i != _output_frames.end();) {
-          if (i->first == _next_output_frame) {
-            ++_next_output_frame;
-            _current_frame = i->second;
-            TRACE_EVENT("thalamus", "ArucoNode::ready");
-            _outer->ready(_outer.get());
-            i = _output_frames.erase(i);
-          } else {
-            ++i;
-          }
-        }
+        // _outer keeps the ArucoNode (and therefore this Impl) alive; this post
+        // runs on the io_context thread so touching members is safe.
+        camera_results[source_name] =
+            CameraResult{color, std::move(returned_segments),
+                         std::move(returned_metrics), time, frame_interval};
+        combine_and_emit();
       });
     });
   }
