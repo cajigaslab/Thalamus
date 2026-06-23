@@ -166,7 +166,10 @@ class BoardsModel(QAbstractItemModel):
 
   def on_ids_change(self, board, action, key, value):
     LOGGER.debug('on_ids_change %s %s %s', action, key, value)
-    if action == ObservableCollection.Action.SET:
+    # This observer is attached to the board dict, so it also receives the
+    # board's own field changes (Rows, Marker Size, ...) with string keys.
+    # Only the id-list recap passes integer indices; ignore everything else.
+    if action == ObservableCollection.Action.SET and isinstance(key, int):
       i = self.get_row(board)
       parent = self.index(i, 0, QModelIndex())
       index = self.index(key+2, 1, parent)
@@ -176,6 +179,12 @@ class BoardsModel(QAbstractItemModel):
   def data(self, index: QModelIndex, role: int) -> typing.Any:
     if not index.isValid():
       return None
+
+    # Serve the editor a string so Qt uses a free-text QLineEdit instead of a
+    # QDoubleSpinBox (which defaults to 2 decimals and would clamp e.g. 0.035).
+    if role == Qt.ItemDataRole.EditRole:
+      display = self.data(index, Qt.ItemDataRole.DisplayRole)
+      return None if display is None else str(display)
 
     if index.parent() == QModelIndex():
       board = self.config[index.row()]
