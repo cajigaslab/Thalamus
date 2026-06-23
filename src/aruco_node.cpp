@@ -22,6 +22,11 @@
 #pragma clang diagnostic pop
 #endif
 
+#include <cmath>
+#include <iomanip>
+#include <set>
+#include <sstream>
+
 using namespace thalamus;
 
 struct ArucoNode::Impl {
@@ -31,6 +36,7 @@ struct ArucoNode::Impl {
   boost::signals2::scoped_connection boards_connection;
   std::vector<boost::signals2::scoped_connection> board_connections;
   std::vector<boost::signals2::scoped_connection> id_connections;
+  std::vector<boost::signals2::scoped_connection> marker_connections;
   NodeGraph *graph;
   ArucoNode *outer;
   std::string pose_name;
@@ -51,17 +57,36 @@ struct ArucoNode::Impl {
     std::chrono::nanoseconds interval;
     std::vector<Segment> segments;
     std::chrono::nanoseconds time;
+    // Per-board quality-check metrics, keyed by analog channel name.  Ordered
+    // (std::map) so analog channel indexing is deterministic across frames.
+    std::map<std::string, double> metrics;
   };
   std::map<size_t, Frame> output_frames;
 
+  enum class BoardType { Grid, Layout };
+
+  struct Marker {
+    int id = 0;
+    cv::Vec3d position;
+    cv::Vec3d rotation;
+    double size = 0;
+  };
+
   struct Board {
+    BoardType type = BoardType::Grid;
+    std::string name;
+    bool quality_check = false;
     double translation_x = 0, translation_y = 0, translation_z = 0;
     cv::Vec3d rotation;
-    long long rows;
-    long long columns;
-    double markerSize;
-    double markerSeparation;
+    long long rows = 0;
+    long long columns = 0;
+    double markerSize = 0;
+    double markerSeparation = 0;
     std::vector<int> ids;
+    // Layout boards: each marker placed independently in board space.  Keyed
+    // by the marker's ObservableDict so observers can update in place.
+    std::vector<ObservableDictPtr> marker_order;
+    std::map<ObservableDictPtr, Marker> markers;
   };
 
   std::map<ObservableDictPtr, Board> boards;
@@ -100,13 +125,81 @@ struct ArucoNode::Impl {
     }
   }
 
+  void on_marker_change(ObservableDictPtr board_self, ObservableDictPtr self,
+                        ObservableCollection::Action,
+                        const ObservableCollection::Key &key,
+                        const ObservableCollection::Value &value) {
+    TRACE_EVENT("thalamus", "ArucoNode::on_marker_change");
+    auto key_str = std::get<std::string>(key);
+    auto &marker = boards[board_self].markers[self];
+    if (key_str == "id") {
+      marker.id = int(std::get<long long>(value));
+    } else if (key_str == "x") {
+      marker.position[0] = std::get<double>(value);
+    } else if (key_str == "y") {
+      marker.position[1] = std::get<double>(value);
+    } else if (key_str == "z") {
+      marker.position[2] = std::get<double>(value);
+    } else if (key_str == "rx") {
+      marker.rotation[0] = std::get<double>(value);
+    } else if (key_str == "ry") {
+      marker.rotation[1] = std::get<double>(value);
+    } else if (key_str == "rz") {
+      marker.rotation[2] = std::get<double>(value);
+    } else if (key_str == "size") {
+      marker.size = std::get<double>(value);
+    }
+  }
+
+  void on_markers_change(ObservableDictPtr board_self,
+                         ObservableCollection::Action action,
+                         const ObservableCollection::Key &key,
+                         const ObservableCollection::Value &value) {
+    TRACE_EVENT("thalamus", "ArucoNode::on_markers_change");
+    auto &board = boards[board_self];
+    auto index = size_t(std::get<long long>(key));
+    if (action == ObservableCollection::Action::Set) {
+      auto marker_dict = std::get<ObservableDictPtr>(value);
+      if (index <= board.marker_order.size()) {
+        board.marker_order.insert(
+            board.marker_order.begin() + int64_t(index), marker_dict);
+      } else {
+        board.marker_order.push_back(marker_dict);
+      }
+      marker_connections.push_back(marker_dict->changed.connect(std::bind(
+          &Impl::on_marker_change, this, board_self, marker_dict, _1, _2, _3)));
+      marker_dict->recap(std::bind(&Impl::on_marker_change, this, board_self,
+                                   marker_dict, _1, _2, _3));
+    } else {
+      if (index < board.marker_order.size()) {
+        auto marker_dict = board.marker_order[index];
+        board.markers.erase(marker_dict);
+        board.marker_order.erase(board.marker_order.begin() + int64_t(index));
+      }
+    }
+  }
+
   void on_board_change(ObservableDictPtr self, ObservableCollection::Action,
                        const ObservableCollection::Key &key,
                        const ObservableCollection::Value &value) {
     TRACE_EVENT("thalamus", "ArucoNode::on_board_change");
     auto key_str = std::get<std::string>(key);
     auto &board = boards[self];
-    if (key_str == "Rows") {
+    if (key_str == "Type") {
+      board.type = std::get<std::string>(value) == "layout"
+                       ? BoardType::Layout
+                       : BoardType::Grid;
+    } else if (key_str == "Name") {
+      board.name = std::get<std::string>(value);
+    } else if (key_str == "Quality Check") {
+      board.quality_check = std::get<bool>(value);
+    } else if (key_str == "Markers") {
+      auto value_list = std::get<ObservableListPtr>(value);
+      board_connections.push_back(value_list->changed.connect(
+          std::bind(&Impl::on_markers_change, this, self, _1, _2, _3)));
+      value_list->recap(
+          std::bind(&Impl::on_markers_change, this, self, _1, _2, _3));
+    } else if (key_str == "Rows") {
       board.rows = std::get<long long>(value);
     } else if (key_str == "Columns") {
       board.columns = std::get<long long>(value);
@@ -222,7 +315,7 @@ struct ArucoNode::Impl {
       } else if (value_str == "DICT_7X7_250") {
         dict_type = cv::aruco::DICT_7X7_250;
       } else if (value_str == "DICT_7X7_1000") {
-        dict_type = cv::aruco::DICT_7X7_250;
+        dict_type = cv::aruco::DICT_7X7_1000;
       } else if (value_str == "DICT_ARUCO_ORIGINAL") {
         dict_type = cv::aruco::DICT_ARUCO_ORIGINAL;
       } else if (value_str == "DICT_APRILTAG_16h5") {
@@ -249,6 +342,20 @@ struct ArucoNode::Impl {
   Frame current_frame;
   unsigned int frame = 0;
   static unsigned int global_frame;
+
+  // Flattened view of current_frame.metrics for the AnalogNode interface,
+  // rebuilt from the (ordered) metrics map whenever num_channels() is queried.
+  mutable std::vector<std::string> analog_names;
+  mutable std::vector<double> analog_values;
+
+  void sync_analog() const {
+    analog_names.clear();
+    analog_values.clear();
+    for (auto &pair : current_frame.metrics) {
+      analog_names.push_back(pair.first);
+      analog_values.push_back(pair.second);
+    }
+  }
 
   void on_data(Node *) {
     auto id = get_unique_id();
@@ -292,6 +399,7 @@ struct ArucoNode::Impl {
       cv::Mat color;
       cv::cvtColor(in, color, cv::COLOR_GRAY2RGB);
       std::vector<MotionCaptureNode::Segment> _segments;
+      std::map<std::string, double> _metrics;
 
       if (_running) {
         std::vector<int> ids;
@@ -305,17 +413,58 @@ struct ArucoNode::Impl {
           cv::aruco::drawDetectedMarkers(color, corners, ids);
         }
 
+        // Compute the four 3D corner points of a layout marker in board space,
+        // following OpenCV's corner order (TL, TR, BR, BL) for a marker lying in
+        // its local XY plane, then rotated/translated to its placement.
+        auto layout_marker_corners = [](const Marker &m) {
+          float h = float(m.size) / 2.0f;
+          std::vector<cv::Point3f> local = {
+              {-h, h, 0.0f}, {h, h, 0.0f}, {h, -h, 0.0f}, {-h, -h, 0.0f}};
+          cv::Mat rotmat;
+          cv::Rodrigues(m.rotation, rotmat); // 3x3 CV_64F
+          std::vector<cv::Point3f> out;
+          for (auto &p : local) {
+            double x = double(p.x), y = double(p.y), z = double(p.z);
+            out.emplace_back(
+                float(x * rotmat.at<double>(0, 0) + y * rotmat.at<double>(0, 1) +
+                      z * rotmat.at<double>(0, 2) + m.position[0]),
+                float(x * rotmat.at<double>(1, 0) + y * rotmat.at<double>(1, 1) +
+                      z * rotmat.at<double>(1, 2) + m.position[1]),
+                float(x * rotmat.at<double>(2, 0) + y * rotmat.at<double>(2, 1) +
+                      z * rotmat.at<double>(2, 2) + m.position[2]));
+          }
+          return out;
+        };
+
         if (!camera_matrix.empty() && !ids.empty()) {
           auto board_index = 0;
           for (auto &pair : _boards) {
             auto &board = pair.second;
-            cv::aruco::GridBoard grid_board(
-                cv::Size(int(board.columns), int(board.rows)),
-                float(board.markerSize), float(board.markerSeparation), _dict,
-                board.ids);
+
+            if (board.type == BoardType::Layout && board.marker_order.empty()) {
+              ++board_index;
+              continue;
+            }
+
+            cv::aruco::Board board_obj = [&]() -> cv::aruco::Board {
+              if (board.type == BoardType::Layout) {
+                std::vector<std::vector<cv::Point3f>> obj_points_3d;
+                std::vector<int> board_ids;
+                for (auto &marker_dict : board.marker_order) {
+                  auto &marker = board.markers.at(marker_dict);
+                  obj_points_3d.push_back(layout_marker_corners(marker));
+                  board_ids.push_back(marker.id);
+                }
+                return cv::aruco::Board(obj_points_3d, _dict, board_ids);
+              }
+              return cv::aruco::GridBoard(
+                  cv::Size(int(board.columns), int(board.rows)),
+                  float(board.markerSize), float(board.markerSeparation), _dict,
+                  board.ids);
+            }();
 
             cv::Mat obj_points, img_points;
-            grid_board.matchImagePoints(corners, ids, obj_points, img_points);
+            board_obj.matchImagePoints(corners, ids, obj_points, img_points);
             cv::Vec3d rvec, tvec;
             if (obj_points.total() == 0) {
               continue;
@@ -327,10 +476,20 @@ struct ArucoNode::Impl {
                              _distortion_parameters, rvec, tvec);
               }
 
-              float axis_length =
-                  .5f * float(std::min(board.columns, board.rows)) *
-                      float(board.markerSize + board.markerSeparation) +
-                  float(board.markerSeparation);
+              float axis_length;
+              if (board.type == BoardType::Layout) {
+                double max_size = 0;
+                for (auto &marker_dict : board.marker_order) {
+                  max_size =
+                      std::max(max_size, board.markers.at(marker_dict).size);
+                }
+                axis_length = float(max_size > 0 ? max_size : 0.05);
+              } else {
+                axis_length =
+                    .5f * float(std::min(board.columns, board.rows)) *
+                        float(board.markerSize + board.markerSeparation) +
+                    float(board.markerSeparation);
+              }
 
               {
                 TRACE_EVENT("thalamus", "cv::drawFrameAxes");
@@ -375,6 +534,108 @@ struct ArucoNode::Impl {
                      cv::Scalar(0, 255, 0), 3);
                 line(color, imagePoints[0], imagePoints[3],
                      cv::Scalar(255, 0, 0), 3);
+              }
+
+              if (board.quality_check) {
+                TRACE_EVENT("thalamus", "ArucoNode::quality_check");
+
+                // Detection coverage: how many of this board's markers were
+                // matched (matchImagePoints emits 4 object points per marker).
+                size_t total_markers = board.type == BoardType::Layout
+                                           ? board.marker_order.size()
+                                           : board.ids.size();
+                int detected = int(obj_points.total()) / 4;
+
+                // Reprojection error (RMS pixels) of the rigid board pose.
+                double reproj_rms = 0.0;
+                std::vector<cv::Point2f> reprojected;
+                cv::projectPoints(obj_points, rvec, tvec, camera_matrix,
+                                  _distortion_parameters, reprojected);
+                cv::Mat img_points_2f =
+                    img_points.reshape(2, int(img_points.total()));
+                double sse = 0.0;
+                size_t n = std::min(reprojected.size(),
+                                    size_t(img_points_2f.rows));
+                for (size_t k = 0; k < n; ++k) {
+                  auto ip = img_points_2f.at<cv::Point2f>(int(k));
+                  double dx = double(ip.x) - double(reprojected[k].x);
+                  double dy = double(ip.y) - double(reprojected[k].y);
+                  sse += dx * dx + dy * dy;
+                }
+                if (n > 0) {
+                  reproj_rms = std::sqrt(sse / double(n));
+                }
+
+                // Measured-vs-known geometry (layout boards): estimate each
+                // visible marker's pose independently and compare measured
+                // inter-marker distances to the known config distances.
+                double dist_err_mm = -1.0;
+                if (board.type == BoardType::Layout) {
+                  std::map<int, cv::Vec3d> measured, known;
+                  for (auto &marker_dict : board.marker_order) {
+                    auto &m = board.markers.at(marker_dict);
+                    known[m.id] = m.position;
+                    for (size_t k = 0; k < ids.size(); ++k) {
+                      if (ids[k] != m.id) {
+                        continue;
+                      }
+                      float h = float(m.size) / 2.0f;
+                      std::vector<cv::Point3f> objp = {{-h, h, 0.0f},
+                                                       {h, h, 0.0f},
+                                                       {h, -h, 0.0f},
+                                                       {-h, -h, 0.0f}};
+                      cv::Vec3d mrvec, mtvec;
+                      try {
+                        cv::solvePnP(objp, corners[k], camera_matrix,
+                                     _distortion_parameters, mrvec, mtvec, false,
+                                     cv::SOLVEPNP_IPPE_SQUARE);
+                        measured[m.id] = mtvec;
+                      } catch (cv::Exception &e) {
+                        THALAMUS_LOG(error) << e.what();
+                      }
+                      break;
+                    }
+                  }
+                  double max_err = 0.0;
+                  bool have_pair = false;
+                  std::vector<int> seen;
+                  for (auto &kv : measured) {
+                    seen.push_back(kv.first);
+                  }
+                  for (size_t a = 0; a < seen.size(); ++a) {
+                    for (size_t b = a + 1; b < seen.size(); ++b) {
+                      double md = cv::norm(measured[seen[a]] - measured[seen[b]]);
+                      double kd = cv::norm(known[seen[a]] - known[seen[b]]);
+                      max_err = std::max(max_err, std::abs(md - kd));
+                      have_pair = true;
+                    }
+                  }
+                  if (have_pair) {
+                    dist_err_mm = max_err * 1000.0;
+                  }
+                }
+
+                std::string label =
+                    board.name.empty()
+                        ? "board" + std::to_string(board_index)
+                        : board.name;
+                std::ostringstream oss;
+                oss << label << ": " << detected << "/" << total_markers
+                    << " reproj=" << std::fixed << std::setprecision(1)
+                    << reproj_rms << "px";
+                if (dist_err_mm >= 0) {
+                  oss << " dErr=" << std::setprecision(1) << dist_err_mm << "mm";
+                }
+                cv::putText(color, oss.str(),
+                            imagePoints[0] + cv::Point2f(8.0f, -8.0f),
+                            cv::FONT_HERSHEY_SIMPLEX, 0.5,
+                            cv::Scalar(0, 255, 255), 1);
+
+                _metrics[label + "_reproj_px"] = reproj_rms;
+                _metrics[label + "_n_markers"] = double(detected);
+                if (dist_err_mm >= 0) {
+                  _metrics[label + "_dist_err_mm"] = dist_err_mm;
+                }
               }
 
               _segments.emplace_back();
@@ -437,11 +698,13 @@ struct ArucoNode::Impl {
                                       &_next_output_frame, &_current_frame,
                                       _outer, frame_interval,
                                       returned_segments = std::move(_segments),
+                                      returned_metrics = std::move(_metrics),
                                       time] {
         TRACE_EVENT("thalamus", "ArucoNode Post Main",
                     perfetto::TerminatingFlow::ProcessScoped(id));
         _output_frames[frame_id] =
-            Frame{color, frame_interval, std::move(returned_segments), time};
+            Frame{color, frame_interval, std::move(returned_segments), time,
+                  std::move(returned_metrics)};
         for (auto i = _output_frames.begin(); i != _output_frames.end();) {
           if (i->first == _next_output_frame) {
             ++_next_output_frame;
@@ -480,15 +743,27 @@ std::chrono::nanoseconds ArucoNode::time() const {
 }
 
 std::span<const double> ArucoNode::data(int channel) const {
-  return std::span<const double>();
-  THALAMUS_ASSERT(false, "Unexpected channel: %d", channel);
+  if (channel < 0 || size_t(channel) >= impl->analog_values.size()) {
+    return std::span<const double>();
+  }
+  return std::span<const double>(&impl->analog_values[size_t(channel)], 1);
 }
 
-int ArucoNode::num_channels() const { return 0; }
+int ArucoNode::num_channels() const {
+  impl->sync_analog();
+  return int(impl->analog_names.size());
+}
 
-std::string_view ArucoNode::name(int) const { return ""; }
+std::string_view ArucoNode::name(int channel) const {
+  if (channel < 0 || size_t(channel) >= impl->analog_names.size()) {
+    return "";
+  }
+  return impl->analog_names[size_t(channel)];
+}
 
-std::chrono::nanoseconds ArucoNode::sample_interval(int) const { return 0ns; }
+std::chrono::nanoseconds ArucoNode::sample_interval(int) const {
+  return impl->current_frame.interval;
+}
 
 void ArucoNode::inject(const thalamus::vector<std::span<double const>> &spans,
                        const thalamus::vector<std::chrono::nanoseconds> &,
@@ -497,7 +772,9 @@ void ArucoNode::inject(const thalamus::vector<std::span<double const>> &spans,
   THALAMUS_ASSERT(spans.front().size() == 1, "Error");
 }
 
-bool ArucoNode::has_analog_data() const { return false; }
+bool ArucoNode::has_analog_data() const {
+  return !impl->current_frame.metrics.empty();
+}
 
 bool ArucoNode::has_motion_data() const { return true; }
 
@@ -522,7 +799,8 @@ std::chrono::nanoseconds ArucoNode::frame_interval() const {
 void ArucoNode::inject(const thalamus_grpc::Image &) {}
 bool ArucoNode::has_image_data() const { return true; }
 size_t ArucoNode::modalities() const {
-  return THALAMUS_MODALITY_IMAGE | THALAMUS_MODALITY_MOCAP;
+  return THALAMUS_MODALITY_IMAGE | THALAMUS_MODALITY_MOCAP |
+         THALAMUS_MODALITY_ANALOG;
 }
 
 unsigned int ArucoNode::Impl::global_frame = 0;

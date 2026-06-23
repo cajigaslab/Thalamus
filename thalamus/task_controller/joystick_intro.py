@@ -11,6 +11,9 @@ Two control modes:
 
 Testing:
  > python -m thalamus.task_controller --pypipeline -c joy_home_test.json
+
+ for mac: ❯ .venv/bin/python -m pip install --force-reinstall PyQt6 PyQt6-Qt6 PyQt6-sip
+ 
 """
 
 import asyncio

@@ -9,13 +9,30 @@ import logging
 
 LOGGER = logging.getLogger(__name__)
 
+# Default calibration-wand geometry (T-shaped, 3 markers, 4x4 30mm), measured
+# from the wand STL.  Origin at the T-junction, units meters.
+WAND_MARKERS = [
+  {'id': 1, 'x': -0.040, 'y':  0.000000, 'z': 0.0, 'rx': 0.0, 'ry': 0.0, 'rz': 0.0, 'size': 0.030},
+  {'id': 2, 'x':  0.040, 'y':  0.000000, 'z': 0.0, 'rx': 0.0, 'ry': 0.0, 'rz': 0.0, 'size': 0.030},
+  {'id': 3, 'x':  0.000, 'y': -0.091652, 'z': 0.0, 'rx': 0.0, 'ry': 0.0, 'rz': 0.0, 'size': 0.030},
+]
+
+MARKER_KEYS = ['id', 'x', 'y', 'z', 'rx', 'ry', 'rz', 'size']
+TRANSFORM_KEYS = [None, 'translation_x', 'translation_y', 'translation_z',
+                  'rotation_x', 'rotation_y', 'rotation_z', None]
+
+
 class BoardsModel(QAbstractItemModel):
   def __init__(self, config: ObservableList):
     super().__init__()
+    self.building = False
     self.config = config
     self.config.add_observer(self.on_boards_change, functools.partial(isdeleted, self))
     for i, v in enumerate(self.config):
       self.on_boards_change(ObservableCollection.Action.SET, i, v)
+
+  def is_layout(self, board):
+    return 'Type' in board and board['Type'] == 'layout'
 
   def get_row(self, board):
     for i, v in enumerate(self.config):
@@ -28,8 +45,13 @@ class BoardsModel(QAbstractItemModel):
       self.beginInsertRows(QModelIndex(), key, key)
       self.endInsertRows()
       board.add_observer(lambda *args: self.on_board_change(board, *args), functools.partial(isdeleted, self))
+      # Recap the board's fields to wire observers.  Children rows are reported
+      # by rowCount() once the board row is inserted, so suppress structural
+      # marker inserts during this initial pass.
+      self.building = True
       for k, v in board.items():
         self.on_board_change(board, ObservableCollection.Action.SET, k, v)
+      self.building = False
     else:
       self.beginRemoveRows(QModelIndex(), key, key)
       self.endRemoveRows()
@@ -54,10 +76,51 @@ class BoardsModel(QAbstractItemModel):
       self.endInsertRows()
     LOGGER.debug('filled')
 
+  def on_marker_change(self, board, marker, action, key, value):
+    markers = board['Markers']
+    mi = None
+    for i, m in enumerate(markers):
+      if m is marker:
+        mi = i
+        break
+    if mi is None or key not in MARKER_KEYS:
+      return
+    parent = self.index(self.get_row(board), 0, QModelIndex())
+    index = self.index(mi+3, MARKER_KEYS.index(key), parent)
+    self.dataChanged.emit(index, index)
+
+  def on_markers_change(self, board, action, key, value):
+    parent = self.index(self.get_row(board), 0, QModelIndex())
+    if action == ObservableCollection.Action.SET:
+      if not self.building:
+        self.beginInsertRows(parent, key+3, key+3)
+      value.add_observer(lambda *args: self.on_marker_change(board, value, *args),
+                         functools.partial(isdeleted, self))
+      if not self.building:
+        self.endInsertRows()
+    else:
+      self.beginRemoveRows(parent, key+3, key+3)
+      self.endRemoveRows()
+
   def on_board_change(self, board, action, key, value):
     i = self.get_row(board)
     LOGGER.debug('on_board_change %s %s %s %s', i, action, key, value)
-    if key == 'Rows':
+    if key == 'Type':
+      index = self.index(i, 0, QModelIndex())
+      self.dataChanged.emit(index, index)
+    elif key == 'Name':
+      index = self.index(i, 0, QModelIndex())
+      self.dataChanged.emit(index, index)
+    elif key == 'Quality Check':
+      index = self.index(i, 1, QModelIndex())
+      self.dataChanged.emit(index, index)
+    elif key == 'Markers':
+      # Observe the Markers *list* itself (regular observers only fire when the
+      # change originates on the observed collection - see config.__notify).
+      value.add_observer(lambda *args: self.on_markers_change(board, *args), functools.partial(isdeleted, self))
+      for k, v in enumerate(value):
+        self.on_markers_change(board, ObservableCollection.Action.SET, k, v)
+    elif key == 'Rows':
       index = self.index(i, 0, QModelIndex())
       self.dataChanged.emit(index, index)
       self.fill_ids(board)
@@ -111,15 +174,24 @@ class BoardsModel(QAbstractItemModel):
       self.dataChanged.emit(index, index)
 
   def data(self, index: QModelIndex, role: int) -> typing.Any:
-    #print('data', index.row(), index.column(), role)
     if not index.isValid():
-      return None
-
-    if role != Qt.ItemDataRole.DisplayRole:
       return None
 
     if index.parent() == QModelIndex():
       board = self.config[index.row()]
+      if self.is_layout(board):
+        if role == Qt.ItemDataRole.CheckStateRole and index.column() == 1:
+          return Qt.CheckState.Checked if board['Quality Check'] else Qt.CheckState.Unchecked
+        if role not in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole):
+          return None
+        if index.column() == 0:
+          return board['Name']
+        elif index.column() == 1:
+          return 'Quality Check'
+        return None
+
+      if role != Qt.ItemDataRole.DisplayRole:
+        return None
       if index.column() == 0:
         return board['Rows']
       elif index.column() == 1:
@@ -128,49 +200,82 @@ class BoardsModel(QAbstractItemModel):
         return board['Marker Size']
       elif index.column() == 3:
         return board['Marker Separation']
-    else:
-      board_row = index.parent().row()
-      board = self.config[board_row]
-      if index.column() == 0 and index.row() == 1:
-        return 'End Effector Transform:'
-      elif index.column() == 1 and index.row() == 0:
-        return 'Tranlsation X:'
-      elif index.column() == 2 and index.row() == 0:
-        return 'Tranlsation Y:'
-      elif index.column() == 3 and index.row() == 0:
-        return 'Tranlsation Z:'
-      elif index.column() == 4 and index.row() == 0:
-        return 'Rotation X:'
-      elif index.column() == 5 and index.row() == 0:
-        return 'Rotation Y:'
-      elif index.column() == 6 and index.row() == 0:
-        return 'Rotation Z:'
-      elif index.column() == 1 and index.row() == 1:
-        return board['translation_x']
-      elif index.column() == 2 and index.row() == 1:
-        return board['translation_y']
-      elif index.column() == 3 and index.row() == 1:
-        return board['translation_z']
-      elif index.column() == 4 and index.row() == 1:
-        return board['rotation_x']
-      elif index.column() == 5 and index.row() == 1:
-        return board['rotation_y']
-      elif index.column() == 6 and index.row() == 1:
-        return board['rotation_z']
-      elif index.column() == 0 and index.row() == 2:
-        return 'IDs:'
-      elif index.column() == 1 and index.row() >= 2:
-        ids = board['ids']
-        LOGGER.debug('data %s %s', ids, index.row())
-        return ids[index.row()-2]
+      return None
+
+    board = self.config[index.parent().row()]
+    if self.is_layout(board):
+      if role not in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole):
+        return None
+      r, c = index.row(), index.column()
+      if r == 0:
+        labels = ['', 'Tranlsation X:', 'Tranlsation Y:', 'Tranlsation Z:',
+                  'Rotation X:', 'Rotation Y:', 'Rotation Z:', '']
+        return labels[c] if c < len(labels) else None
+      elif r == 1:
+        if c == 0:
+          return 'End Effector Transform:'
+        key = TRANSFORM_KEYS[c] if c < len(TRANSFORM_KEYS) else None
+        return board[key] if key else None
+      elif r == 2:
+        return MARKER_KEYS[c] if c < len(MARKER_KEYS) else None
+      else:
+        markers = board['Markers']
+        mi = r - 3
+        if mi >= len(markers) or c >= len(MARKER_KEYS):
+          return None
+        return markers[mi][MARKER_KEYS[c]]
+
+    if role != Qt.ItemDataRole.DisplayRole:
+      return None
+    if index.column() == 0 and index.row() == 1:
+      return 'End Effector Transform:'
+    elif index.column() == 1 and index.row() == 0:
+      return 'Tranlsation X:'
+    elif index.column() == 2 and index.row() == 0:
+      return 'Tranlsation Y:'
+    elif index.column() == 3 and index.row() == 0:
+      return 'Tranlsation Z:'
+    elif index.column() == 4 and index.row() == 0:
+      return 'Rotation X:'
+    elif index.column() == 5 and index.row() == 0:
+      return 'Rotation Y:'
+    elif index.column() == 6 and index.row() == 0:
+      return 'Rotation Z:'
+    elif index.column() == 1 and index.row() == 1:
+      return board['translation_x']
+    elif index.column() == 2 and index.row() == 1:
+      return board['translation_y']
+    elif index.column() == 3 and index.row() == 1:
+      return board['translation_z']
+    elif index.column() == 4 and index.row() == 1:
+      return board['rotation_x']
+    elif index.column() == 5 and index.row() == 1:
+      return board['rotation_y']
+    elif index.column() == 6 and index.row() == 1:
+      return board['rotation_z']
+    elif index.column() == 0 and index.row() == 2:
+      return 'IDs:'
+    elif index.column() == 1 and index.row() >= 2:
+      ids = board['ids']
+      LOGGER.debug('data %s %s', ids, index.row())
+      return ids[index.row()-2]
 
   def setData(self, index: QModelIndex, value: typing.Any, role: int = Qt.ItemDataRole.EditRole) -> bool:
-    #print('setData', index, value, role)
-    if role != Qt.ItemDataRole.EditRole:
-      return super().setData(index, value, role)
-
     if index.parent() == QModelIndex():
       board = self.config[index.row()]
+      if self.is_layout(board):
+        if role == Qt.ItemDataRole.CheckStateRole and index.column() == 1:
+          board['Quality Check'] = int(value) == int(Qt.CheckState.Checked)
+          return True
+        if role != Qt.ItemDataRole.EditRole:
+          return super().setData(index, value, role)
+        if index.column() == 0:
+          board['Name'] = str(value)
+          return True
+        return False
+
+      if role != Qt.ItemDataRole.EditRole:
+        return super().setData(index, value, role)
       if index.column() == 0:
         try:
           board['Rows'] = int(value)
@@ -194,38 +299,94 @@ class BoardsModel(QAbstractItemModel):
       else:
         return False
       return True
-    else:
-      board_row = index.parent().row()
-      board = self.config[board_row]
-      if index.row() == 1:
-        if index.column() == 0:
+
+    board = self.config[index.parent().row()]
+    if self.is_layout(board):
+      if role != Qt.ItemDataRole.EditRole:
+        return super().setData(index, value, role)
+      r, c = index.row(), index.column()
+      if r == 1:
+        key = TRANSFORM_KEYS[c] if c < len(TRANSFORM_KEYS) else None
+        if not key:
           return False
         try:
-          if index.column() == 1:
-            board['translation_x'] = float(value)
-          elif index.column() == 2:
-            board['translation_y'] = float(value)
-          elif index.column() == 3:
-            board['translation_z'] = float(value)
-          elif index.column() == 4:
-            board['rotation_x'] = float(value)
-          elif index.column() == 5:
-            board['rotation_y'] = float(value)
-          elif index.column() == 6:
-            board['rotation_z'] = float(value)
+          board[key] = float(value)
         except ValueError:
           return False
-      elif index.column() == 1 and index.row() >= 2:
+        return True
+      elif r >= 3:
+        markers = board['Markers']
+        mi = r - 3
+        if mi >= len(markers) or c >= len(MARKER_KEYS):
+          return False
+        marker = markers[mi]
         try:
-          board['ids'][index.row()-2] = int(value)
+          if c == 0:
+            marker['id'] = int(value)
+          else:
+            marker[MARKER_KEYS[c]] = float(value)
         except ValueError:
           return False
-      return True
+        return True
+      return False
+
+    if role != Qt.ItemDataRole.EditRole:
+      return super().setData(index, value, role)
+    if index.row() == 1:
+      if index.column() == 0:
+        return False
+      try:
+        if index.column() == 1:
+          board['translation_x'] = float(value)
+        elif index.column() == 2:
+          board['translation_y'] = float(value)
+        elif index.column() == 3:
+          board['translation_z'] = float(value)
+        elif index.column() == 4:
+          board['rotation_x'] = float(value)
+        elif index.column() == 5:
+          board['rotation_y'] = float(value)
+        elif index.column() == 6:
+          board['rotation_z'] = float(value)
+      except ValueError:
+        return False
+    elif index.column() == 1 and index.row() >= 2:
+      try:
+        board['ids'][index.row()-2] = int(value)
+      except ValueError:
+        return False
+    return True
 
   def flags(self, index: QModelIndex) -> Qt.ItemFlag:
-    if index.parent().isValid() and index.column() == 0 or index.row() == 0:
+    if not index.isValid():
       return super().flags(index)
-    return super().flags(index) | Qt.ItemFlag.ItemIsEditable
+
+    base = super().flags(index)
+    if index.parent() == QModelIndex():
+      board = self.config[index.row()]
+      if self.is_layout(board):
+        if index.column() == 0:
+          return base | Qt.ItemFlag.ItemIsEditable
+        if index.column() == 1:
+          return base | Qt.ItemFlag.ItemIsUserCheckable
+        return base
+      # Grid top-level: preserve original editability behavior.
+      if index.row() == 0 or index.column() > 3:
+        return base
+      return base | Qt.ItemFlag.ItemIsEditable
+
+    board = self.config[index.parent().row()]
+    if self.is_layout(board):
+      r, c = index.row(), index.column()
+      if r == 1 and 1 <= c <= 6:
+        return base | Qt.ItemFlag.ItemIsEditable
+      if r >= 3 and 0 <= c < len(MARKER_KEYS):
+        return base | Qt.ItemFlag.ItemIsEditable
+      return base
+
+    if index.column() == 0 or index.row() == 0:
+      return base
+    return base | Qt.ItemFlag.ItemIsEditable
 
   def headerData(self, section: int, orientation: Qt.Orientation, role: int):
     if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole:
@@ -245,12 +406,14 @@ class BoardsModel(QAbstractItemModel):
       return result
     else:
       board = self.config[parent.row()]
-      ids = board['ids']
-      result = self.createIndex(row, column, board) if row < len(ids)+2 else QModelIndex()
+      if self.is_layout(board):
+        child_count = len(board['Markers']) + 3
+      else:
+        child_count = len(board['ids']) + 2
+      result = self.createIndex(row, column, board) if row < child_count else QModelIndex()
       return result
-  
+
   def parent(self, index: QModelIndex) -> QModelIndex:
-    #print('parent', index)
     board = index.internalPointer()
     if board is None:
       return QModelIndex()
@@ -264,14 +427,15 @@ class BoardsModel(QAbstractItemModel):
       board = parent.internalPointer()
       if board is None:
         board = self.config[parent.row()]
+        if self.is_layout(board):
+          return len(board['Markers']) + 3
         ids = board['ids']
         LOGGER.debug('rowCount %s %s', ids, len(ids) + 2)
         return len(ids) + 2
       return 0
 
   def columnCount(self, _: QModelIndex) -> int:
-    #print('columnCount', _)
-    return 7
+    return 8
 
 class ArucoWidget(QWidget):
   def __init__(self, config, stub):
@@ -286,6 +450,13 @@ class ArucoWidget(QWidget):
       for k in ('translation_x', 'translation_y', 'translation_z', 'rotation_x', 'rotation_y', 'rotation_z'):
         if k not in board:
           board[k] = 0.0
+      if 'Type' in board and board['Type'] == 'layout':
+        if 'Name' not in board:
+          board['Name'] = ''
+        if 'Quality Check' not in board:
+          board['Quality Check'] = False
+        if 'Markers' not in board:
+          board['Markers'] = []
 
     qlist = QTreeView()
     model = BoardsModel(boards)
@@ -317,6 +488,9 @@ class ArucoWidget(QWidget):
       "DICT_ARUCO_MIP_36h12"
     ])
     add_button = QPushButton('Add')
+    add_layout_button = QPushButton('Add Layout Board')
+    add_marker_button = QPushButton('Add Marker')
+    remove_marker_button = QPushButton('Remove Marker')
     remove_button = QPushButton('Remove')
     save_button = QPushButton('Generate Board')
 
@@ -326,13 +500,23 @@ class ArucoWidget(QWidget):
     layout.addWidget(qlist, 1, 0, 1, 2)
     layout.addWidget(add_button, 2, 0)
     layout.addWidget(remove_button, 2, 1)
-    layout.addWidget(save_button, 3, 0, 1, 2)
+    layout.addWidget(add_layout_button, 3, 0)
+    layout.addWidget(add_marker_button, 3, 1)
+    layout.addWidget(remove_marker_button, 4, 0)
+    layout.addWidget(save_button, 4, 1)
+
+    def max_marker_id():
+      max_id = 0
+      for board in boards:
+        if 'ids' in board:
+          max_id = max([max_id] + list(board['ids']))
+        if 'Markers' in board:
+          for marker in board['Markers']:
+            max_id = max(max_id, marker['id'])
+      return max_id
 
     def on_add():
-      max_id = 0
-      LOGGER.debug('%s', boards)
-      for board in boards:
-        max_id = max(board['ids'] + [max_id])
+      max_id = max_marker_id()
       board = {
         'Rows': 3,
         'Columns': 4,
@@ -348,6 +532,54 @@ class ArucoWidget(QWidget):
       }
       boards.append(board)
     add_button.clicked.connect(on_add)
+
+    def on_add_layout():
+      board = {
+        'Type': 'layout',
+        'Name': 'wand',
+        'Quality Check': True,
+        'Markers': [dict(m) for m in WAND_MARKERS],
+        'translation_x': 0.0,
+        'translation_y': 0.0,
+        'translation_z': 0.0,
+        'rotation_x': 0.0,
+        'rotation_y': 0.0,
+        'rotation_z': 0.0
+      }
+      boards.append(board)
+    add_layout_button.clicked.connect(on_add_layout)
+
+    def selected_layout_board():
+      for item in qlist.selectedIndexes():
+        idx = item
+        while idx.parent().isValid():
+          idx = idx.parent()
+        board = boards[idx.row()]
+        if 'Type' in board and board['Type'] == 'layout':
+          return board
+      return None
+
+    def on_add_marker():
+      board = selected_layout_board()
+      if board is None:
+        return
+      board['Markers'].append({
+        'id': max_marker_id()+1, 'x': 0.0, 'y': 0.0, 'z': 0.0,
+        'rx': 0.0, 'ry': 0.0, 'rz': 0.0, 'size': 0.030
+      })
+    add_marker_button.clicked.connect(on_add_marker)
+
+    def on_remove_marker():
+      for item in qlist.selectedIndexes():
+        if not item.parent().isValid():
+          continue
+        board = boards[item.parent().row()]
+        if 'Type' in board and board['Type'] == 'layout' and item.row() >= 3:
+          mi = item.row() - 3
+          if 0 <= mi < len(board['Markers']):
+            del board['Markers'][mi]
+            return
+    remove_marker_button.clicked.connect(on_remove_marker)
 
     dict_combo.currentTextChanged.connect(lambda text: config.update({'Dictionary': text}))
     self.dict_combo = dict_combo
@@ -376,6 +608,8 @@ class ArucoWidget(QWidget):
 
       for row in sorted(rows, reverse=True):
         board = boards[row]
+        if 'Type' in board and board['Type'] == 'layout':
+          continue
         file_name = QFileDialog.getSaveFileName(self, "Save file", str(pathlib.Path.cwd() / f'board{row}.png'), "*.png *.jpg")
         if file_name:
           rows, columns = board['Rows'], board['Columns']
