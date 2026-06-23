@@ -421,6 +421,7 @@ class Listeners():
     self.touch_listener: typing.Callable[[QPoint], None] = lambda e: None
     self.gaze_listener: typing.Callable[[QPoint], None] = lambda e: None
     self.renderer: typing.Callable[[CanvasPainterProtocol], None] = lambda w: None
+    self.key_press_handler: typing.Callable[[CanvasPainterProtocol], None] = lambda w: None
     self.key_release_handler: typing.Callable[[CanvasPainterProtocol], None] = lambda w: None
     self.paint_subscribers: typing.List[typing.Callable[[], None]] = []
 
@@ -443,7 +444,7 @@ class Handles:
 
   def __repr__(self) -> str:
     return str(self)
-
+import time
 class Canvas(QOpenGLWidget):
   """
   The QWidget the task will render on and that will generate mouse events on touch input
@@ -455,6 +456,10 @@ class Canvas(QOpenGLWidget):
                port: typing.Optional[int] = None,
                mock_sleep: typing.Optional[typing.Callable[[float], 'asyncio.Future[None]']] = None) -> None:
     super().__init__()
+    self.setUpdateBehavior(QOpenGLWidget.UpdateBehavior.NoPartialUpdate)
+    # self.draw_duration = 0.0
+    # self.frame_count = 0.0
+    # self.last_print = time.perf_counter()
     
     # set up connection to joystick here() - option
 
@@ -540,6 +545,17 @@ class Canvas(QOpenGLWidget):
     self.listeners.key_release_handler = value
 
   @property
+  def key_press_handler(self) -> typing.Callable[[CanvasPainterProtocol], None]:
+    '''
+    Get key_press_handler callback
+    '''
+    return self.listeners.key_press_handler
+
+  @key_press_handler.setter
+  def key_press_handler(self, value: typing.Callable[[CanvasPainterProtocol], None]) -> None:
+    self.listeners.key_press_handler = value
+
+  @property
   def touch_listener(self) -> typing.Callable[[QPoint], None]:
     '''
     Get touch callback
@@ -614,6 +630,8 @@ class Canvas(QOpenGLWidget):
     '''
     assert self.opengl_config, 'opengl_config is None'
 
+    # start = time.perf_counter()
+
     locations = GlslLocations(0, 1, self.opengl_config.color_loc, self.opengl_config.mv_matrix_loc,
                               self.opengl_config.proj_matrix_loc, self.opengl_config.normal_matrix_loc)
     geometry = qt_screen_geometry()
@@ -624,16 +642,32 @@ class Canvas(QOpenGLWidget):
       painter.fillRect(QRect(0, 0, 4000, 4000), QColor(0, 0, 0))
       self.listeners.renderer(painter)
 
-      with painter.masked(RenderOutput.OPERATOR):
-        painter.fillPath(self.input_config.touch_path, QColor(255, 0, 0))
+      operator_config = self.config['operator_view'] if 'operator_view' in self.config else {}
+      show_touch = operator_config.get('show_touch', True)
+      show_gaze = operator_config.get('show_gaze', True)
 
-        painter.setTransform(QTransform.fromTranslate(self.width()/2, self.height()/2))
-        for path in self.input_config.gaze_paths:
-          painter.fillPath(path, QColor(0, 0, 255))
+      with painter.masked(RenderOutput.OPERATOR):
+        if show_touch:
+          painter.fillPath(self.input_config.touch_path, QColor(255, 0, 0))
+
+        if show_gaze:
+          painter.setTransform(QTransform.fromTranslate(self.width()/2, self.height()/2))
+          for path in self.input_config.gaze_paths:
+            painter.fillPath(path, QColor(0, 0, 255))
 
     if self.current_output_mask != RenderOutput.OPERATOR:
       for subscriber in self.listeners.paint_subscribers:
         subscriber()
+
+    # end = time.perf_counter()
+    # self.frame_count += 1
+    # self.draw_duration += end - start
+
+    # if start - self.last_print > 1:
+    #   print('draw_duration', self.draw_duration/self.frame_count, self.frame_count)
+    #   self.last_print = start
+    #   self.draw_duration = 0.0
+    #   self.frame_count = 0.0
 
   async def __start_server(self, port: int) -> None:
     """
@@ -896,7 +930,17 @@ class Canvas(QOpenGLWidget):
     '''
     Progresses touch calibration on key presses
     '''
+    if e.isAutoRepeat():
+      return
     self.listeners.key_release_handler(e)
+
+  def keyPressEvent(self, e: QKeyEvent) -> None: # pylint: disable=invalid-name
+    '''
+    Progresses touch calibration on key presses
+    '''
+    # if e.isAutoRepeat():
+    #   return
+    self.listeners.key_press_handler(e)
 
   def clear_accumulation(self) -> None:
     '''

@@ -357,6 +357,7 @@ FACTORIES = {
     UserData(UserDataType.CHECK_BOX, 'Computing', False, []),
     UserData(UserDataType.DEFAULT, 'Source', '', []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Framerate', 10.0, []),
   ]),
   'THREAD_POOL': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
@@ -365,6 +366,7 @@ FACTORIES = {
   'GENICAM': Factory(lambda c, s: GenicamWidget(c, s), [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
+    UserData(UserDataType.COMBO_BOX, 'View Rotation', '0', ['0', '90', '180', '270']),
   ]),
   'CHANNEL_PICKER': Factory(ChannelPickerWidget, []),
   'SYNC': Factory(SyncWidget, []),

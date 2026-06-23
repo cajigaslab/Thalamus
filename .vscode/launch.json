@@ -11,15 +11,14 @@
             "request": "launch",
             "module": "thalamus.pipeline",
             //"args": ["-c", "working_v1_250123.json"//, "--no-orchestration"
-        ]
-        }
+        },
     
         {
             "name": "Task Controller",
             "type": "debugpy",
             "request": "launch",
             "module": "thalamus.task_controller",
-            "args": ["-c", "working_v1_250123.json"//, "--no-orchestration"
+            "args": ["-c", "joystick.json"//, "--no-orchestration"
         ]
         }
     ]

@@ -126,8 +126,8 @@ async def async_main() -> None:
   bmbi_native_proc = None
   command = bmbi_native_filename, 'thalamus', '--port', str(arguments.port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else [])
   LOGGER.debug('COMMAND %s', ' '.join(command))
-  bmbi_native_proc = await asyncio.create_subprocess_exec(*command)
-  create_task_with_exc_handling(proc_watcher('native.exe', bmbi_native_proc))
+  #bmbi_native_proc = await asyncio.create_subprocess_exec(*command)
+  #create_task_with_exc_handling(proc_watcher('native.exe', bmbi_native_proc))
 
   dotnet_proc = None
   #if False:

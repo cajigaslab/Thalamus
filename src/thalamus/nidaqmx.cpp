@@ -64,7 +64,7 @@ DAQmxAPI* DAQmxAPI::get_singleton() {
 #ifdef _WIN32
       auto library_handle = LoadLibrary("nicaiu");
 #else
-      std::string nidaqmx_path = "/usr/lib/x86_64-linux-gnu/libnidaqmx.so.25.5.0";
+      std::string nidaqmx_path = "/usr/lib/x86_64-linux-gnu/libnidaqmx.so.26.0.0";
       auto library_handle = dlopen(nidaqmx_path.c_str(), RTLD_NOW);
 #endif
   if (!library_handle) {

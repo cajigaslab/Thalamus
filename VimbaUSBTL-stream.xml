@@ -11,7 +11,7 @@
     MinorVersion="0"
     SubMinorVersion="0"
     ProductGuid="580cb2eb-601b-4fc0-885a-f3a0b240604b"
-    VersionGuid="ef878a83-5ef7-434d-9f2d-aa29eb28db03"
+    VersionGuid="810a5d69-eb5a-4103-8fd7-7cb91f383515"
     xmlns="http://www.genicam.org/GenApi/Version_1_1"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:schemaLocation="http://www.genicam.org/GenApi/Version_1_1 http://www.genicam.org/GenApi/GenApiSchema_Version_1_1.xsd">

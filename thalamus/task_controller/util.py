@@ -92,6 +92,18 @@ class CanvasProtocol(typing_extensions.Protocol):
     '''
 
   @property
+  def key_press_listener(self) -> typing.Callable[[QPoint], None]:
+    '''
+    Get touch callback
+    '''
+
+  @property
+  def key_release_listener(self) -> typing.Callable[[QPoint], None]:
+    '''
+    Get touch callback
+    '''
+
+  @property
   def touch_listener(self) -> typing.Callable[[QPoint], None]:
     '''
     Get touch callback

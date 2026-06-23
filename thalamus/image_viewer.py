@@ -185,6 +185,17 @@ QTKEY_TO_CODE = {
 
 LOGGER = logging.getLogger(__name__)
 
+VIEW_ROTATIONS = {
+  '0': 0,
+  '90': 90,
+  '180': 180,
+  '270': 270,
+  0: 0,
+  90: 90,
+  180: 180,
+  270: 270,
+}
+
 class ImageWidget(QWidget):
   def __init__(self, node: ObservableDict, stream: typing.AsyncIterable[thalamus_pb2.Image], control_queue: IterableQueue, stub: thalamus_pb2_grpc.ThalamusStub, done_future):
     self.node = node
@@ -219,6 +230,37 @@ class ImageWidget(QWidget):
     
     self.show()
 
+  def view_rotation(self) -> int:
+    return VIEW_ROTATIONS.get(self.node.get('View Rotation', 0), 0)
+
+  def display_size(self) -> typing.Tuple[int, int]:
+    assert self.image is not None
+    rotation = self.view_rotation()
+    if rotation in (90, 270):
+      return self.image.height(), self.image.width()
+    return self.image.width(), self.image.height()
+
+  def image_to_widget_transform(self) -> QTransform:
+    assert self.image is not None
+    display_width, display_height = self.display_size()
+    scale = min(self.width()/display_width, self.height()/display_height)
+    transform = QTransform()
+    transform.translate(-(display_width*scale - self.width())/2,
+                        -(display_height*scale - self.height())/2)
+    transform.scale(scale, scale)
+
+    rotation = self.view_rotation()
+    if rotation == 90:
+      transform.translate(self.image.height(), 0)
+      transform.rotate(90)
+    elif rotation == 180:
+      transform.translate(self.image.width(), self.image.height())
+      transform.rotate(180)
+    elif rotation == 270:
+      transform.translate(0, self.image.width())
+      transform.rotate(270)
+    return transform
+
   def key_event(self, e: QKeyEvent, event_type):
     if e.key() not in QTKEY_TO_CODE:
       return
@@ -238,14 +280,16 @@ class ImageWidget(QWidget):
     if self.image is None:
       return
 
-    scale = min(self.width()/self.image.width(), self.height()/self.image.height())
-    offset = -(self.image.width()*scale - self.width())/2, -(self.image.height()*scale - self.height())/2
+    inverse_transform, invertible = self.image_to_widget_transform().inverted()
+    if not invertible:
+      return
+    image_position = inverse_transform.map(QPointF(float(qt_get_x(e)), float(qt_get_y(e))))
 
     event = {
       event_type :{
         'type': event_type,
-        'offsetX': int(float(qt_get_x(e) + offset[0])/self.width()*self.image.width()),
-        'offsetY': int(float(qt_get_y(e) + offset[1])/self.height()*self.image.height()),
+        'offsetX': int(max(0, min(self.image.width() - 1, image_position.x()))),
+        'offsetY': int(max(0, min(self.image.height() - 1, image_position.y()))),
         'button': qt_get_button_int(e),
         'buttons': qt_get_buttons_int(e)
       }
@@ -276,9 +320,7 @@ class ImageWidget(QWidget):
     super().paintEvent(a0)
     painter = QPainter(self)
     if self.image is not None:
-      scale = min(self.width()/self.image.width(), self.height()/self.image.height())
-      painter.translate(-(self.image.width()*scale - self.width())/2, -(self.image.height()*scale - self.height())/2)
-      painter.scale(scale, scale)
+      painter.setTransform(self.image_to_widget_transform())
       painter.drawImage(0, 0, self.image)
 
   async def __stream_task(self, stream: typing.AsyncIterable[thalamus_pb2.Image]):
@@ -367,6 +409,8 @@ class ImageWidget(QWidget):
     if key == 'View':
       if not value:
         self.close()
+    elif key == 'View Rotation':
+      self.update()
 
   def moveEvent(self, a0: QMoveEvent) -> None:
     offset = self.frameGeometry().size() - self.geometry().size()
