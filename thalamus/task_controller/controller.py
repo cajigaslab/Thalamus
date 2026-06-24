@@ -122,7 +122,13 @@ class TaskWidget(QWidget):
       self.current_widget.deleteLater()
 
     task_description = None
-    index, desc = [(i, desc) for i, desc in enumerate(self.task_descriptions) if desc.code == task_type][0]
+    try:
+      index, desc = [(i, desc) for i, desc in enumerate(self.task_descriptions) if desc.code == task_type][0]
+    except IndexError:
+      QMessageBox.critical(self, 'Unknown Task', f'No definition of task "{task_type}" found')
+      self.config['task_type'] = 'null'
+      return
+
     task_description = desc
     self.combo_box.setCurrentIndex(index)
 
