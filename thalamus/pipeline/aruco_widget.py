@@ -1,7 +1,11 @@
 from ..qt import *
 from ..config import *
 import functools
-#import cv2.aruco
+try:
+  import cv2.aruco
+  ARUCO_AVAILABLE = True
+except ImportError:
+  ARUCO_AVAILABLE = False
 import pathlib
 import traceback
 import numpy
@@ -13,9 +17,9 @@ class BoardsModel(QAbstractItemModel):
   def __init__(self, config: ObservableList):
     super().__init__()
     self.config = config
-    self.config.add_observer(self.on_boards_change, functools.partial(isdeleted, self))
-    for i, v in enumerate(self.config):
-      self.on_boards_change(ObservableCollection.Action.SET, i, v)
+    self.boards = config
+    self.config.add_recursive_observer(self.on_change, functools.partial(isdeleted, self))
+    self.config.recap(lambda *args: self.on_change(self.config, *args))
 
   def get_row(self, board):
     for i, v in enumerate(self.config):
@@ -23,16 +27,72 @@ class BoardsModel(QAbstractItemModel):
         return i
     assert False, 'Failed to find row for board'
 
-  def on_boards_change(self, action, key, board):
-    if action == ObservableCollection.Action.SET:
-      self.beginInsertRows(QModelIndex(), key, key)
-      self.endInsertRows()
-      board.add_observer(lambda *args: self.on_board_change(board, *args), functools.partial(isdeleted, self))
-      for k, v in board.items():
-        self.on_board_change(board, ObservableCollection.Action.SET, k, v)
-    else:
-      self.beginRemoveRows(QModelIndex(), key, key)
-      self.endRemoveRows()
+  def on_change(self, source, action, key, value):
+    if source == self.boards:
+      #A board has been set or removed
+      if action == ObservableCollection.Action.SET:
+        self.beginInsertRows(QModelIndex(), key, key)
+        self.endInsertRows()
+        value.recap(lambda *args: self.on_change(value, *args))
+      else:
+        self.beginRemoveRows(QModelIndex(), key, key)
+        self.endRemoveRows()
+    elif source.parent == self.boards:
+      #A board has been edited
+      board = source
+      i = self.get_row(board)
+      LOGGER.debug('on_board_change %s %s %s %s', i, action, key, value)
+      if key == 'Rows':
+        index = self.index(i, 0, QModelIndex())
+        self.dataChanged.emit(index, index)
+        self.fill_ids(board)
+      elif key == 'Columns':
+        index = self.index(i, 1, QModelIndex())
+        self.dataChanged.emit(index, index)
+        self.fill_ids(board)
+      elif key == 'Marker Size':
+        index = self.index(i, 2, QModelIndex())
+        self.dataChanged.emit(index, index)
+      elif key == 'Marker Separation':
+        index = self.index(i, 3, QModelIndex())
+        self.dataChanged.emit(index, index)
+      elif key == 'translation_x':
+        parent = self.index(i, 0, QModelIndex())
+        index = self.index(1, 1, parent)
+        self.dataChanged.emit(index, index)
+      elif key == 'translation_y':
+        parent = self.index(i, 0, QModelIndex())
+        index = self.index(1, 2, parent)
+        self.dataChanged.emit(index, index)
+      elif key == 'translation_z':
+        parent = self.index(i, 0, QModelIndex())
+        index = self.index(1, 3, parent)
+        self.dataChanged.emit(index, index)
+      elif key == 'rotation_x':
+        parent = self.index(i, 0, QModelIndex())
+        index = self.index(1, 4, parent)
+        self.dataChanged.emit(index, index)
+      elif key == 'rotation_y':
+        parent = self.index(i, 0, QModelIndex())
+        index = self.index(1, 5, parent)
+        self.dataChanged.emit(index, index)
+      elif key == 'rotation_z':
+        parent = self.index(i, 0, QModelIndex())
+        index = self.index(1, 6, parent)
+        self.dataChanged.emit(index, index)
+      elif key == 'ids':
+        parent = self.index(i, 0, QModelIndex())
+        value.recap(lambda *args: self.on_change(value, *args))
+    elif any(b is source.parent for b in self.boards) and source.key_in_parent() == 'ids':
+      #A board ID has been set
+      board = source.parent
+      LOGGER.debug('on_ids_change %s %s %s', action, key, value)
+      if action == ObservableCollection.Action.SET:
+        i = self.get_row(board)
+        parent = self.index(i, 0, QModelIndex())
+        index = self.index(key+2, 1, parent)
+        LOGGER.debug('on_ids_change %s %s %s %s', self.rowCount(parent), key+2, index.row(), index.column())
+        self.dataChanged.emit(index, index)
 
   def fill_ids(self, board):
     board_row = self.get_row(board)
@@ -49,73 +109,17 @@ class BoardsModel(QAbstractItemModel):
       self.endRemoveRows()
     elif new_size > len(ids):
       self.beginInsertRows(parent, len(ids)+2, new_size-1+2)
-      for i in range(len(ids), new_size):
+      for i in range(new_size - len(ids)):
         ids.append(next_id+i)
       self.endInsertRows()
     LOGGER.debug('filled')
-
-  def on_board_change(self, board, action, key, value):
-    i = self.get_row(board)
-    LOGGER.debug('on_board_change %s %s %s %s', i, action, key, value)
-    if key == 'Rows':
-      index = self.index(i, 0, QModelIndex())
-      self.dataChanged.emit(index, index)
-      self.fill_ids(board)
-    elif key == 'Columns':
-      index = self.index(i, 1, QModelIndex())
-      self.dataChanged.emit(index, index)
-      self.fill_ids(board)
-    elif key == 'Marker Size':
-      index = self.index(i, 2, QModelIndex())
-      self.dataChanged.emit(index, index)
-    elif key == 'Marker Separation':
-      index = self.index(i, 3, QModelIndex())
-      self.dataChanged.emit(index, index)
-    elif key == 'translation_x':
-      parent = self.index(i, 0, QModelIndex())
-      index = self.index(1, 1, parent)
-      self.dataChanged.emit(index, index)
-    elif key == 'translation_y':
-      parent = self.index(i, 0, QModelIndex())
-      index = self.index(1, 2, parent)
-      self.dataChanged.emit(index, index)
-    elif key == 'translation_z':
-      parent = self.index(i, 0, QModelIndex())
-      index = self.index(1, 3, parent)
-      self.dataChanged.emit(index, index)
-    elif key == 'rotation_x':
-      parent = self.index(i, 0, QModelIndex())
-      index = self.index(1, 4, parent)
-      self.dataChanged.emit(index, index)
-    elif key == 'rotation_y':
-      parent = self.index(i, 0, QModelIndex())
-      index = self.index(1, 5, parent)
-      self.dataChanged.emit(index, index)
-    elif key == 'rotation_z':
-      parent = self.index(i, 0, QModelIndex())
-      index = self.index(1, 6, parent)
-      self.dataChanged.emit(index, index)
-    elif key == 'ids':
-      parent = self.index(i, 0, QModelIndex())
-      board.add_observer(lambda *args: self.on_ids_change(board, *args), functools.partial(isdeleted, self))
-      for k, v in enumerate(value):
-        self.on_ids_change(board, ObservableCollection.Action.SET, k, v)
-
-  def on_ids_change(self, board, action, key, value):
-    LOGGER.debug('on_ids_change %s %s %s', action, key, value)
-    if action == ObservableCollection.Action.SET:
-      i = self.get_row(board)
-      parent = self.index(i, 0, QModelIndex())
-      index = self.index(key+2, 1, parent)
-      LOGGER.debug('on_ids_change %s %s %s %s', self.rowCount(parent), key+2, index.row(), index.column())
-      self.dataChanged.emit(index, index)
 
   def data(self, index: QModelIndex, role: int) -> typing.Any:
     #print('data', index.row(), index.column(), role)
     if not index.isValid():
       return None
 
-    if role != Qt.ItemDataRole.DisplayRole:
+    if role not in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole):
       return None
 
     if index.parent() == QModelIndex():
@@ -125,9 +129,11 @@ class BoardsModel(QAbstractItemModel):
       elif index.column() == 1:
         return board['Columns']
       elif index.column() == 2:
-        return board['Marker Size']
+        val = board['Marker Size']
+        return f'{val:.3f}'
       elif index.column() == 3:
-        return board['Marker Separation']
+        val = board['Marker Separation']
+        return f'{val:.3f}'
     else:
       board_row = index.parent().row()
       board = self.config[board_row]
@@ -223,7 +229,7 @@ class BoardsModel(QAbstractItemModel):
       return True
 
   def flags(self, index: QModelIndex) -> Qt.ItemFlag:
-    if index.parent().isValid() and index.column() == 0 or index.row() == 0:
+    if index.parent().isValid() and (index.column() == 0 or index.row() == 0):
       return super().flags(index)
     return super().flags(index) | Qt.ItemFlag.ItemIsEditable
 
@@ -326,10 +332,11 @@ class ArucoWidget(QWidget):
     layout.addWidget(qlist, 1, 0, 1, 2)
     layout.addWidget(add_button, 2, 0)
     layout.addWidget(remove_button, 2, 1)
-    layout.addWidget(save_button, 3, 0, 1, 2)
+    if ARUCO_AVAILABLE:
+      layout.addWidget(save_button, 3, 0, 1, 2)
 
     def on_add():
-      max_id = 0
+      max_id = -1
       LOGGER.debug('%s', boards)
       for board in boards:
         max_id = max(board['ids'] + [max_id])

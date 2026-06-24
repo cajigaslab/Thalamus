@@ -14,6 +14,7 @@
 #include <boost/qvm/quat_vec_operations.hpp>
 #include <boost/qvm/vec_access.hpp>
 #include <boost/qvm/vec_operations.hpp>
+#include <boost/json.hpp>
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core/quaternion.hpp>
 #include <opencv2/imgproc.hpp>
@@ -29,7 +30,6 @@ struct ArucoNode::Impl {
   boost::asio::io_context &io_context;
   boost::signals2::scoped_connection state_connection;
   boost::signals2::scoped_connection boards_connection;
-  std::vector<boost::signals2::scoped_connection> board_connections;
   std::vector<boost::signals2::scoped_connection> id_connections;
   NodeGraph *graph;
   ArucoNode *outer;
@@ -62,9 +62,33 @@ struct ArucoNode::Impl {
     double markerSize;
     double markerSeparation;
     std::vector<int> ids;
+
+    std::string to_string() {
+      boost::json::object obj;
+      obj["translation_x"] = translation_x;
+      obj["translation_y"] = translation_y;
+      obj["translation_z"] = translation_z;
+
+      boost::json::object rot_obj;
+      rot_obj["x"] = rotation[0];
+      rot_obj["y"] = rotation[1];
+      rot_obj["z"] = rotation[2];
+      obj["rotation"] = rot_obj;
+
+      obj["rows"] = rows;
+      obj["columns"] = columns;
+
+      obj["markerSize"] = markerSize;
+      obj["markerSeparation"] = markerSeparation;
+
+      obj["ids"] = boost::json::value_from(ids);
+
+      return boost::json::serialize(obj);
+    }
   };
 
-  std::map<ObservableDictPtr, Board> boards;
+  ObservableListPtr boards_list;
+  std::map<ObservableCollection*, Board> boards;
 
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
        NodeGraph *_graph, ArucoNode *_outer)
@@ -77,172 +101,153 @@ struct ArucoNode::Impl {
 
     using namespace std::placeholders;
     state_connection =
-        state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
-    this->state->recap(std::bind(&Impl::on_change, this, _1, _2, _3));
+        state->recursive_changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3, _4));
+    this->state->recap(std::bind(&Impl::on_change, this, state.get(), _1, _2, _3));
   }
 
-  void on_ids_change(ObservableDictPtr self,
-                     ObservableCollection::Action action,
-                     const ObservableCollection::Key &key,
-                     const ObservableCollection::Value &value) {
-    TRACE_EVENT("thalamus", "ArucoNode::on_ids_change");
-    auto key_int = size_t(std::get<int64_t>(key));
-    auto value_int = std::get<int64_t>(value);
-
-    auto &board = boards[self];
-    if (action == ObservableCollection::Action::Set) {
-      while (board.ids.size() <= key_int) {
-        board.ids.emplace_back();
-      }
-      board.ids[key_int] = int(value_int);
-    } else {
-      board.ids.erase(board.ids.begin() + int64_t(key_int));
-    }
-  }
-
-  void on_board_change(ObservableDictPtr self, ObservableCollection::Action,
-                       const ObservableCollection::Key &key,
-                       const ObservableCollection::Value &value) {
-    TRACE_EVENT("thalamus", "ArucoNode::on_board_change");
-    auto key_str = std::get<std::string>(key);
-    auto &board = boards[self];
-    if (key_str == "Rows") {
-      board.rows = std::get<int64_t>(value);
-    } else if (key_str == "Columns") {
-      board.columns = std::get<int64_t>(value);
-    } else if (key_str == "Marker Size") {
-      board.markerSize = std::get<double>(value);
-    } else if (key_str == "Marker Separation") {
-      board.markerSeparation = std::get<double>(value);
-    } else if (key_str == "ids") {
-      auto value_list = std::get<ObservableListPtr>(value);
-      id_connections.push_back(value_list->changed.connect(
-          std::bind(&Impl::on_ids_change, this, self, _1, _2, _3)));
-      value_list->recap(
-          std::bind(&Impl::on_ids_change, this, self, _1, _2, _3));
-    } else if (key_str == "translation_x") {
-      board.translation_x = std::get<double>(value);
-    } else if (key_str == "translation_y") {
-      board.translation_y = std::get<double>(value);
-    } else if (key_str == "translation_z") {
-      board.translation_z = std::get<double>(value);
-    } else if (key_str == "rotation_x") {
-      board.rotation[0] = std::get<double>(value);
-    } else if (key_str == "rotation_y") {
-      board.rotation[1] = std::get<double>(value);
-    } else if (key_str == "rotation_z") {
-      board.rotation[2] = std::get<double>(value);
-    }
-  }
-
-  void on_boards_change(ObservableCollection::Action action,
-                        const ObservableCollection::Key &,
-                        const ObservableCollection::Value &value) {
-    TRACE_EVENT("thalamus", "ArucoNode::on_boards_change");
-    if (action == ObservableCollection::Action::Set) {
-      auto value_dict = std::get<ObservableDictPtr>(value);
-      board_connections.push_back(value_dict->changed.connect(
-          std::bind(&Impl::on_board_change, this, value_dict, _1, _2, _3)));
-      value_dict->recap(
-          std::bind(&Impl::on_board_change, this, value_dict, _1, _2, _3));
-    }
-    for (auto i = board_connections.begin(); i != board_connections.end();) {
-      if (i->connected()) {
-        ++i;
-      } else {
-        i = board_connections.erase(i);
-      }
-    }
-  }
-
-  void on_change(ObservableCollection::Action,
+  void on_change(ObservableCollection* collection,
+                 ObservableCollection::Action action,
                  const ObservableCollection::Key &key,
                  const ObservableCollection::Value &value) {
     TRACE_EVENT("thalamus", "ArucoNode::on_change");
-    auto key_str = std::get<std::string>(key);
-    if (key_str == "Boards") {
-      auto value_list = std::get<ObservableListPtr>(value);
-      boards_connection = value_list->changed.connect(
-          std::bind(&Impl::on_boards_change, this, _1, _2, _3));
-      value_list->recap(std::bind(&Impl::on_boards_change, this, _1, _2, _3));
-    } else if (key_str == "Source") {
-      std::string source_str = std::get<std::string>(value);
-      auto token = std::string(absl::StripAsciiWhitespace(source_str));
+    if(collection == state.get()) {
+      auto key_str = std::get<std::string>(key);
+      THALAMUS_LOG(debug) << "root " << key_str;
+      if (key_str == "Boards") {
+        boards_list = std::get<ObservableListPtr>(value);
+        boards_list->recap(std::bind(&Impl::on_change, this, boards_list.get(), _1, _2, _3));
+      } else if (key_str == "Source") {
+        std::string source_str = std::get<std::string>(value);
+        auto token = std::string(absl::StripAsciiWhitespace(source_str));
 
-      get_source_connection = graph->get_node_scoped(token, [this, token](
-                                                                auto _source) {
-        auto locked_source = _source.lock();
-        if (!locked_source) {
-          return;
-        }
+        get_source_connection = graph->get_node_scoped(token, [this, token](auto _source) {
+          auto locked_source = _source.lock();
+          if (!locked_source) {
+            return;
+          }
 
-        if (node_cast<ImageNode *>(locked_source.get()) != nullptr) {
-          this->source = node_cast<ImageNode *>(locked_source.get());
-          source_connection =
-              locked_source->ready.connect(std::bind(&Impl::on_data, this, _1));
-        }
+          if (node_cast<ImageNode *>(locked_source.get()) != nullptr) {
+            this->source = node_cast<ImageNode *>(locked_source.get());
+            source_connection =
+                locked_source->ready.connect(std::bind(&Impl::on_data, this, _1));
+          }
 
-        if (dynamic_cast<DistortionNode *>(locked_source.get()) != nullptr) {
-          this->distortion_source =
-              dynamic_cast<DistortionNode *>(locked_source.get());
-        } else {
-          this->distortion_source = nullptr;
+          if (dynamic_cast<DistortionNode *>(locked_source.get()) != nullptr) {
+            this->distortion_source =
+                dynamic_cast<DistortionNode *>(locked_source.get());
+          } else {
+            this->distortion_source = nullptr;
+          }
+        });
+      } else if (key_str == "Dictionary") {
+        auto value_str = std::get<std::string>(value);
+        if (value_str == "DICT_4X4_50") {
+          dict_type = cv::aruco::DICT_4X4_50;
+        } else if (value_str == "DICT_4X4_100") {
+          dict_type = cv::aruco::DICT_4X4_100;
+        } else if (value_str == "DICT_4X4_250") {
+          dict_type = cv::aruco::DICT_4X4_250;
+        } else if (value_str == "DICT_4X4_1000") {
+          dict_type = cv::aruco::DICT_4X4_1000;
+        } else if (value_str == "DICT_5X5_50") {
+          dict_type = cv::aruco::DICT_5X5_50;
+        } else if (value_str == "DICT_5X5_100") {
+          dict_type = cv::aruco::DICT_5X5_100;
+        } else if (value_str == "DICT_5X5_250") {
+          dict_type = cv::aruco::DICT_5X5_250;
+        } else if (value_str == "DICT_5X5_1000") {
+          dict_type = cv::aruco::DICT_5X5_1000;
+        } else if (value_str == "DICT_6X6_50") {
+          dict_type = cv::aruco::DICT_6X6_50;
+        } else if (value_str == "DICT_6X6_100") {
+          dict_type = cv::aruco::DICT_6X6_100;
+        } else if (value_str == "DICT_6X6_250") {
+          dict_type = cv::aruco::DICT_6X6_250;
+        } else if (value_str == "DICT_6X6_1000") {
+          dict_type = cv::aruco::DICT_6X6_1000;
+        } else if (value_str == "DICT_7X7_50") {
+          dict_type = cv::aruco::DICT_7X7_50;
+        } else if (value_str == "DICT_7X7_100") {
+          dict_type = cv::aruco::DICT_7X7_100;
+        } else if (value_str == "DICT_7X7_250") {
+          dict_type = cv::aruco::DICT_7X7_250;
+        } else if (value_str == "DICT_7X7_1000") {
+          dict_type = cv::aruco::DICT_7X7_250;
+        } else if (value_str == "DICT_ARUCO_ORIGINAL") {
+          dict_type = cv::aruco::DICT_ARUCO_ORIGINAL;
+        } else if (value_str == "DICT_APRILTAG_16h5") {
+          dict_type = cv::aruco::DICT_APRILTAG_16h5;
+        } else if (value_str == "DICT_APRILTAG_25h9") {
+          dict_type = cv::aruco::DICT_APRILTAG_25h9;
+        } else if (value_str == "DICT_APRILTAG_36h10") {
+          dict_type = cv::aruco::DICT_APRILTAG_36h10;
+        } else if (value_str == "DICT_APRILTAG_36h11") {
+          dict_type = cv::aruco::DICT_APRILTAG_36h11;
+        } else if (value_str == "DICT_ARUCO_MIP_36h12") {
+          dict_type = cv::aruco::DICT_ARUCO_MIP_36h12;
         }
-      });
-    } else if (key_str == "Dictionary") {
-      auto value_str = std::get<std::string>(value);
-      if (value_str == "DICT_4X4_50") {
-        dict_type = cv::aruco::DICT_4X4_50;
-      } else if (value_str == "DICT_4X4_100") {
-        dict_type = cv::aruco::DICT_4X4_100;
-      } else if (value_str == "DICT_4X4_250") {
-        dict_type = cv::aruco::DICT_4X4_250;
-      } else if (value_str == "DICT_4X4_1000") {
-        dict_type = cv::aruco::DICT_4X4_1000;
-      } else if (value_str == "DICT_5X5_50") {
-        dict_type = cv::aruco::DICT_5X5_50;
-      } else if (value_str == "DICT_5X5_100") {
-        dict_type = cv::aruco::DICT_5X5_100;
-      } else if (value_str == "DICT_5X5_250") {
-        dict_type = cv::aruco::DICT_5X5_250;
-      } else if (value_str == "DICT_5X5_1000") {
-        dict_type = cv::aruco::DICT_5X5_1000;
-      } else if (value_str == "DICT_6X6_50") {
-        dict_type = cv::aruco::DICT_6X6_50;
-      } else if (value_str == "DICT_6X6_100") {
-        dict_type = cv::aruco::DICT_6X6_100;
-      } else if (value_str == "DICT_6X6_250") {
-        dict_type = cv::aruco::DICT_6X6_250;
-      } else if (value_str == "DICT_6X6_1000") {
-        dict_type = cv::aruco::DICT_6X6_1000;
-      } else if (value_str == "DICT_7X7_50") {
-        dict_type = cv::aruco::DICT_7X7_50;
-      } else if (value_str == "DICT_7X7_100") {
-        dict_type = cv::aruco::DICT_7X7_100;
-      } else if (value_str == "DICT_7X7_250") {
-        dict_type = cv::aruco::DICT_7X7_250;
-      } else if (value_str == "DICT_7X7_1000") {
-        dict_type = cv::aruco::DICT_7X7_250;
-      } else if (value_str == "DICT_ARUCO_ORIGINAL") {
-        dict_type = cv::aruco::DICT_ARUCO_ORIGINAL;
-      } else if (value_str == "DICT_APRILTAG_16h5") {
-        dict_type = cv::aruco::DICT_APRILTAG_16h5;
-      } else if (value_str == "DICT_APRILTAG_25h9") {
-        dict_type = cv::aruco::DICT_APRILTAG_25h9;
-      } else if (value_str == "DICT_APRILTAG_36h10") {
-        dict_type = cv::aruco::DICT_APRILTAG_36h10;
-      } else if (value_str == "DICT_APRILTAG_36h11") {
-        dict_type = cv::aruco::DICT_APRILTAG_36h11;
-      } else if (value_str == "DICT_ARUCO_MIP_36h12") {
-        dict_type = cv::aruco::DICT_ARUCO_MIP_36h12;
+        dict = cv::aruco::getPredefinedDictionary(dict_type);
+        detector =
+            std::make_shared<cv::aruco::ArucoDetector>(dict, detector_parameters);
+
+      } else if (key_str == "Running") {
+        frame = 0;
+        running = std::get<bool>(value);
       }
-      dict = cv::aruco::getPredefinedDictionary(dict_type);
-      detector =
-          std::make_shared<cv::aruco::ArucoDetector>(dict, detector_parameters);
+    } else if (collection == boards_list.get()) {
+      TRACE_EVENT("thalamus", "ArucoNode::on_boards_change");
+      THALAMUS_LOG(debug) << "boards " << std::get<int64_t>(key);
+      if (action == ObservableCollection::Action::Set) {
+        auto value_dict = std::get<ObservableDictPtr>(value);
+        value_dict->recap(std::bind(&Impl::on_change, this, value_dict.get(), _1, _2, _3));
+      }
+    } else if (std::find(boards_list->begin(), boards_list->end(), collection) != boards_list->end()) {
+      TRACE_EVENT("thalamus", "ArucoNode::on_board_change");
+      auto key_str = std::get<std::string>(key);
+      THALAMUS_LOG(debug) << "board " << key_str;
+      auto &board = boards[collection];
+      if (key_str == "Rows") {
+        board.rows = std::get<int64_t>(value);
+      } else if (key_str == "Columns") {
+        board.columns = std::get<int64_t>(value);
+      } else if (key_str == "Marker Size") {
+        board.markerSize = std::get<double>(value);
+      } else if (key_str == "Marker Separation") {
+        board.markerSeparation = std::get<double>(value);
+      } else if (key_str == "ids") {
+        auto value_list = std::get<ObservableListPtr>(value);
+        value_list->recap(std::bind(&Impl::on_change, this, value_list.get(), _1, _2, _3));
+      } else if (key_str == "translation_x") {
+        board.translation_x = std::get<double>(value);
+      } else if (key_str == "translation_y") {
+        board.translation_y = std::get<double>(value);
+      } else if (key_str == "translation_z") {
+        board.translation_z = std::get<double>(value);
+      } else if (key_str == "rotation_x") {
+        board.rotation[0] = std::get<double>(value);
+      } else if (key_str == "rotation_y") {
+        board.rotation[1] = std::get<double>(value);
+      } else if (key_str == "rotation_z") {
+        board.rotation[2] = std::get<double>(value);
+      }
+      THALAMUS_LOG(debug) << board.to_string();
+    } else if (std::find(boards_list->begin(), boards_list->end(), collection->parent) != boards_list->end()
+               && collection->parent->key_of(*collection) == ObservableCollection::Key(std::string("ids"))) {
+      TRACE_EVENT("thalamus", "ArucoNode::on_ids_change");
+      auto key_int = size_t(std::get<int64_t>(key));
+      auto value_int = std::get<int64_t>(value);
+      THALAMUS_LOG(debug) << "id " << key_int << " " << value_int;
 
-    } else if (key_str == "Running") {
-      frame = 0;
-      running = std::get<bool>(value);
+      auto &board = boards[collection->parent];
+      if (action == ObservableCollection::Action::Set) {
+        while (board.ids.size() <= key_int) {
+          board.ids.emplace_back();
+        }
+        board.ids[key_int] = int(value_int);
+      } else {
+        board.ids.erase(board.ids.begin() + int64_t(key_int));
+      }
+      THALAMUS_LOG(debug) << board.to_string();
     }
   }
 
