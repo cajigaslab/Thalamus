@@ -29,6 +29,7 @@ public:
   std::array<std::array<double, 3>, 3> mat;
   std::pair<double, double> input;
   std::pair<double, double> output;
+  double null_threshold = -4;
 
   void on_data(Node *) {
     if (!source->has_analog_data()) {
@@ -45,7 +46,7 @@ public:
     if (!y_channel.empty()) {
       input.second = y_channel.front();
     }
-    if (input.first < -4 || input.second < -4) {
+    if (input.first < null_threshold || input.second < null_threshold) {
       output.first = input.first;
       output.second = input.second;
       outer->ready(outer);
@@ -68,8 +69,8 @@ public:
     } else if (_source->parent == transform.get()) {
       auto row_v = transform->key_of(*_source);
       THALAMUS_ASSERT(row_v.has_value(), "Row not found in transform");
-      auto row = size_t(std::get<int64_t>(*row_v));
-      auto column = size_t(std::get<int64_t>(k));
+      auto row = size_t(std::get<long long>(*row_v));
+      auto column = size_t(std::get<long long>(k));
       auto value = std::get<double>(v);
       mat[row][column] = value;
       return;
@@ -92,6 +93,8 @@ public:
       transform = std::get<ObservableListPtr>(v);
       transform->recap(
           std::bind(&Impl::on_change, this, transform.get(), _1, _2, _3));
+    } else if (key_str == "Null Threshold") {
+      null_threshold = std::get<double>(v);
     }
   }
 };
