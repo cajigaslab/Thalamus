@@ -12,6 +12,18 @@ ObservableCollection::ValueWrapper::ValueWrapper(
     : key(_key), get_value(_get_value), has_value(_has_value),
       collection(_collection) {}
 
+ObservableCollection::ValueWrapper::operator ObservableCollection*() {
+  auto value = get_value();
+  if (std::holds_alternative<ObservableDictPtr>(value)) {
+    return thalamus::get<ObservableDictPtr>(value).get();
+  } else if (std::holds_alternative<ObservableListPtr>(value)) {
+    return thalamus::get<ObservableListPtr>(value).get();
+  } else {
+    THALAMUS_ASSERT(false, "Value is not a dict");
+    return nullptr;
+  }
+}
+
 ObservableCollection::ValueWrapper::operator ObservableDictPtr() {
   auto value = get_value();
   if (std::holds_alternative<ObservableDictPtr>(value)) {
@@ -122,19 +134,21 @@ ObservableCollection::VectorIteratorWrapper::operator*() {
   return *value_wrapper;
 }
 
+ObservableCollection::VectorIteratorWrapper
+ObservableCollection::VectorIteratorWrapper::operator+(size_t count) const {
+  auto result = *this;
+  result += count;
+  return result;
+}
+
 ObservableCollection::VectorIteratorWrapper &
-ObservableCollection::VectorIteratorWrapper::operator+(size_t count) {
+ObservableCollection::VectorIteratorWrapper::operator+=(size_t count) {
   key += count;
   iterator += int64_t(count);
   return *this;
 }
 
-ObservableCollection::VectorIteratorWrapper &
-ObservableCollection::VectorIteratorWrapper::operator+=(size_t count) {
-  return *this + count;
-}
-
-ObservableCollection::VectorIteratorWrapper &
+ObservableCollection::VectorIteratorWrapper&
 ObservableCollection::VectorIteratorWrapper::operator++() {
   return *this += 1;
 }
@@ -146,14 +160,19 @@ ObservableCollection::VectorIteratorWrapper::operator++(int) {
   return new_wrapper;
 }
 
-ObservableCollection::VectorIteratorWrapper &
-ObservableCollection::VectorIteratorWrapper::operator-(size_t count) {
+ObservableCollection::VectorIteratorWrapper
+ObservableCollection::VectorIteratorWrapper::operator-(size_t count) const {
   return *this + -count;
+}
+
+ObservableCollection::VectorIteratorWrapper::difference_type
+ObservableCollection::VectorIteratorWrapper::operator-(const VectorIteratorWrapper& other) const {
+  return iterator - other.iterator;
 }
 
 ObservableCollection::VectorIteratorWrapper &
 ObservableCollection::VectorIteratorWrapper::operator-=(size_t count) {
-  return *this - count;
+  return *this += -count;
 }
 
 ObservableCollection::VectorIteratorWrapper &
