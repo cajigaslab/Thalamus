@@ -36,6 +36,10 @@ SharedLibrary::SharedLibrary(const std::string& name) : impl(new Impl(name)) {}
 SharedLibrary::SharedLibrary(SharedLibrary&& that) : impl(std::move(that.impl)) {}
 SharedLibrary::~SharedLibrary() {}
 
+std::string SharedLibrary::path() {
+  return impl->name;
+}
+
 #ifdef _WIN32
 FARPROC SharedLibrary::load_address(const std::string& name) {
   auto result = ::GetProcAddress(impl->library_handle, name.c_str());

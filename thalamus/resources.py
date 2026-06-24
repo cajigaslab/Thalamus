@@ -1,5 +1,6 @@
 import thalamus
 import typing
+import platform
 
 try:
   #New resource import
@@ -43,3 +44,6 @@ except ImportError:
       arg1 = __name__
 
     return pkg_resources.resource_string(arg1, arg2)
+
+EXE_SUFFIX = '.exe' if platform.system() == 'Windows' else ''
+native_exe = get_path('native' + EXE_SUFFIX)

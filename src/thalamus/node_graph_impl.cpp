@@ -1192,6 +1192,7 @@ public:
         {"ARUCO", new NodeFactory<ArucoNode>()}};
 
     for(auto& ext : extension) {
+      THALAMUS_LOG(info) << "Loading " << ext.name();
       //auto library_handle = LoadLibrary("C:\\Thalamus\\ext.dll");
 
       //auto get_node_factories = reinterpret_cast<get_node_factories_fun>(
@@ -1201,6 +1202,7 @@ public:
       THALAMUS_ASSERT(get_node_factories, "get_node_factories not found in extension");
       auto factory = get_node_factories(&thalamus_api);
       while(*factory != nullptr) {
+        THALAMUS_LOG(info) << "Found " << (*factory)->type;
         node_factories[(*factory)->type] = new ExtNodeFactory(*factory, io_context, outer, &thalamus_api);
         ++factory;
       }
