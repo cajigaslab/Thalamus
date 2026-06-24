@@ -16,10 +16,10 @@
       "AcquisitionFrameRate": 150.0,
       "Gain": 0.0,
       "view_geometry": [
-        674,
-        1766,
-        593,
-        468
+        1301,
+        1200,
+        619,
+        469
       ],
       "Camera Values": {
         "WidthMax": 1280,
@@ -32,7 +32,7 @@
         "AcquisitionFrameRate": 150.0,
         "Gain": 0.0
       },
-      "View Rotation": 0
+      "View Rotation": 180
     },
     {
       "name": "Oculomatic",
@@ -45,7 +45,7 @@
       "Invert X": false,
       "Invert Y": false,
       "Source": "Cam Eye",
-      "Computing": true,
+      "Computing": false,
       "View": false,
       "view_geometry": [
         993,
@@ -216,11 +216,7 @@
           "Address": ""
         },
         {
-          "Name": "Aruco Top",
-          "Address": ""
-        },
-        {
-          "Name": "Aruco Left",
+          "Name": "Cam Eye",
           "Address": ""
         }
       ],
@@ -229,7 +225,7 @@
     {
       "name": "Recording",
       "type": "RUNNER2",
-      "Running": false,
+      "Running": true,
       "Targets": [
         {
           "Name": "Storage",
@@ -266,10 +262,10 @@
       "AcquisitionFrameRate": 60.0,
       "Gain": 0.0,
       "view_geometry": [
-        72,
-        1237,
-        596,
-        475
+        0,
+        1206,
+        597,
+        487
       ],
       "Camera Values": {
         "WidthMax": 1280,
@@ -300,10 +296,10 @@
       "AcquisitionFrameRate": 60.0,
       "Gain": 0.0,
       "view_geometry": [
-        66,
-        1749,
-        607,
-        494
+        0,
+        1724,
+        630,
+        519
       ],
       "Camera Values": {
         "WidthMax": 1280,
@@ -326,31 +322,31 @@
       "Camera": "VimbaUSBTL:DEV_1AB228001040",
       "WidthMax": 1280,
       "HeightMax": 1024,
-      "Width": 575,
-      "Height": 915,
+      "Width": 1280,
+      "Height": 618,
       "OffsetX": 0,
       "OffsetY": 0,
       "ExposureTime": 6000.0,
       "AcquisitionFrameRate": 150.0,
       "Gain": 0.0,
       "view_geometry": [
-        1348,
-        1263,
-        299,
-        190
+        641,
+        1833,
+        445,
+        195
       ],
       "Camera Values": {
         "WidthMax": 1280,
         "HeightMax": 1024,
-        "Width": 568,
-        "Height": 914,
+        "Width": 1280,
+        "Height": 618,
         "OffsetX": 0,
         "OffsetY": 0,
         "ExposureTime": 6000.005,
         "AcquisitionFrameRate": 149.9999250000375,
         "Gain": 0.0
       },
-      "View Rotation": 90
+      "View Rotation": 0
     },
     {
       "name": "Node 1",
@@ -369,7 +365,7 @@
     {
       "name": "Storage",
       "type": "STORAGE2",
-      "Running": false,
+      "Running": true,
       "Output File": "/mnt/sraid/Eevee_Behavior_AlexRig/%y%m%d/behave",
       "Compress Analog": false,
       "Compress Video": true,
@@ -469,24 +465,24 @@
           "Node": "Aruco Left",
           "Time Series": false,
           "Image": false,
-          "Motion": true,
+          "Motion": false,
           "Text": false
         },
         {
           "Node": "Aruco Top",
           "Time Series": false,
           "Image": false,
-          "Motion": true,
+          "Motion": false,
           "Text": false
         }
       ],
-      "rec": 7,
-      "start": 1640708.646844653,
+      "rec": 1,
+      "start": 597011.903124794,
       "Files": [],
       "Metadata": [
         {
           "Key": "Rec",
-          "Value": 7
+          "Value": 1
         }
       ],
       "Simple Copy": false
@@ -689,7 +685,7 @@
       "Rows": 4,
       "Columns": 5,
       "Collecting": false,
-      "Computing": true,
+      "Computing": false,
       "Source": "Cam Top",
       "View": false,
       "Show Threshold": false,
@@ -737,101 +733,65 @@
       "Running": true
     },
     {
-      "name": "Aruco Top",
-      "type": "ARUCO",
-      "Running": true,
-      "Marker Mode": false,
-      "View": true,
-      "Source": "Distortion Cam Top",
-      "Dictionary": "DICT_4X4_50",
-      "Boards": [
-        {
-          "Rows": 3,
-          "Columns": 4,
-          "Marker Size": 0.032,
-          "Marker Separation": 0.008,
-          "ids": [
-            1,
-            2,
-            3,
-            4,
-            5,
-            6,
-            7,
-            8,
-            9,
-            10,
-            11,
-            12
-          ],
-          "translation_x": 0.0,
-          "translation_y": 0.0,
-          "translation_z": 0.0,
-          "rotation_x": 0.0,
-          "rotation_y": 0.0,
-          "rotation_z": 0.0
-        },
-        {
-          "Rows": 3,
-          "Columns": 4,
-          "Marker Size": 0.032,
-          "Marker Separation": 0.008,
-          "ids": [
-            13,
-            14,
-            15,
-            16,
-            17,
-            18,
-            19,
-            20,
-            21,
-            22,
-            23,
-            24
-          ],
-          "translation_x": 0.0,
-          "translation_y": 0.0,
-          "translation_z": 0.0,
-          "rotation_x": 0.0,
-          "rotation_y": 0.0,
-          "rotation_z": 0.0
-        }
+      "name": "Distortion Cam Rear",
+      "type": "DISTORTION",
+      "Threshold": 53,
+      "Invert": false,
+      "Rows": 4,
+      "Columns": 5,
+      "Collecting": false,
+      "Computing": false,
+      "Source": "Cam Rear",
+      "View": false,
+      "Framerate": 1.0,
+      "Show Threshold": false,
+      "Camera Matrix": [
+        [
+          1689.2063278605374,
+          0.0,
+          755.131749984167
+        ],
+        [
+          0.0,
+          1684.1980185794187,
+          476.10842857291965
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "Distortion Coefficients": [
+        -0.03851543304318467,
+        -1.2177682946795354,
+        -0.0027958353496471554,
+        0.011447109680061584,
+        7.622377340649849
       ],
       "view_geometry": [
-        72,
-        1990,
-        309,
-        239
+        591,
+        1386,
+        910,
+        789
       ]
     },
     {
-      "name": "Aruco Left",
+      "name": "Wand Aruco",
       "type": "ARUCO",
-      "Running": true,
+      "Running": false,
       "Marker Mode": false,
-      "View": true,
-      "Source": "Distortion Cam Left",
+      "View": false,
+      "Source": "",
       "Dictionary": "DICT_4X4_50",
       "Boards": [
         {
-          "Rows": 3,
-          "Columns": 4,
-          "Marker Size": 0.032,
-          "Marker Separation": 0.008,
+          "Rows": 1,
+          "Columns": 1,
+          "Marker Size": 0.03,
+          "Marker Separation": 0.01,
           "ids": [
-            1,
-            2,
-            3,
-            4,
-            5,
-            6,
-            7,
-            8,
-            9,
-            10,
-            11,
-            12
+            1
           ],
           "translation_x": 0.0,
           "translation_y": 0.0,
@@ -841,23 +801,27 @@
           "rotation_z": 0.0
         },
         {
-          "Rows": 3,
-          "Columns": 4,
-          "Marker Size": 0.032,
-          "Marker Separation": 0.008,
+          "Rows": 1,
+          "Columns": 1,
+          "Marker Size": 0.03,
+          "Marker Separation": 0.01,
           "ids": [
-            13,
-            14,
-            15,
-            16,
-            17,
-            18,
-            19,
-            20,
-            21,
-            22,
-            23,
-            24
+            2
+          ],
+          "translation_x": 0.0,
+          "translation_y": 0.0,
+          "translation_z": 0.0,
+          "rotation_x": 0.0,
+          "rotation_y": 0.0,
+          "rotation_z": 0.0
+        },
+        {
+          "Rows": 1,
+          "Columns": 1,
+          "Marker Size": 0.03,
+          "Marker Separation": 0.01,
+          "ids": [
+            3
           ],
           "translation_x": 0.0,
           "translation_y": 0.0,
@@ -867,26 +831,21 @@
           "rotation_z": 0.0
         }
       ],
-      "view_geometry": [
-        81,
-        1522,
-        236,
-        177
-      ]
+      "Sources": []
     }
   ],
   "thalamus_view_geometry": [
-    13,
-    245,
-    581,
+    66,
+    254,
+    502,
     768
   ],
   "data_views": [
     {
       "view_geometry": [
-        538,
-        9,
-        964,
+        554,
+        36,
+        970,
         193
       ],
       "rows": 1,
@@ -918,9 +877,9 @@
     },
     {
       "view_geometry": [
-        17,
-        7,
-        488,
+        66,
+        32,
+        491,
         187
       ],
       "rows": 1,
@@ -945,8 +904,8 @@
       "node": "Experiment",
       "dock_area": "",
       "view_geometry": [
-        1529,
-        0,
+        1526,
+        32,
         390,
         242
       ]
@@ -962,10 +921,10 @@
       ]
     },
     {
-      "node": "Cam Eye",
+      "node": "Oculomatic",
       "dock_area": "right",
       "view_geometry": [
-        269,
+        190,
         23,
         312,
         745
@@ -976,7 +935,7 @@
     {
       "task_type": "joystick_intro",
       "type": "task",
-      "goal": 60,
+      "goal": 74,
       "name": "Grid",
       "intertrial_timeout": {
         "min": 1,
@@ -1025,12 +984,12 @@
       ],
       "targets": [
         {
-          "name": "L",
+          "name": "Target 1",
           "enabled": false,
-          "x_norm": 0.2,
-          "y_norm": 0.5,
-          "radius_ratio": 0.2,
-          "hold_time": 0.3,
+          "x_norm": 0.08,
+          "y_norm": 0.08,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
           "reward_channel": 2,
           "target_color": [
             154,
@@ -1046,12 +1005,96 @@
           "target_active_opacity": 1.0
         },
         {
-          "name": "Top 2",
+          "name": "Target 2",
+          "enabled": true,
+          "x_norm": 0.248,
+          "y_norm": 0.08,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 3",
+          "enabled": true,
+          "x_norm": 0.41600000000000004,
+          "y_norm": 0.08,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 4",
+          "enabled": true,
+          "x_norm": 0.584,
+          "y_norm": 0.08,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 5",
+          "enabled": true,
+          "x_norm": 0.752,
+          "y_norm": 0.08,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 6",
           "enabled": false,
-          "x_norm": 0.506,
-          "y_norm": 0.9,
-          "radius_ratio": 0.15,
-          "hold_time": 0.3,
+          "x_norm": 0.92,
+          "y_norm": 0.08,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
           "reward_channel": 2,
           "target_color": [
             154,
@@ -1067,12 +1110,180 @@
           "target_active_opacity": 1.0
         },
         {
-          "name": "Bot",
-          "enabled": false,
+          "name": "Target 7",
+          "enabled": true,
+          "x_norm": 0.164,
+          "y_norm": 0.36000000000000004,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 8",
+          "enabled": true,
+          "x_norm": 0.836,
+          "y_norm": 0.36000000000000004,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 9",
+          "enabled": true,
+          "x_norm": 0.08,
+          "y_norm": 0.64,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 10",
+          "enabled": true,
+          "x_norm": 0.248,
+          "y_norm": 0.64,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 11",
+          "enabled": true,
+          "x_norm": 0.752,
+          "y_norm": 0.64,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 12",
+          "enabled": true,
+          "x_norm": 0.92,
+          "y_norm": 0.64,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 13",
+          "enabled": true,
+          "x_norm": 0.164,
+          "y_norm": 0.92,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 14",
+          "enabled": true,
+          "x_norm": 0.332,
+          "y_norm": 0.92,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 15",
+          "enabled": true,
           "x_norm": 0.5,
-          "y_norm": 0.05,
-          "radius_ratio": 0.4,
-          "hold_time": 0.3,
+          "y_norm": 0.92,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
           "reward_channel": 2,
           "target_color": [
             154,
@@ -1088,12 +1299,12 @@
           "target_active_opacity": 1.0
         },
         {
-          "name": "R",
+          "name": "Target 16",
           "enabled": true,
-          "x_norm": 0.965,
-          "y_norm": 0.484,
-          "radius_ratio": 0.5,
-          "hold_time": 0.3,
+          "x_norm": 0.6679999999999999,
+          "y_norm": 0.92,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
           "reward_channel": 2,
           "target_color": [
             154,
@@ -1109,138 +1320,12 @@
           "target_active_opacity": 1.0
         },
         {
-          "name": "Top 1",
+          "name": "Target 17",
           "enabled": true,
-          "x_norm": 0.5,
-          "y_norm": 0.95,
-          "radius_ratio": 0.2,
-          "hold_time": 0.3,
-          "reward_channel": 3,
-          "target_color": [
-            154,
-            153,
-            150
-          ],
-          "target_opacity": 1.0,
-          "target_active_color": [
-            255,
-            255,
-            255
-          ],
-          "target_active_opacity": 1.0
-        },
-        {
-          "name": "Top 2 L",
-          "enabled": true,
-          "x_norm": 0.4,
-          "y_norm": 0.9,
-          "radius_ratio": 0.15,
-          "hold_time": 0.3,
-          "reward_channel": 2,
-          "target_color": [
-            154,
-            153,
-            150
-          ],
-          "target_opacity": 1.0,
-          "target_active_color": [
-            255,
-            255,
-            255
-          ],
-          "target_active_opacity": 1.0
-        },
-        {
-          "name": "L2",
-          "enabled": true,
-          "x_norm": 0.15,
-          "y_norm": 0.4,
-          "radius_ratio": 0.2,
-          "hold_time": 0.3,
-          "reward_channel": 2,
-          "target_color": [
-            154,
-            153,
-            150
-          ],
-          "target_opacity": 1.0,
-          "target_active_color": [
-            255,
-            255,
-            255
-          ],
-          "target_active_opacity": 1.0
-        },
-        {
-          "name": "LT",
-          "enabled": true,
-          "x_norm": 0.14165666266506602,
-          "y_norm": 0.8167834297898263,
-          "radius_ratio": 0.2,
-          "hold_time": 0.3,
-          "reward_channel": 2,
-          "target_color": [
-            154,
-            153,
-            150
-          ],
-          "target_opacity": 1.0,
-          "target_active_color": [
-            255,
-            255,
-            255
-          ],
-          "target_active_opacity": 1.0
-        },
-        {
-          "name": "Top 11",
-          "enabled": true,
-          "x_norm": 0.65,
-          "y_norm": 0.95,
-          "radius_ratio": 0.25,
-          "hold_time": 0.3,
-          "reward_channel": 2,
-          "target_color": [
-            154,
-            153,
-            150
-          ],
-          "target_opacity": 1.0,
-          "target_active_color": [
-            255,
-            255,
-            255
-          ],
-          "target_active_opacity": 1.0
-        },
-        {
-          "name": "Top 2 L Copy",
-          "enabled": true,
-          "x_norm": 0.5,
-          "y_norm": 0.76,
-          "radius_ratio": 0.2,
-          "hold_time": 0.3,
-          "reward_channel": 2,
-          "target_color": [
-            154,
-            153,
-            150
-          ],
-          "target_opacity": 1.0,
-          "target_active_color": [
-            255,
-            255,
-            255
-          ],
-          "target_active_opacity": 1.0
-        },
-        {
-          "name": "Top 2 L Copy Copy",
-          "enabled": true,
-          "x_norm": 0.6,
-          "y_norm": 0.76,
-          "radius_ratio": 0.25,
-          "hold_time": 0.3,
+          "x_norm": 0.836,
+          "y_norm": 0.92,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
           "reward_channel": 2,
           "target_color": [
             154,
@@ -1275,8 +1360,8 @@
       "task_region_width": 0.5,
       "task_region_height": 0.67,
       "reward_channel": 2.0,
-      "trial_timeout": 12.0,
-      "intertrial_interval": 1.5,
+      "trial_timeout": 10.0,
+      "intertrial_interval": 1.0,
       "disable_up": true,
       "disable_down": true,
       "disable_left": false,
@@ -1302,9 +1387,9 @@
       "reset_cursor_each_trial": false,
       "direct_recenter_when_idle": false,
       "target_layout_editor_geometry": {
-        "x": 373,
-        "y": 216,
-        "width": 1195,
+        "x": 200,
+        "y": 177,
+        "width": 1261,
         "height": 910
       },
       "free_play_reward_enabled": false,
@@ -1325,21 +1410,506 @@
       "require_center_before_trial": false,
       "center_gate_radius_ratio": 0.15,
       "ignored_idle_sample_clear_threshold": 50,
-      "fail_on_touch_input": true,
+      "fail_on_touch_input": false,
       "max_logged_joystick_samples": 2000,
       "show_success_particles": true,
-      "target_layout_editor_drag_enabled": true,
+      "target_layout_editor_drag_enabled": false,
       "task_cluster_name": "Joy",
       "queue_index": 0,
-      "_streak_count": 0,
-      "_last_cursor_x": 0.528125,
-      "_last_cursor_y": 0.5,
+      "_streak_count": 1,
+      "_last_cursor_x": 0.921875,
+      "_last_cursor_y": 0.38046875,
       "_operator_keys_pressed": {
         "left": false,
         "right": false,
         "up": false,
         "down": false
       }
+    },
+    {
+      "task_type": "joystick_intro",
+      "type": "task",
+      "goal": 99,
+      "name": "Grid",
+      "intertrial_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "start_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "hold_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "blink_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "fail_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "success_timeout": {
+        "min": 1,
+        "max": 1
+      },
+      "target_x": {
+        "min": 1,
+        "max": 1
+      },
+      "target_y": {
+        "min": 1,
+        "max": 1
+      },
+      "target_width": {
+        "min": 1,
+        "max": 1
+      },
+      "target_height": {
+        "min": 1,
+        "max": 1
+      },
+      "target_color": [
+        255,
+        255,
+        255
+      ],
+      "targets": [
+        {
+          "name": "Target 1",
+          "enabled": false,
+          "x_norm": 0.08,
+          "y_norm": 0.08,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 2",
+          "enabled": true,
+          "x_norm": 0.248,
+          "y_norm": 0.08,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 3",
+          "enabled": true,
+          "x_norm": 0.41600000000000004,
+          "y_norm": 0.08,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 4",
+          "enabled": true,
+          "x_norm": 0.584,
+          "y_norm": 0.08,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 5",
+          "enabled": true,
+          "x_norm": 0.752,
+          "y_norm": 0.08,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 6",
+          "enabled": false,
+          "x_norm": 0.92,
+          "y_norm": 0.08,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 7",
+          "enabled": true,
+          "x_norm": 0.164,
+          "y_norm": 0.36000000000000004,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 8",
+          "enabled": true,
+          "x_norm": 0.836,
+          "y_norm": 0.36000000000000004,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 9",
+          "enabled": true,
+          "x_norm": 0.08,
+          "y_norm": 0.64,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 10",
+          "enabled": true,
+          "x_norm": 0.248,
+          "y_norm": 0.64,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 11",
+          "enabled": true,
+          "x_norm": 0.752,
+          "y_norm": 0.64,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 12",
+          "enabled": true,
+          "x_norm": 0.92,
+          "y_norm": 0.64,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 13",
+          "enabled": true,
+          "x_norm": 0.164,
+          "y_norm": 0.92,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 14",
+          "enabled": true,
+          "x_norm": 0.332,
+          "y_norm": 0.92,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 15",
+          "enabled": true,
+          "x_norm": 0.5,
+          "y_norm": 0.92,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 16",
+          "enabled": true,
+          "x_norm": 0.6679999999999999,
+          "y_norm": 0.92,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        },
+        {
+          "name": "Target 17",
+          "enabled": true,
+          "x_norm": 0.836,
+          "y_norm": 0.92,
+          "radius_ratio": 0.22,
+          "hold_time": 0.25,
+          "reward_channel": 2,
+          "target_color": [
+            154,
+            153,
+            150
+          ],
+          "target_opacity": 1.0,
+          "target_active_color": [
+            255,
+            255,
+            255
+          ],
+          "target_active_opacity": 1.0
+        }
+      ],
+      "joystick_node": "Joystick",
+      "control_mode": "direct",
+      "cursor_only_mode": false,
+      "free_play_end_key": "space",
+      "cumulative_speed": 0.7,
+      "zero_drift_mode": true,
+      "zero_drift_buffer": 0.05,
+      "direct_range": 0.45,
+      "cursor_diameter_ratio": 0.08,
+      "cursor_color": [
+        153,
+        193,
+        241
+      ],
+      "task_region_x": 0.5,
+      "task_region_y": 0.27,
+      "task_region_width": 0.5,
+      "task_region_height": 0.67,
+      "reward_channel": 2.0,
+      "trial_timeout": 10.0,
+      "intertrial_interval": 1.0,
+      "disable_up": true,
+      "disable_down": true,
+      "disable_left": false,
+      "disable_right": false,
+      "animations_enabled": true,
+      "task_animation_enabled": true,
+      "target_animation_enabled": true,
+      "show_streak_hud": true,
+      "streak_bonus_threshold": 0,
+      "streak_bonus_reward_count": 1,
+      "streak_reset_on_bonus": false,
+      "inside_tint_strength_pct": 20,
+      "show_hold_progress_ring": true,
+      "show_success_pop": true,
+      "success_pop_duration_s": 0.12,
+      "up_influence_pct": 100,
+      "down_influence_pct": 100,
+      "left_influence_pct": 100,
+      "right_influence_pct": 100,
+      "ignore_idle_trial_failures": true,
+      "state_indicator_x": 30.0,
+      "state_indicator_y": 70.0,
+      "reset_cursor_each_trial": false,
+      "direct_recenter_when_idle": false,
+      "target_layout_editor_geometry": {
+        "x": 200,
+        "y": 177,
+        "width": 1261,
+        "height": 910
+      },
+      "free_play_reward_enabled": false,
+      "free_play_reward_policy": "touch_bouts",
+      "free_play_reward_threshold": 0.0,
+      "free_play_reward_cooldown_s": 1.0,
+      "free_play_reward_channel": 2,
+      "free_play_active_threshold": 0.0,
+      "free_play_first_touch_reward_enabled": false,
+      "free_play_first_touch_reward_channel": 2,
+      "free_play_bout_reward_enabled": false,
+      "free_play_bout_reward_channel": 2,
+      "free_play_bout_cooldown_s": 1.0,
+      "free_play_sustain_reward_enabled": false,
+      "free_play_sustain_reward_channel": 2,
+      "free_play_sustain_initial_delay_s": 0.0,
+      "free_play_sustain_interval_s": 1.0,
+      "require_center_before_trial": false,
+      "center_gate_radius_ratio": 0.15,
+      "ignored_idle_sample_clear_threshold": 50,
+      "fail_on_touch_input": false,
+      "max_logged_joystick_samples": 2000,
+      "show_success_particles": true,
+      "target_layout_editor_drag_enabled": false,
+      "task_cluster_name": "Joy",
+      "queue_index": 1
     }
   ],
   "reward_schedule": {
@@ -1434,7 +2004,7 @@
     },
     "Auto Clear": true
   },
-  "status": "Joy/Grid = 216/102",
+  "status": "Joy/Grid = 25/13",
   "Persistence": {
     "Cached": []
   },
@@ -8020,12 +8590,12 @@
           ],
           "targets": [
             {
-              "name": "L",
+              "name": "Target 1",
               "enabled": false,
-              "x_norm": 0.2,
-              "y_norm": 0.5,
-              "radius_ratio": 0.2,
-              "hold_time": 0.3,
+              "x_norm": 0.08,
+              "y_norm": 0.08,
+              "radius_ratio": 0.22,
+              "hold_time": 0.25,
               "reward_channel": 2,
               "target_color": [
                 154,
@@ -8041,12 +8611,96 @@
               "target_active_opacity": 1.0
             },
             {
-              "name": "Top 2",
+              "name": "Target 2",
+              "enabled": true,
+              "x_norm": 0.248,
+              "y_norm": 0.08,
+              "radius_ratio": 0.22,
+              "hold_time": 0.25,
+              "reward_channel": 2,
+              "target_color": [
+                154,
+                153,
+                150
+              ],
+              "target_opacity": 1.0,
+              "target_active_color": [
+                255,
+                255,
+                255
+              ],
+              "target_active_opacity": 1.0
+            },
+            {
+              "name": "Target 3",
+              "enabled": true,
+              "x_norm": 0.41600000000000004,
+              "y_norm": 0.08,
+              "radius_ratio": 0.22,
+              "hold_time": 0.25,
+              "reward_channel": 2,
+              "target_color": [
+                154,
+                153,
+                150
+              ],
+              "target_opacity": 1.0,
+              "target_active_color": [
+                255,
+                255,
+                255
+              ],
+              "target_active_opacity": 1.0
+            },
+            {
+              "name": "Target 4",
+              "enabled": true,
+              "x_norm": 0.584,
+              "y_norm": 0.08,
+              "radius_ratio": 0.22,
+              "hold_time": 0.25,
+              "reward_channel": 2,
+              "target_color": [
+                154,
+                153,
+                150
+              ],
+              "target_opacity": 1.0,
+              "target_active_color": [
+                255,
+                255,
+                255
+              ],
+              "target_active_opacity": 1.0
+            },
+            {
+              "name": "Target 5",
+              "enabled": true,
+              "x_norm": 0.752,
+              "y_norm": 0.08,
+              "radius_ratio": 0.22,
+              "hold_time": 0.25,
+              "reward_channel": 2,
+              "target_color": [
+                154,
+                153,
+                150
+              ],
+              "target_opacity": 1.0,
+              "target_active_color": [
+                255,
+                255,
+                255
+              ],
+              "target_active_opacity": 1.0
+            },
+            {
+              "name": "Target 6",
               "enabled": false,
-              "x_norm": 0.506,
-              "y_norm": 0.9,
-              "radius_ratio": 0.15,
-              "hold_time": 0.3,
+              "x_norm": 0.92,
+              "y_norm": 0.08,
+              "radius_ratio": 0.22,
+              "hold_time": 0.25,
               "reward_channel": 2,
               "target_color": [
                 154,
@@ -8062,12 +8716,180 @@
               "target_active_opacity": 1.0
             },
             {
-              "name": "Bot",
-              "enabled": false,
+              "name": "Target 7",
+              "enabled": true,
+              "x_norm": 0.164,
+              "y_norm": 0.36000000000000004,
+              "radius_ratio": 0.22,
+              "hold_time": 0.25,
+              "reward_channel": 2,
+              "target_color": [
+                154,
+                153,
+                150
+              ],
+              "target_opacity": 1.0,
+              "target_active_color": [
+                255,
+                255,
+                255
+              ],
+              "target_active_opacity": 1.0
+            },
+            {
+              "name": "Target 8",
+              "enabled": true,
+              "x_norm": 0.836,
+              "y_norm": 0.36000000000000004,
+              "radius_ratio": 0.22,
+              "hold_time": 0.25,
+              "reward_channel": 2,
+              "target_color": [
+                154,
+                153,
+                150
+              ],
+              "target_opacity": 1.0,
+              "target_active_color": [
+                255,
+                255,
+                255
+              ],
+              "target_active_opacity": 1.0
+            },
+            {
+              "name": "Target 9",
+              "enabled": true,
+              "x_norm": 0.08,
+              "y_norm": 0.64,
+              "radius_ratio": 0.22,
+              "hold_time": 0.25,
+              "reward_channel": 2,
+              "target_color": [
+                154,
+                153,
+                150
+              ],
+              "target_opacity": 1.0,
+              "target_active_color": [
+                255,
+                255,
+                255
+              ],
+              "target_active_opacity": 1.0
+            },
+            {
+              "name": "Target 10",
+              "enabled": true,
+              "x_norm": 0.248,
+              "y_norm": 0.64,
+              "radius_ratio": 0.22,
+              "hold_time": 0.25,
+              "reward_channel": 2,
+              "target_color": [
+                154,
+                153,
+                150
+              ],
+              "target_opacity": 1.0,
+              "target_active_color": [
+                255,
+                255,
+                255
+              ],
+              "target_active_opacity": 1.0
+            },
+            {
+              "name": "Target 11",
+              "enabled": true,
+              "x_norm": 0.752,
+              "y_norm": 0.64,
+              "radius_ratio": 0.22,
+              "hold_time": 0.25,
+              "reward_channel": 2,
+              "target_color": [
+                154,
+                153,
+                150
+              ],
+              "target_opacity": 1.0,
+              "target_active_color": [
+                255,
+                255,
+                255
+              ],
+              "target_active_opacity": 1.0
+            },
+            {
+              "name": "Target 12",
+              "enabled": true,
+              "x_norm": 0.92,
+              "y_norm": 0.64,
+              "radius_ratio": 0.22,
+              "hold_time": 0.25,
+              "reward_channel": 2,
+              "target_color": [
+                154,
+                153,
+                150
+              ],
+              "target_opacity": 1.0,
+              "target_active_color": [
+                255,
+                255,
+                255
+              ],
+              "target_active_opacity": 1.0
+            },
+            {
+              "name": "Target 13",
+              "enabled": true,
+              "x_norm": 0.164,
+              "y_norm": 0.92,
+              "radius_ratio": 0.22,
+              "hold_time": 0.25,
+              "reward_channel": 2,
+              "target_color": [
+                154,
+                153,
+                150
+              ],
+              "target_opacity": 1.0,
+              "target_active_color": [
+                255,
+                255,
+                255
+              ],
+              "target_active_opacity": 1.0
+            },
+            {
+              "name": "Target 14",
+              "enabled": true,
+              "x_norm": 0.332,
+              "y_norm": 0.92,
+              "radius_ratio": 0.22,
+              "hold_time": 0.25,
+              "reward_channel": 2,
+              "target_color": [
+                154,
+                153,
+                150
+              ],
+              "target_opacity": 1.0,
+              "target_active_color": [
+                255,
+                255,
+                255
+              ],
+              "target_active_opacity": 1.0
+            },
+            {
+              "name": "Target 15",
+              "enabled": true,
               "x_norm": 0.5,
-              "y_norm": 0.05,
-              "radius_ratio": 0.4,
-              "hold_time": 0.3,
+              "y_norm": 0.92,
+              "radius_ratio": 0.22,
+              "hold_time": 0.25,
               "reward_channel": 2,
               "target_color": [
                 154,
@@ -8083,12 +8905,12 @@
               "target_active_opacity": 1.0
             },
             {
-              "name": "R",
+              "name": "Target 16",
               "enabled": true,
-              "x_norm": 0.965,
-              "y_norm": 0.484,
-              "radius_ratio": 0.5,
-              "hold_time": 0.3,
+              "x_norm": 0.6679999999999999,
+              "y_norm": 0.92,
+              "radius_ratio": 0.22,
+              "hold_time": 0.25,
               "reward_channel": 2,
               "target_color": [
                 154,
@@ -8104,138 +8926,12 @@
               "target_active_opacity": 1.0
             },
             {
-              "name": "Top 1",
+              "name": "Target 17",
               "enabled": true,
-              "x_norm": 0.5,
-              "y_norm": 0.95,
-              "radius_ratio": 0.2,
-              "hold_time": 0.3,
-              "reward_channel": 3,
-              "target_color": [
-                154,
-                153,
-                150
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "Top 2 L",
-              "enabled": true,
-              "x_norm": 0.4,
-              "y_norm": 0.9,
-              "radius_ratio": 0.15,
-              "hold_time": 0.3,
-              "reward_channel": 2,
-              "target_color": [
-                154,
-                153,
-                150
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "L2",
-              "enabled": true,
-              "x_norm": 0.15,
-              "y_norm": 0.4,
-              "radius_ratio": 0.2,
-              "hold_time": 0.3,
-              "reward_channel": 2,
-              "target_color": [
-                154,
-                153,
-                150
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "LT",
-              "enabled": true,
-              "x_norm": 0.14165666266506602,
-              "y_norm": 0.8167834297898263,
-              "radius_ratio": 0.2,
-              "hold_time": 0.3,
-              "reward_channel": 2,
-              "target_color": [
-                154,
-                153,
-                150
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "Top 11",
-              "enabled": true,
-              "x_norm": 0.65,
-              "y_norm": 0.95,
-              "radius_ratio": 0.25,
-              "hold_time": 0.3,
-              "reward_channel": 2,
-              "target_color": [
-                154,
-                153,
-                150
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "Top 2 L Copy",
-              "enabled": true,
-              "x_norm": 0.5,
-              "y_norm": 0.76,
-              "radius_ratio": 0.2,
-              "hold_time": 0.3,
-              "reward_channel": 2,
-              "target_color": [
-                154,
-                153,
-                150
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "Top 2 L Copy Copy",
-              "enabled": true,
-              "x_norm": 0.6,
-              "y_norm": 0.76,
-              "radius_ratio": 0.25,
-              "hold_time": 0.3,
+              "x_norm": 0.836,
+              "y_norm": 0.92,
+              "radius_ratio": 0.22,
+              "hold_time": 0.25,
               "reward_channel": 2,
               "target_color": [
                 154,
@@ -8270,8 +8966,8 @@
           "task_region_width": 0.5,
           "task_region_height": 0.67,
           "reward_channel": 2.0,
-          "trial_timeout": 12.0,
-          "intertrial_interval": 1.5,
+          "trial_timeout": 10.0,
+          "intertrial_interval": 1.0,
           "disable_up": true,
           "disable_down": true,
           "disable_left": false,
@@ -8297,9 +8993,9 @@
           "reset_cursor_each_trial": false,
           "direct_recenter_when_idle": false,
           "target_layout_editor_geometry": {
-            "x": 373,
-            "y": 216,
-            "width": 1195,
+            "x": 200,
+            "y": 177,
+            "width": 1261,
             "height": 910
           },
           "free_play_reward_enabled": false,
@@ -8320,10 +9016,10 @@
           "require_center_before_trial": false,
           "center_gate_radius_ratio": 0.15,
           "ignored_idle_sample_clear_threshold": 50,
-          "fail_on_touch_input": true,
+          "fail_on_touch_input": false,
           "max_logged_joystick_samples": 2000,
           "show_success_particles": true,
-          "target_layout_editor_drag_enabled": true
+          "target_layout_editor_drag_enabled": false
         },
         {
           "task_type": "joystick_intro",
@@ -8377,611 +9073,170 @@
           ],
           "targets": [
             {
-              "name": "R",
+              "name": "Target 1",
               "enabled": true,
-              "x_norm": 0.7,
+              "x_norm": 0.75,
               "y_norm": 0.5,
-              "radius_ratio": 0.1,
-              "hold_time": 0.1,
+              "radius_ratio": 0.25,
+              "hold_time": 0.15,
               "reward_channel": 2,
               "target_color": [
-                255,
-                255,
-                255
+                154,
+                153,
+                150
               ],
               "target_opacity": 1.0,
               "target_active_color": [
-                255,
-                255,
-                255
+                249,
+                240,
+                107
               ],
               "target_active_opacity": 1.0
             },
             {
-              "name": "B2",
+              "name": "Target 2",
               "enabled": true,
-              "x_norm": 0.5,
-              "y_norm": 0.22,
-              "radius_ratio": 0.1,
-              "hold_time": 0.1,
+              "x_norm": 0.6767766952966369,
+              "y_norm": 0.6767766952966369,
+              "radius_ratio": 0.25,
+              "hold_time": 0.15,
               "reward_channel": 2,
               "target_color": [
-                255,
-                255,
-                255
+                154,
+                153,
+                150
               ],
               "target_opacity": 1.0,
               "target_active_color": [
-                255,
-                255,
-                255
+                249,
+                240,
+                107
               ],
               "target_active_opacity": 1.0
             },
             {
-              "name": "L",
-              "enabled": true,
-              "x_norm": 0.35,
-              "y_norm": 0.5,
-              "radius_ratio": 0.1,
-              "hold_time": 0.1,
-              "reward_channel": 3,
-              "target_color": [
-                255,
-                255,
-                255
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "T2",
+              "name": "Target 3",
               "enabled": true,
               "x_norm": 0.5,
               "y_norm": 0.75,
-              "radius_ratio": 0.1,
-              "hold_time": 0.1,
+              "radius_ratio": 0.25,
+              "hold_time": 0.15,
               "reward_channel": 2,
               "target_color": [
-                255,
-                255,
-                255
+                154,
+                153,
+                150
               ],
               "target_opacity": 1.0,
               "target_active_color": [
-                255,
-                255,
-                255
+                249,
+                240,
+                107
               ],
               "target_active_opacity": 1.0
             },
             {
-              "name": "T",
+              "name": "Target 4",
               "enabled": true,
-              "x_norm": 0.5,
-              "y_norm": 0.65,
-              "radius_ratio": 0.1,
-              "hold_time": 0.1,
-              "reward_channel": 3,
-              "target_color": [
-                255,
-                255,
-                255
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "T3",
-              "enabled": true,
-              "x_norm": 0.5,
-              "y_norm": 0.9,
-              "radius_ratio": 0.1,
-              "hold_time": 0.1,
+              "x_norm": 0.323,
+              "y_norm": 0.677,
+              "radius_ratio": 0.25,
+              "hold_time": 0.15,
               "reward_channel": 2,
               "target_color": [
-                255,
-                255,
-                255
+                154,
+                153,
+                150
               ],
               "target_opacity": 1.0,
               "target_active_color": [
-                255,
-                255,
-                255
+                249,
+                240,
+                107
               ],
               "target_active_opacity": 1.0
             },
             {
-              "name": "TL2",
-              "enabled": true,
-              "x_norm": 0.3,
-              "y_norm": 0.75,
-              "radius_ratio": 0.1,
-              "hold_time": 0.1,
-              "reward_channel": 2,
-              "target_color": [
-                255,
-                255,
-                255
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "BL2",
-              "enabled": true,
-              "x_norm": 0.3,
-              "y_norm": 0.22,
-              "radius_ratio": 0.1,
-              "hold_time": 0.1,
-              "reward_channel": 2,
-              "target_color": [
-                255,
-                255,
-                255
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "TL3",
-              "enabled": true,
-              "x_norm": 0.3,
-              "y_norm": 0.9,
-              "radius_ratio": 0.12,
-              "hold_time": 0.1,
-              "reward_channel": 1,
-              "target_color": [
-                220,
-                138,
-                221
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "TL",
-              "enabled": true,
-              "x_norm": 0.3,
-              "y_norm": 0.6,
-              "radius_ratio": 0.1,
-              "hold_time": 0.1,
-              "reward_channel": 2,
-              "target_color": [
-                255,
-                255,
-                255
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "L2",
+              "name": "Target 5",
               "enabled": true,
               "x_norm": 0.25,
               "y_norm": 0.5,
-              "radius_ratio": 0.1,
-              "hold_time": 0.1,
+              "radius_ratio": 0.25,
+              "hold_time": 0.15,
               "reward_channel": 2,
               "target_color": [
-                255,
-                255,
-                255
+                154,
+                153,
+                150
               ],
               "target_opacity": 1.0,
               "target_active_color": [
-                255,
-                255,
-                255
+                249,
+                240,
+                107
               ],
               "target_active_opacity": 1.0
             },
             {
-              "name": "L3",
+              "name": "Target 6",
               "enabled": true,
-              "x_norm": 0.18,
-              "y_norm": 0.5,
-              "radius_ratio": 0.1,
-              "hold_time": 0.1,
-              "reward_channel": 1,
-              "target_color": [
-                220,
-                138,
-                221
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "B",
-              "enabled": true,
-              "x_norm": 0.5,
-              "y_norm": 0.35,
-              "radius_ratio": 0.1,
-              "hold_time": 0.1,
-              "reward_channel": 3,
-              "target_color": [
-                255,
-                255,
-                255
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "B3",
-              "enabled": true,
-              "x_norm": 0.5,
-              "y_norm": 0.142,
-              "radius_ratio": 0.1,
-              "hold_time": 0.1,
-              "reward_channel": 1,
-              "target_color": [
-                220,
-                138,
-                221
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "BL",
-              "enabled": true,
-              "x_norm": 0.3,
-              "y_norm": 0.35,
-              "radius_ratio": 0.1,
-              "hold_time": 0.1,
+              "x_norm": 0.3232233047033631,
+              "y_norm": 0.32322330470336313,
+              "radius_ratio": 0.25,
+              "hold_time": 0.15,
               "reward_channel": 2,
               "target_color": [
-                255,
-                255,
-                255
+                154,
+                153,
+                150
               ],
               "target_opacity": 1.0,
               "target_active_color": [
-                255,
-                255,
-                255
+                249,
+                240,
+                107
               ],
               "target_active_opacity": 1.0
             },
             {
-              "name": "BL3",
+              "name": "Target 7",
               "enabled": true,
-              "x_norm": 0.3,
-              "y_norm": 0.14,
-              "radius_ratio": 0.1,
-              "hold_time": 0.1,
-              "reward_channel": 1,
-              "target_color": [
-                220,
-                138,
-                221
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "TR",
-              "enabled": true,
-              "x_norm": 0.8,
-              "y_norm": 0.65,
-              "radius_ratio": 0.12,
-              "hold_time": 0.1,
-              "reward_channel": 1,
-              "target_color": [
-                220,
-                138,
-                221
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "BR",
-              "enabled": true,
-              "x_norm": 0.7,
-              "y_norm": 0.35,
-              "radius_ratio": 0.1,
-              "hold_time": 0.1,
+              "x_norm": 0.49999999999999994,
+              "y_norm": 0.25,
+              "radius_ratio": 0.25,
+              "hold_time": 0.15,
               "reward_channel": 2,
               "target_color": [
-                255,
-                255,
-                255
+                154,
+                153,
+                150
               ],
               "target_opacity": 1.0,
               "target_active_color": [
-                255,
-                255,
-                255
+                249,
+                240,
+                107
               ],
               "target_active_opacity": 1.0
             },
             {
-              "name": "BLL3",
+              "name": "Target 8",
               "enabled": true,
-              "x_norm": 0.18,
-              "y_norm": 0.14,
-              "radius_ratio": 0.1,
-              "hold_time": 0.1,
-              "reward_channel": 1,
-              "target_color": [
-                220,
-                138,
-                221
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "BLL2",
-              "enabled": true,
-              "x_norm": 0.18,
-              "y_norm": 0.22,
-              "radius_ratio": 0.1,
-              "hold_time": 0.1,
-              "reward_channel": 1,
-              "target_color": [
-                220,
-                138,
-                221
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "BLL",
-              "enabled": true,
-              "x_norm": 0.18,
-              "y_norm": 0.35,
-              "radius_ratio": 0.1,
-              "hold_time": 0.1,
-              "reward_channel": 1,
-              "target_color": [
-                220,
-                138,
-                221
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "TLL",
-              "enabled": true,
-              "x_norm": 0.18,
-              "y_norm": 0.6,
-              "radius_ratio": 0.1,
-              "hold_time": 0.1,
-              "reward_channel": 1,
-              "target_color": [
-                220,
-                138,
-                221
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "TLL2",
-              "enabled": true,
-              "x_norm": 0.18,
-              "y_norm": 0.75,
-              "radius_ratio": 0.1,
-              "hold_time": 0.1,
-              "reward_channel": 1,
-              "target_color": [
-                220,
-                138,
-                221
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "TLL3",
-              "enabled": true,
-              "x_norm": 0.18,
-              "y_norm": 0.9,
-              "radius_ratio": 0.12,
-              "hold_time": 0.1,
-              "reward_channel": 1,
-              "target_color": [
-                220,
-                138,
-                221
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "TR2",
-              "enabled": true,
-              "x_norm": 0.8,
-              "y_norm": 0.8,
-              "radius_ratio": 0.12,
-              "hold_time": 0.1,
-              "reward_channel": 1,
-              "target_color": [
-                220,
-                138,
-                221
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "BR2",
-              "enabled": true,
-              "x_norm": 0.7,
-              "y_norm": 0.2,
-              "radius_ratio": 0.14,
-              "hold_time": 0.1,
-              "reward_channel": 1,
-              "target_color": [
-                220,
-                138,
-                221
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "BRR",
-              "enabled": true,
-              "x_norm": 0.8,
-              "y_norm": 0.35,
-              "radius_ratio": 0.12,
-              "hold_time": 0.1,
-              "reward_channel": 1,
-              "target_color": [
-                220,
-                138,
-                221
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "BRR2",
-              "enabled": true,
-              "x_norm": 0.8,
-              "y_norm": 0.2,
-              "radius_ratio": 0.14,
-              "hold_time": 0.1,
-              "reward_channel": 1,
-              "target_color": [
-                220,
-                138,
-                221
-              ],
-              "target_opacity": 1.0,
-              "target_active_color": [
-                255,
-                255,
-                255
-              ],
-              "target_active_opacity": 1.0
-            },
-            {
-              "name": "R2",
-              "enabled": true,
-              "x_norm": 0.85,
-              "y_norm": 0.5,
-              "radius_ratio": 0.1,
-              "hold_time": 0.1,
+              "x_norm": 0.6767766952966369,
+              "y_norm": 0.3232233047033631,
+              "radius_ratio": 0.25,
+              "hold_time": 0.15,
               "reward_channel": 2,
               "target_color": [
-                255,
-                255,
-                255
+                154,
+                153,
+                150
               ],
               "target_opacity": 1.0,
               "target_active_color": [
-                255,
-                255,
-                255
+                249,
+                240,
+                107
               ],
               "target_active_opacity": 1.0
             }
@@ -8994,7 +9249,7 @@
           "zero_drift_mode": true,
           "zero_drift_buffer": 0.05,
           "direct_range": 0.45,
-          "cursor_diameter_ratio": 0.05,
+          "cursor_diameter_ratio": 0.08,
           "cursor_color": [
             255,
             190,
@@ -9005,7 +9260,7 @@
           "task_region_width": 0.5,
           "task_region_height": 0.67,
           "reward_channel": 2.0,
-          "trial_timeout": 15.0,
+          "trial_timeout": 25.0,
           "intertrial_interval": 2.0,
           "disable_up": true,
           "disable_down": true,
@@ -9029,7 +9284,7 @@
           "ignore_idle_trial_failures": true,
           "state_indicator_x": 30.0,
           "state_indicator_y": 70.0,
-          "reset_cursor_each_trial": false,
+          "reset_cursor_each_trial": true,
           "direct_recenter_when_idle": false,
           "free_play_reward_enabled": false,
           "free_play_reward_policy": "touch_bouts",
@@ -9051,7 +9306,13 @@
           "ignored_idle_sample_clear_threshold": 50,
           "fail_on_touch_input": false,
           "max_logged_joystick_samples": 2000,
-          "show_success_particles": true
+          "show_success_particles": true,
+          "target_layout_editor_geometry": {
+            "x": 563,
+            "y": 353,
+            "width": 900,
+            "height": 560
+          }
         },
         {
           "task_type": "joystick_intro",
@@ -9669,10 +9930,10 @@
     "capture_mode": "framebuffer",
     "show_eye_scaling": false,
     "view_geometry": [
-      665,
-      1235,
-      669,
-      515
+      598,
+      1200,
+      703,
+      587
     ],
     "auto_launch": true
   }

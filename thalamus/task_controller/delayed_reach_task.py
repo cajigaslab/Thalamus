@@ -226,7 +226,7 @@ def toggle_brightness(brightness):
 
 async def next_state(context, new_state, stim_phase, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period):
   await context.log(f'BehavState={new_state.name}')
-  return stimulator(context, stim_start, intan_cfg, pulse_width, pulse_count, pulse_period) if new_state == stim_phase else nullcontext()
+  return nullcontext()
 
 @animate(30)
 async def run(context: task_context.TaskContextProtocol) -> task_context.TaskResult: #pylint: disable=too-many-statements
