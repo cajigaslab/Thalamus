@@ -1,4 +1,5 @@
 #include <thalamus/throttle.hpp>
+#include <algorithm>
 
 using namespace thalamus;
 using namespace std::chrono_literals;
