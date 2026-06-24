@@ -4,6 +4,7 @@
 #include <thalamus/thread_pool.hpp>
 
 #include <thalamus/modalities_util.hpp>
+#include <thalamus/throttle.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -56,6 +57,7 @@ struct DistortionNode::Impl {
   size_t columns;
   double x_gain;
   double y_gain;
+  std::atomic<double> framerate;
   bool invert_x;
   bool invert_y;
   size_t source_width = std::numeric_limits<size_t>::max();
@@ -103,11 +105,17 @@ struct DistortionNode::Impl {
 
   void stop() {}
 
+  Throttle throttle;
   void on_data(Node *) {
     auto id = get_unique_id();
     TRACE_EVENT_BEGIN("thalamus", "DistortionNode::on_data",
                       perfetto::Flow::ProcessScoped(id));
     if (image_source->format() != ImageNode::Format::Gray || pool.full()) {
+      TRACE_EVENT_END("thalamus");
+      return;
+    }
+
+    if(!throttle.update(image_source->time(), this->framerate.load())) {
       TRACE_EVENT_END("thalamus");
       return;
     }
@@ -298,6 +306,8 @@ struct DistortionNode::Impl {
       threshold = size_t(std::get<int64_t>(v));
     } else if (key_str == "Computing") {
       computing = std::get<bool>(v);
+    } else if (key_str == "Framerate") {
+      framerate = std::get<double>(v);
     } else if (key_str == "Square Size") {
       square_size = std::get<double>(v);
     } else if (key_str == "Show Threshold" || key_str == "Apply Threshold") {
