@@ -384,7 +384,7 @@ class ArucoWidget(QWidget):
       for row in sorted(rows, reverse=True):
         board = boards[row]
         file_name = QFileDialog.getSaveFileName(self, "Save file", str(pathlib.Path.cwd() / f'board{row}.png'), "*.png *.jpg")
-        if file_name:
+        if file_name and file_name[0]:
           rows, columns = board['Rows'], board['Columns']
           ids = numpy.array(board['ids'])
           grid = cv2.aruco.GridBoard((columns, rows), board['Marker Size'], board['Marker Separation'], aruco_dict, ids)
