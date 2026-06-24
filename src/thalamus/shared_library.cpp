@@ -36,7 +36,7 @@ SharedLibrary::SharedLibrary(const std::string& name) : impl(new Impl(name)) {}
 SharedLibrary::SharedLibrary(SharedLibrary&& that) : impl(std::move(that.impl)) {}
 SharedLibrary::~SharedLibrary() {}
 
-std::string SharedLibrary::path() {
+std::string SharedLibrary::name() {
   return impl->name;
 }
 
