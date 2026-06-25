@@ -8,6 +8,7 @@ use serde::{Serialize, Deserialize};
 
 mod ffi;
 mod wakers;
+mod ball_node;
 pub mod api;
 use api::{
   ThalamusNode,
@@ -20,6 +21,7 @@ use api::{
   ThalamusNodeFactory,
   StateValue
 };
+use ball_node::BallNode;
 use futures::select;
 //use regex::Regex;
 
@@ -678,5 +680,6 @@ impl Node for AlgebraNode {
 export_nodes!(
   ("EXT_DEMO", DemoNode),
   ("EXT_SERIAL", SerialNode),
-  ("EXT_ALGEBRA", AlgebraNode)
+  ("EXT_ALGEBRA", AlgebraNode),
+  ("EXT_BALL", BallNode)
 );
