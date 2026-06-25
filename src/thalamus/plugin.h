@@ -111,21 +111,20 @@ extern "C" {
   };
 
   enum ThalamusImageFormat {
-    Gray,
-    RGB,
-    YUYV422,
-    YUV420P,
-    YUVJ420P,
+    Gray = 0,
+    RGB = 1,
+    YUYV422 = 2,
+    YUV420P = 3,
+    YUVJ420P = 4,
   };
 
   struct ThalamusImageNode {
     void (*plane)(struct ThalamusByteSpan*, struct ThalamusNode*, int channel);
-    size_t (*num_planes)(struct ThalamusNode*);
+    uint64_t (*num_planes)(struct ThalamusNode*);
     enum ThalamusImageFormat (*format)(struct ThalamusNode*);
-    size_t (*width)(struct ThalamusNode*);
-    size_t (*height)(struct ThalamusNode*);
-    size_t (*frame_interval_ns)(struct ThalamusNode*);
-    //void (*inject)(ThalamusNode*, const thalamus_grpc::Image &);
+    uint64_t (*width)(struct ThalamusNode*);
+    uint64_t (*height)(struct ThalamusNode*);
+    uint64_t (*frame_interval_ns)(struct ThalamusNode*);
     char (*has_image_data)(struct ThalamusNode*);
   };
   
