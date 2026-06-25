@@ -7,6 +7,17 @@ from .. import thalamus_pb2
 
 LOGGER = logging.getLogger(__name__)
 
+VIEW_ROTATIONS = {
+  '0': 0,
+  '90': 90,
+  '180': 180,
+  '270': 270,
+  0: 0,
+  90: 90,
+  180: 180,
+  270: 270,
+}
+
 class Edge(enum.Enum):
   LEFT = enum.auto()
   RIGHT = enum.auto()
@@ -234,6 +245,8 @@ class GenicamWidget(QWidget):
 
     if 'Running' not in config:
       config['Running'] = False
+    if 'View Rotation' not in config:
+      config['View Rotation'] = 0
 
     config.add_recursive_observer(self.on_change, lambda: isdeleted(self))
 
@@ -246,6 +259,14 @@ class GenicamWidget(QWidget):
     self.running_checkbox = QCheckBox('Running')
     self.running_checkbox.toggled.connect(lambda value: config.update({'Running': value}))
     layout.addWidget(self.running_checkbox)
+
+    layout.addWidget(QLabel('View Rotation:'))
+    self.view_rotation_combobox = QComboBox()
+    for rotation in (0, 90, 180, 270):
+      self.view_rotation_combobox.addItem(f'{rotation} deg', rotation)
+    self.view_rotation_combobox.currentIndexChanged.connect(
+      lambda _: config.update({'View Rotation': self.view_rotation_combobox.currentData()}))
+    layout.addWidget(self.view_rotation_combobox)
 
     self.roi_widget = RoiWidget(config)
     layout.addWidget(self.roi_widget)
@@ -316,6 +337,12 @@ class GenicamWidget(QWidget):
     elif key == 'Running':
       if self.running_checkbox.isChecked() != value:
         self.running_checkbox.setChecked(value)
+    elif key == 'View Rotation':
+      index = self.view_rotation_combobox.findData(VIEW_ROTATIONS.get(value, 0))
+      if index < 0:
+        index = 0
+      if self.view_rotation_combobox.currentIndex() != index:
+        self.view_rotation_combobox.setCurrentIndex(index)
     elif key == 'Camera':
       self.camera_combobox.setCurrentText(value)
     elif key == 'AcquisitionFrameRate':
@@ -327,4 +354,3 @@ class GenicamWidget(QWidget):
     elif key == 'Gain':
       if abs(self.gain_spinbox.value() - value) >= 1:
         self.gain_spinbox.setValue(value)
-
