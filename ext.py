@@ -22,6 +22,12 @@ def widgets():
     'EXT_BALL': Factory(None, [
       UserData(UserDataType.CHECK_BOX, 'View', False, []),
     ]),
+    'EXT_ARUCO': Factory(None, [
+      UserData(UserDataType.CHECK_BOX, 'View', False, []),
+      UserData(UserDataType.COMBO_BOX, 'source', '', get_node_names),
+    ]),
+    'EXT_MOCAP': Factory(None, [
+    ]),
   }
 
 def library():

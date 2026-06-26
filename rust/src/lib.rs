@@ -2,13 +2,15 @@ use std::ops::Deref;
 use std::rc::{Rc, Weak};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::{self, JoinHandle, sleep};
-use std::{cell::RefCell, ptr};
+use std::{cell::RefCell, ptr, cell::Ref};
 use std::time::{Duration};
 use serde::{Serialize, Deserialize};
 
 mod ffi;
 mod wakers;
 mod ball_node;
+mod aruco_node;
+mod mocap_node;
 pub mod api;
 use api::{
   ThalamusNode,
@@ -22,10 +24,12 @@ use api::{
   StateValue
 };
 use ball_node::BallNode;
+use aruco_node::ArucoNode;
+use mocap_node::IdentityMocapNode;
 use futures::select;
 //use regex::Regex;
 
-use crate::api::{ExtNode, Json, Sleeper, SleeperWaker, SliceDeref, StateKey, StrDeref, TaskScope, ThalamusAPI, run_task};
+use crate::api::{ExtNode, Json, Sleeper, SleeperWaker, StateKey, TaskScope, ThalamusAPI, run_task};
 
 enum Message {
   Running(bool),
@@ -60,7 +64,7 @@ impl AnalogNode for DemoNode {
           &self,
           _channel: i32,
       ) -> impl Deref<Target = [f64]> {
-    SliceDeref::new(self.inner.samples.borrow(), None, None)
+    Ref::map(self.inner.samples.borrow(), |v| &v[..])
   }
 
   fn num_channels(&self) -> i32 { 1 }
@@ -454,9 +458,9 @@ impl AnalogNode for SerialNode {
       ) -> impl Deref<Target = [f64]> {
     
       match _channel {
-          0 => SliceDeref::new(self.inner.samples.borrow(), Some(0), Some(1)),
-          1 => SliceDeref::new(self.inner.samples.borrow(), Some(1), Some(2)),
-          _ => SliceDeref::new(self.inner.samples.borrow(), Some(0), Some(0))
+          0 => Ref::map(self.inner.samples.borrow(), |v| &v[0..1]),
+          1 => Ref::map(self.inner.samples.borrow(), |v| &v[1..2]),
+          _ => Ref::map(self.inner.samples.borrow(), |v| &v[0..0]),
       }
   }
 
@@ -537,7 +541,7 @@ struct AlgebraNode {
 }
 
 impl AlgebraNodeInner {
-  fn on_data(&self, node: &ExtNode) {
+  fn on_data(&self, node: ExtNode) {
     let Some(analog) = node.analog() else {
       return;
     };
@@ -618,8 +622,8 @@ impl AnalogNode for AlgebraNode {
       ) -> impl Deref<Target = [f64]> {
     
       match _channel {
-          0 => SliceDeref::new(self.inner.samples.borrow(), None, None),
-          _ => SliceDeref::new(self.inner.samples.borrow(), Some(0), Some(0))
+          0 => Ref::map(self.inner.samples.borrow(), |v| &v[..]),
+          _ => Ref::map(self.inner.samples.borrow(), |v| &v[..0])
       }
   }
 
@@ -632,7 +636,7 @@ impl AnalogNode for AlgebraNode {
           _channel: i32,
       ) -> impl Deref<Target = str> {
       match _channel {
-          0 => StrDeref{ inner: self.inner.channel_name.borrow() },
+          0 => Ref::map(self.inner.channel_name.borrow(), |v| v.as_str()),
           _ => panic!("Error")
       }
   }
@@ -681,5 +685,7 @@ export_nodes!(
   ("EXT_DEMO", DemoNode),
   ("EXT_SERIAL", SerialNode),
   ("EXT_ALGEBRA", AlgebraNode),
-  ("EXT_BALL", BallNode)
+  ("EXT_BALL", BallNode),
+  ("EXT_ARUCO", ArucoNode),
+  ("EXT_MOCAP", IdentityMocapNode)
 );

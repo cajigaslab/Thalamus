@@ -41,19 +41,19 @@ extern "C" {
 
   struct ThalamusDoubleSpan {
     const double* data;
-    size_t size;
+    uint64_t size;
   };
   struct ThalamusShortSpan {
     const short* data;
-    size_t size;
+    uint64_t size;
   };
   struct ThalamusIntSpan {
     const int* data;
-    size_t size;
+    uint64_t size;
   };
   struct ThalamusULongSpan {
     const uint64_t* data;
-    size_t size;
+    uint64_t size;
   };
   struct ThalamusByteSpan {
     const uint8_t* data;
@@ -137,14 +137,13 @@ extern "C" {
     unsigned char actor;
   };
   struct ThalamusMocapSegmentSpan {
-    struct ThalamusMocapSegment* data;
+    const struct ThalamusMocapSegment* data;
     uint64_t size;
   };
 
   struct ThalamusMocapNode {
     void (*segments)(struct ThalamusMocapSegmentSpan*, struct ThalamusNode*);
-    const char* (*pose_name)(struct ThalamusNode*);
-    //void (*inject)(ThalamusNode*, const ThalamusMocapSegmentSpan);
+    void (*pose_name)(struct ThalamusCharSpan*, struct ThalamusNode*);
     char (*has_motion_data)(struct ThalamusNode*);
   };
   struct ThalamusTextNode {
@@ -171,7 +170,7 @@ extern "C" {
   struct ThalamusNodeGetConnection;
   struct ThalamusNodeReadyConnection;
 
-  typedef void (*ThalamusIOCallback)(struct ThalamusErrorCode*, size_t, void* data);
+  typedef void (*ThalamusIOCallback)(struct ThalamusErrorCode*, uint64_t, void* data);
   typedef void (*ThalamusNodeGetCallback)(struct ThalamusNode*, void* data);
   typedef void (*ThalamusNodeReadyCallback)(struct ThalamusNode*, void* data);
 
@@ -190,7 +189,7 @@ extern "C" {
     char (*state_get_bool)(struct ThalamusState*);
 
     struct ThalamusState* (*state_get_at_name)(struct ThalamusState*, const char*);
-    struct ThalamusState* (*state_get_at_index)(struct ThalamusState*, size_t);
+    struct ThalamusState* (*state_get_at_index)(struct ThalamusState*, uint64_t);
 
     void (*state_dec_ref)(struct ThalamusState*);
     void (*state_inc_ref)(struct ThalamusState*);
@@ -199,7 +198,7 @@ extern "C" {
 
     struct ThalamusTimer* (*timer_create)();
     void (*timer_destroy)(struct ThalamusTimer*);
-    void (*timer_expire_after_ns)(struct ThalamusTimer*, size_t);
+    void (*timer_expire_after_ns)(struct ThalamusTimer*, uint64_t);
     void (*timer_async_wait)(struct ThalamusTimer*, ThalamusTimerCallback, void*);
 
     int (*error_code_value)(struct ThalamusErrorCode*);
@@ -228,7 +227,7 @@ extern "C" {
 
     void (*trace_event_begin)(const char*);
 
-    void (*trace_event_begin_span)(const char*, size_t);
+    void (*trace_event_begin_span)(const char*, uint64_t);
 
     void (*trace_event_end)();
 
@@ -242,7 +241,7 @@ extern "C" {
 
     struct ThalamusErrorCode* (*serial_port_error)(struct ThalamusSerialPort*);
 
-    void (*serial_port_read_until)(struct ThalamusSerialPort* port, struct ThalamusStreamBuf* buffer, char* delimiter, size_t delimiter_len, ThalamusIOCallback callback, void* data);
+    void (*serial_port_read_until)(struct ThalamusSerialPort* port, struct ThalamusStreamBuf* buffer, char* delimiter, uint64_t delimiter_len, ThalamusIOCallback callback, void* data);
     
     void (*serial_port_read_some)(struct ThalamusSerialPort* port, struct ThalamusMutableByteSpan* span, ThalamusIOCallback callback, void* data);
 
@@ -253,8 +252,8 @@ extern "C" {
     struct ThalamusStreamBuf* (*streambuf_create)();
     void (*streambuf_destroy)(struct ThalamusStreamBuf* port);
     void (*streambuf_to_span)(struct ThalamusCharSpan*, struct ThalamusStreamBuf* buffer);
-    void (*streambuf_consume)(struct ThalamusStreamBuf* buffer, size_t count);
-    size_t (*streambuf_size)(struct ThalamusStreamBuf* buffer);
+    void (*streambuf_consume)(struct ThalamusStreamBuf* buffer, uint64_t count);
+    uint64_t (*streambuf_size)(struct ThalamusStreamBuf* buffer);
     void (*charspan_release)(struct ThalamusCharSpan* span);
 
     void (*error_code_message)(struct ThalamusCharSpan* result, struct ThalamusErrorCode *error);
@@ -278,6 +277,9 @@ extern "C" {
 
     ThalamusNodeReadyConnection* (*node_channels_changed_connect)(struct ThalamusNode*, ThalamusNodeReadyCallback callback, void* data);
     void (*node_channels_changed_disconnect)(struct ThalamusNodeReadyConnection*);
+
+    void (*node_inc_ref)(struct ThalamusNode* node);
+    void (*node_dec_ref)(struct ThalamusNode* node);
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories)(struct ThalamusAPI*);
