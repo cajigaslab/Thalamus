@@ -297,7 +297,9 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
     return std::span<MotionCaptureNode::Segment const>(temp.data, temp.data+temp.size);
   }
   const std::string_view pose_name() const override {
-    return node->mocap->pose_name(node);
+    ThalamusCharSpan temp;
+    node->mocap->pose_name(&temp, node);
+    return std::string_view(temp.data, temp.data+temp.size);
   }
   void inject(const std::span<MotionCaptureNode::Segment const> &) override {
     THALAMUS_ABORT("Unimplemented");
@@ -333,11 +335,43 @@ ExtNode::~ExtNode() {
 struct Interfaces {
   Node* node = nullptr;
   AnalogNode* analog = nullptr;
+  ImageNode* image = nullptr;
+  MotionCaptureNode* mocap = nullptr;
   bool safe = false;
   int count = 0;
 };
 
 #define ASSERT_SAFE() do { if(!interfaces->safe) [[unlikely]] { THALAMUS_ABORT("Node should only be accessed in get_node or ready callback"); } } while(0)
+
+static uint64_t plugin_analog_time_ns(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  std::chrono::nanoseconds t = interfaces->analog->time();
+  return uint64_t(t.count());
+}
+
+static uint64_t plugin_image_time_ns(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  std::chrono::nanoseconds t = interfaces->image->time();
+  return uint64_t(t.count());
+}
+
+static uint64_t plugin_mocap_time_ns(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  std::chrono::nanoseconds t = interfaces->mocap->time();
+  return uint64_t(t.count());
+}
+
+static void plugin_node_process(struct ThalamusNode* node, struct ThalamusRequestHandle* handle, struct ThalamusJson* request) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  interfaces->node->process(request->value, [handle](const boost::json::value & response) {
+    handle->callback(response);
+    delete handle;
+  });
+}
 
 static void plugin_analog_data(struct ThalamusDoubleSpan* output, struct ThalamusNode* node, int channel) {
   auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
@@ -434,6 +468,84 @@ static double plugin_analog_offset(struct ThalamusNode* node, int channel) {
   return interfaces->analog->offset(channel);
 }
 
+static void plugin_image_plane(struct ThalamusByteSpan* output, struct ThalamusNode* node, int channel) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  auto span = interfaces->image->plane(channel);
+  output->data = span.data();
+  output->size = span.size();
+}
+
+static uint64_t plugin_image_num_planes(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  return interfaces->image->num_planes();
+}
+
+static ThalamusImageFormat plugin_image_format(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  switch(interfaces->image->format()) {
+  case ImageNode::Format::Gray:
+    return ThalamusImageFormat::Gray;
+  case ImageNode::Format::RGB:
+    return ThalamusImageFormat::RGB;
+  case ImageNode::Format::YUYV422:
+    return ThalamusImageFormat::YUYV422;
+  case ImageNode::Format::YUV420P:
+    return ThalamusImageFormat::YUV420P;
+  case ImageNode::Format::YUVJ420P:
+    return ThalamusImageFormat::YUVJ420P;
+  }
+}
+
+static uint64_t plugin_image_width(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  return interfaces->image->width();
+}
+
+static uint64_t plugin_image_height(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  return interfaces->image->height();
+}
+
+static uint64_t plugin_image_frame_interval_ns(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  std::chrono::nanoseconds ns = interfaces->image->frame_interval();
+  return uint64_t(ns.count());
+}
+
+static char plugin_image_has_image_data(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  return interfaces->image->has_image_data() ? 1 : 0;
+}
+
+static void plugin_mocap_segments(ThalamusMocapSegmentSpan* output, struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  auto segments = interfaces->mocap->segments();
+  output->data = segments.data();
+  output->size = segments.size();
+}
+
+static void plugin_mocap_pose_name(ThalamusCharSpan* output, struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  auto name = interfaces->mocap->pose_name();
+  output->data = name.data();
+  output->size = name.size();
+}
+
+static char plugin_mocap_has_motion_data(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  return interfaces->mocap->has_motion_data() ? 1 : 0;
+}
+
 struct NodeGuard {
   Interfaces* interfaces;
   NodeGuard(ThalamusNode* node) : interfaces(reinterpret_cast<Interfaces*>(node->impl)) {
@@ -462,10 +574,14 @@ struct ThalamusAPIImpl {
     interfaces->node = node;
     interfaces->count = 1;
     result->impl = interfaces;
+    result->process = plugin_node_process;
 
-    AnalogNode* analog;
-    if((analog = node_cast<AnalogNode*>(node))) {
+    auto analog = node_cast<AnalogNode *>(node);
+    auto image = node_cast<ImageNode *>(node);
+    auto mocap = node_cast<MotionCaptureNode *>(node);
+    if(analog) {
       interfaces->analog = analog;
+      result->time_ns = result->time_ns ? result->time_ns : plugin_analog_time_ns;
       result->analog = new ThalamusAnalogNode();
       result->analog->data = plugin_analog_data;
       result->analog->short_data = plugin_analog_short_data;
@@ -481,6 +597,26 @@ struct ThalamusAPIImpl {
       result->analog->is_transformed = plugin_analog_is_transformed;
       result->analog->scale = plugin_analog_scale;
       result->analog->offset = plugin_analog_offset;
+    }
+    if (image) {
+      interfaces->image = image;
+      result->time_ns = result->time_ns ? result->time_ns : plugin_image_time_ns;
+      result->image = new ThalamusImageNode();
+      result->image->plane = plugin_image_plane;
+      result->image->num_planes = plugin_image_num_planes;
+      result->image->format = plugin_image_format;
+      result->image->width = plugin_image_width;
+      result->image->height = plugin_image_height;
+      result->image->frame_interval_ns = plugin_image_frame_interval_ns;
+      result->image->has_image_data = plugin_image_has_image_data;
+    }
+    if (mocap) {
+      interfaces->mocap = mocap;
+      result->time_ns = result->time_ns ? result->time_ns : plugin_mocap_time_ns;
+      result->mocap = new ThalamusMocapNode();
+      result->mocap->segments = plugin_mocap_segments;
+      result->mocap->pose_name = plugin_mocap_pose_name;
+      result->mocap->has_motion_data = plugin_mocap_has_motion_data;
     }
 
     return result;
@@ -539,12 +675,12 @@ struct ThalamusAPIImpl {
 
   static void state_inc_ref(ThalamusState* state) {
     ++state->count;
-    THALAMUS_LOG(info) << "state_inc_ref " << get_path(state->value) << " " << state->count;
+    //THALAMUS_LOG(info) << "state_inc_ref " << get_path(state->value) << " " << state->count;
   }
 
   static void state_dec_ref(ThalamusState* state) {
     --state->count;
-    THALAMUS_LOG(info) << "state_dec_ref " << get_path(state->value) << " " << state->count;
+    //THALAMUS_LOG(info) << "state_dec_ref " << get_path(state->value) << " " << state->count;
     if(state->count == 0) {
       c_to_cpp->erase(state);
       cpp_to_c->erase(state->value);
@@ -1139,6 +1275,9 @@ public:
     thalamus_api.node_channels_changed_connect = ThalamusAPIImpl::node_channels_changed_connect;
     thalamus_api.node_channels_changed_disconnect = ThalamusAPIImpl::node_channels_changed_disconnect;
 
+    thalamus_api.node_inc_ref = ThalamusAPIImpl::node_inc_ref;
+    thalamus_api.node_dec_ref = ThalamusAPIImpl::node_dec_ref;
+
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},
         {"NIDAQ", new NodeFactory<NidaqNode>()},
@@ -1265,6 +1404,10 @@ public:
       node_impls.insert(node_impls.begin() + index, node_impl);
       node_types.insert(node_types.begin() + index, type_str);
       node->recap(std::bind(&Impl::on_node, this, node.get(), _1, _2, _3));
+    } else {
+      auto index = std::get<int64_t>(k);
+      node_impls.erase(node_impls.begin() + index);
+      node_types.erase(node_types.begin() + index);
     }
   }
 
