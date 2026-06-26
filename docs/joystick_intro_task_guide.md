@@ -171,6 +171,16 @@ This reward path is only used when `cursor_only_mode` is `true`. Normal target-b
 
 Reward channels in this task are looked up through the shared task-controller reward schedule. See [Reward Schedule Configuration](reward_schedule_configuration.md) for how schedule files, channel indexes, and reward durations are currently wired together.
 
+### `reward_scale`
+
+The reward channel still selects a base pulse duration (ms) from the shared reward schedule, exactly as every other task expects. This task then applies `reward_scale`, a continuous multiplier, to that base duration just before the reward pulse is injected:
+
+```
+effective_ms = round(base_ms * reward_scale)
+```
+
+This lets reward be ramped in fine, sub-channel steps (e.g. dialing `1.000 -> 0.950 -> 0.900` against a 600 ms base gives 30 ms decrements) instead of jumping a whole channel. `reward_scale` defaults to `1.0`, which reproduces the original behavior exactly, and it is local to this task only — the shared `reward_schedule`, `get_reward`, and channel layout are unchanged, so other tasks are unaffected. The multiplier applies to every reward this task delivers (trial success, streak bonus, and free-play). The value used is recorded on `reward_triggered`/`bonus_reward_triggered` events for the trial log.
+
 ### Free-play reward settings
 
 The cursor-only free-play controls are grouped together in the task UI. The enable checkbox is always visible in that group, and the end-key plus reward controls are shown underneath it when cursor-only free play is enabled.

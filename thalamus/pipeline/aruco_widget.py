@@ -11,13 +11,19 @@ import logging
 
 LOGGER = logging.getLogger(__name__)
 
-# Default calibration-wand geometry (T-shaped, 3 markers, 4x4 30mm), measured
-# from the wand STL.  Origin at the T-junction, units meters.
+# Default calibration-wand geometry (T-shaped, 3 markers, 4x4 27mm), measured
+# from the wand STL.  Origin at the T-junction, units meters.  The x/y/z here are
+# each marker's known position in wand space; they seed the node-level Calibration
+# block (the source of truth for known distances).  The detection boards created
+# from this place each marker at its own local origin (see make_wand_boards).
 WAND_MARKERS = [
-  {'id': 1, 'x': -0.040, 'y':  0.000000, 'z': 0.0, 'rx': 0.0, 'ry': 0.0, 'rz': 0.0, 'size': 0.030},
-  {'id': 2, 'x':  0.040, 'y':  0.000000, 'z': 0.0, 'rx': 0.0, 'ry': 0.0, 'rz': 0.0, 'size': 0.030},
-  {'id': 3, 'x':  0.000, 'y': -0.091652, 'z': 0.0, 'rx': 0.0, 'ry': 0.0, 'rz': 0.0, 'size': 0.030},
+  {'id': 1, 'x': -0.040, 'y':  0.000000, 'z': 0.0, 'rx': 0.0, 'ry': 0.0, 'rz': 0.0, 'size': 0.027},
+  {'id': 2, 'x':  0.040, 'y':  0.000000, 'z': 0.0, 'rx': 0.0, 'ry': 0.0, 'rz': 0.0, 'size': 0.027},
+  {'id': 3, 'x':  0.000, 'y': -0.091652, 'z': 0.0, 'rx': 0.0, 'ry': 0.0, 'rz': 0.0, 'size': 0.027},
 ]
+
+# Default pass threshold (mm) for the server-side wand calibration check.
+WAND_THRESHOLD_MM = 5.0
 
 MARKER_KEYS = ['id', 'x', 'y', 'z', 'rx', 'ry', 'rz', 'size']
 TRANSFORM_KEYS = [None, 'translation_x', 'translation_y', 'translation_z',
@@ -500,7 +506,7 @@ class ArucoWidget(QWidget):
       "DICT_ARUCO_MIP_36h12"
     ])
     add_button = QPushButton('Add')
-    add_layout_button = QPushButton('Add Layout Board')
+    add_layout_button = QPushButton('Add Wand (3 boards)')
     add_marker_button = QPushButton('Add Marker')
     remove_marker_button = QPushButton('Remove Marker')
     remove_button = QPushButton('Remove')
@@ -513,6 +519,17 @@ class ArucoWidget(QWidget):
       config['Sources'] = []
     sources = config['Sources']
 
+    # Server-side wand calibration block (geometry populated by the wand button).
+    if 'Calibration' not in config:
+      config['Calibration'] = {'Enabled': False, 'Threshold (mm)': WAND_THRESHOLD_MM, 'Markers': []}
+    calibration = config['Calibration']
+    if 'Enabled' not in calibration:
+      calibration['Enabled'] = False
+    if 'Threshold (mm)' not in calibration:
+      calibration['Threshold (mm)'] = WAND_THRESHOLD_MM
+    if 'Markers' not in calibration:
+      calibration['Markers'] = []
+
     source_combo = QComboBox()
     source_combo.setModel(FlatObservableCollectionModel(config.parent, lambda n: n['name']))
     source_view = QTreeView()
@@ -521,6 +538,18 @@ class ArucoWidget(QWidget):
     source_view.setModel(FlatObservableCollectionModel(sources, lambda n: n))
     source_add_button = QPushButton('Add Camera')
     source_remove_button = QPushButton('Remove Camera')
+
+    calib_check = QCheckBox('Calibration Enabled')
+    calib_check.setChecked(bool(calibration['Enabled']))
+    calib_check.toggled.connect(lambda checked: calibration.update({'Enabled': bool(checked)}))
+    calib_threshold = QLineEdit(str(calibration['Threshold (mm)']))
+
+    def on_threshold_edit():
+      try:
+        calibration['Threshold (mm)'] = float(calib_threshold.text())
+      except ValueError:
+        calib_threshold.setText(str(calibration['Threshold (mm)']))
+    calib_threshold.editingFinished.connect(on_threshold_edit)
 
     layout = QGridLayout()
     layout.addWidget(QLabel('Dictionary:'), 0, 0)
@@ -537,6 +566,10 @@ class ArucoWidget(QWidget):
     layout.addWidget(source_view, 7, 0, 1, 2)
     layout.addWidget(source_add_button, 8, 0)
     layout.addWidget(source_remove_button, 8, 1)
+    layout.addWidget(QLabel('Wand Calibration:'), 9, 0, 1, 2)
+    layout.addWidget(calib_check, 10, 0)
+    layout.addWidget(QLabel('Threshold (mm):'), 10, 1)
+    layout.addWidget(calib_threshold, 11, 0, 1, 2)
 
     def on_add_source():
       name = source_combo.currentText()
@@ -579,19 +612,32 @@ class ArucoWidget(QWidget):
     add_button.clicked.connect(on_add)
 
     def on_add_layout():
-      board = {
-        'Type': 'layout',
-        'Name': 'wand',
-        'Quality Check': True,
-        'Markers': [dict(m) for m in WAND_MARKERS],
-        'translation_x': 0.0,
-        'translation_y': 0.0,
-        'translation_z': 0.0,
-        'rotation_x': 0.0,
-        'rotation_y': 0.0,
-        'rotation_z': 0.0
-      }
-      boards.append(board)
+      # The wand is three SEPARATE single-marker boards (wand_1/2/3).  Each board
+      # places its marker at its own local origin so the board's measured origin
+      # is that marker's center; the cross-marker distance check is done
+      # server-side from the node-level Calibration block below.
+      for m in WAND_MARKERS:
+        boards.append({
+          'Type': 'layout',
+          'Name': f"wand_{m['id']}",
+          'Quality Check': True,
+          'Markers': [{'id': m['id'], 'x': 0.0, 'y': 0.0, 'z': 0.0,
+                       'rx': 0.0, 'ry': 0.0, 'rz': 0.0, 'size': m['size']}],
+          'translation_x': 0.0,
+          'translation_y': 0.0,
+          'translation_z': 0.0,
+          'rotation_x': 0.0,
+          'rotation_y': 0.0,
+          'rotation_z': 0.0
+        })
+      # Known wand geometry + threshold drive the server-side calibration check.
+      # Update the existing Calibration dict in place so the bound widgets and the
+      # node's observer keep tracking it (replacing the dict would orphan them).
+      calibration['Markers'] = [dict(m) for m in WAND_MARKERS]
+      calibration['Threshold (mm)'] = WAND_THRESHOLD_MM
+      calibration['Enabled'] = True
+      calib_check.setChecked(True)
+      calib_threshold.setText(str(WAND_THRESHOLD_MM))
     add_layout_button.clicked.connect(on_add_layout)
 
     def selected_layout_board():

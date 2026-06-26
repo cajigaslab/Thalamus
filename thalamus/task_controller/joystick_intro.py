@@ -207,6 +207,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Constant("State Indicator Right Margin", "state_indicator_x", 30, precision=0),
     Form.Constant("State Indicator Bottom Margin", "state_indicator_y", 70, precision=0),
     Form.Constant("Reward Channel", "reward_channel", 0, precision=0),
+    Form.Constant("Reward Scale", "reward_scale", 1.0, precision=3),
     Form.Constant("Trial Timeout (s)", "trial_timeout", 0.5, "s", precision=3),
     Form.Bool("Ignore Idle Trial Failures", "ignore_idle_trial_failures", False),
     Form.Constant("Idle Sample Clear Threshold", "ignored_idle_sample_clear_threshold", 50, precision=0),
@@ -2118,16 +2119,28 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     )
 
   async def deliver_reward(channel: int) -> None:
-    on_time_ms = int(context.get_reward(channel))
+    # The channel still maps to a base pulse duration (ms) via the shared reward
+    # schedule, exactly as every other task expects. We then apply a continuous
+    # multiplier local to this task so reward can be ramped in fine steps without
+    # jumping a whole channel. reward_scale defaults to 1.0 (identical behavior).
+    base_ms = float(context.get_reward(channel))
+    reward_scale = clamp_float(task_config.get("reward_scale", 1.0), 0.0, 100.0, 1.0)
+    on_time_ms = int(round(base_ms * reward_scale))
     if on_time_ms <= 0:
-      LOGGER.info("Reward skipped: channel=%d returned %d ms", channel, on_time_ms)
+      LOGGER.info(
+        "Reward skipped: channel=%d base_ms=%.1f scale=%.3f -> %d ms",
+        channel, base_ms, reward_scale, on_time_ms,
+      )
       return
     signal = thalamus_pb2.AnalogResponse(
       data=[5, 0],
       spans=[thalamus_pb2.Span(begin=0, end=2, name='Reward')],
       sample_intervals=[1_000_000 * on_time_ms],
     )
-    LOGGER.info("Delivering reward channel=%d duration_ms=%d", channel, on_time_ms)
+    LOGGER.info(
+      "Delivering reward channel=%d base_ms=%.1f scale=%.3f duration_ms=%d",
+      channel, base_ms, reward_scale, on_time_ms,
+    )
     await context.inject_analog('Reward', signal)
 
   async def deliver_reward_repeats(channel: int, repeats: int) -> None:
@@ -2916,7 +2929,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
             hold_progress_ratio = 1.0
             append_event("hold_complete", now, hold_duration_s=now - hold_start)
             await deliver_reward_repeats(current_reward_channel, 1)
-            append_event("reward_triggered", now, reward_count=1, reward_channel=current_reward_channel)
+            append_event("reward_triggered", now, reward_count=1, reward_channel=current_reward_channel, reward_scale=clamp_float(task_config.get("reward_scale", 1.0), 0.0, 100.0, 1.0))
             streak_count += 1
             task_config["_streak_count"] = streak_count
             bonus_hit = (
@@ -2926,7 +2939,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
             )
             if bonus_hit:
               await deliver_reward_repeats(current_reward_channel, streak_bonus_reward_count)
-              append_event("bonus_reward_triggered", now, reward_count=streak_bonus_reward_count, reward_channel=current_reward_channel)
+              append_event("bonus_reward_triggered", now, reward_count=streak_bonus_reward_count, reward_channel=current_reward_channel, reward_scale=clamp_float(task_config.get("reward_scale", 1.0), 0.0, 100.0, 1.0))
               if streak_reset_on_bonus:
                 streak_count = 0
                 task_config["_streak_count"] = 0

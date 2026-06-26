@@ -18,7 +18,7 @@
             "type": "debugpy",
             "request": "launch",
             "module": "thalamus.task_controller",
-            "args": ["-c", "joystick.json"//, "--no-orchestration"
+            "args": ["-c", "eevee.json"//, "--no-orchestration"
         ]
         }
     ]

@@ -115,6 +115,22 @@ struct ArucoNode::Impl {
 
   std::map<ObservableDictPtr, Board> boards;
 
+  // Server-side wand calibration: known marker geometry + a pass threshold.  Per
+  // camera we measure each marker's origin independently and compare pairwise
+  // origin distances to the known wand distances (logged + emitted as analog).
+  struct Calibration {
+    bool enabled = false;
+    double threshold_mm = 5.0;
+    struct CalMarker {
+      cv::Vec3d pos; // known position in wand space (meters)
+      double size = 0;
+    };
+    std::map<int, CalMarker> markers; // keyed by marker id
+  };
+  Calibration calibration;
+  ObservableDictPtr calibration_dict;
+  boost::signals2::scoped_connection calibration_connection;
+
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
        NodeGraph *_graph, ArucoNode *_outer)
       : state(_state), io_context(_io_context), graph(_graph), outer(_outer),
@@ -342,9 +358,43 @@ struct ArucoNode::Impl {
       detector =
           std::make_shared<cv::aruco::ArucoDetector>(dict, detector_parameters);
 
+    } else if (key_str == "Calibration") {
+      calibration_dict = std::get<ObservableDictPtr>(value);
+      calibration_connection = calibration_dict->changed.connect(
+          [this](auto, auto, auto) { rebuild_calibration(); });
+      rebuild_calibration();
     } else if (key_str == "Running") {
       frame = 0;
       running = std::get<bool>(value);
+    }
+  }
+
+  // Re-read the whole Calibration block synchronously.  Cheap and robust against
+  // wholesale replacement (the wand button sets the entire dict at once).
+  void rebuild_calibration() {
+    TRACE_EVENT("thalamus", "ArucoNode::rebuild_calibration");
+    calibration = Calibration{};
+    if (!calibration_dict) {
+      return;
+    }
+    if (calibration_dict->contains("Enabled")) {
+      calibration.enabled = bool(calibration_dict->at("Enabled"));
+    }
+    if (calibration_dict->contains("Threshold (mm)")) {
+      calibration.threshold_mm = double(calibration_dict->at("Threshold (mm)"));
+    }
+    if (calibration_dict->contains("Markers")) {
+      ObservableListPtr markers = calibration_dict->at("Markers");
+      for (size_t i = 0; i < markers->size(); ++i) {
+        ObservableDictPtr m = markers->at(i);
+        int id = m->contains("id") ? int(static_cast<long long>(m->at("id"))) : 0;
+        Calibration::CalMarker cm;
+        cm.pos = cv::Vec3d(m->contains("x") ? double(m->at("x")) : 0.0,
+                           m->contains("y") ? double(m->at("y")) : 0.0,
+                           m->contains("z") ? double(m->at("z")) : 0.0);
+        cm.size = m->contains("size") ? double(m->at("size")) : 0.0;
+        calibration.markers[id] = cm;
+      }
     }
   }
 
@@ -524,6 +574,7 @@ struct ArucoNode::Impl {
 
     TRACE_EVENT_END("thalamus");
     pool.push([this, source_name, in, id, _boards = this->boards,
+               _calibration = this->calibration,
                _dict = this->dict, _running = this->running,
                _detector = this->detector, &_io_context = this->io_context,
                frame_interval, camera_matrix, _frame = this->frame,
@@ -545,9 +596,40 @@ struct ArucoNode::Impl {
           TRACE_EVENT("thalamus", "cv::aruco::ArucoDetector::detectMarkers");
           _detector->detectMarkers(in, corners, ids, rejected);
         }
+
+        // Only annotate markers that belong to a configured board (or the
+        // calibration wand).  Detection still runs over the whole frame, but
+        // unselected scene markers (e.g. static markers with other IDs) are not
+        // drawn or pose-solved.
+        std::set<int> configured_ids;
+        for (auto &pair : _boards) {
+          auto &b = pair.second;
+          if (b.type == BoardType::Layout) {
+            for (auto &md : b.marker_order) {
+              configured_ids.insert(b.markers.at(md).id);
+            }
+          } else {
+            for (int bid : b.ids) {
+              configured_ids.insert(bid);
+            }
+          }
+        }
+        for (auto &kv : _calibration.markers) {
+          configured_ids.insert(kv.first);
+        }
         {
           TRACE_EVENT("thalamus", "cv::aruco::drawDetectedMarkers");
-          cv::aruco::drawDetectedMarkers(color, corners, ids);
+          std::vector<std::vector<cv::Point2f>> draw_corners;
+          std::vector<int> draw_ids;
+          for (size_t k = 0; k < ids.size(); ++k) {
+            if (configured_ids.count(ids[k])) {
+              draw_corners.push_back(corners[k]);
+              draw_ids.push_back(ids[k]);
+            }
+          }
+          if (!draw_ids.empty()) {
+            cv::aruco::drawDetectedMarkers(color, draw_corners, draw_ids);
+          }
         }
 
         // Compute the four 3D corner points of a layout marker in board space,
@@ -678,12 +760,11 @@ struct ArucoNode::Impl {
 
                 // Detection coverage: how many of this board's markers were
                 // matched (matchImagePoints emits 4 object points per marker).
-                size_t total_markers = board.type == BoardType::Layout
-                                           ? board.marker_order.size()
-                                           : board.ids.size();
                 int detected = int(obj_points.total()) / 4;
 
-                // Reprojection error (RMS pixels) of the rigid board pose.
+                // Reprojection error (RMS pixels) of the rigid board pose.  This
+                // is reported as an analog metric only (no on-screen text); the
+                // wand inter-marker distance check is done once per camera below.
                 double reproj_rms = 0.0;
                 std::vector<cv::Point2f> reprojected;
                 cv::projectPoints(obj_points, rvec, tvec, camera_matrix,
@@ -703,76 +784,12 @@ struct ArucoNode::Impl {
                   reproj_rms = std::sqrt(sse / double(n));
                 }
 
-                // Measured-vs-known geometry (layout boards): estimate each
-                // visible marker's pose independently and compare measured
-                // inter-marker distances to the known config distances.
-                double dist_err_mm = -1.0;
-                if (board.type == BoardType::Layout) {
-                  std::map<int, cv::Vec3d> measured, known;
-                  for (auto &marker_dict : board.marker_order) {
-                    auto &m = board.markers.at(marker_dict);
-                    known[m.id] = m.position;
-                    for (size_t k = 0; k < ids.size(); ++k) {
-                      if (ids[k] != m.id) {
-                        continue;
-                      }
-                      float h = float(m.size) / 2.0f;
-                      std::vector<cv::Point3f> objp = {{-h, h, 0.0f},
-                                                       {h, h, 0.0f},
-                                                       {h, -h, 0.0f},
-                                                       {-h, -h, 0.0f}};
-                      cv::Vec3d mrvec, mtvec;
-                      try {
-                        cv::solvePnP(objp, corners[k], camera_matrix,
-                                     _distortion_parameters, mrvec, mtvec, false,
-                                     cv::SOLVEPNP_IPPE_SQUARE);
-                        measured[m.id] = mtvec;
-                      } catch (cv::Exception &e) {
-                        THALAMUS_LOG(error) << e.what();
-                      }
-                      break;
-                    }
-                  }
-                  double max_err = 0.0;
-                  bool have_pair = false;
-                  std::vector<int> seen;
-                  for (auto &kv : measured) {
-                    seen.push_back(kv.first);
-                  }
-                  for (size_t a = 0; a < seen.size(); ++a) {
-                    for (size_t b = a + 1; b < seen.size(); ++b) {
-                      double md = cv::norm(measured[seen[a]] - measured[seen[b]]);
-                      double kd = cv::norm(known[seen[a]] - known[seen[b]]);
-                      max_err = std::max(max_err, std::abs(md - kd));
-                      have_pair = true;
-                    }
-                  }
-                  if (have_pair) {
-                    dist_err_mm = max_err * 1000.0;
-                  }
-                }
-
                 std::string label =
                     board.name.empty()
                         ? "board" + std::to_string(board_index)
                         : board.name;
-                std::ostringstream oss;
-                oss << label << ": " << detected << "/" << total_markers
-                    << " reproj=" << std::fixed << std::setprecision(1)
-                    << reproj_rms << "px";
-                if (dist_err_mm >= 0) {
-                  oss << " dErr=" << std::setprecision(1) << dist_err_mm << "mm";
-                }
-                cv::putText(color, oss.str(),
-                            imagePoints[0] + cv::Point2f(8.0f, -8.0f),
-                            cv::FONT_HERSHEY_SIMPLEX, 0.5,
-                            cv::Scalar(0, 255, 255), 1);
-
                 _metrics[label + "_reproj_px"] = reproj_rms;
                 _metrics[label + "_n_markers"] = double(detected);
-                if (dist_err_mm >= 0) {
-                  _metrics[label + "_dist_err_mm"] = dist_err_mm;
-                }
               }
 
               _segments.emplace_back();
@@ -827,6 +844,80 @@ struct ArucoNode::Impl {
               THALAMUS_LOG(error) << e.what();
             }
             ++board_index;
+          }
+
+          // Wand calibration (once per camera): measure each calibration
+          // marker's origin independently, then compare pairwise origin
+          // distances to the known wand distances.  Results are emitted as
+          // analog metrics and logged (throttled).
+          if (_calibration.enabled && _calibration.markers.size() >= 2) {
+            TRACE_EVENT("thalamus", "ArucoNode::wand_calibration");
+            std::map<int, cv::Vec3d> measured;
+            for (const auto &mkv : _calibration.markers) {
+              int marker_id = mkv.first;
+              double size = mkv.second.size;
+              for (size_t k = 0; k < ids.size(); ++k) {
+                if (ids[k] != marker_id) {
+                  continue;
+                }
+                float h = float(size) / 2.0f;
+                std::vector<cv::Point3f> objp = {{-h, h, 0.0f},
+                                                 {h, h, 0.0f},
+                                                 {h, -h, 0.0f},
+                                                 {-h, -h, 0.0f}};
+                cv::Vec3d mrvec, mtvec;
+                try {
+                  cv::solvePnP(objp, corners[k], camera_matrix,
+                               _distortion_parameters, mrvec, mtvec, false,
+                               cv::SOLVEPNP_IPPE_SQUARE);
+                  measured[marker_id] = mtvec;
+                } catch (cv::Exception &e) {
+                  THALAMUS_LOG(error) << e.what();
+                }
+                break;
+              }
+            }
+
+            std::vector<int> mids;
+            for (const auto &mkv : _calibration.markers) {
+              mids.push_back(mkv.first);
+            }
+            std::ostringstream log_oss;
+            log_oss << "[aruco wand] " << source_name << ":";
+            bool all_ok = true, any_pair = false;
+            for (size_t a = 0; a < mids.size(); ++a) {
+              for (size_t b = a + 1; b < mids.size(); ++b) {
+                int ia = mids[a], ib = mids[b];
+                double known_mm =
+                    cv::norm(_calibration.markers.at(ia).pos -
+                             _calibration.markers.at(ib).pos) *
+                    1000.0;
+                std::string base = "d_" + std::to_string(ia) + "_" +
+                                   std::to_string(ib);
+                if (measured.count(ia) && measured.count(ib)) {
+                  double md_mm = cv::norm(measured[ia] - measured[ib]) * 1000.0;
+                  double err_mm = std::abs(md_mm - known_mm);
+                  bool ok = err_mm <= _calibration.threshold_mm;
+                  all_ok = all_ok && ok;
+                  any_pair = true;
+                  _metrics[base + "_mm"] = md_mm;
+                  _metrics[base + "_err_mm"] = err_mm;
+                  log_oss << " " << base << "=" << std::fixed
+                          << std::setprecision(1) << md_mm << "mm(err " << err_mm
+                          << (ok ? " OK)" : " FAIL)");
+                } else {
+                  all_ok = false;
+                  log_oss << " " << base << "=NA";
+                }
+              }
+            }
+            if (any_pair) {
+              _metrics["pass"] = all_ok ? 1.0 : 0.0;
+              if (_frame % 30 == 0) {
+                log_oss << " -> " << (all_ok ? "OK" : "FAIL");
+                THALAMUS_LOG(info) << log_oss.str();
+              }
+            }
           }
         }
       }

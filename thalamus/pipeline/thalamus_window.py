@@ -1373,6 +1373,11 @@ class ItemModel(QAbstractItemModel):
         if row < len(self.nodes):
           return self.createIndex(row, column, self.nodes)
       else:
+        # parent may be a stale/persistent index for a node that was just
+        # removed (the backing list shrinks before Qt finishes its remove
+        # handshake); guard against an out-of-range row.
+        if parent.row() >= len(self.nodes):
+          return QModelIndex()
         node = self.nodes[parent.row()]
         type = self.get_node_type(node)
         factory = FACTORIES[type]
@@ -1402,7 +1407,11 @@ class ItemModel(QAbstractItemModel):
       return self.num_nodes
     else:
       collection = parent.internalPointer()
-      if collection == self.nodes:
+      if collection is self.nodes:
+        # Guard against a stale parent row: the backing list can shrink before
+        # Qt finishes removing rows, so parent.row() may be out of range.
+        if parent.row() >= len(self.nodes):
+          return 0
         node = self.nodes[parent.row()]
         type = self.get_node_type(node)
         factory = FACTORIES[type]
