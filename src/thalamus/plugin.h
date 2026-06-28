@@ -148,12 +148,12 @@ extern "C" {
     char (*has_motion_data)(struct ThalamusNode*);
   };
   struct ThalamusTextNode {
-    const char* (*text)(struct ThalamusNode*);
+    void (*text)(struct ThalamusCharSpan*, struct ThalamusNode*);
     char (*has_text_data)(struct ThalamusNode*);
   };
 
   struct ThalamusNodeFactory {
-    const char* type;
+    struct ThalamusCharSpan type;
     struct ThalamusNode* (*create)(struct ThalamusNodeFactory*, struct ThalamusState*, struct ThalamusIoContext*, struct ThalamusNodeGraph*);
     void (*destroy)(struct ThalamusNodeFactory*, struct ThalamusNode*);
     char (*prepare)(struct ThalamusNodeFactory*);
@@ -184,12 +184,12 @@ extern "C" {
     char (*state_is_null)(struct ThalamusState*);
     char (*state_is_bool)(struct ThalamusState*);
 
-    const char* (*state_get_string)(struct ThalamusState*);
+    void (*state_get_string)(struct ThalamusCharSpan*, struct ThalamusState*);
     int64_t (*state_get_int)(struct ThalamusState*);
     double (*state_get_float)(struct ThalamusState*);
     char (*state_get_bool)(struct ThalamusState*);
 
-    struct ThalamusState* (*state_get_at_name)(struct ThalamusState*, const char*);
+    struct ThalamusState* (*state_get_at_name)(struct ThalamusState*, const struct ThalamusCharSpan*);
     struct ThalamusState* (*state_get_at_index)(struct ThalamusState*, uint64_t);
 
     void (*state_dec_ref)(struct ThalamusState*);
@@ -210,15 +210,15 @@ extern "C" {
     int (*error_code_operation_aborted)();
     void (*state_recap)(struct ThalamusState*);
 
-    void (*state_set_at_name_state)(struct ThalamusState*, const char*, struct ThalamusState*);
-    void (*state_set_at_name_string)(struct ThalamusState*, const char*, const char*);
-    void (*state_set_at_name_int)(struct ThalamusState*, const char*, int64_t);
-    void (*state_set_at_name_float)(struct ThalamusState*, const char*, double);
-    void (*state_set_at_name_null)(struct ThalamusState*, const char*);
-    void (*state_set_at_name_bool)(struct ThalamusState*, const char*, char);
+    void (*state_set_at_name_state)(struct ThalamusState*, const struct ThalamusCharSpan*, struct ThalamusState*);
+    void (*state_set_at_name_string)(struct ThalamusState*, const struct ThalamusCharSpan*, const struct ThalamusCharSpan*);
+    void (*state_set_at_name_int)(struct ThalamusState*, const struct ThalamusCharSpan*, int64_t);
+    void (*state_set_at_name_float)(struct ThalamusState*, const struct ThalamusCharSpan*, double);
+    void (*state_set_at_name_null)(struct ThalamusState*, const struct ThalamusCharSpan*);
+    void (*state_set_at_name_bool)(struct ThalamusState*, const struct ThalamusCharSpan*, char);
 
     void (*state_set_at_index_state)(struct ThalamusState*, int64_t, struct ThalamusState*);
-    void (*state_set_at_index_string)(struct ThalamusState*, int64_t, const char*);
+    void (*state_set_at_index_string)(struct ThalamusState*, int64_t, const struct ThalamusCharSpan*);
     void (*state_set_at_index_int)(struct ThalamusState*, int64_t, int64_t);
     void (*state_set_at_index_float)(struct ThalamusState*, int64_t, double);
     void (*state_set_at_index_null)(struct ThalamusState*, int64_t);
@@ -226,9 +226,9 @@ extern "C" {
 
     void (*io_context_post)(ThalamusPostCallback, void*);
 
-    void (*trace_event_begin)(const char*);
+    void (*trace_event_begin)(const struct ThalamusCharSpan*);
 
-    void (*trace_event_begin_span)(const char*, uint64_t);
+    void (*trace_event_begin_span)(const struct ThalamusCharSpan*);
 
     void (*trace_event_end)();
 
@@ -238,11 +238,11 @@ extern "C" {
 
     void (*serial_set_baud_rate)(struct ThalamusSerialPort*, uint32_t);
 
-    void (*serial_port_open)(struct ThalamusSerialPort*, const char*);
+    void (*serial_port_open)(struct ThalamusSerialPort*, const struct ThalamusCharSpan*);
 
     struct ThalamusErrorCode* (*serial_port_error)(struct ThalamusSerialPort*);
 
-    void (*serial_port_read_until)(struct ThalamusSerialPort* port, struct ThalamusStreamBuf* buffer, char* delimiter, uint64_t delimiter_len, ThalamusIOCallback callback, void* data);
+    void (*serial_port_read_until)(struct ThalamusSerialPort* port, struct ThalamusStreamBuf* buffer, const struct ThalamusCharSpan* delimiter, ThalamusIOCallback callback, void* data);
     
     void (*serial_port_read_some)(struct ThalamusSerialPort* port, struct ThalamusMutableByteSpan* span, ThalamusIOCallback callback, void* data);
 
@@ -304,12 +304,3 @@ extern "C" {
 #ifdef __cplusplus
 }
 #endif
-
-//IMPORT int thalamus_start(const char *config_filename, const char *target_node,
-//                          int port, bool trace);
-//IMPORT int thalamus_stop();
-//IMPORT int thalamus_push(size_t num_channels, const double *samples,
-//                         const size_t *counts,
-//                         const size_t *sample_intervals_ns,
-//                         const char **channel_names);
-
