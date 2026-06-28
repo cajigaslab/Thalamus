@@ -55,5 +55,6 @@ public:
   ThreadPool &get_thread_pool() override;
   void dialog(const thalamus_grpc::Dialog &) override;
   void log(const thalamus_grpc::Text &) override;
+  ObservableDictPtr get_node_state(Node*);
 };
 } // namespace thalamus

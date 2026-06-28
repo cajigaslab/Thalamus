@@ -68,6 +68,17 @@ struct ThalamusState {
   thalamus::ObservableCollection::Value value;
 };
 
+struct ThalamusStateIter {
+  thalamus::ObservableCollection::Value value;
+  std::variant<thalamus::ObservableCollection::VectorIteratorWrapper,
+               thalamus::ObservableCollection::MapIteratorWrapper> begin;
+  std::variant<thalamus::ObservableCollection::VectorIteratorWrapper,
+               thalamus::ObservableCollection::MapIteratorWrapper> pos;
+  std::variant<thalamus::ObservableCollection::VectorIteratorWrapper,
+               thalamus::ObservableCollection::MapIteratorWrapper> end;
+  bool started;
+};
+
 struct ThalamusIoContext {
   boost::asio::io_context& io_context;
   ThalamusIoContext(boost::asio::io_context& _io_context) : io_context(_io_context) {}
@@ -564,7 +575,7 @@ struct ThalamusAPIImpl {
   static std::map<ThalamusNode*, Node*>* node_c_to_cpp;
 
   static boost::asio::io_context* io_context;
-  static NodeGraph* node_graph;
+  static NodeGraphImpl* node_graph;
 
   static ThalamusNode* wrap_node(Node* node) {
     auto result = new ThalamusNode();
@@ -636,6 +647,19 @@ struct ThalamusAPIImpl {
     }
   }
 
+  static ObservableCollection::Value key_to_value(ObservableCollection::Key key) {
+    if(std::holds_alternative<std::monostate>(key)) {
+      return ObservableCollection::Value(std::get<std::monostate>(key));
+    } else if (std::holds_alternative<int64_t>(key)) {
+      return ObservableCollection::Value(std::get<int64_t>(key));
+    } else if (std::holds_alternative<bool>(key)) {
+      return ObservableCollection::Value(std::get<bool>(key));
+    } else if (std::holds_alternative<std::string>(key)) {
+      return ObservableCollection::Value(std::get<std::string>(key));
+    }
+    THALAMUS_ABORT("Unexpected type");
+  }
+
   static ThalamusState* get_state_ref(ObservableCollection::Key key) {
     if(std::holds_alternative<std::monostate>(key)) {
       return get_state_ref(ObservableCollection::Value(std::get<std::monostate>(key)));
@@ -675,12 +699,12 @@ struct ThalamusAPIImpl {
 
   static void state_inc_ref(ThalamusState* state) {
     ++state->count;
-    //THALAMUS_LOG(info) << "state_inc_ref " << get_path(state->value) << " " << state->count;
+    THALAMUS_LOG(info) << "state_inc_ref " << get_path(state->value) << " " << state->count;
   }
 
   static void state_dec_ref(ThalamusState* state) {
     --state->count;
-    //THALAMUS_LOG(info) << "state_dec_ref " << get_path(state->value) << " " << state->count;
+    THALAMUS_LOG(info) << "state_dec_ref " << get_path(state->value) << " " << state->count;
     if(state->count == 0) {
       c_to_cpp->erase(state);
       cpp_to_c->erase(state->value);
@@ -726,17 +750,29 @@ struct ThalamusAPIImpl {
   static ThalamusState* state_get_at_name(ThalamusState* state, const char* key) {
     if(std::holds_alternative<ObservableDictPtr>(state->value)) {
       auto dict = std::get<ObservableDictPtr>(state->value);
-      return get_state_ref((*dict)[key]);
+      if(dict->contains(key)) {
+        return get_state_ref((*dict)[key]);
+      } else {
+        return nullptr;
+      }
     }
     THALAMUS_ABORT("State does not contain dict");
   }
-  static ThalamusState* state_get_at_index(ThalamusState* state, size_t key) {
+  static ThalamusState* state_get_at_index(ThalamusState* state, uint64_t key) {
     if(std::holds_alternative<ObservableDictPtr>(state->value)) {
       auto dict = std::get<ObservableDictPtr>(state->value);
-      return get_state_ref((*dict)[int64_t(key)]);
+      if(dict->contains(int64_t(key))) {
+        return get_state_ref((*dict)[int64_t(key)]);
+      } else {
+        return nullptr;
+      }
     } else if (std::holds_alternative<ObservableListPtr>(state->value)) {
       auto list = std::get<ObservableListPtr>(state->value);
-      return get_state_ref((*list)[key]);
+      if(key < list->size()) {
+        return get_state_ref((*list)[key]);
+      } else {
+        return nullptr;
+      }
     }
     THALAMUS_ABORT("State does not contain dict or list");
   }
@@ -757,7 +793,12 @@ struct ThalamusAPIImpl {
         THALAMUS_ABORT("state is not a collection");
       }
       auto action_wrapper = action == ObservableCollection::Action::Set ? ThalamusStateAction::Set : ThalamusStateAction::Delete;
-      callback(source_wrapper, action_wrapper, get_state_ref(key), get_state_ref(value), data);
+      auto wrapped_key = get_state_ref(key);
+      auto wrapped_value = get_state_ref(value);
+      callback(source_wrapper, action_wrapper, wrapped_key, wrapped_value, data);
+      state_dec_ref(source_wrapper);
+      state_dec_ref(wrapped_key);
+      state_dec_ref(wrapped_value);
     };
 
     boost::signals2::connection connection;
@@ -817,14 +858,39 @@ struct ThalamusAPIImpl {
     }
   }
 
+  static void state_recap_with(ThalamusState* state, ThalamusStateRecursiveCallback callback, void* data) {
+    auto handler = [state,callback,data](ObservableCollection::Action action,
+                                   ObservableCollection::Key key,
+                                   ObservableCollection::Value value) {
+      auto action_wrapper = action == ObservableCollection::Action::Set ? ThalamusStateAction::Set : ThalamusStateAction::Delete;
+      auto wrapped_key = get_state_ref(key);
+      auto wrapped_value = get_state_ref(value);
+      callback(state, action_wrapper, wrapped_key, wrapped_value, data);
+      state_dec_ref(wrapped_key);
+      state_dec_ref(wrapped_value);
+    };
+
+    if(std::holds_alternative<ObservableDictPtr>(state->value)) {
+      std::get<ObservableDictPtr>(state->value)->recap(handler);
+    } else if(std::holds_alternative<ObservableListPtr>(state->value)) {
+      std::get<ObservableListPtr>(state->value)->recap(handler);
+    } else {
+      THALAMUS_ABORT("Attempt to recap a value that is neither a dict or list");
+    }
+  }
+
   template <typename T1, typename T2> static void assign_state(struct ThalamusState* state, T1 key, T2 value) {
     if(std::holds_alternative<ObservableDictPtr>(state->value)) {
       auto coll = std::get<ObservableDictPtr>(state->value);
       (*coll)[key].assign(value);
     } else if(std::holds_alternative<ObservableListPtr>(state->value)) {
       if constexpr (std::is_integral<T1>::value) {
-        auto coll = std::get<ObservableDictPtr>(state->value);
-        (*coll)[key].assign(value);
+        auto coll = std::get<ObservableListPtr>(state->value);
+        if(size_t(key) < coll->size()) {
+          (*coll)[size_t(key)].assign(value);
+        } else {
+          THALAMUS_ABORT("Index out of bounds");
+        }
       } else {
         THALAMUS_ABORT("Can only index list with integer");
       }
@@ -871,8 +937,129 @@ struct ThalamusAPIImpl {
     assign_state(state, key, value != 0);
   }
 
+  static struct ThalamusState* state_parent(struct ThalamusState* state) {
+    ObservableCollection* parent = nullptr;
+    if(std::holds_alternative<ObservableDictPtr>(state->value)) {
+      parent = std::get<ObservableDictPtr>(state->value)->parent;
+    } else if (std::holds_alternative<ObservableListPtr>(state->value)) {
+      parent = std::get<ObservableListPtr>(state->value)->parent;
+    } else {
+      THALAMUS_ABORT("Attempt to recap a value that is neither a dict or list");
+    }
+    if (parent == nullptr) {
+      return nullptr;
+    }
+
+    ObservableList* list;
+    ObservableDict* dict;
+    ObservableCollection::Value parent_value;
+    if((list = parent->as_list())) {
+      parent_value = ObservableCollection::Value(list->shared_from_this());
+    } else if ((dict = parent->as_dict())) {
+      parent_value = ObservableCollection::Value(dict->shared_from_this());
+    } else {
+      return nullptr;
+    }
+    return get_state_ref(parent_value);
+  }
+
+  static struct ThalamusStateIter* state_iter_create(struct ThalamusState* state) {
+    if(std::holds_alternative<ObservableDictPtr>(state->value)) {
+      auto value = std::get<ObservableDictPtr>(state->value);
+      return new ThalamusStateIter{state->value, value->begin(), value->begin(), value->end(), false};
+    } else if (std::holds_alternative<ObservableListPtr>(state->value)) {
+      auto value = std::get<ObservableListPtr>(state->value);
+      return new ThalamusStateIter{state->value, value->begin(), value->begin(), value->end(), false};
+    }
+    THALAMUS_ABORT("Attempt to iterate a value that is neither a dict or list");
+  }
+
+  static uint8_t state_iter_next(struct ThalamusStateIter* iter) {
+    THALAMUS_ASSERT(iter->pos != iter->end, "Attempted to advance finished iterator");
+    if(std::holds_alternative<thalamus::ObservableCollection::VectorIteratorWrapper>(iter->begin)) {
+      auto& pos = std::get<thalamus::ObservableCollection::VectorIteratorWrapper>(iter->pos);
+      auto end = std::get<thalamus::ObservableCollection::VectorIteratorWrapper>(iter->pos);
+      if(iter->started) {
+        ++pos;
+      } else {
+        iter->started = true;
+      }
+      return iter->pos == iter->end ? 0 : 1;
+    } else if (std::holds_alternative<thalamus::ObservableCollection::MapIteratorWrapper>(iter->begin)) {
+      auto& pos = std::get<thalamus::ObservableCollection::MapIteratorWrapper>(iter->pos);
+      auto end = std::get<thalamus::ObservableCollection::MapIteratorWrapper>(iter->pos);
+      if(iter->started) {
+        ++pos;
+      } else {
+        iter->started = true;
+      }
+      return iter->pos == iter->end ? 0 : 1;
+    }
+    THALAMUS_ABORT("Bad Iterator");
+  }
+
+  static struct ThalamusState* state_iter_key(struct ThalamusStateIter* iter) {
+    THALAMUS_ASSERT(iter->pos != iter->end, "Attempted to read finished iterator");
+    thalamus::ObservableCollection::Value result;
+    if(std::holds_alternative<thalamus::ObservableCollection::VectorIteratorWrapper>(iter->begin)) {
+      auto begin = std::get<thalamus::ObservableCollection::VectorIteratorWrapper>(iter->begin);
+      auto pos = std::get<thalamus::ObservableCollection::VectorIteratorWrapper>(iter->pos);
+      result = int64_t(std::distance(begin, pos));
+    } else if (std::holds_alternative<thalamus::ObservableCollection::MapIteratorWrapper>(iter->begin)) {
+      auto pos = std::get<thalamus::ObservableCollection::MapIteratorWrapper>(iter->pos);
+      result = key_to_value(pos->first);
+    }
+    return get_state_ref(result);
+  }
+
+  static struct ThalamusState* state_iter_value(struct ThalamusStateIter* iter) {
+    THALAMUS_ASSERT(iter->pos != iter->end, "Attempted to read finished iterator");
+    thalamus::ObservableCollection::Value result;
+    if(std::holds_alternative<thalamus::ObservableCollection::VectorIteratorWrapper>(iter->begin)) {
+      auto pos = std::get<thalamus::ObservableCollection::VectorIteratorWrapper>(iter->pos);
+      result = *pos;
+    } else if (std::holds_alternative<thalamus::ObservableCollection::MapIteratorWrapper>(iter->begin)) {
+      auto pos = std::get<thalamus::ObservableCollection::MapIteratorWrapper>(iter->pos);
+      result = pos->second;
+    }
+    return get_state_ref(result);
+  }
+
+  static struct ThalamusState* state_key_of(struct ThalamusState* parent, struct ThalamusState* child) {
+    ObservableCollection* parent_col = nullptr;
+    ObservableCollection* child_col = nullptr;
+    if(std::holds_alternative<ObservableDictPtr>(parent->value)) {
+      parent_col = std::get<ObservableDictPtr>(parent->value).get();
+    } else if (std::holds_alternative<ObservableListPtr>(parent->value)) {
+      parent_col = std::get<ObservableListPtr>(parent->value).get();
+    } else {
+      THALAMUS_ABORT("Attempt to iterate a value that is neither a dict or list");
+    }
+    if(std::holds_alternative<ObservableDictPtr>(child->value)) {
+      child_col = std::get<ObservableDictPtr>(child->value).get();
+    } else if (std::holds_alternative<ObservableListPtr>(child->value)) {
+      child_col = std::get<ObservableListPtr>(child->value).get();
+    } else {
+      THALAMUS_ABORT("Attempt to iterate a value that is neither a dict or list");
+    }
+
+    auto key = parent_col->key_of(*child_col);
+
+    return key ? get_state_ref(*key) : nullptr;
+  }
+
+  static void state_iter_destroy(struct ThalamusStateIter* iter) {
+    delete iter;
+  }
+
   static void io_context_post(ThalamusPostCallback callback, void* data) {
     boost::asio::post(*io_context, [callback, data] {
+      callback(data);
+    });
+  }
+
+  static void threadpool_post(ThalamusPostCallback callback, void* data) {
+    node_graph->get_thread_pool().push([callback, data] {
       callback(data);
     });
   }
@@ -1091,12 +1278,18 @@ struct ThalamusAPIImpl {
     node_dec_ref(conn->node);
     delete conn;
   }
+
+  static ThalamusState* node_get_state(struct ThalamusNode* node) {
+    auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+    ASSERT_SAFE();
+    return get_state_ref(node_graph->get_node_state(interfaces->node));
+  }
 };
 
 std::map<ObservableCollection::Value, ThalamusState*>* ThalamusAPIImpl::cpp_to_c = nullptr;
 std::map<ThalamusState*, ObservableCollection::Value>* ThalamusAPIImpl::c_to_cpp = nullptr;
 boost::asio::io_context* ThalamusAPIImpl::io_context = nullptr;
-NodeGraph* ThalamusAPIImpl::node_graph = nullptr;
+NodeGraphImpl* ThalamusAPIImpl::node_graph = nullptr;
 
 
 std::map<Node*, ThalamusNode*>* ThalamusAPIImpl::node_cpp_to_c = nullptr;
@@ -1138,13 +1331,14 @@ struct ExtNodeFactory : public INodeFactory {
   std::string type_name() override;
 };
 
-std::string ExtNodeFactory::type_name() { return underlying->type; }
+std::string ExtNodeFactory::type_name() { return std::string("*EXT* ") + underlying->type; }
 
 
 struct NodeGraphImpl::Impl {
   ObservableListPtr nodes;
   std::vector<std::shared_ptr<Node>> node_impls;
   std::vector<std::string> node_types;
+  std::vector<ObservableDictPtr> node_configs;
   size_t num_nodes;
   boost::asio::io_context &io_context;
   std::optional<Service *> service;
@@ -1277,6 +1471,19 @@ public:
 
     thalamus_api.node_inc_ref = ThalamusAPIImpl::node_inc_ref;
     thalamus_api.node_dec_ref = ThalamusAPIImpl::node_dec_ref;
+    thalamus_api.state_parent = ThalamusAPIImpl::state_parent;
+
+    thalamus_api.state_iter_create = ThalamusAPIImpl::state_iter_create;
+    thalamus_api.state_iter_next = ThalamusAPIImpl::state_iter_next;
+    thalamus_api.state_iter_key = ThalamusAPIImpl::state_iter_key;
+    thalamus_api.state_iter_value = ThalamusAPIImpl::state_iter_value;
+    thalamus_api.state_iter_destroy = ThalamusAPIImpl::state_iter_destroy;
+
+    thalamus_api.state_key_of = ThalamusAPIImpl::state_key_of;
+    thalamus_api.state_recap_with = ThalamusAPIImpl::state_recap_with;
+    thalamus_api.node_get_state = ThalamusAPIImpl::node_get_state;
+
+    thalamus_api.threadpool_post = ThalamusAPIImpl::threadpool_post;
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},
@@ -1403,11 +1610,13 @@ public:
 
       node_impls.insert(node_impls.begin() + index, node_impl);
       node_types.insert(node_types.begin() + index, type_str);
+      node_configs.insert(node_configs.begin() + index, node);
       node->recap(std::bind(&Impl::on_node, this, node.get(), _1, _2, _3));
     } else {
       auto index = std::get<int64_t>(k);
       node_impls.erase(node_impls.begin() + index);
       node_types.erase(node_types.begin() + index);
+      node_configs.erase(node_configs.begin() + index);
     }
   }
 
@@ -1630,4 +1839,14 @@ void NodeGraphImpl::dialog(const thalamus_grpc::Dialog &dialog) {
 void NodeGraphImpl::log(const thalamus_grpc::Text & text) {
   (*impl->service)->log_signal(text);
 }
+
+ObservableDictPtr NodeGraphImpl::get_node_state(Node* node) {
+  for(size_t i = 0;i < impl->node_impls.size();++i) {
+    if(impl->node_impls[i].get() == node) {
+      return impl->node_configs[i];
+    }
+  }
+  THALAMUS_ABORT("Failed to find node.");
+}
+
 } // namespace thalamus
