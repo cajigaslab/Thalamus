@@ -32,6 +32,7 @@ extern "C" {
   struct ThalamusStateConnection;
 
   struct ThalamusState;
+  struct ThalamusStateIter;
   typedef void (*ThalamusStateRecursiveCallback)(struct ThalamusState* source, enum ThalamusStateAction action,
                                                  struct ThalamusState* key, struct ThalamusState* value, void* data);
 
@@ -280,6 +281,22 @@ extern "C" {
 
     void (*node_inc_ref)(struct ThalamusNode* node);
     void (*node_dec_ref)(struct ThalamusNode* node);
+
+    struct ThalamusState* (*state_parent)(struct ThalamusState*);
+
+    struct ThalamusStateIter* (*state_iter_create)(struct ThalamusState*);
+    uint8_t (*state_iter_next)(struct ThalamusStateIter*);
+    struct ThalamusState* (*state_iter_key)(struct ThalamusStateIter*);
+    struct ThalamusState* (*state_iter_value)(struct ThalamusStateIter*);
+    void (*state_iter_destroy)(struct ThalamusStateIter*);
+
+    struct ThalamusState* (*state_key_of)(struct ThalamusState* parent, struct ThalamusState* child);
+
+    void (*state_recap_with)(struct ThalamusState*, ThalamusStateRecursiveCallback callback, void* data);
+
+    struct ThalamusState* (*node_get_state)(struct ThalamusNode* node);
+
+    void (*threadpool_post)(ThalamusPostCallback, void*);
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories)(struct ThalamusAPI*);

@@ -192,6 +192,11 @@ bool ObservableCollection::VectorIteratorWrapper::operator!=(
   return iterator != other.iterator;
 }
 
+bool ObservableCollection::VectorIteratorWrapper::operator==(
+    const VectorIteratorWrapper &other) const {
+  return iterator == other.iterator;
+}
+
 ObservableCollection::MapIteratorWrapper::MapIteratorWrapper()
     : iterator(), end(), collection(nullptr) {}
 
@@ -250,6 +255,11 @@ bool ObservableCollection::MapIteratorWrapper::operator!=(
   return iterator != other.iterator;
 }
 
+bool ObservableCollection::MapIteratorWrapper::operator==(
+    const MapIteratorWrapper &other) const {
+  return iterator == other.iterator;
+}
+
 ObservableCollection::ObservableCollection(ObservableCollection *_parent)
     : parent(_parent) {}
 
@@ -259,8 +269,11 @@ std::string ObservableCollection::address() const {
   }
   auto prefix = parent->address();
   auto end_opt = parent->key_of(*this);
-  THALAMUS_ASSERT(end_opt.has_value(),
-                  "Failed to find self in parent collection");
+  if(!end_opt) {
+    THALAMUS_LOG(error) << "Failed to find self in parent collection";
+    return "";
+  }
+
   auto end = *end_opt;
   if (std::holds_alternative<int64_t>(end)) {
     return absl::StrFormat("%s[%d]", prefix, thalamus::get<int64_t>(end));

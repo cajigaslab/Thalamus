@@ -18,11 +18,12 @@ class BoardsModel(QAbstractItemModel):
     super().__init__()
     self.config = config
     self.boards = config
+    self.row_to_board = []
     self.config.add_recursive_observer(self.on_change, functools.partial(isdeleted, self))
     self.config.recap(lambda *args: self.on_change(self.config, *args))
 
   def get_row(self, board):
-    for i, v in enumerate(self.config):
+    for i, v in self.row_to_board:
       if board is v:
         return i
     assert False, 'Failed to find row for board'
@@ -32,10 +33,16 @@ class BoardsModel(QAbstractItemModel):
       #A board has been set or removed
       if action == ObservableCollection.Action.SET:
         self.beginInsertRows(QModelIndex(), key, key)
+        self.row_to_board.append([key, value])
         self.endInsertRows()
         value.recap(lambda *args: self.on_change(value, *args))
       else:
         self.beginRemoveRows(QModelIndex(), key, key)
+        for i in range(len(self.row_to_board)-1, -1, -1):
+          if self.row_to_board[i][0] == key:
+            del self.row_to_board[i]
+          elif self.row_to_board[i][0] > key:
+            self.row_to_board[i][0] -= 1
         self.endRemoveRows()
     elif source.parent == self.boards:
       #A board has been edited
@@ -250,7 +257,13 @@ class BoardsModel(QAbstractItemModel):
       result = self.createIndex(row, column, None) if row < len(self.config) else QModelIndex()
       return result
     else:
-      board = self.config[parent.row()]
+      board = None
+      for canidate_row, canidate_board in self.row_to_board:
+        if canidate_row == parent.row():
+          board = canidate_board
+          break
+      assert board is not None
+      #board = self.config[parent.row()]
       ids = board['ids']
       result = self.createIndex(row, column, board) if row < len(ids)+2 else QModelIndex()
       return result

@@ -78,6 +78,7 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument('-p', '--port', type=int, default=50050, help='GRPC port')
   parser.add_argument('-u', '--ui-port', type=int, default=50051, help='UI GRPC port')
   parser.add_argument('-d', '--dotnet-port', type=int, default=50052, help='dotnet GRPC port')
+  parser.add_argument('--contrib', action='store_true', help='Equivalent to --ext thalamus.contrib')
   parser.add_argument('--ext', help='Extension Module')
   return parser.parse_args(self_args[1:])
 
@@ -112,8 +113,12 @@ async def async_main() -> None:
   
   ext_widgets = {}
   ext_library = None
-  if arguments.ext is not None:
-    ext_module = importlib.import_module(arguments.ext)
+  if arguments.contrib:
+    extension_module = 'thalamus.contrib'
+  else:
+    extension_module = arguments.ext
+  if extension_module is not None:
+    ext_module = importlib.import_module(extension_module)
     if hasattr(ext_module, 'widgets'):
       ext_widgets.update(ext_module.widgets())
     if hasattr(ext_module, 'library'):
@@ -161,9 +166,9 @@ async def async_main() -> None:
   if use_crashpad:
     command = command + ('--crashpad',)
   LOGGER.info('COMMAND %s', ' '.join(command))
-  bmbi_native_proc = await asyncio.create_subprocess_exec(*command)
-  LOGGER.info('PID %s', bmbi_native_proc.pid)
-  create_task_with_exc_handling(proc_watcher('native.exe', bmbi_native_proc))
+  #bmbi_native_proc = await asyncio.create_subprocess_exec(*command)
+  #LOGGER.info('PID %s', bmbi_native_proc.pid)
+  #create_task_with_exc_handling(proc_watcher('native.exe', bmbi_native_proc))
 
   dotnet_proc = None
   #if False:
