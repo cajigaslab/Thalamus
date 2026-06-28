@@ -80,6 +80,7 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument('-d', '--dotnet-port', type=int, default=50052, help='dotnet GRPC port')
   parser.add_argument('--contrib', action='store_true', help='Equivalent to --ext thalamus.contrib')
   parser.add_argument('--ext', help='Extension Module')
+  parser.add_argument('--wait-for-pipeline', action='store_true', help='Don\'t start pipeline, wait for something else to launch it')
   return parser.parse_args(self_args[1:])
 
 async def async_main() -> None:
@@ -166,9 +167,10 @@ async def async_main() -> None:
   if use_crashpad:
     command = command + ('--crashpad',)
   LOGGER.info('COMMAND %s', ' '.join(command))
-  #bmbi_native_proc = await asyncio.create_subprocess_exec(*command)
-  #LOGGER.info('PID %s', bmbi_native_proc.pid)
-  #create_task_with_exc_handling(proc_watcher('native.exe', bmbi_native_proc))
+  if not arguments.wait_for_pipeline:
+    bmbi_native_proc = await asyncio.create_subprocess_exec(*command)
+    LOGGER.info('PID %s', bmbi_native_proc.pid)
+    create_task_with_exc_handling(proc_watcher('native.exe', bmbi_native_proc))
 
   dotnet_proc = None
   #if False:
