@@ -18,7 +18,16 @@ def widgets():
     'EXT_ALGEBRA': Factory(None, [
       UserData(UserDataType.COMBO_BOX, 'Node', '', get_node_names),
       UserData(UserDataType.DOUBLE_SPINBOX, 'Scale', 1.0, []),
-    ])
+    ]),
+    'EXT_BALL': Factory(None, [
+      UserData(UserDataType.CHECK_BOX, 'View', False, []),
+    ]),
+    'EXT_ARUCO': Factory(None, [
+      UserData(UserDataType.CHECK_BOX, 'View', False, []),
+      UserData(UserDataType.COMBO_BOX, 'source', '', get_node_names),
+    ]),
+    'EXT_MOCAP': Factory(None, [
+    ]),
   }
 
 def library():

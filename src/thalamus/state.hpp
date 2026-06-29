@@ -126,6 +126,7 @@ public:
     VectorIteratorWrapper &operator--();
     VectorIteratorWrapper operator--(int);
     bool operator!=(const VectorIteratorWrapper &other) const;
+    bool operator==(const VectorIteratorWrapper &other) const;
   };
 
   class MapIteratorWrapper {
@@ -148,6 +149,7 @@ public:
     MapIteratorWrapper &operator--();
     MapIteratorWrapper operator--(int);
     bool operator!=(const MapIteratorWrapper &other) const;
+    bool operator==(const MapIteratorWrapper &other) const;
 
     using value_type        = Map::iterator::value_type;
     using difference_type   = Map::iterator::difference_type;
@@ -172,6 +174,13 @@ public:
 
   std::string address() const;
   void notify(ObservableCollection *, Action, const Key &, Value &);
+
+  virtual ObservableList* as_list() {
+    return nullptr;
+  }
+  virtual ObservableDict* as_dict() {
+    return nullptr;
+  }
 };
 
 class ObservableList : public ObservableCollection, public std::enable_shared_from_this<ObservableList>{
@@ -217,6 +226,10 @@ public:
                          ObservableCollection::Value, std::function<void()>)>
           remote_storage) override;
   boost::json::value to_json() override;
+
+  ObservableList* as_list() override {
+    return this;
+  }
 };
 
 class ObservableDict : public ObservableCollection, public std::enable_shared_from_this<ObservableDict> {
@@ -261,6 +274,9 @@ public:
                          ObservableCollection::Value, std::function<void()>)>
           remote_storage) override;
   boost::json::value to_json() override;
+  ObservableDict* as_dict() override {
+    return this;
+  }
 };
 ObservableCollection::Value get_jsonpath(ObservableCollection::Value store,
                                          const std::list<std::string> &tokens);

@@ -13,7 +13,7 @@ import asyncio
 import functools
 import subprocess
 
-from .. import native_exe
+from ..resources import native_exe
 
 from ..config import *
 import pathlib

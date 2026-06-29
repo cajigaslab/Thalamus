@@ -9,7 +9,7 @@ if HAS_QT6:
                            QContextMenuEvent, QAction, QPixmap, QPainterPath, QBrush, QKeyEvent, QStandardItemModel,
                            QSurfaceFormat, QOffscreenSurface, QOpenGLContext, QPen, QFontMetrics, QCloseEvent,
                            QMoveEvent, QResizeEvent, QMatrix4x4, QVector3D, QPaintEvent, QQuaternion, QWheelEvent,
-                           QIcon, QFontDatabase, QRadialGradient, QWheelEvent, QGuiApplication, QLinearGradient)
+                           QIcon, QFontDatabase, QRadialGradient, QWheelEvent, QGuiApplication, QLinearGradient, QMovie)
   from PyQt6.QtWidgets import (QWidget, QProgressDialog, QSizePolicy, QAbstractScrollArea, QGridLayout, QSlider, 
                                QSpinBox, QLabel, QVBoxLayout, QHBoxLayout, QComboBox, QSpinBox, QCheckBox,
                                QPushButton, QDialog, QRadioButton, QTextEdit, QMainWindow, QFileDialog, QMenu,
@@ -74,7 +74,7 @@ else:
                            QOpenGLFramebufferObject, QPen, QStandardItem, QTextCursor, QFontMetrics, QCloseEvent,
                            QMoveEvent, QResizeEvent, QMatrix4x4, QVector3D, QPaintEvent, QQuaternion, QWheelEvent,
                            QOpenGLBuffer, QOpenGLShaderProgram, QOpenGLShader, QIcon, QFontDatabase, QRadialGradient,
-                           QWheelEvent, QGuiApplication, QLinearGradient)
+                           QWheelEvent, QGuiApplication, QLinearGradient, QMovie)
   from PyQt5.QtWidgets import (QWidget, QProgressDialog, QSizePolicy, QAbstractScrollArea, QGridLayout, QSlider, 
                                QSpinBox, QLabel, QVBoxLayout, QHBoxLayout, QComboBox, QSpinBox, QCheckBox, QPushButton,
                                QDialog, QRadioButton, QTextEdit, QMainWindow, QFileDialog, QMenu, QInputDialog, 

@@ -68,6 +68,17 @@ struct ThalamusState {
   thalamus::ObservableCollection::Value value;
 };
 
+struct ThalamusStateIter {
+  thalamus::ObservableCollection::Value value;
+  std::variant<thalamus::ObservableCollection::VectorIteratorWrapper,
+               thalamus::ObservableCollection::MapIteratorWrapper> begin;
+  std::variant<thalamus::ObservableCollection::VectorIteratorWrapper,
+               thalamus::ObservableCollection::MapIteratorWrapper> pos;
+  std::variant<thalamus::ObservableCollection::VectorIteratorWrapper,
+               thalamus::ObservableCollection::MapIteratorWrapper> end;
+  bool started;
+};
+
 struct ThalamusIoContext {
   boost::asio::io_context& io_context;
   ThalamusIoContext(boost::asio::io_context& _io_context) : io_context(_io_context) {}
@@ -120,6 +131,18 @@ struct ThalamusNodeReadyConnection {
   boost::signals2::scoped_connection connection;
   ThalamusNode* node;
 };
+
+static std::string to_string(const ThalamusCharSpan& span) {
+  return std::string(span.data, span.size);
+}
+
+static std::string_view to_string_view(const ThalamusCharSpan& span) {
+  return std::string_view(span.data, span.size);
+}
+
+inline std::ostream& operator<<(std::ostream& os, const ThalamusCharSpan& span) {
+  return os.write(span.data, std::streamsize(span.size));
+}
 
 namespace thalamus {
 using namespace std::chrono_literals;
@@ -297,7 +320,9 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
     return std::span<MotionCaptureNode::Segment const>(temp.data, temp.data+temp.size);
   }
   const std::string_view pose_name() const override {
-    return node->mocap->pose_name(node);
+    ThalamusCharSpan temp;
+    node->mocap->pose_name(&temp, node);
+    return std::string_view(temp.data, temp.data+temp.size);
   }
   void inject(const std::span<MotionCaptureNode::Segment const> &) override {
     THALAMUS_ABORT("Unimplemented");
@@ -307,7 +332,9 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
   }
 
   std::string_view text() const override {
-    return node->text->text(node);
+    ThalamusCharSpan span;
+    node->text->text(&span, node);
+    return to_string_view(span);
   }
 
   bool has_text_data() const override {
@@ -333,11 +360,43 @@ ExtNode::~ExtNode() {
 struct Interfaces {
   Node* node = nullptr;
   AnalogNode* analog = nullptr;
+  ImageNode* image = nullptr;
+  MotionCaptureNode* mocap = nullptr;
   bool safe = false;
   int count = 0;
 };
 
 #define ASSERT_SAFE() do { if(!interfaces->safe) [[unlikely]] { THALAMUS_ABORT("Node should only be accessed in get_node or ready callback"); } } while(0)
+
+static uint64_t plugin_analog_time_ns(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  std::chrono::nanoseconds t = interfaces->analog->time();
+  return uint64_t(t.count());
+}
+
+static uint64_t plugin_image_time_ns(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  std::chrono::nanoseconds t = interfaces->image->time();
+  return uint64_t(t.count());
+}
+
+static uint64_t plugin_mocap_time_ns(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  std::chrono::nanoseconds t = interfaces->mocap->time();
+  return uint64_t(t.count());
+}
+
+static void plugin_node_process(struct ThalamusNode* node, struct ThalamusRequestHandle* handle, struct ThalamusJson* request) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  interfaces->node->process(request->value, [handle](const boost::json::value & response) {
+    handle->callback(response);
+    delete handle;
+  });
+}
 
 static void plugin_analog_data(struct ThalamusDoubleSpan* output, struct ThalamusNode* node, int channel) {
   auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
@@ -434,6 +493,84 @@ static double plugin_analog_offset(struct ThalamusNode* node, int channel) {
   return interfaces->analog->offset(channel);
 }
 
+static void plugin_image_plane(struct ThalamusByteSpan* output, struct ThalamusNode* node, int channel) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  auto span = interfaces->image->plane(channel);
+  output->data = span.data();
+  output->size = span.size();
+}
+
+static uint64_t plugin_image_num_planes(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  return interfaces->image->num_planes();
+}
+
+static ThalamusImageFormat plugin_image_format(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  switch(interfaces->image->format()) {
+  case ImageNode::Format::Gray:
+    return ThalamusImageFormat::Gray;
+  case ImageNode::Format::RGB:
+    return ThalamusImageFormat::RGB;
+  case ImageNode::Format::YUYV422:
+    return ThalamusImageFormat::YUYV422;
+  case ImageNode::Format::YUV420P:
+    return ThalamusImageFormat::YUV420P;
+  case ImageNode::Format::YUVJ420P:
+    return ThalamusImageFormat::YUVJ420P;
+  }
+}
+
+static uint64_t plugin_image_width(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  return interfaces->image->width();
+}
+
+static uint64_t plugin_image_height(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  return interfaces->image->height();
+}
+
+static uint64_t plugin_image_frame_interval_ns(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  std::chrono::nanoseconds ns = interfaces->image->frame_interval();
+  return uint64_t(ns.count());
+}
+
+static char plugin_image_has_image_data(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  return interfaces->image->has_image_data() ? 1 : 0;
+}
+
+static void plugin_mocap_segments(ThalamusMocapSegmentSpan* output, struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  auto segments = interfaces->mocap->segments();
+  output->data = segments.data();
+  output->size = segments.size();
+}
+
+static void plugin_mocap_pose_name(ThalamusCharSpan* output, struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  auto name = interfaces->mocap->pose_name();
+  output->data = name.data();
+  output->size = name.size();
+}
+
+static char plugin_mocap_has_motion_data(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  return interfaces->mocap->has_motion_data() ? 1 : 0;
+}
+
 struct NodeGuard {
   Interfaces* interfaces;
   NodeGuard(ThalamusNode* node) : interfaces(reinterpret_cast<Interfaces*>(node->impl)) {
@@ -452,7 +589,7 @@ struct ThalamusAPIImpl {
   static std::map<ThalamusNode*, Node*>* node_c_to_cpp;
 
   static boost::asio::io_context* io_context;
-  static NodeGraph* node_graph;
+  static NodeGraphImpl* node_graph;
 
   static ThalamusNode* wrap_node(Node* node) {
     auto result = new ThalamusNode();
@@ -462,10 +599,14 @@ struct ThalamusAPIImpl {
     interfaces->node = node;
     interfaces->count = 1;
     result->impl = interfaces;
+    result->process = plugin_node_process;
 
-    AnalogNode* analog;
-    if((analog = node_cast<AnalogNode*>(node))) {
+    auto analog = node_cast<AnalogNode *>(node);
+    auto image = node_cast<ImageNode *>(node);
+    auto mocap = node_cast<MotionCaptureNode *>(node);
+    if(analog) {
       interfaces->analog = analog;
+      result->time_ns = result->time_ns ? result->time_ns : plugin_analog_time_ns;
       result->analog = new ThalamusAnalogNode();
       result->analog->data = plugin_analog_data;
       result->analog->short_data = plugin_analog_short_data;
@@ -481,6 +622,26 @@ struct ThalamusAPIImpl {
       result->analog->is_transformed = plugin_analog_is_transformed;
       result->analog->scale = plugin_analog_scale;
       result->analog->offset = plugin_analog_offset;
+    }
+    if (image) {
+      interfaces->image = image;
+      result->time_ns = result->time_ns ? result->time_ns : plugin_image_time_ns;
+      result->image = new ThalamusImageNode();
+      result->image->plane = plugin_image_plane;
+      result->image->num_planes = plugin_image_num_planes;
+      result->image->format = plugin_image_format;
+      result->image->width = plugin_image_width;
+      result->image->height = plugin_image_height;
+      result->image->frame_interval_ns = plugin_image_frame_interval_ns;
+      result->image->has_image_data = plugin_image_has_image_data;
+    }
+    if (mocap) {
+      interfaces->mocap = mocap;
+      result->time_ns = result->time_ns ? result->time_ns : plugin_mocap_time_ns;
+      result->mocap = new ThalamusMocapNode();
+      result->mocap->segments = plugin_mocap_segments;
+      result->mocap->pose_name = plugin_mocap_pose_name;
+      result->mocap->has_motion_data = plugin_mocap_has_motion_data;
     }
 
     return result;
@@ -498,6 +659,19 @@ struct ThalamusAPIImpl {
       node_inc_ref(i->second);
       return i->second;
     }
+  }
+
+  static ObservableCollection::Value key_to_value(ObservableCollection::Key key) {
+    if(std::holds_alternative<std::monostate>(key)) {
+      return ObservableCollection::Value(std::get<std::monostate>(key));
+    } else if (std::holds_alternative<int64_t>(key)) {
+      return ObservableCollection::Value(std::get<int64_t>(key));
+    } else if (std::holds_alternative<bool>(key)) {
+      return ObservableCollection::Value(std::get<bool>(key));
+    } else if (std::holds_alternative<std::string>(key)) {
+      return ObservableCollection::Value(std::get<std::string>(key));
+    }
+    THALAMUS_ABORT("Unexpected type");
   }
 
   static ThalamusState* get_state_ref(ObservableCollection::Key key) {
@@ -527,7 +701,7 @@ struct ThalamusAPIImpl {
     auto i = cpp_to_c->find(val);
     if(i == cpp_to_c->end()) {
       auto new_ptr = new ThalamusState{1, val};
-      THALAMUS_LOG(info) << "new_state " << get_path(new_ptr->value) << " " << new_ptr->count;
+      THALAMUS_LOG(trace) << "new_state " << get_path(new_ptr->value) << " " << new_ptr->count;
       (*cpp_to_c)[val] = new_ptr;
       (*c_to_cpp)[new_ptr] = val;
       return new_ptr;
@@ -539,12 +713,12 @@ struct ThalamusAPIImpl {
 
   static void state_inc_ref(ThalamusState* state) {
     ++state->count;
-    THALAMUS_LOG(info) << "state_inc_ref " << get_path(state->value) << " " << state->count;
+    THALAMUS_LOG(trace) << "state_inc_ref " << get_path(state->value) << " " << state->count;
   }
 
   static void state_dec_ref(ThalamusState* state) {
     --state->count;
-    THALAMUS_LOG(info) << "state_dec_ref " << get_path(state->value) << " " << state->count;
+    THALAMUS_LOG(trace) << "state_dec_ref " << get_path(state->value) << " " << state->count;
     if(state->count == 0) {
       c_to_cpp->erase(state);
       cpp_to_c->erase(state->value);
@@ -574,8 +748,11 @@ struct ThalamusAPIImpl {
     return std::holds_alternative<bool>(value->value) ? 1 : 0;
   }
 
-  static const char* state_get_string(ThalamusState* state) {
-    return std::get<std::string>(state->value).c_str();
+  static void state_get_string(ThalamusCharSpan* span, ThalamusState* state) {
+    const auto& s = std::get<std::string>(state->value);
+    span->data = s.data();
+    span->size = s.size();
+    span->owns_data = 0;
   }
   static int64_t state_get_int(ThalamusState* state) {
     return std::get<int64_t>(state->value);
@@ -587,20 +764,33 @@ struct ThalamusAPIImpl {
     return std::get<bool>(state->value);
   }
   
-  static ThalamusState* state_get_at_name(ThalamusState* state, const char* key) {
+  static ThalamusState* state_get_at_name(ThalamusState* state, const ThalamusCharSpan* key) {
+    std::string key_str(key->data, key->size);
     if(std::holds_alternative<ObservableDictPtr>(state->value)) {
       auto dict = std::get<ObservableDictPtr>(state->value);
-      return get_state_ref((*dict)[key]);
+      if(dict->contains(key_str)) {
+        return get_state_ref((*dict)[key_str]);
+      } else {
+        return nullptr;
+      }
     }
     THALAMUS_ABORT("State does not contain dict");
   }
-  static ThalamusState* state_get_at_index(ThalamusState* state, size_t key) {
+  static ThalamusState* state_get_at_index(ThalamusState* state, uint64_t key) {
     if(std::holds_alternative<ObservableDictPtr>(state->value)) {
       auto dict = std::get<ObservableDictPtr>(state->value);
-      return get_state_ref((*dict)[int64_t(key)]);
+      if(dict->contains(int64_t(key))) {
+        return get_state_ref((*dict)[int64_t(key)]);
+      } else {
+        return nullptr;
+      }
     } else if (std::holds_alternative<ObservableListPtr>(state->value)) {
       auto list = std::get<ObservableListPtr>(state->value);
-      return get_state_ref((*list)[key]);
+      if(key < list->size()) {
+        return get_state_ref((*list)[key]);
+      } else {
+        return nullptr;
+      }
     }
     THALAMUS_ABORT("State does not contain dict or list");
   }
@@ -621,7 +811,12 @@ struct ThalamusAPIImpl {
         THALAMUS_ABORT("state is not a collection");
       }
       auto action_wrapper = action == ObservableCollection::Action::Set ? ThalamusStateAction::Set : ThalamusStateAction::Delete;
-      callback(source_wrapper, action_wrapper, get_state_ref(key), get_state_ref(value), data);
+      auto wrapped_key = get_state_ref(key);
+      auto wrapped_value = get_state_ref(value);
+      callback(source_wrapper, action_wrapper, wrapped_key, wrapped_value, data);
+      state_dec_ref(source_wrapper);
+      state_dec_ref(wrapped_key);
+      state_dec_ref(wrapped_value);
     };
 
     boost::signals2::connection connection;
@@ -681,14 +876,39 @@ struct ThalamusAPIImpl {
     }
   }
 
+  static void state_recap_with(ThalamusState* state, ThalamusStateRecursiveCallback callback, void* data) {
+    auto handler = [state,callback,data](ObservableCollection::Action action,
+                                   ObservableCollection::Key key,
+                                   ObservableCollection::Value value) {
+      auto action_wrapper = action == ObservableCollection::Action::Set ? ThalamusStateAction::Set : ThalamusStateAction::Delete;
+      auto wrapped_key = get_state_ref(key);
+      auto wrapped_value = get_state_ref(value);
+      callback(state, action_wrapper, wrapped_key, wrapped_value, data);
+      state_dec_ref(wrapped_key);
+      state_dec_ref(wrapped_value);
+    };
+
+    if(std::holds_alternative<ObservableDictPtr>(state->value)) {
+      std::get<ObservableDictPtr>(state->value)->recap(handler);
+    } else if(std::holds_alternative<ObservableListPtr>(state->value)) {
+      std::get<ObservableListPtr>(state->value)->recap(handler);
+    } else {
+      THALAMUS_ABORT("Attempt to recap a value that is neither a dict or list");
+    }
+  }
+
   template <typename T1, typename T2> static void assign_state(struct ThalamusState* state, T1 key, T2 value) {
     if(std::holds_alternative<ObservableDictPtr>(state->value)) {
       auto coll = std::get<ObservableDictPtr>(state->value);
       (*coll)[key].assign(value);
     } else if(std::holds_alternative<ObservableListPtr>(state->value)) {
       if constexpr (std::is_integral<T1>::value) {
-        auto coll = std::get<ObservableDictPtr>(state->value);
-        (*coll)[key].assign(value);
+        auto coll = std::get<ObservableListPtr>(state->value);
+        if(size_t(key) < coll->size()) {
+          (*coll)[size_t(key)].assign(value);
+        } else {
+          THALAMUS_ABORT("Index out of bounds");
+        }
       } else {
         THALAMUS_ABORT("Can only index list with integer");
       }
@@ -697,30 +917,30 @@ struct ThalamusAPIImpl {
     }
   }
 
-  static void state_set_at_name_state(struct ThalamusState* state, const char* key, struct ThalamusState* value) {
-    assign_state(state, key, value->value);
+  static void state_set_at_name_state(struct ThalamusState* state, const ThalamusCharSpan* key, struct ThalamusState* value) {
+    assign_state(state, std::string(key->data, key->size), value->value);
   }
-  static void state_set_at_name_string(struct ThalamusState* state, const char* key, const char* value) {
-    assign_state(state, key, value);
+  static void state_set_at_name_string(struct ThalamusState* state, const ThalamusCharSpan* key, const ThalamusCharSpan* value) {
+    assign_state(state, std::string(key->data, key->size), std::string(value->data, value->size));
   }
-  static void state_set_at_name_int(struct ThalamusState* state, const char* key, int64_t value) {
-    assign_state(state, key, value);
+  static void state_set_at_name_int(struct ThalamusState* state, const ThalamusCharSpan* key, int64_t value) {
+    assign_state(state, std::string(key->data, key->size), value);
   }
-  static void state_set_at_name_float(struct ThalamusState* state, const char* key, double value) {
-    assign_state(state, key, value);
+  static void state_set_at_name_float(struct ThalamusState* state, const ThalamusCharSpan* key, double value) {
+    assign_state(state, std::string(key->data, key->size), value);
   }
-  static void state_set_at_name_null(struct ThalamusState* state, const char* key) {
-    assign_state(state, key, std::monostate());
+  static void state_set_at_name_null(struct ThalamusState* state, const ThalamusCharSpan* key) {
+    assign_state(state, std::string(key->data, key->size), std::monostate());
   }
-  static void state_set_at_name_bool(struct ThalamusState* state, const char* key, char value) {
-    assign_state(state, key, value != 0);
+  static void state_set_at_name_bool(struct ThalamusState* state, const ThalamusCharSpan* key, char value) {
+    assign_state(state, std::string(key->data, key->size), value != 0);
   }
 
   static void state_set_at_index_state(struct ThalamusState* state, int64_t key, struct ThalamusState* value) {
     assign_state(state, key, value->value);
   }
-  static void state_set_at_index_string(struct ThalamusState* state, int64_t key, const char* value) {
-    assign_state(state, key, value);
+  static void state_set_at_index_string(struct ThalamusState* state, int64_t key, const ThalamusCharSpan* value) {
+    assign_state(state, key, std::string(value->data, value->size));
   }
   static void state_set_at_index_int(struct ThalamusState* state, int64_t key, int64_t value) {
     assign_state(state, key, value);
@@ -735,18 +955,139 @@ struct ThalamusAPIImpl {
     assign_state(state, key, value != 0);
   }
 
+  static struct ThalamusState* state_parent(struct ThalamusState* state) {
+    ObservableCollection* parent = nullptr;
+    if(std::holds_alternative<ObservableDictPtr>(state->value)) {
+      parent = std::get<ObservableDictPtr>(state->value)->parent;
+    } else if (std::holds_alternative<ObservableListPtr>(state->value)) {
+      parent = std::get<ObservableListPtr>(state->value)->parent;
+    } else {
+      THALAMUS_ABORT("Attempt to recap a value that is neither a dict or list");
+    }
+    if (parent == nullptr) {
+      return nullptr;
+    }
+
+    ObservableList* list;
+    ObservableDict* dict;
+    ObservableCollection::Value parent_value;
+    if((list = parent->as_list())) {
+      parent_value = ObservableCollection::Value(list->shared_from_this());
+    } else if ((dict = parent->as_dict())) {
+      parent_value = ObservableCollection::Value(dict->shared_from_this());
+    } else {
+      return nullptr;
+    }
+    return get_state_ref(parent_value);
+  }
+
+  static struct ThalamusStateIter* state_iter_create(struct ThalamusState* state) {
+    if(std::holds_alternative<ObservableDictPtr>(state->value)) {
+      auto value = std::get<ObservableDictPtr>(state->value);
+      return new ThalamusStateIter{state->value, value->begin(), value->begin(), value->end(), false};
+    } else if (std::holds_alternative<ObservableListPtr>(state->value)) {
+      auto value = std::get<ObservableListPtr>(state->value);
+      return new ThalamusStateIter{state->value, value->begin(), value->begin(), value->end(), false};
+    }
+    THALAMUS_ABORT("Attempt to iterate a value that is neither a dict or list");
+  }
+
+  static uint8_t state_iter_next(struct ThalamusStateIter* iter) {
+    THALAMUS_ASSERT(iter->pos != iter->end, "Attempted to advance finished iterator");
+    if(std::holds_alternative<thalamus::ObservableCollection::VectorIteratorWrapper>(iter->begin)) {
+      auto& pos = std::get<thalamus::ObservableCollection::VectorIteratorWrapper>(iter->pos);
+      auto end = std::get<thalamus::ObservableCollection::VectorIteratorWrapper>(iter->pos);
+      if(iter->started) {
+        ++pos;
+      } else {
+        iter->started = true;
+      }
+      return iter->pos == iter->end ? 0 : 1;
+    } else if (std::holds_alternative<thalamus::ObservableCollection::MapIteratorWrapper>(iter->begin)) {
+      auto& pos = std::get<thalamus::ObservableCollection::MapIteratorWrapper>(iter->pos);
+      auto end = std::get<thalamus::ObservableCollection::MapIteratorWrapper>(iter->pos);
+      if(iter->started) {
+        ++pos;
+      } else {
+        iter->started = true;
+      }
+      return iter->pos == iter->end ? 0 : 1;
+    }
+    THALAMUS_ABORT("Bad Iterator");
+  }
+
+  static struct ThalamusState* state_iter_key(struct ThalamusStateIter* iter) {
+    THALAMUS_ASSERT(iter->pos != iter->end, "Attempted to read finished iterator");
+    thalamus::ObservableCollection::Value result;
+    if(std::holds_alternative<thalamus::ObservableCollection::VectorIteratorWrapper>(iter->begin)) {
+      auto begin = std::get<thalamus::ObservableCollection::VectorIteratorWrapper>(iter->begin);
+      auto pos = std::get<thalamus::ObservableCollection::VectorIteratorWrapper>(iter->pos);
+      result = int64_t(std::distance(begin, pos));
+    } else if (std::holds_alternative<thalamus::ObservableCollection::MapIteratorWrapper>(iter->begin)) {
+      auto pos = std::get<thalamus::ObservableCollection::MapIteratorWrapper>(iter->pos);
+      result = key_to_value(pos->first);
+    }
+    return get_state_ref(result);
+  }
+
+  static struct ThalamusState* state_iter_value(struct ThalamusStateIter* iter) {
+    THALAMUS_ASSERT(iter->pos != iter->end, "Attempted to read finished iterator");
+    thalamus::ObservableCollection::Value result;
+    if(std::holds_alternative<thalamus::ObservableCollection::VectorIteratorWrapper>(iter->begin)) {
+      auto pos = std::get<thalamus::ObservableCollection::VectorIteratorWrapper>(iter->pos);
+      result = *pos;
+    } else if (std::holds_alternative<thalamus::ObservableCollection::MapIteratorWrapper>(iter->begin)) {
+      auto pos = std::get<thalamus::ObservableCollection::MapIteratorWrapper>(iter->pos);
+      result = pos->second;
+    }
+    return get_state_ref(result);
+  }
+
+  static struct ThalamusState* state_key_of(struct ThalamusState* parent, struct ThalamusState* child) {
+    ObservableCollection* parent_col = nullptr;
+    ObservableCollection* child_col = nullptr;
+    if(std::holds_alternative<ObservableDictPtr>(parent->value)) {
+      parent_col = std::get<ObservableDictPtr>(parent->value).get();
+    } else if (std::holds_alternative<ObservableListPtr>(parent->value)) {
+      parent_col = std::get<ObservableListPtr>(parent->value).get();
+    } else {
+      THALAMUS_ABORT("Attempt to iterate a value that is neither a dict or list");
+    }
+    if(std::holds_alternative<ObservableDictPtr>(child->value)) {
+      child_col = std::get<ObservableDictPtr>(child->value).get();
+    } else if (std::holds_alternative<ObservableListPtr>(child->value)) {
+      child_col = std::get<ObservableListPtr>(child->value).get();
+    } else {
+      THALAMUS_ABORT("Attempt to iterate a value that is neither a dict or list");
+    }
+
+    auto key = parent_col->key_of(*child_col);
+
+    return key ? get_state_ref(*key) : nullptr;
+  }
+
+  static void state_iter_destroy(struct ThalamusStateIter* iter) {
+    delete iter;
+  }
+
   static void io_context_post(ThalamusPostCallback callback, void* data) {
     boost::asio::post(*io_context, [callback, data] {
       callback(data);
     });
   }
 
-  static void trace_event_begin(const char* name) {
-    TRACE_EVENT_BEGIN("plugin", perfetto::DynamicString{name});
+  static void threadpool_post(ThalamusPostCallback callback, void* data) {
+    node_graph->get_thread_pool().push([callback, data] {
+      callback(data);
+    });
   }
 
-  static void trace_event_begin_span(const char* name, size_t length) {
-    TRACE_EVENT_BEGIN("plugin", perfetto::DynamicString(name, length));
+  static void trace_event_begin(const ThalamusCharSpan* name) {
+    TRACE_EVENT_BEGIN("plugin", perfetto::DynamicString(name->data, name->size));
+  }
+
+  static void trace_event_begin_span(const ThalamusCharSpan* name) {
+    TRACE_EVENT_BEGIN("plugin", perfetto::DynamicString(name->data, name->size));
   }
 
   static void trace_event_end() {
@@ -771,16 +1112,16 @@ struct ThalamusAPIImpl {
     port->port.set_option(boost::asio::serial_port_base::baud_rate(rate));
   }
 
-  static void serial_port_open(ThalamusSerialPort* port, const char* name) {
-    port->port.open(name, port->error);
+  static void serial_port_open(ThalamusSerialPort* port, const ThalamusCharSpan* name) {
+    port->port.open(std::string(name->data, name->size), port->error);
   }
 
   static ThalamusErrorCode* serial_port_error(ThalamusSerialPort* port) {
     return &port->error_wrapper;
   }
 
-  static void serial_port_read_until(ThalamusSerialPort* port, ThalamusStreamBuf* buffer, char* delimiter, size_t delimiter_len, ThalamusIOCallback callback, void* data) {
-    auto view =  delimiter_len == 0 ? boost::asio::string_view(delimiter) : boost::asio::string_view(delimiter, delimiter_len);
+  static void serial_port_read_until(ThalamusSerialPort* port, ThalamusStreamBuf* buffer, const ThalamusCharSpan* delimiter, ThalamusIOCallback callback, void* data) {
+    auto view = boost::asio::string_view(delimiter->data, delimiter->size);
     boost::asio::async_read_until(port->port, buffer->buffer, view, [callback, data] (auto ec, auto count) {
       ThalamusErrorCode err{ec};
       callback(&err, count, data);
@@ -955,12 +1296,18 @@ struct ThalamusAPIImpl {
     node_dec_ref(conn->node);
     delete conn;
   }
+
+  static ThalamusState* node_get_state(struct ThalamusNode* node) {
+    auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+    ASSERT_SAFE();
+    return get_state_ref(node_graph->get_node_state(interfaces->node));
+  }
 };
 
 std::map<ObservableCollection::Value, ThalamusState*>* ThalamusAPIImpl::cpp_to_c = nullptr;
 std::map<ThalamusState*, ObservableCollection::Value>* ThalamusAPIImpl::c_to_cpp = nullptr;
 boost::asio::io_context* ThalamusAPIImpl::io_context = nullptr;
-NodeGraph* ThalamusAPIImpl::node_graph = nullptr;
+NodeGraphImpl* ThalamusAPIImpl::node_graph = nullptr;
 
 
 std::map<Node*, ThalamusNode*>* ThalamusAPIImpl::node_cpp_to_c = nullptr;
@@ -1002,13 +1349,14 @@ struct ExtNodeFactory : public INodeFactory {
   std::string type_name() override;
 };
 
-std::string ExtNodeFactory::type_name() { return underlying->type; }
+std::string ExtNodeFactory::type_name() { return std::string("*EXT* ") + to_string(underlying->type); }
 
 
 struct NodeGraphImpl::Impl {
   ObservableListPtr nodes;
   std::vector<std::shared_ptr<Node>> node_impls;
   std::vector<std::string> node_types;
+  std::vector<ObservableDictPtr> node_configs;
   size_t num_nodes;
   boost::asio::io_context &io_context;
   std::optional<Service *> service;
@@ -1139,6 +1487,22 @@ public:
     thalamus_api.node_channels_changed_connect = ThalamusAPIImpl::node_channels_changed_connect;
     thalamus_api.node_channels_changed_disconnect = ThalamusAPIImpl::node_channels_changed_disconnect;
 
+    thalamus_api.node_inc_ref = ThalamusAPIImpl::node_inc_ref;
+    thalamus_api.node_dec_ref = ThalamusAPIImpl::node_dec_ref;
+    thalamus_api.state_parent = ThalamusAPIImpl::state_parent;
+
+    thalamus_api.state_iter_create = ThalamusAPIImpl::state_iter_create;
+    thalamus_api.state_iter_next = ThalamusAPIImpl::state_iter_next;
+    thalamus_api.state_iter_key = ThalamusAPIImpl::state_iter_key;
+    thalamus_api.state_iter_value = ThalamusAPIImpl::state_iter_value;
+    thalamus_api.state_iter_destroy = ThalamusAPIImpl::state_iter_destroy;
+
+    thalamus_api.state_key_of = ThalamusAPIImpl::state_key_of;
+    thalamus_api.state_recap_with = ThalamusAPIImpl::state_recap_with;
+    thalamus_api.node_get_state = ThalamusAPIImpl::node_get_state;
+
+    thalamus_api.threadpool_post = ThalamusAPIImpl::threadpool_post;
+
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},
         {"NIDAQ", new NodeFactory<NidaqNode>()},
@@ -1192,6 +1556,7 @@ public:
         {"ARUCO", new NodeFactory<ArucoNode>()}};
 
     for(auto& ext : extension) {
+      THALAMUS_LOG(info) << "Loading " << ext.name();
       //auto library_handle = LoadLibrary("C:\\Thalamus\\ext.dll");
 
       //auto get_node_factories = reinterpret_cast<get_node_factories_fun>(
@@ -1201,7 +1566,9 @@ public:
       THALAMUS_ASSERT(get_node_factories, "get_node_factories not found in extension");
       auto factory = get_node_factories(&thalamus_api);
       while(*factory != nullptr) {
-        node_factories[(*factory)->type] = new ExtNodeFactory(*factory, io_context, outer, &thalamus_api);
+        THALAMUS_LOG(info) << "Found " << (*factory)->type;
+        auto type_name = to_string((*factory)->type);
+        node_factories[type_name] = new ExtNodeFactory(*factory, io_context, outer, &thalamus_api);
         ++factory;
       }
     }
@@ -1262,7 +1629,13 @@ public:
 
       node_impls.insert(node_impls.begin() + index, node_impl);
       node_types.insert(node_types.begin() + index, type_str);
+      node_configs.insert(node_configs.begin() + index, node);
       node->recap(std::bind(&Impl::on_node, this, node.get(), _1, _2, _3));
+    } else {
+      auto index = std::get<int64_t>(k);
+      node_impls.erase(node_impls.begin() + index);
+      node_types.erase(node_types.begin() + index);
+      node_configs.erase(node_configs.begin() + index);
     }
   }
 
@@ -1404,7 +1777,9 @@ void NodeGraphImpl::get_node(
   if (!value.lock()) {
     impl->callbacks.emplace_back(query_name, callback);
   } else {
-    callback(value);
+    impl->io_context.post([callback,value] {
+      callback(value);
+    });
   }
 }
 
@@ -1427,7 +1802,9 @@ NodeGraph::NodeConnection NodeGraphImpl::get_node_scoped(
         impl->signals.back().second.connect(callback));
     return connection;
   } else {
-    callback(value);
+    impl->io_context.post([callback,value] {
+      callback(value);
+    });
     return NodeConnection();
   }
 }
@@ -1485,4 +1862,14 @@ void NodeGraphImpl::dialog(const thalamus_grpc::Dialog &dialog) {
 void NodeGraphImpl::log(const thalamus_grpc::Text & text) {
   (*impl->service)->log_signal(text);
 }
+
+ObservableDictPtr NodeGraphImpl::get_node_state(Node* node) {
+  for(size_t i = 0;i < impl->node_impls.size();++i) {
+    if(impl->node_impls[i].get() == node) {
+      return impl->node_configs[i];
+    }
+  }
+  THALAMUS_ABORT("Failed to find node.");
+}
+
 } // namespace thalamus
