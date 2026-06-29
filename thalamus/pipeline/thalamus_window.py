@@ -555,8 +555,14 @@ class Delegate(QStyledItemDelegate):
         options = user_data.options(self.config)
       else:
         options = user_data.options
-      for value in options:
-        combo_box.addItem(FACTORY_NAMES[value] if index.column() == 0 else value, value)
+
+      if index.column() == 1 and index.parent() == QModelIndex():
+        text = (FACTORY_NAMES[v] for v in options)
+      else:
+        text = options
+
+      for t, value in sorted(zip(text, options)):
+        combo_box.addItem(t, value)
       for i, value in enumerate(options):
         if value == index.data():
           combo_box.setCurrentIndex(i)
@@ -1615,6 +1621,7 @@ class ThalamusWindow(QMainWindow):
   async def load(self):
     for key in list(FACTORIES.keys()):
       response = await self.stub.get_type_name(thalamus_pb2.StringMessage(value=key))
+      print(key, response)
       if response.value:
         FACTORY_NAMES[key] = response.value
       else:
