@@ -838,7 +838,7 @@ struct ThalamusAPIImpl {
   static void timer_destroy(ThalamusTimer *timer) {
     delete timer;
   }
-  static void timer_expire_after_ns(ThalamusTimer *timer, size_t ns) {
+  static void timer_expire_after_ns(ThalamusTimer *timer, uint64_t ns) {
     timer->timer.expires_after(std::chrono::nanoseconds(ns));
   }
   static void timer_async_wait(ThalamusTimer *timer,
@@ -1171,11 +1171,11 @@ struct ThalamusAPIImpl {
     result->owns_data = true;
   }
 
-  static void streambuf_consume(ThalamusStreamBuf* buffer, size_t count) {
+  static void streambuf_consume(ThalamusStreamBuf* buffer, uint64_t count) {
     buffer->buffer.consume(count);
   }
 
-  static size_t streambuf_size(ThalamusStreamBuf* buffer) {
+  static uint64_t streambuf_size(ThalamusStreamBuf* buffer) {
     return buffer->buffer.size();
   }
 
