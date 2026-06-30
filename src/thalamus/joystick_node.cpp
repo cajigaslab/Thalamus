@@ -179,13 +179,13 @@ public:
     } else if (key_str == "Invert Y") {
       invert_y = std::get<bool>(v);
     } else if (key_str == "X Center") {
-      x_center = std::holds_alternative<long long>(v) ? double(std::get<long long>(v))
+      x_center = std::holds_alternative<int64_t>(v) ? double(std::get<int64_t>(v))
                                                        : std::get<double>(v);
     } else if (key_str == "Y Center") {
-      y_center = std::holds_alternative<long long>(v) ? double(std::get<long long>(v))
+      y_center = std::holds_alternative<int64_t>(v) ? double(std::get<int64_t>(v))
                                                        : std::get<double>(v);
     } else if (key_str == "Dead Zone") {
-      dead_zone = std::holds_alternative<long long>(v) ? double(std::get<long long>(v))
+      dead_zone = std::holds_alternative<int64_t>(v) ? double(std::get<int64_t>(v))
                                                         : std::get<double>(v);
     } else if (key_str == "Running") {
       running = std::get<bool>(v);
