@@ -24,6 +24,9 @@ WAND_MARKERS = [
 
 # Default pass threshold (mm) for the server-side wand calibration check.
 WAND_THRESHOLD_MM = 5.0
+# Default pass threshold (px) — the actual pass/fail gate. A pixel threshold is
+# distance-invariant, so one value works for cameras at different distances.
+WAND_THRESHOLD_PX = 2.0
 
 MARKER_KEYS = ['id', 'x', 'y', 'z', 'rx', 'ry', 'rz', 'size']
 TRANSFORM_KEYS = [None, 'translation_x', 'translation_y', 'translation_z',
@@ -282,7 +285,7 @@ class BoardsModel(QAbstractItemModel):
       board = self.config[index.row()]
       if self.is_layout(board):
         if role == Qt.ItemDataRole.CheckStateRole and index.column() == 1:
-          board['Quality Check'] = int(value) == int(Qt.CheckState.Checked)
+          board['Quality Check'] = Qt.CheckState(value) == Qt.CheckState.Checked
           return True
         if role != Qt.ItemDataRole.EditRole:
           return super().setData(index, value, role)
@@ -521,12 +524,15 @@ class ArucoWidget(QWidget):
 
     # Server-side wand calibration block (geometry populated by the wand button).
     if 'Calibration' not in config:
-      config['Calibration'] = {'Enabled': False, 'Threshold (mm)': WAND_THRESHOLD_MM, 'Markers': []}
+      config['Calibration'] = {'Enabled': False, 'Threshold (mm)': WAND_THRESHOLD_MM,
+                               'Threshold (px)': WAND_THRESHOLD_PX, 'Markers': []}
     calibration = config['Calibration']
     if 'Enabled' not in calibration:
       calibration['Enabled'] = False
     if 'Threshold (mm)' not in calibration:
       calibration['Threshold (mm)'] = WAND_THRESHOLD_MM
+    if 'Threshold (px)' not in calibration:
+      calibration['Threshold (px)'] = WAND_THRESHOLD_PX
     if 'Markers' not in calibration:
       calibration['Markers'] = []
 
@@ -551,6 +557,16 @@ class ArucoWidget(QWidget):
         calib_threshold.setText(str(calibration['Threshold (mm)']))
     calib_threshold.editingFinished.connect(on_threshold_edit)
 
+    # Pixel threshold is the pass/fail gate (mm is reported for reference only).
+    calib_threshold_px = QLineEdit(str(calibration['Threshold (px)']))
+
+    def on_threshold_px_edit():
+      try:
+        calibration['Threshold (px)'] = float(calib_threshold_px.text())
+      except ValueError:
+        calib_threshold_px.setText(str(calibration['Threshold (px)']))
+    calib_threshold_px.editingFinished.connect(on_threshold_px_edit)
+
     layout = QGridLayout()
     layout.addWidget(QLabel('Dictionary:'), 0, 0)
     layout.addWidget(dict_combo, 0, 1)
@@ -567,9 +583,11 @@ class ArucoWidget(QWidget):
     layout.addWidget(source_add_button, 8, 0)
     layout.addWidget(source_remove_button, 8, 1)
     layout.addWidget(QLabel('Wand Calibration:'), 9, 0, 1, 2)
-    layout.addWidget(calib_check, 10, 0)
-    layout.addWidget(QLabel('Threshold (mm):'), 10, 1)
-    layout.addWidget(calib_threshold, 11, 0, 1, 2)
+    layout.addWidget(calib_check, 10, 0, 1, 2)
+    layout.addWidget(QLabel('Threshold (px):'), 11, 0)
+    layout.addWidget(calib_threshold_px, 11, 1)
+    layout.addWidget(QLabel('Threshold (mm, ref):'), 12, 0)
+    layout.addWidget(calib_threshold, 12, 1)
 
     def on_add_source():
       name = source_combo.currentText()
@@ -635,9 +653,11 @@ class ArucoWidget(QWidget):
       # node's observer keep tracking it (replacing the dict would orphan them).
       calibration['Markers'] = [dict(m) for m in WAND_MARKERS]
       calibration['Threshold (mm)'] = WAND_THRESHOLD_MM
+      calibration['Threshold (px)'] = WAND_THRESHOLD_PX
       calibration['Enabled'] = True
       calib_check.setChecked(True)
       calib_threshold.setText(str(WAND_THRESHOLD_MM))
+      calib_threshold_px.setText(str(WAND_THRESHOLD_PX))
     add_layout_button.clicked.connect(on_add_layout)
 
     def selected_layout_board():

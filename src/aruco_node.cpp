@@ -24,11 +24,14 @@
 
 #include <algorithm>
 #include <cmath>
+#include <deque>
 #include <iomanip>
 #include <memory>
+#include <mutex>
 #include <set>
 #include <sstream>
 #include <variant>
+#include <vector>
 
 using namespace thalamus;
 
@@ -87,6 +90,26 @@ struct ArucoNode::Impl {
   };
   std::map<std::string, CameraResult> camera_results;
 
+  // Rolling history of each board's origin (camera frame), keyed by
+  // "<source>/<board label>", used to report temporal pose jitter for the
+  // static-board cross-camera stability readout.  Touched only on the
+  // io_context thread (in on_data's post step).
+  std::map<std::string, std::deque<cv::Vec3d>> pose_history;
+  static constexpr size_t JITTER_WINDOW = 30;
+
+  // Auto-layout one-shot: accumulate observed relative transforms of each
+  // non-reference marker (w.r.t. the board's first marker) across frames AND
+  // cameras, then log a robust estimate to paste into the layout board.  Touched
+  // from worker threads, so guarded by its own mutex.
+  struct AutoLayoutAccum {
+    // marker id -> samples of (t_rel meters, rvec_rel radians) in ref frame
+    std::map<int, std::vector<std::pair<cv::Vec3d, cv::Vec3d>>> samples;
+  };
+  std::map<std::string, AutoLayoutAccum> auto_layout_accum; // keyed by board name
+  std::mutex auto_layout_mutex;
+  static constexpr size_t AUTO_LAYOUT_MIN = 90;  // samples before first estimate
+  static constexpr size_t AUTO_LAYOUT_CAP = 300; // stop growing past this
+
   enum class BoardType { Grid, Layout };
 
   struct Marker {
@@ -100,6 +123,9 @@ struct ArucoNode::Impl {
     BoardType type = BoardType::Grid;
     std::string name;
     bool quality_check = false;
+    // One-shot: when true, the node measures each marker independently and logs
+    // the rigid relative geometry to paste back into this layout board.
+    bool auto_layout = false;
     double translation_x = 0, translation_y = 0, translation_z = 0;
     cv::Vec3d rotation;
     long long rows = 0;
@@ -121,6 +147,7 @@ struct ArucoNode::Impl {
   struct Calibration {
     bool enabled = false;
     double threshold_mm = 5.0;
+    double threshold_px = 2.0; // pixel error gate (distance-invariant across cams)
     struct CalMarker {
       cv::Vec3d pos; // known position in wand space (meters)
       double size = 0;
@@ -233,6 +260,8 @@ struct ArucoNode::Impl {
       board.name = std::get<std::string>(value);
     } else if (key_str == "Quality Check") {
       board.quality_check = std::get<bool>(value);
+    } else if (key_str == "Auto Layout") {
+      board.auto_layout = std::get<bool>(value);
     } else if (key_str == "Markers") {
       auto value_list = std::get<ObservableListPtr>(value);
       board_connections.push_back(value_list->changed.connect(
@@ -383,6 +412,9 @@ struct ArucoNode::Impl {
     if (calibration_dict->contains("Threshold (mm)")) {
       calibration.threshold_mm = double(calibration_dict->at("Threshold (mm)"));
     }
+    if (calibration_dict->contains("Threshold (px)")) {
+      calibration.threshold_px = double(calibration_dict->at("Threshold (px)"));
+    }
     if (calibration_dict->contains("Markers")) {
       ObservableListPtr markers = calibration_dict->at("Markers");
       for (size_t i = 0; i < markers->size(); ++i) {
@@ -421,6 +453,11 @@ struct ArucoNode::Impl {
     for (auto it = source_bindings.begin(); it != source_bindings.end();) {
       if (!seen.count(it->first)) {
         camera_results.erase(it->first);
+        std::string prefix = it->first + "/";
+        for (auto hit = pose_history.begin(); hit != pose_history.end();) {
+          hit = hit->first.rfind(prefix, 0) == 0 ? pose_history.erase(hit)
+                                                 : std::next(hit);
+        }
         it = source_bindings.erase(it);
       } else {
         ++it;
@@ -588,6 +625,8 @@ struct ArucoNode::Impl {
       cv::cvtColor(in, color, cv::COLOR_GRAY2RGB);
       std::vector<MotionCaptureNode::Segment> _segments;
       std::map<std::string, double> _metrics;
+      // Board origin (camera frame, meters) per board label, for jitter.
+      std::map<std::string, cv::Vec3d> _origins;
 
       if (_running) {
         std::vector<int> ids;
@@ -661,6 +700,117 @@ struct ArucoNode::Impl {
             auto &board = pair.second;
 
             if (board.type == BoardType::Layout && board.marker_order.empty()) {
+              ++board_index;
+              continue;
+            }
+
+            // Auto-layout one-shot: measure each marker independently and learn
+            // the rigid relative geometry (vs the first marker), then log it to
+            // paste back into this board.  Skips the (not-yet-valid) joint solve.
+            if (board.type == BoardType::Layout && board.auto_layout &&
+                board.marker_order.size() >= 2) {
+              auto solve_one = [&](int want_id, double sz,
+                                   cv::Vec3d &rv, cv::Vec3d &tv) -> bool {
+                for (size_t k = 0; k < ids.size(); ++k) {
+                  if (ids[k] != want_id || sz <= 0.0) {
+                    continue;
+                  }
+                  float h = float(sz) / 2.0f;
+                  std::vector<cv::Point3f> objp = {{-h, h, 0.0f},
+                                                   {h, h, 0.0f},
+                                                   {h, -h, 0.0f},
+                                                   {-h, -h, 0.0f}};
+                  try {
+                    cv::solvePnP(objp, corners[k], camera_matrix,
+                                 _distortion_parameters, rv, tv, false,
+                                 cv::SOLVEPNP_IPPE_SQUARE);
+                    return true;
+                  } catch (cv::Exception &e) {
+                    THALAMUS_LOG(error) << e.what();
+                    return false;
+                  }
+                }
+                return false;
+              };
+
+              auto &ref = board.markers.at(board.marker_order[0]);
+              cv::Vec3d rref, tref;
+              if (solve_one(ref.id, ref.size, rref, tref)) {
+                cv::Mat Rref;
+                cv::Rodrigues(rref, Rref);
+                cv::Mat Rref_t = Rref.t();
+                std::lock_guard<std::mutex> lock(auto_layout_mutex);
+                auto &accum = auto_layout_accum[board.name];
+                for (size_t mi = 1; mi < board.marker_order.size(); ++mi) {
+                  auto &mk = board.markers.at(board.marker_order[mi]);
+                  cv::Vec3d roth, toth;
+                  if (!solve_one(mk.id, mk.size, roth, toth)) {
+                    continue;
+                  }
+                  cv::Mat Roth;
+                  cv::Rodrigues(roth, Roth);
+                  cv::Vec3d rrel;
+                  cv::Rodrigues(cv::Mat(Rref_t * Roth), rrel);
+                  cv::Mat trel_m = Rref_t * cv::Mat(cv::Vec3d(toth - tref));
+                  cv::Vec3d trel(trel_m.at<double>(0), trel_m.at<double>(1),
+                                 trel_m.at<double>(2));
+                  auto &vec = accum.samples[mk.id];
+                  if (vec.size() < AUTO_LAYOUT_CAP) {
+                    vec.emplace_back(trel, rrel);
+                  }
+                }
+                // Throttled robust estimate: component-wise median position +
+                // densest-cluster rotation (rejects single-marker pose-flip
+                // outliers, which barely move position but swing rotation).
+                if (_frame % 30 == 0) {
+                  for (const auto &skv : accum.samples) {
+                    if (skv.second.size() < AUTO_LAYOUT_MIN) {
+                      continue;
+                    }
+                    std::vector<double> xs, ys, zs;
+                    for (const auto &p : skv.second) {
+                      xs.push_back(p.first[0]);
+                      ys.push_back(p.first[1]);
+                      zs.push_back(p.first[2]);
+                    }
+                    auto med = [](std::vector<double> &v) {
+                      std::sort(v.begin(), v.end());
+                      return v[v.size() / 2];
+                    };
+                    cv::Vec3d tmed(med(xs), med(ys), med(zs));
+                    cv::Vec3d rbest;
+                    size_t best = 0;
+                    const double ROT_TOL = 0.15; // ~8.6 deg cluster radius
+                    for (const auto &pi : skv.second) {
+                      size_t cnt = 0;
+                      cv::Vec3d sum(0, 0, 0);
+                      for (const auto &pj : skv.second) {
+                        if (cv::norm(pi.second - pj.second) <= ROT_TOL) {
+                          ++cnt;
+                          sum += pj.second;
+                        }
+                      }
+                      if (cnt > best) {
+                        best = cnt;
+                        rbest = sum * (1.0 / double(cnt));
+                      }
+                    }
+                    double clust_frac = double(best) / double(skv.second.size());
+                    THALAMUS_LOG(info)
+                        << "[aruco autolayout] " << board.name << ": id"
+                        << skv.first << " rel to id" << ref.id << std::fixed
+                        << std::setprecision(6) << " -> x=" << tmed[0]
+                        << " y=" << tmed[1] << " z=" << tmed[2]
+                        << " rx=" << rbest[0] << " ry=" << rbest[1]
+                        << " rz=" << rbest[2] << std::setprecision(1)
+                        << "  (pos[mm]=" << tmed[0] * 1000.0 << ","
+                        << tmed[1] * 1000.0 << "," << tmed[2] * 1000.0
+                        << " rot[deg]=" << cv::norm(rbest) * 180.0 / CV_PI
+                        << " n=" << skv.second.size() << " clust="
+                        << std::setprecision(2) << clust_frac << ")";
+                  }
+                }
+              }
               ++board_index;
               continue;
             }
@@ -790,6 +940,30 @@ struct ArucoNode::Impl {
                         : board.name;
                 _metrics[label + "_reproj_px"] = reproj_rms;
                 _metrics[label + "_n_markers"] = double(detected);
+
+                // Cross-camera stability readout (any rigid board — grid or a
+                // baked layout): record the board origin (for jitter) and px/mm.
+                _origins[label] = cv::Vec3d(tvec);
+                // Empirical px/mm: mean detected marker side (px) / physical
+                // marker size (mm).  matchImagePoints emits 4 corners/marker in
+                // order, so consecutive groups of 4 rows are one marker.
+                if (board.markerSize > 0.0 && n >= 4) {
+                  double side_sum = 0.0;
+                  size_t markers = n / 4;
+                  for (size_t m = 0; m < markers; ++m) {
+                    double perim = 0.0;
+                    for (size_t c = 0; c < 4; ++c) {
+                      auto p0 = img_points_2f.at<cv::Point2f>(int(m * 4 + c));
+                      auto p1 = img_points_2f.at<cv::Point2f>(
+                          int(m * 4 + (c + 1) % 4));
+                      perim += cv::norm(p0 - p1);
+                    }
+                    side_sum += perim / 4.0;
+                  }
+                  double mean_side_px = side_sum / double(markers);
+                  _metrics[label + "_px_per_mm"] =
+                      mean_side_px / (board.markerSize * 1000.0);
+                }
               }
 
               _segments.emplace_back();
@@ -853,12 +1027,27 @@ struct ArucoNode::Impl {
           if (_calibration.enabled && _calibration.markers.size() >= 2) {
             TRACE_EVENT("thalamus", "ArucoNode::wand_calibration");
             std::map<int, cv::Vec3d> measured;
+            // Empirical pixels-per-mm per marker, from its detected corner
+            // geometry (independent of the intrinsics, so it honestly reflects
+            // what this camera actually resolves at the marker's distance).
+            std::map<int, double> scale;
             for (const auto &mkv : _calibration.markers) {
               int marker_id = mkv.first;
               double size = mkv.second.size;
               for (size_t k = 0; k < ids.size(); ++k) {
                 if (ids[k] != marker_id) {
                   continue;
+                }
+                if (size > 0.0 && corners[k].size() == 4) {
+                  double perim_px = 0.0;
+                  for (int c = 0; c < 4; ++c) {
+                    perim_px += cv::norm(corners[k][size_t(c)] -
+                                         corners[k][size_t((c + 1) % 4)]);
+                  }
+                  double mean_side_px = perim_px / 4.0;
+                  double px_per_mm = mean_side_px / (size * 1000.0);
+                  scale[marker_id] = px_per_mm;
+                  _metrics["px_per_mm_" + std::to_string(marker_id)] = px_per_mm;
                 }
                 float h = float(size) / 2.0f;
                 std::vector<cv::Point3f> objp = {{-h, h, 0.0f},
@@ -883,7 +1072,11 @@ struct ArucoNode::Impl {
               mids.push_back(mkv.first);
             }
             std::ostringstream log_oss;
-            log_oss << "[aruco wand] " << source_name << ":";
+            log_oss << "[aruco wand] " << source_name << " | px/mm";
+            for (const auto &skv : scale) {
+              log_oss << " " << skv.first << ":" << std::fixed
+                      << std::setprecision(2) << skv.second;
+            }
             bool all_ok = true, any_pair = false;
             for (size_t a = 0; a < mids.size(); ++a) {
               for (size_t b = a + 1; b < mids.size(); ++b) {
@@ -894,27 +1087,43 @@ struct ArucoNode::Impl {
                     1000.0;
                 std::string base = "d_" + std::to_string(ia) + "_" +
                                    std::to_string(ib);
-                if (measured.count(ia) && measured.count(ib)) {
+                if (measured.count(ia) && measured.count(ib) &&
+                    scale.count(ia) && scale.count(ib)) {
                   double md_mm = cv::norm(measured[ia] - measured[ib]) * 1000.0;
-                  double err_mm = std::abs(md_mm - known_mm);
-                  bool ok = err_mm <= _calibration.threshold_mm;
+                  double signed_mm = md_mm - known_mm;
+                  double err_mm = std::abs(signed_mm);
+                  double pct = known_mm > 0.0 ? err_mm / known_mm * 100.0 : 0.0;
+                  // Convert the mm error to pixels at this pair's resolution.
+                  // The wand is roughly fronto-parallel, so the inter-marker
+                  // offset lies near the image plane; average the two markers'
+                  // px/mm as the pair scale.
+                  double pair_scale = (scale.at(ia) + scale.at(ib)) / 2.0;
+                  double err_px = err_mm * pair_scale;
+                  bool ok = err_px <= _calibration.threshold_px;
                   all_ok = all_ok && ok;
                   any_pair = true;
                   _metrics[base + "_mm"] = md_mm;
                   _metrics[base + "_err_mm"] = err_mm;
-                  log_oss << " " << base << "=" << std::fixed
-                          << std::setprecision(1) << md_mm << "mm(err " << err_mm
-                          << (ok ? " OK)" : " FAIL)");
+                  _metrics[base + "_err_px"] = err_px;
+                  // measured/expected, signed mm error, px error, % error
+                  log_oss << " | " << ia << "-" << ib << " " << std::fixed
+                          << std::setprecision(1) << md_mm << "/" << known_mm
+                          << "mm " << std::showpos << signed_mm << std::noshowpos
+                          << "mm " << std::setprecision(2) << err_px << "px "
+                          << std::setprecision(1) << pct << "% "
+                          << (ok ? "OK" : "FAIL");
                 } else {
                   all_ok = false;
-                  log_oss << " " << base << "=NA";
+                  log_oss << " | " << ia << "-" << ib << " NA(marker missing)";
                 }
               }
             }
             if (any_pair) {
               _metrics["pass"] = all_ok ? 1.0 : 0.0;
               if (_frame % 30 == 0) {
-                log_oss << " -> " << (all_ok ? "OK" : "FAIL");
+                log_oss << " => " << (all_ok ? "OK" : "FAIL") << " (thr "
+                        << std::fixed << std::setprecision(1)
+                        << _calibration.threshold_px << "px)";
                 THALAMUS_LOG(info) << log_oss.str();
               }
             }
@@ -923,14 +1132,57 @@ struct ArucoNode::Impl {
       }
       TRACE_EVENT_END("thalamus");
       boost::asio::post(_io_context, [this, id, source_name, color, _outer,
-                                      frame_interval,
+                                      frame_interval, _frame,
                                       returned_segments = std::move(_segments),
                                       returned_metrics = std::move(_metrics),
-                                      time] {
+                                      returned_origins = std::move(_origins),
+                                      time]() mutable {
         TRACE_EVENT("thalamus", "ArucoNode Post Main",
                     perfetto::TerminatingFlow::ProcessScoped(id));
         // _outer keeps the ArucoNode (and therefore this Impl) alive; this post
-        // runs on the io_context thread so touching members is safe.
+        // runs on the io_context thread so touching members (pose_history) is
+        // safe.  Temporal pose jitter = std of each grid board's origin over a
+        // rolling window; this is the "more markers -> steadier pose" signal.
+        for (const auto &okv : returned_origins) {
+          auto &hist = pose_history[source_name + "/" + okv.first];
+          hist.push_back(okv.second);
+          while (hist.size() > JITTER_WINDOW) {
+            hist.pop_front();
+          }
+          if (hist.size() >= 2) {
+            cv::Vec3d mean(0, 0, 0);
+            for (const auto &p : hist) {
+              mean += p;
+            }
+            mean *= 1.0 / double(hist.size());
+            double ss = 0.0;
+            for (const auto &p : hist) {
+              cv::Vec3d d = p - mean;
+              ss += d.dot(d);
+            }
+            returned_metrics[okv.first + "_jitter_mm"] =
+                std::sqrt(ss / double(hist.size())) * 1000.0;
+          }
+        }
+        // Throttled cross-camera static-board readout (one line per camera).
+        if (_frame % 30 == 0 && !returned_origins.empty()) {
+          std::ostringstream oss;
+          oss << "[aruco static] " << source_name;
+          for (const auto &okv : returned_origins) {
+            const std::string &label = okv.first;
+            auto metric = [&](const std::string &suffix) {
+              auto it = returned_metrics.find(label + suffix);
+              return it == returned_metrics.end() ? 0.0 : it->second;
+            };
+            oss << " | " << label << ": reproj=" << std::fixed
+                << std::setprecision(2) << metric("_reproj_px")
+                << "px n=" << int(metric("_n_markers"))
+                << " px/mm=" << std::setprecision(2) << metric("_px_per_mm")
+                << " jitter=" << std::setprecision(3) << metric("_jitter_mm")
+                << "mm";
+          }
+          THALAMUS_LOG(info) << oss.str();
+        }
         camera_results[source_name] =
             CameraResult{color, std::move(returned_segments),
                          std::move(returned_metrics), time, frame_interval};
