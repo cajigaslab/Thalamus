@@ -25,6 +25,8 @@
 #include <thalamus/pupil_node.hpp>
 #include <thalamus/remote_node.hpp>
 #include <thalamus/remotelog_node.hpp>
+#include <thalamus/serialtouchscreen_node.hpp>
+#include <thalamus/joystick_node.hpp>
 #include <variant>
 #ifndef _WIN32
 #include <thalamus/ros2_node.hpp>
@@ -1553,6 +1555,8 @@ public:
         {"DELSYS", new NodeFactory<DelsysNode>()},
         {"FREQUENCY", new NodeFactory<FrequencyNode>()},
         {"SAMPLE_MONITOR", new NodeFactory<SampleMonitorNode>()},
+        {"JOYSTICK", new NodeFactory<JoystickNode>()},
+        {"SERIAL_TOUCH_SCREEN", new NodeFactory<SerialTouchScreenNode>()},
         {"ARUCO", new NodeFactory<ArucoNode>()}};
 
     for(auto& ext : extension) {

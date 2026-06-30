@@ -14,7 +14,6 @@
 #include <boost/qvm/quat_vec_operations.hpp>
 #include <boost/qvm/vec_access.hpp>
 #include <boost/qvm/vec_operations.hpp>
-#include <boost/json.hpp>
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core/quaternion.hpp>
 #include <opencv2/imgproc.hpp>
@@ -23,6 +22,14 @@
 #pragma clang diagnostic pop
 #endif
 
+#include <algorithm>
+#include <cmath>
+#include <iomanip>
+#include <memory>
+#include <set>
+#include <sstream>
+#include <variant>
+
 using namespace thalamus;
 
 struct ArucoNode::Impl {
@@ -30,65 +37,99 @@ struct ArucoNode::Impl {
   boost::asio::io_context &io_context;
   boost::signals2::scoped_connection state_connection;
   boost::signals2::scoped_connection boards_connection;
+  std::vector<boost::signals2::scoped_connection> board_connections;
   std::vector<boost::signals2::scoped_connection> id_connections;
+  std::vector<boost::signals2::scoped_connection> marker_connections;
   NodeGraph *graph;
   ArucoNode *outer;
   std::string pose_name;
-  NodeGraph::NodeConnection get_source_connection;
-  ImageNode *source;
-  DistortionNode *distortion_source;
-  boost::signals2::scoped_connection source_connection;
+
+  // One camera == one source node (typically a DistortionNode, which is both an
+  // ImageNode and the intrinsics provider).  The same Boards config is detected
+  // on every camera.
+  struct SourceBinding {
+    std::string name;
+    ImageNode *image = nullptr;
+    DistortionNode *distortion = nullptr;
+    NodeGraph::NodeConnection get_connection;
+    boost::signals2::scoped_connection ready_connection;
+  };
+  std::map<std::string, std::unique_ptr<SourceBinding>> source_bindings;
+  std::vector<std::string> source_order; // stable camera index for outputs
+  std::string single_source;             // legacy "Source" field
+  ObservableListPtr sources_list;        // "Sources" list
+  boost::signals2::scoped_connection sources_connection;
+
   cv::aruco::PredefinedDictionaryType dict_type = cv::aruco::DICT_6X6_250;
   cv::aruco::Dictionary dict;
   cv::aruco::DetectorParameters detector_parameters;
   std::shared_ptr<cv::aruco::ArucoDetector> detector;
   bool running = false;
   ThreadPool &pool;
-  size_t next_input_frame = 0;
-  size_t next_output_frame = 0;
   struct Frame {
     cv::Mat mat;
     std::chrono::nanoseconds interval;
     std::vector<Segment> segments;
     std::chrono::nanoseconds time;
+    // Per-board quality-check metrics, keyed by analog channel name.  Ordered
+    // (std::map) so analog channel indexing is deterministic across frames.
+    std::map<std::string, double> metrics;
   };
-  std::map<size_t, Frame> output_frames;
+
+  // Latest detection result for each camera, merged into current_frame on every
+  // camera update (last-writer-wins per camera).
+  struct CameraResult {
+    cv::Mat color;
+    std::vector<Segment> segments;
+    std::map<std::string, double> metrics;
+    std::chrono::nanoseconds time{0};
+    std::chrono::nanoseconds interval{0};
+  };
+  std::map<std::string, CameraResult> camera_results;
+
+  enum class BoardType { Grid, Layout };
+
+  struct Marker {
+    int id = 0;
+    cv::Vec3d position;
+    cv::Vec3d rotation;
+    double size = 0;
+  };
 
   struct Board {
+    BoardType type = BoardType::Grid;
+    std::string name;
+    bool quality_check = false;
     double translation_x = 0, translation_y = 0, translation_z = 0;
     cv::Vec3d rotation;
-    int64_t rows;
-    int64_t columns;
-    double markerSize;
-    double markerSeparation;
+    long long rows = 0;
+    long long columns = 0;
+    double markerSize = 0;
+    double markerSeparation = 0;
     std::vector<int> ids;
-
-    std::string to_string() {
-      boost::json::object obj;
-      obj["translation_x"] = translation_x;
-      obj["translation_y"] = translation_y;
-      obj["translation_z"] = translation_z;
-
-      boost::json::object rot_obj;
-      rot_obj["x"] = rotation[0];
-      rot_obj["y"] = rotation[1];
-      rot_obj["z"] = rotation[2];
-      obj["rotation"] = rot_obj;
-
-      obj["rows"] = rows;
-      obj["columns"] = columns;
-
-      obj["markerSize"] = markerSize;
-      obj["markerSeparation"] = markerSeparation;
-
-      obj["ids"] = boost::json::value_from(ids);
-
-      return boost::json::serialize(obj);
-    }
+    // Layout boards: each marker placed independently in board space.  Keyed
+    // by the marker's ObservableDict so observers can update in place.
+    std::vector<ObservableDictPtr> marker_order;
+    std::map<ObservableDictPtr, Marker> markers;
   };
 
-  ObservableListPtr boards_list;
-  std::map<ObservableCollection*, Board> boards;
+  std::map<ObservableDictPtr, Board> boards;
+
+  // Server-side wand calibration: known marker geometry + a pass threshold.  Per
+  // camera we measure each marker's origin independently and compare pairwise
+  // origin distances to the known wand distances (logged + emitted as analog).
+  struct Calibration {
+    bool enabled = false;
+    double threshold_mm = 5.0;
+    struct CalMarker {
+      cv::Vec3d pos; // known position in wand space (meters)
+      double size = 0;
+    };
+    std::map<int, CalMarker> markers; // keyed by marker id
+  };
+  Calibration calibration;
+  ObservableDictPtr calibration_dict;
+  boost::signals2::scoped_connection calibration_connection;
 
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
        NodeGraph *_graph, ArucoNode *_outer)
@@ -101,165 +142,415 @@ struct ArucoNode::Impl {
 
     using namespace std::placeholders;
     state_connection =
-        state->recursive_changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3, _4));
-    this->state->recap(std::bind(&Impl::on_change, this, state.get(), _1, _2, _3));
+        state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
+    this->state->recap(std::bind(&Impl::on_change, this, _1, _2, _3));
   }
 
-  void on_change(ObservableCollection* collection,
-                 ObservableCollection::Action action,
+  void on_ids_change(ObservableDictPtr self,
+                     ObservableCollection::Action action,
+                     const ObservableCollection::Key &key,
+                     const ObservableCollection::Value &value) {
+    TRACE_EVENT("thalamus", "ArucoNode::on_ids_change");
+    auto key_int = size_t(std::get<long long>(key));
+    auto value_int = std::get<long long>(value);
+
+    auto &board = boards[self];
+    if (action == ObservableCollection::Action::Set) {
+      while (board.ids.size() <= key_int) {
+        board.ids.emplace_back();
+      }
+      board.ids[key_int] = int(value_int);
+    } else {
+      board.ids.erase(board.ids.begin() + int64_t(key_int));
+    }
+  }
+
+  void on_marker_change(ObservableDictPtr board_self, ObservableDictPtr self,
+                        ObservableCollection::Action,
+                        const ObservableCollection::Key &key,
+                        const ObservableCollection::Value &value) {
+    TRACE_EVENT("thalamus", "ArucoNode::on_marker_change");
+    auto key_str = std::get<std::string>(key);
+    auto &marker = boards[board_self].markers[self];
+    if (key_str == "id") {
+      marker.id = int(std::get<long long>(value));
+    } else if (key_str == "x") {
+      marker.position[0] = std::get<double>(value);
+    } else if (key_str == "y") {
+      marker.position[1] = std::get<double>(value);
+    } else if (key_str == "z") {
+      marker.position[2] = std::get<double>(value);
+    } else if (key_str == "rx") {
+      marker.rotation[0] = std::get<double>(value);
+    } else if (key_str == "ry") {
+      marker.rotation[1] = std::get<double>(value);
+    } else if (key_str == "rz") {
+      marker.rotation[2] = std::get<double>(value);
+    } else if (key_str == "size") {
+      marker.size = std::get<double>(value);
+    }
+  }
+
+  void on_markers_change(ObservableDictPtr board_self,
+                         ObservableCollection::Action action,
+                         const ObservableCollection::Key &key,
+                         const ObservableCollection::Value &value) {
+    TRACE_EVENT("thalamus", "ArucoNode::on_markers_change");
+    auto &board = boards[board_self];
+    auto index = size_t(std::get<long long>(key));
+    if (action == ObservableCollection::Action::Set) {
+      auto marker_dict = std::get<ObservableDictPtr>(value);
+      if (index <= board.marker_order.size()) {
+        board.marker_order.insert(
+            board.marker_order.begin() + int64_t(index), marker_dict);
+      } else {
+        board.marker_order.push_back(marker_dict);
+      }
+      marker_connections.push_back(marker_dict->changed.connect(std::bind(
+          &Impl::on_marker_change, this, board_self, marker_dict, _1, _2, _3)));
+      marker_dict->recap(std::bind(&Impl::on_marker_change, this, board_self,
+                                   marker_dict, _1, _2, _3));
+    } else {
+      if (index < board.marker_order.size()) {
+        auto marker_dict = board.marker_order[index];
+        board.markers.erase(marker_dict);
+        board.marker_order.erase(board.marker_order.begin() + int64_t(index));
+      }
+    }
+  }
+
+  void on_board_change(ObservableDictPtr self, ObservableCollection::Action,
+                       const ObservableCollection::Key &key,
+                       const ObservableCollection::Value &value) {
+    TRACE_EVENT("thalamus", "ArucoNode::on_board_change");
+    auto key_str = std::get<std::string>(key);
+    auto &board = boards[self];
+    if (key_str == "Type") {
+      board.type = std::get<std::string>(value) == "layout"
+                       ? BoardType::Layout
+                       : BoardType::Grid;
+    } else if (key_str == "Name") {
+      board.name = std::get<std::string>(value);
+    } else if (key_str == "Quality Check") {
+      board.quality_check = std::get<bool>(value);
+    } else if (key_str == "Markers") {
+      auto value_list = std::get<ObservableListPtr>(value);
+      board_connections.push_back(value_list->changed.connect(
+          std::bind(&Impl::on_markers_change, this, self, _1, _2, _3)));
+      value_list->recap(
+          std::bind(&Impl::on_markers_change, this, self, _1, _2, _3));
+    } else if (key_str == "Rows") {
+      board.rows = std::get<long long>(value);
+    } else if (key_str == "Columns") {
+      board.columns = std::get<long long>(value);
+    } else if (key_str == "Marker Size") {
+      board.markerSize = std::get<double>(value);
+    } else if (key_str == "Marker Separation") {
+      board.markerSeparation = std::get<double>(value);
+    } else if (key_str == "ids") {
+      auto value_list = std::get<ObservableListPtr>(value);
+      id_connections.push_back(value_list->changed.connect(
+          std::bind(&Impl::on_ids_change, this, self, _1, _2, _3)));
+      value_list->recap(
+          std::bind(&Impl::on_ids_change, this, self, _1, _2, _3));
+    } else if (key_str == "translation_x") {
+      board.translation_x = std::get<double>(value);
+    } else if (key_str == "translation_y") {
+      board.translation_y = std::get<double>(value);
+    } else if (key_str == "translation_z") {
+      board.translation_z = std::get<double>(value);
+    } else if (key_str == "rotation_x") {
+      board.rotation[0] = std::get<double>(value);
+    } else if (key_str == "rotation_y") {
+      board.rotation[1] = std::get<double>(value);
+    } else if (key_str == "rotation_z") {
+      board.rotation[2] = std::get<double>(value);
+    }
+  }
+
+  void on_boards_change(ObservableCollection::Action action,
+                        const ObservableCollection::Key &,
+                        const ObservableCollection::Value &value) {
+    TRACE_EVENT("thalamus", "ArucoNode::on_boards_change");
+    if (action == ObservableCollection::Action::Set) {
+      auto value_dict = std::get<ObservableDictPtr>(value);
+      board_connections.push_back(value_dict->changed.connect(
+          std::bind(&Impl::on_board_change, this, value_dict, _1, _2, _3)));
+      value_dict->recap(
+          std::bind(&Impl::on_board_change, this, value_dict, _1, _2, _3));
+    }
+    for (auto i = board_connections.begin(); i != board_connections.end();) {
+      if (i->connected()) {
+        ++i;
+      } else {
+        i = board_connections.erase(i);
+      }
+    }
+  }
+
+  void on_change(ObservableCollection::Action,
                  const ObservableCollection::Key &key,
                  const ObservableCollection::Value &value) {
     TRACE_EVENT("thalamus", "ArucoNode::on_change");
-    if(collection == state.get()) {
-      auto key_str = std::get<std::string>(key);
-      THALAMUS_LOG(debug) << "root " << key_str;
-      if (key_str == "Boards") {
-        boards_list = std::get<ObservableListPtr>(value);
-        boards_list->recap(std::bind(&Impl::on_change, this, boards_list.get(), _1, _2, _3));
-      } else if (key_str == "Source") {
-        std::string source_str = std::get<std::string>(value);
-        auto token = std::string(absl::StripAsciiWhitespace(source_str));
-
-        get_source_connection = graph->get_node_scoped(token, [this, token](auto _source) {
-          auto locked_source = _source.lock();
-          if (!locked_source) {
-            return;
-          }
-
-          if (node_cast<ImageNode *>(locked_source.get()) != nullptr) {
-            this->source = node_cast<ImageNode *>(locked_source.get());
-            source_connection =
-                locked_source->ready.connect(std::bind(&Impl::on_data, this, _1));
-          }
-
-          if (dynamic_cast<DistortionNode *>(locked_source.get()) != nullptr) {
-            this->distortion_source =
-                dynamic_cast<DistortionNode *>(locked_source.get());
-          } else {
-            this->distortion_source = nullptr;
-          }
-        });
-      } else if (key_str == "Dictionary") {
-        auto value_str = std::get<std::string>(value);
-        if (value_str == "DICT_4X4_50") {
-          dict_type = cv::aruco::DICT_4X4_50;
-        } else if (value_str == "DICT_4X4_100") {
-          dict_type = cv::aruco::DICT_4X4_100;
-        } else if (value_str == "DICT_4X4_250") {
-          dict_type = cv::aruco::DICT_4X4_250;
-        } else if (value_str == "DICT_4X4_1000") {
-          dict_type = cv::aruco::DICT_4X4_1000;
-        } else if (value_str == "DICT_5X5_50") {
-          dict_type = cv::aruco::DICT_5X5_50;
-        } else if (value_str == "DICT_5X5_100") {
-          dict_type = cv::aruco::DICT_5X5_100;
-        } else if (value_str == "DICT_5X5_250") {
-          dict_type = cv::aruco::DICT_5X5_250;
-        } else if (value_str == "DICT_5X5_1000") {
-          dict_type = cv::aruco::DICT_5X5_1000;
-        } else if (value_str == "DICT_6X6_50") {
-          dict_type = cv::aruco::DICT_6X6_50;
-        } else if (value_str == "DICT_6X6_100") {
-          dict_type = cv::aruco::DICT_6X6_100;
-        } else if (value_str == "DICT_6X6_250") {
-          dict_type = cv::aruco::DICT_6X6_250;
-        } else if (value_str == "DICT_6X6_1000") {
-          dict_type = cv::aruco::DICT_6X6_1000;
-        } else if (value_str == "DICT_7X7_50") {
-          dict_type = cv::aruco::DICT_7X7_50;
-        } else if (value_str == "DICT_7X7_100") {
-          dict_type = cv::aruco::DICT_7X7_100;
-        } else if (value_str == "DICT_7X7_250") {
-          dict_type = cv::aruco::DICT_7X7_250;
-        } else if (value_str == "DICT_7X7_1000") {
-          dict_type = cv::aruco::DICT_7X7_250;
-        } else if (value_str == "DICT_ARUCO_ORIGINAL") {
-          dict_type = cv::aruco::DICT_ARUCO_ORIGINAL;
-        } else if (value_str == "DICT_APRILTAG_16h5") {
-          dict_type = cv::aruco::DICT_APRILTAG_16h5;
-        } else if (value_str == "DICT_APRILTAG_25h9") {
-          dict_type = cv::aruco::DICT_APRILTAG_25h9;
-        } else if (value_str == "DICT_APRILTAG_36h10") {
-          dict_type = cv::aruco::DICT_APRILTAG_36h10;
-        } else if (value_str == "DICT_APRILTAG_36h11") {
-          dict_type = cv::aruco::DICT_APRILTAG_36h11;
-        } else if (value_str == "DICT_ARUCO_MIP_36h12") {
-          dict_type = cv::aruco::DICT_ARUCO_MIP_36h12;
-        }
-        dict = cv::aruco::getPredefinedDictionary(dict_type);
-        detector =
-            std::make_shared<cv::aruco::ArucoDetector>(dict, detector_parameters);
-
-      } else if (key_str == "Running") {
-        frame = 0;
-        running = std::get<bool>(value);
+    auto key_str = std::get<std::string>(key);
+    if (key_str == "Boards") {
+      auto value_list = std::get<ObservableListPtr>(value);
+      boards_connection = value_list->changed.connect(
+          std::bind(&Impl::on_boards_change, this, _1, _2, _3));
+      value_list->recap(std::bind(&Impl::on_boards_change, this, _1, _2, _3));
+    } else if (key_str == "Source") {
+      single_source = std::string(
+          absl::StripAsciiWhitespace(std::get<std::string>(value)));
+      rebuild_sources();
+    } else if (key_str == "Sources") {
+      sources_list = std::get<ObservableListPtr>(value);
+      sources_connection = sources_list->changed.connect(
+          [this](auto, auto, auto) { rebuild_sources(); });
+      rebuild_sources();
+    } else if (key_str == "Dictionary") {
+      auto value_str = std::get<std::string>(value);
+      if (value_str == "DICT_4X4_50") {
+        dict_type = cv::aruco::DICT_4X4_50;
+      } else if (value_str == "DICT_4X4_100") {
+        dict_type = cv::aruco::DICT_4X4_100;
+      } else if (value_str == "DICT_4X4_250") {
+        dict_type = cv::aruco::DICT_4X4_250;
+      } else if (value_str == "DICT_4X4_1000") {
+        dict_type = cv::aruco::DICT_4X4_1000;
+      } else if (value_str == "DICT_5X5_50") {
+        dict_type = cv::aruco::DICT_5X5_50;
+      } else if (value_str == "DICT_5X5_100") {
+        dict_type = cv::aruco::DICT_5X5_100;
+      } else if (value_str == "DICT_5X5_250") {
+        dict_type = cv::aruco::DICT_5X5_250;
+      } else if (value_str == "DICT_5X5_1000") {
+        dict_type = cv::aruco::DICT_5X5_1000;
+      } else if (value_str == "DICT_6X6_50") {
+        dict_type = cv::aruco::DICT_6X6_50;
+      } else if (value_str == "DICT_6X6_100") {
+        dict_type = cv::aruco::DICT_6X6_100;
+      } else if (value_str == "DICT_6X6_250") {
+        dict_type = cv::aruco::DICT_6X6_250;
+      } else if (value_str == "DICT_6X6_1000") {
+        dict_type = cv::aruco::DICT_6X6_1000;
+      } else if (value_str == "DICT_7X7_50") {
+        dict_type = cv::aruco::DICT_7X7_50;
+      } else if (value_str == "DICT_7X7_100") {
+        dict_type = cv::aruco::DICT_7X7_100;
+      } else if (value_str == "DICT_7X7_250") {
+        dict_type = cv::aruco::DICT_7X7_250;
+      } else if (value_str == "DICT_7X7_1000") {
+        dict_type = cv::aruco::DICT_7X7_1000;
+      } else if (value_str == "DICT_ARUCO_ORIGINAL") {
+        dict_type = cv::aruco::DICT_ARUCO_ORIGINAL;
+      } else if (value_str == "DICT_APRILTAG_16h5") {
+        dict_type = cv::aruco::DICT_APRILTAG_16h5;
+      } else if (value_str == "DICT_APRILTAG_25h9") {
+        dict_type = cv::aruco::DICT_APRILTAG_25h9;
+      } else if (value_str == "DICT_APRILTAG_36h10") {
+        dict_type = cv::aruco::DICT_APRILTAG_36h10;
+      } else if (value_str == "DICT_APRILTAG_36h11") {
+        dict_type = cv::aruco::DICT_APRILTAG_36h11;
+      } else if (value_str == "DICT_ARUCO_MIP_36h12") {
+        dict_type = cv::aruco::DICT_ARUCO_MIP_36h12;
       }
-    } else if (collection == boards_list.get()) {
-      TRACE_EVENT("thalamus", "ArucoNode::on_boards_change");
-      THALAMUS_LOG(debug) << "boards " << std::get<int64_t>(key);
-      if (action == ObservableCollection::Action::Set) {
-        auto value_dict = std::get<ObservableDictPtr>(value);
-        value_dict->recap(std::bind(&Impl::on_change, this, value_dict.get(), _1, _2, _3));
-      }
-    } else if (std::find(boards_list->begin(), boards_list->end(), collection) != boards_list->end()) {
-      TRACE_EVENT("thalamus", "ArucoNode::on_board_change");
-      auto key_str = std::get<std::string>(key);
-      THALAMUS_LOG(debug) << "board " << key_str;
-      auto &board = boards[collection];
-      if (key_str == "Rows") {
-        board.rows = std::get<int64_t>(value);
-      } else if (key_str == "Columns") {
-        board.columns = std::get<int64_t>(value);
-      } else if (key_str == "Marker Size") {
-        board.markerSize = std::get<double>(value);
-      } else if (key_str == "Marker Separation") {
-        board.markerSeparation = std::get<double>(value);
-      } else if (key_str == "ids") {
-        auto value_list = std::get<ObservableListPtr>(value);
-        value_list->recap(std::bind(&Impl::on_change, this, value_list.get(), _1, _2, _3));
-      } else if (key_str == "translation_x") {
-        board.translation_x = std::get<double>(value);
-      } else if (key_str == "translation_y") {
-        board.translation_y = std::get<double>(value);
-      } else if (key_str == "translation_z") {
-        board.translation_z = std::get<double>(value);
-      } else if (key_str == "rotation_x") {
-        board.rotation[0] = std::get<double>(value);
-      } else if (key_str == "rotation_y") {
-        board.rotation[1] = std::get<double>(value);
-      } else if (key_str == "rotation_z") {
-        board.rotation[2] = std::get<double>(value);
-      }
-      THALAMUS_LOG(debug) << board.to_string();
-    } else if (std::find(boards_list->begin(), boards_list->end(), collection->parent) != boards_list->end()
-               && collection->parent->key_of(*collection) == ObservableCollection::Key(std::string("ids"))) {
-      TRACE_EVENT("thalamus", "ArucoNode::on_ids_change");
-      auto key_int = size_t(std::get<int64_t>(key));
-      auto value_int = std::get<int64_t>(value);
-      THALAMUS_LOG(debug) << "id " << key_int << " " << value_int;
+      dict = cv::aruco::getPredefinedDictionary(dict_type);
+      detector =
+          std::make_shared<cv::aruco::ArucoDetector>(dict, detector_parameters);
 
-      auto &board = boards[collection->parent];
-      if (action == ObservableCollection::Action::Set) {
-        while (board.ids.size() <= key_int) {
-          board.ids.emplace_back();
-        }
-        board.ids[key_int] = int(value_int);
-      } else {
-        board.ids.erase(board.ids.begin() + int64_t(key_int));
-      }
-      THALAMUS_LOG(debug) << board.to_string();
+    } else if (key_str == "Calibration") {
+      calibration_dict = std::get<ObservableDictPtr>(value);
+      calibration_connection = calibration_dict->changed.connect(
+          [this](auto, auto, auto) { rebuild_calibration(); });
+      rebuild_calibration();
+    } else if (key_str == "Running") {
+      frame = 0;
+      running = std::get<bool>(value);
     }
+  }
+
+  // Re-read the whole Calibration block synchronously.  Cheap and robust against
+  // wholesale replacement (the wand button sets the entire dict at once).
+  void rebuild_calibration() {
+    TRACE_EVENT("thalamus", "ArucoNode::rebuild_calibration");
+    calibration = Calibration{};
+    if (!calibration_dict) {
+      return;
+    }
+    if (calibration_dict->contains("Enabled")) {
+      calibration.enabled = bool(calibration_dict->at("Enabled"));
+    }
+    if (calibration_dict->contains("Threshold (mm)")) {
+      calibration.threshold_mm = double(calibration_dict->at("Threshold (mm)"));
+    }
+    if (calibration_dict->contains("Markers")) {
+      ObservableListPtr markers = calibration_dict->at("Markers");
+      for (size_t i = 0; i < markers->size(); ++i) {
+        ObservableDictPtr m = markers->at(i);
+        int id = m->contains("id") ? int(static_cast<long long>(m->at("id"))) : 0;
+        Calibration::CalMarker cm;
+        cm.pos = cv::Vec3d(m->contains("x") ? double(m->at("x")) : 0.0,
+                           m->contains("y") ? double(m->at("y")) : 0.0,
+                           m->contains("z") ? double(m->at("z")) : 0.0);
+        cm.size = m->contains("size") ? double(m->at("size")) : 0.0;
+        calibration.markers[id] = cm;
+      }
+    }
+  }
+
+  void rebuild_sources() {
+    TRACE_EVENT("thalamus", "ArucoNode::rebuild_sources");
+    std::vector<std::string> desired;
+    std::set<std::string> seen;
+    auto add = [&](const std::string &raw) {
+      auto t = std::string(absl::StripAsciiWhitespace(raw));
+      if (!t.empty() && seen.insert(t).second) {
+        desired.push_back(t);
+      }
+    };
+    add(single_source);
+    if (sources_list) {
+      for (size_t i = 0; i < sources_list->size(); ++i) {
+        auto v = sources_list->at(i).get();
+        if (std::holds_alternative<std::string>(v)) {
+          add(std::get<std::string>(v));
+        }
+      }
+    }
+
+    for (auto it = source_bindings.begin(); it != source_bindings.end();) {
+      if (!seen.count(it->first)) {
+        camera_results.erase(it->first);
+        it = source_bindings.erase(it);
+      } else {
+        ++it;
+      }
+    }
+
+    for (const auto &name : desired) {
+      if (source_bindings.count(name)) {
+        continue;
+      }
+      auto binding = std::make_unique<SourceBinding>();
+      binding->name = name;
+      auto *bp = binding.get();
+      bp->get_connection =
+          graph->get_node_scoped(name, [this, bp, name](auto weak) {
+            auto locked = weak.lock();
+            if (!locked) {
+              bp->image = nullptr;
+              bp->distortion = nullptr;
+              return;
+            }
+            bp->image = node_cast<ImageNode *>(locked.get());
+            bp->distortion = dynamic_cast<DistortionNode *>(locked.get());
+            if (bp->image) {
+              bp->ready_connection = locked->ready.connect(
+                  [this, name](Node *) { this->on_data(name); });
+            }
+          });
+      source_bindings[name] = std::move(binding);
+    }
+
+    source_order = desired;
+  }
+
+  // Tile every camera's latest annotated frame into a single grid image, merge
+  // their segments (segment_id = camera_index*100 + board_index) and metrics
+  // (prefixed with the camera name), then publish as the current frame.
+  void combine_and_emit() {
+    TRACE_EVENT("thalamus", "ArucoNode::combine_and_emit");
+    std::vector<const CameraResult *> tiles;
+    for (const auto &name : source_order) {
+      auto it = camera_results.find(name);
+      if (it != camera_results.end() && !it->second.color.empty()) {
+        tiles.push_back(&it->second);
+      }
+    }
+    if (tiles.empty()) {
+      return;
+    }
+
+    int n = int(tiles.size());
+    int cols = int(std::ceil(std::sqrt(double(n))));
+    int rows = (n + cols - 1) / cols;
+    const int cell_w = 480, cell_h = 360;
+    cv::Mat canvas(rows * cell_h, cols * cell_w, CV_8UC3, cv::Scalar(0, 0, 0));
+    for (int i = 0; i < n; ++i) {
+      const cv::Mat &img = tiles[size_t(i)]->color;
+      double scale =
+          std::min(double(cell_w) / img.cols, double(cell_h) / img.rows);
+      int w = std::max(1, int(img.cols * scale));
+      int h = std::max(1, int(img.rows * scale));
+      cv::Mat resized;
+      cv::resize(img, resized, cv::Size(w, h));
+      int r = i / cols, c = i % cols;
+      int x = c * cell_w + (cell_w - w) / 2;
+      int y = r * cell_h + (cell_h - h) / 2;
+      resized.copyTo(canvas(cv::Rect(x, y, w, h)));
+    }
+
+    std::vector<Segment> merged_segments;
+    std::map<std::string, double> merged_metrics;
+    std::chrono::nanoseconds latest_time{0}, latest_interval{0};
+    int cam_index = 0;
+    for (const auto &name : source_order) {
+      auto it = camera_results.find(name);
+      if (it == camera_results.end()) {
+        ++cam_index;
+        continue;
+      }
+      auto &res = it->second;
+      for (auto seg : res.segments) {
+        seg.segment_id = uint32_t(cam_index * 100) + seg.segment_id;
+        merged_segments.push_back(seg);
+      }
+      for (const auto &kv : res.metrics) {
+        merged_metrics[name + "_" + kv.first] = kv.second;
+      }
+      latest_time = std::max(latest_time, res.time);
+      latest_interval = res.interval;
+      ++cam_index;
+    }
+
+    current_frame.mat = canvas;
+    current_frame.segments = std::move(merged_segments);
+    current_frame.metrics = std::move(merged_metrics);
+    current_frame.time = latest_time;
+    current_frame.interval = latest_interval;
+    outer->ready(outer);
   }
 
   Frame current_frame;
   unsigned int frame = 0;
   static unsigned int global_frame;
 
-  void on_data(Node *) {
+  // Flattened view of current_frame.metrics for the AnalogNode interface,
+  // rebuilt from the (ordered) metrics map whenever num_channels() is queried.
+  mutable std::vector<std::string> analog_names;
+  mutable std::vector<double> analog_values;
+
+  void sync_analog() const {
+    analog_names.clear();
+    analog_values.clear();
+    for (auto &pair : current_frame.metrics) {
+      analog_names.push_back(pair.first);
+      analog_values.push_back(pair.second);
+    }
+  }
+
+  void on_data(const std::string &source_name) {
+    auto binding_it = source_bindings.find(source_name);
+    if (binding_it == source_bindings.end()) {
+      return;
+    }
+    ImageNode *source = binding_it->second->image;
+    DistortionNode *distortion_source = binding_it->second->distortion;
+
     auto id = get_unique_id();
     TRACE_EVENT_BEGIN("thalamus", "ArucoNode::on_data",
                       perfetto::Flow::ProcessScoped(id));
-    if (!source->has_image_data() ||
+    if (!source || !source->has_image_data() ||
         source->format() != ImageNode::Format::Gray) {
       TRACE_EVENT_END("thalamus");
       return;
@@ -282,13 +573,12 @@ struct ArucoNode::Impl {
                           : std::span<const double>();
 
     TRACE_EVENT_END("thalamus");
-    pool.push([frame_id = next_input_frame++, in, id, _boards = this->boards,
+    pool.push([this, source_name, in, id, _boards = this->boards,
+               _calibration = this->calibration,
                _dict = this->dict, _running = this->running,
                _detector = this->detector, &_io_context = this->io_context,
-               &_output_frames = this->output_frames,
-               &_next_output_frame = this->next_output_frame,
-               &_current_frame = this->current_frame, frame_interval,
-               camera_matrix, _frame = this->frame, time = source->time(),
+               frame_interval, camera_matrix, _frame = this->frame,
+               time = source->time(),
                _distortion_parameters = std::vector<double>(
                    distortion_parameters.begin(), distortion_parameters.end()),
                _outer = outer->shared_from_this()] {
@@ -297,6 +587,7 @@ struct ArucoNode::Impl {
       cv::Mat color;
       cv::cvtColor(in, color, cv::COLOR_GRAY2RGB);
       std::vector<MotionCaptureNode::Segment> _segments;
+      std::map<std::string, double> _metrics;
 
       if (_running) {
         std::vector<int> ids;
@@ -305,22 +596,94 @@ struct ArucoNode::Impl {
           TRACE_EVENT("thalamus", "cv::aruco::ArucoDetector::detectMarkers");
           _detector->detectMarkers(in, corners, ids, rejected);
         }
+
+        // Only annotate markers that belong to a configured board (or the
+        // calibration wand).  Detection still runs over the whole frame, but
+        // unselected scene markers (e.g. static markers with other IDs) are not
+        // drawn or pose-solved.
+        std::set<int> configured_ids;
+        for (auto &pair : _boards) {
+          auto &b = pair.second;
+          if (b.type == BoardType::Layout) {
+            for (auto &md : b.marker_order) {
+              configured_ids.insert(b.markers.at(md).id);
+            }
+          } else {
+            for (int bid : b.ids) {
+              configured_ids.insert(bid);
+            }
+          }
+        }
+        for (auto &kv : _calibration.markers) {
+          configured_ids.insert(kv.first);
+        }
         {
           TRACE_EVENT("thalamus", "cv::aruco::drawDetectedMarkers");
-          cv::aruco::drawDetectedMarkers(color, corners, ids);
+          std::vector<std::vector<cv::Point2f>> draw_corners;
+          std::vector<int> draw_ids;
+          for (size_t k = 0; k < ids.size(); ++k) {
+            if (configured_ids.count(ids[k])) {
+              draw_corners.push_back(corners[k]);
+              draw_ids.push_back(ids[k]);
+            }
+          }
+          if (!draw_ids.empty()) {
+            cv::aruco::drawDetectedMarkers(color, draw_corners, draw_ids);
+          }
         }
+
+        // Compute the four 3D corner points of a layout marker in board space,
+        // following OpenCV's corner order (TL, TR, BR, BL) for a marker lying in
+        // its local XY plane, then rotated/translated to its placement.
+        auto layout_marker_corners = [](const Marker &m) {
+          float h = float(m.size) / 2.0f;
+          std::vector<cv::Point3f> local = {
+              {-h, h, 0.0f}, {h, h, 0.0f}, {h, -h, 0.0f}, {-h, -h, 0.0f}};
+          cv::Mat rotmat;
+          cv::Rodrigues(m.rotation, rotmat); // 3x3 CV_64F
+          std::vector<cv::Point3f> out;
+          for (auto &p : local) {
+            double x = double(p.x), y = double(p.y), z = double(p.z);
+            out.emplace_back(
+                float(x * rotmat.at<double>(0, 0) + y * rotmat.at<double>(0, 1) +
+                      z * rotmat.at<double>(0, 2) + m.position[0]),
+                float(x * rotmat.at<double>(1, 0) + y * rotmat.at<double>(1, 1) +
+                      z * rotmat.at<double>(1, 2) + m.position[1]),
+                float(x * rotmat.at<double>(2, 0) + y * rotmat.at<double>(2, 1) +
+                      z * rotmat.at<double>(2, 2) + m.position[2]));
+          }
+          return out;
+        };
 
         if (!camera_matrix.empty() && !ids.empty()) {
           auto board_index = 0;
           for (auto &pair : _boards) {
             auto &board = pair.second;
-            cv::aruco::GridBoard grid_board(
-                cv::Size(int(board.columns), int(board.rows)),
-                float(board.markerSize), float(board.markerSeparation), _dict,
-                board.ids);
+
+            if (board.type == BoardType::Layout && board.marker_order.empty()) {
+              ++board_index;
+              continue;
+            }
+
+            cv::aruco::Board board_obj = [&]() -> cv::aruco::Board {
+              if (board.type == BoardType::Layout) {
+                std::vector<std::vector<cv::Point3f>> obj_points_3d;
+                std::vector<int> board_ids;
+                for (auto &marker_dict : board.marker_order) {
+                  auto &marker = board.markers.at(marker_dict);
+                  obj_points_3d.push_back(layout_marker_corners(marker));
+                  board_ids.push_back(marker.id);
+                }
+                return cv::aruco::Board(obj_points_3d, _dict, board_ids);
+              }
+              return cv::aruco::GridBoard(
+                  cv::Size(int(board.columns), int(board.rows)),
+                  float(board.markerSize), float(board.markerSeparation), _dict,
+                  board.ids);
+            }();
 
             cv::Mat obj_points, img_points;
-            grid_board.matchImagePoints(corners, ids, obj_points, img_points);
+            board_obj.matchImagePoints(corners, ids, obj_points, img_points);
             cv::Vec3d rvec, tvec;
             if (obj_points.total() == 0) {
               continue;
@@ -332,10 +695,20 @@ struct ArucoNode::Impl {
                              _distortion_parameters, rvec, tvec);
               }
 
-              float axis_length =
-                  .5f * float(std::min(board.columns, board.rows)) *
-                      float(board.markerSize + board.markerSeparation) +
-                  float(board.markerSeparation);
+              float axis_length;
+              if (board.type == BoardType::Layout) {
+                double max_size = 0;
+                for (auto &marker_dict : board.marker_order) {
+                  max_size =
+                      std::max(max_size, board.markers.at(marker_dict).size);
+                }
+                axis_length = float(max_size > 0 ? max_size : 0.05);
+              } else {
+                axis_length =
+                    .5f * float(std::min(board.columns, board.rows)) *
+                        float(board.markerSize + board.markerSeparation) +
+                    float(board.markerSeparation);
+              }
 
               {
                 TRACE_EVENT("thalamus", "cv::drawFrameAxes");
@@ -382,6 +755,43 @@ struct ArucoNode::Impl {
                      cv::Scalar(255, 0, 0), 3);
               }
 
+              if (board.quality_check) {
+                TRACE_EVENT("thalamus", "ArucoNode::quality_check");
+
+                // Detection coverage: how many of this board's markers were
+                // matched (matchImagePoints emits 4 object points per marker).
+                int detected = int(obj_points.total()) / 4;
+
+                // Reprojection error (RMS pixels) of the rigid board pose.  This
+                // is reported as an analog metric only (no on-screen text); the
+                // wand inter-marker distance check is done once per camera below.
+                double reproj_rms = 0.0;
+                std::vector<cv::Point2f> reprojected;
+                cv::projectPoints(obj_points, rvec, tvec, camera_matrix,
+                                  _distortion_parameters, reprojected);
+                cv::Mat img_points_2f =
+                    img_points.reshape(2, int(img_points.total()));
+                double sse = 0.0;
+                size_t n = std::min(reprojected.size(),
+                                    size_t(img_points_2f.rows));
+                for (size_t k = 0; k < n; ++k) {
+                  auto ip = img_points_2f.at<cv::Point2f>(int(k));
+                  double dx = double(ip.x) - double(reprojected[k].x);
+                  double dy = double(ip.y) - double(reprojected[k].y);
+                  sse += dx * dx + dy * dy;
+                }
+                if (n > 0) {
+                  reproj_rms = std::sqrt(sse / double(n));
+                }
+
+                std::string label =
+                    board.name.empty()
+                        ? "board" + std::to_string(board_index)
+                        : board.name;
+                _metrics[label + "_reproj_px"] = reproj_rms;
+                _metrics[label + "_n_markers"] = double(detected);
+              }
+
               _segments.emplace_back();
               _segments.back().frame = _frame;
               _segments.back().segment_id = uint32_t(board_index);
@@ -424,40 +834,104 @@ struct ArucoNode::Impl {
                                 board.translation_z * rvecMat.at<double>(2, 2);
               cv::Vec3d boardTvec(boardTvecX, boardTvecY, boardTvecZ);
 
-              _segments.back().position[0] =
-                  float(tvec[0] + boardTvecX);
-              _segments.back().position[1] =
-                  float(tvec[1] + boardTvecY);
-              _segments.back().position[2] =
-                  float(tvec[2] + boardTvecZ);
+              _segments.back().position[0] = float(tvec[0] + boardTvecX);
+              _segments.back().position[1] = float(tvec[1] + boardTvecY);
+              _segments.back().position[2] = float(tvec[2] + boardTvecZ);
             } catch (cv::Exception &e) {
               THALAMUS_LOG(error) << e.what();
             }
             ++board_index;
           }
+
+          // Wand calibration (once per camera): measure each calibration
+          // marker's origin independently, then compare pairwise origin
+          // distances to the known wand distances.  Results are emitted as
+          // analog metrics and logged (throttled).
+          if (_calibration.enabled && _calibration.markers.size() >= 2) {
+            TRACE_EVENT("thalamus", "ArucoNode::wand_calibration");
+            std::map<int, cv::Vec3d> measured;
+            for (const auto &mkv : _calibration.markers) {
+              int marker_id = mkv.first;
+              double size = mkv.second.size;
+              for (size_t k = 0; k < ids.size(); ++k) {
+                if (ids[k] != marker_id) {
+                  continue;
+                }
+                float h = float(size) / 2.0f;
+                std::vector<cv::Point3f> objp = {{-h, h, 0.0f},
+                                                 {h, h, 0.0f},
+                                                 {h, -h, 0.0f},
+                                                 {-h, -h, 0.0f}};
+                cv::Vec3d mrvec, mtvec;
+                try {
+                  cv::solvePnP(objp, corners[k], camera_matrix,
+                               _distortion_parameters, mrvec, mtvec, false,
+                               cv::SOLVEPNP_IPPE_SQUARE);
+                  measured[marker_id] = mtvec;
+                } catch (cv::Exception &e) {
+                  THALAMUS_LOG(error) << e.what();
+                }
+                break;
+              }
+            }
+
+            std::vector<int> mids;
+            for (const auto &mkv : _calibration.markers) {
+              mids.push_back(mkv.first);
+            }
+            std::ostringstream log_oss;
+            log_oss << "[aruco wand] " << source_name << ":";
+            bool all_ok = true, any_pair = false;
+            for (size_t a = 0; a < mids.size(); ++a) {
+              for (size_t b = a + 1; b < mids.size(); ++b) {
+                int ia = mids[a], ib = mids[b];
+                double known_mm =
+                    cv::norm(_calibration.markers.at(ia).pos -
+                             _calibration.markers.at(ib).pos) *
+                    1000.0;
+                std::string base = "d_" + std::to_string(ia) + "_" +
+                                   std::to_string(ib);
+                if (measured.count(ia) && measured.count(ib)) {
+                  double md_mm = cv::norm(measured[ia] - measured[ib]) * 1000.0;
+                  double err_mm = std::abs(md_mm - known_mm);
+                  bool ok = err_mm <= _calibration.threshold_mm;
+                  all_ok = all_ok && ok;
+                  any_pair = true;
+                  _metrics[base + "_mm"] = md_mm;
+                  _metrics[base + "_err_mm"] = err_mm;
+                  log_oss << " " << base << "=" << std::fixed
+                          << std::setprecision(1) << md_mm << "mm(err " << err_mm
+                          << (ok ? " OK)" : " FAIL)");
+                } else {
+                  all_ok = false;
+                  log_oss << " " << base << "=NA";
+                }
+              }
+            }
+            if (any_pair) {
+              _metrics["pass"] = all_ok ? 1.0 : 0.0;
+              if (_frame % 30 == 0) {
+                log_oss << " -> " << (all_ok ? "OK" : "FAIL");
+                THALAMUS_LOG(info) << log_oss.str();
+              }
+            }
+          }
         }
       }
       TRACE_EVENT_END("thalamus");
-      boost::asio::post(_io_context, [frame_id, id, color, &_output_frames,
-                                      &_next_output_frame, &_current_frame,
-                                      _outer, frame_interval,
+      boost::asio::post(_io_context, [this, id, source_name, color, _outer,
+                                      frame_interval,
                                       returned_segments = std::move(_segments),
+                                      returned_metrics = std::move(_metrics),
                                       time] {
         TRACE_EVENT("thalamus", "ArucoNode Post Main",
                     perfetto::TerminatingFlow::ProcessScoped(id));
-        _output_frames[frame_id] =
-            Frame{color, frame_interval, std::move(returned_segments), time};
-        for (auto i = _output_frames.begin(); i != _output_frames.end();) {
-          if (i->first == _next_output_frame) {
-            ++_next_output_frame;
-            _current_frame = i->second;
-            TRACE_EVENT("thalamus", "ArucoNode::ready");
-            _outer->ready(_outer.get());
-            i = _output_frames.erase(i);
-          } else {
-            ++i;
-          }
-        }
+        // _outer keeps the ArucoNode (and therefore this Impl) alive; this post
+        // runs on the io_context thread so touching members is safe.
+        camera_results[source_name] =
+            CameraResult{color, std::move(returned_segments),
+                         std::move(returned_metrics), time, frame_interval};
+        combine_and_emit();
       });
     });
   }
@@ -485,15 +959,27 @@ std::chrono::nanoseconds ArucoNode::time() const {
 }
 
 std::span<const double> ArucoNode::data(int channel) const {
-  return std::span<const double>();
-  THALAMUS_ASSERT(false, "Unexpected channel: %d", channel);
+  if (channel < 0 || size_t(channel) >= impl->analog_values.size()) {
+    return std::span<const double>();
+  }
+  return std::span<const double>(&impl->analog_values[size_t(channel)], 1);
 }
 
-int ArucoNode::num_channels() const { return 0; }
+int ArucoNode::num_channels() const {
+  impl->sync_analog();
+  return int(impl->analog_names.size());
+}
 
-std::string_view ArucoNode::name(int) const { return ""; }
+std::string_view ArucoNode::name(int channel) const {
+  if (channel < 0 || size_t(channel) >= impl->analog_names.size()) {
+    return "";
+  }
+  return impl->analog_names[size_t(channel)];
+}
 
-std::chrono::nanoseconds ArucoNode::sample_interval(int) const { return 0ns; }
+std::chrono::nanoseconds ArucoNode::sample_interval(int) const {
+  return impl->current_frame.interval;
+}
 
 void ArucoNode::inject(const thalamus::vector<std::span<double const>> &spans,
                        const thalamus::vector<std::chrono::nanoseconds> &,
@@ -502,7 +988,9 @@ void ArucoNode::inject(const thalamus::vector<std::span<double const>> &spans,
   THALAMUS_ASSERT(spans.front().size() == 1, "Error");
 }
 
-bool ArucoNode::has_analog_data() const { return false; }
+bool ArucoNode::has_analog_data() const {
+  return !impl->current_frame.metrics.empty();
+}
 
 bool ArucoNode::has_motion_data() const { return true; }
 
@@ -527,7 +1015,8 @@ std::chrono::nanoseconds ArucoNode::frame_interval() const {
 void ArucoNode::inject(const thalamus_grpc::Image &) {}
 bool ArucoNode::has_image_data() const { return true; }
 size_t ArucoNode::modalities() const {
-  return THALAMUS_MODALITY_IMAGE | THALAMUS_MODALITY_MOCAP;
+  return THALAMUS_MODALITY_IMAGE | THALAMUS_MODALITY_MOCAP |
+         THALAMUS_MODALITY_ANALOG;
 }
 
 unsigned int ArucoNode::Impl::global_frame = 0;
