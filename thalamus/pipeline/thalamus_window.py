@@ -487,6 +487,20 @@ FACTORIES = {
     UserData(UserDataType.DOUBLE_SPINBOX, 'Allowed Error (%)', -1.0, []),
     UserData(UserDataType.DOUBLE_SPINBOX, 'Interval (s)', 1.0, []),
   ]),
+  'SERIAL_TOUCH_SCREEN': Factory(None, [
+    UserData(UserDataType.OPEN_FILE, 'Port', '/dev/ttyUSB0', []),
+    UserData(UserDataType.SPINBOX, 'No Touch Timeout (ms)', 30, []),
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+  ]),
+  'JOYSTICK': Factory(None, [
+    UserData(UserDataType.OPEN_FILE, 'Port', '/dev/ttyACM0', []),
+    UserData(UserDataType.CHECK_BOX, 'Invert X', True, []),
+    UserData(UserDataType.CHECK_BOX, 'Invert Y', False, []),
+    UserData(UserDataType.SPINBOX, 'X Center', 516, []),
+    UserData(UserDataType.SPINBOX, 'Y Center', 514, []),
+    UserData(UserDataType.SPINBOX, 'Dead Zone', 3, []),
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+  ]),
 }
 
 FACTORY_NAMES = {}
@@ -1621,7 +1635,7 @@ class ThalamusWindow(QMainWindow):
   async def load(self):
     for key in list(FACTORIES.keys()):
       response = await self.stub.get_type_name(thalamus_pb2.StringMessage(value=key))
-      print(key, response)
+      LOGGER.debug('%s %s', key, response)
       if response.value:
         FACTORY_NAMES[key] = response.value
       else:
