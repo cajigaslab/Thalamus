@@ -22,7 +22,8 @@ def generate():
       'trace_event/trace_event_grpc',
       'task_controller',
       'util',
-      'thalamus'
+      'thalamus',
+      'rust_task'
   ]
   if int(platform.python_version_tuple()[1]) > 6:
     base_args = [sys.executable, '-m', 'grpc_tools.protoc', '-Iproto', '--python_out=thalamus', '--grpc_python_out=thalamus', '--pyi_out=thalamus']

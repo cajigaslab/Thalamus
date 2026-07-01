@@ -1,0 +1,45 @@
+[package]
+name = "thalamus-joystick-task"
+version = "0.1.0"
+edition = "2021"
+description = "Low-latency Rust executor for the Thalamus joystick_intro behavioral task (real-time BCI patch)."
+license = "MIT"
+
+# Binary entrypoint. See src/main.rs.
+[[bin]]
+name = "joystick_intro_executor"
+path = "src/main.rs"
+
+[dependencies]
+# --- gRPC / protobuf (the foundation, exercised now) ---
+tonic = "0.12"
+prost = "0.13"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "signal"] }
+tokio-stream = "0.1"
+
+# --- config + serialization ---
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] } # preserve_order => byte-faithful behav_result key order
+indexmap = { version = "2", features = ["serde"] }
+
+# --- shared state / utilities ---
+arc-swap = "1"        # lock-free "latest joystick sample" cell read by the render loop
+anyhow = "1"
+thiserror = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4", features = ["derive"] }
+
+# --- rendering + operator mirror (M1+; kept out of the first build on purpose) ---
+# Uncomment when starting M1 (latency-floor spike). They pull a large native
+# dependency tree (Vulkan/X11/Wayland) that is irrelevant to the foundation and
+# only builds cleanly on the Linux rig. See rust/README.md "Milestones".
+# winit = "0.30"
+# wgpu = "22"
+# pollster = "0.3"
+# bytemuck = { version = "1", features = ["derive"] }
+# glyphon = "0.6"      # HUD text
+# turbojpeg = "1"      # operator-mirror frame encode
+
+[build-dependencies]
+tonic-build = "0.12"
