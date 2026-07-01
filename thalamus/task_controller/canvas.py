@@ -673,7 +673,7 @@ class InputConfig():
       if show_gaze:
         self.gaze_config.paint(painter, dims, opacity)
 
-  def process_gaze(self, voltage_point: QPointF, is_pixels: bool):
+  def process_gaze(self, voltage_point: QPointF, is_pixels: bool) -> QPointF:
     return self.gaze_config.process(voltage_point, is_pixels)
   
   def clear(self):
