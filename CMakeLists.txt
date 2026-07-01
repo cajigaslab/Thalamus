@@ -293,6 +293,12 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/samplemonitor_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/shared_library.hpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/shared_library.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/throttle.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/throttle.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/joystick_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/joystick_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/serialtouchscreen_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/serialtouchscreen_node.cpp"
                      "${CMAKE_SOURCE_DIR}/proto/thalamus.proto")
 target_sources(thalamus PRIVATE 
                "${CMAKE_SOURCE_DIR}/src/thalamus/pupil_node.hpp"

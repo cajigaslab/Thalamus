@@ -7,6 +7,7 @@ import time
 import queue
 import struct
 import typing
+import pathlib
 import logging
 import asyncio
 import datetime
@@ -88,6 +89,18 @@ class CanvasProtocol(typing_extensions.Protocol):
   def renderer(self, value: typing.Callable[[CanvasPainterProtocol], None]) -> None:
     '''
     renderer setter
+    '''
+
+  @property
+  def key_press_listener(self) -> typing.Callable[[QPoint], None]:
+    '''
+    Get touch callback
+    '''
+
+  @property
+  def key_release_listener(self) -> typing.Callable[[QPoint], None]:
+    '''
+    Get touch callback
     '''
 
   @property
@@ -341,21 +354,23 @@ def with_transform(transform: QTransform) -> typing.Callable[[WithTransformTarge
   return decorator
 
 async def wait_for(context: TaskContextProtocol, condition: typing.Callable[[], bool],
-                   timeout: datetime.timedelta) -> bool:
+                   timeout: typing.Optional[datetime.timedelta]) -> bool:
   '''
   Waits for either condition to return true or for the timeout to expire and returns the current value of condition
   '''
-  condition_future = context.until(condition)
-  timeout_future = context.sleep(timeout)
-  temp = await context.any(condition_future, timeout_future)
+  if timeout is None:
+    await context.until(condition)
+  else:
+    await context.any(context.until(condition), context.sleep(timeout))
   return condition()
 
 async def wait_for_dual_hold(context: TaskContextProtocol,
                             hold_duration: datetime.timedelta,
                             is_held1: typing.Callable[[], bool], 
                             is_held2: typing.Callable[[], bool], 
-                            blink1_duration: datetime.timedelta,
-                            blink2_duration: datetime.timedelta) -> bool:
+                            blink1_duration: typing.Optional[datetime.timedelta],
+                            blink2_duration: typing.Optional[datetime.timedelta],
+                            include_blink=False) -> bool:
   """
   Waits for two conditions to be held for hold_duration. Both is_held1 and is_held2 must both maintain true
   throughout.  up to blink1_duration and blink2_duration.
@@ -367,8 +382,10 @@ async def wait_for_dual_hold(context: TaskContextProtocol,
     elapsed_time = datetime.timedelta(seconds=time.perf_counter() - start)
     td_spent_blinking = datetime.timedelta(seconds=time_spent_blinking)
 
-    remaining_time = hold_duration - elapsed_time + td_spent_blinking
-    #remaining_time = hold_duration - elapsed_time
+    if include_blink:
+      remaining_time = hold_duration - elapsed_time
+    else:
+      remaining_time = hold_duration - elapsed_time + td_spent_blinking
     if remaining_time.total_seconds() < 0:
       break 
     blinked = await wait_for(context, lambda: not is_held1() or not is_held2(), remaining_time)
@@ -436,11 +453,12 @@ async def do_stimulation(context, stim_start, intan_cfg, pulse_width, pulse_coun
 
 @contextlib.contextmanager
 def stimulator(*args, **kwargs):
-  task = create_task_with_exc_handling(do_stimulation(*args, **kwargs))
-  try:
-    yield
-  finally:
-    task.cancel()
+  yield
+  #task = create_task_with_exc_handling(do_stimulation(*args, **kwargs))
+  #try:
+  #  yield
+  #finally:
+  #  task.cancel()
 
 @contextlib.contextmanager
 def nullcontext():
@@ -450,7 +468,8 @@ def nullcontext():
 async def wait_for_hold(context: TaskContextProtocol,
                         is_held: typing.Callable[[], bool],
                         hold_duration: datetime.timedelta,
-                        blink_duration: datetime.timedelta) -> bool:
+                        blink_duration: typing.Optional[datetime.timedelta],
+                        include_blink = False) -> bool:
   """
   Waits for the target to be held for hold_duration.  Subject is allowed to blink no longer than blink_duration
   """
@@ -460,8 +479,11 @@ async def wait_for_hold(context: TaskContextProtocol,
     elapsed_time = datetime.timedelta(seconds=time.perf_counter() - start)
     td_spent_blinking = datetime.timedelta(seconds=time_spent_blinking)
     
-    remaining_time = hold_duration - elapsed_time + td_spent_blinking
-    #remaining_time = hold_duration - elapsed_time
+    if include_blink:
+      remaining_time = hold_duration - elapsed_time
+    else:
+      remaining_time = hold_duration - elapsed_time + td_spent_blinking
+
     if remaining_time.total_seconds() < 0:
       break 
     blinked = await wait_for(context, lambda: not is_held(), remaining_time)
@@ -613,3 +635,6 @@ def movella_decorator(port: int):
 
   return decorator
   
+@functools.lru_cache
+def get_sound(path: typing.Union[str, pathlib.Path]) -> QSound:
+  return QSound(str(path))

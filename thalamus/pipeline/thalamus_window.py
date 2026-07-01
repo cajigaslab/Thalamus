@@ -365,6 +365,7 @@ FACTORIES = {
     UserData(UserDataType.CHECK_BOX, 'Computing', False, []),
     UserData(UserDataType.DEFAULT, 'Source', '', []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Framerate', 10.0, []),
   ]),
   'THREAD_POOL': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
@@ -373,6 +374,7 @@ FACTORIES = {
   'GENICAM': Factory(lambda c, s: GenicamWidget(c, s), [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
+    UserData(UserDataType.COMBO_BOX, 'View Rotation', '0', ['0', '90', '180', '270']),
   ]),
   'CHANNEL_PICKER': Factory(ChannelPickerWidget, []),
   'SYNC': Factory(SyncWidget, []),
@@ -387,7 +389,8 @@ FACTORIES = {
   'LUA': Factory(lambda c, s: LuaWidget(c, s), [
     UserData(UserDataType.DEFAULT, 'Source', '', [])]),
   'TOUCH_SCREEN': Factory(TouchScreenWidget, [
-    UserData(UserDataType.COMBO_BOX, 'Source', '', get_node_names)]),
+    UserData(UserDataType.COMBO_BOX, 'Source', '', get_node_names),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Null Threshold', -4.0, [])]),
   'REMOTE': Factory(None, [
     UserData(UserDataType.DEFAULT, 'Address', '', []),
     UserData(UserDataType.DEFAULT, 'Node', '', []),
@@ -484,6 +487,20 @@ FACTORIES = {
     UserData(UserDataType.DOUBLE_SPINBOX, 'Allowed Error (%)', -1.0, []),
     UserData(UserDataType.DOUBLE_SPINBOX, 'Interval (s)', 1.0, []),
   ]),
+  'SERIAL_TOUCH_SCREEN': Factory(None, [
+    UserData(UserDataType.OPEN_FILE, 'Port', '/dev/ttyUSB0', []),
+    UserData(UserDataType.SPINBOX, 'No Touch Timeout (ms)', 30, []),
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+  ]),
+  'JOYSTICK': Factory(None, [
+    UserData(UserDataType.OPEN_FILE, 'Port', '/dev/ttyACM0', []),
+    UserData(UserDataType.CHECK_BOX, 'Invert X', True, []),
+    UserData(UserDataType.CHECK_BOX, 'Invert Y', False, []),
+    UserData(UserDataType.SPINBOX, 'X Center', 516, []),
+    UserData(UserDataType.SPINBOX, 'Y Center', 514, []),
+    UserData(UserDataType.SPINBOX, 'Dead Zone', 3, []),
+    UserData(UserDataType.CHECK_BOX, 'Running', False, []),
+  ]),
 }
 
 FACTORY_NAMES = {}
@@ -552,8 +569,14 @@ class Delegate(QStyledItemDelegate):
         options = user_data.options(self.config)
       else:
         options = user_data.options
-      for value in options:
-        combo_box.addItem(FACTORY_NAMES[value] if index.column() == 0 else value, value)
+
+      if index.column() == 1 and index.parent() == QModelIndex():
+        text = (FACTORY_NAMES[v] for v in options)
+      else:
+        text = options
+
+      for t, value in sorted(zip(text, options)):
+        combo_box.addItem(t, value)
       for i, value in enumerate(options):
         if value == index.data():
           combo_box.setCurrentIndex(i)
@@ -1612,6 +1635,7 @@ class ThalamusWindow(QMainWindow):
   async def load(self):
     for key in list(FACTORIES.keys()):
       response = await self.stub.get_type_name(thalamus_pb2.StringMessage(value=key))
+      LOGGER.debug('%s %s', key, response)
       if response.value:
         FACTORY_NAMES[key] = response.value
       else:

@@ -29,6 +29,7 @@ public:
   std::array<std::array<double, 3>, 3> mat;
   std::pair<double, double> input;
   std::pair<double, double> output;
+  double null_threshold = -4;
 
   void on_data(Node *) {
     if (!source->has_analog_data()) {
@@ -45,7 +46,7 @@ public:
     if (!y_channel.empty()) {
       input.second = y_channel.front();
     }
-    if (input.first < -4 || input.second < -4) {
+    if (input.first < null_threshold || input.second < null_threshold) {
       output.first = input.first;
       output.second = input.second;
       outer->ready(outer);
@@ -92,6 +93,8 @@ public:
       transform = std::get<ObservableListPtr>(v);
       transform->recap(
           std::bind(&Impl::on_change, this, transform.get(), _1, _2, _3));
+    } else if (key_str == "Null Threshold") {
+      null_threshold = std::get<double>(v);
     }
   }
 };

@@ -344,6 +344,10 @@ class ObservableCollection(abc.ABC):
     Returns an iterator for the underlying content
     """
     return iter(self.content)
+  
+  def clear(self, callback = lambda: None, from_remote = False):
+    empty = get_storage_type(self.content)()
+    self.assign(empty, callback, from_remote)
 
   def assign(self, other: typing.Union[typing.Dict[typing.Any, typing.Any], typing.List[typing.Any]], callback = lambda: None, from_remote = False) -> None:
     """

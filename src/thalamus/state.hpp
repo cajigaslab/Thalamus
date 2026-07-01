@@ -73,6 +73,7 @@ public:
                 std::function<void()> callback = nullptr,
                 bool from_remote = false);
 
+    operator ObservableCollection*();
     operator ObservableDictPtr();
     operator ObservableListPtr();
     operator int64_t();
@@ -104,20 +105,28 @@ public:
     friend ObservableDict;
 
   public:
+    using value_type        = Vector::iterator::value_type;
+    using difference_type   = Vector::iterator::difference_type;
+    using pointer           = Vector::iterator::pointer;
+    using reference         = Vector::iterator::reference;
+    using iterator_category = Vector::iterator::iterator_category;
+
     VectorIteratorWrapper();
     VectorIteratorWrapper(size_t key, Vector::iterator iterator,
                           Vector::iterator end,
                           ObservableCollection *collection);
     ValueWrapper& operator*();
-    VectorIteratorWrapper &operator+(size_t count);
+    VectorIteratorWrapper operator+(size_t count) const;
     VectorIteratorWrapper &operator+=(size_t count);
     VectorIteratorWrapper &operator++();
     VectorIteratorWrapper operator++(int);
-    VectorIteratorWrapper &operator-(size_t count);
+    VectorIteratorWrapper operator-(size_t count) const;
+    difference_type operator-(const VectorIteratorWrapper& other) const;
     VectorIteratorWrapper &operator-=(size_t count);
     VectorIteratorWrapper &operator--();
     VectorIteratorWrapper operator--(int);
     bool operator!=(const VectorIteratorWrapper &other) const;
+    bool operator==(const VectorIteratorWrapper &other) const;
   };
 
   class MapIteratorWrapper {
@@ -140,6 +149,13 @@ public:
     MapIteratorWrapper &operator--();
     MapIteratorWrapper operator--(int);
     bool operator!=(const MapIteratorWrapper &other) const;
+    bool operator==(const MapIteratorWrapper &other) const;
+
+    using value_type        = Map::iterator::value_type;
+    using difference_type   = Map::iterator::difference_type;
+    using pointer           = Map::iterator::pointer;
+    using reference         = Map::iterator::reference;
+    using iterator_category = Map::iterator::iterator_category;
   };
   ObservableCollection(ObservableCollection *parent = nullptr);
   virtual ~ObservableCollection();
@@ -158,6 +174,13 @@ public:
 
   std::string address() const;
   void notify(ObservableCollection *, Action, const Key &, Value &);
+
+  virtual ObservableList* as_list() {
+    return nullptr;
+  }
+  virtual ObservableDict* as_dict() {
+    return nullptr;
+  }
 };
 
 class ObservableList : public ObservableCollection, public std::enable_shared_from_this<ObservableList>{
@@ -203,6 +226,10 @@ public:
                          ObservableCollection::Value, std::function<void()>)>
           remote_storage) override;
   boost::json::value to_json() override;
+
+  ObservableList* as_list() override {
+    return this;
+  }
 };
 
 class ObservableDict : public ObservableCollection, public std::enable_shared_from_this<ObservableDict> {
@@ -247,6 +274,9 @@ public:
                          ObservableCollection::Value, std::function<void()>)>
           remote_storage) override;
   boost::json::value to_json() override;
+  ObservableDict* as_dict() override {
+    return this;
+  }
 };
 ObservableCollection::Value get_jsonpath(ObservableCollection::Value store,
                                          const std::list<std::string> &tokens);

@@ -14,6 +14,7 @@ import pathlib
 import shutil
 import datetime
 import functools
+import traceback
 import collections
 import os
 import time
@@ -747,6 +748,11 @@ class TaskContext(TaskContextProtocol):
         except asyncio.CancelledError:
           LOGGER.debug('CANCELLED')
           was_cancelled = True
+        except:
+          LOGGER.exception('Task error')
+          self.config['queue'].clear()
+          was_cancelled = True
+          QMessageBox.critical(None, 'Task Error', traceback.format_exc())
         self.set_operator_widget(QWidget())
         self.widget.renderer = lambda w: None
         self.widget.touch_listener = lambda e: None

@@ -96,7 +96,7 @@ jobs:
     - name: Build
       shell: cmd
       run: |
-        call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat"
+        call "C:\\Program Files\\Microsoft Visual Studio\\18\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat"
 
         mklink /j D:\LLVM "C:\Program Files\LLVM"
         set PATH=D:\LLVM\bin;%PATH%

@@ -149,7 +149,7 @@ def main():
   parser = argparse.ArgumentParser()
   parser.add_argument('-n', '--node', help='Nodes to render video for')
   parser.add_argument('-i', '--input', help='Input filename')
-  parser.add_argument('-o', '--output', default='%s.mp4', help='Output filename, %s will be replaced with node name')
+  parser.add_argument('-o', '--output', default='%s.mp4', help='Output filename, %%s will be replaced with node name')
   args = parser.parse_args()
 
   with RecordReader(args.input, args.node, decode_video=False) as reader, MultiVideoWriter(args.output) as writer:

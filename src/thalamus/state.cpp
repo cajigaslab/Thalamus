@@ -12,6 +12,18 @@ ObservableCollection::ValueWrapper::ValueWrapper(
     : key(_key), get_value(_get_value), has_value(_has_value),
       collection(_collection) {}
 
+ObservableCollection::ValueWrapper::operator ObservableCollection*() {
+  auto value = get_value();
+  if (std::holds_alternative<ObservableDictPtr>(value)) {
+    return thalamus::get<ObservableDictPtr>(value).get();
+  } else if (std::holds_alternative<ObservableListPtr>(value)) {
+    return thalamus::get<ObservableListPtr>(value).get();
+  } else {
+    THALAMUS_ASSERT(false, "Value is not a dict");
+    return nullptr;
+  }
+}
+
 ObservableCollection::ValueWrapper::operator ObservableDictPtr() {
   auto value = get_value();
   if (std::holds_alternative<ObservableDictPtr>(value)) {
@@ -122,19 +134,21 @@ ObservableCollection::VectorIteratorWrapper::operator*() {
   return *value_wrapper;
 }
 
+ObservableCollection::VectorIteratorWrapper
+ObservableCollection::VectorIteratorWrapper::operator+(size_t count) const {
+  auto result = *this;
+  result += count;
+  return result;
+}
+
 ObservableCollection::VectorIteratorWrapper &
-ObservableCollection::VectorIteratorWrapper::operator+(size_t count) {
+ObservableCollection::VectorIteratorWrapper::operator+=(size_t count) {
   key += count;
   iterator += int64_t(count);
   return *this;
 }
 
-ObservableCollection::VectorIteratorWrapper &
-ObservableCollection::VectorIteratorWrapper::operator+=(size_t count) {
-  return *this + count;
-}
-
-ObservableCollection::VectorIteratorWrapper &
+ObservableCollection::VectorIteratorWrapper&
 ObservableCollection::VectorIteratorWrapper::operator++() {
   return *this += 1;
 }
@@ -146,14 +160,19 @@ ObservableCollection::VectorIteratorWrapper::operator++(int) {
   return new_wrapper;
 }
 
-ObservableCollection::VectorIteratorWrapper &
-ObservableCollection::VectorIteratorWrapper::operator-(size_t count) {
+ObservableCollection::VectorIteratorWrapper
+ObservableCollection::VectorIteratorWrapper::operator-(size_t count) const {
   return *this + -count;
+}
+
+ObservableCollection::VectorIteratorWrapper::difference_type
+ObservableCollection::VectorIteratorWrapper::operator-(const VectorIteratorWrapper& other) const {
+  return iterator - other.iterator;
 }
 
 ObservableCollection::VectorIteratorWrapper &
 ObservableCollection::VectorIteratorWrapper::operator-=(size_t count) {
-  return *this - count;
+  return *this += -count;
 }
 
 ObservableCollection::VectorIteratorWrapper &
@@ -171,6 +190,11 @@ ObservableCollection::VectorIteratorWrapper::operator--(int) {
 bool ObservableCollection::VectorIteratorWrapper::operator!=(
     const VectorIteratorWrapper &other) const {
   return iterator != other.iterator;
+}
+
+bool ObservableCollection::VectorIteratorWrapper::operator==(
+    const VectorIteratorWrapper &other) const {
+  return iterator == other.iterator;
 }
 
 ObservableCollection::MapIteratorWrapper::MapIteratorWrapper()
@@ -231,6 +255,11 @@ bool ObservableCollection::MapIteratorWrapper::operator!=(
   return iterator != other.iterator;
 }
 
+bool ObservableCollection::MapIteratorWrapper::operator==(
+    const MapIteratorWrapper &other) const {
+  return iterator == other.iterator;
+}
+
 ObservableCollection::ObservableCollection(ObservableCollection *_parent)
     : parent(_parent) {}
 
@@ -240,8 +269,11 @@ std::string ObservableCollection::address() const {
   }
   auto prefix = parent->address();
   auto end_opt = parent->key_of(*this);
-  THALAMUS_ASSERT(end_opt.has_value(),
-                  "Failed to find self in parent collection");
+  if(!end_opt) {
+    THALAMUS_LOG(error) << "Failed to find self in parent collection";
+    return "";
+  }
+
   auto end = *end_opt;
   if (std::holds_alternative<int64_t>(end)) {
     return absl::StrFormat("%s[%d]", prefix, thalamus::get<int64_t>(end));

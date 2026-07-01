@@ -33,8 +33,11 @@ class CalibrationWidget(QWidget):
     self.task = create_task_with_exc_handling(self.stream_processor(stream))
     self.px = 0
     self.py = 0
+    self.null_threshold = -4
 
     def on_change(source, action, key, value):
+      if key == 'Null Threshold':
+        self.null_threshold = value
       monitor = config['Monitor']
       screen = QApplication.screens()[monitor]
       geometry = screen.geometry()
@@ -72,7 +75,7 @@ class CalibrationWidget(QWidget):
         touch = QPointF(self.px, self.py)
         #print(touch, [len(t) for t in self.touch_points])
         if self.current_point < len(self.screen_points):
-          if touch.x() < -5 or touch.y() < -5:
+          if touch.x() < self.null_threshold or touch.y() < self.null_threshold:
             continue
           self.touch_points[self.current_point].append([self.px, self.py, 1])
           self.touch = touch
