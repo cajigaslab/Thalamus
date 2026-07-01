@@ -73,8 +73,47 @@ The generator is meant to accelerate initial layout creation while preserving th
 - `Preview` shows generated targets as a temporary dashed overlay in the layout editor before they are committed
 - `Apply Preview` commits the current preview using the selected append or replace behavior
 - `Clear Preview` discards the current generator preview without changing the draft targets
-- `Use selected target style` copies radius, hold time, reward channel, enabled state, static style, and active style from the selected target when generating new targets
-- generated targets are still editable afterward through the same table fields and drag-based layout preview
+
+### Generated target style
+
+`Style Source` controls what style every generated target receives:
+
+- `Explicit style below` (default) applies the radius, hold time, reward channel, enabled
+  state, static color/opacity, and active color/opacity set in the generator's
+  "Generated Target Style" block to all generated targets. Use this when you want to declare,
+  up front, exactly how the whole generated set should look — no need to pre-build a template
+  target first.
+- `Inherit from selected target` copies those same fields from the currently selected target
+  (or the first target if none is selected). This preserves the previous generator behavior.
+
+The style block controls are disabled while `Inherit from selected target` is active.
+Generated targets remain fully editable afterward through the table fields and drag-based
+layout preview.
+
+### Distinguishing targets in the preview
+
+To keep dense layouts readable, the layout preview draws every target as a hollow ring rather
+than a filled disc, so overlapping targets stay individually visible:
+
+- enabled targets are drawn as solid-outline rings in the target color
+- disabled targets are drawn as dimmed, dashed rings (rather than only faded fill)
+- generated preview targets are dashed blue rings
+- target name labels are shown only for the selected target and the target currently under the
+  cursor, so labels no longer pile on top of each other when there are many targets
+
+### Layout presets
+
+Named target layouts can be saved and reused from the `Presets` row at the top of the layout
+editor:
+
+- `Save` stores the current draft targets under a name you provide (you are prompted before an
+  existing preset is overwritten)
+- `Load` replaces the current draft with the selected preset (you are prompted before
+  discarding a non-empty draft)
+- `Delete` removes the selected preset
+
+Presets are stored on the task configuration under `target_layout_presets`, so they persist
+with the saved config graph.
 
 ### Editing conveniences
 

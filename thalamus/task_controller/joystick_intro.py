@@ -595,6 +595,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       self.select_callback = select_callback
       self.update_callback = update_callback
       self.selected_index = -1
+      self.hovered_index = -1
       self.drag_index = -1
       self.drag_enabled = True
       self.setMinimumSize(360, 320)
@@ -701,7 +702,17 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       if self.drag_index >= 0:
         self._move_target_to_pos(self.drag_index, self._event_pos(event))
         return
+      hovered = self._hit_test(self._event_pos(event))
+      if hovered != self.hovered_index:
+        self.hovered_index = hovered
+        self.update()
       super().mouseMoveEvent(event)
+
+    def leaveEvent(self, event: typing.Any) -> None:
+      if self.hovered_index != -1:
+        self.hovered_index = -1
+        self.update()
+      super().leaveEvent(event)
 
     def mouseReleaseEvent(self, event: typing.Any) -> None:
       if event.button() == Qt.MouseButton.LeftButton:
@@ -726,17 +737,26 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         painter.drawLine(int(x), int(region_rect.top()), int(x), int(region_rect.bottom()))
         painter.drawLine(int(region_rect.left()), int(y), int(region_rect.right()), int(y))
 
+      # Targets are drawn as hollow rings (never filled) so overlapping targets
+      # remain individually distinguishable. Enabled targets use a solid stroke
+      # in the target color; disabled targets use a dimmer dashed stroke.
       for i, target in enumerate(self.targets_ref):
         center = self._target_center(region_rect, target)
         radius = self._target_radius_px(region_rect, target)
         rgb = target.get("target_color", DEFAULT_TARGET_COLOR)
-        color = color_with_opacity(rgb, float(target.get("target_opacity", DEFAULT_TARGET_OPACITY)))
-        if not bool(target.get("enabled", True)):
-          color.setAlpha(min(color.alpha(), 80))
-        painter.setPen(QPen(QColor(255, 255, 255) if i == self.selected_index else color, 2))
-        painter.setBrush(color)
+        is_selected = i == self.selected_index
+        is_enabled = bool(target.get("enabled", True))
+        if is_enabled:
+          ring_color = QColor(int(rgb[0]), int(rgb[1]), int(rgb[2]))
+          ring_pen = QPen(QColor(255, 255, 255) if is_selected else ring_color, 2, Qt.PenStyle.SolidLine)
+        else:
+          # Greyed, dashed, thinner ring for disabled targets.
+          ring_color = QColor(150, 150, 150)
+          ring_pen = QPen(QColor(255, 255, 255) if is_selected else ring_color, 1, Qt.PenStyle.DashLine)
+        painter.setPen(ring_pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawEllipse(center, radius, radius)
-        if i == self.selected_index:
+        if is_selected:
           painter.setPen(QPen(QColor(255, 255, 255), 2, Qt.PenStyle.DashLine))
           painter.setBrush(Qt.BrushStyle.NoBrush)
           painter.drawEllipse(center, radius + 6.0, radius + 6.0)
@@ -747,20 +767,19 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
           painter.setPen(QPen(QColor(255, 255, 255), 1))
           painter.setBrush(active_color)
           painter.drawEllipse(active_center, active_radius, active_radius)
-        painter.setPen(QPen(QColor(255, 255, 255), 1))
-        label = str(target.get("name", f"T{i + 1}"))
-        painter.drawText(int(center.x() + radius + 6.0), int(center.y() - radius - 4.0), label)
+        # Only label the selected and hovered targets to avoid text pile-up.
+        if is_selected or i == self.hovered_index:
+          painter.setPen(QPen(QColor(255, 255, 255), 1))
+          label = str(target.get("name", f"T{i + 1}"))
+          painter.drawText(int(center.x() + radius + 6.0), int(center.y() - radius - 4.0), label)
 
       preview_pen = QPen(QColor(120, 200, 255, 220), 2, Qt.PenStyle.DashLine)
-      preview_brush = QColor(120, 200, 255, 70)
       for i, target in enumerate(self.generated_preview_getter()):
         center = self._target_center(region_rect, target)
         radius = self._target_radius_px(region_rect, target)
         painter.setPen(preview_pen)
-        painter.setBrush(preview_brush)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawEllipse(center, radius, radius)
-        painter.setPen(QPen(QColor(220, 240, 255), 1))
-        painter.drawText(int(center.x() + radius + 6.0), int(center.y() + radius + 14.0), f"Preview {i + 1}")
 
       cursor_center = QPointF(region_rect.center().x(), region_rect.center().y())
       cursor_radius = max(0.005, min(0.5, float(self.cursor_radius_getter()))) * min(region_rect.width(), region_rect.height())
@@ -772,11 +791,12 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
 
       painter.setPen(QPen(QColor(200, 200, 200), 1))
       if self.drag_enabled:
-        painter.drawText(12, 18, "Drag target centers to reposition them inside the task region.")
+        painter.drawText(12, 18, "Drag target centers to reposition them. Hover a ring to see its name.")
       else:
-        painter.drawText(12, 18, "Drag move is disabled. Click targets to select them without repositioning.")
+        painter.drawText(12, 18, "Drag move is disabled. Click or hover targets to identify them.")
+      painter.drawText(12, 36, "Solid rings = enabled, dashed grey rings = disabled.")
       if self.generated_preview_getter():
-        painter.drawText(12, 36, "Dashed blue targets are generator preview targets and are not saved yet.")
+        painter.drawText(12, 54, "Dashed blue rings are generator preview targets and are not saved yet.")
 
   class PersistentLayoutEditorDialog(QDialog):
     def __init__(
@@ -886,6 +906,24 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     side_layout.addWidget(QLabel("Targets"))
     side_layout.addWidget(target_list)
 
+    preset_combo = QComboBox()
+    preset_combo.setToolTip("Saved target layouts. Load restores the whole draft from the chosen preset.")
+    preset_save_button = QPushButton("Save")
+    preset_load_button = QPushButton("Load")
+    preset_delete_button = QPushButton("Delete")
+    preset_save_button.setToolTip("Save the current draft targets as a named preset.")
+    preset_load_button.setToolTip("Replace the draft with the selected preset.")
+    preset_delete_button.setToolTip("Delete the selected preset.")
+    preset_row = QWidget()
+    preset_row_layout = QHBoxLayout(preset_row)
+    preset_row_layout.setContentsMargins(0, 0, 0, 0)
+    preset_row_layout.addWidget(preset_combo, 1)
+    preset_row_layout.addWidget(preset_save_button)
+    preset_row_layout.addWidget(preset_load_button)
+    preset_row_layout.addWidget(preset_delete_button)
+    side_layout.addWidget(QLabel("Presets"))
+    side_layout.addWidget(preset_row)
+
     settings_widget = QWidget(side_panel)
     settings_layout = QVBoxLayout(settings_widget)
     settings_layout.setContentsMargins(0, 0, 0, 0)
@@ -993,12 +1031,16 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     generator_operation_combo.addItem("Append", "append")
     generator_operation_combo.addItem("Replace", "replace")
     name_prefix_edit = QLineEdit("Target")
-    use_selected_style_box = QCheckBox("Use selected target style")
-    use_selected_style_box.setChecked(True)
+    generator_style_source_combo = QComboBox()
+    generator_style_source_combo.addItem("Explicit style below", "explicit")
+    generator_style_source_combo.addItem("Inherit from selected target", "inherit")
     generator_mode_combo.setToolTip("Choose how target coordinates are generated.")
     generator_operation_combo.setToolTip("Append adds to the current draft. Replace swaps the draft for generated targets when you apply the preview.")
     name_prefix_edit.setToolTip("Base name used when new generated targets are created.")
-    use_selected_style_box.setToolTip("Copy size, hold, reward, enabled state, static style, and active style from the selected target.")
+    generator_style_source_combo.setToolTip(
+      "Explicit: every generated target uses the size, hold, reward, and colors set below. "
+      "Inherit: copy those from the selected target (or the first target)."
+    )
 
     annulus_ring_count_spin = QSpinBox()
     annulus_ring_count_spin.setRange(1, 20)
@@ -1048,6 +1090,72 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     center_exclusion_spin.setValue(0.18)
     center_exclusion_spin.setToolTip("Circular exclusion zone around center to prevent accidental idle hits.")
 
+    # Explicit style applied to every generated target (used when Style Source == explicit).
+    gen_static_color = list(DEFAULT_TARGET_COLOR)
+    gen_active_color = list(DEFAULT_TARGET_ACTIVE_COLOR)
+    gen_style_header = QLabel("Generated Target Style")
+    gen_enabled_box = QCheckBox("Enabled")
+    gen_enabled_box.setChecked(True)
+    gen_enabled_box.setToolTip("Whether generated targets start enabled.")
+    gen_radius_spin = QDoubleSpinBox()
+    gen_radius_spin.setRange(0.01, 0.5)
+    gen_radius_spin.setDecimals(3)
+    gen_radius_spin.setSingleStep(0.01)
+    gen_radius_spin.setValue(DEFAULT_TARGET_RADIUS_RATIO)
+    gen_radius_spin.setToolTip("Radius (as a fraction of the region) for every generated target.")
+    gen_hold_spin = QDoubleSpinBox()
+    gen_hold_spin.setRange(0.01, 10.0)
+    gen_hold_spin.setDecimals(3)
+    gen_hold_spin.setSingleStep(0.05)
+    gen_hold_spin.setValue(DEFAULT_TARGET_HOLD_TIME)
+    gen_hold_spin.setToolTip("Hold time for every generated target.")
+    gen_reward_channel_spin = QSpinBox()
+    gen_reward_channel_spin.setRange(0, 255)
+    gen_reward_channel_spin.setSingleStep(1)
+    gen_reward_channel_spin.setValue(int(task_config.get("reward_channel", 0)))
+    gen_reward_channel_spin.setToolTip("Reward channel for every generated target.")
+    gen_static_color_button = QPushButton("Choose Static Color")
+    gen_static_color_button.setToolTip("Static color for every generated target.")
+    gen_static_opacity_spin = QDoubleSpinBox()
+    gen_static_opacity_spin.setRange(0.0, 1.0)
+    gen_static_opacity_spin.setDecimals(2)
+    gen_static_opacity_spin.setSingleStep(0.05)
+    gen_static_opacity_spin.setValue(DEFAULT_TARGET_OPACITY)
+    gen_static_opacity_spin.setToolTip("Static opacity for every generated target.")
+    gen_active_color_button = QPushButton("Choose Active Color")
+    gen_active_color_button.setToolTip("Active color for every generated target.")
+    gen_active_opacity_spin = QDoubleSpinBox()
+    gen_active_opacity_spin.setRange(0.0, 1.0)
+    gen_active_opacity_spin.setDecimals(2)
+    gen_active_opacity_spin.setSingleStep(0.05)
+    gen_active_opacity_spin.setValue(DEFAULT_TARGET_ACTIVE_OPACITY)
+    gen_active_opacity_spin.setToolTip("Active opacity for every generated target.")
+
+    def update_gen_color_buttons() -> None:
+      gen_static_color_button.setStyleSheet(
+        f"background-color: rgb({int(gen_static_color[0])}, {int(gen_static_color[1])}, {int(gen_static_color[2])});"
+      )
+      gen_active_color_button.setStyleSheet(
+        f"background-color: rgb({int(gen_active_color[0])}, {int(gen_active_color[1])}, {int(gen_active_color[2])});"
+      )
+
+    def choose_gen_static_color() -> None:
+      selected = QColorDialog.getColor(QColor(*gen_static_color), dialog, "Select Generated Static Color")
+      if not selected.isValid():
+        return
+      gen_static_color[:] = [selected.red(), selected.green(), selected.blue()]
+      update_gen_color_buttons()
+
+    def choose_gen_active_color() -> None:
+      selected = QColorDialog.getColor(QColor(*gen_active_color), dialog, "Select Generated Active Color")
+      if not selected.isValid():
+        return
+      gen_active_color[:] = [selected.red(), selected.green(), selected.blue()]
+      update_gen_color_buttons()
+
+    gen_static_color_button.clicked.connect(choose_gen_static_color)
+    gen_active_color_button.clicked.connect(choose_gen_active_color)
+
     generator_hint_label = QLabel("")
     generator_hint_label.setWordWrap(True)
     generator_hint_label.setToolTip("Short description of the currently selected generator mode.")
@@ -1061,7 +1169,6 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     generator_layout.addRow("Mode", generator_mode_combo)
     generator_layout.addRow("Operation", generator_operation_combo)
     generator_layout.addRow("Name Prefix", name_prefix_edit)
-    generator_layout.addRow("", use_selected_style_box)
     generator_layout.addRow("Rows", grid_rows_spin)
     generator_layout.addRow("Columns", grid_columns_spin)
     generator_layout.addRow("Ring Count", annulus_ring_count_spin)
@@ -1071,6 +1178,16 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     generator_layout.addRow("Inner Radius", annulus_inner_radius_spin)
     generator_layout.addRow("Outer Radius", annulus_outer_radius_spin)
     generator_layout.addRow("Angle Offset", annulus_angle_offset_spin)
+    generator_layout.addRow("Style Source", generator_style_source_combo)
+    generator_layout.addRow(gen_style_header)
+    generator_layout.addRow("", gen_enabled_box)
+    generator_layout.addRow("Radius", gen_radius_spin)
+    generator_layout.addRow("Hold (s)", gen_hold_spin)
+    generator_layout.addRow("Reward Channel", gen_reward_channel_spin)
+    generator_layout.addRow("Static Color", gen_static_color_button)
+    generator_layout.addRow("Static Opacity", gen_static_opacity_spin)
+    generator_layout.addRow("Active Color", gen_active_color_button)
+    generator_layout.addRow("Active Opacity", gen_active_opacity_spin)
     generator_layout.addRow("", generator_hint_label)
     preview_button_row = QWidget()
     preview_button_row_layout = QHBoxLayout(preview_button_row)
@@ -1249,6 +1366,18 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       grid_columns_spin.setEnabled(not is_annulus)
       center_exclusion_spin.setEnabled(not is_annulus)
       grid_margin_spin.setEnabled(not is_annulus)
+      explicit_style = str(generator_style_source_combo.currentData()) == "explicit"
+      for style_widget in (
+        gen_enabled_box,
+        gen_radius_spin,
+        gen_hold_spin,
+        gen_reward_channel_spin,
+        gen_static_color_button,
+        gen_static_opacity_spin,
+        gen_active_color_button,
+        gen_active_opacity_spin,
+      ):
+        style_widget.setEnabled(explicit_style)
       if is_annulus:
         generator_hint_label.setText(
           "Annulus places targets in concentric rings and naturally leaves the center open."
@@ -1376,7 +1505,18 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       refresh_editor()
 
     def make_generator_template() -> typing.Dict[str, typing.Any]:
-      if use_selected_style_box.isChecked() and 0 <= selected_index < len(draft_targets):
+      if str(generator_style_source_combo.currentData()) == "explicit":
+        return normalize_target({
+          "enabled": gen_enabled_box.isChecked(),
+          "radius_ratio": gen_radius_spin.value(),
+          "hold_time": gen_hold_spin.value(),
+          "reward_channel": gen_reward_channel_spin.value(),
+          "target_color": list(gen_static_color),
+          "target_opacity": gen_static_opacity_spin.value(),
+          "target_active_color": list(gen_active_color),
+          "target_active_opacity": gen_active_opacity_spin.value(),
+        })
+      if 0 <= selected_index < len(draft_targets):
         return normalize_target(draft_targets[selected_index])
       if draft_targets:
         return normalize_target(draft_targets[0])
@@ -1464,10 +1604,89 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         target_table.selectRow(selected_index)
       dialog.accept()
 
+    def load_presets_dict() -> typing.Dict[str, typing.Any]:
+      raw = task_config.get("target_layout_presets", {})
+      if isinstance(raw, ObservableCollection):
+        raw = raw.unwrap()
+      return dict(raw) if isinstance(raw, dict) else {}
+
+    def refresh_preset_combo(select_name: typing.Optional[str] = None) -> None:
+      presets = load_presets_dict()
+      preset_combo.blockSignals(True)
+      preset_combo.clear()
+      for name in sorted(presets.keys()):
+        preset_combo.addItem(str(name))
+      if select_name is not None:
+        index = preset_combo.findText(select_name)
+        if index >= 0:
+          preset_combo.setCurrentIndex(index)
+      preset_combo.blockSignals(False)
+      has_presets = preset_combo.count() > 0
+      preset_load_button.setEnabled(has_presets)
+      preset_delete_button.setEnabled(has_presets)
+
+    def save_preset() -> None:
+      name, ok = QInputDialog.getText(dialog, "Save Preset", "Preset name:")
+      if not ok:
+        return
+      name = name.strip()
+      if not name:
+        return
+      presets = load_presets_dict()
+      if name in presets:
+        confirm = QMessageBox.question(
+          dialog, "Overwrite Preset", f"Preset '{name}' already exists. Overwrite it?"
+        )
+        if confirm != QMessageBox.StandardButton.Yes:
+          return
+      presets[name] = [normalize_target(target) for target in draft_targets]
+      task_config["target_layout_presets"] = presets
+      refresh_preset_combo(name)
+
+    def load_preset() -> None:
+      nonlocal selected_index
+      name = preset_combo.currentText()
+      if not name:
+        return
+      preset_targets = load_presets_dict().get(name)
+      if not isinstance(preset_targets, list):
+        return
+      if draft_targets:
+        confirm = QMessageBox.question(
+          dialog,
+          "Load Preset",
+          f"Replace the current {len(draft_targets)} draft target(s) with preset '{name}'?",
+        )
+        if confirm != QMessageBox.StandardButton.Yes:
+          return
+      draft_targets[:] = [normalize_target(target) for target in preset_targets]
+      selected_index = 0 if draft_targets else -1
+      clear_generated_preview()
+      refresh_editor()
+
+    def delete_preset() -> None:
+      name = preset_combo.currentText()
+      if not name:
+        return
+      presets = load_presets_dict()
+      if name not in presets:
+        return
+      confirm = QMessageBox.question(dialog, "Delete Preset", f"Delete preset '{name}'?")
+      if confirm != QMessageBox.StandardButton.Yes:
+        return
+      del presets[name]
+      task_config["target_layout_presets"] = presets
+      refresh_preset_combo()
+
+    preset_save_button.clicked.connect(save_preset)
+    preset_load_button.clicked.connect(load_preset)
+    preset_delete_button.clicked.connect(delete_preset)
+
     add_button.clicked.connect(add_layout_target)
     remove_button.clicked.connect(remove_layout_target)
     clear_all_button.clicked.connect(clear_all_layout_targets)
     generator_mode_combo.currentIndexChanged.connect(lambda _index: update_generator_controls())
+    generator_style_source_combo.currentIndexChanged.connect(lambda _index: update_generator_controls())
     preview_generator_button.clicked.connect(preview_generated_targets)
     apply_preview_button.clicked.connect(apply_generated_preview)
     clear_preview_button.clicked.connect(clear_generated_preview)
@@ -1486,6 +1705,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       slider.installEventFilter(no_wheel_filter)
 
     refresh_editor()
+    refresh_preset_combo()
+    update_gen_color_buttons()
     update_generator_controls()
     update_preview_buttons()
     dialog.show()
