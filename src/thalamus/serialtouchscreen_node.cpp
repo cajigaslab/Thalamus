@@ -168,7 +168,7 @@ public:
     if (key_str == "Port") {
       port_name = std::get<std::string>(v);
     } else if (key_str == "No Touch Timeout (ms)") {
-      no_touch_timeout = std::chrono::milliseconds(std::get<long long>(v));
+      no_touch_timeout = std::chrono::milliseconds(std::get<int64_t>(v));
     } else if (key_str == "Running") {
       running = std::get<bool>(v);
       if(port.is_open()) {
