@@ -4,10 +4,12 @@ import io
 import sys
 import typing
 import pathlib
+import argparse
 import threading
 import subprocess
 
 from thalamus.thalamus_pb2 import StorageRecord, Image
+from thalamus.record_reader2 import RecordReader
 
 EXECUTABLE_EXTENSION = '.exe' if sys.platform == 'win32' else ''
 
@@ -142,3 +144,17 @@ class MultiVideoWriter:
   def __exit__(self, type, value, tb):
     for writer in self.writers.values():
       writer.__exit__(type, value, tb)
+
+def main():
+  parser = argparse.ArgumentParser()
+  parser.add_argument('-n', '--node', help='Nodes to render video for')
+  parser.add_argument('-i', '--input', help='Input filename')
+  parser.add_argument('-o', '--output', default='%s.mp4', help='Output filename, %s will be replaced with node name')
+  args = parser.parse_args()
+
+  with RecordReader(args.input, args.node, decode_video=False) as reader, MultiVideoWriter(args.output) as writer:
+    writer.write_all(reader)
+
+if __name__ == '__main__':
+  main()
+
