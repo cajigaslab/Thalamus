@@ -335,7 +335,7 @@ def main():
         bashrc.write(f'\nsource ~/.thalamusrc\n')
         
   if reboot_required:
-    print("""
+    print(r"""
   _____      _                 _          
  |  __ \    | |               | |         
  | |__) |___| |__   ___   ___ | |_        

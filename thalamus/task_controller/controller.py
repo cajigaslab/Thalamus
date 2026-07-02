@@ -122,7 +122,13 @@ class TaskWidget(QWidget):
       self.current_widget.deleteLater()
 
     task_description = None
-    index, desc = [(i, desc) for i, desc in enumerate(self.task_descriptions) if desc.code == task_type][0]
+    try:
+      index, desc = [(i, desc) for i, desc in enumerate(self.task_descriptions) if desc.code == task_type][0]
+    except IndexError:
+      QMessageBox.critical(self, 'Unknown Task', f'No definition of task "{task_type}" found')
+      self.config['task_type'] = 'null'
+      return
+
     task_description = desc
     self.combo_box.setCurrentIndex(index)
 
@@ -336,11 +342,13 @@ class ControlWindow(QMainWindow):
                config_data: ConfigData,
                done_future: asyncio.Future) -> None:
     super().__init__()
+    self.subject_window = subject_window
     self.task_context = task_context
     self.config_data = config_data
     self.done_future = done_future
     self.valid_queue_items: typing.List[QTreeWidgetItem] = []
     self.operator_window: typing.Optional[OperatorWindow] = None
+    self.operator_view_autolaunch_attempted = False
 
     self.operator_widget = None
     def on_operator_widget(widget):
@@ -393,6 +401,22 @@ class ControlWindow(QMainWindow):
     dock.setWidget(queue_widget)
     self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
 
+    status_layout = QVBoxLayout()
+    self.status_list = QListWidget()
+    self.status_list.setObjectName('status_list')
+    status_layout.addWidget(self.status_list)
+    button = QPushButton("Reset History")
+    button.setObjectName('reset_history')
+    button.clicked.connect(self.on_reset_trial_history)
+    status_layout.addWidget(button)
+
+    status_widget = QWidget()
+    status_widget.setLayout(status_layout)
+
+    dock = QDockWidget('Trial History', self)
+    dock.setWidget(status_widget)
+    self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock)
+
     plot = RewardSchedule(self.task_context.config['reward_schedule'])
     dock = QDockWidget('Reward Schedule', self)
     dock.setWidget(plot)
@@ -431,14 +455,15 @@ class ControlWindow(QMainWindow):
   def __prepare_status(self) -> None:
     if 'status' not in self.task_context.config:
       self.task_context.config['status'] = ''
-    status_widget = QLabel()
-    self.statusBar().addWidget(status_widget)
-    self.task_context.config.add_observer(functools.partial(self.__on_status_change, status_widget))
+    self.task_context.config.add_observer(functools.partial(self.__on_status_change))
 
-  def __on_status_change(self, widget: QLabel,
-                         _: ObservableCollection.Action, key: typing.Any, value: typing.Any) -> None:
+  def __on_status_change(self, _: ObservableCollection.Action, key: typing.Any, value: typing.Any) -> None:
     if key == 'status':
-      widget.setText(value)
+      self.status_list.clear()
+
+      items = sorted(self.task_context.trial_summary_data.trial_history.items())
+      for b in items:
+        self.status_list.addItem(f'{b[0]} = {b[1]["success"]}/{b[1]["failure"]}')
 
   def on_queue_item_selected(self, index: QModelIndex) -> None:
     '''
@@ -481,15 +506,27 @@ class ControlWindow(QMainWindow):
                                            "Operator View is not supported in remote executor mode")
       return
 
+    operator_config = self.task_context.config.get('operator_view', {})
     if not self.operator_window or self.operator_window.closed:
       self.operator_window = OperatorWindow(subject_window, self.task_context.config)
-    self.operator_window.resize(self.width()//2, self.height()//2)
+      geometry = operator_config.get('view_geometry', None)
+      if not geometry or len(geometry) != 4 or geometry[2] < 0 or geometry[3] < 0:
+        self.operator_window.resize(self.width()//2, self.height()//2)
     
     if self.operator_widget is not None:
       self.operator_window.set_control_widget(self.operator_widget)
     
     self.operator_window.show()
     self.operator_window.activateWindow()
+
+  def showEvent(self, event) -> None: # pylint: disable=invalid-name
+    super().showEvent(event)
+    if self.operator_view_autolaunch_attempted:
+      return
+    self.operator_view_autolaunch_attempted = True
+    operator_config = self.task_context.config.get('operator_view', {})
+    if operator_config.get('auto_launch', False) and self.operator_window is None:
+      QTimer.singleShot(0, lambda: self.on_operator_view(self.subject_window))
 
   def closeEvent(self, event: QCloseEvent) -> None: # pylint: disable=invalid-name
     """
@@ -511,6 +548,7 @@ class ControlWindow(QMainWindow):
     '''
     Resets the trial history
     '''
+    self.task_context.reset_trial_history()
 
   def on_load_reward_schedule(self) -> None:
     '''
@@ -603,7 +641,8 @@ class ControlWindow(QMainWindow):
     Save the current config to a new file
     """
     file_name = QFileDialog.getSaveFileName(self, "Save Config", "", "*.json *.mat")
-    if file_name:
+    print('on_save_as_config', file_name)
+    if file_name and file_name[0]:
       save(file_name[0], self.task_context.config)
       self.config_data = ConfigData(self.config_data.user_config, file_name[0])
       self.setWindowTitle(f'Task Controller: {self.config_data.file_name}')

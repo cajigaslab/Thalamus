@@ -196,7 +196,6 @@ add_custom_command(
   OUTPUT "${FRAG_SPV}"
   COMMAND "${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE}" -V "${CMAKE_SOURCE_DIR}/src/shaders/texture.frag" -o "${FRAG_SPV}" --vn frag_shader_data
   DEPENDS "${CMAKE_SOURCE_DIR}/src/shaders/texture.frag")
-add_custom_target(thalamus_shaders DEPENDS "${VERT_SPV}" "${FRAG_SPV}")
   
 add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/node_graph_impl.hpp"
@@ -315,11 +314,15 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/image_viewer.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/vulkan_instance.hpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/vulkan_instance.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/throttle.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/throttle.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/joystick_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/joystick_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/serialtouchscreen_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/serialtouchscreen_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/proto/thalamus.proto"
                      "${VERT_SPV}"
                      "${FRAG_SPV}")
-
-set_source_files_properties("${CMAKE_SOURCE_DIR}/src/thalamus/image_viewer.cpp" PROPERTIES
-  COMPILE_DEFINITIONS "VERT_SPV_PATH=\"${VERT_SPV}\";FRAG_SPV_PATH=\"${FRAG_SPV}\"")
 
 if(WIN32)
   target_compile_definitions(thalamus PRIVATE _WIN32_WINNT=0x0A00 _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN BOOST_STACKTRACE_USE_WINDBG)
@@ -418,14 +421,10 @@ add_executable(Rec_Stim Rec_Stim.cpp)
 target_link_libraries(Rec_Stim PRIVATE hdf5-static thalamus)
 target_include_directories(Rec_Stim PRIVATE "${CMAKE_SOURCE_DIR}/src")
 
-add_executable(vulkan_hello src/vulkan_hello.cpp)
-add_dependencies(vulkan_hello thalamus_shaders)
+add_executable(vulkan_hello src/vulkan_hello.cpp "${VERT_SPV}" "${FRAG_SPV}")
 if(WIN32)
   target_compile_definitions(vulkan_hello PRIVATE _WIN32_WINNT=0x0A00 NOMINMAX WIN32_LEAN_AND_MEAN)
 endif()
-target_compile_definitions(vulkan_hello PRIVATE
-  "VERT_SPV_PATH=\"${VERT_SPV}\""
-  "FRAG_SPV_PATH=\"${FRAG_SPV}\"")
 target_compile_options(vulkan_hello PRIVATE ${WARNING_FLAGS})
 target_include_directories(vulkan_hello PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(vulkan_hello PRIVATE Vulkan::Vulkan sdl opencv zlib_processed)

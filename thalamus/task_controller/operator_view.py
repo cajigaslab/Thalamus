@@ -3,6 +3,7 @@ Module defining the operator view
 """
 import typing
 import asyncio
+import datetime
 import functools
 
 from ..qt import *
@@ -16,6 +17,7 @@ USINGLEGACY_QT = PYQT_VERSION < packaging.version.parse('5.11.0')
 from .window import Window as TaskWindow
 from .util import RenderOutput
 from ..config import ObservableCollection
+from ..util import MeteredUpdater
 
 class ViewWidget(QWidget):
   """
@@ -63,9 +65,8 @@ class AngularScalingModelWidget(QWidget):
     
     if 'Angular Scaling' not in eye_config['Models']:
       eye_config['Models']['Angular Scaling'] = {
-        'Angle': [],
-        'Scale X': [],
-        'Scale Y': [],
+        'Pins': [],
+        'Scale Default': 100.0
       }
 
     self.model = eye_config['Models']['Angular Scaling']
@@ -77,39 +78,38 @@ class AngularScalingModelWidget(QWidget):
     self.model.recap()
 
   def paintEvent(self, e):
+    return
     painter = QPainter(self)
 
-    anglef = self.model['Angle']
-    scalexf = self.model['Scale X']
-    scaleyf = self.model['Scale Y']
-    length = min(len(anglef), len(scalexf), len(scaleyf))
+    pins = numpy.array(self.model['Pins'])
 
     diameter = min(self.width(), self.height()) - 10
     radius = diameter/2
 
     angles = numpy.linspace(0, 2*numpy.pi, 360)
-    if length:
-      scalesx = numpy.interp(angles, anglef[:length], scalexf[:length], period=2*numpy.pi)
-      scalesy = numpy.interp(angles, anglef[:length], scaleyf[:length], period=2*numpy.pi)
-      mag = (scalesx**2 + scalesy**2).max()**.5
-      scalesx /= mag
-      scalesy /= mag
+    if pins.size > 0:
+      scale = numpy.interp(angles, pins[:,0], pins[:,1], period=2*numpy.pi)
+      rotation = numpy.interp(angles, pins[:,0], pins[:,2], period=2*numpy.pi)
+      mag = scale.max()
+      cos = numpy.cos(angles + rotation)
+      sin = numpy.sin(angles + rotation)
+      scalesx = cos*scale/mag*radius
+      scalesy = sin*scale/mag*radius
     else:
       mag = 1
-      scalesx = numpy.ones_like(angles)
-      scalesy = numpy.ones_like(angles)
+      scalesx = numpy.ones_like(angles)*radius
+      scalesy = numpy.ones_like(angles)*radius
 
     end = None
     first = True
     path = QPainterPath()
     for a, sx, sy in zip(angles, scalesx, scalesy):
-      coord = radius*numpy.cos(a)*sx, radius*numpy.sin(a)*sy
       if first:
-        end = coord
-        path.moveTo(*coord)
+        end = sx, sy
+        path.moveTo(sx, sy)
         first = False
       else:
-        path.lineTo(*coord)
+        path.lineTo(sx, sy)
     if end is not None:
       path.lineTo(*end)
     path.moveTo(0, -radius)
@@ -121,10 +121,10 @@ class AngularScalingModelWidget(QWidget):
     painter.drawPath(path)
 
     path2 = QPainterPath()
-    for a, sx, sy in zip(anglef[:length], scalexf[:length], scaleyf[:length]):
+    for a, scale, rot in pins:
       path2.moveTo(0, 0)
       path2.lineTo(radius*numpy.cos(a), radius*numpy.sin(a))
-      path2.lineTo(radius*numpy.cos(a)*sx/mag, radius*numpy.sin(a)*sy/mag)
+      path2.lineTo(radius*numpy.cos(a+rot)*scale/mag, radius*numpy.sin(a+rot)*scale/mag)
 
     painter.setPen(QColor(255, 0, 0))
     painter.drawPath(path2)
@@ -250,10 +250,20 @@ class CentralWidget(QWidget):
 
     if 'eye_scaling' not in config:
       config['eye_scaling'] = {}
+    if 'operator_view' not in config:
+      config['operator_view'] = {}
 
     eye_config = config['eye_scaling']
     if 'Selected Model' not in eye_config:
       eye_config['Selected Model'] = 'Quadrant Scaling'
+
+    operator_config = config['operator_view']
+    if 'show_touch' not in operator_config:
+      operator_config['show_touch'] = True
+    if 'show_gaze' not in operator_config:
+      operator_config['show_gaze'] = True
+    if 'auto_launch' not in operator_config:
+      operator_config['auto_launch'] = False
 
     layout = QGridLayout()
     self.control_widget = None
@@ -285,6 +295,21 @@ class CentralWidget(QWidget):
     layout.addWidget(QLabel('Model:'), 3, 0)
     layout.addWidget(model_combo, 3, 1)
 
+    show_touch_checkbox = QCheckBox('Show Touch')
+    show_touch_checkbox.setChecked(operator_config['show_touch'])
+    layout.addWidget(show_touch_checkbox, 4, 0)
+    show_touch_checkbox.toggled.connect(lambda v: operator_config.update({'show_touch': v}))
+
+    show_gaze_checkbox = QCheckBox('Show Gaze')
+    show_gaze_checkbox.setChecked(operator_config['show_gaze'])
+    layout.addWidget(show_gaze_checkbox, 4, 1)
+    show_gaze_checkbox.toggled.connect(lambda v: operator_config.update({'show_gaze': v}))
+
+    auto_launch_checkbox = QCheckBox('Launch On Startup')
+    auto_launch_checkbox.setChecked(operator_config['auto_launch'])
+    layout.addWidget(auto_launch_checkbox, 4, 2)
+    auto_launch_checkbox.toggled.connect(lambda v: operator_config.update({'auto_launch': v}))
+
     model_combo.currentTextChanged.connect(lambda t: eye_config.update({'Selected Model': t}))
 
     model_widget = None
@@ -306,14 +331,24 @@ class CentralWidget(QWidget):
         
         if model_widget is None:
           model_widget = new_model_widget
-          layout.addWidget(model_widget, 4, 0, 1, 4)
+          layout.addWidget(model_widget, 5, 0, 1, 4)
         else:
           layout.replaceWidget(model_widget, new_model_widget)
           model_widget.deleteLater()
           model_widget = new_model_widget
 
+    def on_operator_config_change(_a, key, value):
+      if key == 'show_touch':
+        show_touch_checkbox.setChecked(bool(value))
+      elif key == 'show_gaze':
+        show_gaze_checkbox.setChecked(bool(value))
+      elif key == 'auto_launch':
+        auto_launch_checkbox.setChecked(bool(value))
+
     eye_config.add_observer(on_eye_config_change, lambda: isdeleted(self))
     eye_config.recap(on_eye_config_change)
+    operator_config.add_observer(on_operator_config_change, lambda: isdeleted(self))
+    operator_config.recap(on_operator_config_change)
 
     self.setLayout(layout)
 
@@ -324,10 +359,24 @@ class Window(QMainWindow):
   def __init__(self, target: TaskWindow, config: ObservableCollection) -> None:
     super().__init__()
     self.target = target
+    self.config = config
     self.closed = False
+    if 'operator_view' not in self.config:
+      self.config['operator_view'] = {}
+    operator_config = self.config['operator_view']
+    if 'view_geometry' not in operator_config:
+      operator_config['view_geometry'] = [100, 100, 900, 700]
+    self.view_geometry_updater = MeteredUpdater(
+      operator_config['view_geometry'],
+      datetime.timedelta(seconds=1),
+      lambda: isdeleted(self))
     self.central_widget = CentralWidget(self.target, config)
     self.render_loop = asyncio.get_event_loop().create_task(self.__render_loop())
     self.setCentralWidget(self.central_widget)
+    self.setWindowTitle('Operator View')
+    x, y, w, h = operator_config['view_geometry']
+    self.move(x, y)
+    self.resize(w, h)
 
   async def __render_loop(self):
     try:
@@ -336,6 +385,17 @@ class Window(QMainWindow):
         self.central_widget.update()
     except asyncio.CancelledError:
       pass
+
+  def moveEvent(self, event: QMoveEvent) -> None: # pylint: disable=invalid-name
+    offset = self.frameGeometry().size() - self.geometry().size()
+    position = event.pos() - QPoint(offset.width(), offset.height())
+    position = QPoint(max(0, position.x()), max(0, position.y()))
+    self.view_geometry_updater[:2] = position.x(), position.y()
+    super().moveEvent(event)
+
+  def resizeEvent(self, event: QResizeEvent) -> None: # pylint: disable=invalid-name
+    self.view_geometry_updater[2:] = event.size().width(), event.size().height()
+    super().resizeEvent(event)
 
   def set_control_widget(self, widget: QWidget):
     if self.central_widget.control_widget is not None:

@@ -14,6 +14,7 @@ import pathlib
 import shutil
 import datetime
 import functools
+import traceback
 import collections
 import os
 import time
@@ -46,7 +47,7 @@ from ..util import IterableQueue
 
 from .canvas import Canvas
 from ..config import ObservableCollection, ObservableDict
-from .util import create_task_with_exc_handling, TaskContextProtocol, TaskResult
+from .util import create_task_with_exc_handling, TaskContextProtocol, TaskResult, get_sound
 from .servicer import TaskControllerServicer, ExecutorLostError
 
 LOGGER = logging.getLogger(__name__)
@@ -390,6 +391,9 @@ class TaskContext(TaskContextProtocol):
     await stream.requests.put(thalamus_pb2.NodeRequest(json=json.dumps(request), id=request_id))
 
     return await future
+  
+  def get_sound(path: typing.Union[str, pathlib.Path]) -> QSound:
+    return get_sound(path)
 
   async def get_stim_stream(self, name: str):
     queue = self.stim_streams.get(name, None)
@@ -617,7 +621,7 @@ class TaskContext(TaskContextProtocol):
 
     try:
       grpc_result = await self.servicer.get_result()
-      result = TaskResult(grpc_result.success)
+      result = TaskResult(grpc_result.success, cancelled=grpc_result.cancelled)
     except ExecutorLostError:
       LOGGER.error('Task executor disconnected')
       result = TaskResult(False)
@@ -700,7 +704,7 @@ class TaskContext(TaskContextProtocol):
     if not response:
       return
     
-    source_file = inspect.getsourcefile(task.run)
+    source_file = inspect.getsourcefile(inspect.unwrap(task.run))
     if source_file is None:
       return
     
@@ -747,6 +751,11 @@ class TaskContext(TaskContextProtocol):
         except asyncio.CancelledError:
           LOGGER.debug('CANCELLED')
           was_cancelled = True
+        except:
+          LOGGER.exception('Task error')
+          self.config['queue'].clear()
+          was_cancelled = True
+          QMessageBox.critical(None, 'Task Error', traceback.format_exc())
         self.set_operator_widget(QWidget())
         self.widget.renderer = lambda w: None
         self.widget.touch_listener = lambda e: None
@@ -758,6 +767,7 @@ class TaskContext(TaskContextProtocol):
       else:
         try:
           result = await self.__execute_remote_task(self.task_config)
+          was_cancelled = result.cancelled
         except asyncio.CancelledError:
           LOGGER.debug('CANCELLED')
           was_cancelled = True

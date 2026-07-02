@@ -40,6 +40,7 @@ class ThalamusThread:
   def send_change(self, action: ObservableCollection.Action, address: str, value: typing.Any, callback: typing.Callable[[], None]) -> bool:
     assert self.queue is not None
 
+    value = value.unwrap() if isinstance(value, ObservableCollection) else value
     transaction = thalamus_pb2.ObservableTransaction(
       changes = [thalamus_pb2.ObservableChange(
         address = address,
@@ -60,6 +61,8 @@ class ThalamusThread:
       self.loop = asyncio.get_event_loop()
       async with grpc.aio.insecure_channel(self.address) as channel:
         await channel.channel_ready()
+        self.main_channel = channel
+        self.bridge_channel = channel
 
         stub = thalamus_pb2_grpc.ThalamusStub(channel)
         bridge_channel = channel
@@ -74,6 +77,7 @@ class ThalamusThread:
               stream.cancel()
               redirection = transaction.redirection.replace('localhost', self.address.split(':')[0])
               bridge_channel = grpc.aio.insecure_channel(redirection)
+              self.bridge_channel = bridge_channel
               await bridge_channel.channel_ready()
               bridge_stub = thalamus_pb2_grpc.ThalamusStub(bridge_channel)
               break

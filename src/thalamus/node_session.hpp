@@ -154,4 +154,127 @@ namespace thalamus {
       }
     }
   };
+
+  template <typename NODE, typename REQUEST>
+  struct NodeReadSession : public ServerReadReactor<REQUEST> {
+    struct State {
+      std::mutex mutex;
+      bool joining = false;
+      ~State() {
+        THALAMUS_LOG(trace) << "Delete State";
+      }
+    };
+    std::shared_ptr<State> state = std::make_shared<State>();
+
+    NodeGraph& node_graph;
+    boost::asio::io_context& io_context;
+    boost::asio::steady_timer timer;
+    boost::signals2::scoped_connection get_node_connection;
+    thalamus_grpc::NodeSelector selector;
+    std::weak_ptr<Node> weak_raw_node;
+    std::shared_ptr<Node> raw_node;
+    NODE* typed_node;
+    ContextGuard context_guard;
+
+    NodeReadSession(NodeGraph& _node_graph, boost::asio::io_context& _io_context,
+                  ::grpc::CallbackServerContext& server_context,
+                  ContextGuard&& _context_guard)
+    : ServerReadReactor<REQUEST>(server_context, _io_context)
+    , node_graph(_node_graph)
+    , io_context(_io_context)
+    , timer(_io_context)
+    , context_guard(std::move(_context_guard)) {
+      THALAMUS_LOG(trace) << "Create NodeReadSession";
+    }
+
+    ~NodeReadSession() override {
+      THALAMUS_LOG(trace) << "Delete NodeReadSession";
+      std::lock_guard<std::mutex> lock(state->mutex);
+      state->joining = true;
+    }
+        
+    void OnDone() override {
+      THALAMUS_LOG(trace) << "OnDone" << std::endl;
+      ServerReadReactor<REQUEST>::OnDone();
+      delete this;
+    }
+
+    void OnCancel() override {
+      THALAMUS_LOG(trace) << "OnCancel" << std::endl;
+      grpc::ServerReadReactor<REQUEST>::Finish(grpc::Status::OK);
+      //delete this;
+    }
+
+    void set_selector(const thalamus_grpc::NodeSelector& new_selector) {
+      boost::asio::post(io_context, [&,c_state=state,new_selector] {
+        std::lock_guard<std::mutex> lock(c_state->mutex);
+        if(c_state->joining) {
+          THALAMUS_LOG(trace) << "get_node_connection joined";
+          return;
+        }
+        this->selector = new_selector;
+        get_node();
+      });
+    }
+
+    void get_node() {
+      //THALAMUS_LOG(trace) << "getting node";
+      boost::asio::post(io_context, [&] {
+        get_node_connection = node_graph.get_node_scoped(selector, [&,c_state=state](auto ptr) {
+          std::lock_guard<std::mutex> lock(c_state->mutex);
+          if(c_state->joining) {
+            THALAMUS_LOG(trace) << "get_node_connection joined";
+            return;
+          }
+
+          weak_raw_node = ptr;
+          raw_node = ptr.lock();
+          typed_node = node_cast<NODE *>(raw_node.get());
+          if (!typed_node) {
+            timer.expires_after(1s);
+            timer.async_wait(std::bind(&NodeReadSession<NODE, REQUEST>::on_timer_get_node, this, _1));
+            return;
+          }
+          on_node();
+        });
+      });
+    }
+
+    std::shared_ptr<Node> lock() {
+      return typed_node ? weak_raw_node.lock() : std::shared_ptr<Node>();
+    }
+
+    void on_node() {
+      THALAMUS_LOG(trace) << "got node";
+      raw_node.reset();
+
+      timer.expires_after(1s);
+      timer.async_wait(std::bind(&NodeReadSession<NODE, REQUEST>::on_timer_check_expired, this, _1));
+    }
+
+    void on_timer_get_node(const boost::system::error_code &error) {
+      if (error.value() == boost::asio::error::operation_aborted) {
+        return;
+      }
+      THALAMUS_ASSERT(!error, "Unexpected error");
+
+      get_node();
+    }
+
+    void on_timer_check_expired(const boost::system::error_code &error) {
+      if (error.value() == boost::asio::error::operation_aborted) {
+        return;
+      }
+      THALAMUS_ASSERT(!error, "Unexpected error");
+
+      if(weak_raw_node.lock() == nullptr) {
+        THALAMUS_LOG(trace) << "node expired";
+        timer.expires_after(1s);
+        timer.async_wait(std::bind(&NodeReadSession<NODE, REQUEST>::on_timer_get_node, this, _1));
+      } else {
+        timer.expires_after(1s);
+        timer.async_wait(std::bind(&NodeReadSession<NODE, REQUEST>::on_timer_check_expired, this, _1));
+      }
+    }
+  };
 }

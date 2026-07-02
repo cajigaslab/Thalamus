@@ -6,10 +6,12 @@ import queue
 import typing
 import struct
 import pathlib
+import argparse
 import threading
 import traceback
 import subprocess
 import collections
+from pprint import pprint
 from multiprocessing.pool import ThreadPool, AsyncResult
 
 from thalamus.thalamus_pb2 import StorageRecord, Image, Compressed
@@ -489,13 +491,38 @@ def is_capturefile(f: pathlib.Path):
     return read_record(stream) is not None
 
 def main():
-  #parser = argparse.ArgumentParser()
-  filename = sys.argv[1]
-  print('filename', filename)
-  with RecordReader(filename) as reader:
+  parser = argparse.ArgumentParser()
+  parser.add_argument('-n', '--node', help='Nodes to render video for')
+  parser.add_argument('input', nargs='?', default=None, help='Input filename')
+  parser.add_argument('-i', '--input', dest='named_input', help='Input filename')
+  parser.add_argument('-s', '--stats', action='store_true', help='Just print summary ')
+  args = parser.parse_args()
+
+  filename = args.input or args.named_input
+  #print('filename', filename)
+  stats_dict = collections.defaultdict(lambda: collections.defaultdict(lambda: 0))
+  last = time.time()
+  with RecordReader(filename, node=args.node, decode_video=False) as reader:
     for record in reader:
-      print(record)
-      input()
+      now = time.time()
+      if now - last > 1:
+        print('Progress:', 100*reader.progress(), file=sys.stderr)
+        #output = {k: {k2: dict(v2) for k2, v2 in v.items()} for k, v in stats_dict.items()}
+        output = {k: dict(v) for k, v in stats_dict.items()}
+        pprint(output, stream=sys.stderr)
+        last = now
+      if args.stats:
+        body = record.WhichOneof('body')
+        stats_dict[record.node][body] += 1
+      else:
+        print(record)
+        input()
+
+  if args.stats:
+    #output = {k: {k2: dict(v2) for k2, v2 in v.items()} for k, v in stats_dict.items()}
+    output = {k: dict(v) for k, v in stats_dict.items()}
+    print('Progress:', 100, file=sys.stderr)
+    pprint(output)
 
 if __name__ == '__main__':
   main()
