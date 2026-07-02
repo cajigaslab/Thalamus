@@ -4975,7 +4975,7 @@
     "Remote Executor": false,
     "Processes": [
       {
-        "Command": "reset-cameras",
+        "Command": "bash -c 'reset-cameras || { echo \"reset-cameras failed; retrying in 3s...\"; sleep 3; reset-cameras; }'",
         "Critial (Crash on Failure)": true,
         "Wait For Exit": true
       },

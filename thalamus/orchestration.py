@@ -141,7 +141,7 @@ class Orchestrator:
         # A one-shot (Wait For Exit) process is expected to end; only a
         # nonzero exit is a failure.
         if self.running and required and (proc.returncode != 0 or not one_shot):
-          raise RuntimeError(f'Critial process ended: {command}')
+          raise RuntimeError(f'Critial process ended with code={proc.returncode}: {command}')
         return
       text = data.decode().rstrip()
       LOGGER.info(text)
