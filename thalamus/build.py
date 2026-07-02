@@ -268,7 +268,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
       parents = [p.name for p in path.parents]
       is_dir = not path.is_file()
       in_ignored_dir = any(d in ("__pycache__", '.vs') for d in parents)
-      has_ignored_suffix = path.suffix not in ('.py', '.pyi', '.vert', '.proto', '.comp', '.frag', '.exe', '.h')
+      has_ignored_suffix = path.suffix not in ('.py', '.pyi', '.vert', '.proto', '.comp', '.frag', '.exe', '.h', '.wav')
       is_native_executable = path.stem == 'native'
       is_crashpad_handler = path.stem == 'crashpad_handler'
       is_dotnet_file = "dotnet" in parents
