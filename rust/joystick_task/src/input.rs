@@ -37,13 +37,21 @@ impl JoystickState {
         *self.latest.load_full()
     }
 
-    fn set(&self, xy: (f64, f64)) {
+    pub(crate) fn set(&self, xy: (f64, f64)) {
         self.latest.store(Arc::new(xy));
     }
 }
 
+/// Slice `data` by a span's begin/end, clamped (shared with control::pump_input).
+pub(crate) fn span_slice<'a>(data: &'a [f64], span: &crate::proto::thalamus::Span) -> &'a [f64] {
+    slice(data, span.begin, span.end)
+}
+
 /// Extract the latest (X, Y) from one AnalogResponse, or None if it carries no
 /// usable sample. Pure function — unit-tested against the Python parsing rules.
+/// (Superseded by control::pump_input for the trial path, which also logs every
+/// sample; kept for the tests and simple consumers.)
+#[allow(dead_code)]
 pub fn parse_xy(msg: &AnalogResponse) -> Option<(f64, f64)> {
     if msg.spans.len() >= 2 {
         let xs = &msg.spans[0];
@@ -73,7 +81,9 @@ fn slice(data: &[f64], begin: u32, end: u32) -> &[f64] {
     }
 }
 
-/// Spawn the reader task. Returns the shared `JoystickState` the loop reads.
+/// Spawn a latest-only reader task (no behav_result sample logging — the trial
+/// path uses control::pump_input instead).
+#[allow(dead_code)]
 pub fn spawn_reader(mut stream: tonic::Streaming<AnalogResponse>) -> JoystickState {
     let state = JoystickState::default();
     let out = state.clone();

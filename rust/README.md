@@ -68,17 +68,32 @@ The first build intentionally excludes the render stack (winit/wgpu deps are
 commented out in `Cargo.toml`) so it is fast and cross-platform. `cargo test`
 exercises the machine-independent foundation and validates the proto codegen.
 
-## Run (once M3/M4 land)
+## Run
+
+The executor is auto-spawned by task_controller's Orchestration
+(`eevee.json` `Orchestration.Processes` runs the release binary with
+`--thalamus http://127.0.0.1:50050`; stdout lands in the thalamus terminal,
+process is killed on shutdown, non-critical so an executor crash fails trials
+loudly but does not end the session). So the normal flow is just:
 
 ```sh
-# 1. Thalamus core running on :50050 (as usual).
-# 2. Start the executor (long-lived):
-cargo run --release -- --thalamus http://localhost:50050 --listen 127.0.0.1:50060
-# 3. In task_controller, select the "Joystick Intro (Rust)" task.
+# 1. Build once after any Rust change:
+cd rust/joystick_task && cargo build --release
+# 2. Start thalamus as usual (spawns core + executor):
+python -m thalamus.task_controller --config eevee.json
+# 3. Select the "Joystick Intro (Rust)" task.
 ```
 
-Eventually `main_impl.py` should spawn the executor the way it spawns the native
-binary (main_impl.py:170), passing `--thalamus`/`--listen`.
+To run the executor by hand instead (debugging), remove/disable the
+Orchestration entry and:
+
+```sh
+cargo run --release -- --thalamus http://127.0.0.1:50050 --listen 127.0.0.1:50060
+```
+
+Note: only one executor can bind :50060 — if an orphaned one is still running,
+the spawned one exits immediately (check the thalamus log). The executor grabs
+monitor 1 fullscreen (override-redirect) from startup, showing the idle scene.
 
 ## Wiring in (when ready)
 
@@ -110,11 +125,17 @@ binary (main_impl.py:170), passing `--thalamus`/`--listen`.
 | # | Goal | Status |
 |---|------|--------|
 | M0 | Baseline: record current ~50 ms photodiode distribution | rig task |
-| M1 | Latency floor: wgpu fullscreen photodiode square, measure command->photon | not started (needs rig) |
-| M2 | Input: consume analog stream, render tracking cursor | foundation ready (`grpc.rs`, `input.rs`) |
-| M3 | State machine + logging + reward: port joystick_intro.py:2881-3235 | `state.rs`/`events.rs` stubbed |
-| M4 | Control handoff + operator mirror | `control.rs`/`mirror.rs` scaffolded |
-| M5 | Parity validation vs Python (capture diff) | not started |
+| M1 | Latency floor: wgpu fullscreen photodiode square, measure command->photon | DONE 2026-07-01 — paced fifo p50 11.3 ms (see below) |
+| M2 | Input: consume analog stream, render tracking cursor | DONE (control.rs pump_input + render loop) |
+| M3 | State machine + logging + reward: port joystick_intro.py:2881-3235 | DONE 2026-07-01 — full port, 29 unit tests, e2e smoke green |
+| M4 | Control handoff + operator mirror | DONE 2026-07-02 — mirror streams shape-list re-rasterized JPEGs @30 Hz; delegate paints them on the operator Canvas |
+| M5 | Parity validation vs Python (capture diff) | waived 2026-07-02 — full live training session ran clean; formal capture diff skipped by choice |
+
+**Live production result (2026-07-02):** a full training session through the
+Rust path measured a **median command-to-photon photodiode response of
+16.8 ms**, vs the ~50 ms median of the Python/Qt path — a ~3x improvement,
+consistent with the M1 spike (11.3 ms p50 for bare rendering; the extra ~5 ms
+is the full state machine + input path in the loop).
 
 ## Foundation that is DONE and testable now
 
@@ -127,14 +148,161 @@ binary (main_impl.py:170), passing `--thalamus`/`--listen`.
 - `events.rs`: `behav_result` struct model with key-order/`null` parity rules.
 - `control.rs` + `main.rs`: RustTask server hosting + config parse + clock seed.
 
+## M1 spike usage (code done 2026-07-01; measurement is a rig task)
+
+Toolchain is installed on the Linux rig (rustup stable + protoc 29.3 in
+`~/.local/bin`); `cargo test` green (10/10). The spike renders fullscreen,
+toggles the photodiode square (70x70, same bottom-right spot/margins as the
+Python task) every N frames, and writes each toggle's command timestamp
+(CLOCK_MONOTONIC ns) to CSV:
+
+```sh
+cargo run --release -- spike --present-mode fifo --seconds 30 --csv fifo.csv
+# repeat with --present-mode mailbox / immediate; Esc or q quits early.
+# --monitor N picks the subject display; --windowed for debugging.
+```
+
+Command-to-photon is computed AUTOMATICALLY when the Thalamus core is running:
+the spike streams the photodiode channel (NIDAQ "Analog in" Dev1/ai1, exposed
+as "Node 5"/"Photodiode" — override with --diode-node/--diode-channel) during
+the run, detects edges, and prints the latency distribution at exit, plus a
+`<name>_latency.csv`. This works because `AnalogResponse.time` is C++
+steady_clock (grpc_impl.cpp:353) == CLOCK_MONOTONIC == the spike's `t_cmd_ns`
+domain; diode sampling is 1 kHz so keep the toggle period >= 50 ms (the
+analyzer refuses shorter). For `immediate` runs use `--toggle-frames` big
+enough (e.g. 2000 at ~4000 fps). Without the core, runs degrade to CSV-only
+(`--no-diode` silences the warning).
+
+Rig facts: subject display = HDMI-0, 1920x1080 @ 240 Hz = `--monitor 1`
+(`--list-monitors` prints the table). Windowed smoke test: 239.67 fps,
+frame-interval p50 4.166 ms — vsync-locked. `immediate` fullscreen ran
+~4000 fps, so the GPU pipeline is far from the bottleneck.
+
+### M1 RESULTS (measured 2026-07-01, photodiode via NIDAQ @1 kHz)
+
+| configuration | p50 ms | p90 ms | max ms | what it isolates |
+|---|---|---|---|---|
+| Python/Qt task (M0, doc baseline) | ~50 | | | current production path |
+| fifo, WM fullscreen (composited) | 40.3 | 48.3 | 53.0 | Mutter X11 composites ALL monitors on the 60 Hz primary's clock |
+| fifo, `--override-redirect` | 29.7 | 31.7 | 32.3 | compositor bypassed; NVIDIA fifo queue ~5 frames deep remains |
+| fifo, o-r + `--pace-margin-ms 1.5` | **11.3** | 12.3 | 16.5 | production candidate: vsync, no tearing, queue ~1 |
+| immediate, `--override-redirect` | 8.6 | 11.2 | 12.5 | the physical floor (scanline + LCD + monitor lag) |
+
+Hard-won lessons baked into the code (spike.rs):
+- `_NET_WM_BYPASS_COMPOSITOR=1` alone did NOT make Mutter unredirect the
+  wgpu window; a `--override-redirect` (unmanaged) window did. The production
+  M3 window must be override-redirect (keyboard input then needs explicit
+  handling — winit gets no focus).
+- NVIDIA X11 Vulkan ignores `desired_maximum_frame_latency=1`; free-running
+  fifo saturates a ~5-frame queue (~20 ms). Frame pacing must (a) stamp
+  decisions AFTER the blocking acquire, (b) one-shot drain the queue (a fifo
+  queue drains 1/vblank — pacing alone never shrinks it), (c) roll the sleep
+  over to the NEXT vblank when already inside the margin window, else it
+  submits twice per refresh and silently refills the queue.
+- `mailbox` is not supported by this driver (fifo/fifoRelaxed/immediate only).
+- LCD asymmetry: black->white ~2 ms slower than white->black at mid-swing.
+- Remaining ~8 ms floor is display physics + ~1-2 ms diode-chain uncertainty,
+  not software.
+
+## M3 status (DONE 2026-07-01)
+
+The full trial pipeline works end to end:
+
+- `state.rs`: faithful port of run() @2034-3246 — cursor integration (direct/
+  cumulative/zero-drift/influence/operator latch), ITI + center gate, hold/
+  entry/timeout/ignored-idle, free-play (bout/first-touch/sustain rewards),
+  touch fail, streak + bonus, all ~19 append_event sites. NOT ported: the
+  success pop/particle stall (@3167-3188, animations-off by default) and
+  on-screen text (glyphon lands with the M4 mirror).
+- `events.rs`: behav_result with Python-exact key order (verified by unit test
+  and e2e), mode-dependent key presence (free-play block, finalize tail).
+- `run_trial` is now BIDIRECTIONAL: first message TrialConfig, then
+  OperatorEvents (arrow keys / free-play end / touch) forwarded by the
+  delegate; TrialEvent gained config_updates_json (_streak_count,
+  _last_cursor_x/y, _operator_keys_pressed persistence).
+- Executor threading: main thread = winit render loop (override-redirect,
+  paced fifo — the M1 recipe); background tokio runtime = tonic server +
+  Thalamus client (input pump / BehavState log / reward injection).
+- Python: stubs generated (`thalamus/rust_task_pb2*`), delegate rewritten
+  (operator-event forwarding, sounds on success/fail markers, config updates),
+  REGISTERED in tasks.py as "Joystick Intro (Rust)".
+- Trial start latency ~4 ms. Gotcha found: the C++ core takes ~1 s to answer
+  an analog subscribe, so the executor must never await stream-open before
+  starting the trial (Python never awaited it either). Use 127.0.0.1 rather
+  than localhost in endpoints to dodge a 1 s IPv6 fallback in gRPC.
+- Live-session bug pair (2026-07-02): (a) tonic client-streaming calls (log /
+  inject_analog) resolve only when the request stream ENDS, so awaiting them
+  inline deadlocked the effects task before a single message went out — no
+  BehavState logs or reward pulses reached the core while trials otherwise ran
+  normally. grpc.rs now spawns the RPC future (Python-equivalent un-awaited
+  `stub.inject_analog(queue)`) and reopens broken streams. (b) The delegate's
+  request iterator must be an IterableQueue, not an async generator — grpc.aio
+  tears the iterator down from another task at RPC end, raising "aclose():
+  asynchronous generator is already running" and killing task_controller (and
+  the core it spawned).
+- Real-config gotcha (crashed the first live attempt): the Qt Form UI stores
+  int-like values as floats ("reward_channel": 2.0), which Python reads
+  through int() casts. config.rs now parses ALL numeric/bool fields leniently
+  (mod lenient) with a regression test against the eevee.json shape. Related:
+  when the executor rejects a config, a gRPC client-side race can mask the
+  status as INTERNAL — the executor's terminal logs the real reason, and the
+  delegate now fails the trial instead of crashing task_controller.
+
+Run it: `cargo run --release -- --thalamus http://127.0.0.1:50050` (defaults:
+subject display --monitor 1, paced fifo). Then select "Joystick Intro (Rust)"
+in task_controller.
+
+## M4 mirror (DONE 2026-07-02)
+
+No GPU readback: the render thread publishes each frame's SHAPE LIST (a few
+hundred bytes) into a watch channel; frames() re-rasterizes it on the CPU at
+mirror resolution (mirror.rs, coverage rules identical to the WGSL) and
+streams JPEGs (pure-Rust jpeg-encoder; 480x270 @ 30 Hz measured, ~2.7 KB/frame
+idle). The subject present path is untouched. The delegate opens the stream
+per trial and paints frames aspect-fit on the operator Canvas. Between trials
+the mirror correctly shows the idle scene (black + dark photodiode square).
+HUD text (target name / next target / reward channel) is still TODO.
+
 ## Next actions for a future session
 
-1. On the rig: install toolchain + protoc, `cargo test` (green = codegen + foundation OK).
-2. M1 spike: uncomment render deps, implement `render/mod.rs` minimal window +
-   photodiode square, measure the latency floor across present modes and X11 vs
-   Wayland. This number drives everything else.
-3. M3: port the state machine into `state.rs`, filling `events.rs` per the ~19
-   `append_event` call sites, wiring `grpc`/`input`/`reward`.
-4. M4/M5: mirror + golden-config parity tests (diff capture files with
-   `thalamus/record_reader.py`).
-```
+Nothing blocking — the patch is in production (see live result above; the
+executor is auto-spawned via Orchestration). Deliberately deferred:
+
+1. Operator HUD text (target name/size/reward-channel/next-target) and
+   subject-side status text (glyphon) — dropped 2026-07-02, operator doesn't
+   need them.
+2. Formal M5 capture diff with thalamus/record_reader.py — waived; the parity
+   unit tests in events.rs/state.rs plus a clean live session were judged
+   sufficient. Revisit if analysis scripts flag anything odd in the records.
+
+## Future avenue: built-in remote-executor seam (evaluated 2026-07-02, deferred)
+
+Thalamus already has a generic executor seam, used by cajigaslab's
+cpp-executor / godot-executor (and py_executor): start task_controller with
+`--remote-executor`, and the executor process dials task_controller's gRPC
+port (50051) and opens the bidi `execution` stream — per trial it receives
+`TaskConfig{body: <task_config json>}` and replies `TaskResult{success: bool}`
+(proto/task_controller.proto; served by task_controller/servicer.py:77-97;
+dispatched at task_context.py:696-722). We considered restructuring this Rust
+executor to use that seam instead of the custom RustTask delegate and decided
+against it FOR THIS RIG, because today the seam:
+
+- returns only `bool success` — no channel for behav_result, BehavState
+  markers, or config_updates (streak counts), so trial_summ in the capture
+  file loses the behavioral record; TRIAL START/FINISHED are also only logged
+  in the widget branch (task_context.py:701-703) and would vanish;
+- requires `--remote-executor`, which skips creating the subject
+  Window/Canvas (main_impl.py:198-213) — no operator mirror surface, no
+  arrow-key/end-key/touch forwarding, no sounds;
+- has a single executor slot that receives EVERY queued task type, so a mixed
+  queue (Rust joystick_intro + Qt tasks) is impossible;
+- Python's reward-schedule resolution (context.get_reward) is bypassed and
+  would need reimplementing in the executor.
+
+Revisit when: the rig moves to a dedicated headless subject machine running
+ALL tasks in one executor (task_controller headless, operator UI elsewhere).
+Prerequisite: extend the upstream TaskController proto so TaskResult carries
+behav_result/markers/config_updates. Worth borrowing sooner regardless: the
+executor-dials-controller direction (free reconnection; Python never needs to
+know the executor address) could be adopted by the RustTask proto without
+giving up the rich delegate channel.

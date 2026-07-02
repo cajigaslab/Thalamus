@@ -21,10 +21,19 @@ use crate::proto::thalamus::{
 
 /// Connected Thalamus client plus the long-lived sender halves of the streaming
 /// RPCs we keep open for the duration of the process.
+///
+/// CRITICAL pattern note: tonic's client-streaming calls (`log`,
+/// `inject_analog`) resolve only when the REQUEST STREAM ENDS — awaiting them
+/// inline deadlocks a long-lived stream before a single message is sent (this
+/// silently ate every BehavState log and reward pulse of the first live
+/// session). Python fires them without awaiting (`self.stub.inject_analog(
+/// queue)`, task_context.py:331); we do the equivalent by spawning the call
+/// onto a background task and feeding it through the channel sender.
 pub struct ThalamusConn {
     client: ThalamusClient<Channel>,
     log_tx: Option<mpsc::Sender<Text>>,
-    inject_tx: Option<mpsc::Sender<InjectAnalogRequest>>,
+    /// (node name, sender) — the stream is node-scoped by its first message.
+    inject: Option<(String, mpsc::Sender<InjectAnalogRequest>)>,
 }
 
 impl ThalamusConn {
@@ -36,8 +45,19 @@ impl ThalamusConn {
         Ok(Self {
             client,
             log_tx: None,
-            inject_tx: None,
+            inject: None,
         })
+    }
+
+    /// A second handle over the same multiplexed HTTP/2 channel (fresh stream
+    /// senders). Used to open the analog stream concurrently with log/reward
+    /// traffic owned by another task.
+    pub fn clone_conn(&self) -> ThalamusConn {
+        ThalamusConn {
+            client: self.client.clone(),
+            log_tx: None,
+            inject: None,
+        }
     }
 
     /// Open the analog input stream for a node's X/Y channels.
@@ -46,13 +66,22 @@ impl ThalamusConn {
         &mut self,
         node_name: &str,
     ) -> anyhow::Result<tonic::Streaming<AnalogResponse>> {
+        self.analog_channels(node_name, &["X", "Y"]).await
+    }
+
+    /// Open an analog stream for arbitrary named channels of a node.
+    pub async fn analog_channels(
+        &mut self,
+        node_name: &str,
+        channel_names: &[&str],
+    ) -> anyhow::Result<tonic::Streaming<AnalogResponse>> {
         let req = AnalogRequest {
             node: Some(NodeSelector {
                 name: node_name.to_string(),
                 r#type: String::new(),
             }),
             channels: vec![],
-            channel_names: vec!["X".to_string(), "Y".to_string()],
+            channel_names: channel_names.iter().map(|s| s.to_string()).collect(),
         };
         let stream = self
             .client
@@ -66,59 +95,75 @@ impl ThalamusConn {
     /// Lazily open the `log(stream Text)` RPC and return the sender.
     /// All BehavState markers go here; they land in the storage capture file with
     /// an empty `node` field (storage2_node.cpp on_log), byte-identical to Python.
-    pub async fn log_sender(&mut self) -> anyhow::Result<mpsc::Sender<Text>> {
+    ///
+    /// The RPC future is spawned, NOT awaited (see the struct docs): messages
+    /// flow as they are queued, and the future only resolves when the stream
+    /// closes or errors.
+    fn log_sender(&mut self) -> mpsc::Sender<Text> {
         if let Some(tx) = &self.log_tx {
-            return Ok(tx.clone());
+            if !tx.is_closed() {
+                return tx.clone();
+            }
+            // Stream died (core restart, transport error): reopen.
+            self.log_tx = None;
         }
         let (tx, rx) = mpsc::channel::<Text>(256);
         let outbound = ReceiverStream::new(rx);
-        // Fire-and-forget: the server consumes until we drop the sender.
-        self.client.log(outbound).await.context("opening log stream")?;
+        let mut client = self.client.clone();
+        tokio::spawn(async move {
+            if let Err(status) = client.log(outbound).await {
+                tracing::warn!(%status, "log stream terminated");
+            }
+        });
         self.log_tx = Some(tx.clone());
-        Ok(tx)
+        tx
     }
 
     /// Send a single behavioral log line already stamped in the Python perf_counter
     /// domain (see clock.rs). `text` is e.g. "BehavState=start_on".
     pub async fn log(&mut self, text: String, time_python_ns: u64) -> anyhow::Result<()> {
-        let tx = self.log_sender().await?;
-        tx.send(Text {
+        let message = Text {
             text,
             time: time_python_ns,
             remote_time: 0,
             redirect: String::new(),
-        })
-        .await
-        .context("queueing log Text")?;
+        };
+        let tx = self.log_sender();
+        if let Err(e) = tx.send(message).await {
+            // The stream broke since we cached it; reopen once and retry.
+            self.log_tx = None;
+            let tx = self.log_sender();
+            tx.send(e.0).await.context("log stream unavailable")?;
+        }
         Ok(())
     }
 
     /// Lazily open the `inject_analog(stream InjectAnalogRequest)` RPC targeting a
-    /// node. The FIRST message must carry the node name (task_context.py:333); we
-    /// send it here on open.
-    pub async fn inject_sender(
-        &mut self,
-        node_name: &str,
-    ) -> anyhow::Result<mpsc::Sender<InjectAnalogRequest>> {
-        if let Some(tx) = &self.inject_tx {
-            return Ok(tx.clone());
+    /// node. The FIRST message must carry the node name (task_context.py:331-334,
+    /// which keeps one stream per node fed by an un-awaited queue — mirrored here).
+    fn inject_sender(&mut self, node_name: &str) -> mpsc::Sender<InjectAnalogRequest> {
+        if let Some((cached_node, tx)) = &self.inject {
+            if cached_node == node_name && !tx.is_closed() {
+                return tx.clone();
+            }
+            self.inject = None;
         }
         let (tx, rx) = mpsc::channel::<InjectAnalogRequest>(64);
         let outbound = ReceiverStream::new(rx);
-        self.client
-            .inject_analog(outbound)
-            .await
-            .context("opening inject_analog stream")?;
-        // First message names the node.
-        tx.send(InjectAnalogRequest {
+        let mut client = self.client.clone();
+        tokio::spawn(async move {
+            if let Err(status) = client.inject_analog(outbound).await {
+                tracing::warn!(%status, "inject_analog stream terminated");
+            }
+        });
+        // First message names the node. try_send cannot fail on a fresh channel.
+        let _ = tx.try_send(InjectAnalogRequest {
             body: Some(thalamus::inject_analog_request::Body::Node(
                 node_name.to_string(),
             )),
-        })
-        .await
-        .context("sending inject_analog node header")?;
-        self.inject_tx = Some(tx.clone());
-        Ok(tx)
+        });
+        self.inject = Some((node_name.to_string(), tx.clone()));
+        tx
     }
 
     /// Inject one analog signal payload (e.g. a reward pulse) to a node.
@@ -127,12 +172,15 @@ impl ThalamusConn {
         node_name: &str,
         signal: AnalogResponse,
     ) -> anyhow::Result<()> {
-        let tx = self.inject_sender(node_name).await?;
-        tx.send(InjectAnalogRequest {
+        let message = InjectAnalogRequest {
             body: Some(thalamus::inject_analog_request::Body::Signal(signal)),
-        })
-        .await
-        .context("queueing inject_analog signal")?;
+        };
+        let tx = self.inject_sender(node_name);
+        if let Err(e) = tx.send(message).await {
+            self.inject = None;
+            let tx = self.inject_sender(node_name);
+            tx.send(e.0).await.context("inject_analog stream unavailable")?;
+        }
         Ok(())
     }
 }

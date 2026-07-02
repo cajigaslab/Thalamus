@@ -30,16 +30,19 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4", features = ["derive"] }
 
-# --- rendering + operator mirror (M1+; kept out of the first build on purpose) ---
-# Uncomment when starting M1 (latency-floor spike). They pull a large native
-# dependency tree (Vulkan/X11/Wayland) that is irrelevant to the foundation and
-# only builds cleanly on the Linux rig. See rust/README.md "Milestones".
-# winit = "0.30"
-# wgpu = "22"
-# pollster = "0.3"
-# bytemuck = { version = "1", features = ["derive"] }
+# --- rendering (M1 latency-floor spike) ---
+winit = "0.30"
+wgpu = "22"
+pollster = "0.3"
+bytemuck = { version = "1", features = ["derive"] }
+libc = "0.2"          # clock_gettime(CLOCK_MONOTONIC) absolute timestamps for photodiode correlation
+raw-window-handle = "0.6"  # X11 window id for the compositor-bypass hint
+
+# --- operator mirror (M4) ---
+jpeg-encoder = "0.6"  # pure-Rust JPEG encode for the operator mirror (no system libjpeg dep)
+
+# --- M4 extras (later) ---
 # glyphon = "0.6"      # HUD text
-# turbojpeg = "1"      # operator-mirror frame encode
 
 [build-dependencies]
 tonic-build = "0.12"

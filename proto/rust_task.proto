@@ -19,13 +19,46 @@ syntax = "proto3";
 package rust_task_grpc;
 
 service RustTask {
-  // Run exactly one trial. The stream returns behavioral events as they happen
-  // and terminates with a `success` event.
-  rpc run_trial(TrialConfig) returns (stream TrialEvent) {}
+  // Run exactly one trial. The FIRST request message must carry `config`;
+  // subsequent messages forward operator-side inputs (keyboard override,
+  // free-play end key, touch events) that only the Python widget can observe.
+  // The response stream returns behavioral events as they happen and
+  // terminates with a `success` event. Client-side cancellation (the operator
+  // stopping the task) aborts the trial.
+  rpc run_trial(stream TrialRequest) returns (stream TrialEvent) {}
 
   // Operator live-mirror: downscaled JPEG frames of the subject display (~30 Hz).
   // Runs on a separate channel so it never touches the subject present path.
   rpc frames(FrameRequest) returns (stream MirrorFrame) {}
+}
+
+message TrialRequest {
+  oneof body {
+    TrialConfig config = 1;     // required first message
+    OperatorEvent operator = 2; // any time after
+  }
+}
+
+// Operator-side inputs observed by the Python widget and forwarded live.
+// Mirrors joystick_intro.py's key handlers (@2227-2267) and touch_handler
+// (@2269): arrow-key cursor override, the free-play end key, touch input.
+message OperatorEvent {
+  oneof body {
+    ArrowKey arrow = 1;     // operator keyboard joystick override
+    bool end_requested = 2; // free_play_end_key released (true) / cleared (false)
+    Touch touch = 3;        // touch screen contact (fail_on_touch_input)
+  }
+}
+
+message ArrowKey {
+  // One of "left" | "right" | "up" | "down".
+  string key = 1;
+  bool pressed = 2;
+}
+
+message Touch {
+  int32 x = 1;
+  int32 y = 2;
 }
 
 message TrialConfig {
@@ -60,6 +93,12 @@ message TrialEvent {
 
     // Terminal event: trial outcome. Delegate maps this to TaskResult(success).
     bool success = 3;
+
+    // Cross-trial bookkeeping the Python task persists by mutating task_config
+    // (_streak_count @3155, _last_cursor_x/y @3237, _operator_keys_pressed
+    // @2048). JSON object of key -> value; the delegate applies each entry to
+    // task_config before returning. Sent once, before `success`.
+    string config_updates_json = 4;
   }
 }
 

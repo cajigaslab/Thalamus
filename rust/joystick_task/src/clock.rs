@@ -18,6 +18,15 @@
 
 use std::time::Instant;
 
+/// Absolute CLOCK_MONOTONIC ns — same domain as C++ steady_clock and (on
+/// Linux) Python perf_counter. Used where no per-trial ClockMap is available
+/// (e.g. mirror frame timestamps).
+pub fn monotonic_now_ns() -> u64 {
+    let mut ts = libc::timespec { tv_sec: 0, tv_nsec: 0 };
+    unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut ts) };
+    (ts.tv_sec as u64) * 1_000_000_000 + ts.tv_nsec as u64
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct ClockMap {
     /// Local monotonic reference captured when the seed arrived.
@@ -43,7 +52,8 @@ impl ClockMap {
     }
 
     /// Map an arbitrary local `Instant` into the Python perf_counter ns domain.
-    /// `at` must be >= the seed instant.
+    /// `at` must be >= the seed instant. (Reserved for the M4 min-RTT refinement.)
+    #[allow(dead_code)]
     pub fn to_python_ns(&self, at: Instant) -> u64 {
         let elapsed = at.saturating_duration_since(self.local_ref).as_nanos() as u64;
         self.python_ref_ns.saturating_add(elapsed)
