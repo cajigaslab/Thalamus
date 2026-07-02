@@ -149,6 +149,7 @@ class TaskResult(typing.NamedTuple):
   '''
   success: bool
   done: bool = True
+  cancelled: bool = False
 
 class TaskContextProtocol(metaclass=abc.ABCMeta):
   """
