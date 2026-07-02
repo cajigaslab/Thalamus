@@ -4975,6 +4975,11 @@
     "Remote Executor": false,
     "Processes": [
       {
+        "Command": "reset-cameras",
+        "Critial (Crash on Failure)": true,
+        "Wait For Exit": true
+      },
+      {
         "Command": "python /home/bijanadmin/bowser/Thalamus/fiducial.py",
         "Critial (Crash on Failure)": true
       },

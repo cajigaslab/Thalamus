@@ -32,7 +32,8 @@ class OrchestrationDialog(QWidget):
         return
       self.processes.append({
         'Command': '',
-        'Critial (Crash on Failure)': False
+        'Critial (Crash on Failure)': False,
+        'Wait For Exit': False
       })
     self.add_button = QPushButton('Add')
     self.add_button.clicked.connect(on_add)
@@ -62,7 +63,7 @@ class OrchestrationDialog(QWidget):
 
   def on_change(self, action, key, value):
     if key == 'Processes':
-      model = TreeObservableCollectionModel(value, key_column="#", columns=['Command', 'Critial (Crash on Failure)'], show_extra_values=False, is_editable=lambda c, k: True)
+      model = TreeObservableCollectionModel(value, key_column="#", columns=['Command', 'Critial (Crash on Failure)', 'Wait For Exit'], show_extra_values=False, is_editable=lambda c, k: True)
       self.tree.setModel(model)
     elif key == 'Remote Executor':
       if self.remote_executor_checkbox.isChecked() != value:
@@ -79,6 +80,11 @@ class Orchestrator:
     self.running = True
     for process in processes:
       required = process['Critial (Crash on Failure)']
+      # One-shot setup command (e.g. reset-cameras): block here until it
+      # finishes so later processes (and the session) start from a clean
+      # state. Critical + Wait For Exit means "crash on nonzero exit" rather
+      # than "crash when it ends".
+      wait_for_exit = process.get('Wait For Exit', False)
       command = process['Command']
       tokens = oslex.split(command)
       if not tokens:
@@ -92,7 +98,12 @@ class Orchestrator:
       proc = await asyncio.create_subprocess_exec(*tokens, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, env=env)
       LOGGER.info('started ' + command)
       self.procs.append(proc)
-      self.tasks.append(create_task_with_exc_handling(self.__proc_manager(proc, command, required)))
+      task = create_task_with_exc_handling(self.__proc_manager(proc, command, required, wait_for_exit))
+      self.tasks.append(task)
+      if wait_for_exit:
+        # Don't re-raise here; a critical failure already reaches the loop
+        # exception handler through create_task_with_exc_handling.
+        await asyncio.wait([task])
 
   async def stop(self):
     self.running = False
@@ -119,7 +130,7 @@ class Orchestrator:
     LOGGER.info('ochestration terminated')
 
 
-  async def __proc_manager(self, proc: asyncio.subprocess.Process, command: str, required: bool):
+  async def __proc_manager(self, proc: asyncio.subprocess.Process, command: str, required: bool, one_shot: bool = False):
     assert proc.stdout is not None
     while True:
       data = await proc.stdout.readline()
@@ -127,7 +138,9 @@ class Orchestrator:
         LOGGER.info('Process stdout reached EOF: %s', command)
         await proc.wait()
         LOGGER.info('Process ended with code=%d: %s', proc.returncode, command)
-        if self.running and required:
+        # A one-shot (Wait For Exit) process is expected to end; only a
+        # nonzero exit is a failure.
+        if self.running and required and (proc.returncode != 0 or not one_shot):
           raise RuntimeError(f'Critial process ended: {command}')
         return
       text = data.decode().rstrip()
