@@ -95,6 +95,19 @@ Note: only one executor can bind :50060 — if an orphaned one is still running,
 the spawned one exits immediately (check the thalamus log). The executor grabs
 monitor 1 fullscreen (override-redirect) from startup, showing the idle scene.
 
+Shutdown (2026-07-02): the executor handles SIGINT/SIGTERM by exiting the
+render loop between frames — window, swapchain, and core connections tear
+down cleanly, with a 2 s hard-exit fallback (main.rs signal task). The
+Orchestrator likewise SIGTERMs before SIGKILLing (orchestration.py). This was
+added after a Ctrl+C of the orchestrated session froze the desktop: journal
+forensics showed kernel/GPU/X all healthy, so the suspect is abrupt
+termination (default SIGINT + orchestrator SIGKILL) mid-frame/mid-stream —
+either the flipped fullscreen surface dying uncleanly or the core wedging on
+abruptly-dropped client streams while Python awaited it with dead Qt windows
+covering the monitors. If a freeze recurs, get in via ssh/TTY (Ctrl+Alt+F3)
+and check for a hung `python -m thalamus.task_controller` / native core
+before rebooting.
+
 ## Wiring in (when ready)
 
 1. Generate the Python stubs. `rust_task` is already registered in

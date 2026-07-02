@@ -99,13 +99,23 @@ class Orchestrator:
     if not self.procs:
       return
 
-    LOGGER.info('Killing procs')
+    # SIGTERM first so processes can clean up (the Rust executor tears down
+    # its fullscreen surface and core connections on SIGTERM; SIGKILL mid-frame
+    # is suspected of wedging the desktop session). SIGKILL only if they
+    # ignore it.
+    LOGGER.info('Terminating procs')
     for proc in self.procs:
       if proc.returncode is None:
-        proc.kill()
+        proc.terminate()
 
     LOGGER.info('Awaiting tasks')
-    await asyncio.wait(self.tasks)
+    done, pending = await asyncio.wait(self.tasks, timeout=5)
+    if pending:
+      LOGGER.warning('%d process(es) ignored SIGTERM; killing', len(pending))
+      for proc in self.procs:
+        if proc.returncode is None:
+          proc.kill()
+      await asyncio.wait(pending)
     LOGGER.info('ochestration terminated')
 
 

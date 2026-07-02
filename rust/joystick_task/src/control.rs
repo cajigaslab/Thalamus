@@ -259,7 +259,7 @@ impl RustTask for RustTaskService {
             .unwrap()
             .send(job)
             .map_err(|_| Status::internal("render thread is gone"))?;
-        let _ = self.wake.lock().unwrap().send_event(Wake);
+        let _ = self.wake.lock().unwrap().send_event(Wake::Job);
 
         Ok(Response::new(
             Box::pin(UnboundedReceiverStream::new(event_rx)) as TrialEventStream,

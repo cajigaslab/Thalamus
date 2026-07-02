@@ -575,7 +575,15 @@ impl Gpu {
 
 /// Wake-up message for the winit user-event channel.
 #[derive(Debug)]
-pub struct Wake;
+pub enum Wake {
+    /// A trial job was queued; pick it up on the next frame.
+    Job,
+    /// SIGINT/SIGTERM received; exit the event loop between frames so the
+    /// X window, swapchain, and core gRPC connections tear down cleanly
+    /// (abrupt termination mid-flip is suspected of wedging the session,
+    /// 2026-07-02 Ctrl+C freeze).
+    Shutdown,
+}
 
 pub struct Executor {
     args: ExecutorArgs,
@@ -804,10 +812,18 @@ impl ApplicationHandler<Wake> for Executor {
         }
     }
 
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, _event: Wake) {
-        // A job arrived; the continuous redraw loop will pick it up.
-        if let Some(w) = &self.window {
-            w.request_redraw();
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: Wake) {
+        match event {
+            Wake::Job => {
+                // A job arrived; the continuous redraw loop will pick it up.
+                if let Some(w) = &self.window {
+                    w.request_redraw();
+                }
+            }
+            Wake::Shutdown => {
+                tracing::info!("shutdown signal received; exiting render loop");
+                event_loop.exit();
+            }
         }
     }
 

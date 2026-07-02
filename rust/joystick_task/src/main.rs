@@ -102,6 +102,7 @@ fn main() -> anyhow::Result<()> {
 
     let endpoint = args.thalamus.clone();
     tracing::info!(thalamus = %endpoint, listen = %args.listen, "starting RustTask executor");
+    let signal_proxy = proxy.clone();
     std::thread::Builder::new()
         .name("grpc-server".into())
         .spawn(move || {
@@ -109,6 +110,28 @@ fn main() -> anyhow::Result<()> {
                 .enable_all()
                 .build()
                 .expect("tokio runtime");
+            // Graceful shutdown: Ctrl+C in the task_controller terminal delivers
+            // SIGINT to this whole process group, and the Orchestration pipeline
+            // stops us with SIGTERM. Rust's default disposition would terminate
+            // the process abruptly mid-frame with the fullscreen surface still
+            // flipped; instead ask the render loop to exit between frames so the
+            // window, swapchain, and core gRPC connections tear down cleanly.
+            // If the loop doesn't wind down (wedged driver call), hard-exit
+            // after 2 s.
+            rt.spawn(async move {
+                let mut term =
+                    tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                        .expect("SIGTERM handler");
+                tokio::select! {
+                    _ = tokio::signal::ctrl_c() => {}
+                    _ = term.recv() => {}
+                }
+                tracing::info!("signal received; requesting clean shutdown");
+                let _ = signal_proxy.send_event(Wake::Shutdown);
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                tracing::warn!("render loop did not exit within 2 s; forcing exit");
+                std::process::exit(0);
+            });
             let service = RustTaskService {
                 thalamus_endpoint: endpoint,
                 job_tx: std::sync::Mutex::new(job_tx),
