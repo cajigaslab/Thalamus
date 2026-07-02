@@ -23,6 +23,7 @@ message TaskConfig {
 
 message TaskResult {
   bool success = 1;
+  bool cancelled = 2;
 }
 
 message TrialSummary {

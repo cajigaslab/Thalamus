@@ -149,6 +149,7 @@ class TaskResult(typing.NamedTuple):
   '''
   success: bool
   done: bool = True
+  cancelled: bool = False
 
 class TaskContextProtocol(metaclass=abc.ABCMeta):
   """
@@ -515,11 +516,14 @@ def animate(frequency: int) -> typing.Callable[[AnimateTarget], AnimateTarget]:
   def decorator(func: AnimateTarget) -> AnimateTarget:
     @functools.wraps(func)
     async def wrapper(context: TaskContextProtocol) -> TaskResult:
-      animate_task = asyncio.get_event_loop().create_task(animator(context))
+      is_task_controller = context.get_name() == 'TASK_CONTROLLER'
+      if is_task_controller:
+        animate_task = asyncio.get_event_loop().create_task(animator(context))
       try:
         return await func(context)
       finally:
-        animate_task.cancel()
+        if is_task_controller:
+          animate_task.cancel()
 
     return wrapper
 

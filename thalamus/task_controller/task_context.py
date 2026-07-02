@@ -47,7 +47,7 @@ from ..util import IterableQueue
 
 from .canvas import Canvas
 from ..config import ObservableCollection, ObservableDict
-from .util import create_task_with_exc_handling, TaskContextProtocol, TaskResult
+from .util import create_task_with_exc_handling, TaskContextProtocol, TaskResult, get_sound
 from .servicer import TaskControllerServicer, ExecutorLostError
 
 LOGGER = logging.getLogger(__name__)
@@ -391,6 +391,9 @@ class TaskContext(TaskContextProtocol):
     await stream.requests.put(thalamus_pb2.NodeRequest(json=json.dumps(request), id=request_id))
 
     return await future
+  
+  def get_sound(path: typing.Union[str, pathlib.Path]) -> QSound:
+    return get_sound(path)
 
   async def get_stim_stream(self, name: str):
     queue = self.stim_streams.get(name, None)
@@ -618,7 +621,7 @@ class TaskContext(TaskContextProtocol):
 
     try:
       grpc_result = await self.servicer.get_result()
-      result = TaskResult(grpc_result.success)
+      result = TaskResult(grpc_result.success, cancelled=grpc_result.cancelled)
     except ExecutorLostError:
       LOGGER.error('Task executor disconnected')
       result = TaskResult(False)
@@ -764,6 +767,7 @@ class TaskContext(TaskContextProtocol):
       else:
         try:
           result = await self.__execute_remote_task(self.task_config)
+          was_cancelled = result.cancelled
         except asyncio.CancelledError:
           LOGGER.debug('CANCELLED')
           was_cancelled = True

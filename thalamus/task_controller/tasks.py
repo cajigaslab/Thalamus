@@ -117,3 +117,4 @@ def add_tasks(new_tasks: list[TaskDescription]):
   global DESCRIPTIONS, DESCRIPTIONS_MAP
   DESCRIPTIONS.extend(new_tasks)
   DESCRIPTIONS_MAP = dict((description.code, description) for description in DESCRIPTIONS)
+  return DESCRIPTIONS_MAP 
