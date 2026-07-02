@@ -131,6 +131,11 @@ async def async_main() -> None:
     if 'Running' in node:
       node['Running'] = False
 
+  orchestrator = Orchestrator()
+  orchestration_processes = config['Orchestration']['Processes']
+  setup_processes = [process for process in orchestration_processes if process.get('Wait For Exit', False)]
+  background_processes = [process for process in orchestration_processes if not process.get('Wait For Exit', False)]
+
   cache_manager = CacheManager(config)
 
   server = grpc.aio.server()
@@ -154,6 +159,11 @@ async def async_main() -> None:
   dotnet_filename = pathlib.Path(get_path('thalamus.dotnet', 'dotnet' + ('.exe' if sys.platform == 'win32' else '')))
   bmbi_native_proc = None
   pypipeline_servicer = None
+  if not arguments.no_orchestration:
+    # One-shot setup commands may need exclusive hardware access. Run them
+    # before native Thalamus has a chance to open devices such as cameras.
+    await orchestrator.start(setup_processes)
+
   if arguments.pypipeline:
     pypipeline_server = grpc.aio.server()
     pypipeline_servicer = PipelineServicer()
@@ -181,9 +191,8 @@ async def async_main() -> None:
   await channel.channel_ready()
   stub = thalamus_pb2_grpc.ThalamusStub(channel)
 
-  orchestrator = Orchestrator()
   if not arguments.no_orchestration:
-    await orchestrator.start(config['Orchestration']['Processes'])
+    await orchestrator.start(background_processes)
 
   user_config_path = pathlib.Path.home().joinpath('.task_controller', 'config.yaml')
   if user_config_path.exists():
