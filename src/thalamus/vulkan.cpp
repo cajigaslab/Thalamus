@@ -18,6 +18,23 @@
 
 namespace thalamus {
 
+static std::string device_type_string(uint32_t type) {
+  switch(type) {
+    case VK_PHYSICAL_DEVICE_TYPE_OTHER:
+      return "OTHER";
+    case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
+      return "INTEGRATED";
+    case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
+      return "DISCRETE";
+    case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
+      return "VIRTUAL";
+    case VK_PHYSICAL_DEVICE_TYPE_CPU:
+      return "CPU";
+    default:
+      return "??";
+  }
+}
+
 Vulkan get_vulkan(std::optional<uint32_t> device_id) {
   VkSurfaceKHR surface = nullptr;
   Vulkan result{};
@@ -111,7 +128,7 @@ Vulkan get_vulkan(std::optional<uint32_t> device_id) {
   for(auto p : physical_devices) {
     VkPhysicalDeviceProperties props;
     vkGetPhysicalDeviceProperties(p, &props);
-    THALAMUS_LOG(info) << "ID:" << props.deviceID << "Type:" << props.deviceType << " " << props.deviceName;
+    THALAMUS_LOG(info) << "ID:" << props.deviceID << " Type:" << device_type_string(props.deviceType) << " " << props.deviceName;
     if(device_id) {
       if(*device_id == props.deviceID) {
         physical_device = p;
