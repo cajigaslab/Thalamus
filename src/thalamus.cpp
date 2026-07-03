@@ -16,6 +16,7 @@
 #include <thalamus/plugin.h>
 #include <thalamus/shared_library.hpp>
 #include <thalamus/http_server.hpp>
+#include <thalamus/vulkan.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -281,6 +282,8 @@ int main(int argc, char **argv) {
     }
   }
 
+  auto vulkan = thalamus::get_vulkan(std::nullopt);
+
   boost::asio::io_context io_context;
 
   // QApplication app (argc, argv);
@@ -331,7 +334,7 @@ int main(int argc, char **argv) {
   grpc::ServerBuilder builder;
   builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
   std::unique_ptr<NodeGraphImpl> node_graph(
-      new NodeGraphImpl(nodes, io_context, system_start, steady_start, stub.get(), extensions
+      new NodeGraphImpl(nodes, io_context, system_start, steady_start, stub.get(), extensions, vulkan
 #ifndef _WIN32
                         ,pool_sched_policy_opt, pool_sched_priority_opt
 #endif
@@ -370,7 +373,7 @@ int main(int argc, char **argv) {
     if (!shutdown_success) {
       THALAMUS_LOG(error) << "Clean shutdown taking too long, terminating"
                           << std::endl;
-      std::terminate();
+      //::terminate();
     }
   });
 
@@ -378,6 +381,7 @@ int main(int argc, char **argv) {
   server->Shutdown();
   grpc_thread.join();
   node_graph.reset();
+  destroy_vulkan(vulkan);
 
 #ifdef __clang__
   if (vm.count("trace")) {

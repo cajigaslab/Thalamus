@@ -1376,6 +1376,7 @@ struct NodeGraphImpl::Impl {
   ThreadPool thread_pool;
   thalamus_grpc::Thalamus::Stub* stub;
   std::vector<SharedLibrary>& extension;
+  Vulkan vulkan;
 
   std::map<std::string, INodeFactory *> node_factories;
 
@@ -1389,10 +1390,10 @@ public:
        std::chrono::system_clock::time_point _system_time,
        std::chrono::steady_clock::time_point _steady_time,
        thalamus_grpc::Thalamus::Stub* _stub,
-       std::vector<SharedLibrary>& _extension)
+       std::vector<SharedLibrary>& _extension, Vulkan _vulkan)
       : nodes(_nodes), num_nodes(nodes->size()), io_context(_io_context),
         outer(_outer), system_time(_system_time), steady_time(_steady_time),
-        thread_pool("ThreadPool"), stub(_stub), extension(_extension) {
+        thread_pool("ThreadPool"), stub(_stub), extension(_extension), vulkan(_vulkan) {
 
     ThalamusAPIImpl::cpp_to_c = new std::map<ObservableCollection::Value, ThalamusState*>();
     ThalamusAPIImpl::c_to_cpp = new std::map<ThalamusState*, ObservableCollection::Value>();
@@ -1716,9 +1717,10 @@ NodeGraphImpl::NodeGraphImpl(ObservableListPtr nodes,
                              std::chrono::steady_clock::time_point steady_time,
                              thalamus_grpc::Thalamus::Stub* stub,
                              std::vector<SharedLibrary>& extension,
+                             Vulkan vulkan,
                              std::optional<int> thread_policy,
                              std::optional<int> thread_priority)
-    : impl(new Impl(nodes, io_context, this, system_time, steady_time, stub, extension)) {
+    : impl(new Impl(nodes, io_context, this, system_time, steady_time, stub, extension, vulkan)) {
   impl->nodes->recap();
   impl->thread_pool.start(thread_policy, thread_priority);
 }
@@ -1874,6 +1876,33 @@ ObservableDictPtr NodeGraphImpl::get_node_state(Node* node) {
     }
   }
   THALAMUS_ABORT("Failed to find node.");
+}
+
+VkDevice NodeGraphImpl::get_vulkan_device() {
+  return impl->vulkan.device;
+}
+
+VkInstance NodeGraphImpl::get_vulkan_instance() {
+  return impl->vulkan.instance;
+}
+
+VkPhysicalDevice NodeGraphImpl::get_vulkan_physical_device() {
+  return impl->vulkan.physical_device;
+}
+
+VkQueue NodeGraphImpl::get_vulkan_queue() {
+  return impl->vulkan.queue;
+}
+
+VkCommandPool NodeGraphImpl::create_vulkan_command_pool() {
+  VkCommandPoolCreateInfo cp_ci{};
+  cp_ci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+  cp_ci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+  cp_ci.queueFamilyIndex = impl->vulkan.queue_family_index;
+  VkCommandPool result;
+  auto success = vkCreateCommandPool(impl->vulkan.device, &cp_ci, nullptr, &result);
+  THALAMUS_ASSERT(success == VK_SUCCESS, "vkCreateCommandPool failed");
+  return result;
 }
 
 } // namespace thalamus

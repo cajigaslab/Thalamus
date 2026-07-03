@@ -176,7 +176,7 @@ struct PupilNode::Impl {
     } else if (key_str == "View") {
       if (std::get<bool>(v)) {
         if(!viewer) {
-          viewer = std::make_unique<ImageViewer>();
+          viewer = std::make_unique<ImageViewer>(graph);
         }
       } else {
         viewer.reset();

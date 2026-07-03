@@ -5,13 +5,11 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 #include <vulkan/vulkan.h>
-#include <opencv2/opencv.hpp>
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
 
 #include <thalamus/image_viewer.hpp>
-#include <thalamus/vulkan_instance.hpp>
 #include <thalamus/assert.hpp>
 #include <algorithm>
 #include <cstring>
@@ -87,42 +85,6 @@ static void transitionLayout(VkDevice dev, VkCommandPool pool, VkQueue queue,
   }
   vkCmdPipelineBarrier(cb, src, dst, 0, 0, nullptr, 0, nullptr, 1, &b);
   endOneShot(dev, pool, queue, cb);
-}
-
-// --- Format conversion ---
-
-static cv::Mat toRGBA(ImageNode* node) {
-  auto w = static_cast<int>(node->width());
-  auto h = static_cast<int>(node->height());
-  cv::Mat rgba;
-
-  switch (node->format()) {
-    case ImageNode::Format::Gray: {
-      cv::Mat src(h, w, CV_8UC1, const_cast<unsigned char*>(node->plane(0).data()));
-      cv::cvtColor(src, rgba, cv::COLOR_GRAY2RGBA);
-      break;
-    }
-    case ImageNode::Format::RGB: {
-      cv::Mat src(h, w, CV_8UC3, const_cast<unsigned char*>(node->plane(0).data()));
-      cv::cvtColor(src, rgba, cv::COLOR_RGB2RGBA);
-      break;
-    }
-    case ImageNode::Format::YUYV422: {
-      cv::Mat src(h, w, CV_8UC2, const_cast<unsigned char*>(node->plane(0).data()));
-      cv::cvtColor(src, rgba, cv::COLOR_YUV2RGBA_YUYV);
-      break;
-    }
-    case ImageNode::Format::YUV420P:
-    case ImageNode::Format::YUVJ420P: {
-      cv::Mat yuv(h * 3 / 2, w, CV_8UC1);
-      std::memcpy(yuv.data,                          node->plane(0).data(), static_cast<size_t>(w * h));
-      std::memcpy(yuv.data + w * h,                  node->plane(1).data(), static_cast<size_t>(w * h / 4));
-      std::memcpy(yuv.data + w * h + w * h / 4,      node->plane(2).data(), static_cast<size_t>(w * h / 4));
-      cv::cvtColor(yuv, rgba, cv::COLOR_YUV2RGBA_I420);
-      break;
-    }
-  }
-  return rgba;
 }
 
 // --- Impl ---
@@ -271,7 +233,7 @@ struct ImageViewer::Impl {
   void buildTexture(uint32_t w, uint32_t h) {
     destroyTexture();
     tex_w = w; tex_h = h;
-    VkDeviceSize size = static_cast<VkDeviceSize>(w) * h * 4;
+    VkDeviceSize size = static_cast<VkDeviceSize>(w) * h;
 
     makeBuffer(dev, phys, size,
                VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
@@ -282,7 +244,7 @@ struct ImageViewer::Impl {
 
     VkImageCreateInfo ici{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
     ici.imageType = VK_IMAGE_TYPE_2D;
-    ici.format = VK_FORMAT_R8G8B8A8_UNORM;
+    ici.format = VK_FORMAT_R8_UNORM;
     ici.extent = {w, h, 1};
     ici.mipLevels = 1; ici.arrayLayers = 1;
     ici.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -304,7 +266,9 @@ struct ImageViewer::Impl {
 
     VkImageViewCreateInfo ivCI{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
     ivCI.image = tex_image; ivCI.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    ivCI.format = VK_FORMAT_R8G8B8A8_UNORM;
+    ivCI.format = VK_FORMAT_R8_UNORM;
+    ivCI.components = {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_R,
+                        VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_ONE};
     ivCI.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
     vkCreateImageView(dev, &ivCI, nullptr, &tex_view);
 
@@ -317,12 +281,10 @@ struct ImageViewer::Impl {
     vkUpdateDescriptorSets(dev, 1, &dset, 0, nullptr);
   }
 
-  void uploadTexture(const cv::Mat& rgba) {
-    auto w = static_cast<uint32_t>(rgba.cols);
-    auto h = static_cast<uint32_t>(rgba.rows);
+  void uploadTexture(ImageNode::Plane plane, uint32_t w, uint32_t h) {
     if (w != tex_w || h != tex_h) buildTexture(w, h);
 
-    std::memcpy(stage_mapped, rgba.data, static_cast<size_t>(w) * h * 4);
+    std::memcpy(stage_mapped, plane.data(), static_cast<size_t>(w) * h);
 
     transitionLayout(dev, cmd_pool, queue, tex_image,
                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
@@ -339,9 +301,13 @@ struct ImageViewer::Impl {
 
 // --- Constructor ---
 
-ImageViewer::ImageViewer()
+ImageViewer::ImageViewer(NodeGraph* graph)
     : impl(std::make_unique<Impl>()) {
-  impl->instance = *get_vk_instance();
+  impl->instance = graph->get_vulkan_instance();
+  impl->dev = graph->get_vulkan_device();
+  impl->phys = graph->get_vulkan_physical_device();
+  impl->queue = graph->get_vulkan_queue();
+  impl->cmd_pool = graph->create_vulkan_command_pool();
 
   // SDL window
   if (!SDL_Init(SDL_INIT_VIDEO))
@@ -354,13 +320,6 @@ ImageViewer::ImageViewer()
   if (!SDL_Vulkan_CreateSurface(impl->window, impl->instance, nullptr, &impl->surface))
     THALAMUS_ABORT("%s", SDL_GetError());
 
-  // Physical device
-  uint32_t nPhys = 0;
-  vkEnumeratePhysicalDevices(impl->instance, &nPhys, nullptr);
-  std::vector<VkPhysicalDevice> physDevs(nPhys);
-  vkEnumeratePhysicalDevices(impl->instance, &nPhys, physDevs.data());
-  impl->phys = physDevs[0];
-
   // Surface format
   uint32_t nFmt = 0;
   vkGetPhysicalDeviceSurfaceFormatsKHR(impl->phys, impl->surface, &nFmt, nullptr);
@@ -369,39 +328,6 @@ ImageViewer::ImageViewer()
   impl->surf_fmt = fmts[0];
   for (auto& f : fmts)
     if (f.format == VK_FORMAT_B8G8R8A8_UNORM) { impl->surf_fmt = f; break; }
-
-  // Queue family
-  uint32_t nQF = 0;
-  vkGetPhysicalDeviceQueueFamilyProperties(impl->phys, &nQF, nullptr);
-  std::vector<VkQueueFamilyProperties> qfProps(nQF);
-  vkGetPhysicalDeviceQueueFamilyProperties(impl->phys, &nQF, qfProps.data());
-  for (uint32_t i = 0; i < nQF; i++) {
-    VkBool32 present = VK_FALSE;
-    vkGetPhysicalDeviceSurfaceSupportKHR(impl->phys, i, impl->surface, &present);
-    if ((qfProps[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) && present) {
-      impl->gfx_family = i; break;
-    }
-  }
-  if (impl->gfx_family == UINT32_MAX)
-    THALAMUS_ABORT("No suitable Vulkan queue family");
-
-  // Logical device
-  float pri = 1.0f;
-  VkDeviceQueueCreateInfo qCI{VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO};
-  qCI.queueFamilyIndex = impl->gfx_family; qCI.queueCount = 1; qCI.pQueuePriorities = &pri;
-  const char* devExts[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
-  VkDeviceCreateInfo devCI{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
-  devCI.queueCreateInfoCount = 1; devCI.pQueueCreateInfos = &qCI;
-  devCI.enabledExtensionCount = 1; devCI.ppEnabledExtensionNames = devExts;
-  if (vkCreateDevice(impl->phys, &devCI, nullptr, &impl->dev) != VK_SUCCESS)
-    THALAMUS_ABORT("vkCreateDevice failed");
-  vkGetDeviceQueue(impl->dev, impl->gfx_family, 0, &impl->queue);
-
-  // Command pool
-  VkCommandPoolCreateInfo cpCI{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
-  cpCI.queueFamilyIndex = impl->gfx_family;
-  cpCI.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-  vkCreateCommandPool(impl->dev, &cpCI, nullptr, &impl->cmd_pool);
 
   // Render pass
   VkAttachmentDescription att{};
@@ -545,7 +471,6 @@ ImageViewer::~ImageViewer() {
   vkDestroyCommandPool(impl->dev, impl->cmd_pool, nullptr);
   if (impl->swapchain != VK_NULL_HANDLE) vkDestroySwapchainKHR(impl->dev, impl->swapchain, nullptr);
   vkDestroySurfaceKHR(impl->instance, impl->surface, nullptr);
-  vkDestroyDevice(impl->dev, nullptr);
   if (impl->window) SDL_DestroyWindow(impl->window);
   SDL_Quit();
 }
@@ -569,8 +494,8 @@ void ImageViewer::update(ImageNode* node) {
 
   // Upload new image if provided
   if (node && node->has_image_data()) {
-    cv::Mat rgba = toRGBA(node);
-    if (!rgba.empty()) impl->uploadTexture(rgba);
+    impl->uploadTexture(node->plane(0), static_cast<uint32_t>(node->width()),
+                         static_cast<uint32_t>(node->height()));
   }
 
   // Skip render if no texture yet

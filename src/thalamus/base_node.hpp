@@ -23,6 +23,17 @@
 #pragma clang diagnostic pop
 #endif
 
+struct VkInstance_T;
+typedef VkInstance_T* VkInstance;
+struct VkDevice_T;
+typedef VkDevice_T* VkDevice;
+struct VkPhysicalDevice_T;
+typedef VkPhysicalDevice_T* VkPhysicalDevice;
+struct VkQueue_T;
+typedef VkQueue_T* VkQueue;
+struct VkCommandPool_T;
+typedef VkCommandPool_T* VkCommandPool;
+
 namespace thalamus {
 using namespace std::chrono_literals;
 class Service;
@@ -77,6 +88,11 @@ public:
     message.set_text(text);
     log(message);
   }
+  virtual VkInstance get_vulkan_instance() = 0;
+  virtual VkDevice get_vulkan_device() = 0;
+  virtual VkPhysicalDevice get_vulkan_physical_device() = 0;
+  virtual VkQueue get_vulkan_queue() = 0;
+  virtual VkCommandPool create_vulkan_command_pool() = 0;
 };
 
 class NoneNode : public Node {
