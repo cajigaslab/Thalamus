@@ -232,12 +232,13 @@ namespace thalamus {
     }
 
     void OnDone() override {
-      std::cout << "OnDone" << std::endl;
+      THALAMUS_LOG(trace) << "OnDone";
       signal_done();
+      delete this;
     }
 
     void OnCancel() override {
-      THALAMUS_LOG(trace) << "OnCancel" << std::endl;
+      THALAMUS_LOG(trace) << "OnCancel";
       grpc::ServerBidiReactor<REQUEST, RESPONSE>::Finish(grpc::Status::OK);
       // delete this;
     }
@@ -300,8 +301,14 @@ namespace thalamus {
     }
 
     void OnDone() override {
-      //std::cout << "OnDone" << std::endl;
+      THALAMUS_LOG(trace) << "OnDone";
       signal_done();
+      delete this;
+    }
+
+    void OnCancel() override {
+      THALAMUS_LOG(trace) << "OnCancel";
+      grpc::ServerWriteReactor<RESPONSE>::Finish(grpc::Status::OK);
     }
 
     void do_send() {
@@ -363,8 +370,16 @@ namespace thalamus {
       });
       grpc::ServerReadReactor<T>::StartRead(&in);
     }
+
     void OnDone() override {
+      THALAMUS_LOG(trace) << "OnDone";
       signal_done();
+      delete this;
+    }
+
+    void OnCancel() override {
+      THALAMUS_LOG(trace) << "OnCancel";
+      grpc::ServerReadReactor<T>::Finish(grpc::Status::OK);
     }
   };
 }

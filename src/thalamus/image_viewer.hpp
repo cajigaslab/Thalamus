@@ -6,11 +6,11 @@
 
 namespace thalamus {
 
-class ImageViewer {
+class ImageViewer : public std::enable_shared_from_this<ImageViewer> {
   struct Impl;
   std::unique_ptr<Impl> impl;
 public:
-  explicit ImageViewer(NodeGraph*);
+  explicit ImageViewer(NodeGraph*, boost::asio::io_context&);
   ~ImageViewer();
   ImageViewer(const ImageViewer&) = delete;
   ImageViewer& operator=(const ImageViewer&) = delete;

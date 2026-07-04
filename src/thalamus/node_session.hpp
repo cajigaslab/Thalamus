@@ -73,7 +73,9 @@ namespace thalamus {
     , selector(_selector)
     , context_guard(std::move(_context_guard)) {
       THALAMUS_LOG(trace) << "Create NodeSession";
+    }
 
+    void start() {
       get_node();
     }
 
@@ -86,7 +88,6 @@ namespace thalamus {
     void OnDone() override {
       THALAMUS_LOG(trace) << "OnDone" << std::endl;
       ServerWriteReactor<RESPONSE>::OnDone();
-      delete this;
     }
 
     void OnCancel() override {
@@ -196,7 +197,6 @@ namespace thalamus {
     void OnDone() override {
       THALAMUS_LOG(trace) << "OnDone" << std::endl;
       ServerReadReactor<REQUEST>::OnDone();
-      delete this;
     }
 
     void OnCancel() override {

@@ -20,6 +20,8 @@
 #include <thalamus/thread.hpp>
 #include <thalamus/grpc.hpp>
 #include <thalamus/node_session.hpp>
+#include <thalamus/throttle.hpp>
+#include <thalamus/node_util.hpp>
 
 #include <thalamus_config.h>
 
@@ -224,92 +226,33 @@ struct Service::Impl {
     }
   }
 
-  struct AnalogSession : public ServerWriteReactor<::thalamus_grpc::AnalogResponse> {
-    struct State {
-      std::mutex mutex;
-      bool joining = false;
-      ~State() {
-        THALAMUS_LOG(trace) << "Delete State";
-      }
-    };
-    std::shared_ptr<State> state = std::make_shared<State>();
+  struct AnalogSession : public NodeSession<AnalogNode, thalamus_grpc::AnalogResponse> {
 
-    NodeGraph& node_graph;
-    boost::asio::io_context& io_context;
-    boost::asio::steady_timer timer;
-    boost::signals2::scoped_connection get_node_connection;
     boost::signals2::scoped_connection channels_changed_connection;
     boost::signals2::scoped_connection ready_connection;
     const ::thalamus_grpc::AnalogRequest request;
-    std::weak_ptr<Node> weak_raw_node;
-    std::shared_ptr<Node> raw_node;
-    AnalogNode* analog_node;
     std::vector<size_t> channels;
     std::set<size_t> specified_channel_ids;
     std::set<std::string> specified_channel_names;
     bool channels_specified;
     bool channels_changed = true;
     std::vector<double> workspace;
-    ContextGuard context_guard;
 
-    AnalogSession(NodeGraph& _node_graph, boost::asio::io_context& _io_context,
-                  ::grpc::CallbackServerContext& server_context, const ::thalamus_grpc::AnalogRequest* _request,
-                  Service *_service)
-    : ServerWriteReactor<::thalamus_grpc::AnalogResponse>(server_context)
-    , node_graph(_node_graph)
-    , io_context(_io_context)
-    , timer(_io_context)
+  AnalogSession(NodeGraph& graph, boost::asio::io_context& _io_context, ::grpc::CallbackServerContext& _context, const ::thalamus_grpc::AnalogRequest *_request, ContextGuard&& guard)
+  : NodeSession<AnalogNode, thalamus_grpc::AnalogResponse>(graph, _io_context, _context, _request->node(), std::move(guard))
     , request(*_request)
     , specified_channel_ids(_request->channels().begin(), _request->channels().end())
     , specified_channel_names(_request->channel_names().begin(), _request->channel_names().end())
-    , channels_specified(!_request->channels().empty() || !_request->channel_names().empty())
-    , context_guard(_service, &server_context) {
+    , channels_specified(!_request->channels().empty() || !_request->channel_names().empty()) {
       THALAMUS_LOG(trace) << "Create AnalogSession";
-
-      get_node();
     }
 
     ~AnalogSession() override;
-        
-    void OnDone() override {
-      THALAMUS_LOG(trace) << "OnDone" << std::endl;
-      ServerWriteReactor<::thalamus_grpc::AnalogResponse>::OnDone();
-      delete this;
-    }
 
-    void OnCancel() override {
-      THALAMUS_LOG(trace) << "OnCancel" << std::endl;
-      Finish(grpc::Status::OK);
-      //delete this;
-    }
-
-    void get_node() {
-      //THALAMUS_LOG(trace) << "getting node";
-      boost::asio::post(io_context, [&] {
-        get_node_connection = node_graph.get_node_scoped(request.node(), [&,c_state=state](auto ptr) {
-          std::lock_guard<std::mutex> lock(c_state->mutex);
-          if(c_state->joining) {
-            THALAMUS_LOG(trace) << "get_node_connection joined";
-            return;
-          }
-
-          weak_raw_node = ptr;
-          raw_node = ptr.lock();
-          analog_node = node_cast<AnalogNode *>(raw_node.get());
-          if (!analog_node) {
-            timer.expires_after(1s);
-            timer.async_wait(std::bind(&AnalogSession::on_timer_get_node, this, _1));
-            return;
-          }
-          on_node();
-        });
-      });
-    }
-
-    void on_node() {
+    void subscribe() override {
       THALAMUS_LOG(trace) << "got node";
-      using channels_changed_signal_type = decltype(analog_node->channels_changed);
-      channels_changed_connection = analog_node->channels_changed.connect(channels_changed_signal_type::slot_type([&,c_state=state](const AnalogNode *) {
+      using channels_changed_signal_type = decltype(typed_node->channels_changed);
+      channels_changed_connection = typed_node->channels_changed.connect(channels_changed_signal_type::slot_type([&,c_state=state](const AnalogNode *) {
         std::lock_guard<std::mutex> lock(c_state->mutex);
         if(c_state->joining) {
           THALAMUS_LOG(trace) << "channels_changed_connection joined";
@@ -319,15 +262,14 @@ struct Service::Impl {
         channels_changed = true;
       }));
 
-      using signal_type = decltype(raw_node->ready);
-      ready_connection = raw_node->ready.connect(signal_type::slot_type([&,c_state=state](const Node *) {
+      ready_connection = node::connect_ready_multithreaded(this->raw_node.get(), [&,c_state=state](const Node *) {
         std::lock_guard<std::mutex> lock(c_state->mutex);
         if(c_state->joining) {
           THALAMUS_LOG(trace) << "ready_connection joined";
           return;
         }
 
-        if (!analog_node->has_analog_data()) {
+        if (!typed_node->has_analog_data()) {
           return;
         }
         
@@ -335,14 +277,14 @@ struct Service::Impl {
         ::thalamus_grpc::AnalogResponse response;
 
         response.set_channels_changed(channels_changed);
-        response.set_time(size_t(analog_node->time().count()));
-        response.set_remote_time(size_t(analog_node->remote_time().count()));
-        size_t num_channels = size_t(analog_node->num_channels());
+        response.set_time(size_t(typed_node->time().count()));
+        response.set_remote_time(size_t(typed_node->remote_time().count()));
+        size_t num_channels = size_t(typed_node->num_channels());
         if(channels_changed) {
           channels.clear();
           if(channels_specified) {
             for (auto i = channels.size(); i < num_channels; ++i) {
-              auto name_view = analog_node->name(int(i));
+              auto name_view = typed_node->name(int(i));
               std::string name_str(name_view.begin(), name_view.end());
               if(specified_channel_ids.contains(i) || specified_channel_names.contains(name_str)) {
                 channels.push_back(i);
@@ -356,7 +298,7 @@ struct Service::Impl {
           channels_changed = false;
         }
 
-        auto is_transformed = analog_node->is_transformed();
+        auto is_transformed = typed_node->is_transformed();
         for (auto c = 0u; c < channels.size(); ++c) {
           auto channel = channels[c];
           if (channel >= num_channels) {
@@ -364,18 +306,18 @@ struct Service::Impl {
           }
           auto span = response.add_spans();
           span->set_begin(uint32_t(response.data_size()));
-          auto name = analog_node->name(int(channel));
+          auto name = typed_node->name(int(channel));
           span->set_name(name.data(), name.size());
 
           response.add_sample_intervals(
-              uint64_t(analog_node->sample_interval(int(channel)).count()));
+              uint64_t(typed_node->sample_interval(int(channel)).count()));
 
-          visit_node(analog_node, [&](auto wrapper) {
+          visit_node(typed_node, [&](auto wrapper) {
             auto data = wrapper->data(int(channel));
             workspace.assign(data.begin(), data.end());
             if(is_transformed) {
-              auto scale = analog_node->scale(int(channel));
-              auto offset = analog_node->offset(int(channel));
+              auto scale = typed_node->scale(int(channel));
+              auto offset = typed_node->offset(int(channel));
               std::transform(workspace.begin(), workspace.end(), workspace.begin(), [&](auto s) { return s*scale + offset; });
             }
             response.mutable_data()->Add(workspace.begin(), workspace.end());
@@ -385,42 +327,19 @@ struct Service::Impl {
         }
 
         ServerWriteReactor<::thalamus_grpc::AnalogResponse>::send(std::move(response));
-      }).track_foreign(raw_node));
+      });
       raw_node.reset();
 
       timer.expires_after(1s);
       timer.async_wait(std::bind(&AnalogSession::on_timer_check_expired, this, _1));
     }
-
-    void on_timer_get_node(const boost::system::error_code &error) {
-      if (error.value() == boost::asio::error::operation_aborted) {
-        return;
-      }
-      THALAMUS_ASSERT(!error, "Unexpected error");
-
-      get_node();
-    }
-
-    void on_timer_check_expired(const boost::system::error_code &error) {
-      if (error.value() == boost::asio::error::operation_aborted) {
-        return;
-      }
-      THALAMUS_ASSERT(!error, "Unexpected error");
-
-      if(weak_raw_node.lock() == nullptr) {
-        THALAMUS_LOG(trace) << "node expired";
-        timer.expires_after(1s);
-        timer.async_wait(std::bind(&AnalogSession::on_timer_get_node, this, _1));
-      } else {
-        timer.expires_after(1s);
-        timer.async_wait(std::bind(&AnalogSession::on_timer_check_expired, this, _1));
-      }
-    }
   };
 
   ::grpc::ServerWriteReactor<::thalamus_grpc::AnalogResponse>* analog(::grpc::CallbackServerContext* context,
                         const ::thalamus_grpc::AnalogRequest *request) {
-    return new AnalogSession(node_graph, io_context, *context, request, this->outer);
+    auto result = new AnalogSession(node_graph, io_context, *context, request, ContextGuard(this->outer, context));
+    result->start();
+    return result;
   }
 
   ::grpc::Status text(::grpc::ServerContext *context,
@@ -1088,6 +1007,99 @@ struct Counter {
 };
 std::atomic_size_t Counter::count = 0;
 
+static const size_t IMAGE_CHUNK_SIZE = 524288;
+
+struct ImageSession : public NodeSession<ImageNode, thalamus_grpc::Image> {
+  Throttle throttle;
+  const thalamus_grpc::ImageRequest request;
+  boost::signals2::scoped_connection ready_connection;
+
+  std::vector<std::chrono::steady_clock::time_point> frame_times;
+
+  ImageSession(NodeGraph& graph, boost::asio::io_context& _io_context, ::grpc::CallbackServerContext& _context, const ::thalamus_grpc::ImageRequest *_request, ContextGuard&& guard)
+  : NodeSession<ImageNode, thalamus_grpc::Image>(graph, _io_context, _context, _request->node(), std::move(guard))
+  , request(*_request)
+  {}
+
+  ~ImageSession() override;
+
+  void subscribe() override {
+    ready_connection = node::connect_ready_multithreaded(this->raw_node.get(), [this,c_state=this->state](const Node *) {
+      std::lock_guard<std::mutex> lock(c_state->mutex);
+      if(c_state->joining) {
+        return;
+      }
+      if (!typed_node->has_image_data()) {
+          return;
+      }
+
+      TRACE_EVENT("thalamus", "Service::image(on ready)");
+      std::vector<::thalamus_grpc::Image> responses;
+      size_t position = 0;
+
+      if (request.framerate() > 0 && !throttle.update(typed_node->time(), request.framerate())) {
+        return;
+      }
+
+      size_t data_count = 0;
+      for (auto i = 0ull; i < typed_node->num_planes(); ++i) {
+        auto data = typed_node->plane(int(i));
+        data_count += data.size();
+      }
+
+      auto width = typed_node->width();
+      auto height = typed_node->height();
+      thalamus_grpc::Image::Format format;
+      switch (typed_node->format()) {
+      case ImageNode::Format::Gray:
+        format = thalamus_grpc::Image::Format::Image_Format_Gray;
+        break;
+      case ImageNode::Format::RGB:
+        format = thalamus_grpc::Image::Format::Image_Format_RGB;
+        break;
+      case ImageNode::Format::YUYV422:
+        format = thalamus_grpc::Image::Format::Image_Format_YUYV422;
+        break;
+      case ImageNode::Format::YUV420P:
+        format = thalamus_grpc::Image::Format::Image_Format_YUV420P;
+        break;
+      case ImageNode::Format::YUVJ420P:
+        format = thalamus_grpc::Image::Format::Image_Format_YUVJ420P;
+        break;
+      }
+
+      while (position < data_count) {
+        thalamus_grpc::Image piece;
+        piece.set_width(uint32_t(width));
+        piece.set_height(uint32_t(height));
+        piece.set_format(format);
+        piece.set_frame_interval(size_t(typed_node->frame_interval().count()));
+
+        size_t plane_offset = 0;
+        size_t remaining_chunk = IMAGE_CHUNK_SIZE;
+        for (auto i = 0ull; i < typed_node->num_planes(); ++i) {
+          auto data = typed_node->plane(int(i));
+          if (position > plane_offset + data.size() || !remaining_chunk) {
+            piece.add_data();
+          } else {
+            auto in_plane_offset = position - plane_offset;
+            auto count =
+                std::min(data.size() - in_plane_offset, remaining_chunk);
+            piece.add_data(data.data() + in_plane_offset, count);
+            remaining_chunk -= count;
+            position += count;
+          }
+          plane_offset += data.size();
+        }
+        piece.set_last(position >= data_count);
+        ServerWriteReactor<::thalamus_grpc::Image>::send(std::move(piece));
+      }
+    });
+  }
+};
+
+ImageSession::~ImageSession() {}
+
 struct GraphSession : public NodeSession<AnalogNode, thalamus_grpc::GraphResponse> {
   const thalamus_grpc::GraphRequest request;
   boost::signals2::scoped_connection channels_changed_connection;
@@ -1256,7 +1268,9 @@ GraphSession::~GraphSession() {}
 ::grpc::ServerWriteReactor<::thalamus_grpc::GraphResponse>*
 Service::graph(::grpc::CallbackServerContext *context,
       const ::thalamus_grpc::GraphRequest *request) {
-  return new GraphSession(impl->node_graph, impl->io_context, *context, request, ContextGuard(this, context));
+  auto result = new GraphSession(impl->node_graph, impl->io_context, *context, request, ContextGuard(this, context));
+  result->start();
+  return result;
 }
 
 ::grpc::Status Service::channel_info(
@@ -1721,163 +1735,12 @@ Service::xsens(::grpc::ServerContext *context,
   return ::grpc::Status::OK;
 }
 
-static const size_t IMAGE_CHUNK_SIZE = 524288;
-
-::grpc::Status
-Service::image(::grpc::ServerContext *context,
-               const ::thalamus_grpc::ImageRequest *request,
-               ::grpc::ServerWriter<::thalamus_grpc::Image> *writer) {
-  ContextGuard guard(this, context);
-  while (!context->IsCancelled()) {
-    std::promise<void> promise;
-    auto future = promise.get_future();
-    std::shared_ptr<Node> raw_node;
-    {
-      TRACE_EVENT("thalamus", "Service::image(get node)");
-      boost::asio::post(impl->io_context, [&] {
-        impl->node_graph.get_node(request->node(), [&](auto ptr) {
-          raw_node = ptr.lock();
-          promise.set_value();
-        });
-      });
-      while (future.wait_for(1s) == std::future_status::timeout &&
-             !context->IsCancelled()) {
-        if (impl->io_context.stopped()) {
-          writer->WriteLast(::thalamus_grpc::Image(), ::grpc::WriteOptions());
-          return ::grpc::Status::OK;
-        }
-      }
-      if (!node_cast<ImageNode *>(raw_node.get())) {
-        std::this_thread::sleep_for(1s);
-        continue;
-      }
-    }
-
-    auto node = node_cast<ImageNode *>(raw_node.get());
-
-    std::mutex connection_mutex;
-    std::mutex images_mutex;
-    std::condition_variable cond;
-    std::vector<thalamus_grpc::Image> images;
-    std::vector<std::chrono::steady_clock::time_point> frame_times;
- 
-    using signal_type = decltype(raw_node->ready);
-    auto connection = raw_node->ready.connect(
-        signal_type::slot_type([&](const Node *) {
-          if (!node->has_image_data()) {
-              return;
-          }
-
-          TRACE_EVENT("thalamus", "Service::image(on ready)");
-          std::lock_guard<std::mutex> lock(connection_mutex);
-          std::vector<::thalamus_grpc::Image> responses;
-          size_t position = 0;
-
-          if (request->framerate() > 0) {
-            auto now = std::chrono::steady_clock::now();
-            while (!frame_times.empty() && now - frame_times.front() >= 1s) {
-              std::pop_heap(frame_times.begin(), frame_times.end(),
-                            [](auto &l, auto &r) { return l > r; });
-              frame_times.pop_back();
-            }
-            if (!frame_times.empty()) {
-              auto duration = now - frame_times.front();
-              auto duration_seconds =
-                  double(duration.count()) / decltype(duration)::period::den;
-              if (double(frame_times.size()) / duration_seconds >=
-                  request->framerate()) {
-                return;
-              }
-            }
-
-            frame_times.push_back(now);
-            std::push_heap(frame_times.begin(), frame_times.end(),
-                           [](auto &l, auto &r) { return l > r; });
-          }
-
-          size_t data_count = 0;
-          for (auto i = 0ull; i < node->num_planes(); ++i) {
-            auto data = node->plane(int(i));
-            data_count += data.size();
-          }
-
-          auto width = node->width();
-          auto height = node->height();
-          thalamus_grpc::Image::Format format;
-          switch (node->format()) {
-          case ImageNode::Format::Gray:
-            format = thalamus_grpc::Image::Format::Image_Format_Gray;
-            break;
-          case ImageNode::Format::RGB:
-            format = thalamus_grpc::Image::Format::Image_Format_RGB;
-            break;
-          case ImageNode::Format::YUYV422:
-            format = thalamus_grpc::Image::Format::Image_Format_YUYV422;
-            break;
-          case ImageNode::Format::YUV420P:
-            format = thalamus_grpc::Image::Format::Image_Format_YUV420P;
-            break;
-          case ImageNode::Format::YUVJ420P:
-            format = thalamus_grpc::Image::Format::Image_Format_YUVJ420P;
-            break;
-          }
-
-          while (position < data_count) {
-            responses.emplace_back();
-            auto &piece = responses.back();
-            piece.set_width(uint32_t(width));
-            piece.set_height(uint32_t(height));
-            piece.set_format(format);
-            piece.set_frame_interval(size_t(node->frame_interval().count()));
-
-            size_t plane_offset = 0;
-            size_t remaining_chunk = IMAGE_CHUNK_SIZE;
-            for (auto i = 0ull; i < node->num_planes(); ++i) {
-              auto data = node->plane(int(i));
-              if (position > plane_offset + data.size() || !remaining_chunk) {
-                piece.add_data();
-              } else {
-                auto in_plane_offset = position - plane_offset;
-                auto count =
-                    std::min(data.size() - in_plane_offset, remaining_chunk);
-                piece.add_data(data.data() + in_plane_offset, count);
-                remaining_chunk -= count;
-                position += count;
-              }
-              plane_offset += data.size();
-            }
-          }
-          responses.back().set_last(true);
-
-          std::lock_guard<std::mutex> lock2(images_mutex);
-          for (auto &i : responses) {
-            images.push_back(std::move(i));
-          }
-          cond.notify_one();
-        }).track_foreign(raw_node));
-    raw_node.reset();
-
-    while (!context->IsCancelled() && connection.connected()) {
-      if (impl->io_context.stopped()) {
-        writer->WriteLast(::thalamus_grpc::Image(), ::grpc::WriteOptions());
-        return ::grpc::Status::OK;
-      }
-      std::vector<thalamus_grpc::Image> local_images;
-      {
-        std::unique_lock<std::mutex> lock2(images_mutex);
-        cond.wait_for(lock2, 1s);
-        local_images.swap(images);
-      }
-      for (auto &i : local_images) {
-        writer->Write(i);
-      }
-    }
-    connection.disconnect();
-    std::lock_guard<std::mutex> lock(connection_mutex);
-    std::this_thread::sleep_for(1s);
-  }
-
-  return ::grpc::Status::OK;
+::grpc::ServerWriteReactor<::thalamus_grpc::Image>*
+Service::image(::grpc::CallbackServerContext *context,
+               const ::thalamus_grpc::ImageRequest *request) {
+  auto result = new ImageSession(impl->node_graph, impl->io_context, *context, request, ContextGuard(this, context));
+  result->start();
+  return result;
 }
 
 ::grpc::Status Service::notification(
@@ -2080,11 +1943,7 @@ void Service::wait() {
   // std::cout << "State service arrived" << std::endl;
 }
 
-Service::Impl::AnalogSession::~AnalogSession() {
-  THALAMUS_LOG(trace) << "Delete AnalogSession";
-  std::lock_guard<std::mutex> lock(state->mutex);
-  state->joining = true;
-}
+Service::Impl::AnalogSession::~AnalogSession() {}
 
 ContextGuard::ContextGuard(Service *_service, ::grpc::ServerContextBase *_context)
     : service(_service), context(_context) {

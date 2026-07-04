@@ -2,6 +2,8 @@
 #include <thalamus/pupil_node.hpp>
 #include <thalamus/image_viewer.hpp>
 #include <thalamus/thread_pool.hpp>
+#include <thalamus/node_util.hpp>
+#include <thread>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -54,8 +56,15 @@ struct PupilNode::Impl {
   size_t next_output_frame = 0;
 
   ThreadPool &pool;
+  boost::asio::io_context draw_context;
   boost::asio::steady_timer timer;
-  std::unique_ptr<ImageViewer> viewer;
+  std::shared_ptr<ImageViewer> viewer;
+  std::thread draw_thread;
+  // SDL requires window/event calls to stay on one consistent thread. Frames
+  // now arrive on draw_thread, but poll_events() (which pumps SDL's event
+  // queue) has to run on the main thread instead, via this timer bound to
+  // the shared io_context rather than draw_context.
+  boost::asio::steady_timer poll_timer;
 
   struct DeleteCairoSurface {
     void operator()(cairo_surface_t *p) { cairo_surface_destroy(p); }
@@ -88,7 +97,9 @@ struct PupilNode::Impl {
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
        PupilNode *_outer, NodeGraph *_graph)
       : io_context(_io_context), state(_state), outer(_outer), graph(_graph),
-        pool(graph->get_thread_pool()), timer(io_context) {
+        pool(graph->get_thread_pool()), timer(draw_context), poll_timer(_io_context) {
+    outer->ready_multithreaded.emplace();
+
     using namespace std::placeholders;
     state_connection =
         state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
@@ -98,6 +109,9 @@ struct PupilNode::Impl {
     pattern.reset(cairo_pattern_create_radial(0, 0, 8, 0, 0, 64));
     cairo_pattern_add_color_stop_rgba(pattern.get(), 0, 0, 0, 0, 0);
     cairo_pattern_add_color_stop_rgba(pattern.get(), 1, 0, 0, 0, 1);
+
+    poll_timer.expires_after(32ms);
+    poll_timer.async_wait(std::bind(&Impl::on_poll_timer, this, _1));
   }
 
   void init_cairo() {
@@ -111,6 +125,11 @@ struct PupilNode::Impl {
   }
 
   ~Impl() {
+    boost::asio::post(draw_context, [&] {
+      timer.cancel();
+    });
+    draw_thread.join();
+    poll_timer.cancel();
     (*state)["Running"].assign(false, [&] {});
   }
 
@@ -143,15 +162,9 @@ struct PupilNode::Impl {
     cairo_arc(cairo.get(), 0, 0, 128, 0, 2 * M_PI);
     cairo_fill(cairo.get());
 
-    outer->ready(outer);
-
+    node::signal_ready_offmain(outer, io_context);
     if (viewer) {
-      viewer->poll_events();
       viewer->update(outer);
-    }
-
-    if (!is_running) {
-      return;
     }
 
     auto end = std::chrono::steady_clock::now();
@@ -165,18 +178,44 @@ struct PupilNode::Impl {
     timer.async_wait(std::bind(&Impl::on_timer, this, _1));
   }
 
+  // Runs on the main thread (io_context), not draw_thread, since SDL's
+  // event queue and window calls need to stay on one consistent thread.
+  void on_poll_timer(const boost::system::error_code &error) {
+    if (error.value() == boost::asio::error::operation_aborted) {
+      return;
+    }
+    BOOST_ASSERT(!error);
+
+    if (viewer) {
+      viewer->poll_events();
+    }
+
+    poll_timer.expires_after(32ms);
+    poll_timer.async_wait(std::bind(&Impl::on_poll_timer, this, _1));
+  }
+
   void on_change(ObservableCollection::Action,
                  const ObservableCollection::Key &k,
                  const ObservableCollection::Value &v) {
     auto key_str = std::get<std::string>(k);
     if (key_str == "Running") {
       is_running = std::get<bool>(v);
-      timer.expires_after(32ms);
-      timer.async_wait(std::bind(&Impl::on_timer, this, _1));
+      if(is_running) {
+        draw_thread = std::thread([&] {
+          timer.expires_after(32ms);
+          timer.async_wait(std::bind(&Impl::on_timer, this, _1));
+          draw_context.run();
+        });
+      } else if (draw_thread.joinable()) {
+        boost::asio::post(draw_context, [&] {
+          timer.cancel();
+        });
+        draw_thread.join();
+      }
     } else if (key_str == "View") {
       if (std::get<bool>(v)) {
         if(!viewer) {
-          viewer = std::make_unique<ImageViewer>(graph);
+          viewer = std::make_shared<ImageViewer>(graph, io_context);
         }
       } else {
         viewer.reset();
@@ -227,14 +266,19 @@ bool PupilNode::has_image_data() const { return true; }
 boost::json::value PupilNode::process(const boost::json::value &request) {
   for (auto &v : request.as_object()) {
     if (v.key() == "mousemove") {
-      auto &event = v.value().as_object();
-      impl->target_x = event.find("offsetX")->value().to_number<int>();
-      impl->target_y = event.find("offsetY")->value().to_number<int>();
-      impl->last_saccade = std::chrono::steady_clock::now();
+      if(impl->is_running) {
+        boost::asio::post(impl->draw_context, [this,v] {
+          auto &event = v.value().as_object();
+          impl->target_x = event.find("offsetX")->value().to_number<int>();
+          impl->target_y = event.find("offsetY")->value().to_number<int>();
+          impl->last_saccade = std::chrono::steady_clock::now();
+        });
+      }
     }
   }
 
   return boost::json::value();
 }
+
 size_t PupilNode::modalities() const { return infer_modalities<PupilNode>(); }
 } // namespace thalamus

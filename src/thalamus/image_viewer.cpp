@@ -12,15 +12,18 @@
 #include <thalamus/image_viewer.hpp>
 #include <thalamus/assert.hpp>
 #include <algorithm>
+#include <atomic>
 #include <cstring>
 #include <fstream>
+#include <functional>
+#include <future>
+#include <mutex>
 #include <vector>
+#include <boost/asio/post.hpp>
 #include <texture.vert.spv.h>
 #include <texture.frag.spv.h>
 
 namespace thalamus {
-
-// --- Vulkan helpers ---
 
 static uint32_t findMemType(VkPhysicalDevice phys, uint32_t bits, VkMemoryPropertyFlags props) {
   VkPhysicalDeviceMemoryProperties mp;
@@ -93,10 +96,6 @@ static void transitionLayout(VkDevice dev, VkCommandPool pool, VkQueue queue,
   endOneShot(dev, pool, queue, cb);
 }
 
-// Records a layout-transition barrier into an already-open command buffer,
-// instead of submitting its own one-shot command buffer. Used on the hot
-// per-frame upload path so the transition rides along with the frame's main
-// submission rather than forcing a separate blocking round trip.
 static void recordBarrier(VkCommandBuffer cb, VkImage image, VkImageLayout from, VkImageLayout to,
                            VkAccessFlags srcAccess, VkAccessFlags dstAccess,
                            VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage) {
@@ -114,8 +113,9 @@ static void recordBarrier(VkCommandBuffer cb, VkImage image, VkImageLayout from,
 // --- Impl ---
 
 struct ImageViewer::Impl {
-  // Borrowed from NodeGraph
   VkInstance instance = VK_NULL_HANDLE;
+
+  boost::asio::io_context* io_context = nullptr;
 
   SDL_Window* window = nullptr;
   VkSurfaceKHR surface = VK_NULL_HANDLE;
@@ -126,21 +126,29 @@ struct ImageViewer::Impl {
   VkQueue queue = VK_NULL_HANDLE;
   VkCommandPool cmd_pool = VK_NULL_HANDLE;
 
-  // Swapchain (recreatable)
   VkSwapchainKHR swapchain = VK_NULL_HANDLE;
   VkExtent2D extent{};
   std::vector<VkImage> sc_images;
   std::vector<VkImageView> sc_views;
   std::vector<VkFramebuffer> framebuffers;
   VkRenderPass render_pass = VK_NULL_HANDLE;
-  bool needs_recreate = false;
+  std::atomic<bool> needs_recreate{false};
+
+  std::mutex swapchain_mutex;
+  int swapchain_generation = 0;
+
+  void runOnMainThread(const std::function<void()>& fn) {
+    std::promise<void> done;
+    auto fut = done.get_future();
+    boost::asio::post(*io_context, [&fn, &done]() {
+      fn();
+      done.set_value();
+    });
+    fut.wait();
+  }
 
   static constexpr int MAX_FRAMES = 2;
 
-  // Texture: one full set of resources per frame-in-flight slot. This lets
-  // the upload path write into a slot's texture/staging buffer as soon as
-  // that slot's fence says the GPU is done with it, without risking a race
-  // against a still-in-flight previous frame reading the same image.
   uint32_t tex_w[MAX_FRAMES] = {}, tex_h[MAX_FRAMES] = {};
   VkImage tex_image[MAX_FRAMES]{};
   VkDeviceMemory tex_mem[MAX_FRAMES]{};
@@ -164,6 +172,15 @@ struct ImageViewer::Impl {
   std::vector<VkSemaphore> render_done;  // one per swapchain image, not per frame
   VkFence in_flight[MAX_FRAMES]{};
   int frame = 0;
+
+  void drainAcquireSemaphore(int f) {
+    VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    VkSubmitInfo si{};
+    si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    si.waitSemaphoreCount = 1; si.pWaitSemaphores = &image_avail[f];
+    si.pWaitDstStageMask = &waitStage;
+    vkQueueSubmit(queue, 1, &si, in_flight[f]);
+  }
 
   void destroySwapchainDeps() {
     for (auto fb : framebuffers) vkDestroyFramebuffer(dev, fb, nullptr);
@@ -244,11 +261,14 @@ struct ImageViewer::Impl {
     for (uint32_t i = 0; i < nImg; i++)
       vkCreateSemaphore(dev, &rdSemCI, nullptr, &render_done[i]);
 
+    ++swapchain_generation;
     return true;
   }
 
   void recreateSwapchain() {
+    std::lock_guard<std::mutex> lock(swapchain_mutex);
     vkDeviceWaitIdle(dev);
+
     destroySwapchainDeps();
     buildSwapchain();
   }
@@ -262,10 +282,6 @@ struct ImageViewer::Impl {
     if (tex_mem[slot]    != VK_NULL_HANDLE) { vkFreeMemory(dev, tex_mem[slot], nullptr);         tex_mem[slot]    = VK_NULL_HANDLE; }
   }
 
-  // Only called when a slot's texture doesn't exist yet or its resolution
-  // changed -- i.e. rarely, not on the steady-state per-frame path. The
-  // blocking one-shot transition below is an accepted exception to "never
-  // block": it's a one-time structural cost per slot, not a per-frame one.
   void buildTexture(int slot, uint32_t w, uint32_t h) {
     destroyTexture(slot);
     tex_w[slot] = w; tex_h[slot] = h;
@@ -299,8 +315,10 @@ struct ImageViewer::Impl {
     vkAllocateMemory(dev, &ai, nullptr, &tex_mem[slot]);
     vkBindImageMemory(dev, tex_image[slot], tex_mem[slot], 0);
 
-    transitionLayout(dev, cmd_pool, queue, tex_image[slot],
-                     VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    runOnMainThread([&] {
+      transitionLayout(dev, cmd_pool, queue, tex_image[slot],
+                       VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    });
 
     VkImageViewCreateInfo ivCI{};
     ivCI.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -320,10 +338,6 @@ struct ImageViewer::Impl {
     vkUpdateDescriptorSets(dev, 1, &dset, 0, nullptr);
   }
 
-  // Records the upload (barrier, copy, barrier) into the caller's already-open
-  // command buffer instead of submitting its own -- this rides along with
-  // that frame's single submission rather than adding extra blocking
-  // round trips on the hot path.
   void uploadTexture(int slot, VkCommandBuffer cb, ImageNode::Plane plane, uint32_t w, uint32_t h) {
     if (w != tex_w[slot] || h != tex_h[slot]) buildTexture(slot, w, h);
 
@@ -344,10 +358,9 @@ struct ImageViewer::Impl {
   }
 };
 
-// --- Constructor ---
-
-ImageViewer::ImageViewer(NodeGraph* graph)
+ImageViewer::ImageViewer(NodeGraph* graph, boost::asio::io_context& io_context)
     : impl(std::make_unique<Impl>()) {
+  impl->io_context = &io_context;
   impl->instance = graph->get_vulkan_instance();
   impl->dev = graph->get_vulkan_device();
   impl->phys = graph->get_vulkan_physical_device();
@@ -506,6 +519,10 @@ ImageViewer::ImageViewer(NodeGraph* graph)
   VkFenceCreateInfo fenCI{};
   fenCI.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
   fenCI.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+  // acquire_fence starts unsignaled (unlike in_flight) -- it's meant to be
+  // signaled by the acquire call itself, not pre-signaled as "free".
+  VkFenceCreateInfo acquireFenCI{};
+  acquireFenCI.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
   for (int i = 0; i < Impl::MAX_FRAMES; i++) {
     vkCreateSemaphore(impl->dev, &semCI, nullptr, &impl->image_avail[i]);
     vkCreateFence(impl->dev, &fenCI, nullptr, &impl->in_flight[i]);
@@ -514,8 +531,6 @@ ImageViewer::ImageViewer(NodeGraph* graph)
   // Initial swapchain
   impl->buildSwapchain();
 }
-
-// --- Destructor ---
 
 ImageViewer::~ImageViewer() {
   if (!impl->dev) return;
@@ -540,43 +555,44 @@ ImageViewer::~ImageViewer() {
   SDL_Quit();
 }
 
-// --- update ---
-
 void ImageViewer::poll_events() {
   SDL_Event event;
-  if (!SDL_PollEvent(&event)) return;
-  do {
-    if (event.type == SDL_EVENT_WINDOW_RESIZED) impl->needs_recreate = true;
-  } while (SDL_PollEvent(&event));
-}
+  if (SDL_PollEvent(&event)) {
+    do {
+      if (event.type == SDL_EVENT_WINDOW_RESIZED) impl->needs_recreate = true;
+    } while (SDL_PollEvent(&event));
+  }
 
-void ImageViewer::update(ImageNode* node) {
   if (impl->needs_recreate) {
     impl->recreateSwapchain();
     impl->needs_recreate = false;
   }
+}
+
+void ImageViewer::update(ImageNode* node) {
+  if (impl->needs_recreate) return;
   if (impl->extent.width == 0 || impl->extent.height == 0) return;
 
   int f = impl->frame;
 
-  // Never block: if the GPU hasn't finished the last time this frame slot
-  // was used, drop this tick's frame rather than wait for it to catch up.
   if (vkGetFenceStatus(impl->dev, impl->in_flight[f]) != VK_SUCCESS) return;
 
   bool have_new_data = node && node->has_image_data();
-  bool have_texture = impl->tex_image[f] != VK_NULL_HANDLE;
-  if (!have_new_data && !have_texture) return;  // nothing to draw yet
+  if (!have_new_data) return;  // nothing to draw yet
+
+  std::unique_lock<std::mutex> lock(impl->swapchain_mutex);
+  int generation = impl->swapchain_generation;
 
   uint32_t imgIdx;
   VkResult res = vkAcquireNextImageKHR(impl->dev, impl->swapchain, 0,
-                                        impl->image_avail[f], VK_NULL_HANDLE, &imgIdx);
-  if (res == VK_ERROR_OUT_OF_DATE_KHR) { impl->recreateSwapchain(); return; }
+                                        impl->image_avail[f], nullptr, &imgIdx);
+  if (res == VK_ERROR_OUT_OF_DATE_KHR) {
+    impl->needs_recreate = true;
+    return;
+  }
   if (res == VK_NOT_READY || res == VK_TIMEOUT) return;  // no image ready right now; drop frame
   if (res != VK_SUCCESS && res != VK_SUBOPTIMAL_KHR) return;
 
-  // Past this point we're committed to submitting, so it's safe to reset
-  // the fence -- resetting it any earlier and then bailing out would leave
-  // it permanently unsignaled, since nothing would ever signal it again.
   vkResetFences(impl->dev, 1, &impl->in_flight[f]);
 
   VkCommandBuffer cb = impl->cmd_bufs[f];
@@ -622,23 +638,34 @@ void ImageViewer::update(ImageNode* node) {
   vkCmdDraw(cb, 3, 1, 0, 0);
   vkCmdEndRenderPass(cb);
   vkEndCommandBuffer(cb);
+  lock.unlock();
 
-  VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-  VkSubmitInfo si{};
-  si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-  si.waitSemaphoreCount = 1; si.pWaitSemaphores = &impl->image_avail[f];
-  si.pWaitDstStageMask = &waitStage;
-  si.commandBufferCount = 1; si.pCommandBuffers = &cb;
-  si.signalSemaphoreCount = 1; si.pSignalSemaphores = &impl->render_done[imgIdx];
-  vkQueueSubmit(impl->queue, 1, &si, impl->in_flight[f]);
+  auto self = shared_from_this();
+  boost::asio::post(*impl->io_context, [self, f, imgIdx, cb, generation]() {
+    Impl* impl_ptr = self->impl.get();
 
-  VkPresentInfoKHR pi{};
-  pi.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-  pi.waitSemaphoreCount = 1; pi.pWaitSemaphores = &impl->render_done[imgIdx];
-  pi.swapchainCount = 1; pi.pSwapchains = &impl->swapchain; pi.pImageIndices = &imgIdx;
-  res = vkQueuePresentKHR(impl->queue, &pi);
-  if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR)
-    impl->needs_recreate = true;
+    if (impl_ptr->swapchain_generation != generation) {
+      impl_ptr->drainAcquireSemaphore(f);
+      return;
+    }
+
+    VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    VkSubmitInfo si{};
+    si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    si.waitSemaphoreCount = 1; si.pWaitSemaphores = &impl_ptr->image_avail[f];
+    si.pWaitDstStageMask = &waitStage;
+    si.commandBufferCount = 1; si.pCommandBuffers = &cb;
+    si.signalSemaphoreCount = 1; si.pSignalSemaphores = &impl_ptr->render_done[imgIdx];
+    vkQueueSubmit(impl_ptr->queue, 1, &si, impl_ptr->in_flight[f]);
+
+    VkPresentInfoKHR pi{};
+    pi.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    pi.waitSemaphoreCount = 1; pi.pWaitSemaphores = &impl_ptr->render_done[imgIdx];
+    pi.swapchainCount = 1; pi.pSwapchains = &impl_ptr->swapchain; pi.pImageIndices = &imgIdx;
+    VkResult present_res = vkQueuePresentKHR(impl_ptr->queue, &pi);
+    if (present_res == VK_ERROR_OUT_OF_DATE_KHR || present_res == VK_SUBOPTIMAL_KHR)
+      impl_ptr->needs_recreate = true;
+  });
 
   impl->frame = (f + 1) % Impl::MAX_FRAMES;
 }

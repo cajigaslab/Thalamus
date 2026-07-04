@@ -284,119 +284,125 @@ int main(int argc, char **argv) {
 
   auto vulkan = thalamus::get_vulkan(std::nullopt);
 
-  boost::asio::io_context io_context;
-
-  // QApplication app (argc, argv);
-  set_current_thread_name("main");
-
-#ifdef __clang__
-  std::unique_ptr<perfetto::TracingSession> tracing_session;
-  perfetto::TracingInitArgs tracing_args;
-  tracing_args.backends |= perfetto::kInProcessBackend;
-
-  perfetto::TraceConfig cfg;
-  cfg.add_buffers()->set_size_kb(1024 * 1024); // Record up to 1 MiB.
-  cfg.set_output_path("thalamus_" + start_time_str + ".perfetto-trace");
-  cfg.set_write_into_file(true);
-  auto *ds_cfg = cfg.add_data_sources()->mutable_config();
-  ds_cfg->set_name("track_event");
-
-  if (vm.count("trace")) {
-    perfetto::Tracing::Initialize(tracing_args);
-    perfetto::TrackEvent::Register();
-    tracing_session = perfetto::Tracing::NewTrace();
-    tracing_session->Setup(cfg);
-    tracing_session->StartBlocking();
-  }
-#endif
-
-  std::shared_ptr<ObservableDict> state = std::make_shared<ObservableDict>();
-  ObservableListPtr nodes = std::make_shared<ObservableList>();
-  (*state)["nodes"].assign(nodes);
-
-  std::optional<StateManager> state_manager;
-  std::unique_ptr<thalamus_grpc::Thalamus::Stub> stub;
-  if (!state_url.empty()) {
-    auto channel =
-        grpc::CreateChannel(state_url, grpc::InsecureChannelCredentials());
-    while (channel->GetState(true) != GRPC_CHANNEL_READY) {
-      THALAMUS_LOG(info) << "Waiting for state source";
-      std::this_thread::sleep_for(1s);
-    }
-    stub = thalamus_grpc::Thalamus::NewStub(channel);
-    state_manager.emplace(stub.get(), state, io_context);
-  }
-
-  std::string server_address = absl::StrFormat("%s:%d", ip, port);
-
-  grpc::EnableDefaultHealthCheckService(true);
-  grpc::reflection::InitProtoReflectionServerBuilderPlugin();
-  grpc::ServerBuilder builder;
-  builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
-  std::unique_ptr<NodeGraphImpl> node_graph(
-      new NodeGraphImpl(nodes, io_context, system_start, steady_start, stub.get(), extensions, vulkan
-#ifndef _WIN32
-                        ,pool_sched_policy_opt, pool_sched_priority_opt
-#endif
-    ));
-  Service service(state, io_context, *node_graph, state_url);
-  node_graph->set_service(&service);
-  builder.RegisterService(&service);
-  auto server = builder.BuildAndStart();
-  auto websocket_channel = server->InProcessChannel(grpc::ChannelArguments());
-  std::unique_ptr<thalamus_grpc::Thalamus::Stub> websocket_stub = thalamus_grpc::Thalamus::NewStub(websocket_channel);
-  HttpServer http_server(io_context, std::move(websocket_stub), ip, http_port);
-
-  // std::cout << "Server listening on " << server_address << std::endl;
-  std::thread grpc_thread([&] { server->Wait(); });
-
-  boost::asio::high_resolution_timer timer(io_context);
-  std::function<void(const boost::system::error_code &)> poll_function =
-      [&](const boost::system::error_code &error) {
-        THALAMUS_ASSERT(!error, "async_wait failed");
-        // QApplication::processEvents();
-        timer.expires_after(32ms);
-        timer.async_wait(poll_function);
-      };
-  poll_function(boost::system::error_code());
-  //THALAMUS_ABORT("DIE");
-
-  io_context.run();
-  THALAMUS_LOG(info) << "Shutting down";
-
-  auto shutdown_success = false;
-  std::condition_variable shutdown_condition;
-  std::mutex shutdown_mutex;
-  std::thread termination_thread([&] {
-    std::unique_lock<std::mutex> lock(shutdown_mutex);
-    shutdown_condition.wait_for(lock, 5s, [&] { return shutdown_success; });
-    if (!shutdown_success) {
-      THALAMUS_LOG(error) << "Clean shutdown taking too long, terminating"
-                          << std::endl;
-      //::terminate();
-    }
-  });
-
-  service.stop();
-  server->Shutdown();
-  grpc_thread.join();
-  node_graph.reset();
-  destroy_vulkan(vulkan);
-
-#ifdef __clang__
-  if (vm.count("trace")) {
-    tracing_session->StopBlocking();
-  }
-#endif
-
   {
-    std::lock_guard<std::mutex> lock(shutdown_mutex);
-    shutdown_success = true;
+    boost::asio::io_context io_context;
+
+    // QApplication app (argc, argv);
+    set_current_thread_name("main");
+
+#ifdef __clang__
+    std::unique_ptr<perfetto::TracingSession> tracing_session;
+    perfetto::TracingInitArgs tracing_args;
+    tracing_args.backends |= perfetto::kInProcessBackend;
+
+    perfetto::TraceConfig cfg;
+    cfg.add_buffers()->set_size_kb(1024 * 1024); // Record up to 1 MiB.
+    cfg.set_output_path("thalamus_" + start_time_str + ".perfetto-trace");
+    cfg.set_write_into_file(true);
+    auto *ds_cfg = cfg.add_data_sources()->mutable_config();
+    ds_cfg->set_name("track_event");
+
+    if (vm.count("trace")) {
+      perfetto::Tracing::Initialize(tracing_args);
+      perfetto::TrackEvent::Register();
+      tracing_session = perfetto::Tracing::NewTrace();
+      tracing_session->Setup(cfg);
+      tracing_session->StartBlocking();
+    }
+#endif
+
+    std::shared_ptr<ObservableDict> state = std::make_shared<ObservableDict>();
+    ObservableListPtr nodes = std::make_shared<ObservableList>();
+    (*state)["nodes"].assign(nodes);
+
+    std::optional<StateManager> state_manager;
+    std::unique_ptr<thalamus_grpc::Thalamus::Stub> stub;
+    if (!state_url.empty()) {
+      auto channel =
+          grpc::CreateChannel(state_url, grpc::InsecureChannelCredentials());
+      while (channel->GetState(true) != GRPC_CHANNEL_READY) {
+        THALAMUS_LOG(info) << "Waiting for state source";
+        std::this_thread::sleep_for(1s);
+      }
+      stub = thalamus_grpc::Thalamus::NewStub(channel);
+      state_manager.emplace(stub.get(), state, io_context);
+    }
+
+    std::string server_address = absl::StrFormat("%s:%d", ip, port);
+
+    grpc::EnableDefaultHealthCheckService(true);
+    grpc::reflection::InitProtoReflectionServerBuilderPlugin();
+    grpc::ServerBuilder builder;
+    builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+    std::unique_ptr<NodeGraphImpl> node_graph(
+        new NodeGraphImpl(nodes, io_context, system_start, steady_start,
+                          stub.get(), extensions, vulkan
+#ifndef _WIN32
+                          ,
+                          pool_sched_policy_opt, pool_sched_priority_opt
+#endif
+                          ));
+    Service service(state, io_context, *node_graph, state_url);
+    node_graph->set_service(&service);
+    builder.RegisterService(&service);
+    auto server = builder.BuildAndStart();
+    auto websocket_channel = server->InProcessChannel(grpc::ChannelArguments());
+    std::unique_ptr<thalamus_grpc::Thalamus::Stub> websocket_stub =
+        thalamus_grpc::Thalamus::NewStub(websocket_channel);
+    HttpServer http_server(io_context, std::move(websocket_stub), ip,
+                           http_port);
+
+    // std::cout << "Server listening on " << server_address << std::endl;
+    std::thread grpc_thread([&] { server->Wait(); });
+
+    boost::asio::high_resolution_timer timer(io_context);
+    std::function<void(const boost::system::error_code &)> poll_function =
+        [&](const boost::system::error_code &error) {
+          THALAMUS_ASSERT(!error, "async_wait failed");
+          // QApplication::processEvents();
+          timer.expires_after(32ms);
+          timer.async_wait(poll_function);
+        };
+    poll_function(boost::system::error_code());
+    // THALAMUS_ABORT("DIE");
+
+    io_context.run();
+    THALAMUS_LOG(info) << "Shutting down";
+
+    auto shutdown_success = false;
+    std::condition_variable shutdown_condition;
+    std::mutex shutdown_mutex;
+    std::thread termination_thread([&] {
+      std::unique_lock<std::mutex> lock(shutdown_mutex);
+      shutdown_condition.wait_for(lock, 5s, [&] { return shutdown_success; });
+      if (!shutdown_success) {
+        THALAMUS_LOG(error)
+            << "Clean shutdown taking too long, terminating" << std::endl;
+        //::terminate();
+      }
+    });
+
+    service.stop();
+    server->Shutdown();
+    grpc_thread.join();
+    node_graph.reset();
+
+#ifdef __clang__
+    if (vm.count("trace")) {
+      tracing_session->StopBlocking();
+    }
+#endif
+
+    {
+      std::lock_guard<std::mutex> lock(shutdown_mutex);
+      shutdown_success = true;
+    }
+    shutdown_condition.notify_all();
+    termination_thread.join();
+    cleanup_movable_clocks();
+    THALAMUS_LOG(info) << "Thalamus Ending";
   }
-  shutdown_condition.notify_all();
-  termination_thread.join();
-  cleanup_movable_clocks();
-  THALAMUS_LOG(info) << "Thalamus Ending";
+  destroy_vulkan(vulkan);
 
   return 0;
 }

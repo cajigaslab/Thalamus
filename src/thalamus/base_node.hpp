@@ -43,7 +43,7 @@ class Node : public std::enable_shared_from_this<Node> {
 public:
   virtual ~Node();
   boost::signals2::signal<void(Node *)> ready;
-  std::map<size_t, boost::signals2::scoped_connection> connections;
+  std::optional<boost::signals2::signal<void(Node *)>> ready_multithreaded;
   virtual size_t modalities() const = 0;
   virtual boost::json::value process(const boost::json::value &) {
     return boost::json::value();

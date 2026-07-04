@@ -53,6 +53,7 @@
 #include <thalamus/samplemonitor_node.hpp>
 #include <thalamus/plugin.h>
 #include <thalamus/modalities_util.hpp>
+#include <thalamus/node_util.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -860,6 +861,11 @@ struct ThalamusAPIImpl {
     ext_node->ready(ext_node);
   }
 
+  static void node_ready_offmain(ThalamusNode* node) {
+    auto ext_node = reinterpret_cast<ExtNode*>(node->impl);
+    node_ready_offmain(ext_node, *io_context);
+  }
+
   static uint64_t time_ns() {
     std::chrono::nanoseconds ns = std::chrono::steady_clock::now().time_since_epoch();
     return uint64_t(ns.count());
@@ -868,6 +874,7 @@ struct ThalamusAPIImpl {
   static int error_code_operation_aborted() {
     return boost::asio::error::operation_aborted;
   }
+
   static void state_recap(ThalamusState* state) {
     if(std::holds_alternative<ObservableDictPtr>(state->value)) {
       std::get<ObservableDictPtr>(state->value)->recap();
@@ -1268,6 +1275,19 @@ struct ThalamusAPIImpl {
     return result;
   }
 
+  static ThalamusNodeReadyConnection* node_ready_multithreaded_connect(struct ThalamusNode* node, ThalamusNodeReadyCallback callback, void* data) {
+    auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+    
+    auto result = new ThalamusNodeReadyConnection();
+    result->node = node;
+    node_inc_ref(node);
+    result->connection = connect_ready_multithreaded(interfaces->node, [node, callback, data] (auto) {
+      NodeGuard lock(node);
+      callback(node, data);
+    });
+    return result;
+  }
+
   static void node_get_node_disconnect(struct ThalamusNodeGetConnection* conn) {
     delete conn;
   }
@@ -1505,6 +1525,8 @@ public:
     thalamus_api.node_get_state = ThalamusAPIImpl::node_get_state;
 
     thalamus_api.threadpool_post = ThalamusAPIImpl::threadpool_post;
+    thalamus_api.node_ready_multithreaded_connect = ThalamusAPIImpl::node_ready_multithreaded_connect;
+    thalamus_api.node_ready_offmain = ThalamusAPIImpl::node_ready_offmain;
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},
