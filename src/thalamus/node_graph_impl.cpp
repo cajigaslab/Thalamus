@@ -863,7 +863,7 @@ struct ThalamusAPIImpl {
 
   static void node_ready_offmain(ThalamusNode* node) {
     auto ext_node = reinterpret_cast<ExtNode*>(node->impl);
-    node_ready_offmain(ext_node, *io_context);
+    node::signal_ready_offmain(ext_node, *io_context);
   }
 
   static uint64_t time_ns() {
@@ -1281,7 +1281,7 @@ struct ThalamusAPIImpl {
     auto result = new ThalamusNodeReadyConnection();
     result->node = node;
     node_inc_ref(node);
-    result->connection = connect_ready_multithreaded(interfaces->node, [node, callback, data] (auto) {
+    result->connection = node::connect_ready_multithreaded(interfaces->node, [node, callback, data] (auto) {
       NodeGuard lock(node);
       callback(node, data);
     });

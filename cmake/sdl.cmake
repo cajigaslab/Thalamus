@@ -23,6 +23,7 @@ add_custom_command(OUTPUT "${sdl_BINARY_DIR}/$<CONFIG>/CMakeCache.txt"
                       "-DCMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
                       -DCMAKE_LINKER=${CMAKE_LINKER}
                       -DBUILD_SHARED_LIBS=OFF
+                      -DCMAKE_LIBRARY_ARCHITECTURE=${CMAKE_LIBRARY_ARCHITECTURE}
                       "-DSDL_CMAKE_DEBUG_POSTFIX=\"\""
                       "-DCMAKE_CXX_FLAGS=${ALL_COMPILE_OPTIONS_SPACED}" 
                       "-DCMAKE_C_FLAGS=${ALL_COMPILE_OPTIONS_SPACED}"
