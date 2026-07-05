@@ -315,6 +315,7 @@ int main(int argc, char **argv) {
     ObservableListPtr nodes = std::make_shared<ObservableList>();
     (*state)["nodes"].assign(nodes);
 
+    std::function<void()> stopper;
     std::optional<StateManager> state_manager;
     std::unique_ptr<thalamus_grpc::Thalamus::Stub> stub;
     if (!state_url.empty()) {
@@ -325,7 +326,7 @@ int main(int argc, char **argv) {
         std::this_thread::sleep_for(1s);
       }
       stub = thalamus_grpc::Thalamus::NewStub(channel);
-      state_manager.emplace(stub.get(), state, io_context);
+      state_manager.emplace(stub.get(), state, io_context, [&] { stopper(); });
     }
 
     std::string server_address = absl::StrFormat("%s:%d", ip, port);
@@ -366,26 +367,34 @@ int main(int argc, char **argv) {
     poll_function(boost::system::error_code());
     // THALAMUS_ABORT("DIE");
 
-    io_context.run();
-    THALAMUS_LOG(info) << "Shutting down";
-
     auto shutdown_success = false;
     std::condition_variable shutdown_condition;
     std::mutex shutdown_mutex;
-    std::thread termination_thread([&] {
-      std::unique_lock<std::mutex> lock(shutdown_mutex);
-      shutdown_condition.wait_for(lock, 5s, [&] { return shutdown_success; });
-      if (!shutdown_success) {
-        THALAMUS_LOG(error)
-            << "Clean shutdown taking too long, terminating" << std::endl;
-        //::terminate();
-      }
-    });
+    std::thread termination_thread;
+    stopper = [&] {
+      termination_thread = std::thread([&] {
+        std::unique_lock<std::mutex> lock(shutdown_mutex);
+        shutdown_condition.wait_for(lock, 5s, [&] { return shutdown_success; });
+        if (!shutdown_success) {
+          THALAMUS_LOG(error)
+              << "Clean shutdown taking too long, terminating" << std::endl;
+          //::terminate();
+        }
+      });
 
-    service.stop();
-    server->Shutdown();
-    grpc_thread.join();
-    node_graph.reset();
+      service.stop();
+      server->Shutdown();
+      grpc_thread.join();
+      node_graph->predrop([&] {
+        boost::asio::post(io_context, [&] {
+          node_graph.reset();
+          io_context.stop();
+        });
+      });
+    };
+
+    io_context.run();
+    THALAMUS_LOG(info) << "Shutting down";
 
 #ifdef __clang__
     if (vm.count("trace")) {

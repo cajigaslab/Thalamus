@@ -195,10 +195,16 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
   ThalamusNode* node;
   ThalamusNodeFactory *factory;
   ThalamusAPI *api;
+  std::function<void()> drop_ready;
 
   ExtNode(ThalamusNode *_node, ThalamusNodeFactory *_factory, ThalamusAPI *_api)
       : node(_node), factory(_factory), api(_api) {}
   ~ExtNode() override;
+
+  void predrop(std::function<void()> on_drop_ready) override {
+    drop_ready = on_drop_ready;
+    node->predrop(node);
+  }
 
   size_t modalities() const override {
     size_t result = 0;
@@ -863,7 +869,13 @@ struct ThalamusAPIImpl {
 
   static void node_ready_offmain(ThalamusNode* node) {
     auto ext_node = reinterpret_cast<ExtNode*>(node->impl);
-    node_ready_offmain(ext_node, *io_context);
+    node::signal_ready_offmain(ext_node, *io_context);
+  }
+
+  static void node_predrop_ready(ThalamusNode* node) {
+    auto ext_node = reinterpret_cast<ExtNode*>(node->impl);
+    THALAMUS_ASSERT(ext_node->drop_ready, "No predrop callback available");
+    ext_node->drop_ready();
   }
 
   static uint64_t time_ns() {
@@ -1281,7 +1293,7 @@ struct ThalamusAPIImpl {
     auto result = new ThalamusNodeReadyConnection();
     result->node = node;
     node_inc_ref(node);
-    result->connection = connect_ready_multithreaded(interfaces->node, [node, callback, data] (auto) {
+    result->connection = node::connect_ready_multithreaded(interfaces->node, [node, callback, data] (auto) {
       NodeGuard lock(node);
       callback(node, data);
     });
@@ -1376,6 +1388,7 @@ std::string ExtNodeFactory::type_name() { return std::string("*EXT* ") + to_stri
 
 struct NodeGraphImpl::Impl {
   ObservableListPtr nodes;
+  std::vector<std::string> node_next_type;
   std::vector<std::shared_ptr<Node>> node_impls;
   std::vector<std::string> node_types;
   std::vector<ObservableDictPtr> node_configs;
@@ -1654,12 +1667,14 @@ public:
           std::shared_ptr<Node>(factory->create(node, io_context, outer));
       creating_index = -1;
 
+      node_next_type.insert(node_next_type.begin() + index, "");
       node_impls.insert(node_impls.begin() + index, node_impl);
       node_types.insert(node_types.begin() + index, type_str);
       node_configs.insert(node_configs.begin() + index, node);
       node->recap(std::bind(&Impl::on_node, this, node.get(), _1, _2, _3));
     } else {
       auto index = std::get<int64_t>(k);
+      node_next_type.erase(node_next_type.begin() + index);
       node_impls.erase(node_impls.begin() + index);
       node_types.erase(node_types.begin() + index);
       node_configs.erase(node_configs.begin() + index);
@@ -1709,19 +1724,48 @@ public:
       if (key_str == "type") {
         auto value_str = std::get<std::string>(v);
         if (value_str != node_types.at(size_t(node_index))) {
-          auto factory = node_factories.at(value_str);
+          auto current_node = node_impls.at(size_t(node_index));
+          auto current_next_type = node_next_type[size_t(node_index)];
 
-          node_types.at(size_t(node_index)) = value_str;
-          creating_index = node_index;
-          node_impls.at(size_t(node_index))
-              .reset(factory->create(shared_node, io_context, outer));
-          creating_index = -1;
+          if(!current_next_type.empty()) {
+            node_next_type[size_t(node_index)] = value_str;
+          } else {
+            node_next_type[size_t(node_index)] = value_str;
+            current_node->predrop([this,current_node] {
+              boost::asio::post(io_context, [this, current_node] {
+                size_t new_node_index = std::numeric_limits<size_t>::max();
+                for(size_t i = 0;i < node_impls.size();++i) {
+                  if(node_impls[i] == current_node) {
+                    new_node_index = i;
+                    break;
+                  }
+                }
+                THALAMUS_ASSERT(new_node_index != std::numeric_limits<size_t>::max(), "Node is missing");
+                auto node_config = node_configs[new_node_index];
+
+                auto type_str = node_next_type[new_node_index];
+                auto factory = node_factories.at(type_str);
+                
+                node_types.at(new_node_index) = type_str;
+                creating_index = new_node_index;
+                node_impls.at(new_node_index)
+                    .reset(factory->create(node_config, io_context, outer));
+                creating_index = -1;
+                node_next_type[new_node_index] = "";
+
+                auto node_impl = node_impls.at(new_node_index);
+                notify([&type_str](
+                          auto &selector) { return selector.type() == type_str; },
+                      node_impl);
+              });
+            });
+          }
+        } else {
+          auto node_impl = node_impls.at(size_t(node_index));
+          notify([&value_str](
+                    auto &selector) { return selector.type() == value_str; },
+                node_impl);
         }
-
-        auto node_impl = node_impls.at(size_t(node_index));
-        notify([&value_str](
-                   auto &selector) { return selector.type() == value_str; },
-               node_impl);
       } else if (key_str == "name") {
         auto node_impl = node_impls.at(size_t(node_index));
         auto value_str = std::get<std::string>(v);
@@ -1925,6 +1969,20 @@ VkCommandPool NodeGraphImpl::create_vulkan_command_pool() {
   auto success = vkCreateCommandPool(impl->vulkan.device, &cp_ci, nullptr, &result);
   THALAMUS_ASSERT(success == VK_SUCCESS, "vkCreateCommandPool failed");
   return result;
+}
+
+void NodeGraphImpl::predrop(std::function<void()> ready) {
+  auto drop_count = std::make_shared<size_t>(impl->node_impls.size());
+  for(auto& node : impl->node_impls) {
+    node->predrop([ready,drop_count,this] {
+      boost::asio::post(impl->io_context, [ready,drop_count] {
+        --*drop_count;
+        if(*drop_count == 0) {
+          ready();
+        }
+      });
+    });
+  }
 }
 
 } // namespace thalamus

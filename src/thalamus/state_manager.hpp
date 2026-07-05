@@ -18,7 +18,8 @@ class StateManager {
 public:
   StateManager(thalamus_grpc::Thalamus::Stub *stub,
                ObservableCollection::Value state,
-               boost::asio::io_context &io_context);
+               boost::asio::io_context &io_context,
+               std::function<void()> stopper);
   ~StateManager();
 };
 } // namespace thalamus

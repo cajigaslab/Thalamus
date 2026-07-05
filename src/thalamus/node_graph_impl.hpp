@@ -63,5 +63,6 @@ public:
   VkPhysicalDevice get_vulkan_physical_device() override;
   VkQueue get_vulkan_queue() override;
   VkCommandPool create_vulkan_command_pool() override;
+  void predrop(std::function<void()>);
 };
 } // namespace thalamus

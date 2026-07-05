@@ -20,6 +20,7 @@ struct StateManager::Impl {
   ObservableCollection::Value root;
   boost::asio::io_context &io_context;
   std::atomic_bool running;
+  std::function<void()> stopper;
   std::atomic<
       ::grpc::ClientReaderWriter<::thalamus_grpc::ObservableTransaction,
                                  ::thalamus_grpc::ObservableTransaction> *>
@@ -99,13 +100,13 @@ struct StateManager::Impl {
       }
     }
 
-    io_context.stop();
+    boost::asio::post(io_context, stopper);
   }
 
   Impl(thalamus_grpc::Thalamus::Stub *_stub, ObservableCollection::Value _state,
-       boost::asio::io_context &_io_context)
+       boost::asio::io_context &_io_context, std::function<void()> _stopper)
       : stub(_stub), state(_state), root(state), io_context(_io_context),
-        running(true) {
+        running(true), stopper(_stopper) {
     grpc_thread = std::thread(std::bind(&Impl::grpc_target, this));
     if (std::holds_alternative<ObservableListPtr>(state)) {
       auto temp = std::get<ObservableListPtr>(state);
@@ -167,7 +168,8 @@ struct StateManager::Impl {
 
 StateManager::StateManager(thalamus_grpc::Thalamus::Stub *stub,
                            ObservableCollection::Value state,
-                           boost::asio::io_context &io_context)
-    : impl(new Impl(stub, state, io_context)) {}
+                           boost::asio::io_context &io_context,
+                           std::function<void()> stopper)
+    : impl(new Impl(stub, state, io_context, stopper)) {}
 
 StateManager::~StateManager() {}

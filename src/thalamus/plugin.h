@@ -92,6 +92,7 @@ extern "C" {
     struct ThalamusTextNode* text;
     void* plugin_impl;
     void (*process)(struct ThalamusNode*, struct ThalamusRequestHandle*, struct ThalamusJson*);
+    void (*predrop)(struct ThalamusNode*);
   };
 
   struct ThalamusAnalogNode {

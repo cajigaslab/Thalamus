@@ -54,6 +54,9 @@ public:
   virtual std::string_view redirect() const {
     return "";
   }
+  virtual void predrop(std::function<void()> drop_ready) {
+    drop_ready();
+  }
 };
 
 class NodeGraph {

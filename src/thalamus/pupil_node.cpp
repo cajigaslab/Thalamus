@@ -230,6 +230,18 @@ struct PupilNode::Impl {
       init_cairo();
     }
   }
+
+  void predrop(std::function<void()> outer_drop_ready) {
+    if (!draw_thread.joinable()) {
+      outer_drop_ready();
+      return;
+    }
+    boost::asio::post(draw_context, [this] { timer.cancel(); });
+    pool.push([this, outer_drop_ready] {
+      draw_thread.join();
+      boost::asio::post(io_context, outer_drop_ready);
+    });
+  }
 };
 
 PupilNode::PupilNode(ObservableDictPtr state,
@@ -281,4 +293,8 @@ boost::json::value PupilNode::process(const boost::json::value &request) {
 }
 
 size_t PupilNode::modalities() const { return infer_modalities<PupilNode>(); }
+
+void PupilNode::predrop(std::function<void()> drop_ready) {
+  impl->predrop(std::move(drop_ready));
+}
 } // namespace thalamus
