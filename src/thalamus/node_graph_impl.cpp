@@ -1541,6 +1541,8 @@ public:
     thalamus_api.node_ready_multithreaded_connect = ThalamusAPIImpl::node_ready_multithreaded_connect;
     thalamus_api.node_ready_offmain = ThalamusAPIImpl::node_ready_offmain;
 
+    thalamus_api.node_predrop_ready = ThalamusAPIImpl::node_predrop_ready;
+
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},
         {"NIDAQ", new NodeFactory<NidaqNode>()},
