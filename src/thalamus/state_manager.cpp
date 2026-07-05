@@ -100,6 +100,7 @@ struct StateManager::Impl {
       }
     }
 
+    this->stream = nullptr;
     boost::asio::post(io_context, stopper);
   }
 
@@ -120,6 +121,14 @@ struct StateManager::Impl {
   }
 
   ~Impl() {
+    if (std::holds_alternative<ObservableListPtr>(state)) {
+      auto temp = std::get<ObservableListPtr>(state);
+      temp->set_remote_storage([](auto, auto, auto, auto) { return false; });
+    } else if (std::holds_alternative<ObservableDictPtr>(state)) {
+      auto temp = std::get<ObservableDictPtr>(state);
+      temp->set_remote_storage([](auto, auto, auto, auto) { return false; });
+    }
+
     running = false;
     context.TryCancel();
     grpc_thread.join();
@@ -132,10 +141,6 @@ struct StateManager::Impl {
     auto id = get_unique_id();
     TRACE_EVENT("thalamus", "StateManager::send_change",
                 perfetto::Flow::ProcessScoped(id));
-    if (io_context.stopped()) {
-      return true;
-    }
-
     auto loaded_stream = stream.load();
     if (loaded_stream == nullptr) {
       return false;

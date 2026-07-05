@@ -125,6 +125,8 @@ struct Storage2Node::Impl {
   ~Impl() {
     (*state)["Running"].assign(false, [] {});
     stop_thread();
+    std::lock_guard<std::mutex> lock(records_mutex);
+    records.clear();
   }
 
   void on_event(const thalamus_grpc::Event &e) {
@@ -1278,7 +1280,10 @@ struct Storage2Node::Impl {
   void start_thread(std::string output_file) {
     stop_thread(true);
     is_running = true;
-    records.clear();
+    {
+      std::lock_guard<std::mutex> lock(records_mutex);
+      records.clear();
+    }
     queued_bytes = 0;
     queued_records = 0;
     written_bytes = 0;

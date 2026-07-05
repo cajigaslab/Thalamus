@@ -285,6 +285,7 @@ int main(int argc, char **argv) {
   auto vulkan = thalamus::get_vulkan(std::nullopt);
 
   {
+    std::shared_ptr<ObservableDict> state = std::make_shared<ObservableDict>();
     boost::asio::io_context io_context;
 
     // QApplication app (argc, argv);
@@ -311,7 +312,6 @@ int main(int argc, char **argv) {
     }
 #endif
 
-    std::shared_ptr<ObservableDict> state = std::make_shared<ObservableDict>();
     ObservableListPtr nodes = std::make_shared<ObservableList>();
     (*state)["nodes"].assign(nodes);
 

@@ -1418,6 +1418,8 @@ struct NodeGraphImpl::Impl {
   ThalamusAPIImpl thalamus_api_impl;
   ThalamusAPI thalamus_api;
   int creating_index = -1;
+  boost::signals2::scoped_connection nodes_connection;
+  std::vector<boost::signals2::scoped_connection> node_connections;
 
 public:
   Impl(ObservableListPtr _nodes, boost::asio::io_context &_io_context,
@@ -1627,10 +1629,12 @@ public:
       }
     }
     
-    nodes->changed.connect(std::bind(&Impl::on_nodes, this, _1, _2, _3));
+    nodes_connection = nodes->changed.connect(std::bind(&Impl::on_nodes, this, _1, _2, _3));
   }
 
   ~Impl() {
+    nodes_connection.disconnect();
+    node_connections.clear();
     node_impls.clear();
     auto i = node_factories.begin();
     while (i != node_factories.end()) {
@@ -1660,7 +1664,7 @@ public:
     if (a == ObservableCollection::Action::Set) {
       auto index = std::get<int64_t>(k);
       ObservableDictPtr node = std::get<ObservableDictPtr>(v);
-      node->changed.connect(
+      boost::signals2::scoped_connection conn = node->changed.connect(
           std::bind(&Impl::on_node, this, node.get(), _1, _2, _3));
 
       std::string type_str = node->at("type");
@@ -1671,6 +1675,7 @@ public:
           std::shared_ptr<Node>(factory->create(node, io_context, outer));
       creating_index = -1;
 
+      node_connections.insert(node_connections.begin() + index, std::move(conn));
       node_next_type.insert(node_next_type.begin() + index, "");
       node_impls.insert(node_impls.begin() + index, node_impl);
       node_types.insert(node_types.begin() + index, type_str);
@@ -1678,6 +1683,7 @@ public:
       node->recap(std::bind(&Impl::on_node, this, node.get(), _1, _2, _3));
     } else {
       auto index = std::get<int64_t>(k);
+      node_connections.erase(node_connections.begin() + index);
       node_next_type.erase(node_next_type.begin() + index);
       node_impls.erase(node_impls.begin() + index);
       node_types.erase(node_types.begin() + index);
@@ -1754,6 +1760,7 @@ public:
                 creating_index = int(new_node_index);
                 node_impls.at(new_node_index)
                     .reset(factory->create(node_config, io_context, outer));
+
                 creating_index = -1;
                 node_next_type[new_node_index] = "";
 

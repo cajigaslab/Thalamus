@@ -989,7 +989,9 @@ struct InjectAnalogSession : public NodeReadSession<AnalogNode, thalamus_grpc::I
   }
 };
 
-InjectAnalogSession::~InjectAnalogSession() {}
+InjectAnalogSession::~InjectAnalogSession() {
+  start_join();
+}
 
 ::grpc::ServerReadReactor< ::thalamus_grpc::InjectAnalogRequest>* Service::inject_analog(::grpc::CallbackServerContext* context, ::thalamus_grpc::Empty*) {
   auto result = new InjectAnalogSession(impl->node_graph, impl->io_context, *context, ContextGuard(this, context));
@@ -1098,7 +1100,9 @@ struct ImageSession : public NodeSession<ImageNode, thalamus_grpc::Image> {
   }
 };
 
-ImageSession::~ImageSession() {}
+ImageSession::~ImageSession() {
+  start_join();
+}
 
 struct GraphSession : public NodeSession<AnalogNode, thalamus_grpc::GraphResponse> {
   const thalamus_grpc::GraphRequest request;
@@ -1263,7 +1267,9 @@ struct GraphSession : public NodeSession<AnalogNode, thalamus_grpc::GraphRespons
   }
 };
 
-GraphSession::~GraphSession() {}
+GraphSession::~GraphSession() {
+  start_join();
+}
 
 ::grpc::ServerWriteReactor<::thalamus_grpc::GraphResponse>*
 Service::graph(::grpc::CallbackServerContext *context,
@@ -1943,7 +1949,9 @@ void Service::wait() {
   // std::cout << "State service arrived" << std::endl;
 }
 
-Service::Impl::AnalogSession::~AnalogSession() {}
+Service::Impl::AnalogSession::~AnalogSession() {
+  start_join();
+}
 
 ContextGuard::ContextGuard(Service *_service, ::grpc::ServerContextBase *_context)
     : service(_service), context(_context) {

@@ -1,6 +1,11 @@
 #include <thalamus/chessboard_node.hpp>
 #include <thalamus/modalities_util.hpp>
+#include <thalamus/node_util.hpp>
 #include <thalamus/thread_pool.hpp>
+#include <thalamus/thread.hpp>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -50,7 +55,12 @@ struct ChessBoardNode::Impl {
   size_t next_output_frame = 0;
 
   ThreadPool &pool;
+  boost::asio::io_context draw_context;
   boost::asio::steady_timer timer;
+  std::thread draw_thread;
+  std::atomic_bool draw_thread_running = false;
+  std::mutex mutex;
+  std::condition_variable condition_variable;
 
   struct DeleteCairoSurface {
     void operator()(cairo_surface_t *p) { cairo_surface_destroy(p); }
@@ -68,8 +78,8 @@ struct ChessBoardNode::Impl {
   int stride = -1;
   std::vector<unsigned char> cairo_data;
 
-  int rows = 8;
-  int columns = 8;
+  std::atomic_int rows = 8;
+  std::atomic_int columns = 8;
 
   std::chrono::steady_clock::time_point last_saccade =
       std::chrono::steady_clock::now();
@@ -77,7 +87,9 @@ struct ChessBoardNode::Impl {
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
        ChessBoardNode *_outer, NodeGraph *_graph)
       : io_context(_io_context), state(_state), outer(_outer), graph(_graph),
-        pool(_graph->get_thread_pool()), timer(_io_context) {
+        pool(_graph->get_thread_pool()), timer(draw_context) {
+    outer->ready_multithreaded.emplace();
+
     using namespace std::placeholders;
     state_connection =
         state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
@@ -89,6 +101,12 @@ struct ChessBoardNode::Impl {
   }
 
   ~Impl() {
+    boost::asio::post(draw_context, [&] {
+      timer.cancel();
+    });
+    if(draw_thread.joinable()) {
+      draw_thread.join();
+    }
     (*state)["Running"].assign(false, [&] {});
   }
 
@@ -136,11 +154,7 @@ struct ChessBoardNode::Impl {
       }
     }
 
-    outer->ready(outer);
-
-    if (!is_running) {
-      return;
-    }
+    node::signal_ready_offmain(outer, io_context);
 
     auto end = std::chrono::steady_clock::now();
     auto elapsed = end - start;
@@ -159,8 +173,18 @@ struct ChessBoardNode::Impl {
     auto key_str = std::get<std::string>(k);
     if (key_str == "Running") {
       is_running = std::get<bool>(v);
-      timer.expires_after(16ms);
-      timer.async_wait(std::bind(&Impl::on_timer, this, _1));
+      stop_draw_thread([this] {
+        if(is_running) {
+          draw_thread_running = true;
+          draw_context.restart();
+          draw_thread = std::thread([&] {
+            set_current_thread_name("ChessBoardNode");
+            timer.expires_after(16ms);
+            timer.async_wait(std::bind(&Impl::on_timer, this, _1));
+            draw_context.run();
+          });
+        }
+      });
     } else if (key_str == "Height") {
       height = int(std::get<int64_t>(v));
     } else if (key_str == "Rows") {
@@ -168,6 +192,37 @@ struct ChessBoardNode::Impl {
     } else if (key_str == "Columns") {
       columns = int(std::get<int64_t>(v));
     }
+  }
+
+  void stop_draw_thread(std::function<void()> callback) {
+    if(draw_thread.joinable()) {
+      auto old_thread = std::make_shared<std::thread>(std::move(draw_thread));
+      boost::asio::post(draw_context, [this] { timer.cancel(); });
+      pool.push([old_thread, callback, this] {
+        old_thread->join();
+        {
+          std::lock_guard<std::mutex> lock(mutex);
+          draw_thread_running = false;
+        }
+        condition_variable.notify_all();
+        if(callback) {
+          boost::asio::post(io_context, callback);
+        }
+      });
+    } else {
+      pool.push([this,callback] {
+        std::unique_lock<std::mutex> lock(mutex);
+        condition_variable.wait(lock, [&]{ return !draw_thread_running; });
+        if(callback) {
+          boost::asio::post(io_context, callback);
+        }
+      });
+    }
+  }
+
+  void predrop(std::function<void()> outer_drop_ready) {
+    state_connection.disconnect();
+    stop_draw_thread(outer_drop_ready);
   }
 };
 
@@ -214,4 +269,9 @@ boost::json::value ChessBoardNode::process(const boost::json::value &) {
 size_t ChessBoardNode::modalities() const {
   return infer_modalities<ChessBoardNode>();
 }
+
+void ChessBoardNode::predrop(std::function<void()> drop_ready) {
+  impl->predrop(drop_ready);
+}
+
 } // namespace thalamus
