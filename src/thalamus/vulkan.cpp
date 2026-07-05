@@ -124,35 +124,35 @@ Vulkan get_vulkan(std::optional<uint32_t> device_id) {
   }
 
   VkPhysicalDevice physical_device = nullptr;
-  //If device_id is specified find that device, otherwise, get the first discrete GPU and if there is no discrete GPU get the integrated GPU
+  std::vector<int> physical_device_scores;
   for(auto p : physical_devices) {
     VkPhysicalDeviceProperties props;
     vkGetPhysicalDeviceProperties(p, &props);
-    THALAMUS_LOG(info) << "ID:" << props.deviceID << " Type:" << device_type_string(props.deviceType) << " " << props.deviceName;
-    if(device_id) {
-      if(*device_id == props.deviceID) {
-        physical_device = p;
-        THALAMUS_LOG(info) << "Selected";
-        break;
-      }
-    } else {
-      if(props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
-        physical_device = p;
-        THALAMUS_LOG(info) << "Selected";
-        break;
-      } else if(physical_device == nullptr && props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU) {
-        physical_device = p;
-        THALAMUS_LOG(info) << "Selected";
-      }
+
+    int score = 0;
+    if(device_id && *device_id == props.deviceID) {
+      score = 100;
+    } else if(props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+      score = 99;
+    } else if(props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU) {
+      score = 98;
+    } else if(props.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU) {
+      score = 97;
     }
+    THALAMUS_LOG(info) << "ID:" << props.deviceID << " Type:" << device_type_string(props.deviceType) << " Score:" << score << " " << props.deviceName;
+    physical_device_scores.push_back(score);
   }
 
-  if(physical_device == nullptr) {
-    THALAMUS_LOG(error) << "No suitable physical device found";
-    return result;
-  }
+  auto best_physical_device_iter = std::max_element(physical_device_scores.begin(), physical_device_scores.end());
+  auto best_physical_device_index = size_t(std::distance(physical_device_scores.begin(), best_physical_device_iter));
+  physical_device = physical_devices[best_physical_device_index];
   result.physical_device = physical_device;
-  THALAMUS_LOG(info) << "VkPhysicalDevice Selected";
+
+  VkPhysicalDeviceProperties physical_device_props;
+  vkGetPhysicalDeviceProperties(result.physical_device, &physical_device_props);
+  THALAMUS_LOG(info) << "Selected ID:" << physical_device_props.deviceID <<
+	                " Type:" << device_type_string(physical_device_props.deviceType) << 
+			" Score:" << *best_physical_device_iter << " " << physical_device_props.deviceName;
 
   uint32_t num_qf = 0;
   vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &num_qf, nullptr);

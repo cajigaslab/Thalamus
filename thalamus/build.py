@@ -226,6 +226,9 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     cmake_command += [f'-DANDROID_NDK={ndk}']
     cmake_command += [f'-DCMAKE_TOOLCHAIN_FILE={toolchain}']
 
+  if platform.system() == 'Linux':
+    cmake_command += ['-DCMAKE_LIBRARY_ARCHITECTURE=x86_64-linux-gnu']
+
   if not no_native:
     cmake_command = [str(c) for c in cmake_command]
     print(cmake_command)
