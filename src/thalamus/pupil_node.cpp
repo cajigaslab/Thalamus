@@ -3,7 +3,10 @@
 #include <thalamus/image_viewer.hpp>
 #include <thalamus/thread_pool.hpp>
 #include <thalamus/node_util.hpp>
+#include <thalamus/thread.hpp>
 #include <thread>
+#include <mutex>
+#include <condition_variable>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -60,11 +63,14 @@ struct PupilNode::Impl {
   boost::asio::steady_timer timer;
   std::shared_ptr<ImageViewer> viewer;
   std::thread draw_thread;
+  std::atomic_bool draw_thread_running = false;
   // SDL requires window/event calls to stay on one consistent thread. Frames
   // now arrive on draw_thread, but poll_events() (which pumps SDL's event
   // queue) has to run on the main thread instead, via this timer bound to
   // the shared io_context rather than draw_context.
   boost::asio::steady_timer poll_timer;
+  std::mutex mutex;
+  std::condition_variable condition_variable;
 
   struct DeleteCairoSurface {
     void operator()(cairo_surface_t *p) { cairo_surface_destroy(p); }
@@ -128,7 +134,9 @@ struct PupilNode::Impl {
     boost::asio::post(draw_context, [&] {
       timer.cancel();
     });
-    draw_thread.join();
+    if(draw_thread.joinable()) {
+      draw_thread.join();
+    }
     poll_timer.cancel();
     (*state)["Running"].assign(false, [&] {});
   }
@@ -200,18 +208,18 @@ struct PupilNode::Impl {
     auto key_str = std::get<std::string>(k);
     if (key_str == "Running") {
       is_running = std::get<bool>(v);
-      if(is_running) {
-        draw_thread = std::thread([&] {
-          timer.expires_after(32ms);
-          timer.async_wait(std::bind(&Impl::on_timer, this, _1));
-          draw_context.run();
-        });
-      } else if (draw_thread.joinable()) {
-        boost::asio::post(draw_context, [&] {
-          timer.cancel();
-        });
-        draw_thread.join();
-      }
+      stop_draw_thread([this] {
+        if(is_running) {
+          draw_thread_running = true;
+          draw_context.restart();
+          draw_thread = std::thread([&] {
+            set_current_thread_name("PupilNode");
+            timer.expires_after(32ms);
+            timer.async_wait(std::bind(&Impl::on_timer, this, _1));
+            draw_context.run();
+          });
+        }
+      });
     } else if (key_str == "View") {
       if (std::get<bool>(v)) {
         if(!viewer) {
@@ -231,16 +239,35 @@ struct PupilNode::Impl {
     }
   }
 
-  void predrop(std::function<void()> outer_drop_ready) {
-    if (!draw_thread.joinable()) {
-      outer_drop_ready();
-      return;
+  void stop_draw_thread(std::function<void()> callback) {
+    if(draw_thread.joinable()) {
+      auto old_thread = std::make_shared<std::thread>(std::move(draw_thread));
+      boost::asio::post(draw_context, [this] { timer.cancel(); });
+      pool.push([old_thread, callback, this] {
+        old_thread->join();
+        {
+          std::lock_guard<std::mutex> lock(mutex);
+          draw_thread_running = false;
+        }
+        condition_variable.notify_all();
+        if(callback) {
+          boost::asio::post(io_context, callback);
+        }
+      });
+    } else {
+      pool.push([this,callback] {
+        std::unique_lock<std::mutex> lock(mutex);
+        condition_variable.wait(lock, [&]{ return !draw_thread_running; });
+        if(callback) {
+          boost::asio::post(io_context, callback);
+        }
+      });
     }
-    boost::asio::post(draw_context, [this] { timer.cancel(); });
-    pool.push([this, outer_drop_ready] {
-      draw_thread.join();
-      boost::asio::post(io_context, outer_drop_ready);
-    });
+  }
+
+  void predrop(std::function<void()> outer_drop_ready) {
+    state_connection.disconnect();
+    stop_draw_thread(outer_drop_ready);
   }
 };
 
@@ -295,6 +322,7 @@ boost::json::value PupilNode::process(const boost::json::value &request) {
 size_t PupilNode::modalities() const { return infer_modalities<PupilNode>(); }
 
 void PupilNode::predrop(std::function<void()> drop_ready) {
-  impl->predrop(std::move(drop_ready));
+  impl->predrop(drop_ready);
 }
+
 } // namespace thalamus

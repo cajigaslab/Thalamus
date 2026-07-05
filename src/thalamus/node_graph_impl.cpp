@@ -202,6 +202,7 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
   ~ExtNode() override;
 
   void predrop(std::function<void()> on_drop_ready) override {
+    THALAMUS_LOG(info) << "*ext* ExtNode::predrop";
     drop_ready = on_drop_ready;
     node->predrop(node);
   }
@@ -873,6 +874,7 @@ struct ThalamusAPIImpl {
   }
 
   static void node_predrop_ready(ThalamusNode* node) {
+    THALAMUS_LOG(info) << "*ext* node_predrop_ready";
     auto ext_node = reinterpret_cast<ExtNode*>(node->impl);
     THALAMUS_ASSERT(ext_node->drop_ready, "No predrop callback available");
     ext_node->drop_ready();
@@ -1749,7 +1751,7 @@ public:
                 auto factory = node_factories.at(type_str);
                 
                 node_types.at(new_node_index) = type_str;
-                creating_index = new_node_index;
+                creating_index = int(new_node_index);
                 node_impls.at(new_node_index)
                     .reset(factory->create(node_config, io_context, outer));
                 creating_index = -1;
