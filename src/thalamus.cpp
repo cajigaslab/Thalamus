@@ -40,9 +40,11 @@
 #include <boost/dll/shared_library.hpp>
 #include <boost/dll/runtime_symbol_info.hpp>
 
+#ifdef THALAMUS_CRASHPAD
 #include <client/crashpad_client.h>
 #include <client/crash_report_database.h>
 #include <client/settings.h>
+#endif
 
 #ifdef __clang__
 #pragma clang diagnostic pop
@@ -69,6 +71,7 @@ static void on_terminate() {
   }
 }
 
+#ifdef THALAMUS_CRASHPAD
 static bool init_crashpad() {
   std::error_code ec;
   std::filesystem::path crashes_dir = get_home() / "thalamus_crashes";
@@ -120,6 +123,7 @@ static bool init_crashpad() {
   }
   return started;
 }
+#endif
 
 int main(int argc, char **argv) {
 #ifdef _WIN32
@@ -185,6 +189,7 @@ int main(int argc, char **argv) {
   desc.add_options()("ip", boost::program_options::value<std::string>()->default_value("0.0.0.0"), "IP to bind to");
   desc.add_options()("http-port", boost::program_options::value<uint16_t>()->default_value(50053), "Port to run Websocket server on");
   desc.add_options()("crashpad", "Enable crash data collection");
+  desc.add_options()("no-gpu", "Disable GPU usage");
 
 #ifndef _WIN32
   desc.add_options()
@@ -201,9 +206,13 @@ int main(int argc, char **argv) {
           .run(),
       vm);
   boost::program_options::notify(vm);
+
+  auto gpu = vm.count("no-gpu") == 0;
+#ifdef THALAMUS_CRASHPAD
   if (vm.count("crashpad")) {
     init_crashpad();
   }
+#endif
 
   auto ip = vm["ip"].as<std::string>();
   auto http_port = vm["http-port"].as<uint16_t>();
@@ -282,7 +291,7 @@ int main(int argc, char **argv) {
     }
   }
 
-  auto vulkan = thalamus::get_vulkan(std::nullopt);
+  auto vulkan = gpu ? thalamus::get_vulkan(std::nullopt) : Vulkan{};
 
   {
     std::shared_ptr<ObservableDict> state = std::make_shared<ObservableDict>();
