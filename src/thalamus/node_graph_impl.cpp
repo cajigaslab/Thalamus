@@ -372,8 +372,8 @@ struct Interfaces {
   AnalogNode* analog = nullptr;
   ImageNode* image = nullptr;
   MotionCaptureNode* mocap = nullptr;
-  bool safe = false;
-  int count = 0;
+  std::atomic_int safe = 0;
+  std::atomic_int count = 0;
 };
 
 #define ASSERT_SAFE() do { if(!interfaces->safe) [[unlikely]] { THALAMUS_ABORT("Node should only be accessed in get_node or ready callback"); } } while(0)
@@ -584,10 +584,10 @@ static char plugin_mocap_has_motion_data(struct ThalamusNode* node) {
 struct NodeGuard {
   Interfaces* interfaces;
   NodeGuard(ThalamusNode* node) : interfaces(reinterpret_cast<Interfaces*>(node->impl)) {
-    interfaces->safe = true;
+    ++interfaces->safe;
   }
   ~NodeGuard() {
-    interfaces->safe = false;
+    --interfaces->safe;
   }
 };
 
@@ -595,6 +595,7 @@ struct ThalamusAPIImpl {
   static std::map<ObservableCollection::Value, ThalamusState*>* cpp_to_c;
   static std::map<ThalamusState*, ObservableCollection::Value>* c_to_cpp;
 
+  static std::mutex* mutex;
   static std::map<Node*, ThalamusNode*>* node_cpp_to_c;
   static std::map<ThalamusNode*, Node*>* node_c_to_cpp;
 
@@ -658,6 +659,8 @@ struct ThalamusAPIImpl {
   }
 
   static ThalamusNode* get_node_ref(Node* val) {
+    std::lock_guard<std::mutex> lock(*mutex);
+
     auto i = node_cpp_to_c->find(val);
     if(i == node_cpp_to_c->end()) {
       auto new_ptr = wrap_node(val);
@@ -1270,6 +1273,7 @@ struct ThalamusAPIImpl {
   static void node_dec_ref(struct ThalamusNode* node) {
     auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
     if(--interfaces->count == 0) {
+      std::lock_guard<std::mutex> lock(*mutex);
       node_c_to_cpp->erase(node);
       node_cpp_to_c->erase(interfaces->node);
       delete node;
@@ -1346,6 +1350,7 @@ boost::asio::io_context* ThalamusAPIImpl::io_context = nullptr;
 NodeGraphImpl* ThalamusAPIImpl::node_graph = nullptr;
 
 
+std::mutex* ThalamusAPIImpl::mutex = nullptr;
 std::map<Node*, ThalamusNode*>* ThalamusAPIImpl::node_cpp_to_c = nullptr;
 std::map<ThalamusNode*, Node*>* ThalamusAPIImpl::node_c_to_cpp = nullptr;
 
@@ -1434,6 +1439,7 @@ public:
 
     ThalamusAPIImpl::cpp_to_c = new std::map<ObservableCollection::Value, ThalamusState*>();
     ThalamusAPIImpl::c_to_cpp = new std::map<ThalamusState*, ObservableCollection::Value>();
+    ThalamusAPIImpl::mutex = new std::mutex();
     ThalamusAPIImpl::node_cpp_to_c = new std::map<Node*, ThalamusNode*>();
     ThalamusAPIImpl::node_c_to_cpp = new std::map<ThalamusNode*, Node*>();
     ThalamusAPIImpl::io_context = &io_context;
