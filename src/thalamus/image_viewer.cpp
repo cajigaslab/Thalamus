@@ -13,10 +13,12 @@
 #include <thalamus/assert.hpp>
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cstring>
 #include <fstream>
 #include <functional>
 #include <future>
+#include <map>
 #include <mutex>
 #include <vector>
 #include <boost/asio/post.hpp>
@@ -110,12 +112,266 @@ static void recordBarrier(VkCommandBuffer cb, VkImage image, VkImageLayout from,
   vkCmdPipelineBarrier(cb, srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &b);
 }
 
+static bool read_geometry(const ObservableDictPtr &state, int &x, int &y,
+                          int &w, int &h) {
+  if (!state || !state->contains("view_geometry")) {
+    return false;
+  }
+  auto value = state->at("view_geometry").get();
+  if (!std::holds_alternative<ObservableListPtr>(value)) {
+    return false;
+  }
+  auto list = thalamus::get<ObservableListPtr>(value);
+  if (list->size() < 4) {
+    return false;
+  }
+  x = int(int64_t((*list)[0]));
+  y = int(int64_t((*list)[1]));
+  w = int(int64_t((*list)[2]));
+  h = int(int64_t((*list)[3]));
+  return true;
+}
+
+static void write_geometry(const ObservableDictPtr &state, int x, int y,
+                           int w, int h) {
+  if (!state) {
+    return;
+  }
+  boost::json::array geometry{x, y, w, h};
+  (*state)["view_geometry"].assign(ObservableCollection::from_json(geometry), [] {});
+}
+
+// --- Input event conversion (SDL -> JS-style input events) ---
+
+// JS MouseEvent.button: 0=left, 1=middle, 2=right, 3=back, 4=forward
+static int js_button_from_sdl(Uint8 button) {
+  switch (button) {
+    case SDL_BUTTON_LEFT: return 0;
+    case SDL_BUTTON_MIDDLE: return 1;
+    case SDL_BUTTON_RIGHT: return 2;
+    case SDL_BUTTON_X1: return 3;
+    case SDL_BUTTON_X2: return 4;
+    default: return 0;
+  }
+}
+
+// JS MouseEvent.buttons bit layout (left=1,right=2,middle=4,back=8,forward=16)
+// differs from SDL's (left=1,middle=2,right=4,x1=8,x2=16), so this can't be a
+// straight bitmask copy.
+static int js_buttons_from_sdl_state(SDL_MouseButtonFlags state) {
+  int result = 0;
+  if (state & SDL_BUTTON_LMASK) result |= 1;
+  if (state & SDL_BUTTON_RMASK) result |= 2;
+  if (state & SDL_BUTTON_MMASK) result |= 4;
+  if (state & SDL_BUTTON_X1MASK) result |= 8;
+  if (state & SDL_BUTTON_X2MASK) result |= 16;
+  return result;
+}
+
 // --- Impl ---
 
 struct ImageViewer::Impl {
   VkInstance instance = VK_NULL_HANDLE;
 
   boost::asio::io_context* io_context = nullptr;
+  ObservableDictPtr state;
+  Node* node = nullptr;
+  int geom_x = 0, geom_y = 0, geom_w = 0, geom_h = 0;
+  std::chrono::steady_clock::time_point last_geometry_check =
+      std::chrono::steady_clock::now();
+  uint32_t image_w = 0, image_h = 0;
+
+  const std::map<SDL_Scancode, std::string> scancode_table = {
+    {SDL_SCANCODE_A, "KeyA"},
+    {SDL_SCANCODE_B, "KeyB"},
+    {SDL_SCANCODE_C, "KeyC"},
+    {SDL_SCANCODE_D, "KeyD"},
+    {SDL_SCANCODE_E, "KeyE"},
+    {SDL_SCANCODE_F, "KeyF"},
+    {SDL_SCANCODE_G, "KeyG"},
+    {SDL_SCANCODE_H, "KeyH"},
+    {SDL_SCANCODE_I, "KeyI"},
+    {SDL_SCANCODE_J, "KeyJ"},
+    {SDL_SCANCODE_K, "KeyK"},
+    {SDL_SCANCODE_L, "KeyL"},
+    {SDL_SCANCODE_M, "KeyM"},
+    {SDL_SCANCODE_N, "KeyN"},
+    {SDL_SCANCODE_O, "KeyO"},
+    {SDL_SCANCODE_P, "KeyP"},
+    {SDL_SCANCODE_Q, "KeyQ"},
+    {SDL_SCANCODE_R, "KeyR"},
+    {SDL_SCANCODE_S, "KeyS"},
+    {SDL_SCANCODE_T, "KeyT"},
+    {SDL_SCANCODE_U, "KeyU"},
+    {SDL_SCANCODE_V, "KeyV"},
+    {SDL_SCANCODE_W, "KeyW"},
+    {SDL_SCANCODE_X, "KeyX"},
+    {SDL_SCANCODE_Y, "KeyY"},
+    {SDL_SCANCODE_Z, "KeyZ"},
+    {SDL_SCANCODE_1, "Digit1"},
+    {SDL_SCANCODE_2, "Digit2"},
+    {SDL_SCANCODE_3, "Digit3"},
+    {SDL_SCANCODE_4, "Digit4"},
+    {SDL_SCANCODE_5, "Digit5"},
+    {SDL_SCANCODE_6, "Digit6"},
+    {SDL_SCANCODE_7, "Digit7"},
+    {SDL_SCANCODE_8, "Digit8"},
+    {SDL_SCANCODE_9, "Digit9"},
+    {SDL_SCANCODE_0, "Digit0"},
+    {SDL_SCANCODE_RETURN, "Enter"},
+    {SDL_SCANCODE_ESCAPE, "Escape"},
+    {SDL_SCANCODE_BACKSPACE, "Backspace"},
+    {SDL_SCANCODE_TAB, "Tab"},
+    {SDL_SCANCODE_SPACE, "Space"},
+    {SDL_SCANCODE_MINUS, "Minus"},
+    {SDL_SCANCODE_EQUALS, "Equal"},
+    {SDL_SCANCODE_LEFTBRACKET, "BracketLeft"},
+    {SDL_SCANCODE_RIGHTBRACKET, "BracketRight"},
+    {SDL_SCANCODE_BACKSLASH, "Backslash"},
+    {SDL_SCANCODE_SEMICOLON, "Semicolon"},
+    {SDL_SCANCODE_APOSTROPHE, "Quote"},
+    {SDL_SCANCODE_GRAVE, "Backquote"},
+    {SDL_SCANCODE_COMMA, "Comma"},
+    {SDL_SCANCODE_PERIOD, "Period"},
+    {SDL_SCANCODE_SLASH, "Slash"},
+    {SDL_SCANCODE_CAPSLOCK, "CapsLock"},
+    {SDL_SCANCODE_F1, "F1"},
+    {SDL_SCANCODE_F2, "F2"},
+    {SDL_SCANCODE_F3, "F3"},
+    {SDL_SCANCODE_F4, "F4"},
+    {SDL_SCANCODE_F5, "F5"},
+    {SDL_SCANCODE_F6, "F6"},
+    {SDL_SCANCODE_F7, "F7"},
+    {SDL_SCANCODE_F8, "F8"},
+    {SDL_SCANCODE_F9, "F9"},
+    {SDL_SCANCODE_F10, "F10"},
+    {SDL_SCANCODE_F11, "F11"},
+    {SDL_SCANCODE_F12, "F12"},
+    {SDL_SCANCODE_F13, "F13"},
+    {SDL_SCANCODE_F14, "F14"},
+    {SDL_SCANCODE_F15, "F15"},
+    {SDL_SCANCODE_F16, "F16"},
+    {SDL_SCANCODE_F17, "F17"},
+    {SDL_SCANCODE_F18, "F18"},
+    {SDL_SCANCODE_F19, "F19"},
+    {SDL_SCANCODE_F20, "F20"},
+    {SDL_SCANCODE_F21, "F21"},
+    {SDL_SCANCODE_F22, "F22"},
+    {SDL_SCANCODE_F23, "F23"},
+    {SDL_SCANCODE_F24, "F24"},
+    {SDL_SCANCODE_PRINTSCREEN, "PrintScreen"},
+    {SDL_SCANCODE_SCROLLLOCK, "ScrollLock"},
+    {SDL_SCANCODE_PAUSE, "Pause"},
+    {SDL_SCANCODE_INSERT, "Insert"},
+    {SDL_SCANCODE_HOME, "Home"},
+    {SDL_SCANCODE_PAGEUP, "PageUp"},
+    {SDL_SCANCODE_DELETE, "Delete"},
+    {SDL_SCANCODE_END, "End"},
+    {SDL_SCANCODE_PAGEDOWN, "PageDown"},
+    {SDL_SCANCODE_RIGHT, "ArrowRight"},
+    {SDL_SCANCODE_LEFT, "ArrowLeft"},
+    {SDL_SCANCODE_DOWN, "ArrowDown"},
+    {SDL_SCANCODE_UP, "ArrowUp"},
+    {SDL_SCANCODE_NUMLOCKCLEAR, "NumLock"},
+    {SDL_SCANCODE_KP_DIVIDE, "NumpadDivide"},
+    {SDL_SCANCODE_KP_MULTIPLY, "NumpadMultiply"},
+    {SDL_SCANCODE_KP_MINUS, "NumpadSubtract"},
+    {SDL_SCANCODE_KP_PLUS, "NumpadAdd"},
+    {SDL_SCANCODE_KP_ENTER, "NumpadEnter"},
+    {SDL_SCANCODE_KP_1, "Numpad1"},
+    {SDL_SCANCODE_KP_2, "Numpad2"},
+    {SDL_SCANCODE_KP_3, "Numpad3"},
+    {SDL_SCANCODE_KP_4, "Numpad4"},
+    {SDL_SCANCODE_KP_5, "Numpad5"},
+    {SDL_SCANCODE_KP_6, "Numpad6"},
+    {SDL_SCANCODE_KP_7, "Numpad7"},
+    {SDL_SCANCODE_KP_8, "Numpad8"},
+    {SDL_SCANCODE_KP_9, "Numpad9"},
+    {SDL_SCANCODE_KP_0, "Numpad0"},
+    {SDL_SCANCODE_KP_PERIOD, "NumpadDecimal"},
+    {SDL_SCANCODE_KP_EQUALS, "NumpadEqual"},
+    {SDL_SCANCODE_KP_COMMA, "NumpadComma"},
+    {SDL_SCANCODE_LCTRL, "ControlLeft"},
+    {SDL_SCANCODE_LSHIFT, "ShiftLeft"},
+    {SDL_SCANCODE_LALT, "AltLeft"},
+    {SDL_SCANCODE_LGUI, "MetaLeft"},
+    {SDL_SCANCODE_RCTRL, "ControlRight"},
+    {SDL_SCANCODE_RSHIFT, "ShiftRight"},
+    {SDL_SCANCODE_RALT, "AltRight"},
+    {SDL_SCANCODE_RGUI, "MetaRight"},
+    {SDL_SCANCODE_APPLICATION, "ContextMenu"},
+    {SDL_SCANCODE_HELP, "Help"},
+  };
+
+  std::string scancode_to_js_code(SDL_Scancode code) const {
+    auto i = scancode_table.find(code);
+    return i == scancode_table.end() ? std::string() : i->second;
+  }
+
+  // Maps window-space coordinates to image-pixel coordinates, accounting for
+  // the aspect-preserving letterboxed viewport computed in update().
+  std::pair<int, int> map_to_image(float wx, float wy) const {
+    if (image_w == 0 || image_h == 0 || extent.width == 0 || extent.height == 0) {
+      return {0, 0};
+    }
+    int win_w = 0, win_h = 0;
+    SDL_GetWindowSize(window, &win_w, &win_h);
+    if (win_w > 0 && win_h > 0) {
+      wx *= static_cast<float>(extent.width) / static_cast<float>(win_w);
+      wy *= static_cast<float>(extent.height) / static_cast<float>(win_h);
+    }
+
+    float imgAspect = static_cast<float>(image_w) / static_cast<float>(image_h);
+    float winAspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
+    float vpW, vpH, vpX, vpY;
+    if (winAspect > imgAspect) {
+      vpH = static_cast<float>(extent.height); vpW = vpH * imgAspect;
+      vpX = (static_cast<float>(extent.width) - vpW) / 2.0f; vpY = 0.0f;
+    } else {
+      vpW = static_cast<float>(extent.width); vpH = vpW / imgAspect;
+      vpX = 0.0f; vpY = (static_cast<float>(extent.height) - vpH) / 2.0f;
+    }
+
+    int ix = int((wx - vpX) / vpW * static_cast<float>(image_w));
+    int iy = int((wy - vpY) / vpH * static_cast<float>(image_h));
+    ix = std::clamp(ix, 0, int(image_w) - 1);
+    iy = std::clamp(iy, 0, int(image_h) - 1);
+    return {ix, iy};
+  }
+
+  void send_key_event(const SDL_KeyboardEvent& key_event) {
+    if (!node) {
+      return;
+    }
+    auto code = scancode_to_js_code(key_event.scancode);
+    if (code.empty()) {
+      return;
+    }
+    std::string type = key_event.down ? "keydown" : "keyup";
+    boost::json::object inner;
+    inner["type"] = type;
+    inner["code"] = code;
+    boost::json::object outer;
+    outer[type] = inner;
+    node->process(outer);
+  }
+
+  void send_mouse_event(const std::string& type, float wx, float wy, int button,
+                        int buttons) {
+    if (!node) {
+      return;
+    }
+    auto [ix, iy] = map_to_image(wx, wy);
+    boost::json::object inner;
+    inner["type"] = type;
+    inner["offsetX"] = ix;
+    inner["offsetY"] = iy;
+    inner["button"] = button;
+    inner["buttons"] = buttons;
+    boost::json::object outer;
+    outer[type] = inner;
+    node->process(outer);
+  }
 
   SDL_Window* window = nullptr;
   VkSurfaceKHR surface = VK_NULL_HANDLE;
@@ -358,9 +614,12 @@ struct ImageViewer::Impl {
   }
 };
 
-ImageViewer::ImageViewer(NodeGraph* graph, boost::asio::io_context& io_context)
+ImageViewer::ImageViewer(NodeGraph* graph, boost::asio::io_context& io_context,
+                          ObservableDictPtr state, Node* node)
     : impl(std::make_unique<Impl>()) {
   impl->io_context = &io_context;
+  impl->state = state;
+  impl->node = node;
   impl->instance = graph->get_vulkan_instance();
   impl->dev = graph->get_vulkan_device();
   impl->phys = graph->get_vulkan_physical_device();
@@ -370,9 +629,18 @@ ImageViewer::ImageViewer(NodeGraph* graph, boost::asio::io_context& io_context)
   // SDL window
   if (!SDL_Init(SDL_INIT_VIDEO))
     THALAMUS_ABORT("SDL_Init: %s", SDL_GetError());
-  impl->window = SDL_CreateWindow("Image Viewer", 800, 600,
+
+  int init_x = 100, init_y = 100, init_w = 400, init_h = 400;
+  if (!read_geometry(state, init_x, init_y, init_w, init_h)) {
+    write_geometry(state, init_x, init_y, init_w, init_h);
+  }
+  impl->geom_x = init_x; impl->geom_y = init_y;
+  impl->geom_w = init_w; impl->geom_h = init_h;
+
+  impl->window = SDL_CreateWindow("Image Viewer", init_w, init_h,
                                   SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
   if (!impl->window) THALAMUS_ABORT("%s", SDL_GetError());
+  SDL_SetWindowPosition(impl->window, init_x, init_y);
 
   // Surface
   if (!SDL_Vulkan_CreateSurface(impl->window, impl->instance, nullptr, &impl->surface))
@@ -560,6 +828,20 @@ void ImageViewer::poll_events() {
   if (SDL_PollEvent(&event)) {
     do {
       if (event.type == SDL_EVENT_WINDOW_RESIZED) impl->needs_recreate = true;
+      else if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
+        (*impl->state)["View"].assign(false, [] {});
+      } else if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) {
+        impl->send_key_event(event.key);
+      } else if (event.type == SDL_EVENT_MOUSE_MOTION) {
+        impl->send_mouse_event("mousemove", event.motion.x, event.motion.y, 0,
+                               js_buttons_from_sdl_state(event.motion.state));
+      } else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+                event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
+        auto buttons = js_buttons_from_sdl_state(SDL_GetMouseState(nullptr, nullptr));
+        impl->send_mouse_event(event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ? "mousedown" : "mouseup",
+                               event.button.x, event.button.y,
+                               js_button_from_sdl(event.button.button), buttons);
+      }
     } while (SDL_PollEvent(&event));
   }
 
@@ -567,9 +849,27 @@ void ImageViewer::poll_events() {
     impl->recreateSwapchain();
     impl->needs_recreate = false;
   }
+
+  auto now = std::chrono::steady_clock::now();
+  if (now - impl->last_geometry_check >= std::chrono::seconds(1)) {
+    impl->last_geometry_check = now;
+    int x, y, w, h;
+    SDL_GetWindowPosition(impl->window, &x, &y);
+    SDL_GetWindowSize(impl->window, &w, &h);
+    if (x != impl->geom_x || y != impl->geom_y || w != impl->geom_w || h != impl->geom_h) {
+      impl->geom_x = x; impl->geom_y = y;
+      impl->geom_w = w; impl->geom_h = h;
+      write_geometry(impl->state, x, y, w, h);
+    }
+  }
 }
 
 void ImageViewer::update(ImageNode* node) {
+  if (node && node->has_image_data()) {
+    impl->image_w = static_cast<uint32_t>(node->width());
+    impl->image_h = static_cast<uint32_t>(node->height());
+  }
+
   if (impl->needs_recreate) return;
   if (impl->extent.width == 0 || impl->extent.height == 0) return;
 

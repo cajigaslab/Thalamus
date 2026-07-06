@@ -223,7 +223,7 @@ struct PupilNode::Impl {
     } else if (key_str == "View") {
       if (std::get<bool>(v)) {
         if(!viewer) {
-          viewer = std::make_shared<ImageViewer>(graph, io_context);
+          viewer = std::make_shared<ImageViewer>(graph, io_context, state, outer);
         }
       } else {
         viewer.reset();
@@ -303,15 +303,29 @@ bool PupilNode::prepare() { return true; }
 bool PupilNode::has_image_data() const { return true; }
 
 boost::json::value PupilNode::process(const boost::json::value &request) {
+  auto move_target = [this](const boost::json::value &v) {
+    boost::asio::post(impl->draw_context, [this,v] {
+      auto &event = v.as_object();
+      impl->target_x = event.find("offsetX")->value().to_number<int>();
+      impl->target_y = event.find("offsetY")->value().to_number<int>();
+      impl->last_saccade = std::chrono::steady_clock::now();
+    });
+  };
+
   for (auto &v : request.as_object()) {
     if (v.key() == "mousemove") {
+      if(!impl->is_running) {
+        continue;
+      }
+      auto &event = v.value().as_object();
+      auto buttons = event.find("buttons")->value().to_number<int>();
+      bool dragging = buttons != 0;
+      if(dragging) {
+        move_target(v.value());
+      }
+    } else if (v.key() == "mousedown") {
       if(impl->is_running) {
-        boost::asio::post(impl->draw_context, [this,v] {
-          auto &event = v.value().as_object();
-          impl->target_x = event.find("offsetX")->value().to_number<int>();
-          impl->target_y = event.find("offsetY")->value().to_number<int>();
-          impl->last_saccade = std::chrono::steady_clock::now();
-        });
+        move_target(v.value());
       }
     }
   }
