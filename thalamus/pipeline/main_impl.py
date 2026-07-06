@@ -81,6 +81,7 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument('--contrib', action='store_true', help='Equivalent to --ext thalamus.contrib')
   parser.add_argument('--ext', help='Extension Module')
   parser.add_argument('--wait-for-pipeline', action='store_true', help='Don\'t start pipeline, wait for something else to launch it')
+  parser.add_argument('--no-gpu', action='store_true', help='Disable pipeline GPU usage')
   return parser.parse_args(self_args[1:])
 
 async def async_main() -> None:
@@ -166,6 +167,8 @@ async def async_main() -> None:
     command = command + ('--ext',) + ext_library
   if use_crashpad:
     command = command + ('--crashpad',)
+  if arguments.no_gpu:
+    command = command + ('--no-gpu',)
   LOGGER.info('COMMAND %s', ' '.join(command))
   if not arguments.wait_for_pipeline:
     bmbi_native_proc = await asyncio.create_subprocess_exec(*command)

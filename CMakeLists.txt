@@ -124,7 +124,9 @@ include(cmake/zlib_processed.cmake)
 include(cmake/opencv.cmake)
 include(cmake/boost.cmake)
 include(cmake/hdf5.cmake)
-include(cmake/crashpad.cmake)
+if(BUILD_CRASHPAD)
+  include(cmake/crashpad.cmake)
+endif()
 include(cmake/vulkan.cmake)
 
 execute_process(
@@ -143,6 +145,7 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 set(THALAMUS_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
+set(THALAMUS_CRASHPAD "${BUILD_CRASHPAD}")
 configure_file(thalamus_config.h.in thalamus_config.h)
  
 set(PROTO_SOURCES
@@ -356,8 +359,11 @@ target_compile_definitions(thalamus PRIVATE _USE_MATH_DEFINES)
 target_include_directories(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(thalamus opencv hdf5-static lua
   boost grpc++ grpc++_reflection inja
-  absl::str_format_internal absl::strings absl::str_format ffmpeg cairo perfetto crashpad
+  absl::str_format_internal absl::strings absl::str_format ffmpeg cairo perfetto
   Vulkan::Vulkan sdl)
+if(BUILD_CRASHPAD)
+  target_link_libraries(thalamus crashpad)
+endif()
 
 if(NOT APPLE)
   target_link_libraries(thalamus zlib_processed)
@@ -384,7 +390,9 @@ if(STRIP)
 else()
   add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "$<TARGET_FILE:native>" "${CMAKE_SOURCE_DIR}/thalamus")
 endif()
-add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "${CRASHPAD_HANDLER_EXE}" "${CMAKE_SOURCE_DIR}/thalamus")
+if(BUILD_CRASHPAD)
+  add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "${CRASHPAD_HANDLER_EXE}" "${CMAKE_SOURCE_DIR}/thalamus")
+endif()
 
 add_executable(test src/test.cpp)
 

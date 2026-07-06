@@ -81,7 +81,13 @@ namespace thalamus {
 
     ~NodeSession() override {
       THALAMUS_LOG(trace) << "Delete NodeSession";
+      start_join();
+    }
+
+    void start_join() {
+      THALAMUS_LOG(trace) << "start_join";
       std::lock_guard<std::mutex> lock(state->mutex);
+      timer.cancel();
       state->joining = true;
     }
         
@@ -145,6 +151,7 @@ namespace thalamus {
       }
       THALAMUS_ASSERT(!error, "Unexpected error");
 
+      std::lock_guard<std::mutex> lock(state->mutex);
       if(weak_raw_node.lock() == nullptr) {
         THALAMUS_LOG(trace) << "node expired";
         timer.expires_after(1s);
@@ -190,7 +197,13 @@ namespace thalamus {
 
     ~NodeReadSession() override {
       THALAMUS_LOG(trace) << "Delete NodeReadSession";
+      start_join();
+    }
+
+    void start_join() {
+      THALAMUS_LOG(trace) << "start_join";
       std::lock_guard<std::mutex> lock(state->mutex);
+      timer.cancel();
       state->joining = true;
     }
         
@@ -267,6 +280,7 @@ namespace thalamus {
       }
       THALAMUS_ASSERT(!error, "Unexpected error");
 
+      std::lock_guard<std::mutex> lock(state->mutex);
       if(weak_raw_node.lock() == nullptr) {
         THALAMUS_LOG(trace) << "node expired";
         timer.expires_after(1s);
