@@ -110,13 +110,226 @@ editor:
   existing preset is overwritten)
 - `Load` replaces the current draft with the selected preset (you are prompted before
   discarding a non-empty draft)
+- `Append` adds the selected preset's targets to the current draft without replacing anything —
+  e.g. layer a COR ring on top of a hex-packing grid. The draft schedule is kept unless you
+  tick "Also adopt this preset's schedule" in the confirm dialog. Appended targets whose names
+  collide with existing ones are auto-renamed (`Target 1 (COR)`), because schedules resolve
+  targets by name.
 - `Delete` removes the selected preset
+
+#### Target groups
+
+Targets remember which preset they came from (a `group` field stamped on `Load`/`Append`;
+targets that already carry a group — a combined layout re-saved as its own preset — keep it).
+When any target has a group, a **Groups** panel appears in the layout editor, and a **Target
+Groups** panel appears under the main target table. Each group gets one checkbox
+(`hex (8/8 on)`): clicking it enables or disables every target in that group at once. The
+panel under the main table edits the **live task config**, so flipping groups mid-session
+takes effect on the next trial — combined with the schedule's "auto ring = all enabled
+non-center targets" rule, this switches the same screen between (say) hex-random and
+center-out behavior without re-authoring the layout. Disabled targets are excluded from the
+schedule, from random inserts, and from rendering.
+
+The target tables also have non-destructive `Enable All` / `Disable All` buttons (unlike
+`Clear All`, which deletes the targets).
 
 Presets are stored on the task configuration under `target_layout_presets`, so they persist
 with the saved config graph.
 
+Presets saved since the schedule feature landed store `{"targets": [...], "schedule": {...}}`;
+older presets that are a bare list of targets still load (they get the default random
+schedule).
+
+### Structured target schedules (`target_schedule`)
+
+> **Runtime note:** schedules are honored by the **Rust executor only**
+> (`joystick_intro_rust` task / `joystick_intro_executor`). The pure-Python `run()` in this
+> module intentionally stays a uniform random draw, even when a schedule is configured. The
+> shared layout editor writes the config keys either way.
+
+The layout editor's `Schedule` panel controls how the next trial's target is chosen. It is
+stored on the task configuration as a single dict:
+
+```json
+"target_schedule": {
+  "mode": "random",                  // "random" | "sequence" | "center_out"
+  "order": ["U1", "R1", "D1", "L1"], // mode=sequence: ordered target names; cycles forever
+  "center": "C",                     // mode=center_out: name of the center target
+  "peripherals": [],                 // mode=center_out: ring names; empty => all non-center enabled
+  "peripheral_order": "sequential",  // "sequential" | "random"
+  "interleave_random_ratio": 0.0     // 0..1 prob. a trial is a random draw instead of the scheduled one
+}
+```
+
+- **Random** (default, and the behavior when the key is absent): uniform random choice over
+  enabled targets — identical to the task before schedules existed.
+- **Fixed Sequence**: cycles the enabled targets in list order, looping forever. Reorder with
+  the `Move Up` / `Move Down` buttons; `order` is written from the list on save.
+- **Center-Out**: alternates center → peripheral → center → next peripheral. The center is
+  chosen by name from the `Center` dropdown; the peripheral ring is picked in the `Ring` list,
+  visited sequentially or at random per `Periphery`.
+- **Random insert %** (`interleave_random_ratio`): with this probability a trial is replaced
+  by a uniform-random enabled target, and the structured cursor does **not** advance — the
+  pattern resumes where it left off. Irrelevant in Random mode.
+- In **Center-Out**, the insert roll only happens on a **pair boundary** (when the next
+  structured trial would be the center), so a random insert can never split a
+  center → peripheral pair: the stream looks like `C → P → R → R → C → P → …`, never
+  `C → R → P`. Because only every other slot rolls, the overall fraction of random trials is
+  `r / (2 - r)` rather than `r` (e.g. 0.70 ⇒ ~54% of trials are inserts, arriving in runs
+  between pairs).
+
+> **Warning:** `Random insert %` at **1.00 disables the structured pattern entirely** — every
+> trial rolls the random insert, so center-out never alternates and `Periphery` has no effect.
+> This knob is for *occasionally* injecting an off-pattern trial (e.g. `0.20` ≈ 1 in 5), not
+> for randomizing the peripheral choice.
+>
+> **Recipe — center → random target alternation:** mode `Center-Out`, `Random insert %` =
+> `0.00`, `Periphery` = `random`. For a fixed ring order use `Periphery` = `sequential`
+> instead.
+
+Targets are referenced **by name**. A scheduled name that is missing or disabled falls back to
+a random draw for that slot (the schedule keeps advancing, so the pattern resumes on the next
+trial).
+
+The schedule's cross-trial position persists in the task config as `_schedule_seq_pos`,
+`_schedule_expect_center`, and `_schedule_peripheral_pos` (round-tripped through the Rust
+executor's `config_updates`, like `_streak_count`). Saving the layout editor resets them, so
+every save restarts the pattern from the top.
+
+Each attempt records which phase selected its target in `behav_result` (see
+`schedule_phase` below).
+
+#### The Ring picker (Center-Out)
+
+The `Ring` list in the Schedule panel controls the peripheral set:
+
+- **Auto: all enabled non-center** (checked, the default) means the ring is computed at
+  runtime as every enabled non-center target — stored as an **empty `peripherals` list**. The
+  greyed, checked items show what Auto resolves to.
+- Unchecking Auto makes the ring **explicit**: the list is seeded with the computed ring and
+  the checked names are written to `peripherals` (in list order — that is the sequential visit
+  order). A target excluded from the ring stays eligible for random-interleave inserts.
+- **Check All / Uncheck All** buttons under the list bulk-edit the explicit ring. After
+  Uncheck All the editor stays in explicit mode with nothing checked so you can build the ring
+  from scratch; an orange hint reminds you that an **empty ring still runs as Auto** at
+  runtime (the empty-`peripherals` rule), so check at least one target or group before saving
+  if you meant to restrict the ring.
+- When targets carry preset **groups**, a row of group checkboxes appears under the ring list
+  (`COR (8/8)`): one click includes or excludes every enabled target of that group. This is
+  how two appended presets divide labor — e.g. uncheck `hex` so the schedule alternates over
+  the COR ring only, while the still-enabled hex targets appear exclusively through random
+  inserts.
+
+References are by name and maintained automatically: renaming a target updates
+`center`/`peripherals`/`order` (as long as no other target still bears the old name);
+deleting a target drops its references. A name that no longer matches an enabled target shows
+as `(missing)`/`(disabled)` in the editor and falls back to a random draw at runtime.
+
+#### The Schedule tab
+
+The editor preview has two tabs. **Layout** is the classic draggable canvas of every draft
+target. **Schedule** renders only the structured pattern so it cannot be confused with the
+random-eligible layout: the center gets a gold `C` badge and a white outline, ring/sequence
+targets get numbered badges in visit order (`?` when the ring order is random) with their
+names always labeled, and targets not in the schedule are drawn faint. A footer shows the
+upcoming pattern (e.g. `C → U1 → C → R1 → …`), the interleave note, and a red warning listing
+any referenced targets that are missing or disabled. Clicking a target in either tab selects
+it in both.
+
+#### Operator HUD trial tag (Rust executor)
+
+During a session run through `joystick_intro_rust`, the operator window shows a colored tag
+over the mirror at each trial start:
+
+- blue `STRUCTURED — center (C)` / `STRUCTURED — peripheral (U1)` / `STRUCTURED — sequence (…)`
+- orange `RANDOM insert @30% — pattern resumes (R1)`: the configured `Random insert %`
+  rolled; the structured pattern continues on the next slot. Seeing these is the schedule
+  working as configured, at roughly the configured rate.
+- orange `RANDOM @100% — structured pattern DISABLED (…)`: `Random insert %` is `1.00`, so
+  every trial is a random insert and the structured pattern never runs. Lower it (usually to
+  `0.00`) if you wanted the structured schedule.
+- orange `RANDOM — no schedule in this task config (…)`: the RUNNING task config has no
+  structured schedule. Watch for this after editing: queue entries are independent copies of
+  the task config, so a queue entry created before you saved the schedule will run without it.
+  Re-queue the task (or clear stale queue entries) after authoring a schedule.
+
+This comes from a `TrialInfo=` marker the executor sends on the **operator event stream
+only** — it is never written to the Thalamus log and never drawn on the subject display (the
+subject render path has no text capability at all).
+
+#### Separating structured vs. random trials in recorded data
+
+Every trial the Rust executor presents is tagged with the schedule phase that selected its
+target, in two places:
+
+1. **Per attempt** — `behav_result["attempts"][i]["schedule_phase"]` (see the field reference
+   below). Values:
+   - `center` — the structured center slot of a Center-Out pair
+   - `peripheral` — the structured peripheral slot that completes a pair
+   - `sequence` — a structured Fixed-Sequence trial
+   - `random` — anything else: Random mode, a random-interleave insert, **or** a structured
+     slot that fell back because its scheduled target name was missing/disabled
+2. **Per event** — the `target_on` event inside each attempt carries the same
+   `schedule_phase`, plus `target_index`, `target_x`, and `target_y`.
+
+Target identity: attempts and `target_on` record `target_index`, which indexes the task
+config's `targets` list (names live there — the list order is stable; presets appended into a
+layout keep existing rows in place). The `TrialInfo=` HUD marker is operator-stream only and
+is **not** in the log — do not look for it in recorded data.
+
+Processing recipes (attempts in presentation order):
+
+```python
+attempts = behav_result["attempts"]
+structured = [a for a in attempts
+              if a.get("schedule_phase") in ("center", "peripheral", "sequence")]
+inserts = [a for a in attempts if a.get("schedule_phase") == "random"]
+# Center-Out pairs: a center attempt and the attempt immediately after it
+pairs = [(a, b) for a, b in zip(attempts, attempts[1:])
+         if a.get("schedule_phase") == "center"
+         and b.get("schedule_phase") == "peripheral"]
+completed_pairs = [(a, b) for a, b in pairs
+                   if a.get("outcome") == "success" and b.get("outcome") == "success"]
+```
+
+Analysis caveats:
+
+- **Pair adjacency guarantee (sessions recorded on/after 2026-07-07):** in Center-Out mode a
+  random insert can only land on a pair boundary, so a `center` attempt is always immediately
+  followed by its `peripheral` attempt. **Earlier sessions do not have this guarantee** —
+  `random` attempts can sit inside a pair, so pair up phases by searching forward rather than
+  assuming adjacency when processing older data.
+- **The schedule advances per presented trial, not per success**: a failed `center` attempt is
+  still followed by the `peripheral` slot. Filter on `outcome` (as in `completed_pairs`
+  above) when you need fully executed center→out reaches.
+- The cross-trial cursor (`_schedule_expect_center` etc.) persists in the config between
+  runs, so a session can *begin* with a `peripheral` attempt if the previous run stopped
+  mid-pair (saving the layout editor resets the cursor).
+- `schedule_phase` is **Rust-executor only and additive**: attempts from the pure-Python task
+  or from sessions before the schedule feature simply lack the key — treat a missing key as
+  `random`-equivalent (uniform draw), not as structured.
+- Expected rates in Center-Out: with `Random insert %` = `r`, inserts arrive in runs between
+  pairs (geometric, mean `r/(1-r)` per boundary) and make up `r/(2-r)` of all trials
+  (`0.70 ⇒ ~54%`). In Sequence mode the fraction is simply `r`.
+
+Automated processing: the py-proc pipeline (`pyCheck/co_structured.py`) implements these recipes
+end-to-end. It runs automatically with the day summary (proc_gui's "Generate Day Summary") and
+writes a structured-CO reach-path image plus `*_co_structured_attempts.csv` / `*_co_structured_paths.npz`
+for reconstructing the paths of structured vs. random trials.
+
+Automated processing: the py-proc repo automates all of the above per day —
+`pyCheck/co_structured.py` (run inside "Generate Day Summary" or standalone) writes
+`<day>_co_structured.png` (structured/random reach paths + success rates),
+`<day>_co_structured_attempts.csv`, and `<day>_co_structured_paths.npz`; see
+`pyCheck/README.md` § "Structured center-out outputs".
+
 ### Editing conveniences
 
+- the side panel's settings are split into **Target / Generator / Schedule tabs** (the target
+  list, presets, and Save/Cancel stay visible at all times), so no section is squeezed into a
+  tiny scroll strip
+- clicking the generator's `Preview` automatically brings the **Layout** preview tab to the
+  front (generated previews are only drawn there)
 - most target editor controls now include hover tooltips describing what they change
 - the target list inside the layout editor supports multi-selection removal
 - the main target table also supports multi-selection removal
@@ -410,6 +623,16 @@ More specific explanation when an attempt does not end normally.
 Examples:
 - `timeout_without_movement`
 - `timeout_after_movement`
+
+### `schedule_phase`
+Which schedule phase selected this attempt's target: `random`, `sequence`, `center`, or
+`peripheral`. Also attached to the `target_on` event.
+
+**Rust executor only** — this key is additive and only emitted by the Rust executor
+(`joystick_intro_rust`); the pure-Python `run()` never writes it. See
+"Structured target schedules" above, and "Separating structured vs. random trials in
+recorded data" for pairing recipes and analysis caveats (pair adjacency, failed-trial
+advancement, cross-run cursor persistence).
 
 ### `end_time_perf_counter`
 Task-side timestamp for the end of the attempt.
