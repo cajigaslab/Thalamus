@@ -10,6 +10,7 @@ from ..qt import *
 
 from .canvas import Canvas
 from ..config import ObservableCollection
+from ..util import PersistedGeometryWindow
 #from .. import recorder2_pb2_grpc
 from .. import ophanim_pb2_grpc
 from .. import thalamus_pb2_grpc
@@ -40,7 +41,7 @@ class CentralWidget(QWidget):
     self.label.setGeometry(0, 0, event.size().width(), event.size().height())
     self.content.setGeometry(0, 0, event.size().width(), event.size().height())
 
-class Window(QMainWindow):
+class Window(PersistedGeometryWindow, QMainWindow):
   """
   The window that the task will render in
   """

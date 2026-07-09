@@ -1214,6 +1214,36 @@ class Plot(QWidget):
 
       self.update()
 
+class NodeSortProxy(QSortFilterProxyModel):
+  """Sorts top-level node rows by each node's 'display_order' — a UI-only
+  config key (like view_geometry) persisted per node in the config file.
+
+  Only the DISPLAY order changes: the underlying nodes list is never
+  reordered, because the running engine keeps per-index node state aligned
+  with that list. Nodes without display_order sort at their list position;
+  child (field) rows keep their natural order.
+  """
+  def __init__(self, nodes: ObservableList):
+    super().__init__()
+    self.nodes = nodes
+
+  def lessThan(self, left: QModelIndex, right: QModelIndex) -> bool:
+    if left.parent().isValid() or right.parent().isValid():
+      return left.row() < right.row()
+
+    def sort_key(row: int) -> typing.Tuple[float, int]:
+      order = row
+      if row < len(self.nodes):
+        node = self.nodes[row]
+        if isinstance(node, ObservableDict):
+          order = node.get('display_order', row)
+      try:
+        return float(order), row
+      except (TypeError, ValueError):
+        return float(row), row
+
+    return sort_key(left.row()) < sort_key(right.row())
+
 class ItemModel(QAbstractItemModel):
   def __init__(self, nodes: ObservableList, stub: thalamus_pb2_grpc.ThalamusStub, address: str):
     super().__init__()
@@ -1565,6 +1595,7 @@ class ThalamusWindow(QMainWindow):
   def __init__(self, address, state: ObservableDict, stub: thalamus_pb2_grpc.ThalamusStub, done_future: asyncio.Future):
     super().__init__()
     self.model: typing.Optional[ItemModel] = None
+    self.proxy: typing.Optional[NodeSortProxy] = None
     self.state = state
     self.stub = stub
     self.address = address
@@ -1613,12 +1644,25 @@ class ThalamusWindow(QMainWindow):
     add_button.clicked.connect(self.on_add)
     remove_button = QPushButton('Remove')
     remove_button.clicked.connect(self.on_remove)
+    move_up_button = QPushButton('Move Up')
+    move_up_button.setToolTip(
+      'Move the selected node up in this panel. Only the display order '
+      'changes (persisted in the config); node processing is unaffected.')
+    move_up_button.clicked.connect(lambda: self.on_move_node(-1))
+    move_down_button = QPushButton('Move Down')
+    move_down_button.setToolTip(
+      'Move the selected node down in this panel. Only the display order '
+      'changes (persisted in the config); node processing is unaffected.')
+    move_down_button.clicked.connect(lambda: self.on_move_node(1))
     self.view = QTreeView()
     self.view.setItemDelegate(Delegate(self.view))
 
     self.model = ItemModel(self.state['nodes'], self.stub, self.address)
-    self.view.setModel(self.model)
+    self.proxy = NodeSortProxy(self.state['nodes'])
+    self.proxy.setSourceModel(self.model)
+    self.view.setModel(self.proxy)
     self.model.dataChanged.connect(self.on_data_changed)
+    self.proxy.sort(0)
 
     self.view.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
     self.view.selectionModel().selectionChanged.connect(self.on_selection_changed)
@@ -1626,6 +1670,8 @@ class ThalamusWindow(QMainWindow):
     self.grid_layout.addWidget(self.view, 0, 0, 1, 2)
     self.grid_layout.addWidget(add_button, 1, 0)
     self.grid_layout.addWidget(remove_button, 1, 1)
+    self.grid_layout.addWidget(move_up_button, 2, 0)
+    self.grid_layout.addWidget(move_down_button, 2, 1)
 
     central_widget = QWidget()
     central_widget.setLayout(self.grid_layout)
@@ -1696,6 +1742,10 @@ class ThalamusWindow(QMainWindow):
     index = indexes[0] if indexes and indexes[0] else None
     if not index:
       return
+    # View selections carry proxy indexes; on_data_changed calls in with
+    # source indexes. Normalize to source so rows address the nodes list.
+    if self.proxy is not None and index.model() is self.proxy:
+      index = self.proxy.mapToSource(index)
 
     nodes = self.state['nodes']
     if index.parent() == QModelIndex():
@@ -1792,7 +1842,9 @@ class ThalamusWindow(QMainWindow):
       if top_left.column() == 1:
         self.on_selection_changed(QItemSelection(top_left, bottom_right), None)
       if self.model.rowCount(top_left) == 0:
-        self.view.setExpanded(top_left, False)
+        # The view holds proxy indexes; top_left is a source-model index.
+        view_index = self.proxy.mapFromSource(top_left) if self.proxy is not None else top_left
+        self.view.setExpanded(view_index, False)
         
   def on_save_config(self) -> None:
     """
@@ -1863,11 +1915,52 @@ class ThalamusWindow(QMainWindow):
     }
     nodes.append(new_node)
 
+  def on_move_node(self, delta: int) -> None:
+    if self.model is None or self.proxy is None:
+      return
+    indexes = self.view.selectedIndexes()
+    if not indexes:
+      return
+    proxy_index = indexes[0]
+    if proxy_index.parent().isValid():
+      proxy_index = proxy_index.parent()
+    visible_row = proxy_index.row()
+    target_row = visible_row + delta
+    count = self.proxy.rowCount(QModelIndex())
+    if not 0 <= target_row < count:
+      return
+
+    nodes = self.state['nodes']
+    # Normalize display_order to the current visible order, then swap the two
+    # rows. Only the display order changes: the nodes list itself stays put
+    # because the running engine tracks node state by list index.
+    source_rows = [
+      self.proxy.mapToSource(self.proxy.index(i, 0, QModelIndex())).row()
+      for i in range(count)]
+    for position, source_row in enumerate(source_rows):
+      node = nodes[source_row]
+      if node.get('display_order') != position:
+        node['display_order'] = position
+    moved_source = source_rows[visible_row]
+    nodes[moved_source]['display_order'] = target_row
+    nodes[source_rows[target_row]]['display_order'] = visible_row
+    self.proxy.invalidate()
+
+    # Keep the moved node selected, without re-triggering the widget-opening
+    # selection handler for a node the operator already had selected.
+    selection_model = self.view.selectionModel()
+    selection_model.blockSignals(True)
+    self.view.setCurrentIndex(
+      self.proxy.mapFromSource(self.model.index(moved_source, 0, QModelIndex())))
+    selection_model.blockSignals(False)
+
   def on_remove(self):
     indexes = self.view.selectedIndexes()
     if not indexes:
       return
     index = indexes[0]
+    if self.proxy is not None and index.model() is self.proxy:
+      index = self.proxy.mapToSource(index)
 
     nodes = self.state['nodes']
     row = index.row() if index.parent() == QModelIndex() else index.parent().row()

@@ -142,7 +142,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
 
     # --- operator live mirror (M4): paint executor-streamed JPEG frames ---
 
-    mirror_state = {'image': None}
+    mirror_state = {'image': None, 'trial_info': None}
 
     async def mirror_consumer(stub) -> None:
         try:
@@ -168,6 +168,39 @@ async def run(context: TaskContextProtocol) -> TaskResult:
             painter.drawImage(QRect((w - dw) // 2, (h - dh) // 2, dw, dh), image)
         painter.setPen(QPen(QColor(255, 255, 255), 1))
         painter.drawText(10, 20, 'Joystick Intro (Rust executor)')
+        # Operator-only schedule tag (drawn over the mirror; the subject
+        # display never sees this — it comes from the TrialInfo= marker).
+        trial_info = mirror_state['trial_info']
+        if trial_info:
+            phase = str(trial_info.get('schedule_phase', ''))
+            name = str(trial_info.get('target_name', '')) or '?'
+            mode = str(trial_info.get('mode', 'random'))
+            interleave_pct = float(trial_info.get('interleave', 0.0) or 0.0) * 100.0
+            if phase in ('sequence', 'center', 'peripheral'):
+                text = f'STRUCTURED — {phase} ({name})'
+                color = QColor(90, 160, 255)
+            elif mode in ('sequence', 'center_out'):
+                if interleave_pct >= 100.0:
+                    # Every slot rolls random: the structured schedule is
+                    # configured but can never run. Lower Random insert %
+                    # (e.g. to 0.00) to get the structured pattern back.
+                    text = f'RANDOM @100% — structured pattern DISABLED ({name})'
+                else:
+                    # The configured interleave rolled: a random trial was
+                    # inserted and the structured pattern resumes next slot.
+                    text = f'RANDOM insert @{interleave_pct:.0f}% — pattern resumes ({name})'
+                color = QColor(255, 150, 60)
+            else:
+                # The RUNNING task config has no structured schedule at all —
+                # e.g. a queue entry saved before the schedule was authored.
+                text = f'RANDOM — no schedule in this task config ({name})'
+                color = QColor(255, 150, 60)
+            hud_font = QFont(painter.font())
+            hud_font.setBold(True)
+            hud_font.setPointSize(14)
+            painter.setFont(hud_font)
+            painter.setPen(QPen(color, 1))
+            painter.drawText(10, 44, text)
 
     context.widget.renderer = renderer
     context.widget.key_press_handler = on_key_press
@@ -193,14 +226,25 @@ async def run(context: TaskContextProtocol) -> TaskResult:
         async for event in stub.run_trial(request_queue):
             kind = event.WhichOneof('body')
             if kind == 'marker':
-                # Rust already logged this to Thalamus.log; here it drives the
-                # operator-side sounds only. Do NOT context.log() it (would
-                # duplicate the record in the capture file).
-                LOGGER.debug('BehavState marker: %s @ %d', event.marker.text, event.marker.time_ns)
-                if event.marker.text == 'BehavState=success':
-                    success_sound.play()
-                elif event.marker.text == 'BehavState=fail':
-                    fail_sound.play()
+                text = event.marker.text
+                if text.startswith('TrialInfo='):
+                    # Operator-only schedule metadata for the HUD overlay.
+                    # Rust sends this on the event stream only — it is never
+                    # written to the Thalamus log.
+                    try:
+                        mirror_state['trial_info'] = json.loads(text[len('TrialInfo='):])
+                    except json.JSONDecodeError:
+                        LOGGER.exception('Malformed TrialInfo marker from Rust executor')
+                    context.widget.update()
+                else:
+                    # Rust already logged this to Thalamus.log; here it drives the
+                    # operator-side sounds only. Do NOT context.log() it (would
+                    # duplicate the record in the capture file).
+                    LOGGER.debug('BehavState marker: %s @ %d', text, event.marker.time_ns)
+                    if text == 'BehavState=success':
+                        success_sound.play()
+                    elif text == 'BehavState=fail':
+                        fail_sound.play()
             elif kind == 'behav_result_json':
                 try:
                     context.behav_result = json.loads(event.behav_result_json)

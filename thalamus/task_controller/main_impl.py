@@ -210,12 +210,13 @@ async def async_main() -> None:
     window = task_window.Window(config, done_future, None, None, stub, None)
     #node.create_timer(1/60, QApplication.processEvents)
 
-    window.resize(1024, 768)
-
-    window.move(
-      (screen_geometry.width()-window.width()) // 2,
-      (screen_geometry.height()-window.height()) // 2)
     window.setWindowTitle('Touch Task')
+    # Geometry persists in the config (like node view_geometry); the centered
+    # 1024x768 below is only the first-run default.
+    window.restore_geometry_from_config(config, 'task_window_geometry', [
+      (screen_geometry.width()-1024) // 2,
+      (screen_geometry.height()-768) // 2,
+      1024, 768])
     window.show()
 
   task_context = task_context_module.TaskContext(config,
@@ -227,16 +228,16 @@ async def async_main() -> None:
     window.set_task_context(task_context)
 
   controller = ControlWindow(window, task_context, ConfigData(user_config, arguments.config), done_future)
-  controller.resize(1024, 768)
-  controller.move(
-    (screen_geometry.width()-controller.width()) // 2 + 50,
-    (screen_geometry.height()-controller.height()) // 2 + 50)
+  controller.restore_geometry_from_config(config, 'control_window_geometry', [
+    (screen_geometry.width()-1024) // 2 + 50,
+    (screen_geometry.height()-768) // 2 + 50,
+    1024, 768])
   controller.show()
 
   thalamus = ThalamusWindow(f'localhost:{arguments.port}', config, stub, done_future)
+  # load() restores thalamus_view_geometry and installs its own persistence
+  # hooks — do not move/resize here, that would clobber the saved geometry.
   await thalamus.load()
-  thalamus.resize(384, 768)
-  thalamus.move(100, 100)
   thalamus.show()
 
   #native_watch_task = None

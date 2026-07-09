@@ -20,6 +20,7 @@ from .operator_view import Window as OperatorWindow
 from .window import Window as SubjectWindow
 from .reward_schedule import RewardSchedule
 from .util import create_task_with_exc_handling, isdeleted
+from ..util import PersistedGeometryWindow
 from ..qt import *
 from .touch_dialog import TouchDialog
 
@@ -326,7 +327,7 @@ class ConfigData(typing.NamedTuple):
   user_config: typing.Dict[typing.Any, typing.Any]
   file_name: str
 
-class ControlWindow(QMainWindow):
+class ControlWindow(PersistedGeometryWindow, QMainWindow):
   """
   Implements the controller UI that manages the config and TaskContext
   """

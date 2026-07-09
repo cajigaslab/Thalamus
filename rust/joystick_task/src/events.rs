@@ -11,6 +11,10 @@
 //!      finalize_attempt tail, final_attempt) are ABSENT until inserted, so
 //!      those use skip_serializing_if.
 //!
+//! Documented divergence: `schedule_phase` on Attempt is a Rust-only ADDITIVE
+//! key (structured target schedules run in this executor only; the pure-Python
+//! run() stays random and never emits it).
+//!
 //! Sources (joystick_intro.py):
 //!   - behav_result literal        @2184-2202
 //!   - reset_attempt_tracking      @2373-2407
@@ -117,6 +121,11 @@ pub struct Attempt {
     pub target_entry_count: i64,
     pub outcome: Option<String>,
     pub failure_reason: Option<String>,
+    /// Rust-only additive key (no Python counterpart): which schedule phase
+    /// selected this trial's target — "random" | "sequence" | "center" |
+    /// "peripheral". Placed after failure_reason so the Python-parity prefix
+    /// assertions above it still hold.
+    pub schedule_phase: Option<String>,
     /// cursor_only_mode only (keys absent otherwise).
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
     pub free_play: Option<FreePlayAttempt>,
@@ -147,6 +156,7 @@ impl Attempt {
             target_entry_count: 0,
             outcome: None,
             failure_reason: None,
+            schedule_phase: None,
             free_play: None,
             end: None,
         }
@@ -313,7 +323,7 @@ mod tests {
         let a = Attempt::new(1, 10.0, "direct", false);
         let json = serde_json::to_string(&a).unwrap();
         assert!(json.starts_with(
-            r#"{"attempt_index":1,"start_time_perf_counter":10.0,"control_mode":"direct","cursor_only_mode":false,"target_index":null,"target_position":null,"target_radius_ratio":null,"hold_time_s":null,"reward_channel":null,"target_color_rgb":null,"target_opacity":null,"target_active_color_rgb":null,"target_active_opacity":null,"events":[],"joystick_active":false,"target_entry_count":0,"outcome":null,"failure_reason":null}"#
+            r#"{"attempt_index":1,"start_time_perf_counter":10.0,"control_mode":"direct","cursor_only_mode":false,"target_index":null,"target_position":null,"target_radius_ratio":null,"hold_time_s":null,"reward_channel":null,"target_color_rgb":null,"target_opacity":null,"target_active_color_rgb":null,"target_active_opacity":null,"events":[],"joystick_active":false,"target_entry_count":0,"outcome":null,"failure_reason":null,"schedule_phase":null}"#
         ), "unexpected: {json}");
     }
 

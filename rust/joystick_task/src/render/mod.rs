@@ -682,8 +682,24 @@ impl Executor {
             width_px: w,
             height_px: h,
         });
+        let trial_started = out
+            .effects
+            .iter()
+            .any(|e| matches!(e, crate::state::Effect::LogState("start_on")));
         for effect in out.effects {
             ship_effect(&job.clock, &job.effect_tx, &job.event_tx, effect);
+        }
+        if trial_started {
+            // Operator-only trial metadata (schedule phase + target name).
+            // Sent directly on event_tx — NOT through ship_effect — so it
+            // reaches the delegate's HUD but never the Thalamus log, and it
+            // can't appear on the subject display (that has no text path).
+            let _ = job.event_tx.send(Ok(TrialEvent {
+                body: Some(Body::Marker(BehavMarker {
+                    text: format!("TrialInfo={}", job.trial.trial_info_json()),
+                    time_ns: job.clock.now_python_ns(),
+                })),
+            }));
         }
 
         if let Some(outcome) = out.done {

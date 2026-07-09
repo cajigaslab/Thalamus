@@ -44,6 +44,43 @@ class MeteredUpdater:
       self.config[key] = value
     self.updates.append((key, update))
 
+class PersistedGeometryWindow:
+  """Mixin for a top-level window whose [x, y, w, h] geometry lives at a
+  config key — the same view_geometry pattern node windows use, so the
+  window comes back where the operator left it after a restart.
+
+  Call restore_geometry_from_config once after construction; move/resize
+  events then write back (throttled). Fullscreen/maximized/minimized
+  geometry is not recorded so a toggle doesn't clobber the saved layout.
+  """
+  view_geometry_updater: typing.Optional[MeteredUpdater] = None
+
+  def restore_geometry_from_config(self, config: ObservableCollection, key: str,
+                                   default: typing.Sequence[int]) -> None:
+    if key not in config:
+      config[key] = list(default)
+    x, y, w, h = config[key]
+    self.view_geometry_updater = MeteredUpdater(
+      config[key], datetime.timedelta(seconds=1), lambda: isdeleted(self))
+    self.move(int(x), int(y))
+    self.resize(int(w), int(h))
+
+  def _geometry_persistable(self) -> bool:
+    return (self.view_geometry_updater is not None and not self.isFullScreen()
+            and not self.isMaximized() and not self.isMinimized())
+
+  def moveEvent(self, a0: QMoveEvent) -> None: # pylint: disable=invalid-name
+    if self._geometry_persistable():
+      offset = self.frameGeometry().size() - self.geometry().size()
+      position = a0.pos() - QPoint(offset.width(), offset.height())
+      self.view_geometry_updater[:2] = max(0, position.x()), max(0, position.y())
+    return super().moveEvent(a0)
+
+  def resizeEvent(self, a0: QResizeEvent) -> None: # pylint: disable=invalid-name
+    if self._geometry_persistable():
+      self.view_geometry_updater[2:] = a0.size().width(), a0.size().height()
+    return super().resizeEvent(a0)
+
 def open_preferred_app(path: pathlib.Path):
   system = platform.system()
   if system == 'Windows':

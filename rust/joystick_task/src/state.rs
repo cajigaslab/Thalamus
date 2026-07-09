@@ -121,7 +121,9 @@ fn toggle_brightness(b: i64) -> i64 {
     }
 }
 
-/// A selected target (Python TargetSelection tuple @2138).
+/// A selected target (Python TargetSelection tuple @2138, plus the schedule
+/// extras the Rust executor adds: the target's `name` so structured schedules
+/// can reference it, and the `schedule_phase` tag propagated into behav_result).
 #[derive(Debug, Clone)]
 pub struct TargetSelection {
     pub index: i64,
@@ -134,6 +136,9 @@ pub struct TargetSelection {
     pub opacity: f64,
     pub active_color: [i64; 3],
     pub active_opacity: f64,
+    pub name: String,
+    /// "random" | "sequence" | "center" | "peripheral"
+    pub schedule_phase: String,
 }
 
 /// Cheap xorshift64* RNG for place_target's random.choice — no rand dep.
@@ -154,6 +159,22 @@ impl Rng {
     fn choice(&mut self, len: usize) -> usize {
         (self.next() % len as u64) as usize
     }
+    /// Uniform float in [0, 1).
+    fn next_f64(&mut self) -> f64 {
+        (self.next() >> 11) as f64 / (1u64 << 53) as f64
+    }
+}
+
+/// Structured-schedule cursor. A fresh Trial is built per run_trial stream, so
+/// this state round-trips through task_config like _streak_count does: parsed
+/// from the `_schedule_*` keys at construction, shipped back via
+/// config_updates() at trial end. The layout editor resets the keys on save.
+#[derive(Debug, Clone, Copy)]
+struct SchedulerState {
+    seq_pos: u64,
+    /// true => the next structured center_out pick is the center target.
+    expect_center: bool,
+    peripheral_pos: u64,
 }
 
 /// Operator keyboard override state (arrow keys on the operator widget).
@@ -172,6 +193,7 @@ struct Persisted {
     last_cursor_x: f64,
     last_cursor_y: f64,
     keys: OperatorKeys,
+    scheduler: SchedulerState,
 }
 
 fn parse_persisted(raw: &Value) -> Persisted {
@@ -199,6 +221,14 @@ fn parse_persisted(raw: &Value) -> Persisted {
             up: key("up"),
             down: key("down"),
         },
+        scheduler: SchedulerState {
+            seq_pos: f("_schedule_seq_pos", 0.0).max(0.0) as u64,
+            expect_center: raw
+                .get("_schedule_expect_center")
+                .and_then(Value::as_bool)
+                .unwrap_or(true),
+            peripheral_pos: f("_schedule_peripheral_pos", 0.0).max(0.0) as u64,
+        },
     }
 }
 
@@ -220,6 +250,7 @@ pub struct Trial {
     // Cross-trial persisted.
     pub streak_count: i64,
     pub operator_keys: OperatorKeys,
+    scheduler: SchedulerState,
 
     // Dynamic state.
     pub session_start: f64,
@@ -337,6 +368,8 @@ impl Trial {
             opacity: DEFAULT_TARGET_OPACITY,
             active_color: DEFAULT_TARGET_ACTIVE_COLOR_I,
             active_opacity: DEFAULT_TARGET_ACTIVE_OPACITY,
+            name: String::new(),
+            schedule_phase: "random".to_string(),
         };
 
         let mut t = Self {
@@ -354,6 +387,7 @@ impl Trial {
             } else {
                 persisted.keys
             },
+            scheduler: persisted.scheduler,
             session_start: now_s,
             state: State::Intertrial,
             cursor_x,
@@ -555,10 +589,18 @@ impl Trial {
                 1.0,
                 DEFAULT_TARGET_ACTIVE_OPACITY,
             ),
+            name: obj
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string(),
+            schedule_phase: "random".to_string(),
         })
     }
 
-    /// place_target (@2512-2547).
+    /// place_target (@2512-2547), extended with the structured schedule.
+    /// Every call advances the schedule cursor by exactly one shown target;
+    /// callers must not invoke it speculatively.
     fn place_target(&mut self) -> TargetSelection {
         let enabled: Vec<TargetSelection> = self
             .cfg
@@ -567,22 +609,95 @@ impl Trial {
             .enumerate()
             .filter_map(|(i, t)| self.parse_target(i, t))
             .collect();
-        if !enabled.is_empty() {
+        if enabled.is_empty() {
+            return TargetSelection {
+                index: -1,
+                x: 0.75,
+                y: 0.50,
+                radius_ratio: DEFAULT_TARGET_RADIUS_RATIO,
+                hold_time: DEFAULT_TARGET_HOLD_TIME,
+                reward_channel: self.cfg.reward_channel as i64,
+                color: DEFAULT_TARGET_COLOR_I,
+                opacity: DEFAULT_TARGET_OPACITY,
+                active_color: DEFAULT_TARGET_ACTIVE_COLOR_I,
+                active_opacity: DEFAULT_TARGET_ACTIVE_OPACITY,
+                name: String::new(),
+                schedule_phase: "random".to_string(),
+            };
+        }
+
+        let mode = self.cfg.target_schedule.mode.as_str();
+        // "random" (and any unknown mode): today's behavior, unchanged.
+        if mode != "sequence" && mode != "center_out" {
             let i = self.rng.choice(enabled.len());
             return enabled[i].clone();
         }
-        TargetSelection {
-            index: -1,
-            x: 0.75,
-            y: 0.50,
-            radius_ratio: DEFAULT_TARGET_RADIUS_RATIO,
-            hold_time: DEFAULT_TARGET_HOLD_TIME,
-            reward_channel: self.cfg.reward_channel as i64,
-            color: DEFAULT_TARGET_COLOR_I,
-            opacity: DEFAULT_TARGET_OPACITY,
-            active_color: DEFAULT_TARGET_ACTIVE_COLOR_I,
-            active_opacity: DEFAULT_TARGET_ACTIVE_OPACITY,
+
+        // Interleave roll: a random trial is INSERTED into the structured
+        // stream — the schedule cursor does not advance, so the pattern
+        // resumes where it left off. In center_out mode the roll only happens
+        // on a pair boundary (when the next structured pick would be the
+        // center), so an insert never splits a center -> peripheral pair.
+        let ratio = self
+            .cfg
+            .target_schedule
+            .interleave_random_ratio
+            .clamp(0.0, 1.0);
+        let at_pair_boundary = mode != "center_out" || self.scheduler.expect_center;
+        if ratio > 0.0 && at_pair_boundary && self.rng.next_f64() < ratio {
+            let i = self.rng.choice(enabled.len());
+            return enabled[i].clone();
         }
+
+        // Next structured pick, by target name. The cursor advances even if
+        // the name turns out missing/disabled below: that slot just becomes a
+        // random trial and the pattern continues at the next slot.
+        let (name, phase) = if mode == "sequence" {
+            let order = &self.cfg.target_schedule.order;
+            if order.is_empty() {
+                (String::new(), "sequence")
+            } else {
+                let name = order[(self.scheduler.seq_pos % order.len() as u64) as usize].clone();
+                self.scheduler.seq_pos = self.scheduler.seq_pos.wrapping_add(1);
+                (name, "sequence")
+            }
+        } else if self.scheduler.expect_center {
+            self.scheduler.expect_center = false;
+            (self.cfg.target_schedule.center.clone(), "center")
+        } else {
+            self.scheduler.expect_center = true;
+            let center = &self.cfg.target_schedule.center;
+            let ring: Vec<String> = if !self.cfg.target_schedule.peripherals.is_empty() {
+                self.cfg.target_schedule.peripherals.clone()
+            } else {
+                enabled
+                    .iter()
+                    .map(|t| t.name.clone())
+                    .filter(|n| !n.is_empty() && n != center)
+                    .collect()
+            };
+            if ring.is_empty() {
+                (String::new(), "peripheral")
+            } else if self.cfg.target_schedule.peripheral_order == "random" {
+                let i = self.rng.choice(ring.len());
+                (ring[i].clone(), "peripheral")
+            } else {
+                let i = (self.scheduler.peripheral_pos % ring.len() as u64) as usize;
+                self.scheduler.peripheral_pos = self.scheduler.peripheral_pos.wrapping_add(1);
+                (ring[i].clone(), "peripheral")
+            }
+        };
+
+        if !name.is_empty() {
+            if let Some(t) = enabled.iter().find(|t| t.name == name) {
+                let mut selected = t.clone();
+                selected.schedule_phase = phase.to_string();
+                return selected;
+            }
+        }
+        // Name missing or disabled: fall back to a random draw for this slot.
+        let i = self.rng.choice(enabled.len());
+        enabled[i].clone()
     }
 
     fn ensure_next_target_preview(&mut self) {
@@ -593,9 +708,11 @@ impl Trial {
 
     fn consume_next_target(&mut self) -> TargetSelection {
         self.ensure_next_target_preview();
-        let selected = self.next_target_preview.take().unwrap();
-        self.next_target_preview = Some(self.place_target());
-        selected
+        // Lazily refilled by the next ensure call. An eager refill here would
+        // advance the schedule cursor for a preview nothing reads, and the
+        // Trial (rebuilt per run_trial stream) would discard it at trial end —
+        // silently skipping one schedule slot per trial.
+        self.next_target_preview.take().unwrap()
     }
 
     /// reset_attempt_tracking (@2373-2407).
@@ -889,6 +1006,7 @@ impl Trial {
             a.target_opacity = Some(target.opacity);
             a.target_active_color_rgb = Some(target.active_color);
             a.target_active_opacity = Some(target.active_opacity);
+            a.schedule_phase = Some(target.schedule_phase.clone());
         }
         let e = self
             .event("target_on", now)
@@ -901,7 +1019,8 @@ impl Trial {
             .with("target_color_rgb", target.color.to_vec())
             .with("target_opacity", target.opacity)
             .with("target_active_color_rgb", target.active_color.to_vec())
-            .with("target_active_opacity", target.active_opacity);
+            .with("target_active_opacity", target.active_opacity)
+            .with("schedule_phase", target.schedule_phase.clone());
         self.append_event(e);
         out.log("start_on");
     }
@@ -1207,6 +1326,21 @@ impl Trial {
         }
     }
 
+    /// Operator-only trial metadata, streamed by the render loop as a
+    /// `TrialInfo=` marker right after `start_on` (see render::step_active).
+    /// It rides the delegate event stream ONLY — never the Thalamus log, and
+    /// never the subject display. `mode` lets the operator HUD distinguish
+    /// "random mode" from "random insert into a structured stream".
+    pub fn trial_info_json(&self) -> String {
+        serde_json::json!({
+            "schedule_phase": self.current_target.schedule_phase,
+            "target_name": self.current_target.name,
+            "mode": self.cfg.target_schedule.mode,
+            "interleave": self.cfg.target_schedule.interleave_random_ratio.clamp(0.0, 1.0),
+        })
+        .to_string()
+    }
+
     /// Cross-trial bookkeeping to persist into task_config (Python mutates
     /// task_config directly @3155/@3237-3239; we ship it as one JSON object in
     /// TrialEvent.config_updates_json for the delegate to apply).
@@ -1221,6 +1355,9 @@ impl Trial {
                 "up": self.operator_keys.up,
                 "down": self.operator_keys.down,
             },
+            "_schedule_seq_pos": self.scheduler.seq_pos,
+            "_schedule_expect_center": self.scheduler.expect_center,
+            "_schedule_peripheral_pos": self.scheduler.peripheral_pos,
         })
         .to_string()
     }
@@ -1483,6 +1620,304 @@ mod tests {
         assert_eq!(t.current_target.hold_time, 1.5);
         assert_eq!(t.current_target.reward_channel, 2);
         assert_eq!(t.current_target.color, [10, 20, 30]);
+    }
+
+    // --- structured target schedule ---
+
+    /// Four named targets on a cross, plus config fragments merged in.
+    fn sched_cfg(schedule_json: &str, extra: &str) -> (TaskConfig, Value) {
+        let json = format!(
+            r#"{{"intertrial_interval": 0.1, "targets": [
+                {{"name": "C",  "x_norm": 0.5, "y_norm": 0.5}},
+                {{"name": "U1", "x_norm": 0.5, "y_norm": 0.9}},
+                {{"name": "R1", "x_norm": 0.9, "y_norm": 0.5}},
+                {{"name": "D1", "x_norm": 0.5, "y_norm": 0.1}}
+            ], "target_schedule": {schedule_json}{extra}}}"#
+        );
+        cfg(&json)
+    }
+
+    fn picks(t: &mut Trial, n: usize) -> Vec<(String, String)> {
+        (0..n)
+            .map(|_| {
+                let s = t.consume_next_target();
+                (s.name, s.schedule_phase)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn sequence_mode_cycles_order() {
+        let (c, raw) = sched_cfg(r#"{"mode": "sequence", "order": ["U1", "R1", "D1"]}"#, "");
+        let mut t = Trial::new(c, &raw, 0.0, 42);
+        let got = picks(&mut t, 7);
+        let names: Vec<&str> = got.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, vec!["U1", "R1", "D1", "U1", "R1", "D1", "U1"]);
+        assert!(got.iter().all(|(_, p)| p == "sequence"));
+    }
+
+    #[test]
+    fn center_out_alternates_and_cycles_ring_sequentially() {
+        let (c, raw) = sched_cfg(
+            r#"{"mode": "center_out", "center": "C", "peripheral_order": "sequential"}"#,
+            "",
+        );
+        let mut t = Trial::new(c, &raw, 0.0, 42);
+        let got = picks(&mut t, 8);
+        // Ring defaults to all enabled non-center names, in target-list order.
+        let expect = [
+            ("C", "center"),
+            ("U1", "peripheral"),
+            ("C", "center"),
+            ("R1", "peripheral"),
+            ("C", "center"),
+            ("D1", "peripheral"),
+            ("C", "center"),
+            ("U1", "peripheral"),
+        ];
+        for (i, (name, phase)) in got.iter().enumerate() {
+            assert_eq!((name.as_str(), phase.as_str()), expect[i], "pick {i}");
+        }
+    }
+
+    #[test]
+    fn center_out_random_stays_within_ring() {
+        let (c, raw) = sched_cfg(
+            r#"{"mode": "center_out", "center": "C", "peripherals": ["U1", "D1"],
+                "peripheral_order": "random"}"#,
+            "",
+        );
+        let mut t = Trial::new(c, &raw, 0.0, 42);
+        for (i, (name, phase)) in picks(&mut t, 20).iter().enumerate() {
+            if i % 2 == 0 {
+                assert_eq!((name.as_str(), phase.as_str()), ("C", "center"));
+            } else {
+                assert!(name == "U1" || name == "D1", "pick {i} left the ring: {name}");
+                assert_eq!(phase, "peripheral");
+            }
+        }
+    }
+
+    #[test]
+    fn interleave_zero_never_inserts_random() {
+        let (c, raw) = sched_cfg(
+            r#"{"mode": "sequence", "order": ["U1", "R1"], "interleave_random_ratio": 0.0}"#,
+            "",
+        );
+        let mut t = Trial::new(c, &raw, 0.0, 42);
+        let got = picks(&mut t, 10);
+        assert!(got.iter().all(|(_, p)| p == "sequence"));
+        let names: Vec<&str> = got.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, vec!["U1", "R1", "U1", "R1", "U1", "R1", "U1", "R1", "U1", "R1"]);
+    }
+
+    #[test]
+    fn interleave_one_is_all_random_and_cursor_never_advances() {
+        let (c, raw) = sched_cfg(
+            r#"{"mode": "sequence", "order": ["U1", "R1"], "interleave_random_ratio": 1.0}"#,
+            "",
+        );
+        let mut t = Trial::new(c, &raw, 0.0, 42);
+        let got = picks(&mut t, 10);
+        assert!(got.iter().all(|(_, p)| p == "random"), "got: {got:?}");
+        assert_eq!(t.scheduler.seq_pos, 0);
+    }
+
+    #[test]
+    fn interleave_resumes_pattern_after_random_insertion() {
+        let (c, raw) = sched_cfg(
+            r#"{"mode": "sequence", "order": ["U1", "R1", "D1"],
+                "interleave_random_ratio": 0.5}"#,
+            "",
+        );
+        let mut t = Trial::new(c, &raw, 0.0, 42);
+        // Regardless of where random insertions land, the structured
+        // subsequence must be exactly the order cycling in-order.
+        let structured: Vec<String> = picks(&mut t, 40)
+            .into_iter()
+            .filter(|(_, p)| p == "sequence")
+            .map(|(n, _)| n)
+            .collect();
+        assert!(!structured.is_empty());
+        for (i, name) in structured.iter().enumerate() {
+            assert_eq!(name, ["U1", "R1", "D1"][i % 3], "structured pick {i}");
+        }
+    }
+
+    #[test]
+    fn center_out_inserts_never_split_a_pair() {
+        // Even at a high insert ratio, every center pick must be immediately
+        // followed by its peripheral: inserts only land between pairs.
+        let (c, raw) = sched_cfg(
+            r#"{"mode": "center_out", "center": "C", "peripheral_order": "random",
+                "interleave_random_ratio": 0.7}"#,
+            "",
+        );
+        let mut t = Trial::new(c, &raw, 0.0, 42);
+        let got = picks(&mut t, 200);
+        let inserts = got.iter().filter(|(_, p)| p == "random").count();
+        assert!(inserts > 0, "ratio 0.7 should produce inserts");
+        for (i, (_, phase)) in got.iter().enumerate() {
+            if phase == "center" {
+                assert!(i + 1 < got.len(), "stream should not end mid-pair here");
+                assert_eq!(
+                    got[i + 1].1, "peripheral",
+                    "pick {} split a pair: {:?} then {:?}", i, got[i], got[i + 1]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn center_out_interleave_one_is_still_all_random() {
+        // expect_center starts true (a pair boundary) and the cursor never
+        // advances, so ratio 1.0 stays all-random in center_out too.
+        let (c, raw) = sched_cfg(
+            r#"{"mode": "center_out", "center": "C", "interleave_random_ratio": 1.0}"#,
+            "",
+        );
+        let mut t = Trial::new(c, &raw, 0.0, 42);
+        let got = picks(&mut t, 10);
+        assert!(got.iter().all(|(_, p)| p == "random"), "got: {got:?}");
+        assert!(t.scheduler.expect_center);
+    }
+
+    #[test]
+    fn missing_or_disabled_name_falls_back_to_random() {
+        // "GONE" is not a target; C is disabled -> center picks fall back too.
+        let (c, raw) = cfg(
+            r#"{"targets": [
+                {"name": "C", "enabled": false},
+                {"name": "U1", "x_norm": 0.5, "y_norm": 0.9}
+            ], "target_schedule": {"mode": "sequence", "order": ["GONE", "U1"]}}"#,
+        );
+        let mut t = Trial::new(c, &raw, 0.0, 42);
+        let got = picks(&mut t, 4);
+        assert_eq!(got[0], ("U1".to_string(), "random".to_string())); // GONE -> fallback
+        assert_eq!(got[1], ("U1".to_string(), "sequence".to_string()));
+        assert_eq!(got[2], ("U1".to_string(), "random".to_string()));
+        assert_eq!(got[3], ("U1".to_string(), "sequence".to_string()));
+    }
+
+    #[test]
+    fn random_mode_tags_random_and_ignores_schedule_state() {
+        let (c, raw) = sched_cfg(r#"{"mode": "random", "interleave_random_ratio": 1.0}"#, "");
+        let mut t = Trial::new(c, &raw, 0.0, 42);
+        for (name, phase) in picks(&mut t, 10) {
+            assert_eq!(phase, "random");
+            assert!(["C", "U1", "R1", "D1"].contains(&name.as_str()));
+        }
+        assert_eq!(t.scheduler.seq_pos, 0);
+    }
+
+    #[test]
+    fn scheduler_state_round_trips_via_config_updates() {
+        let (c, raw) = sched_cfg(
+            r#"{"mode": "sequence", "order": ["U1", "R1", "D1"]}"#,
+            r#", "_schedule_seq_pos": 2, "_schedule_expect_center": false,
+               "_schedule_peripheral_pos": 1"#,
+        );
+        let mut t = Trial::new(c, &raw, 0.0, 42);
+        // Restored cursor: next sequence pick is order[2] = D1.
+        assert_eq!(picks(&mut t, 1)[0].0, "D1");
+        let updates: Value = serde_json::from_str(&t.config_updates()).unwrap();
+        assert_eq!(updates["_schedule_seq_pos"], 3);
+        assert_eq!(updates["_schedule_expect_center"], false);
+        assert_eq!(updates["_schedule_peripheral_pos"], 1);
+    }
+
+    #[test]
+    fn center_out_explicit_peripherals_excludes_unlisted() {
+        let (c, raw) = sched_cfg(
+            r#"{"mode": "center_out", "center": "C", "peripherals": ["U1", "D1"],
+                "peripheral_order": "sequential"}"#,
+            "",
+        );
+        let mut t = Trial::new(c, &raw, 0.0, 42);
+        let got = picks(&mut t, 8);
+        // R1 is enabled but not listed: it must never appear in a peripheral slot.
+        let expect = ["C", "U1", "C", "D1", "C", "U1", "C", "D1"];
+        for (i, (name, phase)) in got.iter().enumerate() {
+            assert_eq!(name, expect[i], "pick {i}");
+            assert_eq!(phase, if i % 2 == 0 { "center" } else { "peripheral" }, "pick {i}");
+        }
+    }
+
+    #[test]
+    fn trial_info_json_reports_phase_name_mode() {
+        let (c, raw) = sched_cfg(
+            r#"{"mode": "center_out", "center": "C"}"#,
+            r#", "trial_timeout": 0.5, "ignore_idle_trial_failures": true"#,
+        );
+        let mut t = Trial::new(c, &raw, 0.0, 7);
+        t.begin();
+        step_at(&mut t, 0.1, 0.0, 0.0); // -> start_on (center slot)
+        let info: Value = serde_json::from_str(&t.trial_info_json()).unwrap();
+        assert_eq!(info["schedule_phase"], "center");
+        assert_eq!(info["target_name"], "C");
+        assert_eq!(info["mode"], "center_out");
+        // Idle timeout re-arms the intertrial; the next start_on is a peripheral.
+        step_at(&mut t, 0.7, 0.0, 0.0);
+        let out = step_at(&mut t, 0.85, 0.0, 0.0);
+        assert!(out.effects.contains(&Effect::LogState("start_on")));
+        let info: Value = serde_json::from_str(&t.trial_info_json()).unwrap();
+        assert_eq!(info["schedule_phase"], "peripheral");
+        assert_eq!(info["target_name"], "U1");
+    }
+
+    #[test]
+    fn center_out_alternates_across_trials_via_config_merge() {
+        // Full cross-trial simulation of the delegate loop: each trial is a
+        // fresh Trial (new run_trial stream); config_updates from trial N are
+        // merged into task_config before trial N+1, exactly like
+        // joystick_intro_rust.py applies config_updates_json.
+        let base = r#"{"intertrial_interval": 0.1, "trial_timeout": 10.0,
+            "control_mode": "direct", "targets": [
+                {"name": "C",  "x_norm": 0.5, "y_norm": 0.5},
+                {"name": "U1", "x_norm": 0.5, "y_norm": 0.9},
+                {"name": "R1", "x_norm": 0.9, "y_norm": 0.5}
+            ], "target_schedule": {"mode": "center_out", "center": "C"}}"#;
+        let mut task_config: Value = serde_json::from_str(base).unwrap();
+        let mut shown = Vec::new();
+        for trial in 0..6 {
+            let json = serde_json::to_string(&task_config).unwrap();
+            let cfg = TaskConfig::from_json(&json).unwrap();
+            let raw: Value = serde_json::from_str(&json).unwrap();
+            let mut t = Trial::new(cfg, &raw, trial as f64 * 100.0, 7 + trial);
+            t.begin();
+            step_at(&mut t, trial as f64 * 100.0 + 0.1, 0.0, 0.0); // -> start_on
+            shown.push((t.current_target.name.clone(), t.current_target.schedule_phase.clone()));
+            // Merge config updates like the delegate does.
+            let updates: Value = serde_json::from_str(&t.config_updates()).unwrap();
+            for (key, value) in updates.as_object().unwrap() {
+                task_config[key] = value.clone();
+            }
+        }
+        let expect = [
+            ("C", "center"),
+            ("U1", "peripheral"),
+            ("C", "center"),
+            ("R1", "peripheral"),
+            ("C", "center"),
+            ("U1", "peripheral"),
+        ];
+        for (i, (name, phase)) in shown.iter().enumerate() {
+            assert_eq!((name.as_str(), phase.as_str()), expect[i], "trial {i}");
+        }
+    }
+
+    #[test]
+    fn schedule_phase_lands_in_attempt_and_target_on_event() {
+        let (c, raw) = sched_cfg(r#"{"mode": "sequence", "order": ["R1"]}"#, "");
+        let mut t = Trial::new(c, &raw, 0.0, 7);
+        t.begin();
+        step_at(&mut t, 0.1, 0.0, 0.0); // -> start_on
+        let a = t.current_attempt.as_ref().unwrap();
+        assert_eq!(a.schedule_phase.as_deref(), Some("sequence"));
+        let target_on = &a.events[0];
+        assert_eq!(target_on.name, "target_on");
+        assert_eq!(target_on.extra["schedule_phase"], "sequence");
+        assert_eq!(t.current_target.name, "R1");
     }
 
     #[test]

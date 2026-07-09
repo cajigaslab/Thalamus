@@ -15,7 +15,7 @@ if HAS_QT6:
                                QPushButton, QDialog, QRadioButton, QTextEdit, QMainWindow, QFileDialog, QMenu,
                                QInputDialog, QLineEdit, QGroupBox, QFormLayout, QMessageBox, QTabWidget,
                                QDoubleSpinBox, QDockWidget, QApplication, QMenuBar, QItemDelegate, QStyledItemDelegate, QSplitter,
-                               QTreeWidget, QTreeWidgetItem, QListWidget, QTreeView, QTableView, QListView,
+                               QTreeWidget, QTreeWidgetItem, QListWidget, QListWidgetItem, QTreeView, QTableView, QListView,
                                QTableWidget, QTableWidgetItem, QWizard, QWizardPage, QProgressBar, QAbstractItemView,
                                QStyleOptionViewItem, QScrollArea, QColorDialog, QFrame, QHeaderView, QButtonGroup)
   from PyQt6.QtOpenGLWidgets import (QOpenGLWidget)
@@ -77,7 +77,7 @@ else:
                                QLineEdit, QGroupBox, QFormLayout, QMessageBox, QTabWidget, QDoubleSpinBox, QDockWidget, 
                                QApplication, QOpenGLWidget, QAction, QAbstractItemView, QTreeView, QTableView,
                                QListView, QMenuBar, QItemDelegate, QSplitter, QTreeWidget, QTreeWidgetItem, QStyledItemDelegate,
-                               QListWidget, QTableWidget, QTableWidgetItem, QWizard, QWizardPage, QProgressBar,
+                               QListWidget, QListWidgetItem, QTableWidget, QTableWidgetItem, QWizard, QWizardPage, QProgressBar,
                                QStyleOptionViewItem, QScrollArea, QColorDialog, QFrame, QHeaderView, QButtonGroup)
   from PyQt5.QtCore import (QPoint, QRect, QPointF, Qt, QSize, QSizeF, QDir, QItemSelectionModel, QModelIndex, QTimer,
                             QAbstractListModel, QAbstractItemModel, QAbstractTableModel, QLineF, QRectF, QBuffer,

@@ -72,6 +72,80 @@ def normalize_rgb(value: typing.Any, default: typing.Sequence[int]) -> typing.Li
       pass
   return [int(default[0]), int(default[1]), int(default[2])]
 
+def rename_in_schedule(schedule: typing.Dict[str, typing.Any], old_name: str, new_name: str) -> None:
+  """Rewrite every reference to a renamed target in a target_schedule dict.
+
+  Targets are referenced by name in `center`, `peripherals`, and `order`; call
+  this whenever a target is renamed so the schedule keeps pointing at it.
+  """
+  if schedule.get("center", "") == old_name:
+    schedule["center"] = new_name
+  for key in ("peripherals", "order"):
+    names = schedule.get(key, [])
+    if isinstance(names, list):
+      schedule[key] = [new_name if name == old_name else name for name in names]
+
+
+def prune_schedule_names(schedule: typing.Dict[str, typing.Any], live_names: typing.Set[str]) -> None:
+  """Drop schedule references to targets that no longer exist."""
+  if schedule.get("center", "") not in live_names:
+    schedule["center"] = ""
+  peripherals = schedule.get("peripherals", [])
+  if isinstance(peripherals, list):
+    schedule["peripherals"] = [name for name in peripherals if name in live_names]
+
+
+def schedule_pattern_preview(
+  schedule: typing.Dict[str, typing.Any],
+  targets: typing.List[typing.Dict[str, typing.Any]],
+  slots: int = 8,
+) -> str:
+  """Deterministic human-readable preview of the structured target stream."""
+  mode = str(schedule.get("mode", "random"))
+  enabled_names = [
+    str(target.get("name", ""))
+    for target in targets
+    if isinstance(target, dict) and bool(target.get("enabled", True)) and str(target.get("name", "")).strip()
+  ]
+  ratio = clamp_float(schedule.get("interleave_random_ratio", 0.0), 0.0, 1.0, 0.0)
+  if mode == "sequence":
+    order = [str(name) for name in schedule.get("order", []) if str(name).strip()]
+    if not order:
+      return "Sequence is empty — every trial falls back to a random draw."
+    pattern = [order[i % len(order)] for i in range(slots)]
+  elif mode == "center_out":
+    center = str(schedule.get("center", ""))
+    ring = [str(name) for name in schedule.get("peripherals", []) if str(name).strip()]
+    if not ring:
+      ring = [name for name in enabled_names if name != center]
+    if not center.strip():
+      return "No center target chosen — center slots fall back to random draws."
+    if not ring:
+      return "No peripheral targets — peripheral slots fall back to random draws."
+    random_ring = str(schedule.get("peripheral_order", "sequential")) == "random"
+    pattern = []
+    ring_pos = 0
+    for i in range(slots):
+      if i % 2 == 0:
+        pattern.append(center)
+      elif random_ring:
+        pattern.append("?")
+      else:
+        pattern.append(ring[ring_pos % len(ring)])
+        ring_pos += 1
+  else:
+    return "Random mode — every enabled target is equally likely; no structured pattern."
+  text = " → ".join(pattern) + " → …"
+  if ratio >= 1.0:
+    text += "   |   100% random inserts — structured slots never run"
+  elif ratio > 0.0:
+    if mode == "center_out":
+      text += f"   |   {ratio:.0%} random inserts between pairs (a pair is never split)"
+    else:
+      text += f"   |   {ratio:.0%} of trials are random inserts (pattern resumes after)"
+  return text
+
+
 def color_with_opacity(rgb: typing.Sequence[int], opacity: float) -> QColor:
   color = QColor(int(rgb[0]), int(rgb[1]), int(rgb[2]))
   color.setAlpha(int(round(255 * clamp_float(opacity, 0.0, 1.0, 1.0))))
@@ -433,6 +507,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     return {
       "name": str(t.get("name", "")),
       "enabled": bool(t.get("enabled", True)),
+      "group": str(t.get("group", "")),
       "x_norm": clamp(float(t.get("x_norm", 0.75)), 0.0, 1.0),
       "y_norm": clamp(float(t.get("y_norm", 0.50)), 0.0, 1.0),
       "radius_ratio": clamp(float(t.get("radius_ratio", DEFAULT_TARGET_RADIUS_RATIO)), 0.01, 0.5),
@@ -449,6 +524,32 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       ),
     }
 
+  def normalize_schedule(raw: typing.Any) -> typing.Dict[str, typing.Any]:
+    """Normalize a target_schedule dict to the schema the Rust executor parses.
+
+    Scheduling is honored by the Rust executor only (joystick_intro_rust task);
+    the pure-Python run() below intentionally stays random-only.
+    """
+    if isinstance(raw, ObservableCollection):
+      raw = raw.unwrap()
+    r = dict(raw) if isinstance(raw, dict) else {}
+    mode = str(r.get("mode", "random"))
+    if mode not in ("random", "sequence", "center_out"):
+      mode = "random"
+    order = r.get("order", [])
+    peripherals = r.get("peripherals", [])
+    peripheral_order = str(r.get("peripheral_order", "sequential"))
+    if peripheral_order not in ("sequential", "random"):
+      peripheral_order = "sequential"
+    return {
+      "mode": mode,
+      "order": [str(name) for name in order] if isinstance(order, list) else [],
+      "center": str(r.get("center", "")),
+      "peripherals": [str(name) for name in peripherals] if isinstance(peripherals, list) else [],
+      "peripheral_order": peripheral_order,
+      "interleave_random_ratio": clamp_float(r.get("interleave_random_ratio", 0.0), 0.0, 1.0, 0.0),
+    }
+
   def make_default_target(index: int) -> typing.Dict[str, typing.Any]:
     return {
       "name": f"Target {index}",
@@ -463,6 +564,55 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       "target_active_color": DEFAULT_TARGET_ACTIVE_COLOR.copy(),
       "target_active_opacity": DEFAULT_TARGET_ACTIVE_OPACITY,
     }
+
+  GROUPLESS_LABEL = "(ungrouped)"
+
+  def target_group_key(target: typing.Any) -> str:
+    group = str(target.get("group", "")) if isinstance(target, dict) else ""
+    return group or GROUPLESS_LABEL
+
+  def rebuild_group_toggle_rows(
+    container: QWidget,
+    container_layout: typing.Any,
+    targets_list: typing.Iterable[typing.Dict[str, typing.Any]],
+    on_set_group_enabled: typing.Callable[[str, bool], None],
+  ) -> None:
+    """Rebuild one-click enable/disable checkboxes, one per target group.
+
+    Groups come from the per-target "group" field (stamped by preset Load/
+    Append). The checkbox is checked only when every target in the group is
+    enabled; clicking it enables/disables the whole group. The panel hides
+    itself while no target carries a group, since Enable/Disable All already
+    covers the ungrouped-only case.
+    """
+    while container_layout.count():
+      item = container_layout.takeAt(0)
+      widget = item.widget()
+      if widget is not None:
+        widget.setParent(None)
+        widget.deleteLater()
+    groups: typing.Dict[str, typing.List[bool]] = {}
+    for target in targets_list:
+      groups.setdefault(target_group_key(target), []).append(
+        bool(target.get("enabled", True)) if isinstance(target, dict) else True
+      )
+    has_groups = any(key != GROUPLESS_LABEL for key in groups)
+    container.setVisible(has_groups)
+    if not has_groups:
+      return
+    for key in sorted(groups):
+      flags = groups[key]
+      on_count = sum(1 for flag in flags if flag)
+      box = QCheckBox(f"{key} ({on_count}/{len(flags)} on)")
+      box.setToolTip(
+        f"Enable or disable every target in group '{key}' at once. "
+        "Checked = all enabled; unchecked = some or all disabled."
+      )
+      box.blockSignals(True)
+      box.setChecked(on_count == len(flags))
+      box.blockSignals(False)
+      box.clicked.connect(lambda checked, group=key: on_set_group_enabled(group, bool(checked)))
+      container_layout.addWidget(box)
 
   def make_target_from_template(
     template_target: typing.Dict[str, typing.Any],
@@ -719,11 +869,10 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         self.drag_index = -1
       super().mouseReleaseEvent(event)
 
-    def paintEvent(self, event: typing.Any) -> None:
-      painter = QPainter(self)
+    def _paint_frame(self, painter: QPainter) -> QRectF:
+      """Background, task-region rect, and grid shared by both preview tabs."""
       painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-      full_rect = self.rect()
-      painter.fillRect(full_rect, QColor(24, 24, 24))
+      painter.fillRect(self.rect(), QColor(24, 24, 24))
       region_rect = self._region_rect()
       painter.setPen(QPen(QColor(90, 90, 90), 1))
       painter.setBrush(QColor(40, 40, 40))
@@ -736,6 +885,11 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         y = region_rect.top() + region_rect.height() * (i / 4.0)
         painter.drawLine(int(x), int(region_rect.top()), int(x), int(region_rect.bottom()))
         painter.drawLine(int(region_rect.left()), int(y), int(region_rect.right()), int(y))
+      return region_rect
+
+    def paintEvent(self, event: typing.Any) -> None:
+      painter = QPainter(self)
+      region_rect = self._paint_frame(painter)
 
       # Targets are drawn as hollow rings (never filled) so overlapping targets
       # remain individually distinguishable. Enabled targets use a solid stroke
@@ -797,6 +951,200 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       painter.drawText(12, 36, "Solid rings = enabled, dashed grey rings = disabled.")
       if self.generated_preview_getter():
         painter.drawText(12, 54, "Dashed blue rings are generator preview targets and are not saved yet.")
+
+  class SchedulePreview(LayoutPreview):
+    """Structured-schedule view (the editor's second preview tab).
+
+    Renders ONLY the schedule — sequence order or center/ring roles, with
+    always-on name labels — so structured targets cannot be confused with the
+    random-eligible layout shown in the Layout tab. Clicking still selects the
+    target (selection is shared with the Layout tab); dragging is disabled.
+    """
+
+    def __init__(
+      self,
+      targets_ref: typing.List[typing.Dict[str, typing.Any]],
+      schedule_getter: typing.Callable[[], typing.Dict[str, typing.Any]],
+      cursor_radius_getter: typing.Callable[[], float],
+      select_callback: typing.Callable[[int], None],
+      update_callback: typing.Callable[[], None],
+      parent: typing.Optional[QWidget] = None,
+    ) -> None:
+      super().__init__(targets_ref, lambda: [], cursor_radius_getter, select_callback, update_callback, parent)
+      self.schedule_getter = schedule_getter
+      self.set_drag_enabled(False)
+
+    def _target_ring_pen(self, target: typing.Dict[str, typing.Any], alpha: int = 255, width: int = 2) -> QPen:
+      rgb = target.get("target_color", DEFAULT_TARGET_COLOR)
+      return QPen(QColor(int(rgb[0]), int(rgb[1]), int(rgb[2]), alpha), width)
+
+    def _draw_label(self, painter: QPainter, center: QPointF, radius: float, text: str) -> None:
+      painter.setPen(QPen(QColor(235, 235, 235), 1))
+      painter.drawText(int(center.x() + radius + 6.0), int(center.y() - radius - 4.0), text)
+
+    def _draw_badge(self, painter: QPainter, center: QPointF, radius: float, text: str, fill: QColor) -> None:
+      badge_radius = 9.0
+      badge_center = QPointF(center.x() - radius * 0.7, center.y() - radius * 0.7)
+      painter.save()
+      painter.setPen(QPen(QColor(255, 255, 255), 1))
+      painter.setBrush(fill)
+      painter.drawEllipse(badge_center, badge_radius, badge_radius)
+      badge_font = QFont(painter.font())
+      badge_font.setBold(True)
+      badge_font.setPointSize(9)
+      painter.setFont(badge_font)
+      painter.drawText(
+        QRectF(badge_center.x() - badge_radius, badge_center.y() - badge_radius, badge_radius * 2.0, badge_radius * 2.0),
+        Qt.AlignmentFlag.AlignCenter,
+        text,
+      )
+      painter.restore()
+
+    def _draw_arrow(self, painter: QPainter, start: QPointF, end: QPointF, start_radius: float, end_radius: float) -> None:
+      dx = end.x() - start.x()
+      dy = end.y() - start.y()
+      length = math.hypot(dx, dy)
+      if length <= start_radius + end_radius + 10.0:
+        return
+      ux, uy = dx / length, dy / length
+      p1 = QPointF(start.x() + ux * (start_radius + 4.0), start.y() + uy * (start_radius + 4.0))
+      p2 = QPointF(end.x() - ux * (end_radius + 4.0), end.y() - uy * (end_radius + 4.0))
+      painter.drawLine(QLineF(p1, p2))
+      head = 7.0
+      left = QPointF(p2.x() - ux * head - uy * head * 0.5, p2.y() - uy * head + ux * head * 0.5)
+      right = QPointF(p2.x() - ux * head + uy * head * 0.5, p2.y() - uy * head - ux * head * 0.5)
+      painter.drawLine(QLineF(p2, left))
+      painter.drawLine(QLineF(p2, right))
+
+    def paintEvent(self, event: typing.Any) -> None:
+      painter = QPainter(self)
+      region_rect = self._paint_frame(painter)
+      schedule = self.schedule_getter()
+      mode = str(schedule.get("mode", "random"))
+
+      def target_name(target: typing.Dict[str, typing.Any]) -> str:
+        return str(target.get("name", ""))
+
+      def is_enabled(target: typing.Dict[str, typing.Any]) -> bool:
+        return bool(target.get("enabled", True))
+
+      def draw_faint(target: typing.Dict[str, typing.Any]) -> None:
+        center = self._target_center(region_rect, target)
+        radius = self._target_radius_px(region_rect, target)
+        style = Qt.PenStyle.SolidLine if is_enabled(target) else Qt.PenStyle.DashLine
+        painter.setPen(QPen(QColor(150, 150, 150, 70), 1, style))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawEllipse(center, radius, radius)
+
+      def draw_selection_halo(index: int, center: QPointF, radius: float) -> None:
+        if index == self.selected_index:
+          painter.setPen(QPen(QColor(255, 255, 255), 2, Qt.PenStyle.DashLine))
+          painter.setBrush(Qt.BrushStyle.NoBrush)
+          painter.drawEllipse(center, radius + 6.0, radius + 6.0)
+
+      badge_blue = QColor(60, 120, 220)
+      missing: typing.List[str] = []
+
+      if mode == "sequence":
+        caption = "Fixed Sequence — numbered targets cycle in list order (reorder with Move Up/Down)."
+        participants = [(i, t) for i, t in enumerate(self.targets_ref) if is_enabled(t)]
+        for target in self.targets_ref:
+          if not is_enabled(target):
+            draw_faint(target)
+        if len(participants) >= 2:
+          painter.setPen(QPen(QColor(200, 200, 200, 130), 1))
+          for k, (i1, t1) in enumerate(participants):
+            i2, t2 = participants[(k + 1) % len(participants)]
+            if i1 == i2:
+              continue
+            self._draw_arrow(
+              painter,
+              self._target_center(region_rect, t1),
+              self._target_center(region_rect, t2),
+              self._target_radius_px(region_rect, t1),
+              self._target_radius_px(region_rect, t2),
+            )
+        for order_pos, (i, target) in enumerate(participants):
+          center = self._target_center(region_rect, target)
+          radius = self._target_radius_px(region_rect, target)
+          painter.setPen(self._target_ring_pen(target))
+          painter.setBrush(Qt.BrushStyle.NoBrush)
+          painter.drawEllipse(center, radius, radius)
+          draw_selection_halo(i, center, radius)
+          self._draw_badge(painter, center, radius, str(order_pos + 1), badge_blue)
+          self._draw_label(painter, center, radius, target_name(target).strip() or f"T{i + 1}")
+      elif mode == "center_out":
+        caption = "Center-Out — C alternates with the numbered ring targets. Faint targets are not in the schedule."
+        center_name = str(schedule.get("center", ""))
+        ring_names = [str(name) for name in schedule.get("peripherals", [])]
+        if not ring_names:
+          ring_names = [
+            target_name(t) for t in self.targets_ref
+            if is_enabled(t) and target_name(t).strip() and target_name(t) != center_name
+          ]
+        by_name: typing.Dict[str, typing.Tuple[int, typing.Dict[str, typing.Any]]] = {}
+        for i, target in enumerate(self.targets_ref):
+          by_name.setdefault(target_name(target), (i, target))
+        ring_set = set(ring_names)
+        for target in self.targets_ref:
+          name = target_name(target)
+          if (name != center_name and name not in ring_set) or not is_enabled(target):
+            draw_faint(target)
+        if center_name.strip() and center_name in by_name and is_enabled(by_name[center_name][1]):
+          i, target = by_name[center_name]
+          center = self._target_center(region_rect, target)
+          radius = self._target_radius_px(region_rect, target)
+          painter.setBrush(Qt.BrushStyle.NoBrush)
+          painter.setPen(QPen(QColor(255, 255, 255), 3))
+          painter.drawEllipse(center, radius, radius)
+          painter.setPen(self._target_ring_pen(target))
+          painter.drawEllipse(center, max(1.0, radius - 4.0), max(1.0, radius - 4.0))
+          draw_selection_halo(i, center, radius)
+          self._draw_badge(painter, center, radius, "C", QColor(230, 180, 40))
+          self._draw_label(painter, center, radius, f"C: {center_name.strip()}")
+        else:
+          missing.append(center_name.strip() or "(no center)")
+        random_ring = str(schedule.get("peripheral_order", "sequential")) == "random"
+        for visit_pos, name in enumerate(ring_names):
+          entry = by_name.get(name)
+          if entry is None or not is_enabled(entry[1]):
+            if name not in missing:
+              missing.append(name)
+            continue
+          i, target = entry
+          center = self._target_center(region_rect, target)
+          radius = self._target_radius_px(region_rect, target)
+          painter.setPen(self._target_ring_pen(target))
+          painter.setBrush(Qt.BrushStyle.NoBrush)
+          painter.drawEllipse(center, radius, radius)
+          draw_selection_halo(i, center, radius)
+          self._draw_badge(painter, center, radius, "?" if random_ring else str(visit_pos + 1), badge_blue)
+          self._draw_label(painter, center, radius, name.strip() or f"T{i + 1}")
+      else:
+        caption = "Random mode — every enabled target is equally likely; no structured pattern."
+        for i, target in enumerate(self.targets_ref):
+          if not is_enabled(target):
+            draw_faint(target)
+            continue
+          center = self._target_center(region_rect, target)
+          radius = self._target_radius_px(region_rect, target)
+          painter.setPen(self._target_ring_pen(target, alpha=90, width=1))
+          painter.setBrush(Qt.BrushStyle.NoBrush)
+          painter.drawEllipse(center, radius, radius)
+          draw_selection_halo(i, center, radius)
+          if i in (self.selected_index, self.hovered_index):
+            self._draw_label(painter, center, radius, target_name(target).strip() or f"T{i + 1}")
+
+      painter.setPen(QPen(QColor(200, 200, 200), 1))
+      painter.drawText(12, 18, caption)
+      if missing:
+        painter.setPen(QPen(QColor(255, 110, 110), 1))
+        painter.drawText(
+          12, self.height() - 26,
+          "Unavailable: " + ", ".join(missing) + " — these slots fall back to random draws.",
+        )
+      painter.setPen(QPen(QColor(200, 200, 200), 1))
+      painter.drawText(12, self.height() - 10, schedule_pattern_preview(schedule, list(self.targets_ref)))
 
   class PersistentLayoutEditorDialog(QDialog):
     def __init__(
@@ -870,13 +1218,21 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     dialog.destroyed.connect(clear_layout_editor_reference)
 
     draft_targets = [normalize_target(target) for target in list(targets)]
+    draft_schedule = normalize_schedule(task_config.get("target_schedule", {}))
     pending_generated_targets: typing.List[typing.Dict[str, typing.Any]] = []
     pending_generator_operation = "append"
+    # An empty peripherals list normally means Auto (the runtime rule). This
+    # flag lets the EDITOR sit on "explicit but nothing checked yet" after
+    # Uncheck All, so the operator can build a ring from scratch instead of
+    # pruning a re-seeded full ring. Saving while empty still runs as Auto
+    # (the hint label says so).
+    ring_explicit_when_empty = False
 
     dialog_layout = QHBoxLayout(dialog)
     dialog_layout.setContentsMargins(8, 8, 8, 8)
     dialog_layout.setSpacing(8)
     preview: typing.Optional[LayoutPreview] = None
+    schedule_preview: typing.Optional[SchedulePreview] = None
     selected_index = 0 if draft_targets else -1
     draft_cursor_radius = max(0.005, min(0.5, float(task_config.get("cursor_diameter_ratio", 0.1)) / 2.0))
 
@@ -884,14 +1240,14 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     side_layout = QVBoxLayout(side_panel)
     side_layout.setContentsMargins(0, 0, 0, 0)
     side_layout.setSpacing(5)
-    side_panel.setMinimumWidth(245)
-    side_panel.setMaximumWidth(310)
+    side_panel.setMinimumWidth(260)
+    side_panel.setMaximumWidth(340)
     compact_font = QFont(side_panel.font())
     if compact_font.pointSize() > 0:
-      compact_font.setPointSize(max(8, compact_font.pointSize() - 2))
+      compact_font.setPointSize(max(9, compact_font.pointSize() - 1))
     side_panel.setFont(compact_font)
     side_panel.setStyleSheet(
-      "QWidget { font-size: 10px; }"
+      "QWidget { font-size: 11px; }"
       "QGroupBox { margin-top: 8px; padding-top: 8px; }"
       "QGroupBox::title { subcontrol-origin: margin; left: 6px; padding: 0 2px; }"
       "QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox { min-height: 18px; max-height: 22px; }"
@@ -910,9 +1266,14 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     preset_combo.setToolTip("Saved target layouts. Load restores the whole draft from the chosen preset.")
     preset_save_button = QPushButton("Save")
     preset_load_button = QPushButton("Load")
+    preset_append_button = QPushButton("Append")
     preset_delete_button = QPushButton("Delete")
     preset_save_button.setToolTip("Save the current draft targets as a named preset.")
     preset_load_button.setToolTip("Replace the draft with the selected preset.")
+    preset_append_button.setToolTip(
+      "Add the selected preset's targets to the current draft (nothing is replaced). "
+      "The draft schedule is kept unless you opt to adopt the preset's schedule."
+    )
     preset_delete_button.setToolTip("Delete the selected preset.")
     preset_row = QWidget()
     preset_row_layout = QHBoxLayout(preset_row)
@@ -920,21 +1281,141 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     preset_row_layout.addWidget(preset_combo, 1)
     preset_row_layout.addWidget(preset_save_button)
     preset_row_layout.addWidget(preset_load_button)
+    preset_row_layout.addWidget(preset_append_button)
     preset_row_layout.addWidget(preset_delete_button)
     side_layout.addWidget(QLabel("Presets"))
     side_layout.addWidget(preset_row)
 
-    settings_widget = QWidget(side_panel)
-    settings_layout = QVBoxLayout(settings_widget)
-    settings_layout.setContentsMargins(0, 0, 0, 0)
-    settings_layout.setSpacing(5)
+    group_panel_box = QGroupBox("Groups")
+    group_panel_box.setToolTip(
+      "One checkbox per preset group. Click to enable/disable every target that "
+      "was loaded or appended from that preset."
+    )
+    group_panel_layout = QVBoxLayout(group_panel_box)
+    group_panel_layout.setContentsMargins(6, 4, 6, 4)
+    group_panel_layout.setSpacing(2)
+    group_panel_box.setVisible(False)
+    side_layout.addWidget(group_panel_box)
 
-    settings_scroll = QScrollArea(side_panel)
-    settings_scroll.setWidgetResizable(True)
+    # --- Schedule: how the next target is chosen. Honored by the Rust
+    # executor only; the pure-Python run() stays random regardless. ---
+    schedule_panel = QGroupBox("Schedule")
+    schedule_layout = QFormLayout(schedule_panel)
+    schedule_layout.setContentsMargins(6, 10, 6, 6)
+    schedule_layout.setHorizontalSpacing(6)
+    schedule_layout.setVerticalSpacing(3)
+    schedule_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+    schedule_mode_combo = QComboBox()
+    schedule_mode_combo.addItem("Random", "random")
+    schedule_mode_combo.addItem("Fixed Sequence", "sequence")
+    schedule_mode_combo.addItem("Center-Out", "center_out")
+    schedule_mode_combo.setToolTip(
+      "How the next target is chosen (Rust executor only). Random: uniform over enabled targets. "
+      "Fixed Sequence: cycle enabled targets in list order. Center-Out: alternate center and periphery."
+    )
+    schedule_center_combo = QComboBox()
+    schedule_center_combo.setToolTip("Center-Out: which target is the center. Referenced by name.")
+    schedule_peripheral_order_combo = QComboBox()
+    schedule_peripheral_order_combo.addItem("Sequential", "sequential")
+    schedule_peripheral_order_combo.addItem("Random", "random")
+    schedule_peripheral_order_combo.setToolTip(
+      "Center-Out: cycle the peripheral ring in list order, or draw a random ring target each time."
+    )
+    schedule_ring_auto_box = QCheckBox("Auto: all enabled non-center")
+    schedule_ring_auto_box.setToolTip(
+      "Checked: the ring is every enabled non-center target (stored as an empty list). "
+      "Uncheck to pick ring members explicitly."
+    )
+    schedule_ring_list = QListWidget()
+    schedule_ring_list.setMaximumHeight(90)
+    schedule_ring_list.setToolTip(
+      "Center-Out ring members, visited top-to-bottom when Periphery is Sequential. "
+      "Greyed items show what Auto resolves to."
+    )
+    schedule_ring_check_all_button = QPushButton("Check All")
+    schedule_ring_uncheck_all_button = QPushButton("Uncheck All")
+    schedule_ring_check_all_button.setToolTip(
+      "Check every enabled non-center target as an explicit ring member."
+    )
+    schedule_ring_uncheck_all_button.setToolTip(
+      "Uncheck every ring member so you can build the ring from scratch "
+      "(check individual targets or a group below)."
+    )
+    schedule_ring_buttons_row = QWidget()
+    schedule_ring_buttons_row_layout = QHBoxLayout(schedule_ring_buttons_row)
+    schedule_ring_buttons_row_layout.setContentsMargins(0, 0, 0, 0)
+    schedule_ring_buttons_row_layout.addWidget(schedule_ring_check_all_button)
+    schedule_ring_buttons_row_layout.addWidget(schedule_ring_uncheck_all_button)
+    schedule_ring_buttons_row_layout.addStretch(1)
+    schedule_ring_group_row = QWidget()
+    schedule_ring_group_row_layout = QHBoxLayout(schedule_ring_group_row)
+    schedule_ring_group_row_layout.setContentsMargins(0, 0, 0, 0)
+    schedule_ring_group_row_layout.setSpacing(6)
+    schedule_ring_group_row.setVisible(False)
+    schedule_ring_hint_label = QLabel(
+      "Empty ring runs as Auto at runtime — check targets or a group to restrict it."
+    )
+    schedule_ring_hint_label.setWordWrap(True)
+    schedule_ring_hint_label.setStyleSheet("color: rgb(220, 150, 60);")
+    schedule_ring_hint_label.setVisible(False)
+    schedule_ring_container = QWidget()
+    schedule_ring_container_layout = QVBoxLayout(schedule_ring_container)
+    schedule_ring_container_layout.setContentsMargins(0, 0, 0, 0)
+    schedule_ring_container_layout.setSpacing(2)
+    schedule_ring_container_layout.addWidget(schedule_ring_auto_box)
+    schedule_ring_container_layout.addWidget(schedule_ring_list)
+    schedule_ring_container_layout.addWidget(schedule_ring_buttons_row)
+    schedule_ring_container_layout.addWidget(schedule_ring_group_row)
+    schedule_ring_container_layout.addWidget(schedule_ring_hint_label)
+    schedule_interleave_spin = QDoubleSpinBox()
+    schedule_interleave_spin.setRange(0.0, 1.0)
+    schedule_interleave_spin.setDecimals(2)
+    schedule_interleave_spin.setSingleStep(0.05)
+    schedule_interleave_spin.setKeyboardTracking(False)
+    schedule_interleave_spin.setToolTip(
+      "Probability that a trial is a uniform-random target inserted into the structured stream. "
+      "The pattern resumes where it left off after each insertion. In Center-Out, inserts only "
+      "land BETWEEN center→peripheral pairs — a pair is never split. "
+      "0.00 = pure structured pattern. 1.00 = every trial is random and the structured pattern "
+      "NEVER runs — to randomize which peripheral is chosen, set Periphery to 'random' instead."
+    )
+    schedule_move_up_button = QPushButton("Move Up")
+    schedule_move_down_button = QPushButton("Move Down")
+    schedule_move_up_button.setToolTip("Move the selected target earlier in the list (sequence order).")
+    schedule_move_down_button.setToolTip("Move the selected target later in the list (sequence order).")
+    schedule_move_row = QWidget()
+    schedule_move_row_layout = QHBoxLayout(schedule_move_row)
+    schedule_move_row_layout.setContentsMargins(0, 0, 0, 0)
+    schedule_move_row_layout.addWidget(schedule_move_up_button)
+    schedule_move_row_layout.addWidget(schedule_move_down_button)
+    schedule_layout.addRow("Mode", schedule_mode_combo)
+    schedule_layout.addRow("Center", schedule_center_combo)
+    schedule_layout.addRow("Periphery", schedule_peripheral_order_combo)
+    schedule_layout.addRow("Ring", schedule_ring_container)
+    schedule_layout.addRow("Order", schedule_move_row)
+    schedule_layout.addRow("Random insert %", schedule_interleave_spin)
+
+    # The settings live in tabs (Target / Generator / Schedule) so no single
+    # tab is crammed into a sliver of scroll area. The target list, presets,
+    # and Save/Cancel stay visible above/below the tabs at all times.
     no_frame = QFrame.Shape.NoFrame if hasattr(QFrame, "Shape") else QFrame.NoFrame
-    settings_scroll.setFrameShape(no_frame)
-    settings_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-    settings_scroll.setWidget(settings_widget)
+
+    def make_settings_tab(*panels: QWidget) -> QScrollArea:
+      tab_body = QWidget()
+      tab_layout = QVBoxLayout(tab_body)
+      tab_layout.setContentsMargins(0, 0, 0, 0)
+      tab_layout.setSpacing(5)
+      for panel in panels:
+        tab_layout.addWidget(panel)
+      tab_layout.addStretch(1)
+      scroll = QScrollArea(side_panel)
+      scroll.setWidgetResizable(True)
+      scroll.setFrameShape(no_frame)
+      scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+      scroll.setWidget(tab_body)
+      return scroll
+
+    settings_tabs = QTabWidget(side_panel)
 
     form_panel = QGroupBox("Selected Target")
     form_layout = QFormLayout(form_panel)
@@ -1000,7 +1481,6 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     form_layout.addRow("Static Opacity", static_opacity_spin)
     form_layout.addRow("Active Color", active_color_button)
     form_layout.addRow("Active Opacity", active_opacity_spin)
-    settings_layout.addWidget(form_panel)
 
     cursor_panel = QGroupBox("Cursor Reference")
     cursor_layout = QFormLayout(cursor_panel)
@@ -1015,7 +1495,6 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     cursor_radius_spin.setToolTip("Reference cursor radius shown in the layout preview center.")
     cursor_layout.addRow("Cursor Radius", cursor_radius_spin)
     cursor_layout.addRow("", enable_drag_box)
-    settings_layout.addWidget(cursor_panel)
 
     generator_panel = QGroupBox("Target Generator")
     generator_layout = QFormLayout(generator_panel)
@@ -1196,30 +1675,44 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     preview_button_row_layout.addWidget(apply_preview_button)
     preview_button_row_layout.addWidget(clear_preview_button)
     generator_layout.addRow("", preview_button_row)
-    settings_layout.addWidget(generator_panel)
-    settings_layout.addStretch(1)
-    side_layout.addWidget(settings_scroll, 1)
+    settings_tabs.addTab(make_settings_tab(form_panel, cursor_panel), "Target")
+    settings_tabs.addTab(make_settings_tab(generator_panel), "Generator")
+    settings_tabs.addTab(make_settings_tab(schedule_panel), "Schedule")
+    side_layout.addWidget(settings_tabs, 1)
 
-    button_row = QWidget()
-    button_row_layout = QHBoxLayout(button_row)
-    button_row_layout.setContentsMargins(0, 0, 0, 0)
+    # Two rows: the side panel is only ~300px wide, so seven buttons on one
+    # line render squished past legibility.
     add_button = QPushButton("Add")
     remove_button = QPushButton("Remove")
     clear_all_button = QPushButton("Clear All")
+    enable_all_button = QPushButton("Enable All")
+    disable_all_button = QPushButton("Disable All")
     save_button = QPushButton("Save")
     cancel_button = QPushButton("Cancel")
     add_button.setToolTip("Duplicate the selected target, or add a new default target if nothing is selected.")
     remove_button.setToolTip("Remove every selected target from the draft.")
     clear_all_button.setToolTip("Remove all draft targets from the editor.")
+    enable_all_button.setToolTip("Mark every draft target enabled (targets are kept, nothing is removed).")
+    disable_all_button.setToolTip("Mark every draft target disabled (targets are kept, nothing is removed).")
     save_button.setToolTip("Commit draft targets back to the task configuration.")
     cancel_button.setToolTip("Close the editor without saving draft changes.")
-    button_row_layout.addWidget(add_button)
-    button_row_layout.addWidget(remove_button)
-    button_row_layout.addWidget(clear_all_button)
-    button_row_layout.addStretch(1)
-    button_row_layout.addWidget(save_button)
-    button_row_layout.addWidget(cancel_button)
-    side_layout.addWidget(button_row)
+    edit_button_row = QWidget()
+    edit_button_row_layout = QHBoxLayout(edit_button_row)
+    edit_button_row_layout.setContentsMargins(0, 0, 0, 0)
+    edit_button_row_layout.addWidget(add_button)
+    edit_button_row_layout.addWidget(remove_button)
+    edit_button_row_layout.addWidget(clear_all_button)
+    edit_button_row_layout.addStretch(1)
+    action_button_row = QWidget()
+    action_button_row_layout = QHBoxLayout(action_button_row)
+    action_button_row_layout.setContentsMargins(0, 0, 0, 0)
+    action_button_row_layout.addWidget(enable_all_button)
+    action_button_row_layout.addWidget(disable_all_button)
+    action_button_row_layout.addStretch(1)
+    action_button_row_layout.addWidget(save_button)
+    action_button_row_layout.addWidget(cancel_button)
+    side_layout.addWidget(edit_button_row)
+    side_layout.addWidget(action_button_row)
 
     def refresh_target_list() -> None:
       target_list.blockSignals(True)
@@ -1297,6 +1790,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         update_color_buttons()
         if preview is not None:
           preview.set_selected_index(-1)
+        if schedule_preview is not None:
+          schedule_preview.set_selected_index(-1)
         return
 
       target = draft_targets[selected_index]
@@ -1333,6 +1828,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       target_list.blockSignals(False)
       if preview is not None:
         preview.set_selected_index(selected_index)
+      if schedule_preview is not None:
+        schedule_preview.set_selected_index(selected_index)
 
     def update_selected_index_from_list() -> None:
       nonlocal selected_index
@@ -1342,10 +1839,151 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       else:
         selected_index = index
       populate_controls()
+      refresh_schedule_controls()
+
+    def refresh_schedule_controls() -> None:
+      mode = str(draft_schedule.get("mode", "random"))
+      schedule_mode_combo.blockSignals(True)
+      mode_index = schedule_mode_combo.findData(mode)
+      schedule_mode_combo.setCurrentIndex(max(0, mode_index))
+      schedule_mode_combo.blockSignals(False)
+
+      schedule_center_combo.blockSignals(True)
+      schedule_center_combo.clear()
+      for i, target in enumerate(draft_targets):
+        name = str(target.get("name", "")).strip()
+        schedule_center_combo.addItem(name or f"Target {i + 1}", name)
+      center_name = str(draft_schedule.get("center", ""))
+      center_index = schedule_center_combo.findData(center_name)
+      if center_index < 0 and center_name:
+        schedule_center_combo.addItem(f"{center_name} (missing)", center_name)
+        center_index = schedule_center_combo.count() - 1
+      schedule_center_combo.setCurrentIndex(max(0, center_index))
+      schedule_center_combo.blockSignals(False)
+
+      schedule_peripheral_order_combo.blockSignals(True)
+      order_index = schedule_peripheral_order_combo.findData(
+        str(draft_schedule.get("peripheral_order", "sequential")))
+      schedule_peripheral_order_combo.setCurrentIndex(max(0, order_index))
+      schedule_peripheral_order_combo.blockSignals(False)
+
+      schedule_interleave_spin.blockSignals(True)
+      schedule_interleave_spin.setValue(float(draft_schedule.get("interleave_random_ratio", 0.0)))
+      schedule_interleave_spin.blockSignals(False)
+
+      # Ring picker. Auto (all enabled non-center) is stored as an empty
+      # peripherals list — exactly the Rust runtime rule — so the checkbox
+      # state derives from the list being empty, except while the operator is
+      # deliberately building an explicit ring from scratch (Uncheck All).
+      peripherals = [str(name) for name in draft_schedule.get("peripherals", [])]
+      auto_ring = not peripherals and not ring_explicit_when_empty
+      schedule_ring_auto_box.blockSignals(True)
+      schedule_ring_auto_box.setChecked(auto_ring)
+      schedule_ring_auto_box.blockSignals(False)
+      schedule_ring_list.blockSignals(True)
+      schedule_ring_list.clear()
+      checkable = Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsUserCheckable
+      listed_names = set()
+      for i, target in enumerate(draft_targets):
+        name = str(target.get("name", ""))
+        enabled = bool(target.get("enabled", True))
+        if not name.strip() or name.strip() == center_name.strip():
+          continue
+        if auto_ring and not enabled:
+          continue
+        display = name.strip() if enabled else f"{name.strip()} (disabled)"
+        item = QListWidgetItem(display)
+        item.setData(Qt.ItemDataRole.UserRole, name)
+        if auto_ring:
+          item.setFlags(checkable)  # greyed: shows what Auto resolves to
+          item.setCheckState(Qt.CheckState.Checked)
+        else:
+          item.setFlags(checkable | Qt.ItemFlag.ItemIsEnabled)
+          item.setCheckState(
+            Qt.CheckState.Checked if name in peripherals else Qt.CheckState.Unchecked)
+        schedule_ring_list.addItem(item)
+        listed_names.add(name)
+      for name in peripherals:
+        if name not in listed_names:
+          item = QListWidgetItem(f"{name} (missing)")
+          item.setData(Qt.ItemDataRole.UserRole, name)
+          item.setFlags(checkable | Qt.ItemFlag.ItemIsEnabled)
+          item.setCheckState(Qt.CheckState.Checked)
+          schedule_ring_list.addItem(item)
+      schedule_ring_list.blockSignals(False)
+
+      is_sequence = mode == "sequence"
+      is_center_out = mode == "center_out"
+
+      # Per-group ring checkboxes: include/exclude every enabled target of a
+      # preset group at once. Same rebuild idiom as the Groups panel.
+      while schedule_ring_group_row_layout.count():
+        row_item = schedule_ring_group_row_layout.takeAt(0)
+        row_widget = row_item.widget()
+        if row_widget is not None:
+          row_widget.setParent(None)
+          row_widget.deleteLater()
+      ring_set = set(compute_auto_ring()) if auto_ring else set(peripherals)
+      ring_group_members: typing.Dict[str, typing.List[str]] = {}
+      for target in draft_targets:
+        name = str(target.get("name", ""))
+        if not name.strip() or name.strip() == center_name.strip():
+          continue
+        if not bool(target.get("enabled", True)):
+          continue
+        ring_group_members.setdefault(target_group_key(target), []).append(name)
+      has_ring_groups = any(key != GROUPLESS_LABEL for key in ring_group_members)
+      schedule_ring_group_row.setVisible(is_center_out and has_ring_groups)
+      if has_ring_groups:
+        for key in sorted(ring_group_members):
+          members = ring_group_members[key]
+          in_ring = sum(1 for member in members if member in ring_set)
+          group_box = QCheckBox(f"{key} ({in_ring}/{len(members)})")
+          group_box.setToolTip(
+            f"Include/exclude every enabled '{key}' target in the ring. Excluded targets "
+            "stay enabled — they appear only via random inserts."
+          )
+          group_box.blockSignals(True)
+          group_box.setChecked(in_ring == len(members))
+          group_box.blockSignals(False)
+          group_box.clicked.connect(
+            lambda checked, group=key: set_ring_group(group, bool(checked)))
+          schedule_ring_group_row_layout.addWidget(group_box)
+      schedule_ring_group_row_layout.addStretch(1)
+      schedule_ring_hint_label.setVisible(is_center_out and not auto_ring and not peripherals)
+
+      has_selection = 0 <= selected_index < len(draft_targets)
+      schedule_center_combo.setEnabled(is_center_out and schedule_center_combo.count() > 0)
+      schedule_peripheral_order_combo.setEnabled(is_center_out)
+      schedule_ring_auto_box.setEnabled(is_center_out)
+      schedule_ring_list.setEnabled(is_center_out)
+      schedule_ring_check_all_button.setEnabled(is_center_out)
+      schedule_ring_uncheck_all_button.setEnabled(is_center_out)
+      schedule_ring_group_row.setEnabled(is_center_out)
+      schedule_move_up_button.setEnabled(is_sequence and has_selection and selected_index > 0)
+      schedule_move_down_button.setEnabled(
+        is_sequence and has_selection and selected_index < len(draft_targets) - 1)
+      schedule_interleave_spin.setEnabled(is_sequence or is_center_out)
+      if schedule_preview is not None:
+        schedule_preview.update()
+
+    def set_draft_group_enabled(group: str, value: bool) -> None:
+      for i in range(len(draft_targets)):
+        target = normalize_target(draft_targets[i])
+        if target_group_key(target) == group:
+          target["enabled"] = value
+        draft_targets[i] = target
+      refresh_editor()
+
+    def refresh_group_panel() -> None:
+      rebuild_group_toggle_rows(
+        group_panel_box, group_panel_layout, draft_targets, set_draft_group_enabled)
 
     def refresh_editor() -> None:
       refresh_target_list()
       populate_controls()
+      refresh_schedule_controls()
+      refresh_group_panel()
       if preview is not None:
         preview.update()
 
@@ -1401,12 +2039,28 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     )
     preview.setToolTip("Solid targets are in the draft. Dashed blue targets are generator previews.")
     preview.set_drag_enabled(enable_drag_box.isChecked())
-    dialog_layout.addWidget(preview, 1)
+    schedule_preview = SchedulePreview(
+      draft_targets,
+      lambda: build_draft_schedule(),
+      lambda: draft_cursor_radius,
+      lambda index: target_list.setCurrentRow(index),
+      refresh_editor,
+      dialog,
+    )
+    schedule_preview.setToolTip(
+      "Schedule-only view: badges show the center (C) and the ring/sequence visit order. "
+      "Faint targets are not part of the structured schedule."
+    )
+    preview_tabs = QTabWidget(dialog)
+    preview_tabs.addTab(preview, "Layout")
+    preview_tabs.addTab(schedule_preview, "Schedule")
+    dialog_layout.addWidget(preview_tabs, 1)
     dialog_layout.addWidget(side_panel)
 
     def apply_field_changes() -> None:
       if not (0 <= selected_index < len(draft_targets)):
         return
+      old_name = str(draft_targets[selected_index].get("name", ""))
       draft_targets[selected_index] = normalize_target({
         **draft_targets[selected_index],
         "name": name_edit.text(),
@@ -1419,6 +2073,14 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         "target_opacity": static_opacity_spin.value(),
         "target_active_opacity": active_opacity_spin.value(),
       })
+      new_name = str(draft_targets[selected_index].get("name", ""))
+      # Keep schedule references (center/peripherals/order) pointing at a
+      # renamed target — but only when no other target still bears the old
+      # name (duplicate guard). Fires per keystroke, so references track live.
+      if old_name and new_name != old_name and not any(
+        str(target.get("name", "")) == old_name for target in draft_targets
+      ):
+        rename_in_schedule(draft_schedule, old_name, new_name)
       clear_generated_preview()
       refresh_editor()
 
@@ -1471,6 +2133,130 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
 
     enable_drag_box.toggled.connect(on_drag_enabled_changed)
 
+    def on_schedule_mode_changed(_index: int) -> None:
+      draft_schedule["mode"] = str(schedule_mode_combo.currentData())
+      if draft_schedule["mode"] == "center_out" and not draft_schedule.get("center") and draft_targets:
+        draft_schedule["center"] = str(draft_targets[0].get("name", ""))
+      refresh_schedule_controls()
+
+    def on_schedule_center_changed(_index: int) -> None:
+      data = schedule_center_combo.currentData()
+      if data is None:
+        return
+      draft_schedule["center"] = str(data)
+      # A target cannot be both the center and a ring member.
+      draft_schedule["peripherals"] = [
+        name for name in draft_schedule.get("peripherals", []) if str(name) != str(data)
+      ]
+      refresh_schedule_controls()
+
+    def on_schedule_peripheral_order_changed(_index: int) -> None:
+      draft_schedule["peripheral_order"] = str(schedule_peripheral_order_combo.currentData())
+      refresh_schedule_controls()
+
+    def on_schedule_interleave_changed(value: float) -> None:
+      draft_schedule["interleave_random_ratio"] = clamp(float(value), 0.0, 1.0)
+      refresh_schedule_controls()
+
+    def compute_auto_ring() -> typing.List[str]:
+      center_name = str(draft_schedule.get("center", ""))
+      return [
+        str(target.get("name", "")) for target in draft_targets
+        if bool(target.get("enabled", True)) and str(target.get("name", "")).strip()
+        and str(target.get("name", "")).strip() != center_name.strip()
+      ]
+
+    def set_ring_explicit(names: typing.List[str]) -> None:
+      nonlocal ring_explicit_when_empty
+      draft_schedule["peripherals"] = names
+      ring_explicit_when_empty = not names
+      refresh_schedule_controls()
+
+    def on_schedule_ring_auto_toggled(checked: bool) -> None:
+      nonlocal ring_explicit_when_empty
+      if checked:
+        ring_explicit_when_empty = False
+        draft_schedule["peripherals"] = []
+        refresh_schedule_controls()
+      else:
+        # Seed the explicit list from what Auto resolves to, so the operator
+        # prunes from a full ring rather than building from nothing (Uncheck
+        # All is the build-from-nothing path).
+        set_ring_explicit(compute_auto_ring())
+
+    def on_schedule_ring_item_changed(_item: typing.Any) -> None:
+      if schedule_ring_auto_box.isChecked():
+        return
+      names = []
+      for row in range(schedule_ring_list.count()):
+        item = schedule_ring_list.item(row)
+        if item is not None and item.checkState() == Qt.CheckState.Checked:
+          names.append(str(item.data(Qt.ItemDataRole.UserRole)))
+      set_ring_explicit(names)
+
+    def eligible_ring_group_members(group: str) -> typing.List[str]:
+      center_name = str(draft_schedule.get("center", "")).strip()
+      return [
+        str(target.get("name", "")) for target in draft_targets
+        if bool(target.get("enabled", True)) and str(target.get("name", "")).strip()
+        and str(target.get("name", "")).strip() != center_name
+        and target_group_key(target) == group
+      ]
+
+    def set_ring_group(group: str, include: bool) -> None:
+      peripherals = [str(name) for name in draft_schedule.get("peripherals", [])]
+      auto_ring = not peripherals and not ring_explicit_when_empty
+      # From Auto, unchecking a group means "everything except that group",
+      # so materialize the auto ring first and edit it explicitly.
+      base = compute_auto_ring() if auto_ring else peripherals
+      members = eligible_ring_group_members(group)
+      if include:
+        new_ring = base + [member for member in members if member not in base]
+      else:
+        member_set = set(members)
+        new_ring = [name for name in base if name not in member_set]
+      set_ring_explicit(new_ring)
+
+    def move_selected_target(delta: int) -> None:
+      nonlocal selected_index
+      source = selected_index
+      destination = source + delta
+      if not (0 <= source < len(draft_targets) and 0 <= destination < len(draft_targets)):
+        return
+      draft_targets[source], draft_targets[destination] = draft_targets[destination], draft_targets[source]
+      selected_index = destination
+      clear_generated_preview()
+      refresh_editor()
+
+    schedule_mode_combo.currentIndexChanged.connect(on_schedule_mode_changed)
+    schedule_center_combo.currentIndexChanged.connect(on_schedule_center_changed)
+    schedule_peripheral_order_combo.currentIndexChanged.connect(on_schedule_peripheral_order_changed)
+    schedule_interleave_spin.valueChanged.connect(on_schedule_interleave_changed)
+    schedule_ring_auto_box.toggled.connect(on_schedule_ring_auto_toggled)
+    schedule_ring_list.itemChanged.connect(on_schedule_ring_item_changed)
+    schedule_ring_check_all_button.clicked.connect(lambda: set_ring_explicit(compute_auto_ring()))
+    schedule_ring_uncheck_all_button.clicked.connect(lambda: set_ring_explicit([]))
+    schedule_move_up_button.clicked.connect(lambda: move_selected_target(-1))
+    schedule_move_down_button.clicked.connect(lambda: move_selected_target(1))
+
+    def build_draft_schedule(
+      source_targets: typing.Optional[typing.List[typing.Dict[str, typing.Any]]] = None,
+    ) -> typing.Dict[str, typing.Any]:
+      source = draft_targets if source_targets is None else source_targets
+      schedule = normalize_schedule(draft_schedule)
+      # Defense in depth: drop references to deleted targets and never list
+      # the center as its own peripheral. Pruned-to-empty degrades to Auto.
+      prune_schedule_names(schedule, {str(target.get("name", "")) for target in source})
+      schedule["peripherals"] = [
+        name for name in schedule["peripherals"] if name != schedule["center"]
+      ]
+      # Sequence order is the enabled targets in list order (reorder with
+      # Move Up / Move Down). Written on every save so the config documents it.
+      schedule["order"] = [
+        str(target.get("name", "")) for target in source if bool(target.get("enabled", True))
+      ]
+      return schedule
+
     def add_layout_target() -> None:
       nonlocal selected_index
       if 0 <= selected_index < len(draft_targets):
@@ -1494,6 +2280,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         if 0 <= row < len(draft_targets):
           del draft_targets[row]
       selected_index = min(selected_index, len(draft_targets) - 1) if draft_targets else -1
+      prune_schedule_names(draft_schedule, {str(target.get("name", "")) for target in draft_targets})
       clear_generated_preview()
       refresh_editor()
 
@@ -1501,7 +2288,14 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       nonlocal selected_index
       draft_targets[:] = []
       selected_index = -1
+      prune_schedule_names(draft_schedule, set())
       clear_generated_preview()
+      refresh_editor()
+
+    def set_all_layout_enabled(value: bool) -> None:
+      for i in range(len(draft_targets)):
+        draft_targets[i] = normalize_target(draft_targets[i])
+        draft_targets[i]["enabled"] = value
       refresh_editor()
 
     def make_generator_template() -> typing.Dict[str, typing.Any]:
@@ -1571,6 +2365,9 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       pending_generated_targets[:] = generated_targets
       pending_generator_operation = str(generator_operation_combo.currentData())
       update_preview_buttons()
+      # Generated previews are drawn on the Layout tab only — bring it to the
+      # front so Preview never looks like a no-op from the Schedule tab.
+      preview_tabs.setCurrentIndex(0)
       if preview is not None:
         preview.update()
 
@@ -1599,6 +2396,12 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       for target in normalized_targets:
         targets.append(target)
       task_config["cursor_diameter_ratio"] = max(0.01, min(1.0, draft_cursor_radius * 2.0))
+      task_config["target_schedule"] = build_draft_schedule(normalized_targets)
+      # Restart the structured schedule from the top: these are the cross-trial
+      # cursor keys the Rust executor persists via config_updates.
+      task_config["_schedule_seq_pos"] = 0
+      task_config["_schedule_expect_center"] = True
+      task_config["_schedule_peripheral_pos"] = 0
       sync_table_from_config()
       if 0 <= selected_index < target_table.rowCount():
         target_table.selectRow(selected_index)
@@ -1623,6 +2426,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       preset_combo.blockSignals(False)
       has_presets = preset_combo.count() > 0
       preset_load_button.setEnabled(has_presets)
+      preset_append_button.setEnabled(has_presets)
       preset_delete_button.setEnabled(has_presets)
 
     def save_preset() -> None:
@@ -1639,17 +2443,55 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         )
         if confirm != QMessageBox.StandardButton.Yes:
           return
-      presets[name] = [normalize_target(target) for target in draft_targets]
+      presets[name] = {
+        "targets": [normalize_target(target) for target in draft_targets],
+        "schedule": build_draft_schedule(),
+      }
       task_config["target_layout_presets"] = presets
       refresh_preset_combo(name)
 
+    def read_preset_entry(
+      name: str,
+    ) -> typing.Tuple[typing.Optional[typing.List[typing.Any]], typing.Any]:
+      stored = load_presets_dict().get(name)
+      if isinstance(stored, ObservableCollection):
+        stored = stored.unwrap()
+      # Backward compatibility: presets saved before schedules were a bare
+      # targets list; newer ones are {"targets": [...], "schedule": {...}}.
+      if isinstance(stored, list):
+        preset_targets: typing.Any = stored
+        preset_schedule: typing.Any = {}
+      elif isinstance(stored, dict):
+        preset_targets = stored.get("targets", [])
+        preset_schedule = stored.get("schedule", {})
+      else:
+        return None, {}
+      if not isinstance(preset_targets, list):
+        return None, {}
+      return preset_targets, preset_schedule
+
+    def tag_preset_targets(
+      preset_targets: typing.List[typing.Any],
+      preset_name: str,
+    ) -> typing.List[typing.Dict[str, typing.Any]]:
+      # Stamp untagged targets with the preset they came from; targets that
+      # already carry a group (a combined layout saved as its own preset)
+      # keep their original subgroup.
+      tagged = []
+      for raw in preset_targets:
+        target = normalize_target(raw)
+        if not target.get("group"):
+          target["group"] = preset_name
+        tagged.append(target)
+      return tagged
+
     def load_preset() -> None:
-      nonlocal selected_index
+      nonlocal selected_index, ring_explicit_when_empty
       name = preset_combo.currentText()
       if not name:
         return
-      preset_targets = load_presets_dict().get(name)
-      if not isinstance(preset_targets, list):
+      preset_targets, preset_schedule = read_preset_entry(name)
+      if preset_targets is None:
         return
       if draft_targets:
         confirm = QMessageBox.question(
@@ -1659,8 +2501,81 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
         )
         if confirm != QMessageBox.StandardButton.Yes:
           return
-      draft_targets[:] = [normalize_target(target) for target in preset_targets]
+      draft_targets[:] = tag_preset_targets(preset_targets, name)
+      draft_schedule.clear()
+      draft_schedule.update(normalize_schedule(preset_schedule))
+      ring_explicit_when_empty = False
       selected_index = 0 if draft_targets else -1
+      clear_generated_preview()
+      refresh_editor()
+
+    def append_preset() -> None:
+      nonlocal selected_index, ring_explicit_when_empty
+      name = preset_combo.currentText()
+      if not name:
+        return
+      preset_targets, preset_schedule = read_preset_entry(name)
+      if preset_targets is None:
+        return
+      incoming = tag_preset_targets(preset_targets, name)
+      if not incoming:
+        return
+
+      confirm = QDialog(dialog)
+      confirm.setWindowTitle("Append Preset")
+      confirm_layout = QVBoxLayout(confirm)
+      confirm_layout.addWidget(QLabel(
+        f"Append {len(incoming)} target(s) from preset '{name}' "
+        f"to the current {len(draft_targets)}?"
+      ))
+      adopt_schedule_box = QCheckBox("Also adopt this preset's schedule")
+      adopt_schedule_box.setToolTip(
+        "Replace the draft schedule (mode/center/ring/random insert %) with the "
+        "preset's saved schedule. Unchecked: only targets are appended."
+      )
+      confirm_layout.addWidget(adopt_schedule_box)
+      confirm_button_row = QWidget()
+      confirm_button_row_layout = QHBoxLayout(confirm_button_row)
+      confirm_button_row_layout.setContentsMargins(0, 0, 0, 0)
+      confirm_ok_button = QPushButton("Append")
+      confirm_cancel_button = QPushButton("Cancel")
+      confirm_ok_button.setDefault(True)
+      confirm_button_row_layout.addStretch(1)
+      confirm_button_row_layout.addWidget(confirm_ok_button)
+      confirm_button_row_layout.addWidget(confirm_cancel_button)
+      confirm_layout.addWidget(confirm_button_row)
+      confirm_ok_button.clicked.connect(confirm.accept)
+      confirm_cancel_button.clicked.connect(confirm.reject)
+      if not confirm.exec():
+        return
+
+      # Schedules resolve targets by first-match-on-name (and the auto ring is
+      # name-based), so a name collision would silently misbehave: rename the
+      # appended copies.
+      taken = {
+        str(target.get("name", "")).strip()
+        for target in draft_targets
+        if str(target.get("name", "")).strip()
+      }
+      for target in incoming:
+        target_name = str(target.get("name", "")).strip()
+        if not target_name or target_name not in taken:
+          taken.add(target_name)
+          continue
+        candidate = f"{target_name} ({name})"
+        suffix = 2
+        while candidate in taken:
+          candidate = f"{target_name} ({name} {suffix})"
+          suffix += 1
+        target["name"] = candidate
+        taken.add(candidate)
+
+      draft_targets.extend(incoming)
+      if adopt_schedule_box.isChecked():
+        draft_schedule.clear()
+        draft_schedule.update(normalize_schedule(preset_schedule))
+        ring_explicit_when_empty = False
+      selected_index = len(draft_targets) - 1
       clear_generated_preview()
       refresh_editor()
 
@@ -1680,11 +2595,14 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
 
     preset_save_button.clicked.connect(save_preset)
     preset_load_button.clicked.connect(load_preset)
+    preset_append_button.clicked.connect(append_preset)
     preset_delete_button.clicked.connect(delete_preset)
 
     add_button.clicked.connect(add_layout_target)
     remove_button.clicked.connect(remove_layout_target)
     clear_all_button.clicked.connect(clear_all_layout_targets)
+    enable_all_button.clicked.connect(lambda: set_all_layout_enabled(True))
+    disable_all_button.clicked.connect(lambda: set_all_layout_enabled(False))
     generator_mode_combo.currentIndexChanged.connect(lambda _index: update_generator_controls())
     generator_style_source_combo.currentIndexChanged.connect(lambda _index: update_generator_controls())
     preview_generator_button.clicked.connect(preview_generated_targets)
@@ -1768,6 +2686,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       target_table.insertRow(i)
       write_table_row(i, target)
     target_table.blockSignals(False)
+    refresh_group_controls()
 
   def sync_row_to_config(row: int) -> None:
     if row < 0 or row >= len(targets):
@@ -1800,6 +2719,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     targets[row] = {
       "name": str(name_item.text()),
       "enabled": enabled_item.checkState() == Qt.CheckState.Checked,
+      "group": normalized.get("group", ""),
       "x_norm": x_val,
       "y_norm": y_val,
       "radius_ratio": radius_val,
@@ -1827,6 +2747,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   add_target_button = QPushButton("Add Target")
   remove_target_button = QPushButton("Remove Selected")
   clear_targets_button = QPushButton("Clear All")
+  enable_all_targets_button = QPushButton("Enable All")
+  disable_all_targets_button = QPushButton("Disable All")
   edit_layout_button = QPushButton("Edit Layout...")
   bulk_field_combo = QComboBox()
   bulk_field_combo.addItems([
@@ -1847,17 +2769,33 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   add_target_button.setToolTip("Add a new target. If a row is selected, the new target copies that row.")
   remove_target_button.setToolTip("Remove all selected rows from the target table.")
   clear_targets_button.setToolTip("Remove every target row from the table.")
+  enable_all_targets_button.setToolTip("Check Enabled on every target row (nothing is removed).")
+  disable_all_targets_button.setToolTip("Uncheck Enabled on every target row (nothing is removed).")
   edit_layout_button.setToolTip("Open the visual layout editor for dragging, previewing, and bulk generation.")
   bulk_field_combo.setToolTip("Choose which field from the selected row should be copied to all targets.")
   apply_to_all_button.setToolTip("Copy the chosen field from the selected row to every target.")
   controls_layout.addWidget(add_target_button)
   controls_layout.addWidget(remove_target_button)
   controls_layout.addWidget(clear_targets_button)
+  controls_layout.addWidget(enable_all_targets_button)
+  controls_layout.addWidget(disable_all_targets_button)
   controls_layout.addWidget(edit_layout_button)
   controls_layout.addWidget(QLabel("Field:"))
   controls_layout.addWidget(bulk_field_combo)
   controls_layout.addWidget(apply_to_all_button)
   controls_layout.addStretch(1)
+
+  # Live group toggles (mid-session control surface): flipping a preset group
+  # here edits the running task config, so the change reaches the executor on
+  # the next trial without touching the layout editor.
+  target_groups_box = QGroupBox("Target Groups")
+  target_groups_box.setToolTip(
+    "One checkbox per preset group. Click to enable/disable every target that "
+    "was loaded or appended from that preset. Takes effect on the next trial."
+  )
+  target_groups_layout = QHBoxLayout(target_groups_box)
+  target_groups_layout.setContentsMargins(6, 4, 6, 4)
+  target_groups_box.setVisible(False)
 
   def add_target() -> None:
     selected_row = -1
@@ -1891,6 +2829,25 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     while targets:
       del targets[len(targets) - 1]
     sync_table_from_config()
+
+  def set_all_enabled(value: bool) -> None:
+    for i in range(len(targets)):
+      target = normalize_target(targets[i])
+      target["enabled"] = value
+      targets[i] = target
+    sync_table_from_config()
+
+  def set_group_enabled(group: str, value: bool) -> None:
+    for i in range(len(targets)):
+      target = normalize_target(targets[i])
+      if target_group_key(target) == group:
+        target["enabled"] = value
+        targets[i] = target
+    sync_table_from_config()
+
+  def refresh_group_controls() -> None:
+    rebuild_group_toggle_rows(
+      target_groups_box, target_groups_layout, list(targets), set_group_enabled)
 
   def apply_selected_field_to_all() -> None:
     if not targets:
@@ -1961,12 +2918,15 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   add_target_button.clicked.connect(add_target)
   remove_target_button.clicked.connect(remove_target)
   clear_targets_button.clicked.connect(clear_targets)
+  enable_all_targets_button.clicked.connect(lambda: set_all_enabled(True))
+  disable_all_targets_button.clicked.connect(lambda: set_all_enabled(False))
   edit_layout_button.clicked.connect(open_layout_editor)
   apply_to_all_button.clicked.connect(apply_selected_field_to_all)
 
   layout.addWidget(QLabel("Targets (rows = targets):"))
   layout.addWidget(target_table)
   layout.addWidget(controls)
+  layout.addWidget(target_groups_box)
 
   animation_group = QGroupBox("Animation Settings")
   animation_layout = QGridLayout(animation_group)
@@ -2510,6 +3470,9 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     return QColor(rgb[0], rgb[1], rgb[2])
 
   def place_target() -> TargetSelection:
+    # Intentionally random-only: `target_schedule` (sequence/center-out) is
+    # honored by the Rust executor (rust/joystick_task state.rs place_target);
+    # this pure-Python path stays a uniform random draw.
     enabled_targets = []
     for index, target in enumerate(configured_targets):
       if not isinstance(target, dict):

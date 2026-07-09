@@ -81,6 +81,43 @@ mod lenient {
 /// interpret in state.rs, matching joystick_intro.py:2886-2919.
 pub type ControlMode = String;
 
+/// Structured target-schedule config (`target_schedule` in task_config).
+/// Authored by the Target Layout Editor; honored by this executor ONLY (the
+/// pure-Python run() stays random). Targets are referenced by NAME; a missing
+/// or disabled name falls back to a random draw at selection time (state.rs).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct TargetSchedule {
+    /// "random" (default) | "sequence" | "center_out". Unknown values behave
+    /// as "random" so a hand-edited config cannot brick target selection.
+    pub mode: String,
+    /// mode=sequence: ordered target names, cycled forever.
+    pub order: Vec<String>,
+    /// mode=center_out: name of the center target.
+    pub center: String,
+    /// mode=center_out: ring names; empty => all enabled non-center targets.
+    pub peripherals: Vec<String>,
+    /// mode=center_out: "sequential" (cycle the ring) | "random".
+    pub peripheral_order: String,
+    /// 0..1 probability that a trial is a uniform-random draw instead of the
+    /// scheduled one; the structured cursor does NOT advance on those trials.
+    #[serde(deserialize_with = "lenient::f64")]
+    pub interleave_random_ratio: f64,
+}
+
+impl Default for TargetSchedule {
+    fn default() -> Self {
+        Self {
+            mode: "random".into(),
+            order: Vec::new(),
+            center: String::new(),
+            peripherals: Vec::new(),
+            peripheral_order: "sequential".into(),
+            interleave_random_ratio: 0.0,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct TaskConfig {
@@ -212,6 +249,10 @@ pub struct TaskConfig {
     // Python UI; kept as raw JSON for now. TODO(M3): promote to a typed `Target`
     // once the state machine port pins down which fields it reads.
     pub targets: Vec<serde_json::Value>,
+
+    // --- structured target schedule ---
+    #[serde(default)]
+    pub target_schedule: TargetSchedule,
 }
 
 impl Default for TaskConfig {
@@ -282,6 +323,8 @@ impl Default for TaskConfig {
             state_indicator_y: 70,
 
             targets: Vec::new(),
+
+            target_schedule: TargetSchedule::default(),
         }
     }
 }
@@ -361,6 +404,36 @@ mod tests {
         assert_eq!(c.cursor_color, [255, 70, 70]);
         assert!(!c.cursor_only_mode);
         assert_eq!(c.trial_timeout, 1.0);
+    }
+
+    #[test]
+    fn target_schedule_defaults_to_random() {
+        let c = TaskConfig::from_json("{}").unwrap();
+        assert_eq!(c.target_schedule.mode, "random");
+        assert!(c.target_schedule.order.is_empty());
+        assert_eq!(c.target_schedule.center, "");
+        assert!(c.target_schedule.peripherals.is_empty());
+        assert_eq!(c.target_schedule.peripheral_order, "sequential");
+        assert_eq!(c.target_schedule.interleave_random_ratio, 0.0);
+    }
+
+    #[test]
+    fn target_schedule_parses_populated_config() {
+        let json = r#"{"target_schedule": {
+            "mode": "center_out",
+            "order": ["U1", "R1"],
+            "center": "C",
+            "peripherals": ["U1", "R1", "D1", "L1"],
+            "peripheral_order": "random",
+            "interleave_random_ratio": 0.3
+        }}"#;
+        let c = TaskConfig::from_json(json).unwrap();
+        assert_eq!(c.target_schedule.mode, "center_out");
+        assert_eq!(c.target_schedule.order, vec!["U1", "R1"]);
+        assert_eq!(c.target_schedule.center, "C");
+        assert_eq!(c.target_schedule.peripherals.len(), 4);
+        assert_eq!(c.target_schedule.peripheral_order, "random");
+        assert_eq!(c.target_schedule.interleave_random_ratio, 0.3);
     }
 
     #[test]
