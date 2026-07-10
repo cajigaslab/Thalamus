@@ -359,11 +359,20 @@ async def wait_for(context: TaskContextProtocol, condition: typing.Callable[[], 
   '''
   Waits for either condition to return true or for the timeout to expire and returns the current value of condition
   '''
+  last_eval = condition()
+  def wrapper():
+    nonlocal last_eval
+    last_eval = condition()
+    return last_eval
+  
   if timeout is None:
-    await context.until(condition)
+    await context.until(wrapper)
   else:
-    await context.any(context.until(condition), context.sleep(timeout))
-  return condition()
+    sleep = context.sleep(timeout)
+    await context.any(context.until(wrapper), sleep)
+    sleep.cancel()
+  
+  return last_eval
 
 async def wait_for_dual_hold(context: TaskContextProtocol,
                             hold_duration: datetime.timedelta,
@@ -470,7 +479,8 @@ async def wait_for_hold(context: TaskContextProtocol,
                         is_held: typing.Callable[[], bool],
                         hold_duration: datetime.timedelta,
                         blink_duration: typing.Optional[datetime.timedelta],
-                        include_blink = False) -> bool:
+                        include_blink = False,
+                        blink_resets = False) -> bool:
   """
   Waits for the target to be held for hold_duration.  Subject is allowed to blink no longer than blink_duration
   """
@@ -480,7 +490,9 @@ async def wait_for_hold(context: TaskContextProtocol,
     elapsed_time = datetime.timedelta(seconds=time.perf_counter() - start)
     td_spent_blinking = datetime.timedelta(seconds=time_spent_blinking)
     
-    if include_blink:
+    if blink_resets:
+      remaining_time = hold_duration
+    elif include_blink:
       remaining_time = hold_duration - elapsed_time
     else:
       remaining_time = hold_duration - elapsed_time + td_spent_blinking
@@ -492,7 +504,7 @@ async def wait_for_hold(context: TaskContextProtocol,
     if not blinked:
       break
     
-    await context.log('BehavState=blink')
+    #await context.log('BehavState=blink')
 
     t0 = time.perf_counter()        
     reacquired = await wait_for(context, is_held, blink_duration)

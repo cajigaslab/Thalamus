@@ -51,6 +51,8 @@ struct PupilNode::Impl {
   bool invert_y;
   size_t next_input_frame = 0;
   size_t next_output_frame = 0;
+  std::chrono::nanoseconds frame_interval = 32ms;
+  int64_t jitter = 0;
 
   ThreadPool &pool;
   boost::asio::steady_timer timer;
@@ -128,6 +130,7 @@ struct PupilNode::Impl {
     }
     x += (target_x - x) / 3;
     y += (target_y - y) / 3;
+    jitter = -jitter;
     time = start.time_since_epoch();
 
     cairo_identity_matrix(cairo.get());
@@ -136,7 +139,7 @@ struct PupilNode::Impl {
     cairo_set_source_rgba(cairo.get(), 0, 0, 0, 1);
     cairo_fill(cairo.get());
 
-    cairo_translate(cairo.get(), x, y);
+    cairo_translate(cairo.get(), x + double(jitter), y);
     cairo_set_source(cairo.get(), pattern.get());
     cairo_arc(cairo.get(), 0, 0, 128, 0, 2 * M_PI);
     cairo_fill(cairo.get());
@@ -149,8 +152,8 @@ struct PupilNode::Impl {
 
     auto end = std::chrono::steady_clock::now();
     auto elapsed = end - start;
-    if (elapsed < 32ms) {
-      timer.expires_after(32ms - elapsed);
+    if (elapsed < frame_interval) {
+      timer.expires_after(frame_interval - elapsed);
     } else {
       timer.expires_after(1ms);
     }
@@ -164,10 +167,14 @@ struct PupilNode::Impl {
     auto key_str = std::get<std::string>(k);
     if (key_str == "Running") {
       is_running = std::get<bool>(v);
-      timer.expires_after(32ms);
+      timer.expires_after(frame_interval);
       timer.async_wait(std::bind(&Impl::on_timer, this, _1));
     } else if(key_str == "Random Saccade") {
       random_saccade = std::get<bool>(v);
+    } else if(key_str == "Jitter (Pixels)") {
+      jitter = std::get<int64_t>(v);
+    } else if(key_str == "Frequency") {
+      frame_interval = std::chrono::nanoseconds(int64_t(1e9/std::get<double>(v)));
     } else if(key_str == "Width") {
       width = int(std::get<int64_t>(v));
       init_cairo();
@@ -203,7 +210,7 @@ void PupilNode::inject(const thalamus_grpc::Image &) { THALAMUS_ASSERT(false, "U
 
 std::chrono::nanoseconds PupilNode::time() const { return impl->time; }
 
-std::chrono::nanoseconds PupilNode::frame_interval() const { return 32ms; }
+std::chrono::nanoseconds PupilNode::frame_interval() const { return impl->frame_interval; }
 
 bool PupilNode::prepare() { return true; }
 

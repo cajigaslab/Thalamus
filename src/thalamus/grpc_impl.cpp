@@ -1029,6 +1029,7 @@ struct InjectAnalogSession : public NodeReadSession<AnalogNode, thalamus_grpc::I
   thalamus::vector<std::chrono::nanoseconds> sample_intervals;
   thalamus::vector<std::string_view> names;
   bool first = true;
+  std::vector<thalamus_grpc::InjectAnalogRequest> pending;
 
   InjectAnalogSession(NodeGraph& graph, boost::asio::io_context& _io_context, ::grpc::CallbackServerContext& _context, ContextGuard&& guard)
   : NodeReadSession<AnalogNode, thalamus_grpc::InjectAnalogRequest>(graph, _io_context, _context, std::move(guard))
@@ -1036,8 +1037,16 @@ struct InjectAnalogSession : public NodeReadSession<AnalogNode, thalamus_grpc::I
 
   ~InjectAnalogSession() override;
 
+  void on_node() override {
+    for(auto&& p : pending) {
+      on_read(std::move(p));
+    }
+    pending.clear();
+  }
+
   void on_read(thalamus_grpc::InjectAnalogRequest&& request) override {
     if (request.has_node()) {
+      pending.clear();
       first = true;
       thalamus_grpc::NodeSelector selector;
       selector.set_name(request.node());
@@ -1046,6 +1055,7 @@ struct InjectAnalogSession : public NodeReadSession<AnalogNode, thalamus_grpc::I
     }
     auto lock = this->lock();
     if(!lock) {
+      pending.push_back(std::move(request));
       return;
     }
 
