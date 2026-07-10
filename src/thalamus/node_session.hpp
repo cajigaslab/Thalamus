@@ -235,6 +235,12 @@ namespace thalamus {
             timer.async_wait(std::bind(&NodeReadSession<NODE, REQUEST>::on_timer_get_node, this, _1));
             return;
           }
+          
+          THALAMUS_LOG(trace) << "got node";
+          raw_node.reset();
+
+          timer.expires_after(1s);
+          timer.async_wait(std::bind(&NodeReadSession<NODE, REQUEST>::on_timer_check_expired, this, _1));
           on_node();
         });
       });
@@ -244,13 +250,7 @@ namespace thalamus {
       return typed_node ? weak_raw_node.lock() : std::shared_ptr<Node>();
     }
 
-    void on_node() {
-      THALAMUS_LOG(trace) << "got node";
-      raw_node.reset();
-
-      timer.expires_after(1s);
-      timer.async_wait(std::bind(&NodeReadSession<NODE, REQUEST>::on_timer_check_expired, this, _1));
-    }
+    virtual void on_node() {}
 
     void on_timer_get_node(const boost::system::error_code &error) {
       if (error.value() == boost::asio::error::operation_aborted) {
