@@ -217,3 +217,23 @@ eevee.json persistence gotcha (edit while the stack is down).
 - Shared control: blend decode + real joystick for assisted training.
 - If Python scheduling jitter becomes the bottleneck, port the decoder to Rust (mirrors
   how the joystick task itself was ported); the injection contract stays identical.
+
+### Planned inference backend: ggml
+
+As the model seam (stage 3) grows beyond the placeholder linear readout — larger neural
+nets, more channels — the intended inference engine is **ggml**
+(<https://github.com/ggml-org/ggml>): the minimal-dependency C/C++ tensor library behind
+llama.cpp / whisper.cpp, with quantization and CPU/GPU backends (CUDA / Metal / Vulkan).
+Rationale and how it fits this design:
+
+- **Latency:** the whole point of this patch is a fast, low-latency loop. The decode stage
+  must stay well under the **~6.4 ms INTAN packet budget** so it never becomes the
+  bottleneck (today it's ~0.3 ms). ggml keeps inference bounded and predictable — no Python
+  interpreter / GIL / GC on the hot path — even as models grow in complexity.
+- **Fits the architecture:** ggml's C API composes with the planned **Rust decoder port**
+  (via bindings) or a C++ path, and the **injection contract is unchanged** — the decoder
+  still just writes X/Y into the `Decoder` node, so nothing downstream (task, core, render)
+  has to change. Only stage 3 (the model) swaps its implementation.
+- **Migration path:** keep iterating the model in Python now (fast to change); when the
+  model stabilizes and/or Python jitter starts to matter, move stages 2–4 into a ggml-backed
+  Rust/C++ decoder while keeping the same listener→features→model→inject→integrate shape.
