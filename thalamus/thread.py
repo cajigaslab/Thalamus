@@ -36,6 +36,7 @@ class ThalamusThread:
     self.pending_callbacks = {}
     self.next_id = 1
     self.queue: typing.Optional[IterableQueue] = None
+    self.ontransaction = lambda t: None
 
   def send_change(self, action: ObservableCollection.Action, address: str, value: typing.Any, callback: typing.Callable[[], None]) -> bool:
     assert self.queue is not None
@@ -65,6 +66,7 @@ class ThalamusThread:
         self.bridge_channel = channel
 
         stub = thalamus_pb2_grpc.ThalamusStub(channel)
+        self.main_stub = stub
         bridge_channel = channel
         bridge_stub = stub
         while self.running:
@@ -81,6 +83,7 @@ class ThalamusThread:
               await bridge_channel.channel_ready()
               bridge_stub = thalamus_pb2_grpc.ThalamusStub(bridge_channel)
               break
+            self.ontransaction(transaction)
 
             if transaction.acknowledged:
               callback = self.pending_callbacks[transaction.acknowledged]

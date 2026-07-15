@@ -410,6 +410,8 @@ FACTORIES = {
     UserData(UserDataType.CHECK_BOX, 'Random Saccade', False, []),
     UserData(UserDataType.SPINBOX, 'Width', 512, []),
     UserData(UserDataType.SPINBOX, 'Height', 512, []),
+    UserData(UserDataType.SPINBOX, 'Jitter (Pixels)', 0, []),
+    UserData(UserDataType.DOUBLE_SPINBOX, 'Frequency', 30.0, []),
   ]),
   'CHESSBOARD': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
