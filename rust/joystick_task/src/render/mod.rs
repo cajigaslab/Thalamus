@@ -304,7 +304,15 @@ fn build_scene(trial: &Trial, w: i64, h: i64) -> SceneUniforms {
         let t = &trial.current_target;
         let (tx, ty) = trial.to_region_pixels(trial.target_x, trial.target_y, w, h);
         let radius = (t.radius_ratio * min_dim) as i64 as f32;
-        let (rgb, opacity) = if trial.cursor_inside_target {
+        let target_animation_enabled = trial.cfg.animations_enabled && trial.cfg.target_animation_enabled;
+        // Radial-fill hold cue (parity with joystick_intro.py renderer): the
+        // active color grows from the target center outward over the hold
+        // instead of a ring travelling the circumference. In fill mode the base
+        // ellipse stays inactive so the growing active disc reads against it.
+        let radial_fill_hold = target_animation_enabled
+            && trial.cfg.show_hold_progress_ring
+            && trial.cfg.hold_progress_style.trim().eq_ignore_ascii_case("fill");
+        let (rgb, opacity) = if trial.cursor_inside_target && !radial_fill_hold {
             (t.active_color, t.active_opacity)
         } else {
             (t.color, t.opacity)
@@ -313,12 +321,23 @@ fn build_scene(trial: &Trial, w: i64, h: i64) -> SceneUniforms {
         let alpha = (255.0 * opacity).round() / 255.0;
         s.ellipse(tx as f32, ty as f32, radius, radius, srgb_u8(rgb, alpha));
 
-        // Hold-progress ring (@2724-2750): gated exactly like Python.
-        let target_animation_enabled = trial.cfg.animations_enabled && trial.cfg.target_animation_enabled;
-        if target_animation_enabled
+        if radial_fill_hold && trial.cursor_inside_target {
+            // Gate on cursor_inside_target, not ratio > 0: on the entry frame
+            // the ratio is 0.0, so the fill starts empty and grows from the
+            // center, reaching the full radius at hold-complete.
+            let progress = trial.hold_progress_ratio.clamp(0.0, 1.0);
+            let eased = progress * progress * (3.0 - 2.0 * progress);
+            let fill_radius = (radius as f64 * eased).round() as f32;
+            if fill_radius > 0.0 {
+                let fill_alpha = (255.0 * t.active_opacity).round() / 255.0;
+                s.ellipse(tx as f32, ty as f32, fill_radius, fill_radius,
+                    srgb_u8(t.active_color, fill_alpha));
+            }
+        } else if target_animation_enabled
             && trial.cfg.show_hold_progress_ring
             && trial.hold_progress_ratio > 0.0
         {
+            // Hold-progress ring (@2724-2750): gated exactly like Python.
             let progress = trial.hold_progress_ratio.clamp(0.0, 1.0);
             let eased = progress * progress * (3.0 - 2.0 * progress);
             let ring_radius = radius + (0.022 * min_dim).max(5.0) as i64 as f32;
@@ -330,6 +349,60 @@ fn build_scene(trial: &Trial, w: i64, h: i64) -> SceneUniforms {
             let mut arc_color = srgb_u8(t.active_color, 245.0 / 255.0);
             arc_color[3] = 245.0 / 255.0;
             s.ring_arc(tx as f32, ty as f32, ring_radius, ring_width, eased as f32, arc_color);
+        }
+    }
+
+    // Success pop (@3715-3725): a short, minimal burst on the target when the
+    // hold completes. Style is operator-selectable; all four keep to one shape
+    // (filled ellipse or ring arc) so they render identically on the subject
+    // GPU display and the CPU operator mirror. Driven by success_pop_ratio,
+    // which the state machine advances during the post-success visual hold.
+    if !trial.cfg.cursor_only_mode && trial.success_pop_start.is_some() {
+        let t = &trial.current_target;
+        let (px, py) = trial.to_region_pixels(trial.success_pop_x, trial.success_pop_y, w, h);
+        let (px, py) = (px as f32, py as f32);
+        let base_radius = (t.radius_ratio * min_dim) as i64 as f32;
+        let p = trial.success_pop_ratio.clamp(0.0, 1.0) as f32;
+        // ease-out: snaps fast then settles. Used for expansion/travel.
+        let eased_out = 1.0 - (1.0 - p) * (1.0 - p);
+        let style = trial.cfg.success_pop_style.trim().to_ascii_lowercase();
+        match style.as_str() {
+            "ring" => {
+                // Expanding shockwave: a crisp ring that grows outward and fades.
+                let radius = base_radius * (1.0 + 0.9 * eased_out);
+                let width = (0.012 * min_dim).max(3.0) as f32;
+                let alpha = (1.0 - p).max(0.0);
+                if alpha > 0.0 {
+                    s.ring_arc(px, py, radius, width, 1.0, srgb_u8(t.active_color, alpha as f64));
+                }
+            }
+            "flash" => {
+                // Bright in-place bloom: barely grows, very quick punchy fade.
+                let radius = base_radius * (1.0 + 0.2 * eased_out);
+                let alpha = (1.0 - p) * (1.0 - p); // ease-in fade → snappy
+                if alpha > 0.0 {
+                    s.ellipse(px, py, radius, radius, srgb_u8(t.active_color, alpha as f64));
+                }
+            }
+            "pulse" => {
+                // Juicy bounce: the target swells then settles back to size.
+                // sin(pi*p): 0 → 1 (at mid) → 0, so scale 1.0 → 1.35 → 1.0.
+                let swell = (std::f32::consts::PI * p).sin();
+                let radius = base_radius * (1.0 + 0.35 * swell);
+                // Hold color through the swell, fade only near the very end.
+                let alpha = (t.active_opacity as f32) * (1.0 - p * p);
+                if alpha > 0.0 {
+                    s.ellipse(px, py, radius, radius, srgb_u8(t.active_color, alpha as f64));
+                }
+            }
+            // "ripple" (default): soft expanding disc that fades.
+            _ => {
+                let radius = base_radius * (1.0 + 0.9 * eased_out);
+                let alpha = (t.active_opacity as f32) * (1.0 - p);
+                if alpha > 0.0 {
+                    s.ellipse(px, py, radius, radius, srgb_u8(t.active_color, alpha as f64));
+                }
+            }
         }
     }
 

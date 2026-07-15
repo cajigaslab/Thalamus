@@ -81,6 +81,18 @@ mod lenient {
 /// interpret in state.rs, matching joystick_intro.py:2886-2919.
 pub type ControlMode = String;
 
+/// serde default for `hold_progress_style` when the key is absent (older
+/// configs) — preserves the original ring cue.
+fn default_hold_progress_style() -> String {
+    "ring".to_string()
+}
+
+/// serde default for `success_pop_style` when the key is absent (older
+/// configs) — preserves the original expanding-disc pop.
+fn default_success_pop_style() -> String {
+    "ripple".to_string()
+}
+
 /// Structured target-schedule config (`target_schedule` in task_config).
 /// Authored by the Target Layout Editor; honored by this executor ONLY (the
 /// pure-Python run() stays random). Targets are referenced by NAME; a missing
@@ -233,8 +245,18 @@ pub struct TaskConfig {
     pub streak_reset_on_bonus: bool,
     #[serde(deserialize_with = "lenient::bool")]
     pub show_hold_progress_ring: bool,
+    /// Hold cue style: "ring" (arc travels the circumference) or "fill" (active
+    /// color grows radially from the target center outward). Gated by
+    /// show_hold_progress_ring, which stays the master enable for the cue.
+    #[serde(default = "default_hold_progress_style")]
+    pub hold_progress_style: String,
     #[serde(deserialize_with = "lenient::bool")]
     pub show_success_pop: bool,
+    /// Success-pop animation: "ripple" (expanding disc), "ring" (expanding
+    /// shockwave outline), "flash" (bright in-place bloom), or "pulse" (target
+    /// swells and settles). Gated by show_success_pop.
+    #[serde(default = "default_success_pop_style")]
+    pub success_pop_style: String,
     #[serde(deserialize_with = "lenient::bool")]
     pub show_success_particles: bool,
     #[serde(deserialize_with = "lenient::f64")]
@@ -316,7 +338,9 @@ impl Default for TaskConfig {
             streak_bonus_reward_count: 1,
             streak_reset_on_bonus: false,
             show_hold_progress_ring: true,
+            hold_progress_style: default_hold_progress_style(),
             show_success_pop: true,
+            success_pop_style: default_success_pop_style(),
             show_success_particles: true,
             success_pop_duration_s: 0.12,
             state_indicator_x: 30,

@@ -12,7 +12,7 @@
 use anyhow::Context as _;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
-use tonic::transport::Channel;
+use tonic::transport::{Channel, Endpoint};
 
 use crate::proto::thalamus::{
     self, thalamus_client::ThalamusClient, AnalogRequest, AnalogResponse, InjectAnalogRequest,
@@ -44,6 +44,24 @@ impl ThalamusConn {
             .with_context(|| format!("connecting to Thalamus core at {endpoint}"))?;
         Ok(Self {
             client,
+            log_tx: None,
+            inject: None,
+        })
+    }
+
+    /// Build a LAZY channel to the core for the process-wide SHARED connection.
+    /// The TCP connection is (re)established on demand with backoff, so a single
+    /// long-lived `ThalamusConn` transparently survives a core restart — each
+    /// reopened stream (log/inject_analog, see `*_sender`) reconnects on its own.
+    /// This constructor never blocks and never fails on an unreachable core
+    /// (unlike `connect`, which eagerly dials and is still used by callers that
+    /// want a fast reachability check, e.g. the diode recorder).
+    pub fn connect_lazy(endpoint: String) -> anyhow::Result<Self> {
+        let channel = Endpoint::from_shared(endpoint.clone())
+            .with_context(|| format!("invalid Thalamus endpoint {endpoint}"))?
+            .connect_lazy();
+        Ok(Self {
+            client: ThalamusClient::new(channel),
             log_tx: None,
             inject: None,
         })

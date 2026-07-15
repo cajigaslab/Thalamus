@@ -225,8 +225,12 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     task_config["inside_tint_strength_pct"] = 20
   if "show_hold_progress_ring" not in task_config:
     task_config["show_hold_progress_ring"] = True
+  if "hold_progress_style" not in task_config:
+    task_config["hold_progress_style"] = "ring"
   if "show_success_pop" not in task_config:
     task_config["show_success_pop"] = True
+  if "success_pop_style" not in task_config:
+    task_config["success_pop_style"] = "ripple"
   if "show_success_particles" not in task_config:
     task_config["show_success_particles"] = True
   if "success_pop_duration_s" not in task_config:
@@ -2958,21 +2962,63 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   add_anim_checkbox(5, "Reset Streak After Bonus", "streak_reset_on_bonus")
   add_anim_checkbox(6, "Enable Target Animations", "target_animation_enabled")
 
-  add_anim_checkbox(7, "Show Hold Progress Ring", "show_hold_progress_ring")
-  add_anim_checkbox(8, "Show Success Pop", "show_success_pop")
-  add_anim_checkbox(9, "Show Success Particles", "show_success_particles")
+  add_anim_checkbox(7, "Show Hold Progress Cue", "show_hold_progress_ring")
 
-  animation_layout.addWidget(QLabel("Success Pop Duration (s)"), 10, 0)
+  # Style of the hold cue drawn while the cursor holds the target.
+  #   "ring" — ring travels the target circumference (original)
+  #   "fill" — active color grows radially from the target center outward
+  animation_layout.addWidget(QLabel("Hold Progress Style"), 8, 0)
+  hold_style_combo = QComboBox()
+  hold_style_options = [("Ring (circumference)", "ring"), ("Radial Fill (center-out)", "fill")]
+  for label_text, value in hold_style_options:
+    hold_style_combo.addItem(label_text, value)
+  current_hold_style = str(task_config.get("hold_progress_style", "ring")).strip().lower()
+  hold_style_combo.setCurrentIndex(1 if current_hold_style == "fill" else 0)
+  hold_style_combo.currentIndexChanged.connect(
+    lambda idx: task_config.update({"hold_progress_style": hold_style_combo.itemData(idx)})
+  )
+  animation_layout.addWidget(hold_style_combo, 8, 1)
+
+  add_anim_checkbox(9, "Show Success Pop", "show_success_pop")
+
+  # Style of the success pop played when the hold completes.
+  #   "ripple" — soft expanding disc that fades (original)
+  #   "ring"   — crisp expanding shockwave outline
+  #   "flash"  — bright in-place bloom, quick punchy fade
+  #   "pulse"  — target swells then settles back (bounce)
+  animation_layout.addWidget(QLabel("Success Pop Style"), 10, 0)
+  pop_style_combo = QComboBox()
+  pop_style_options = [
+    ("Ripple (expanding disc)", "ripple"),
+    ("Ring (shockwave)", "ring"),
+    ("Flash (bloom)", "flash"),
+    ("Pulse (bounce)", "pulse"),
+  ]
+  for label_text, value in pop_style_options:
+    pop_style_combo.addItem(label_text, value)
+  current_pop_style = str(task_config.get("success_pop_style", "ripple")).strip().lower()
+  pop_style_index = next(
+    (i for i, (_, value) in enumerate(pop_style_options) if value == current_pop_style), 0
+  )
+  pop_style_combo.setCurrentIndex(pop_style_index)
+  pop_style_combo.currentIndexChanged.connect(
+    lambda idx: task_config.update({"success_pop_style": pop_style_combo.itemData(idx)})
+  )
+  animation_layout.addWidget(pop_style_combo, 10, 1)
+
+  add_anim_checkbox(11, "Show Success Particles", "show_success_particles")
+
+  animation_layout.addWidget(QLabel("Success Pop Duration (s)"), 12, 0)
   success_pop_spin = QDoubleSpinBox()
   success_pop_spin.setRange(0.0, 1.0)
   success_pop_spin.setSingleStep(0.01)
   success_pop_spin.setDecimals(3)
   success_pop_spin.setValue(float(max(0.0, min(1.0, float(task_config.get("success_pop_duration_s", 0.12))))))
   success_pop_spin.valueChanged.connect(lambda v: task_config.update({"success_pop_duration_s": float(v)}))
-  animation_layout.addWidget(success_pop_spin, 10, 1)
+  animation_layout.addWidget(success_pop_spin, 12, 1)
 
   animation_note = QLabel("Set master to OFF for animation-free behavior.")
-  animation_layout.addWidget(animation_note, 11, 0, 1, 2)
+  animation_layout.addWidget(animation_note, 13, 0, 1, 2)
 
   layout.addWidget(animation_group)
   sync_table_from_config()
@@ -3064,7 +3110,13 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   streak_bonus_reward_count = max(1, int(task_config.get("streak_bonus_reward_count", 1)))
   streak_reset_on_bonus = bool(task_config.get("streak_reset_on_bonus", False))
   show_hold_progress_ring = bool(task_config.get("show_hold_progress_ring", True))
+  hold_progress_style = str(task_config.get("hold_progress_style", "ring")).strip().lower()
+  if hold_progress_style not in ("ring", "fill"):
+    hold_progress_style = "ring"
   show_success_pop = bool(task_config.get("show_success_pop", True))
+  success_pop_style = str(task_config.get("success_pop_style", "ripple")).strip().lower()
+  if success_pop_style not in ("ripple", "ring", "flash", "pulse"):
+    success_pop_style = "ripple"
   show_success_particles = bool(task_config.get("show_success_particles", True))
   success_pop_duration_s = max(0.0, min(1.0, float(task_config.get("success_pop_duration_s", 0.12))))
   streak_count = max(0, int(task_config.get("_streak_count", 0)))
@@ -3675,7 +3727,15 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     painter.drawRect(left_px, top_px, region_w_px, region_h_px)
 
     if (not cursor_only_mode) and state == "start_on":
-      if cursor_inside_target:
+      # Radial-fill hold cue: instead of the ring that travels the target's
+      # circumference, the active color grows from the target's center outward
+      # over the hold. In fill mode the base ellipse stays inactive so the
+      # growing active disc reads against it; in ring mode entry snaps the
+      # whole target to its active color (original behavior).
+      radial_fill_hold = (
+        target_animation_enabled and show_hold_progress_ring and hold_progress_style == "fill"
+      )
+      if cursor_inside_target and not radial_fill_hold:
         draw_target_color = QColor(current_target_active_color)
         draw_target_color.setAlpha(int(round(255 * current_target_active_opacity)))
       else:
@@ -3684,7 +3744,21 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       painter.setPen(QPen(draw_target_color, 1))
       painter.setBrush(draw_target_color)
       painter.drawEllipse(tx - target_radius_px, ty - target_radius_px, 2 * target_radius_px, 2 * target_radius_px)
-      if target_animation_enabled and show_hold_progress_ring and hold_progress_ratio > 0.0:
+      if radial_fill_hold and cursor_inside_target:
+        # Gate on cursor_inside_target, not ratio > 0: on the entry frame the
+        # ratio is exactly 0.0, so the fill starts empty (radius 0) and grows,
+        # avoiding an active-color flash. It reaches the full radius at
+        # hold-complete, then the success pop takes over.
+        progress = max(0.0, min(1.0, hold_progress_ratio))
+        eased_progress = progress * progress * (3.0 - 2.0 * progress)
+        fill_radius = max(0, int(round(target_radius_px * eased_progress)))
+        if fill_radius > 0:
+          fill_color = QColor(current_target_active_color)
+          fill_color.setAlpha(int(round(255 * current_target_active_opacity)))
+          painter.setPen(QPen(fill_color, 1))
+          painter.setBrush(fill_color)
+          painter.drawEllipse(tx - fill_radius, ty - fill_radius, 2 * fill_radius, 2 * fill_radius)
+      elif target_animation_enabled and show_hold_progress_ring and hold_progress_ratio > 0.0:
         progress = max(0.0, min(1.0, hold_progress_ratio))
         eased_progress = progress * progress * (3.0 - 2.0 * progress)
         ring_radius = target_radius_px + max(5, int(0.022 * min_dim))
@@ -3715,14 +3789,39 @@ async def run(context: TaskContextProtocol) -> TaskResult:
     if target_animation_enabled and show_success_pop and success_pop_start is not None and success_pop_duration_s > 0.0:
       elapsed = time.perf_counter() - success_pop_start
       if elapsed <= success_pop_duration_s:
-        progress = max(0.0, min(1.0, elapsed / success_pop_duration_s))
+        # Operator-selectable pop styles; kept in lockstep with the Rust
+        # executor's build_scene (rust/joystick_task/src/render/mod.rs).
+        p = max(0.0, min(1.0, elapsed / success_pop_duration_s))
+        eased_out = 1.0 - (1.0 - p) * (1.0 - p)  # fast then settling
         pop_center_x, pop_center_y = to_region_pixels(success_pop_x, success_pop_y, w, h)
-        pop_radius = int(target_radius_px * (1.0 + 0.8 * progress))
-        alpha = int(255 * (1.0 - progress))
-        pop_width = max(1, int(0.006 * min_dim))
-        painter.setPen(QPen(QColor(current_target_color.red(), current_target_color.green(), current_target_color.blue(), alpha), pop_width))
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawEllipse(pop_center_x - pop_radius, pop_center_y - pop_radius, 2 * pop_radius, 2 * pop_radius)
+        active_qcolor = QColor(current_target_active_color)
+        ar, ag, ab = active_qcolor.red(), active_qcolor.green(), active_qcolor.blue()
+
+        def _draw_pop_disc(radius_px: int, alpha_255: int) -> None:
+          pop_color = QColor(ar, ag, ab, max(0, min(255, alpha_255)))
+          painter.setPen(QPen(pop_color, 1))
+          painter.setBrush(pop_color)
+          painter.drawEllipse(pop_center_x - radius_px, pop_center_y - radius_px, 2 * radius_px, 2 * radius_px)
+
+        if success_pop_style == "ring":
+          # Expanding shockwave: a crisp ring that grows outward and fades.
+          pop_radius = int(target_radius_px * (1.0 + 0.9 * eased_out))
+          pop_width = max(3, int(0.012 * min_dim))
+          painter.setPen(QPen(QColor(ar, ag, ab, int(255 * max(0.0, 1.0 - p))), pop_width))
+          painter.setBrush(Qt.BrushStyle.NoBrush)
+          painter.drawEllipse(pop_center_x - pop_radius, pop_center_y - pop_radius, 2 * pop_radius, 2 * pop_radius)
+        elif success_pop_style == "flash":
+          # Bright in-place bloom: barely grows, very quick punchy fade.
+          pop_radius = int(target_radius_px * (1.0 + 0.2 * eased_out))
+          _draw_pop_disc(pop_radius, int(255 * ((1.0 - p) * (1.0 - p))))
+        elif success_pop_style == "pulse":
+          # Juicy bounce: the target swells then settles back to size.
+          swell = math.sin(math.pi * p)
+          pop_radius = int(target_radius_px * (1.0 + 0.35 * swell))
+          _draw_pop_disc(pop_radius, int(round(255 * current_target_active_opacity * (1.0 - p * p))))
+        else:  # "ripple" (default): soft expanding disc that fades.
+          pop_radius = int(target_radius_px * (1.0 + 0.9 * eased_out))
+          _draw_pop_disc(pop_radius, int(round(255 * current_target_active_opacity * (1.0 - p))))
       else:
         success_pop_start = None
 

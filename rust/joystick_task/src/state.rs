@@ -263,6 +263,15 @@ pub struct Trial {
     pub hold_progress_ratio: f64,
     pub cursor_inside_target: bool,
 
+    // Success-pop visual hold. Set at hold-complete when the pop is enabled;
+    // while Some, step() short-circuits and keeps the trial rendering (target +
+    // expanding pop) until success_pop_duration_s elapses, then finishes the
+    // trial. success_pop_ratio is the 0..1 pop progress read by the renderer.
+    pub success_pop_start: Option<f64>,
+    pub success_pop_ratio: f64,
+    pub success_pop_x: f64,
+    pub success_pop_y: f64,
+
     hold_start: Option<f64>,
     trial_start: f64,
     last_tick: f64,
@@ -397,6 +406,10 @@ impl Trial {
             state_brightness: 0,
             hold_progress_ratio: 0.0,
             cursor_inside_target: false,
+            success_pop_start: None,
+            success_pop_ratio: 0.0,
+            success_pop_x: 0.5,
+            success_pop_y: 0.5,
             hold_start: None,
             trial_start: now_s,
             last_tick: now_s,
@@ -897,6 +910,21 @@ impl Trial {
         let dt = (now - self.last_tick).clamp(0.0, 0.05);
         self.last_tick = now;
 
+        // Success-pop visual hold: the reward/streak/log bookkeeping already
+        // fired at hold-complete; here we simply keep the trial alive (frozen
+        // cursor, target still drawn, pop expanding over it) so the pop renders,
+        // then finish the trial once the pop duration elapses. Mirrors the
+        // Python renderer's post-success wait (joystick_intro.py @4149-4156).
+        if let Some(pop_start) = self.success_pop_start {
+            let dur = self.cfg.success_pop_duration_s.clamp(0.0001, 1.0);
+            let elapsed = now - pop_start;
+            self.success_pop_ratio = (elapsed / dur).clamp(0.0, 1.0);
+            if elapsed >= dur {
+                out.done = Some(TrialOutcome { success: true });
+            }
+            return out;
+        }
+
         let (operator_jx, operator_jy) = self.get_operator_joystick();
         let operator_override_active = operator_jx != 0.0 || operator_jy != 0.0;
         let analog_magnitude = inp.analog_x.hypot(inp.analog_y);
@@ -1120,15 +1148,29 @@ impl Trial {
                             self.streak_count = 0;
                         }
                     }
-                    // NOTE: the Python success-pop/particle wait (@3167-3188)
-                    // is display-only and skipped (animations off by default).
                     let e = self
                         .event("success", now)
                         .with("streak_count", self.streak_count);
                     self.append_event(e);
                     self.finalize_attempt("success", now, None);
                     out.log("success");
-                    out.done = Some(TrialOutcome { success: true });
+                    // If the success pop is enabled, defer trial completion so
+                    // the pop actually renders (see the step() short-circuit).
+                    // The reward and success marker above already fired, so the
+                    // operator sound plays at pop start. Otherwise finish now.
+                    let target_animation_enabled =
+                        self.cfg.animations_enabled && self.cfg.target_animation_enabled;
+                    if target_animation_enabled
+                        && self.cfg.show_success_pop
+                        && self.cfg.success_pop_duration_s > 0.0
+                    {
+                        self.success_pop_start = Some(now);
+                        self.success_pop_ratio = 0.0;
+                        self.success_pop_x = self.target_x;
+                        self.success_pop_y = self.target_y;
+                    } else {
+                        out.done = Some(TrialOutcome { success: true });
+                    }
                     return;
                 }
                 Some(hold_start) => {
@@ -1451,6 +1493,59 @@ mod tests {
         let end = attempt.end.as_ref().unwrap();
         assert!(end.success_time_s.is_some());
         assert!(end.first_movement_time_s.is_some());
+    }
+
+    #[test]
+    fn success_pop_defers_completion_until_pop_duration_elapses() {
+        // With the pop enabled, hold-complete fires the reward + success marker
+        // but keeps the trial alive so the pop renders; the trial finishes only
+        // after success_pop_duration_s.
+        let (c, raw) = cfg(
+            r#"{"intertrial_interval": 0.1, "trial_timeout": 10.0, "control_mode": "direct",
+                "animations_enabled": true, "target_animation_enabled": true,
+                "show_success_pop": true, "success_pop_duration_s": 0.2}"#,
+        );
+        let mut t = Trial::new(c, &raw, 0.0, 7);
+        t.begin();
+        step_at(&mut t, 0.1, 0.0, 0.0); // -> start_on
+
+        // Hold to completion; capture the frame where reward fires.
+        let mut now = 0.11;
+        let mut rewards = 0;
+        let mut hold_complete_now = None;
+        while now < 2.0 {
+            let out = step_at(&mut t, now, 0.5556, 0.0);
+            let this_reward = out
+                .effects
+                .iter()
+                .any(|e| matches!(e, Effect::Reward { .. }));
+            if this_reward {
+                rewards += 1;
+                // Reward fires at hold-complete: success logged, pop armed, but
+                // the trial has NOT finished yet.
+                assert!(out.effects.contains(&Effect::LogState("success")));
+                assert!(out.done.is_none(), "completion must be deferred for the pop");
+                assert!(t.success_pop_start.is_some());
+                hold_complete_now = Some(now);
+                break;
+            }
+            assert!(out.done.is_none());
+            now += 1.0 / 240.0;
+        }
+        let hc = hold_complete_now.expect("hold should complete");
+        assert_eq!(rewards, 1);
+
+        // A frame inside the pop window keeps the trial alive and advances the
+        // pop ratio without re-firing the reward.
+        let out = step_at(&mut t, hc + 0.1, 0.5556, 0.0);
+        assert!(out.done.is_none());
+        assert!(out.effects.is_empty(), "pop hold must not re-fire effects");
+        assert!(t.success_pop_ratio > 0.0 && t.success_pop_ratio < 1.0);
+
+        // Past the pop duration the trial finishes as a success.
+        let out = step_at(&mut t, hc + 0.25, 0.5556, 0.0);
+        assert_eq!(out.done.map(|d| d.success), Some(true));
+        assert_eq!(t.streak_count, 1);
     }
 
     #[test]

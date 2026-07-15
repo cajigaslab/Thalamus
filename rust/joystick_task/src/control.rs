@@ -12,7 +12,7 @@
 //! operator pump), assembles a render::Job, and wakes the winit loop.
 
 use std::pin::Pin;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use serde_json::Value;
 use tokio::sync::mpsc;
@@ -33,7 +33,13 @@ use crate::render::{ship_effect, EffectMsg, Job, OpEvent, Wake};
 use crate::state::Trial;
 
 pub struct RustTaskService {
-    pub thalamus_endpoint: String,
+    /// One long-lived connection to the core, shared by EVERY trial. Its log and
+    /// inject_analog streams are opened once and reused for the life of the
+    /// process, so the core keeps exactly one handler thread for each. The old
+    /// per-trial `ThalamusConn::connect` leaked a TCP connection + a parked
+    /// inject_analog server thread every trial (~7/min), climbing VIRT and
+    /// pinning the core's io_context until the machine fell over.
+    pub conn: Arc<tokio::sync::Mutex<ThalamusConn>>,
     /// Hands assembled trials to the render thread.
     pub job_tx: Mutex<std::sync::mpsc::Sender<Job>>,
     /// Wakes the winit loop when a job is queued.
@@ -107,7 +113,7 @@ async fn pump_input(
 /// ThalamusConn for the trial. Reward repeats are 50 ms apart
 /// (deliver_reward_repeats, joystick_intro.py:2367-2371).
 async fn run_effects(
-    mut conn: ThalamusConn,
+    conn: Arc<tokio::sync::Mutex<ThalamusConn>>,
     mut effect_rx: mpsc::UnboundedReceiver<EffectMsg>,
     reward_ms: Vec<f64>,
     reward_scale: f64,
@@ -115,21 +121,28 @@ async fn run_effects(
     while let Some(msg) = effect_rx.recv().await {
         match msg {
             EffectMsg::Log { text, time_ns } => {
+                // Lock only for the enqueue onto the shared log stream.
+                let mut conn = conn.lock().await;
                 if let Err(e) = conn.log(text, time_ns).await {
                     tracing::warn!("BehavState log failed: {e:#}");
                 }
             }
             EffectMsg::Reward { channel, repeats } => {
                 for i in 0..repeats.max(0) {
-                    if let Err(e) = crate::reward::deliver_reward(
-                        &mut conn,
-                        &reward_ms,
-                        channel as i32,
-                        reward_scale,
-                    )
-                    .await
+                    // Hold the lock only for each inject, NOT across the 50 ms
+                    // gap — otherwise an overlapping trial's logs/rewards stall.
                     {
-                        tracing::warn!("reward delivery failed: {e:#}");
+                        let mut conn = conn.lock().await;
+                        if let Err(e) = crate::reward::deliver_reward(
+                            &mut conn,
+                            &reward_ms,
+                            channel as i32,
+                            reward_scale,
+                        )
+                        .await
+                        {
+                            tracing::warn!("reward delivery failed: {e:#}");
+                        }
                     }
                     if i < repeats - 1 {
                         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
@@ -179,19 +192,16 @@ impl RustTask for RustTaskService {
             "run_trial received"
         );
 
-        // Per-trial Thalamus connection (input stream + log + rewards). The
-        // connect itself is fast and validates the core is reachable; the
-        // analog SUBSCRIBE takes ~1 s on the C++ core to send headers, so it
-        // must NOT block trial start — Python never awaits it either (its
-        // analog_processor task just starts reading whenever data comes).
-        let conn = ThalamusConn::connect(self.thalamus_endpoint.clone())
-            .await
-            .map_err(|e| Status::unavailable(format!("thalamus connect: {e:#}")))?;
-
         // Input pump: analog stream -> latest cell + per-sample log channel.
+        // `input_conn` is a fresh STREAM handle over the process-wide shared
+        // channel (no new TCP connection). The analog SUBSCRIBE takes ~1 s on
+        // the C++ core to send headers, so it must NOT block trial start — hence
+        // the spawn; Python never awaits it either. When the trial ends the pump
+        // returns and this handle drops, tearing down only the analog stream —
+        // the shared channel (and the log/inject streams) stays up.
         let joystick = JoystickState::default();
         let (sample_tx, sample_rx) = std::sync::mpsc::channel();
-        let mut input_conn = conn.clone_conn();
+        let mut input_conn = self.conn.lock().await.clone_conn();
         let node = task_config.joystick_node.clone();
         let input_clock = clock;
         let input_joystick = joystick.clone();
@@ -202,10 +212,11 @@ impl RustTask for RustTaskService {
             }
         });
 
-        // Effects task: owns the connection for logs + rewards.
+        // Effects task: BehavState logs + reward pulses go through the SHARED
+        // conn, so their streams are opened once and reused every trial.
         let (effect_tx, effect_rx) = mpsc::unbounded_channel();
         tokio::spawn(run_effects(
-            conn,
+            self.conn.clone(),
             effect_rx,
             cfg.reward_ms.clone(),
             cfg.reward_scale,

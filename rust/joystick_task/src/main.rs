@@ -132,8 +132,21 @@ fn main() -> anyhow::Result<()> {
                 tracing::warn!("render loop did not exit within 2 s; forcing exit");
                 std::process::exit(0);
             });
+            // One long-lived, lazily-(re)connecting channel to the core, shared
+            // by every trial (see control.rs). connect_lazy never blocks and
+            // auto-reconnects, so the shared conn survives a core restart while
+            // the core keeps just one log + one inject_analog handler thread.
+            // MUST be built inside the runtime: tonic's Channel::new spawns a
+            // background connection driver and panics if there is no runtime in
+            // context (that panic killed this thread and left 50060 unbound).
+            let conn = rt.block_on(async {
+                std::sync::Arc::new(tokio::sync::Mutex::new(
+                    crate::grpc::ThalamusConn::connect_lazy(endpoint)
+                        .expect("build Thalamus channel"),
+                ))
+            });
             let service = RustTaskService {
-                thalamus_endpoint: endpoint,
+                conn,
                 job_tx: std::sync::Mutex::new(job_tx),
                 wake: std::sync::Mutex::new(proxy),
                 mirror_rx,
