@@ -1,0 +1,559 @@
+{
+  "touch_channels": [
+    0,
+    1
+  ],
+  "queue": [],
+  "reward_schedule": {
+    "schedules": [
+      [
+        0
+      ]
+    ],
+    "index": 0
+  },
+  "Orchestration": {
+    "Remote Executor": false,
+    "Processes": []
+  },
+  "nodes": [],
+  "Persistence": {
+    "Cached": []
+  },
+  "eye_scaling": {
+    "I": {
+      "x": 1,
+      "y": 1
+    },
+    "II": {
+      "x": 1,
+      "y": 1
+    },
+    "III": {
+      "x": 1,
+      "y": 1
+    },
+    "IV": {
+      "x": 1,
+      "y": 1
+    }
+  },
+  "status": "Untitled/Sequence Task = 0/47",
+  "thalamus_view_geometry": [
+    100,
+    100,
+    384,
+    768
+  ],
+  "data_views": [],
+  "node_widgets": [],
+  "task_clusters": [
+    {
+      "type": "task_cluster",
+      "name": "SequenceTask",
+      "weight": 0,
+      "tasks": [
+        {
+          "task_type": "diana",
+          "type": "task",
+          "goal": 5,
+          "name": "Sequence Task",
+          "intertrial_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "start_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "hold_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "blink_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "fail_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "success_timeout": {
+            "min": 1,
+            "max": 1
+          },
+          "target_x": {
+            "min": 1,
+            "max": 1
+          },
+          "target_y": {
+            "min": 1,
+            "max": 1
+          },
+          "target_width": {
+            "min": 1,
+            "max": 1
+          },
+          "target_height": {
+            "min": 1,
+            "max": 1
+          },
+          "target_color": [
+            255,
+            255,
+            255
+          ],
+          "targets": [
+            {
+              "name": "Center",
+              "width": 10,
+              "height": 10,
+              "orientation": 0,
+              "window_size": 5.0,
+              "reward_channel": 0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                255,
+                255,
+                255
+              ],
+              "is_center": true,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 0,
+                "max": 0.0
+              },
+              "angle": {
+                "min": 0,
+                "max": 0.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "Left_Up",
+              "width": 10,
+              "height": 10,
+              "orientation": 0,
+              "window_size": 5.0,
+              "reward_channel": 0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                255,
+                255,
+                255
+              ],
+              "is_center": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 20.0,
+                "max": 20.0
+              },
+              "angle": {
+                "min": 135.0,
+                "max": 135.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "Left_mid",
+              "width": 10,
+              "height": 10,
+              "orientation": 0,
+              "window_size": 5.0,
+              "reward_channel": 0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                255,
+                255,
+                255
+              ],
+              "is_center": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 20.0,
+                "max": 20.0
+              },
+              "angle": {
+                "min": 180.0,
+                "max": 180.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "Left_Low",
+              "width": 10,
+              "height": 10,
+              "orientation": 0,
+              "window_size": 5.0,
+              "reward_channel": 0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                255,
+                255,
+                255
+              ],
+              "is_center": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 20.0,
+                "max": 20.0
+              },
+              "angle": {
+                "min": 225.0,
+                "max": 225.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "Right_Up",
+              "width": 10,
+              "height": 10,
+              "orientation": 0,
+              "window_size": 5.0,
+              "reward_channel": 0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                255,
+                255,
+                255
+              ],
+              "is_center": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 20.0,
+                "max": 20.0
+              },
+              "angle": {
+                "min": 45.0,
+                "max": 45.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "Right_mid",
+              "width": 10,
+              "height": 10,
+              "orientation": 0,
+              "window_size": 5.0,
+              "reward_channel": 0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                255,
+                255,
+                255
+              ],
+              "is_center": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 20.0,
+                "max": 20.0
+              },
+              "angle": {
+                "min": 0,
+                "max": 0.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "Right_Low",
+              "width": 10,
+              "height": 10,
+              "orientation": 0,
+              "window_size": 5.0,
+              "reward_channel": 0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                255,
+                255,
+                255
+              ],
+              "is_center": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 20.0,
+                "max": 20.0
+              },
+              "angle": {
+                "min": 315.0,
+                "max": 315.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            },
+            {
+              "name": "Top",
+              "width": 10,
+              "height": 10,
+              "orientation": 0,
+              "window_size": 5.0,
+              "reward_channel": 0,
+              "audio_scale_left": 0,
+              "audio_scale_right": 0,
+              "color": [
+                255,
+                255,
+                255
+              ],
+              "is_center": false,
+              "shape": "box",
+              "stl_file": "",
+              "audio_file": "",
+              "audio_only_if_high": false,
+              "play_in_ear": false,
+              "radius": {
+                "min": 20.0,
+                "max": 20.0
+              },
+              "angle": {
+                "min": 90.0,
+                "max": 90.0
+              },
+              "volume": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_temporal_jitter": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset": {
+                "min": 0,
+                "max": 0
+              },
+              "auditory_spatial_offset_around_fixation": {
+                "min": 0,
+                "max": 0
+              },
+              "on_luminance": {
+                "min": 1,
+                "max": 1
+              },
+              "off_luminance": {
+                "min": 0,
+                "max": 0
+              }
+            }
+          ],
+          "center_hold_timeout": {
+            "min": 1,
+            "max": 1.0
+          },
+          "reach_timeout": {
+            "min": 2,
+            "max": 2
+          },
+          "target_hold_timeout": {
+            "min": 0.3,
+            "max": 0.3
+          },
+          "cue_delay": {
+            "min": 0.4,
+            "max": 2.0
+          },
+          "sequence_length": {
+            "min": 2,
+            "max": 2
+          },
+          "is_random_sequence": true,
+          "state_indicator_x": 180,
+          "state_indicator_y": 0
+        }
+      ]
+    }
+  ]
+}
