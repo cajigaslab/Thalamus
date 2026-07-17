@@ -283,27 +283,22 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
         touch_pos = cursor
 
-        # Collect every target whose window actually contains the touch,
-        # then resolve overlapping center/peripheral windows by assigning
-        # the touch to whichever target center it is physically closest to.
-        # This keeps center_acquired and target_acquired mutually exclusive
-        # even when the acquisition windows spatially overlap.
-        candidates = []
+        # Center always takes priority: being inside the center window counts
+        # as "at center" even if a peripheral window overlaps that same spot.
+        # Peripheral targets are only considered once the touch is outside
+        # the center window, so center_acquired/target_acquired stay mutually
+        # exclusive no matter how much the windows overlap.
+        center_acquired = distance(all_target_rects[i_center_target].center(), cursor) < all_target_windows[i_center_target]
 
-        d_center = distance(all_target_rects[i_center_target].center(), cursor)
-        if d_center < all_target_windows[i_center_target]:
-            candidates.append((d_center, i_center_target))
+        target_acquired = False
+        i_selected_target = None
 
-        for i in i_periph_targs:
-            d = distance(all_target_rects[i].center(), cursor)
-            if d < all_target_windows[i]:
-                candidates.append((d, i))
-
-        i_winner = min(candidates, key=lambda c: c[0])[1] if candidates else None
-
-        center_acquired = (i_winner == i_center_target)
-        target_acquired = i_winner is not None and i_winner != i_center_target
-        i_selected_target = i_winner if target_acquired else None
+        if not center_acquired:
+            for i in i_periph_targs:
+                if distance(all_target_rects[i].center(), cursor) < all_target_windows[i]:
+                    target_acquired = True
+                    i_selected_target = i
+                    break
 
     context.widget.touch_listener = touch_handler
     state_brightness = 0
