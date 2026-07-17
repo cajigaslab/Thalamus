@@ -14,14 +14,14 @@ import os
 
 import stl
 
-from ..qt import *
+from thalamus.qt import *
 
-from . import task_context
-from .widgets import Form, ListAsTabsWidget
-from .util import wait_for, wait_for_hold, RenderOutput, animate
-from .. import thalamus_pb2
-from .. import task_controller_pb2
-from .. import config
+from thalamus.task_controller import task_context
+from thalamus.task_controller.widgets import Form, ListAsTabsWidget
+from thalamus.task_controller.util import wait_for, wait_for_hold, RenderOutput, animate
+from thalamus import thalamus_pb2
+from thalamus import task_controller_pb2
+from thalamus import config
 
 LOGGER = logging.getLogger(__name__)
 
@@ -311,7 +311,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
     def renderer(painter: QPainter) -> None:
         nonlocal center_brightness, show_all_targets, current_target_to_highlight, state_brightness
-        window = all_target_windows[0]
+        #window = all_target_windows[0]
         center_color = QColor(center_brightness, center_brightness, center_brightness)
         stl_mesh = all_target_stls[i_center_target]
         if stl_mesh:
@@ -334,7 +334,7 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
 
         with painter.masked(RenderOutput.OPERATOR):
             path = QPainterPath()
-            for rect in all_target_rects:
+            for rect, window in zip(all_target_rects, all_target_windows):
                 path.addEllipse(QPointF(rect.center()), window, window)
             painter.fillPath(path, QColor(255, 255, 255, 50))
 
