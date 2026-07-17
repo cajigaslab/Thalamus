@@ -75,42 +75,6 @@ extern "C" {
     ThalamusCharSpan type;
   };
 
-  struct ThalamusRequestHandle;
-
-  struct ThalamusJson;
-  struct ThalamusAnalogNode;
-  struct ThalamusImageNode;
-  struct ThalamusMocapNode;
-  struct ThalamusTextNode;
-
-  struct ThalamusNode {
-    void* impl;
-    uint64_t (*time_ns)(struct ThalamusNode*);
-    struct ThalamusAnalogNode* analog;
-    struct ThalamusMocapNode* mocap;
-    struct ThalamusImageNode* image;
-    struct ThalamusTextNode* text;
-    void* plugin_impl;
-    void (*process)(struct ThalamusNode*, struct ThalamusRequestHandle*, struct ThalamusJson*);
-  };
-
-  struct ThalamusAnalogNode {
-    void (*data)(struct ThalamusDoubleSpan*, struct ThalamusNode* node, int channel);
-    void (*short_data)(struct ThalamusShortSpan*, struct ThalamusNode* node, int channel);
-    void (*int_data)(struct ThalamusIntSpan*, struct ThalamusNode* node, int channel);
-    void (*ulong_data)(struct ThalamusULongSpan*, struct ThalamusNode* node, int channel);
-    int (*num_channels)(struct ThalamusNode* node);
-    uint64_t (*sample_interval_ns)(struct ThalamusNode* node, int channel);
-    char (*has_analog_data)(struct ThalamusNode* node);
-    char (*is_short_data)(struct ThalamusNode* node);
-    char (*is_int_data)(struct ThalamusNode* node);
-    char (*is_ulong_data)(struct ThalamusNode* node);
-    char (*is_transformed)(struct ThalamusNode* node);
-    double (*scale)(struct ThalamusNode* node, int channel);
-    double (*offset)(struct ThalamusNode* node, int channel);
-    void (*name)(struct ThalamusCharSpan*, struct ThalamusNode* node, int channel);
-  };
-
   enum ThalamusImageFormat {
     Gray = 0,
     RGB = 1,
@@ -119,14 +83,35 @@ extern "C" {
     YUVJ420P = 4,
   };
 
-  struct ThalamusImageNode {
-    void (*plane)(struct ThalamusByteSpan*, struct ThalamusNode*, int channel);
-    uint64_t (*num_planes)(struct ThalamusNode*);
-    enum ThalamusImageFormat (*format)(struct ThalamusNode*);
-    uint64_t (*width)(struct ThalamusNode*);
-    uint64_t (*height)(struct ThalamusNode*);
-    uint64_t (*frame_interval_ns)(struct ThalamusNode*);
-    char (*has_image_data)(struct ThalamusNode*);
+  struct ThalamusAnalogPayloadChannel {
+    struct ThalamusDoubleSpan* double_data;
+    struct ThalamusShortSpan* short_data;
+    struct ThalamusIntSpan* int_data;
+    struct ThalamusULongSpan* ulong_data;
+    
+    struct ThalamusCharSpan name;
+    uint64_t sample_interval_ns;
+    double scale;
+    double offset;
+  };
+
+  struct ThalamusAnalogPayload {
+    struct ThalamusAnalogPayloadChannel* channels;
+    int32_t num_channels;
+
+    char is_short_data;
+    char is_int_data;
+    char is_ulong_data;
+    char is_transformed;
+  };
+
+  struct ThalamusImagePayload {
+    struct ThalamusByteSpan* planes;
+    int64_t num_planes;
+    int64_t width;
+    int64_t height;
+    ThalamusImageFormat format;
+    uint64_t frame_interval_ns;
   };
   
   struct ThalamusMocapSegment {
@@ -142,14 +127,32 @@ extern "C" {
     uint64_t size;
   };
 
-  struct ThalamusMocapNode {
-    void (*segments)(struct ThalamusMocapSegmentSpan*, struct ThalamusNode*);
-    void (*pose_name)(struct ThalamusCharSpan*, struct ThalamusNode*);
-    char (*has_motion_data)(struct ThalamusNode*);
+  struct ThalamusMocapPayload {
+    struct ThalamusMocapSegmentSpan segments;
+    struct ThalamusCharSpan pose_name;
   };
-  struct ThalamusTextNode {
-    void (*text)(struct ThalamusCharSpan*, struct ThalamusNode*);
-    char (*has_text_data)(struct ThalamusNode*);
+
+  struct ThalamusTextPayload {
+    struct ThalamusCharSpan text;
+  };
+
+  struct ThalamusPayload {
+    struct ThalamusAnalogPayload* analog;
+    struct ThalamusImagePayload* image;
+    struct ThalamusMocapPayload* mocap;
+    struct ThalamusTextPayload* text;
+    int64_t time_ns;
+  };
+
+  struct ThalamusRequestHandle;
+
+  struct ThalamusJson;
+
+  struct ThalamusNode {
+    void* impl;
+    int32_t modalities;
+    void* plugin_impl;
+    void (*process)(struct ThalamusNode*, struct ThalamusRequestHandle*, struct ThalamusJson*);
   };
 
   struct ThalamusNodeFactory {
@@ -204,7 +207,7 @@ extern "C" {
 
     int (*error_code_value)(struct ThalamusErrorCode*);
 
-    void (*node_ready)(struct ThalamusNode*);
+    void (*node_ready)(struct ThalamusNode*, struct ThalamusPayload*);
 
     uint64_t (*time_ns)();
     int (*error_code_operation_aborted)();

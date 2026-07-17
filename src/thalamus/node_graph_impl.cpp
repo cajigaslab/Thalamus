@@ -194,6 +194,7 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
   ThalamusNode* node;
   ThalamusNodeFactory *factory;
   ThalamusAPI *api;
+  ThalamusPayload* payload = nullptr;
 
   ExtNode(ThalamusNode *_node, ThalamusNodeFactory *_factory, ThalamusAPI *_api)
       : node(_node), factory(_factory), api(_api) {}
@@ -213,40 +214,44 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
   }
 
   std::span<const double> data(int channel) const override {
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
     ThalamusDoubleSpan temp;
-    node->analog->data(&temp, node, channel);
+    temp = *payload->analog->channels[channel].double_data;
     return std::span<const double>(temp.data, temp.data+temp.size);
   }
   std::span<const short> short_data(int channel) const override {
-    ThalamusShortSpan temp;
-    node->analog->short_data(&temp, node, channel);
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
+    auto temp = *payload->analog->channels[channel].short_data;
     return std::span<const short>(temp.data, temp.data+temp.size);
   }
   std::span<const int> int_data(int channel) const override {
-    ThalamusIntSpan temp;
-    node->analog->int_data(&temp, node, channel);
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
+    auto temp = *payload->analog->channels[channel].int_data;
     return std::span<const int>(temp.data, temp.data+temp.size);
   }
   std::span<const uint64_t> ulong_data(int channel) const override {
-    ThalamusULongSpan temp;
-    node->analog->ulong_data(&temp, node, channel);
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
+    auto temp = *payload->analog->channels[channel].ulong_data;
     return std::span<const uint64_t>(temp.data, temp.data+temp.size);
   }
   int num_channels() const override {
-    return node->analog->num_channels(node);
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
+    return payload->analog->num_channels;
   }
   std::chrono::nanoseconds sample_interval(int channel) const override {
-    return std::chrono::nanoseconds(node->analog->sample_interval_ns(node, channel));
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
+    return std::chrono::nanoseconds(payload->analog->channels[channel].sample_interval_ns);
   }
   std::chrono::nanoseconds time() const override {
-    return std::chrono::nanoseconds(node->time_ns(node));
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
+    return std::chrono::nanoseconds(payload->time_ns);
   }
   std::chrono::nanoseconds remote_time() const override {
     return 0ns;
   }
   std::string_view name(int channel) const override {
-    ThalamusCharSpan temp2;
-    node->analog->name(&temp2, node, channel);
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
+    auto temp2 = payload->analog->channels[channel].name;
     return std::string_view(temp2.data, temp2.data + temp2.size);
   }
   void inject(const thalamus::vector<std::span<double const>> &,
@@ -255,38 +260,47 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
     THALAMUS_ABORT("Unimplemented");
   }
   bool has_analog_data() const override {
-    return node->analog->has_analog_data(node);
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
+    return payload->analog;
   }
   bool is_short_data() const override {
-    return node->analog->is_short_data ? node->analog->is_short_data(node) : false;
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
+    return payload->analog->is_short_data;
   }
   bool is_int_data() const override {
-    return node->analog->is_int_data ? node->analog->is_int_data(node) : false;
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
+    return payload->analog->is_int_data;
   }
   bool is_ulong_data() const override {
-    return node->analog->is_ulong_data ? node->analog->is_ulong_data(node) : false;
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
+    return payload->analog->is_ulong_data;
   }
 
   bool is_transformed() const override {
-    return node->analog->is_transformed ? node->analog->is_transformed(node) : false;
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
+    return payload->analog->is_transformed;
   }
   double scale(int channel) const override {
-    return node->analog->scale(node, channel);
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
+    return payload->analog->channels[channel].scale;
   }
   double offset(int channel) const override {
-    return node->analog->offset(node, channel);
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
+    return payload->analog->channels[channel].offset;
   }
 
   Plane plane(int i) const override {
-    ThalamusByteSpan temp;
-    node->image->plane(&temp, node, i);
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
+    auto temp = payload->image->planes[i];
     return std::span<const uint8_t>(temp.data, temp.data+temp.size);
   }
   size_t num_planes() const override {
-    return node->image->num_planes(node);
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
+    return size_t(payload->image->num_planes);
   }
   Format format() const override {
-    auto format = node->image->format(node);
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
+    auto format = payload->image->format;
     switch(format) {
     case ThalamusImageFormat::Gray:
       return ImageNode::Format::Gray;
@@ -301,46 +315,52 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
     }
   }
   size_t width() const override {
-    return node->image->width(node);
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
+    return size_t(payload->image->width);
   }
   size_t height() const override {
-    return node->image->height(node);
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
+    return size_t(payload->image->height);
   }
   std::chrono::nanoseconds frame_interval() const override {
-    return std::chrono::nanoseconds(node->image->frame_interval_ns(node));
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
+    return std::chrono::nanoseconds(payload->image->frame_interval_ns);
   }
   void inject(const thalamus_grpc::Image &) override {
     THALAMUS_ABORT("Unimplemented");
   }
   bool has_image_data() const override {
-    return node->image->has_image_data(node);
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
+    return payload->image;
   }
 
   std::span<MotionCaptureNode::Segment const> segments() const override {
-    ThalamusMocapSegmentSpan temp;
-    node->mocap->segments(&temp, node);
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
+    auto temp = payload->mocap->segments;
     return std::span<MotionCaptureNode::Segment const>(temp.data, temp.data+temp.size);
   }
   const std::string_view pose_name() const override {
-    ThalamusCharSpan temp;
-    node->mocap->pose_name(&temp, node);
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
+    auto temp = payload->mocap->pose_name;
     return std::string_view(temp.data, temp.data+temp.size);
   }
   void inject(const std::span<MotionCaptureNode::Segment const> &) override {
     THALAMUS_ABORT("Unimplemented");
   }
   bool has_motion_data() const override {
-    return node->mocap->has_motion_data(node);
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
+    return payload->mocap;
   }
 
   std::string_view text() const override {
-    ThalamusCharSpan span;
-    node->text->text(&span, node);
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
+    auto span = payload->text->text;
     return to_string_view(span);
   }
 
   bool has_text_data() const override {
-    return node->text->has_text_data(node);
+    THALAMUS_ASSERT(payload, "ExtNode accessed with no payload");
+    return payload->text;
   }
 
   void process(const boost::json::value & request, std::function<void(const boost::json::value &)> callback) override {
@@ -855,9 +875,11 @@ struct ThalamusAPIImpl {
     return error->error->value();
   }
 
-  static void node_ready(ThalamusNode* node) {
+  static void node_ready(ThalamusNode* node, ThalamusPayload* new_payload) {
     auto ext_node = reinterpret_cast<ExtNode*>(node->impl);
+    ext_node->payload = new_payload;
     ext_node->ready(ext_node);
+    ext_node->payload = nullptr;
   }
 
   static uint64_t time_ns() {
