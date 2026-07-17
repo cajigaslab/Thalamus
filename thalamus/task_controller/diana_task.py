@@ -282,29 +282,28 @@ async def run(context: task_context.TaskContextProtocol) -> task_context.TaskRes
         nonlocal center_acquired, target_acquired, i_selected_target, touch_pos
 
         touch_pos = cursor
-        center_acquired = distance(all_target_rects[i_center_target].center(), cursor) < all_target_windows[i_center_target]
 
-        target_acquired = False
-        i_selected_target = None
+        # Collect every target whose window actually contains the touch,
+        # then resolve overlapping center/peripheral windows by assigning
+        # the touch to whichever target center it is physically closest to.
+        # This keeps center_acquired and target_acquired mutually exclusive
+        # even when the acquisition windows spatially overlap.
+        candidates = []
 
-        for i in i_periph_targs:
-            if distance(all_target_rects[i].center(), cursor) < all_target_windows[i]:
-                target_acquired = True
-                i_selected_target = i
-                break
-
-        if current_target_to_highlight is not None:
-            if distance(all_target_rects[current_target_to_highlight].center(), cursor) < all_target_windows[current_target_to_highlight]:
-                target_acquired = True
-                i_selected_target = current_target_to_highlight
-                return
+        d_center = distance(all_target_rects[i_center_target].center(), cursor)
+        if d_center < all_target_windows[i_center_target]:
+            candidates.append((d_center, i_center_target))
 
         for i in i_periph_targs:
-            if i != current_target_to_highlight:
-                if distance(all_target_rects[i].center(), cursor) < all_target_windows[i]:
-                    target_acquired = True
-                    i_selected_target = i
-                    break
+            d = distance(all_target_rects[i].center(), cursor)
+            if d < all_target_windows[i]:
+                candidates.append((d, i))
+
+        i_winner = min(candidates, key=lambda c: c[0])[1] if candidates else None
+
+        center_acquired = (i_winner == i_center_target)
+        target_acquired = i_winner is not None and i_winner != i_center_target
+        i_selected_target = i_winner if target_acquired else None
 
     context.widget.touch_listener = touch_handler
     state_brightness = 0
