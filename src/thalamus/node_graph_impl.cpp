@@ -1112,10 +1112,6 @@ struct ThalamusAPIImpl {
     TRACE_EVENT_BEGIN("plugin", perfetto::DynamicString(name->data, name->size));
   }
 
-  static void trace_event_begin_span(const ThalamusCharSpan* name) {
-    TRACE_EVENT_BEGIN("plugin", perfetto::DynamicString(name->data, name->size));
-  }
-
   static void trace_event_end() {
     TRACE_EVENT_END("plugin");
   }
@@ -1494,7 +1490,6 @@ public:
     thalamus_api.state_set_at_index_bool = ThalamusAPIImpl::state_set_at_index_bool;
     thalamus_api.io_context_post = ThalamusAPIImpl::io_context_post;
     thalamus_api.trace_event_begin = ThalamusAPIImpl::trace_event_begin;
-    thalamus_api.trace_event_begin_span = ThalamusAPIImpl::trace_event_begin_span;
     thalamus_api.trace_event_end = ThalamusAPIImpl::trace_event_end;
     thalamus_api.serial_port_create = ThalamusAPIImpl::serial_port_create;
     thalamus_api.serial_port_destroy = ThalamusAPIImpl::serial_port_destroy;
@@ -1554,6 +1549,7 @@ public:
     thalamus_api.node_ready_offmain = ThalamusAPIImpl::node_ready_offmain;
 
     thalamus_api.node_predrop_ready = ThalamusAPIImpl::node_predrop_ready;
+    thalamus_api.version = 84;
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},
