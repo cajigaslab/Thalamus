@@ -92,6 +92,7 @@ extern "C" {
     struct ThalamusTextNode* text;
     void* plugin_impl;
     void (*process)(struct ThalamusNode*, struct ThalamusRequestHandle*, struct ThalamusJson*);
+    void (*predrop)(struct ThalamusNode*);
   };
 
   struct ThalamusAnalogNode {
@@ -297,6 +298,10 @@ extern "C" {
     struct ThalamusState* (*node_get_state)(struct ThalamusNode* node);
 
     void (*threadpool_post)(ThalamusPostCallback, void*);
+
+    struct ThalamusNodeReadyConnection* (*node_ready_multithreaded_connect)(struct ThalamusNode*, ThalamusNodeReadyCallback callback, void* data);
+    void (*node_ready_offmain)(struct ThalamusNode*);
+    void (*node_predrop_ready)(struct ThalamusNode*);
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories)(struct ThalamusAPI*);

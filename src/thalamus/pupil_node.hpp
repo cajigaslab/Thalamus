@@ -27,5 +27,6 @@ public:
   boost::json::value process(const boost::json::value &) override;
   bool has_image_data() const override;
   size_t modalities() const override;
+  void predrop(std::function<void()> drop_ready) override;
 };
 } // namespace thalamus

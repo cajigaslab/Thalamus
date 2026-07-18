@@ -17,9 +17,12 @@ namespace thalamus {
     void* load_address(const std::string&);
 #endif
   public:
+    SharedLibrary();
     SharedLibrary(const std::string&);
     SharedLibrary(SharedLibrary&&);
     ~SharedLibrary();
+
+    bool is_valid();
     std::string name();
     template <typename T> T load(const std::string &name) {
       auto address = load_address(name);

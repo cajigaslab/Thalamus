@@ -5,6 +5,7 @@
 #pragma clang diagnostic ignored "-Weverything"
 #endif
 #include <boost/asio.hpp>
+#include <boost/signals2.hpp>
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif

@@ -256,43 +256,47 @@ struct eval {
 
   template <typename T> static T neg(T arg) { return -arg; }
 
-#define APPLY_FUNCTION(func, rhs)                                              \
+#define APPLY_FUNCTION(func, rhs)                                        \
   std::holds_alternative<int64_t>(rhs)                                   \
       ? number(func(std::get<int64_t>(rhs)))                             \
+      : number(func(std::get<double>(rhs)))
+#define APPLY_DOUBLE_FUNCTION(func, rhs)                                 \
+  std::holds_alternative<int64_t>(rhs)                                   \
+      ? number(func(double(std::get<int64_t>(rhs))))                     \
       : number(func(std::get<double>(rhs)))
 
   number operator()(function_ const &x) const {
     number rhs = (*this)(x.program_);
     if (x.function == "ATAN") {
-      return APPLY_FUNCTION(atan, rhs);
+      return APPLY_DOUBLE_FUNCTION(atan, rhs);
     } else if (x.function == "COS") {
-      return APPLY_FUNCTION(cos, rhs);
+      return APPLY_DOUBLE_FUNCTION(cos, rhs);
     } else if (x.function == "SIN") {
-      return APPLY_FUNCTION(sin, rhs);
+      return APPLY_DOUBLE_FUNCTION(sin, rhs);
     } else if (x.function == "TAN") {
-      return APPLY_FUNCTION(tan, rhs);
+      return APPLY_DOUBLE_FUNCTION(tan, rhs);
     } else if (x.function == "ABS") {
       return APPLY_FUNCTION(abs, rhs);
     } else if (x.function == "EXP") {
-      return APPLY_FUNCTION(exp, rhs);
+      return APPLY_DOUBLE_FUNCTION(exp, rhs);
     } else if (x.function == "LN") {
-      return APPLY_FUNCTION(log, rhs);
+      return APPLY_DOUBLE_FUNCTION(log, rhs);
     } else if (x.function == "LOG") {
-      return APPLY_FUNCTION(log10, rhs);
+      return APPLY_DOUBLE_FUNCTION(log10, rhs);
     } else if (x.function == "SQRT") {
-      return APPLY_FUNCTION(sqrt, rhs);
+      return APPLY_DOUBLE_FUNCTION(sqrt, rhs);
     } else if (x.function == "TRUNC") {
-      return APPLY_FUNCTION(trunc, rhs);
+      return APPLY_DOUBLE_FUNCTION(trunc, rhs);
     } else if (x.function == "FLOOR") {
-      return APPLY_FUNCTION(floor, rhs);
+      return APPLY_DOUBLE_FUNCTION(floor, rhs);
     } else if (x.function == "CEIL") {
-      return APPLY_FUNCTION(ceil, rhs);
+      return APPLY_DOUBLE_FUNCTION(ceil, rhs);
     } else if (x.function == "ROUND") {
-      return APPLY_FUNCTION(round, rhs);
+      return APPLY_DOUBLE_FUNCTION(round, rhs);
     } else if (x.function == "ASIN") {
-      return APPLY_FUNCTION(asin, rhs);
+      return APPLY_DOUBLE_FUNCTION(asin, rhs);
     } else if (x.function == "ACOS") {
-      return APPLY_FUNCTION(acos, rhs);
+      return APPLY_DOUBLE_FUNCTION(acos, rhs);
     } else if (x.function == "SGN") {
       return APPLY_FUNCTION(sgn, rhs);
     } else if (x.function == "NEG") {

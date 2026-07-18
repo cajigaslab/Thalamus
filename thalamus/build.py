@@ -97,6 +97,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     return
 
   no_native = 'no-native' in config_settings
+  crashpad = 'no-crashpad' not in config_settings
   is_android = 'android' in config_settings
   is_release = 'release' in config_settings
   code_coverage = 'code-coverage' in config_settings
@@ -185,6 +186,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
     f'-DCMAKE_OSX_DEPLOYMENT_TARGET={osx_target}',
     f'-DBUILD_DOTNET={"ON" if dotnet else "OFF"}',
+    f'-DBUILD_CRASHPAD={"ON" if crashpad else "OFF"}',
     f'-DPYTHON={sys.executable}'
   ]
   cmake_command += ['-G', generator]
@@ -225,6 +227,9 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     cmake_command += ['-DANDROID_PLATFORM=21']
     cmake_command += [f'-DANDROID_NDK={ndk}']
     cmake_command += [f'-DCMAKE_TOOLCHAIN_FILE={toolchain}']
+
+  if platform.system() == 'Linux':
+    cmake_command += ['-DCMAKE_LIBRARY_ARCHITECTURE=x86_64-linux-gnu']
 
   if not no_native:
     cmake_command = [str(c) for c in cmake_command]

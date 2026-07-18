@@ -1,16 +1,16 @@
 FetchContent_Declare(
   sdl
   GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
-  GIT_TAG release-2.28.5
+  GIT_TAG release-3.4.8
   SOURCE_SUBDIR thalamus-nonexistant)
 FetchContent_MakeAvailable(sdl)
 file(MAKE_DIRECTORY ${sdl_BINARY_DIR}/Debug)
 file(MAKE_DIRECTORY ${sdl_BINARY_DIR}/Release)
 
 if(WIN32)
-  set(SDL_LIB_FILES "${sdl_BINARY_DIR}/$<CONFIG>/install/lib/SDL2-static.lib")
+  set(SDL_LIB_FILES "${sdl_BINARY_DIR}/$<CONFIG>/install/lib/SDL3-static.lib")
 else()
-  set(SDL_LIB_FILES "${sdl_BINARY_DIR}/$<CONFIG>/install/lib/libSDL2.a")
+  set(SDL_LIB_FILES "${sdl_BINARY_DIR}/$<CONFIG>/install/lib/libSDL3.a")
 endif()
 
 add_custom_command(OUTPUT "${sdl_BINARY_DIR}/$<CONFIG>/CMakeCache.txt"
@@ -23,6 +23,7 @@ add_custom_command(OUTPUT "${sdl_BINARY_DIR}/$<CONFIG>/CMakeCache.txt"
                       "-DCMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
                       -DCMAKE_LINKER=${CMAKE_LINKER}
                       -DBUILD_SHARED_LIBS=OFF
+                      -DCMAKE_LIBRARY_ARCHITECTURE=${CMAKE_LIBRARY_ARCHITECTURE}
                       "-DSDL_CMAKE_DEBUG_POSTFIX=\"\""
                       "-DCMAKE_CXX_FLAGS=${ALL_COMPILE_OPTIONS_SPACED}" 
                       "-DCMAKE_C_FLAGS=${ALL_COMPILE_OPTIONS_SPACED}"
@@ -43,7 +44,7 @@ add_custom_command(OUTPUT ${SDL_LIB_FILES}
                    && cmake -E touch_nocreate ${SDL_LIB_FILES}
                    WORKING_DIRECTORY ${sdl_BINARY_DIR}/$<CONFIG>)
       
-set(SDL_INCLUDE "${sdl_BINARY_DIR}/$<CONFIG>/install/include/SDL2")
+set(SDL_INCLUDE "${sdl_BINARY_DIR}/$<CONFIG>/install/include")
 set(SDL_PKG_CONFIG_DIR "${sdl_BINARY_DIR}/$<CONFIG>/install/lib/pkgconfig")
 
 add_library(sdl INTERFACE ${SDL_LIB_FILES})

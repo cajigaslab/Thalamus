@@ -17,10 +17,14 @@ struct SharedLibrary::Impl {
       void* library_handle;
 #endif
   Impl(const std::string& _name) : name(_name) {
+    if(name.empty()) {
+      library_handle = nullptr;
+      return;
+    }
 #ifdef _WIN32
-      library_handle = LoadLibrary(name.c_str());
+    library_handle = LoadLibrary(name.c_str());
 #else
-      library_handle = dlopen(name.c_str(), RTLD_NOW);
+    library_handle = dlopen(name.c_str(), RTLD_NOW);
 #endif
   }
   ~Impl() {
@@ -32,9 +36,14 @@ struct SharedLibrary::Impl {
   }
 };
 
+SharedLibrary::SharedLibrary() : impl(new Impl("")) {}
 SharedLibrary::SharedLibrary(const std::string& name) : impl(new Impl(name)) {}
 SharedLibrary::SharedLibrary(SharedLibrary&& that) : impl(std::move(that.impl)) {}
 SharedLibrary::~SharedLibrary() {}
+
+bool SharedLibrary::is_valid() {
+  return impl->library_handle != nullptr;
+}
 
 std::string SharedLibrary::name() {
   return impl->name;
