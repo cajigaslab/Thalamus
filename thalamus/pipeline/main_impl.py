@@ -28,7 +28,9 @@ from ..cache_manager import CacheManager
 from ..resources import get_path
 
 import grpc
+from grpc_reflection.v1alpha import reflection
 from .. import ophanim_pb2_grpc
+from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
 from ..task_controller.observable_bridge import ObservableBridge
 from .thalamus_window import ThalamusWindow
@@ -147,6 +149,13 @@ async def async_main() -> None:
   servicer = ThalamusServicer(config)
   thalamus_pb2_grpc.add_ThalamusServicer_to_server(servicer, server)
   listen_addr = f'[::]:{arguments.ui_port}'
+
+  serivce_names = [
+    thalamus_pb2.DESCRIPTOR.services_by_name["Thalamus"].full_name,
+    reflection.SERVICE_NAME,
+  ]
+  logging.info('service_names %s', serivce_names)
+  reflection.enable_server_reflection(serivce_names, server)
 
   server.add_insecure_port(listen_addr)
   logging.info("Starting GRPC server on %s", listen_addr)
