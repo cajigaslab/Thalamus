@@ -1287,10 +1287,12 @@ struct ThalamusAPIImpl {
     auto result = new ThalamusNodeReadyConnection();
     result->node = node;
     node_inc_ref(node);
-    result->connection = interfaces->analog->channels_changed.connect([node, callback, data] (auto) {
-      NodeGuard lock(node);
-      callback(node, data);
-    });
+    if(interfaces->analog) {
+      result->connection = interfaces->analog->channels_changed.connect([node, callback, data] (auto) {
+        NodeGuard lock(node);
+        callback(node, data);
+      });
+    }
     return result;
   }
 
