@@ -5,6 +5,7 @@
 #include <memory>
 #include <thalamus/state.hpp>
 #include <thalamus/shared_library.hpp>
+#include <thalamus/vulkan.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -29,6 +30,7 @@ public:
                 std::chrono::steady_clock::time_point,
                 thalamus_grpc::Thalamus::Stub*,
                 std::vector<SharedLibrary>& extensions,
+                Vulkan vulkan,
                 std::optional<int> thread_policy = std::nullopt,
                 std::optional<int> thread_priority = std::nullopt);
   ~NodeGraphImpl() override;
@@ -56,5 +58,11 @@ public:
   void dialog(const thalamus_grpc::Dialog &) override;
   void log(const thalamus_grpc::Text &) override;
   ObservableDictPtr get_node_state(Node*);
+  VkInstance get_vulkan_instance() override;
+  VkDevice get_vulkan_device() override;
+  VkPhysicalDevice get_vulkan_physical_device() override;
+  VkQueue get_vulkan_queue() override;
+  VkCommandPool create_vulkan_command_pool() override;
+  void predrop(std::function<void()>);
 };
 } // namespace thalamus

@@ -28,7 +28,9 @@ from ..cache_manager import CacheManager
 from ..resources import get_path
 
 import grpc
+from grpc_reflection.v1alpha import reflection
 from .. import ophanim_pb2_grpc
+from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
 from ..task_controller.observable_bridge import ObservableBridge
 from .thalamus_window import ThalamusWindow
@@ -81,6 +83,7 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument('--contrib', action='store_true', help='Equivalent to --ext thalamus.contrib')
   parser.add_argument('--ext', help='Extension Module')
   parser.add_argument('--wait-for-pipeline', action='store_true', help='Don\'t start pipeline, wait for something else to launch it')
+  parser.add_argument('--no-gpu', action='store_true', help='Disable pipeline GPU usage')
   return parser.parse_args(self_args[1:])
 
 async def async_main() -> None:
@@ -147,6 +150,13 @@ async def async_main() -> None:
   thalamus_pb2_grpc.add_ThalamusServicer_to_server(servicer, server)
   listen_addr = f'[::]:{arguments.ui_port}'
 
+  serivce_names = [
+    thalamus_pb2.DESCRIPTOR.services_by_name["Thalamus"].full_name,
+    reflection.SERVICE_NAME,
+  ]
+  logging.info('service_names %s', serivce_names)
+  reflection.enable_server_reflection(serivce_names, server)
+
   server.add_insecure_port(listen_addr)
   logging.info("Starting GRPC server on %s", listen_addr)
   await server.start()
@@ -166,6 +176,8 @@ async def async_main() -> None:
     command = command + ('--ext',) + ext_library
   if use_crashpad:
     command = command + ('--crashpad',)
+  if arguments.no_gpu:
+    command = command + ('--no-gpu',)
   LOGGER.info('COMMAND %s', ' '.join(command))
   if not arguments.wait_for_pipeline:
     bmbi_native_proc = await asyncio.create_subprocess_exec(*command)

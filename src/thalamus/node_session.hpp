@@ -73,20 +73,27 @@ namespace thalamus {
     , selector(_selector)
     , context_guard(std::move(_context_guard)) {
       THALAMUS_LOG(trace) << "Create NodeSession";
+    }
 
+    void start() {
       get_node();
     }
 
     ~NodeSession() override {
       THALAMUS_LOG(trace) << "Delete NodeSession";
+      start_join();
+    }
+
+    void start_join() {
+      THALAMUS_LOG(trace) << "start_join";
       std::lock_guard<std::mutex> lock(state->mutex);
+      timer.cancel();
       state->joining = true;
     }
         
     void OnDone() override {
       THALAMUS_LOG(trace) << "OnDone" << std::endl;
       ServerWriteReactor<RESPONSE>::OnDone();
-      delete this;
     }
 
     void OnCancel() override {
@@ -144,6 +151,7 @@ namespace thalamus {
       }
       THALAMUS_ASSERT(!error, "Unexpected error");
 
+      std::lock_guard<std::mutex> lock(state->mutex);
       if(weak_raw_node.lock() == nullptr) {
         THALAMUS_LOG(trace) << "node expired";
         timer.expires_after(1s);
@@ -189,14 +197,19 @@ namespace thalamus {
 
     ~NodeReadSession() override {
       THALAMUS_LOG(trace) << "Delete NodeReadSession";
+      start_join();
+    }
+
+    void start_join() {
+      THALAMUS_LOG(trace) << "start_join";
       std::lock_guard<std::mutex> lock(state->mutex);
+      timer.cancel();
       state->joining = true;
     }
         
     void OnDone() override {
       THALAMUS_LOG(trace) << "OnDone" << std::endl;
       ServerReadReactor<REQUEST>::OnDone();
-      delete this;
     }
 
     void OnCancel() override {
@@ -267,6 +280,7 @@ namespace thalamus {
       }
       THALAMUS_ASSERT(!error, "Unexpected error");
 
+      std::lock_guard<std::mutex> lock(state->mutex);
       if(weak_raw_node.lock() == nullptr) {
         THALAMUS_LOG(trace) << "node expired";
         timer.expires_after(1s);

@@ -53,6 +53,7 @@
 #include <thalamus/samplemonitor_node.hpp>
 #include <thalamus/plugin.h>
 #include <thalamus/modalities_util.hpp>
+#include <thalamus/node_util.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -194,10 +195,17 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
   ThalamusNode* node;
   ThalamusNodeFactory *factory;
   ThalamusAPI *api;
+  std::function<void()> drop_ready;
 
   ExtNode(ThalamusNode *_node, ThalamusNodeFactory *_factory, ThalamusAPI *_api)
       : node(_node), factory(_factory), api(_api) {}
   ~ExtNode() override;
+
+  void predrop(std::function<void()> on_drop_ready) override {
+    THALAMUS_LOG(info) << "*ext* ExtNode::predrop";
+    drop_ready = on_drop_ready;
+    node->predrop(node);
+  }
 
   size_t modalities() const override {
     size_t result = 0;
@@ -364,8 +372,8 @@ struct Interfaces {
   AnalogNode* analog = nullptr;
   ImageNode* image = nullptr;
   MotionCaptureNode* mocap = nullptr;
-  bool safe = false;
-  int count = 0;
+  std::atomic_int safe = 0;
+  std::atomic_int count = 0;
 };
 
 #define ASSERT_SAFE() do { if(!interfaces->safe) [[unlikely]] { THALAMUS_ABORT("Node should only be accessed in get_node or ready callback"); } } while(0)
@@ -576,10 +584,10 @@ static char plugin_mocap_has_motion_data(struct ThalamusNode* node) {
 struct NodeGuard {
   Interfaces* interfaces;
   NodeGuard(ThalamusNode* node) : interfaces(reinterpret_cast<Interfaces*>(node->impl)) {
-    interfaces->safe = true;
+    ++interfaces->safe;
   }
   ~NodeGuard() {
-    interfaces->safe = false;
+    --interfaces->safe;
   }
 };
 
@@ -587,6 +595,7 @@ struct ThalamusAPIImpl {
   static std::map<ObservableCollection::Value, ThalamusState*>* cpp_to_c;
   static std::map<ThalamusState*, ObservableCollection::Value>* c_to_cpp;
 
+  static std::mutex* mutex;
   static std::map<Node*, ThalamusNode*>* node_cpp_to_c;
   static std::map<ThalamusNode*, Node*>* node_c_to_cpp;
 
@@ -650,6 +659,8 @@ struct ThalamusAPIImpl {
   }
 
   static ThalamusNode* get_node_ref(Node* val) {
+    std::lock_guard<std::mutex> lock(*mutex);
+
     auto i = node_cpp_to_c->find(val);
     if(i == node_cpp_to_c->end()) {
       auto new_ptr = wrap_node(val);
@@ -860,6 +871,18 @@ struct ThalamusAPIImpl {
     ext_node->ready(ext_node);
   }
 
+  static void node_ready_offmain(ThalamusNode* node) {
+    auto ext_node = reinterpret_cast<ExtNode*>(node->impl);
+    node::signal_ready_offmain(ext_node, *io_context);
+  }
+
+  static void node_predrop_ready(ThalamusNode* node) {
+    THALAMUS_LOG(info) << "*ext* node_predrop_ready";
+    auto ext_node = reinterpret_cast<ExtNode*>(node->impl);
+    THALAMUS_ASSERT(ext_node->drop_ready, "No predrop callback available");
+    ext_node->drop_ready();
+  }
+
   static uint64_t time_ns() {
     std::chrono::nanoseconds ns = std::chrono::steady_clock::now().time_since_epoch();
     return uint64_t(ns.count());
@@ -868,6 +891,7 @@ struct ThalamusAPIImpl {
   static int error_code_operation_aborted() {
     return boost::asio::error::operation_aborted;
   }
+
   static void state_recap(ThalamusState* state) {
     if(std::holds_alternative<ObservableDictPtr>(state->value)) {
       std::get<ObservableDictPtr>(state->value)->recap();
@@ -1088,10 +1112,6 @@ struct ThalamusAPIImpl {
     TRACE_EVENT_BEGIN("plugin", perfetto::DynamicString(name->data, name->size));
   }
 
-  static void trace_event_begin_span(const ThalamusCharSpan* name) {
-    TRACE_EVENT_BEGIN("plugin", perfetto::DynamicString(name->data, name->size));
-  }
-
   static void trace_event_end() {
     TRACE_EVENT_END("plugin");
   }
@@ -1249,6 +1269,7 @@ struct ThalamusAPIImpl {
   static void node_dec_ref(struct ThalamusNode* node) {
     auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
     if(--interfaces->count == 0) {
+      std::lock_guard<std::mutex> lock(*mutex);
       node_c_to_cpp->erase(node);
       node_cpp_to_c->erase(interfaces->node);
       delete node;
@@ -1262,6 +1283,19 @@ struct ThalamusAPIImpl {
     result->node = node;
     node_inc_ref(node);
     result->connection = interfaces->node->ready.connect([node, callback, data] (auto) {
+      NodeGuard lock(node);
+      callback(node, data);
+    });
+    return result;
+  }
+
+  static ThalamusNodeReadyConnection* node_ready_multithreaded_connect(struct ThalamusNode* node, ThalamusNodeReadyCallback callback, void* data) {
+    auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+    
+    auto result = new ThalamusNodeReadyConnection();
+    result->node = node;
+    node_inc_ref(node);
+    result->connection = node::connect_ready_multithreaded(interfaces->node, [node, callback, data] (auto) {
       NodeGuard lock(node);
       callback(node, data);
     });
@@ -1287,10 +1321,12 @@ struct ThalamusAPIImpl {
     auto result = new ThalamusNodeReadyConnection();
     result->node = node;
     node_inc_ref(node);
-    result->connection = interfaces->analog->channels_changed.connect([node, callback, data] (auto) {
-      NodeGuard lock(node);
-      callback(node, data);
-    });
+    if(interfaces->analog) {
+      result->connection = interfaces->analog->channels_changed.connect([node, callback, data] (auto) {
+        NodeGuard lock(node);
+        callback(node, data);
+      });
+    }
     return result;
   }
 
@@ -1312,6 +1348,7 @@ boost::asio::io_context* ThalamusAPIImpl::io_context = nullptr;
 NodeGraphImpl* ThalamusAPIImpl::node_graph = nullptr;
 
 
+std::mutex* ThalamusAPIImpl::mutex = nullptr;
 std::map<Node*, ThalamusNode*>* ThalamusAPIImpl::node_cpp_to_c = nullptr;
 std::map<ThalamusNode*, Node*>* ThalamusAPIImpl::node_c_to_cpp = nullptr;
 
@@ -1356,6 +1393,7 @@ std::string ExtNodeFactory::type_name() { return std::string("*EXT* ") + to_stri
 
 struct NodeGraphImpl::Impl {
   ObservableListPtr nodes;
+  std::vector<std::string> node_next_type;
   std::vector<std::shared_ptr<Node>> node_impls;
   std::vector<std::string> node_types;
   std::vector<ObservableDictPtr> node_configs;
@@ -1376,12 +1414,15 @@ struct NodeGraphImpl::Impl {
   ThreadPool thread_pool;
   thalamus_grpc::Thalamus::Stub* stub;
   std::vector<SharedLibrary>& extension;
+  Vulkan vulkan;
 
   std::map<std::string, INodeFactory *> node_factories;
 
   ThalamusAPIImpl thalamus_api_impl;
   ThalamusAPI thalamus_api;
   int creating_index = -1;
+  boost::signals2::scoped_connection nodes_connection;
+  std::vector<boost::signals2::scoped_connection> node_connections;
 
 public:
   Impl(ObservableListPtr _nodes, boost::asio::io_context &_io_context,
@@ -1389,13 +1430,14 @@ public:
        std::chrono::system_clock::time_point _system_time,
        std::chrono::steady_clock::time_point _steady_time,
        thalamus_grpc::Thalamus::Stub* _stub,
-       std::vector<SharedLibrary>& _extension)
+       std::vector<SharedLibrary>& _extension, Vulkan _vulkan)
       : nodes(_nodes), num_nodes(nodes->size()), io_context(_io_context),
         outer(_outer), system_time(_system_time), steady_time(_steady_time),
-        thread_pool("ThreadPool"), stub(_stub), extension(_extension) {
+        thread_pool("ThreadPool"), stub(_stub), extension(_extension), vulkan(_vulkan) {
 
     ThalamusAPIImpl::cpp_to_c = new std::map<ObservableCollection::Value, ThalamusState*>();
     ThalamusAPIImpl::c_to_cpp = new std::map<ThalamusState*, ObservableCollection::Value>();
+    ThalamusAPIImpl::mutex = new std::mutex();
     ThalamusAPIImpl::node_cpp_to_c = new std::map<Node*, ThalamusNode*>();
     ThalamusAPIImpl::node_c_to_cpp = new std::map<ThalamusNode*, Node*>();
     ThalamusAPIImpl::io_context = &io_context;
@@ -1448,7 +1490,6 @@ public:
     thalamus_api.state_set_at_index_bool = ThalamusAPIImpl::state_set_at_index_bool;
     thalamus_api.io_context_post = ThalamusAPIImpl::io_context_post;
     thalamus_api.trace_event_begin = ThalamusAPIImpl::trace_event_begin;
-    thalamus_api.trace_event_begin_span = ThalamusAPIImpl::trace_event_begin_span;
     thalamus_api.trace_event_end = ThalamusAPIImpl::trace_event_end;
     thalamus_api.serial_port_create = ThalamusAPIImpl::serial_port_create;
     thalamus_api.serial_port_destroy = ThalamusAPIImpl::serial_port_destroy;
@@ -1504,6 +1545,11 @@ public:
     thalamus_api.node_get_state = ThalamusAPIImpl::node_get_state;
 
     thalamus_api.threadpool_post = ThalamusAPIImpl::threadpool_post;
+    thalamus_api.node_ready_multithreaded_connect = ThalamusAPIImpl::node_ready_multithreaded_connect;
+    thalamus_api.node_ready_offmain = ThalamusAPIImpl::node_ready_offmain;
+
+    thalamus_api.node_predrop_ready = ThalamusAPIImpl::node_predrop_ready;
+    thalamus_api.version = 84;
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},
@@ -1587,10 +1633,12 @@ public:
       }
     }
     
-    nodes->changed.connect(std::bind(&Impl::on_nodes, this, _1, _2, _3));
+    nodes_connection = nodes->changed.connect(std::bind(&Impl::on_nodes, this, _1, _2, _3));
   }
 
   ~Impl() {
+    nodes_connection.disconnect();
+    node_connections.clear();
     node_impls.clear();
     auto i = node_factories.begin();
     while (i != node_factories.end()) {
@@ -1620,7 +1668,7 @@ public:
     if (a == ObservableCollection::Action::Set) {
       auto index = std::get<int64_t>(k);
       ObservableDictPtr node = std::get<ObservableDictPtr>(v);
-      node->changed.connect(
+      boost::signals2::scoped_connection conn = node->changed.connect(
           std::bind(&Impl::on_node, this, node.get(), _1, _2, _3));
 
       std::string type_str = node->at("type");
@@ -1631,12 +1679,16 @@ public:
           std::shared_ptr<Node>(factory->create(node, io_context, outer));
       creating_index = -1;
 
+      node_connections.insert(node_connections.begin() + index, std::move(conn));
+      node_next_type.insert(node_next_type.begin() + index, "");
       node_impls.insert(node_impls.begin() + index, node_impl);
       node_types.insert(node_types.begin() + index, type_str);
       node_configs.insert(node_configs.begin() + index, node);
       node->recap(std::bind(&Impl::on_node, this, node.get(), _1, _2, _3));
     } else {
       auto index = std::get<int64_t>(k);
+      node_connections.erase(node_connections.begin() + index);
+      node_next_type.erase(node_next_type.begin() + index);
       node_impls.erase(node_impls.begin() + index);
       node_types.erase(node_types.begin() + index);
       node_configs.erase(node_configs.begin() + index);
@@ -1686,19 +1738,49 @@ public:
       if (key_str == "type") {
         auto value_str = std::get<std::string>(v);
         if (value_str != node_types.at(size_t(node_index))) {
-          auto factory = node_factories.at(value_str);
+          auto current_node = node_impls.at(size_t(node_index));
+          auto current_next_type = node_next_type[size_t(node_index)];
 
-          node_types.at(size_t(node_index)) = value_str;
-          creating_index = node_index;
-          node_impls.at(size_t(node_index))
-              .reset(factory->create(shared_node, io_context, outer));
-          creating_index = -1;
+          if(!current_next_type.empty()) {
+            node_next_type[size_t(node_index)] = value_str;
+          } else {
+            node_next_type[size_t(node_index)] = value_str;
+            current_node->predrop([this,current_node] {
+              boost::asio::post(io_context, [this, current_node] {
+                size_t new_node_index = std::numeric_limits<size_t>::max();
+                for(size_t i = 0;i < node_impls.size();++i) {
+                  if(node_impls[i] == current_node) {
+                    new_node_index = i;
+                    break;
+                  }
+                }
+                THALAMUS_ASSERT(new_node_index != std::numeric_limits<size_t>::max(), "Node is missing");
+                auto node_config = node_configs[new_node_index];
+
+                auto type_str = node_next_type[new_node_index];
+                auto factory = node_factories.at(type_str);
+                
+                node_types.at(new_node_index) = type_str;
+                creating_index = int(new_node_index);
+                node_impls.at(new_node_index)
+                    .reset(factory->create(node_config, io_context, outer));
+
+                creating_index = -1;
+                node_next_type[new_node_index] = "";
+
+                auto node_impl = node_impls.at(new_node_index);
+                notify([&type_str](
+                          auto &selector) { return selector.type() == type_str; },
+                      node_impl);
+              });
+            });
+          }
+        } else {
+          auto node_impl = node_impls.at(size_t(node_index));
+          notify([&value_str](
+                    auto &selector) { return selector.type() == value_str; },
+                node_impl);
         }
-
-        auto node_impl = node_impls.at(size_t(node_index));
-        notify([&value_str](
-                   auto &selector) { return selector.type() == value_str; },
-               node_impl);
       } else if (key_str == "name") {
         auto node_impl = node_impls.at(size_t(node_index));
         auto value_str = std::get<std::string>(v);
@@ -1716,9 +1798,10 @@ NodeGraphImpl::NodeGraphImpl(ObservableListPtr nodes,
                              std::chrono::steady_clock::time_point steady_time,
                              thalamus_grpc::Thalamus::Stub* stub,
                              std::vector<SharedLibrary>& extension,
+                             Vulkan vulkan,
                              std::optional<int> thread_policy,
                              std::optional<int> thread_priority)
-    : impl(new Impl(nodes, io_context, this, system_time, steady_time, stub, extension)) {
+    : impl(new Impl(nodes, io_context, this, system_time, steady_time, stub, extension, vulkan)) {
   impl->nodes->recap();
   impl->thread_pool.start(thread_policy, thread_priority);
 }
@@ -1874,6 +1957,47 @@ ObservableDictPtr NodeGraphImpl::get_node_state(Node* node) {
     }
   }
   THALAMUS_ABORT("Failed to find node.");
+}
+
+VkDevice NodeGraphImpl::get_vulkan_device() {
+  return impl->vulkan.device;
+}
+
+VkInstance NodeGraphImpl::get_vulkan_instance() {
+  return impl->vulkan.instance;
+}
+
+VkPhysicalDevice NodeGraphImpl::get_vulkan_physical_device() {
+  return impl->vulkan.physical_device;
+}
+
+VkQueue NodeGraphImpl::get_vulkan_queue() {
+  return impl->vulkan.queue;
+}
+
+VkCommandPool NodeGraphImpl::create_vulkan_command_pool() {
+  VkCommandPoolCreateInfo cp_ci{};
+  cp_ci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+  cp_ci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+  cp_ci.queueFamilyIndex = impl->vulkan.queue_family_index;
+  VkCommandPool result;
+  auto success = vkCreateCommandPool(impl->vulkan.device, &cp_ci, nullptr, &result);
+  THALAMUS_ASSERT(success == VK_SUCCESS, "vkCreateCommandPool failed");
+  return result;
+}
+
+void NodeGraphImpl::predrop(std::function<void()> ready) {
+  auto drop_count = std::make_shared<size_t>(impl->node_impls.size());
+  for(auto& node : impl->node_impls) {
+    node->predrop([ready,drop_count,this] {
+      boost::asio::post(impl->io_context, [ready,drop_count] {
+        --*drop_count;
+        if(*drop_count == 0) {
+          ready();
+        }
+      });
+    });
+  }
 }
 
 } // namespace thalamus
