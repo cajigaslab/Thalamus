@@ -57,8 +57,8 @@ struct PupilNode::Impl {
   bool invert_y;
   size_t next_input_frame = 0;
   size_t next_output_frame = 0;
-  std::atomic<std::chrono::nanoseconds> frame_interval = 32ms;
-  std::atomic<int64_t> jitter = 0;
+  std::atomic_int64_t frame_interval_ns = 32'000'000;
+  std::atomic_int64_t jitter = 0;
 
   ThreadPool &pool;
   boost::asio::io_context draw_context;
@@ -180,6 +180,7 @@ struct PupilNode::Impl {
 
     auto end = std::chrono::steady_clock::now();
     auto elapsed = end - start;
+    auto frame_interval = std::chrono::nanoseconds(frame_interval_ns);
     if (elapsed < frame_interval) {
       timer.expires_after(frame_interval - elapsed);
     } else {
@@ -217,7 +218,7 @@ struct PupilNode::Impl {
           draw_context.restart();
           draw_thread = std::thread([&] {
             set_current_thread_name("PupilNode");
-            timer.expires_after(frame_interval);
+            timer.expires_after(std::chrono::nanoseconds(frame_interval_ns));
             timer.async_wait(std::bind(&Impl::on_timer, this, _1));
             draw_context.run();
           });
@@ -236,7 +237,7 @@ struct PupilNode::Impl {
     } else if(key_str == "Jitter (Pixels)") {
       jitter = std::get<int64_t>(v);
     } else if(key_str == "Frequency") {
-      frame_interval = std::chrono::nanoseconds(int64_t(1e9/std::get<double>(v)));
+      frame_interval_ns = int(1e9/std::get<double>(v));
     } else if(key_str == "Width") {
       width = int(std::get<int64_t>(v));
       init_cairo();
@@ -303,7 +304,7 @@ void PupilNode::inject(const thalamus_grpc::Image &) { THALAMUS_ASSERT(false, "U
 
 std::chrono::nanoseconds PupilNode::time() const { return impl->time; }
 
-std::chrono::nanoseconds PupilNode::frame_interval() const { return impl->frame_interval; }
+std::chrono::nanoseconds PupilNode::frame_interval() const { return std::chrono::nanoseconds(impl->frame_interval_ns); }
 
 bool PupilNode::prepare() { return true; }
 
