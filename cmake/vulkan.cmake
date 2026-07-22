@@ -133,6 +133,8 @@ file(MAKE_DIRECTORY "${vulkan_loader_BINARY_DIR}/Release")
 
 if(WIN32)
   set(VULKAN_LOADER_LIB "${vulkan_loader_BINARY_DIR}/$<CONFIG>/install/lib/vulkan-1.lib")
+elseif(APPLE)
+  set(VULKAN_LOADER_LIB "${vulkan_loader_BINARY_DIR}/$<CONFIG>/install/lib/libvulkan.1.dylib")
 else()
   set(VULKAN_LOADER_LIB "${vulkan_loader_BINARY_DIR}/$<CONFIG>/install/lib/libvulkan.so.1")
 endif()
