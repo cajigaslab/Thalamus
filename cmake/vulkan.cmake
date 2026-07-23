@@ -151,6 +151,7 @@ add_custom_command(
       "-DVULKAN_HEADERS_INSTALL_DIR=${vulkan_headers_BINARY_DIR}/$<CONFIG>/install"
       -DBUILD_TESTS=OFF
       -DCMAKE_MSVC_RUNTIME_LIBRARY=${CMAKE_MSVC_RUNTIME_LIBRARY}
+      -DCMAKE_OSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}
       -G "${CMAKE_GENERATOR}"
     && cmake -E touch_nocreate "${vulkan_loader_BINARY_DIR}/$<CONFIG>/CMakeCache.txt"
   WORKING_DIRECTORY "${vulkan_loader_BINARY_DIR}/$<CONFIG>")
@@ -169,6 +170,9 @@ target_link_libraries(vulkan-loader INTERFACE "${VULKAN_LOADER_LIB}" vulkan-head
 
 add_library(vulkan INTERFACE)
 target_link_libraries(vulkan INTERFACE vulkan-headers vulkan-loader)
+if(APPLE)
+  target_link_libraries(vulkan INTERFACE "-framework QuartzCore")
+endif()
 add_library(Vulkan::Vulkan ALIAS vulkan)
 ## --- Vulkan-ValidationLayers ---
 #FetchContent_Declare(

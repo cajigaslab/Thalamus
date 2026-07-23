@@ -10,6 +10,7 @@
 #include <thalamus/atoi.h>
 #include <thalamus/thread_pool.hpp>
 #include <vector>
+#include <regex>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -240,11 +241,16 @@ struct SpikeGlxNode::Impl {
         return *this;
       }
 
-      ~Turn() {
+      void release() {
         if (turnstile) {
           ++turnstile->current;
           turnstile->condition.notify();
+          turnstile = nullptr;
         }
+      }
+
+      ~Turn() {
+        release();
       }
     };
 
@@ -356,6 +362,7 @@ struct SpikeGlxNode::Impl {
   bool connected = false;
   bool connecting = false;
   CoCondition connecting_condition;
+  const std::regex version_re{R"(v\.?(\d{8}))"};
 
   boost::asio::awaitable<void> connect(boost::system::error_code& ec) {
     // TRACE_EVENT("thalamus", "SpikeGlxNode::connect",
@@ -422,17 +429,29 @@ struct SpikeGlxNode::Impl {
       if(ec) {
         co_return;
       }
-      std::vector<std::string_view> tokens =
-          absl::StrSplit(text, absl::ByAnyChar(".,"));
-      if (tokens.size() < 2) {
-        throw std::runtime_error(
-            std::string("Failed to parse SpikeGLX version: ") + text);
-      }
 
-      auto success = absl::SimpleAtoi(tokens[1], &spike_glx_version);
-      if (!success) {
-        throw std::runtime_error(
-            std::string("Failed to parse SpikeGLX version :") + text);
+      //Newer version string matches this regex
+      std::smatch match;
+      if (std::regex_search(text, match, version_re)) {
+        auto success = absl::SimpleAtoi(match[1].str(), &spike_glx_version);
+        if (!success) {
+          throw std::runtime_error(
+              std::string("Failed to parse SpikeGLX version :") + text);
+        }
+      } else {
+        //Older version string was extracted by finding the text between a . and ,
+        std::vector<std::string_view> tokens =
+            absl::StrSplit(text, absl::ByAnyChar(".,"));
+        if (tokens.size() < 2) {
+          throw std::runtime_error(
+              std::string("Failed to parse SpikeGLX version: ") + text);
+        }
+
+        auto success = absl::SimpleAtoi(tokens[1], &spike_glx_version);
+        if (!success) {
+          throw std::runtime_error(
+              std::string("Failed to parse SpikeGLX version :") + text);
+        }
       }
 
       auto command =
@@ -487,9 +506,14 @@ struct SpikeGlxNode::Impl {
     }
   }
 
+  bool beating = false;
   boost::asio::awaitable<void> heartbeat() {
     boost::asio::steady_timer heartbeat_timer(io_context);
-    while(true) {
+    beating = true;
+    Finally f([&] {
+      beating = false;
+    });
+    while(connected) {
       boost::system::error_code ec;
       co_await co_query("NOOP", ec);
       if(ec) {
@@ -710,13 +734,14 @@ struct SpikeGlxNode::Impl {
           }
         }
 
+        auto turn = co_await turnstile.wait();
         auto start_time = std::chrono::steady_clock::now();
         for (auto &pair : inputs) {
           auto [js, ip] = pair;
           auto j = sample_counts.find(pair);
           auto subset = js == Device::IMEC ? imec_subsets[size_t(ip)] : "";
           auto command = fetch_command(js, ip, j->second, subset);
-          co_await co_command(command, ec);
+          co_await co_command(command, ec, false);
           if(check_error()) {
             co_return;
           }
@@ -747,7 +772,7 @@ struct SpikeGlxNode::Impl {
                             "SpikeGlxNode::stream Read BINARY_DATA header");
                 char_buffer[i] = 0;
                 found_header = true;
-                if (std::string_view(char_buffer + offset, i)
+                if (std::string_view(char_buffer + offset, char_buffer + i)
                         .starts_with("ERROR FETCH: No data")) {
                   for (auto &d : data) {
                     d.clear();
@@ -803,18 +828,14 @@ struct SpikeGlxNode::Impl {
             band_size += (uint32_t(nchans) % band_size) ? 1 : 0;
             int total_bands = nchans / int(band_size);
             total_bands += (uint32_t(nchans) % band_size) ? 1 : 0;
-            std::mutex mutex;
-            std::condition_variable cond;
+            //std::mutex mutex;
+            //std::condition_variable cond;
+            CoCondition condition(io_context);
 
             while (samples_read < total_samples) {
-              if (fill - offset < 2) {
-                co_await do_read();
-                if(check_error()) {
-                  co_return;
-                }
-              }
-              while (fill - offset < 2 * (total_samples - samples_read) &&
-                     fill < sizeof(buffer)) {
+              while ((fill - offset < 2 * (total_samples - samples_read) &&
+                      fill < sizeof(buffer)) ||
+                     fill - offset < 2) {
                 // TRACE_EVENT("thalamus", "SpikeGlxNode::stream read more");
                 co_await do_read();
                 if(check_error()) {
@@ -841,15 +862,20 @@ struct SpikeGlxNode::Impl {
                         data[channel].push_back(sample);
                       }
                     }
-                    {
-                      std::lock_guard<std::mutex> lock(mutex);
+                    boost::asio::post(io_context, [&] {
                       --pending_bands;
-                      cond.notify_all();
-                    }
+                      condition.notify();
+                    });
+                    //{
+                    //  std::lock_guard<std::mutex> lock(mutex);
+                    //  --pending_bands;
+                    //  cond.notify_all();
+                    //}
                   });
                 }
-                std::unique_lock<std::mutex> lock(mutex);
-                cond.wait(lock, [&] { return pending_bands == 0; });
+                co_await condition.wait([&] { return pending_bands == 0; });
+                //std::unique_lock<std::mutex> lock(mutex);
+                //cond.wait(lock, [&] { return pending_bands == 0; });
               }
 
               samples_read += (data_end - offset) / 2;
@@ -911,6 +937,7 @@ struct SpikeGlxNode::Impl {
             break;
           }
         }
+        turn.release();
 
         auto end_time = std::chrono::steady_clock::now();
         auto elapsed = end_time - start_time;
@@ -1017,6 +1044,30 @@ struct SpikeGlxNode::Impl {
     } else if (key_str == "Poll Interval (ms)") {
       poll_interval = std::chrono::milliseconds(std::get<int64_t>(v));
     }
+  }
+
+  std::function<void()> pending_drop_ready;
+  void predrop(std::function<void()> drop_ready) {
+    pending_drop_ready = drop_ready;
+    //THALAMUS_LOG(info) << "predrop " << pending_drop_ready.target_type().name();
+    auto cleanup = [&]() -> boost::asio::awaitable<void> {
+      //THALAMUS_LOG(info) << "stop_stream";
+      co_await stop_stream();
+      //THALAMUS_LOG(info) << "disconnect";
+      disconnect();
+
+      //THALAMUS_LOG(info) << "beat1";
+      boost::asio::steady_timer droptimer(io_context);
+      while (beating) {
+        //THALAMUS_LOG(info) << "beat2";
+        droptimer.expires_after(100ms);
+        co_await droptimer.async_wait();
+      }
+      //THALAMUS_LOG(info) << "beat3";
+      //THALAMUS_LOG(info) << "predrop " << pending_drop_ready.target_type().name();
+      pending_drop_ready();
+    };
+    boost::asio::co_spawn(io_context, cleanup(), boost::asio::detached);
   }
 
   std::chrono::milliseconds poll_interval = 10ms;
@@ -1148,6 +1199,10 @@ boost::json::value SpikeGlxNode::process(const boost::json::value &) {
   //     }
   //   });
   // });
+}
+
+void SpikeGlxNode::predrop(std::function<void()> drop_ready) {
+  impl->predrop(drop_ready);
 }
 
 // uint64_t SpikeGlxNode::Impl::io_track = get_unique_id();
