@@ -1612,8 +1612,9 @@ public:
       //auto get_node_factories = reinterpret_cast<get_node_factories_fun>(
       //    ::GetProcAddress(library_handle, "get_node_factories"));
 
-      auto get_node_factories = ext.load<thalamus_get_node_factories>("get_node_factories");
-      THALAMUS_ASSERT(get_node_factories, "get_node_factories not found in extension");
+      auto get_node_factories = ext.load<thalamus_get_node_factories_t>("thalamus_get_node_factories");
+      THALAMUS_ASSERT(get_node_factories, "thalamus_get_node_factories not found in extension");
+
       auto factory = get_node_factories(&thalamus_api);
       while(*factory != nullptr) {
         THALAMUS_LOG(info) << "Found " << (*factory)->type;
@@ -1645,6 +1646,13 @@ public:
       i->second->cleanup();
       delete i->second;
       ++i;
+    }
+
+    for(auto& ext : extension) {
+      auto thalamus_teardown = ext.load<thalamus_teardown_t>("thalamus_teardown");
+      if(thalamus_teardown) {
+        thalamus_teardown();
+      }
     }
 
     delete ThalamusAPIImpl::cpp_to_c;
@@ -1988,6 +1996,10 @@ VkCommandPool NodeGraphImpl::create_vulkan_command_pool() {
 
 void NodeGraphImpl::predrop(std::function<void()> ready) {
   auto drop_count = std::make_shared<size_t>(impl->node_impls.size());
+  if (*drop_count == 0) {
+    ready();
+    return;
+  }
   for(auto& node : impl->node_impls) {
     node->predrop([ready,drop_count,this] {
       boost::asio::post(impl->io_context, [ready,drop_count] {

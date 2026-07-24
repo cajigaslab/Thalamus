@@ -303,7 +303,8 @@ extern "C" {
     void (*node_predrop_ready)(struct ThalamusNode*); // 84
   };
 
-  typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories)(struct ThalamusAPI*);
+  typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories_t)(struct ThalamusAPI*);
+  typedef void (*thalamus_teardown_t)();
   
 #ifdef __cplusplus
 }
