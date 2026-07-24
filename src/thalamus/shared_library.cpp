@@ -25,6 +25,9 @@ struct SharedLibrary::Impl {
     library_handle = LoadLibrary(name.c_str());
 #else
     library_handle = dlopen(name.c_str(), RTLD_NOW);
+    if(library_handle == nullptr) {
+      THALAMUS_LOG(error) << dlerror();
+    }
 #endif
   }
   ~Impl() {

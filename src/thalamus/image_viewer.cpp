@@ -17,11 +17,9 @@
 #include <cstring>
 #include <fstream>
 #include <functional>
-#include <future>
 #include <map>
 #include <mutex>
 #include <vector>
-#include <boost/asio/post.hpp>
 #include <texture.vert.spv.h>
 #include <texture.frag.spv.h>
 
@@ -173,7 +171,6 @@ static int js_buttons_from_sdl_state(SDL_MouseButtonFlags state) {
 struct ImageViewer::Impl {
   VkInstance instance = VK_NULL_HANDLE;
 
-  boost::asio::io_context* io_context = nullptr;
   ObservableDictPtr state;
   Node* node = nullptr;
   int geom_x = 0, geom_y = 0, geom_w = 0, geom_h = 0;
@@ -379,6 +376,7 @@ struct ImageViewer::Impl {
   VkSurfaceFormatKHR surf_fmt{};
   uint32_t gfx_family = UINT32_MAX;
   VkDevice dev = VK_NULL_HANDLE;
+  NodeGraph* graph = nullptr;
   VkQueue queue = VK_NULL_HANDLE;
   VkCommandPool cmd_pool = VK_NULL_HANDLE;
 
@@ -392,16 +390,6 @@ struct ImageViewer::Impl {
 
   std::mutex swapchain_mutex;
   int swapchain_generation = 0;
-
-  void runOnMainThread(const std::function<void()>& fn) {
-    std::promise<void> done;
-    auto fut = done.get_future();
-    boost::asio::post(*io_context, [&fn, &done]() {
-      fn();
-      done.set_value();
-    });
-    fut.wait();
-  }
 
   static constexpr int MAX_FRAMES = 2;
 
@@ -571,10 +559,11 @@ struct ImageViewer::Impl {
     vkAllocateMemory(dev, &ai, nullptr, &tex_mem[slot]);
     vkBindImageMemory(dev, tex_image[slot], tex_mem[slot], 0);
 
-    runOnMainThread([&] {
+    {
+      auto queue_lock = graph->lock_vulkan_queue();
       transitionLayout(dev, cmd_pool, queue, tex_image[slot],
                        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    });
+    }
 
     VkImageViewCreateInfo ivCI{};
     ivCI.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -614,15 +603,15 @@ struct ImageViewer::Impl {
   }
 };
 
-ImageViewer::ImageViewer(NodeGraph* graph, boost::asio::io_context& io_context,
+ImageViewer::ImageViewer(NodeGraph* graph, boost::asio::io_context&,
                           ObservableDictPtr state, Node* node)
     : impl(std::make_unique<Impl>()) {
-  impl->io_context = &io_context;
   impl->state = state;
   impl->node = node;
   impl->instance = graph->get_vulkan_instance();
   impl->dev = graph->get_vulkan_device();
   impl->phys = graph->get_vulkan_physical_device();
+  impl->graph = graph;
   impl->queue = graph->get_vulkan_queue();
   impl->cmd_pool = graph->create_vulkan_command_pool();
 
@@ -940,32 +929,30 @@ void ImageViewer::update(ImageNode* node) {
   vkEndCommandBuffer(cb);
   lock.unlock();
 
-  auto self = shared_from_this();
-  boost::asio::post(*impl->io_context, [self, f, imgIdx, cb, generation]() {
-    Impl* impl_ptr = self->impl.get();
+  auto queue_lock = impl->graph->lock_vulkan_queue();
 
-    if (impl_ptr->swapchain_generation != generation) {
-      impl_ptr->drainAcquireSemaphore(f);
-      return;
-    }
+  if (impl->swapchain_generation != generation) {
+    impl->drainAcquireSemaphore(f);
+    impl->frame = (f + 1) % Impl::MAX_FRAMES;
+    return;
+  }
 
-    VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    VkSubmitInfo si{};
-    si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    si.waitSemaphoreCount = 1; si.pWaitSemaphores = &impl_ptr->image_avail[f];
-    si.pWaitDstStageMask = &waitStage;
-    si.commandBufferCount = 1; si.pCommandBuffers = &cb;
-    si.signalSemaphoreCount = 1; si.pSignalSemaphores = &impl_ptr->render_done[imgIdx];
-    vkQueueSubmit(impl_ptr->queue, 1, &si, impl_ptr->in_flight[f]);
+  VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+  VkSubmitInfo si{};
+  si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  si.waitSemaphoreCount = 1; si.pWaitSemaphores = &impl->image_avail[f];
+  si.pWaitDstStageMask = &waitStage;
+  si.commandBufferCount = 1; si.pCommandBuffers = &cb;
+  si.signalSemaphoreCount = 1; si.pSignalSemaphores = &impl->render_done[imgIdx];
+  vkQueueSubmit(impl->queue, 1, &si, impl->in_flight[f]);
 
-    VkPresentInfoKHR pi{};
-    pi.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    pi.waitSemaphoreCount = 1; pi.pWaitSemaphores = &impl_ptr->render_done[imgIdx];
-    pi.swapchainCount = 1; pi.pSwapchains = &impl_ptr->swapchain; pi.pImageIndices = &imgIdx;
-    VkResult present_res = vkQueuePresentKHR(impl_ptr->queue, &pi);
-    if (present_res == VK_ERROR_OUT_OF_DATE_KHR || present_res == VK_SUBOPTIMAL_KHR)
-      impl_ptr->needs_recreate = true;
-  });
+  VkPresentInfoKHR pi{};
+  pi.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+  pi.waitSemaphoreCount = 1; pi.pWaitSemaphores = &impl->render_done[imgIdx];
+  pi.swapchainCount = 1; pi.pSwapchains = &impl->swapchain; pi.pImageIndices = &imgIdx;
+  VkResult present_res = vkQueuePresentKHR(impl->queue, &pi);
+  if (present_res == VK_ERROR_OUT_OF_DATE_KHR || present_res == VK_SUBOPTIMAL_KHR)
+    impl->needs_recreate = true;
 
   impl->frame = (f + 1) % Impl::MAX_FRAMES;
 }

@@ -62,6 +62,7 @@ public:
   VkDevice get_vulkan_device() override;
   VkPhysicalDevice get_vulkan_physical_device() override;
   VkQueue get_vulkan_queue() override;
+  std::unique_lock<std::mutex> lock_vulkan_queue() override;
   VkCommandPool create_vulkan_command_pool() override;
   void predrop(std::function<void()>);
 };

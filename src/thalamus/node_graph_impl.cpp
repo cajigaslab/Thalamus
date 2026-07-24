@@ -92,6 +92,10 @@ struct ThalamusNodeGraph {
   ThalamusNodeGraph(thalamus::NodeGraph* _graph) : graph(_graph) {}
 };
 
+struct ThalamusVkQueueLock {
+  std::unique_lock<std::mutex> lock;
+};
+
 struct ThalamusStateConnection {
   boost::signals2::scoped_connection connection;
   ThalamusStateConnection(boost::signals2::connection _connection) : connection(_connection) {}
@@ -1340,6 +1344,34 @@ struct ThalamusAPIImpl {
     ASSERT_SAFE();
     return get_state_ref(node_graph->get_node_state(interfaces->node));
   }
+
+  static VkInstance get_vulkan_instance() {
+    return node_graph->get_vulkan_instance();
+  }
+
+  static VkDevice get_vulkan_device() {
+    return node_graph->get_vulkan_device();
+  }
+
+  static VkPhysicalDevice get_vulkan_physical_device() {
+    return node_graph->get_vulkan_physical_device();
+  }
+
+  static VkQueue get_vulkan_queue() {
+    return node_graph->get_vulkan_queue();
+  }
+
+  static VkCommandPool create_vulkan_command_pool() {
+    return node_graph->create_vulkan_command_pool();
+  }
+
+  static ThalamusVkQueueLock* lock_vulkan_queue() {
+    return new ThalamusVkQueueLock{node_graph->lock_vulkan_queue()};
+  }
+
+  static void unlock_vulkan_queue(ThalamusVkQueueLock* lock) {
+    delete lock;
+  }
 };
 
 std::map<ObservableCollection::Value, ThalamusState*>* ThalamusAPIImpl::cpp_to_c = nullptr;
@@ -1414,6 +1446,7 @@ struct NodeGraphImpl::Impl {
   ThreadPool thread_pool;
   thalamus_grpc::Thalamus::Stub* stub;
   std::vector<SharedLibrary>& extension;
+  std::mutex vulkan_mutex;
   Vulkan vulkan;
 
   std::map<std::string, INodeFactory *> node_factories;
@@ -1549,7 +1582,15 @@ public:
     thalamus_api.node_ready_offmain = ThalamusAPIImpl::node_ready_offmain;
 
     thalamus_api.node_predrop_ready = ThalamusAPIImpl::node_predrop_ready;
-    thalamus_api.version = 84;
+
+    thalamus_api.get_vulkan_instance = ThalamusAPIImpl::get_vulkan_instance;
+    thalamus_api.get_vulkan_device = ThalamusAPIImpl::get_vulkan_device;
+    thalamus_api.get_vulkan_physical_device = ThalamusAPIImpl::get_vulkan_physical_device;
+    thalamus_api.get_vulkan_queue = ThalamusAPIImpl::get_vulkan_queue;
+    thalamus_api.create_vulkan_command_pool = ThalamusAPIImpl::create_vulkan_command_pool;
+    thalamus_api.lock_vulkan_queue = ThalamusAPIImpl::lock_vulkan_queue;
+    thalamus_api.unlock_vulkan_queue = ThalamusAPIImpl::unlock_vulkan_queue;
+    thalamus_api.version = 91;
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},
@@ -1981,6 +2022,10 @@ VkPhysicalDevice NodeGraphImpl::get_vulkan_physical_device() {
 
 VkQueue NodeGraphImpl::get_vulkan_queue() {
   return impl->vulkan.queue;
+}
+
+std::unique_lock<std::mutex> NodeGraphImpl::lock_vulkan_queue() {
+  return std::unique_lock<std::mutex>(impl->vulkan_mutex);
 }
 
 VkCommandPool NodeGraphImpl::create_vulkan_command_pool() {

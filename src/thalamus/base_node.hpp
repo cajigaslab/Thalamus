@@ -95,6 +95,7 @@ public:
   virtual VkDevice get_vulkan_device() = 0;
   virtual VkPhysicalDevice get_vulkan_physical_device() = 0;
   virtual VkQueue get_vulkan_queue() = 0;
+  virtual std::unique_lock<std::mutex> lock_vulkan_queue() = 0;
   virtual VkCommandPool create_vulkan_command_pool() = 0;
 };
 
