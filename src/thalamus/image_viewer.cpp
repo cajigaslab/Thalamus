@@ -616,10 +616,6 @@ ImageViewer::ImageViewer(NodeGraph* graph, boost::asio::io_context&,
   impl->queue = graph->get_vulkan_queue();
   impl->cmd_pool = graph->create_vulkan_command_pool();
 
-  // SDL window
-  if (!SDL_Init(SDL_INIT_VIDEO))
-    THALAMUS_ABORT("SDL_Init: %s", SDL_GetError());
-
   int init_x = 100, init_y = 100, init_w = 400, init_h = 400;
   if (!read_geometry(state, init_x, init_y, init_w, init_h)) {
     write_geometry(state, init_x, init_y, init_w, init_h);
