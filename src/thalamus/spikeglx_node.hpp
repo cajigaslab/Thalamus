@@ -36,5 +36,7 @@ public:
   virtual boost::json::value process(const boost::json::value &) override;
   bool is_short_data() const override;
   std::span<const short> short_data(int index) const override;
+
+  void predrop(std::function<void()> drop_ready) override;
 };
 } // namespace thalamus

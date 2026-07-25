@@ -437,7 +437,10 @@ async def main():
     parser.add_argument('-a', '--address', default='localhost:50050', help='Thalamus addres, [ip:port]')
     parser.add_argument('-n', '--node', help='Node name')
     parser.add_argument('-f', '--framerate', type=float, default=60.0, help='Max framerate')
-    args = parser.parse_args()
+    try:
+      args = parser.parse_args()
+    except SystemExit:
+      return
 
     _ = QApplication(sys.argv)
 
@@ -494,5 +497,8 @@ async def main():
     traceback.print_exc()
 
 if __name__ == '__main__':
-  loop = asyncio.get_event_loop()
-  loop.run_until_complete(main())
+  if hasattr(asyncio, 'run'):
+    asyncio.run(main())
+  else:
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())

@@ -124,7 +124,10 @@ include(cmake/zlib_processed.cmake)
 include(cmake/opencv.cmake)
 include(cmake/boost.cmake)
 include(cmake/hdf5.cmake)
-include(cmake/crashpad.cmake)
+if(BUILD_CRASHPAD)
+  include(cmake/crashpad.cmake)
+endif()
+include(cmake/vulkan.cmake)
 
 execute_process(
   COMMAND git log -1 --format=%h
@@ -142,6 +145,7 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 set(THALAMUS_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
+set(THALAMUS_CRASHPAD "${BUILD_CRASHPAD}")
 configure_file(thalamus_config.h.in thalamus_config.h)
  
 set(PROTO_SOURCES
@@ -184,6 +188,17 @@ add_dependencies(hydrate protoc_generated)
 target_compile_definitions(hydrate PRIVATE _USE_MATH_DEFINES NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS _GNU_SOURCE)
 target_include_directories(hydrate PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_compile_options(hydrate PRIVATE ${WARNING_FLAGS})
+
+set(VERT_SPV "${CMAKE_BINARY_DIR}/texture.vert.spv.h")
+set(FRAG_SPV "${CMAKE_BINARY_DIR}/texture.frag.spv.h")
+add_custom_command(
+  OUTPUT "${VERT_SPV}"
+  COMMAND "${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE}" -V "${CMAKE_SOURCE_DIR}/src/shaders/texture.vert" -o "${VERT_SPV}" --vn vert_shader_data
+  DEPENDS "${CMAKE_SOURCE_DIR}/src/shaders/texture.vert")
+add_custom_command(
+  OUTPUT "${FRAG_SPV}"
+  COMMAND "${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE}" -V "${CMAKE_SOURCE_DIR}/src/shaders/texture.frag" -o "${FRAG_SPV}" --vn frag_shader_data
+  DEPENDS "${CMAKE_SOURCE_DIR}/src/shaders/texture.frag")
   
 add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/node_graph_impl.hpp"
@@ -293,18 +308,26 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/samplemonitor_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/shared_library.hpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/shared_library.cpp"
+                     "${CMAKE_SOURCE_DIR}/proto/thalamus.proto"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/pupil_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/pupil_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/chessboard_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/chessboard_node.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/image_viewer.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/image_viewer.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/vulkan.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/vulkan.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/throttle.hpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/throttle.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/joystick_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/joystick_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/serialtouchscreen_node.hpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/serialtouchscreen_node.cpp"
-                     "${CMAKE_SOURCE_DIR}/proto/thalamus.proto")
-target_sources(thalamus PRIVATE 
-               "${CMAKE_SOURCE_DIR}/src/thalamus/pupil_node.hpp"
-               "${CMAKE_SOURCE_DIR}/src/thalamus/pupil_node.cpp"
-               "${CMAKE_SOURCE_DIR}/src/thalamus/chessboard_node.hpp"
-               "${CMAKE_SOURCE_DIR}/src/thalamus/chessboard_node.cpp")
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/node_util.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/node_util.cpp"
+                     "${CMAKE_SOURCE_DIR}/proto/thalamus.proto"
+                     "${VERT_SPV}"
+                     "${FRAG_SPV}")
 
 if(WIN32)
   target_compile_definitions(thalamus PRIVATE _WIN32_WINNT=0x0A00 _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN BOOST_STACKTRACE_USE_WINDBG)
@@ -336,7 +359,11 @@ target_compile_definitions(thalamus PRIVATE _USE_MATH_DEFINES)
 target_include_directories(thalamus PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(thalamus opencv hdf5-static lua
   boost grpc++ grpc++_reflection inja
-  absl::str_format_internal absl::strings absl::str_format ffmpeg cairo perfetto crashpad)
+  absl::str_format_internal absl::strings absl::str_format ffmpeg cairo perfetto
+  Vulkan::Vulkan sdl)
+if(BUILD_CRASHPAD)
+  target_link_libraries(thalamus crashpad)
+endif()
 
 if(NOT APPLE)
   target_link_libraries(thalamus zlib_processed)
@@ -363,7 +390,9 @@ if(STRIP)
 else()
   add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "$<TARGET_FILE:native>" "${CMAKE_SOURCE_DIR}/thalamus")
 endif()
-add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "${CRASHPAD_HANDLER_EXE}" "${CMAKE_SOURCE_DIR}/thalamus")
+if(BUILD_CRASHPAD)
+  add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "${CRASHPAD_HANDLER_EXE}" "${CMAKE_SOURCE_DIR}/thalamus")
+endif()
 
 add_executable(test src/test.cpp)
 
@@ -401,3 +430,12 @@ endif()
 add_executable(Rec_Stim Rec_Stim.cpp)
 target_link_libraries(Rec_Stim PRIVATE hdf5-static thalamus)
 target_include_directories(Rec_Stim PRIVATE "${CMAKE_SOURCE_DIR}/src")
+
+add_executable(vulkan_hello src/vulkan_hello.cpp "${VERT_SPV}" "${FRAG_SPV}")
+if(WIN32)
+  target_compile_definitions(vulkan_hello PRIVATE _WIN32_WINNT=0x0A00 NOMINMAX WIN32_LEAN_AND_MEAN)
+endif()
+target_compile_options(vulkan_hello PRIVATE ${WARNING_FLAGS})
+target_include_directories(vulkan_hello PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(vulkan_hello PRIVATE Vulkan::Vulkan sdl opencv zlib_processed)
+

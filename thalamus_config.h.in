@@ -4,3 +4,4 @@
 #cmakedefine THALAMUS_BUILD_TYPE "@THALAMUS_BUILD_TYPE@"
 #cmakedefine WITH_CAIRO
 #cmakedefine THALAMUS_CRASHPAD
+

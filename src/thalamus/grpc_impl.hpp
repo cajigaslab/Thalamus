@@ -27,7 +27,8 @@ class Service : public thalamus_grpc::Thalamus::WithCallbackMethod_node_request_
                        thalamus_grpc::Thalamus::WithCallbackMethod_analog<
                        thalamus_grpc::Thalamus::WithCallbackMethod_graph<
                        thalamus_grpc::Thalamus::WithCallbackMethod_inject_analog<
-                         thalamus_grpc::Thalamus::Service>>>> {
+                       thalamus_grpc::Thalamus::WithCallbackMethod_image<
+                         thalamus_grpc::Thalamus::Service>>>>> {
   struct Impl;
   std::unique_ptr<Impl> impl;
   friend class ContextGuard;
@@ -116,10 +117,9 @@ public:
   motion_capture(::grpc::ServerContext *context,
         const ::thalamus_grpc::NodeSelector *request,
         ::grpc::ServerWriter<::thalamus_grpc::XsensResponse> *writer) override;
-  ::grpc::Status
-  image(::grpc::ServerContext *context,
-        const ::thalamus_grpc::ImageRequest *request,
-        ::grpc::ServerWriter<::thalamus_grpc::Image> *writer) override;
+  ::grpc::ServerWriteReactor<::thalamus_grpc::Image>*
+  image(::grpc::CallbackServerContext *context,
+        const ::thalamus_grpc::ImageRequest *request) override;
   ::grpc::Status replay(::grpc::ServerContext *context,
                         const ::thalamus_grpc::ReplayRequest *request,
                         ::thalamus_grpc::Empty *response) override;

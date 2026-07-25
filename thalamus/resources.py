@@ -1,6 +1,7 @@
-import thalamus
 import typing
+import pathlib
 import platform
+DIR = pathlib.Path(__file__).resolve().parent
 
 try:
   #New resource import
@@ -9,9 +10,8 @@ try:
 
   def get_path(arg1: typing.Any, arg2: str = None) -> str:
     if arg2 is None:
-      arg2 = arg1
-      arg1 = thalamus
-      
+      return str(DIR / arg1)
+
     try:
       with importlib.resources.path(arg1, arg2) as result:
         return str(result)
@@ -20,8 +20,7 @@ try:
         
   def read_text(arg1: typing.Any, arg2: str = None) -> str:
     if arg2 is None:
-      arg2 = arg1
-      arg1 = thalamus
+      return (DIR / arg1).read_text()
 
     if isinstance(arg1, str):
       arg1 = importlib.__import__(arg1)

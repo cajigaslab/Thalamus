@@ -34,8 +34,10 @@ from .controller import ControlWindow, ConfigData
 from ..resources import get_path
 
 import grpc
+from grpc_reflection.v1alpha import reflection
 from .. import task_controller_pb2_grpc
 from .. import ophanim_pb2_grpc
+from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
 from .servicer import TaskControllerServicer
 from .observable_bridge import ObservableBridge
@@ -172,6 +174,13 @@ async def async_main() -> None:
   thalamus_pb2_grpc.add_ThalamusServicer_to_server(servicer, server)
   task_controller_pb2_grpc.add_TaskControllerServicer_to_server(task_controller_servicer, server)
   listen_addr = f'[::]:{arguments.ui_port}'
+
+  serivce_names = [
+    thalamus_pb2.DESCRIPTOR.services_by_name["Thalamus"].full_name,
+    reflection.SERVICE_NAME,
+  ]
+  logging.info('service_names %s', serivce_names)
+  reflection.enable_server_reflection(serivce_names, server)
 
   server.add_insecure_port(listen_addr)
   logging.info("Starting GRPC server on %s", listen_addr)

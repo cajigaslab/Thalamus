@@ -1257,6 +1257,12 @@ class Plot(QWidget):
 
       self.update()
 
+def thalamus_rendering(node):
+  if node['type'] in ('PUPIL',):
+    return True
+  
+  return False
+
 class ItemModel(QAbstractItemModel):
   def __init__(self, nodes: ObservableList, stub: thalamus_pb2_grpc.ThalamusStub, address: str):
     super().__init__()
@@ -1493,12 +1499,13 @@ class ItemModel(QAbstractItemModel):
             selector = thalamus_pb2.NodeSelector(name=node['name'])
             modalities = await self.stub.get_modalities(selector)
             if thalamus_pb2.Modalities.ImageModality in modalities.values:
-              request = thalamus_pb2.NodeSelector(
-                name = node["name"]
-              )
-              self.procs[id(node)] = await process.create_subprocess_exec(
-                sys.executable, 
-                "-m", "thalamus.image_viewer", '--address', self.address, '--node', node['name'])
+              if not thalamus_rendering(node): 
+                request = thalamus_pb2.NodeSelector(
+                  name = node["name"]
+                )
+                self.procs[id(node)] = await process.create_subprocess_exec(
+                  sys.executable, 
+                  "-m", "thalamus.image_viewer", '--address', self.address, '--node', node['name'])
             elif thalamus_pb2.Modalities.MocapModality in modalities.values:
               request = thalamus_pb2.NodeSelector(
                 name = node["name"]

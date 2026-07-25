@@ -1,6 +1,12 @@
 #include <thalamus/modalities_util.hpp>
 #include <thalamus/pupil_node.hpp>
+#include <thalamus/image_viewer.hpp>
 #include <thalamus/thread_pool.hpp>
+#include <thalamus/node_util.hpp>
+#include <thalamus/thread.hpp>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -51,11 +57,18 @@ struct PupilNode::Impl {
   bool invert_y;
   size_t next_input_frame = 0;
   size_t next_output_frame = 0;
-  std::chrono::nanoseconds frame_interval = 32ms;
-  int64_t jitter = 0;
+  std::atomic_int64_t frame_interval_ns = 32'000'000;
+  std::atomic_int64_t jitter = 0;
 
   ThreadPool &pool;
+  boost::asio::io_context draw_context;
   boost::asio::steady_timer timer;
+  std::shared_ptr<ImageViewer> viewer;
+  std::weak_ptr<ImageViewer> viewer_weak;
+  std::thread draw_thread;
+  std::atomic_bool draw_thread_running = false;
+  std::mutex mutex;
+  std::condition_variable condition_variable;
 
   struct DeleteCairoSurface {
     void operator()(cairo_surface_t *p) { cairo_surface_destroy(p); }
@@ -88,7 +101,9 @@ struct PupilNode::Impl {
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
        PupilNode *_outer, NodeGraph *_graph)
       : io_context(_io_context), state(_state), outer(_outer), graph(_graph),
-        pool(graph->get_thread_pool()), timer(io_context) {
+        pool(graph->get_thread_pool()), timer(draw_context) {
+    outer->ready_multithreaded.emplace();
+
     using namespace std::placeholders;
     state_connection =
         state->changed.connect(std::bind(&Impl::on_change, this, _1, _2, _3));
@@ -111,6 +126,12 @@ struct PupilNode::Impl {
   }
 
   ~Impl() {
+    boost::asio::post(draw_context, [&] {
+      timer.cancel();
+    });
+    if(draw_thread.joinable()) {
+      draw_thread.join();
+    }
     (*state)["Running"].assign(false, [&] {});
   }
 
@@ -144,14 +165,14 @@ struct PupilNode::Impl {
     cairo_arc(cairo.get(), 0, 0, 128, 0, 2 * M_PI);
     cairo_fill(cairo.get());
 
-    outer->ready(outer);
-
-    if (!is_running) {
-      return;
+    node::signal_ready_offmain(outer, io_context);
+    if (auto local = viewer_weak.lock()) {
+      local->update(outer);
     }
 
     auto end = std::chrono::steady_clock::now();
     auto elapsed = end - start;
+    auto frame_interval = std::chrono::nanoseconds(frame_interval_ns);
     if (elapsed < frame_interval) {
       timer.expires_after(frame_interval - elapsed);
     } else {
@@ -167,14 +188,33 @@ struct PupilNode::Impl {
     auto key_str = std::get<std::string>(k);
     if (key_str == "Running") {
       is_running = std::get<bool>(v);
-      timer.expires_after(frame_interval);
-      timer.async_wait(std::bind(&Impl::on_timer, this, _1));
+      stop_draw_thread([this] {
+        if(is_running) {
+          draw_thread_running = true;
+          draw_context.restart();
+          draw_thread = std::thread([&] {
+            set_current_thread_name("PupilNode");
+            timer.expires_after(std::chrono::nanoseconds(frame_interval_ns));
+            timer.async_wait(std::bind(&Impl::on_timer, this, _1));
+            draw_context.run();
+          });
+        }
+      });
+    } else if (key_str == "View") {
+      if (std::get<bool>(v)) {
+        if(!viewer) {
+          viewer = ImageViewer::create(graph, io_context, state, outer);
+          viewer_weak = viewer;
+        }
+      } else {
+        viewer.reset();
+      }
     } else if(key_str == "Random Saccade") {
       random_saccade = std::get<bool>(v);
     } else if(key_str == "Jitter (Pixels)") {
       jitter = std::get<int64_t>(v);
     } else if(key_str == "Frequency") {
-      frame_interval = std::chrono::nanoseconds(int64_t(1e9/std::get<double>(v)));
+      frame_interval_ns = int(1e9/std::get<double>(v));
     } else if(key_str == "Width") {
       width = int(std::get<int64_t>(v));
       init_cairo();
@@ -182,6 +222,37 @@ struct PupilNode::Impl {
       height = int(std::get<int64_t>(v));
       init_cairo();
     }
+  }
+
+  void stop_draw_thread(std::function<void()> callback) {
+    if(draw_thread.joinable()) {
+      auto old_thread = std::make_shared<std::thread>(std::move(draw_thread));
+      boost::asio::post(draw_context, [this] { timer.cancel(); });
+      pool.push([old_thread, callback, this] {
+        old_thread->join();
+        {
+          std::lock_guard<std::mutex> lock(mutex);
+          draw_thread_running = false;
+        }
+        condition_variable.notify_all();
+        if(callback) {
+          boost::asio::post(io_context, callback);
+        }
+      });
+    } else {
+      pool.push([this,callback] {
+        std::unique_lock<std::mutex> lock(mutex);
+        condition_variable.wait(lock, [&]{ return !draw_thread_running; });
+        if(callback) {
+          boost::asio::post(io_context, callback);
+        }
+      });
+    }
+  }
+
+  void predrop(std::function<void()> outer_drop_ready) {
+    state_connection.disconnect();
+    stop_draw_thread(outer_drop_ready);
   }
 };
 
@@ -210,23 +281,47 @@ void PupilNode::inject(const thalamus_grpc::Image &) { THALAMUS_ASSERT(false, "U
 
 std::chrono::nanoseconds PupilNode::time() const { return impl->time; }
 
-std::chrono::nanoseconds PupilNode::frame_interval() const { return impl->frame_interval; }
+std::chrono::nanoseconds PupilNode::frame_interval() const { return std::chrono::nanoseconds(impl->frame_interval_ns); }
 
 bool PupilNode::prepare() { return true; }
 
 bool PupilNode::has_image_data() const { return true; }
 
 boost::json::value PupilNode::process(const boost::json::value &request) {
-  for (auto &v : request.as_object()) {
-    if (v.key() == "mousemove") {
-      auto &event = v.value().as_object();
+  auto move_target = [this](const boost::json::value &v) {
+    boost::asio::post(impl->draw_context, [this,v] {
+      auto &event = v.as_object();
       impl->target_x = event.find("offsetX")->value().to_number<int>();
       impl->target_y = event.find("offsetY")->value().to_number<int>();
       impl->last_saccade = std::chrono::steady_clock::now();
+    });
+  };
+
+  for (auto &v : request.as_object()) {
+    if (v.key() == "mousemove") {
+      if(!impl->is_running) {
+        continue;
+      }
+      auto &event = v.value().as_object();
+      auto buttons = event.find("buttons")->value().to_number<int>();
+      bool dragging = buttons != 0;
+      if(dragging) {
+        move_target(v.value());
+      }
+    } else if (v.key() == "mousedown") {
+      if(impl->is_running) {
+        move_target(v.value());
+      }
     }
   }
 
   return boost::json::value();
 }
+
 size_t PupilNode::modalities() const { return infer_modalities<PupilNode>(); }
+
+void PupilNode::predrop(std::function<void()> drop_ready) {
+  impl->predrop(drop_ready);
+}
+
 } // namespace thalamus
