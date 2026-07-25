@@ -17,11 +17,9 @@
 #include <cstring>
 #include <fstream>
 #include <functional>
-#include <future>
 #include <map>
 #include <mutex>
 #include <vector>
-#include <boost/asio/post.hpp>
 #include <texture.vert.spv.h>
 #include <texture.frag.spv.h>
 
@@ -173,8 +171,8 @@ static int js_buttons_from_sdl_state(SDL_MouseButtonFlags state) {
 struct ImageViewer::Impl {
   VkInstance instance = VK_NULL_HANDLE;
 
-  boost::asio::io_context* io_context = nullptr;
   ObservableDictPtr state;
+  boost::signals2::scoped_connection state_connection;
   Node* node = nullptr;
   int geom_x = 0, geom_y = 0, geom_w = 0, geom_h = 0;
   std::chrono::steady_clock::time_point last_geometry_check =
@@ -379,6 +377,7 @@ struct ImageViewer::Impl {
   VkSurfaceFormatKHR surf_fmt{};
   uint32_t gfx_family = UINT32_MAX;
   VkDevice dev = VK_NULL_HANDLE;
+  NodeGraph* graph = nullptr;
   VkQueue queue = VK_NULL_HANDLE;
   VkCommandPool cmd_pool = VK_NULL_HANDLE;
 
@@ -391,17 +390,6 @@ struct ImageViewer::Impl {
   std::atomic<bool> needs_recreate{false};
 
   std::mutex swapchain_mutex;
-  int swapchain_generation = 0;
-
-  void runOnMainThread(const std::function<void()>& fn) {
-    std::promise<void> done;
-    auto fut = done.get_future();
-    boost::asio::post(*io_context, [&fn, &done]() {
-      fn();
-      done.set_value();
-    });
-    fut.wait();
-  }
 
   static constexpr int MAX_FRAMES = 2;
 
@@ -428,15 +416,6 @@ struct ImageViewer::Impl {
   std::vector<VkSemaphore> render_done;  // one per swapchain image, not per frame
   VkFence in_flight[MAX_FRAMES]{};
   int frame = 0;
-
-  void drainAcquireSemaphore(int f) {
-    VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    VkSubmitInfo si{};
-    si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    si.waitSemaphoreCount = 1; si.pWaitSemaphores = &image_avail[f];
-    si.pWaitDstStageMask = &waitStage;
-    vkQueueSubmit(queue, 1, &si, in_flight[f]);
-  }
 
   void destroySwapchainDeps() {
     for (auto fb : framebuffers) vkDestroyFramebuffer(dev, fb, nullptr);
@@ -517,7 +496,6 @@ struct ImageViewer::Impl {
     for (uint32_t i = 0; i < nImg; i++)
       vkCreateSemaphore(dev, &rdSemCI, nullptr, &render_done[i]);
 
-    ++swapchain_generation;
     return true;
   }
 
@@ -571,10 +549,11 @@ struct ImageViewer::Impl {
     vkAllocateMemory(dev, &ai, nullptr, &tex_mem[slot]);
     vkBindImageMemory(dev, tex_image[slot], tex_mem[slot], 0);
 
-    runOnMainThread([&] {
+    {
+      auto queue_lock = graph->lock_vulkan_queue();
       transitionLayout(dev, cmd_pool, queue, tex_image[slot],
                        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    });
+    }
 
     VkImageViewCreateInfo ivCI{};
     ivCI.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -614,21 +593,28 @@ struct ImageViewer::Impl {
   }
 };
 
-ImageViewer::ImageViewer(NodeGraph* graph, boost::asio::io_context& io_context,
+static std::map<SDL_WindowID, std::weak_ptr<ImageViewer>>* instances = nullptr;
+
+void ImageViewer::setup() {
+  instances = new std::map<SDL_WindowID, std::weak_ptr<ImageViewer>>();
+}
+
+void ImageViewer::teardown() {
+  delete instances;
+  instances = nullptr;
+}
+
+ImageViewer::ImageViewer(NodeGraph* graph, boost::asio::io_context&,
                           ObservableDictPtr state, Node* node)
     : impl(std::make_unique<Impl>()) {
-  impl->io_context = &io_context;
   impl->state = state;
   impl->node = node;
   impl->instance = graph->get_vulkan_instance();
   impl->dev = graph->get_vulkan_device();
   impl->phys = graph->get_vulkan_physical_device();
+  impl->graph = graph;
   impl->queue = graph->get_vulkan_queue();
   impl->cmd_pool = graph->create_vulkan_command_pool();
-
-  // SDL window
-  if (!SDL_Init(SDL_INIT_VIDEO))
-    THALAMUS_ABORT("SDL_Init: %s", SDL_GetError());
 
   int init_x = 100, init_y = 100, init_w = 400, init_h = 400;
   if (!read_geometry(state, init_x, init_y, init_w, init_h)) {
@@ -641,6 +627,15 @@ ImageViewer::ImageViewer(NodeGraph* graph, boost::asio::io_context& io_context,
                                   SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
   if (!impl->window) THALAMUS_ABORT("%s", SDL_GetError());
   SDL_SetWindowPosition(impl->window, init_x, init_y);
+
+  auto on_state_change = [this](ObservableCollection::Action,
+                                const ObservableCollection::Key& k,
+                                const ObservableCollection::Value& v) {
+    if (std::get<std::string>(k) == "name")
+      SDL_SetWindowTitle(impl->window, std::get<std::string>(v).c_str());
+  };
+  impl->state_connection = state->changed.connect(on_state_change);
+  state->recap(on_state_change);
 
   // Surface
   if (!SDL_Vulkan_CreateSurface(impl->window, impl->instance, nullptr, &impl->surface))
@@ -800,6 +795,15 @@ ImageViewer::ImageViewer(NodeGraph* graph, boost::asio::io_context& io_context,
   impl->buildSwapchain();
 }
 
+std::shared_ptr<ImageViewer> ImageViewer::create(NodeGraph* graph,
+                                                  boost::asio::io_context& io_context,
+                                                  ObservableDictPtr state, Node* node) {
+  auto iv = std::make_shared<ImageViewer>(graph, io_context, state, node);
+  THALAMUS_ASSERT(instances != nullptr, "ImageViewer::setup() was not called");
+  (*instances)[SDL_GetWindowID(iv->impl->window)] = iv;
+  return iv;
+}
+
 ImageViewer::~ImageViewer() {
   if (!impl->dev) return;
   vkDeviceWaitIdle(impl->dev);
@@ -819,32 +823,52 @@ ImageViewer::~ImageViewer() {
   vkDestroyCommandPool(impl->dev, impl->cmd_pool, nullptr);
   if (impl->swapchain != VK_NULL_HANDLE) vkDestroySwapchainKHR(impl->dev, impl->swapchain, nullptr);
   vkDestroySurfaceKHR(impl->instance, impl->surface, nullptr);
-  if (impl->window) SDL_DestroyWindow(impl->window);
-  SDL_Quit();
+  if (impl->window) {
+    SDL_DestroyWindow(impl->window);
+  }
 }
 
-void ImageViewer::poll_events() {
-  SDL_Event event;
-  if (SDL_PollEvent(&event)) {
-    do {
-      if (event.type == SDL_EVENT_WINDOW_RESIZED) impl->needs_recreate = true;
-      else if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
-        (*impl->state)["View"].assign(false, [] {});
-      } else if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) {
-        impl->send_key_event(event.key);
-      } else if (event.type == SDL_EVENT_MOUSE_MOTION) {
-        impl->send_mouse_event("mousemove", event.motion.x, event.motion.y, 0,
-                               js_buttons_from_sdl_state(event.motion.state));
-      } else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
-                event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
-        auto buttons = js_buttons_from_sdl_state(SDL_GetMouseState(nullptr, nullptr));
-        impl->send_mouse_event(event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ? "mousedown" : "mouseup",
-                               event.button.x, event.button.y,
-                               js_button_from_sdl(event.button.button), buttons);
-      }
-    } while (SDL_PollEvent(&event));
+static SDL_WindowID event_window_id(const SDL_Event& event) {
+  if (event.type >= SDL_EVENT_WINDOW_FIRST && event.type <= SDL_EVENT_WINDOW_LAST)
+    return event.window.windowID;
+  switch (event.type) {
+    case SDL_EVENT_KEY_DOWN:
+    case SDL_EVENT_KEY_UP:
+      return event.key.windowID;
+    case SDL_EVENT_MOUSE_MOTION:
+      return event.motion.windowID;
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+      return event.button.windowID;
+    case SDL_EVENT_MOUSE_WHEEL:
+      return event.wheel.windowID;
+    default:
+      return 0;
   }
+}
 
+void ImageViewer::handle_event(const SDL_Event& event) {
+  if (event.type == SDL_EVENT_WINDOW_RESIZED) {
+    impl->needs_recreate = true;
+  } else if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED ||
+             event.type == SDL_EVENT_QUIT) {
+    (*impl->state)["View"].assign(false, [] {});
+  } else if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) {
+    impl->send_key_event(event.key);
+  } else if (event.type == SDL_EVENT_MOUSE_MOTION) {
+    impl->send_mouse_event("mousemove", event.motion.x, event.motion.y, 0,
+                           js_buttons_from_sdl_state(event.motion.state));
+  } else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+             event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
+    auto buttons = js_buttons_from_sdl_state(SDL_GetMouseState(nullptr, nullptr));
+    impl->send_mouse_event(
+        event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ? "mousedown" : "mouseup",
+        event.button.x, event.button.y,
+        js_button_from_sdl(event.button.button), buttons);
+  }
+}
+
+void ImageViewer::do_poll() {
   if (impl->needs_recreate) {
     impl->recreateSwapchain();
     impl->needs_recreate = false;
@@ -864,6 +888,35 @@ void ImageViewer::poll_events() {
   }
 }
 
+void ImageViewer::poll_events() {
+  THALAMUS_ASSERT(instances != nullptr, "ImageViewer::setup() was not called");
+
+  for (auto it = instances->begin(); it != instances->end(); ) {
+    if (it->second.expired())
+      it = instances->erase(it);
+    else
+      ++it;
+  }
+
+  SDL_Event event;
+  while (SDL_PollEvent(&event)) {
+    if (event.type == SDL_EVENT_QUIT) {
+      for (auto& [id, w] : *instances)
+        if (auto iv = w.lock())
+          iv->handle_event(event);
+      continue;
+    }
+    auto it = instances->find(event_window_id(event));
+    if (it != instances->end())
+      if (auto iv = it->second.lock())
+        iv->handle_event(event);
+  }
+
+  for (auto& [id, w] : *instances)
+    if (auto iv = w.lock())
+      iv->do_poll();
+}
+
 void ImageViewer::update(ImageNode* node) {
   if (node && node->has_image_data()) {
     impl->image_w = static_cast<uint32_t>(node->width());
@@ -881,7 +934,6 @@ void ImageViewer::update(ImageNode* node) {
   if (!have_new_data) return;  // nothing to draw yet
 
   std::unique_lock<std::mutex> lock(impl->swapchain_mutex);
-  int generation = impl->swapchain_generation;
 
   uint32_t imgIdx;
   VkResult res = vkAcquireNextImageKHR(impl->dev, impl->swapchain, 0,
@@ -940,32 +992,24 @@ void ImageViewer::update(ImageNode* node) {
   vkEndCommandBuffer(cb);
   lock.unlock();
 
-  auto self = shared_from_this();
-  boost::asio::post(*impl->io_context, [self, f, imgIdx, cb, generation]() {
-    Impl* impl_ptr = self->impl.get();
+  auto queue_lock = impl->graph->lock_vulkan_queue();
 
-    if (impl_ptr->swapchain_generation != generation) {
-      impl_ptr->drainAcquireSemaphore(f);
-      return;
-    }
+  VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+  VkSubmitInfo si{};
+  si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  si.waitSemaphoreCount = 1; si.pWaitSemaphores = &impl->image_avail[f];
+  si.pWaitDstStageMask = &waitStage;
+  si.commandBufferCount = 1; si.pCommandBuffers = &cb;
+  si.signalSemaphoreCount = 1; si.pSignalSemaphores = &impl->render_done[imgIdx];
+  vkQueueSubmit(impl->queue, 1, &si, impl->in_flight[f]);
 
-    VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    VkSubmitInfo si{};
-    si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    si.waitSemaphoreCount = 1; si.pWaitSemaphores = &impl_ptr->image_avail[f];
-    si.pWaitDstStageMask = &waitStage;
-    si.commandBufferCount = 1; si.pCommandBuffers = &cb;
-    si.signalSemaphoreCount = 1; si.pSignalSemaphores = &impl_ptr->render_done[imgIdx];
-    vkQueueSubmit(impl_ptr->queue, 1, &si, impl_ptr->in_flight[f]);
-
-    VkPresentInfoKHR pi{};
-    pi.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    pi.waitSemaphoreCount = 1; pi.pWaitSemaphores = &impl_ptr->render_done[imgIdx];
-    pi.swapchainCount = 1; pi.pSwapchains = &impl_ptr->swapchain; pi.pImageIndices = &imgIdx;
-    VkResult present_res = vkQueuePresentKHR(impl_ptr->queue, &pi);
-    if (present_res == VK_ERROR_OUT_OF_DATE_KHR || present_res == VK_SUBOPTIMAL_KHR)
-      impl_ptr->needs_recreate = true;
-  });
+  VkPresentInfoKHR pi{};
+  pi.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+  pi.waitSemaphoreCount = 1; pi.pWaitSemaphores = &impl->render_done[imgIdx];
+  pi.swapchainCount = 1; pi.pSwapchains = &impl->swapchain; pi.pImageIndices = &imgIdx;
+  VkResult present_res = vkQueuePresentKHR(impl->queue, &pi);
+  if (present_res == VK_ERROR_OUT_OF_DATE_KHR || present_res == VK_SUBOPTIMAL_KHR)
+    impl->needs_recreate = true;
 
   impl->frame = (f + 1) % Impl::MAX_FRAMES;
 }

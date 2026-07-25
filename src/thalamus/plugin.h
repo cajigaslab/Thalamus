@@ -3,6 +3,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
+typedef struct VkInstance_T* VkInstance;
+typedef struct VkPhysicalDevice_T* VkPhysicalDevice;
+typedef struct VkDevice_T* VkDevice;
+typedef struct VkQueue_T* VkQueue;
+typedef struct VkCommandPool_T* VkCommandPool;
+
 #ifdef _WIN32
 #define IMPORT __declspec(dllimport)
 #else
@@ -39,6 +45,7 @@ extern "C" {
 
   struct ThalamusIoContext;
   struct ThalamusNodeGraph;
+  struct ThalamusVkQueueLock;
 
   struct ThalamusDoubleSpan {
     const double* data;
@@ -301,6 +308,14 @@ extern "C" {
     struct ThalamusNodeReadyConnection* (*node_ready_multithreaded_connect)(struct ThalamusNode*, ThalamusNodeReadyCallback callback, void* data); // 82
     void (*node_ready_offmain)(struct ThalamusNode*); // 83
     void (*node_predrop_ready)(struct ThalamusNode*); // 84
+
+    VkInstance (*get_vulkan_instance)(); // 85
+    VkDevice (*get_vulkan_device)(); // 86
+    VkPhysicalDevice (*get_vulkan_physical_device)(); // 87
+    VkQueue (*get_vulkan_queue)(); // 88
+    VkCommandPool (*create_vulkan_command_pool)(); // 89
+    struct ThalamusVkQueueLock* (*lock_vulkan_queue)(); // 90
+    void (*unlock_vulkan_queue)(struct ThalamusVkQueueLock*); // 91
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories_t)(struct ThalamusAPI*);

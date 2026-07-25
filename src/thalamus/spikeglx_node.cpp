@@ -784,7 +784,7 @@ struct SpikeGlxNode::Impl {
                 }
 
                 auto scan_count = sscanf(char_buffer + offset,
-                                         "BINARY_DATA %d %d uint64(%llu)",
+                                         "BINARY_DATA %d %d uint64(%" SCNu64 ")",
                                          &nchans, &nsamples, &from_count);
                 // std::cout << (char_buffer + offset) << " " << nchans << " "
                 // << nsamples << " " << from_count << std::endl;

@@ -1,6 +1,7 @@
 find_package(Vulkan)
 if(Vulkan_FOUND)
   message("Vulkan SDK found")
+  message("Vulkan_LIBRARY ${Vulkan_LIBRARY}")
   return()
 endif()
 message("Vulkan SDK not found, will build from source")
@@ -172,9 +173,6 @@ target_link_libraries(vulkan-loader INTERFACE "${VULKAN_LOADER_LIB}" vulkan-head
 
 add_library(vulkan INTERFACE)
 target_link_libraries(vulkan INTERFACE vulkan-headers vulkan-loader)
-if(APPLE)
-  target_link_libraries(vulkan INTERFACE "-framework QuartzCore")
-endif()
 add_library(Vulkan::Vulkan ALIAS vulkan)
 ## --- Vulkan-ValidationLayers ---
 #FetchContent_Declare(
