@@ -64,13 +64,9 @@ struct PupilNode::Impl {
   boost::asio::io_context draw_context;
   boost::asio::steady_timer timer;
   std::shared_ptr<ImageViewer> viewer;
+  std::weak_ptr<ImageViewer> viewer_weak;
   std::thread draw_thread;
   std::atomic_bool draw_thread_running = false;
-  // SDL requires window/event calls to stay on one consistent thread. Frames
-  // now arrive on draw_thread, but poll_events() (which pumps SDL's event
-  // queue) has to run on the main thread instead, via this timer bound to
-  // the shared io_context rather than draw_context.
-  boost::asio::steady_timer poll_timer;
   std::mutex mutex;
   std::condition_variable condition_variable;
 
@@ -105,7 +101,7 @@ struct PupilNode::Impl {
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
        PupilNode *_outer, NodeGraph *_graph)
       : io_context(_io_context), state(_state), outer(_outer), graph(_graph),
-        pool(graph->get_thread_pool()), timer(draw_context), poll_timer(_io_context) {
+        pool(graph->get_thread_pool()), timer(draw_context) {
     outer->ready_multithreaded.emplace();
 
     using namespace std::placeholders;
@@ -117,9 +113,6 @@ struct PupilNode::Impl {
     pattern.reset(cairo_pattern_create_radial(0, 0, 8, 0, 0, 64));
     cairo_pattern_add_color_stop_rgba(pattern.get(), 0, 0, 0, 0, 0);
     cairo_pattern_add_color_stop_rgba(pattern.get(), 1, 0, 0, 0, 1);
-
-    poll_timer.expires_after(32ms);
-    poll_timer.async_wait(std::bind(&Impl::on_poll_timer, this, _1));
   }
 
   void init_cairo() {
@@ -139,7 +132,6 @@ struct PupilNode::Impl {
     if(draw_thread.joinable()) {
       draw_thread.join();
     }
-    poll_timer.cancel();
     (*state)["Running"].assign(false, [&] {});
   }
 
@@ -174,8 +166,8 @@ struct PupilNode::Impl {
     cairo_fill(cairo.get());
 
     node::signal_ready_offmain(outer, io_context);
-    if (viewer) {
-      viewer->update(outer);
+    if (auto local = viewer_weak.lock()) {
+      local->update(outer);
     }
 
     auto end = std::chrono::steady_clock::now();
@@ -188,22 +180,6 @@ struct PupilNode::Impl {
     }
 
     timer.async_wait(std::bind(&Impl::on_timer, this, _1));
-  }
-
-  // Runs on the main thread (io_context), not draw_thread, since SDL's
-  // event queue and window calls need to stay on one consistent thread.
-  void on_poll_timer(const boost::system::error_code &error) {
-    if (error.value() == boost::asio::error::operation_aborted) {
-      return;
-    }
-    BOOST_ASSERT(!error);
-
-    if (viewer) {
-      viewer->poll_events();
-    }
-
-    poll_timer.expires_after(32ms);
-    poll_timer.async_wait(std::bind(&Impl::on_poll_timer, this, _1));
   }
 
   void on_change(ObservableCollection::Action,
@@ -227,7 +203,8 @@ struct PupilNode::Impl {
     } else if (key_str == "View") {
       if (std::get<bool>(v)) {
         if(!viewer) {
-          viewer = std::make_shared<ImageViewer>(graph, io_context, state, outer);
+          viewer = ImageViewer::create(graph, io_context, state, outer);
+          viewer_weak = viewer;
         }
       } else {
         viewer.reset();

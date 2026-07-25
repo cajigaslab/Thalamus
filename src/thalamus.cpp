@@ -17,6 +17,7 @@
 #include <thalamus/shared_library.hpp>
 #include <thalamus/http_server.hpp>
 #include <thalamus/vulkan.hpp>
+#include <thalamus/image_viewer.hpp>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -369,11 +370,13 @@ int main(int argc, char **argv) {
     std::function<void(const boost::system::error_code &)> poll_function =
         [&](const boost::system::error_code &error) {
           THALAMUS_ASSERT(!error, "async_wait failed");
-          // QApplication::processEvents();
+          ImageViewer::poll_events();
           timer.expires_after(32ms);
           timer.async_wait(poll_function);
         };
-    poll_function(boost::system::error_code());
+    timer.expires_after(32ms);
+    timer.async_wait(poll_function);
+    //poll_function(boost::system::error_code());
     // THALAMUS_ABORT("DIE");
 
     auto shutdown_success = false;
@@ -402,7 +405,9 @@ int main(int argc, char **argv) {
       });
     };
 
+    ImageViewer::setup();
     io_context.run();
+    ImageViewer::teardown();
     THALAMUS_LOG(info) << "Shutting down";
 
 #ifdef __clang__

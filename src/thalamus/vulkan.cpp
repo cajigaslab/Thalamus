@@ -63,11 +63,32 @@ Vulkan get_vulkan(std::optional<uint32_t> device_id) {
     return result;
   }
 
+  std::vector<const char*> extensions(sdl_exts, sdl_exts + ext_count);
+
+  uint32_t avail_ext_count = 0;
+  vkEnumerateInstanceExtensionProperties(nullptr, &avail_ext_count, nullptr);
+  std::vector<VkExtensionProperties> avail_exts(avail_ext_count);
+  vkEnumerateInstanceExtensionProperties(nullptr, &avail_ext_count, avail_exts.data());
+
   VkInstanceCreateInfo inst_ci{};
+
+  auto has_portability_enum = std::any_of(avail_exts.begin(), avail_exts.end(),
+      [](const VkExtensionProperties& e) {
+        return strcmp(e.extensionName, "VK_KHR_portability_enumeration") == 0;
+      });
+  if (has_portability_enum) {
+    bool already_present = std::any_of(extensions.begin(), extensions.end(),
+        [](const char* e) { return strcmp(e, "VK_KHR_portability_enumeration") == 0; });
+    if (!already_present) {
+      extensions.push_back("VK_KHR_portability_enumeration");
+    }
+    inst_ci.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+  }
+
   inst_ci.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
   inst_ci.pApplicationInfo = &app_info;
-  inst_ci.enabledExtensionCount = ext_count;
-  inst_ci.ppEnabledExtensionNames = sdl_exts;
+  inst_ci.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+  inst_ci.ppEnabledExtensionNames = extensions.data();
 
   auto validation_layer = "VK_LAYER_KHRONOS_validation";
 
@@ -216,5 +237,6 @@ void destroy_vulkan(Vulkan vulkan) {
   if(vulkan.instance != nullptr) {
     vkDestroyInstance(vulkan.instance, nullptr);
   }
+  SDL_Quit();
 }
 } // namespace thalamus
