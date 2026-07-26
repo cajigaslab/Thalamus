@@ -2,12 +2,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
-
-typedef struct VkInstance_T* VkInstance;
-typedef struct VkPhysicalDevice_T* VkPhysicalDevice;
-typedef struct VkDevice_T* VkDevice;
-typedef struct VkQueue_T* VkQueue;
-typedef struct VkCommandPool_T* VkCommandPool;
+#include <thalamus/plugin_window_event.h>
 
 #ifdef _WIN32
 #define IMPORT __declspec(dllimport)
@@ -17,9 +12,62 @@ typedef struct VkCommandPool_T* VkCommandPool;
 
 #define THALAMUS_OPERATION_ABORTED 995
 
+#define THALAMUS_SDL_WINDOW_FULLSCREEN           uint64_t(0x0000000000000001)
+#define THALAMUS_SDL_WINDOW_OPENGL               uint64_t(0x0000000000000002)
+#define THALAMUS_SDL_WINDOW_OCCLUDED             uint64_t(0x0000000000000004)
+#define THALAMUS_SDL_WINDOW_HIDDEN               uint64_t(0x0000000000000008)
+#define THALAMUS_SDL_WINDOW_BORDERLESS           uint64_t(0x0000000000000010)
+#define THALAMUS_SDL_WINDOW_RESIZABLE            uint64_t(0x0000000000000020)
+#define THALAMUS_SDL_WINDOW_MINIMIZED            uint64_t(0x0000000000000040)
+#define THALAMUS_SDL_WINDOW_MAXIMIZED            uint64_t(0x0000000000000080)
+#define THALAMUS_SDL_WINDOW_MOUSE_GRABBED        uint64_t(0x0000000000000100)
+#define THALAMUS_SDL_WINDOW_INPUT_FOCUS          uint64_t(0x0000000000000200)
+#define THALAMUS_SDL_WINDOW_MOUSE_FOCUS          uint64_t(0x0000000000000400)
+#define THALAMUS_SDL_WINDOW_EXTERNAL             uint64_t(0x0000000000000800)
+#define THALAMUS_SDL_WINDOW_MODAL                uint64_t(0x0000000000001000)
+#define THALAMUS_SDL_WINDOW_HIGH_PIXEL_DENSITY   uint64_t(0x0000000000002000)
+#define THALAMUS_SDL_WINDOW_MOUSE_CAPTURE        uint64_t(0x0000000000004000)
+#define THALAMUS_SDL_WINDOW_MOUSE_RELATIVE_MODE  uint64_t(0x0000000000008000)
+#define THALAMUS_SDL_WINDOW_ALWAYS_ON_TOP        uint64_t(0x0000000000010000)
+#define THALAMUS_SDL_WINDOW_UTILITY              uint64_t(0x0000000000020000)
+#define THALAMUS_SDL_WINDOW_TOOLTIP              uint64_t(0x0000000000040000)
+#define THALAMUS_SDL_WINDOW_POPUP_MENU           uint64_t(0x0000000000080000)
+#define THALAMUS_SDL_WINDOW_KEYBOARD_GRABBED     uint64_t(0x0000000000100000)
+#define THALAMUS_SDL_WINDOW_FILL_DOCUMENT        uint64_t(0x0000000000200000)
+#define THALAMUS_SDL_WINDOW_VULKAN               uint64_t(0x0000000010000000)
+#define THALAMUS_SDL_WINDOW_METAL                uint64_t(0x0000000020000000)
+#define THALAMUS_SDL_WINDOW_TRANSPARENT          uint64_t(0x0000000040000000)
+#define THALAMUS_SDL_WINDOW_NOT_FOCUSABLE        uint64_t(0x0000000080000000)
+
+/* Mirrors SDL_SystemCursor's ordinal values -- only the entries imgui itself
+   ever requests are listed, but the numeric values must stay in lockstep
+   with the real enum in SDL3's SDL_mouse.h since they're passed as plain
+   int32_t across the ThalamusAPI boundary. */
+#define THALAMUS_SDL_SYSTEM_CURSOR_DEFAULT       int32_t(0)
+#define THALAMUS_SDL_SYSTEM_CURSOR_TEXT          int32_t(1)
+#define THALAMUS_SDL_SYSTEM_CURSOR_WAIT          int32_t(2)
+#define THALAMUS_SDL_SYSTEM_CURSOR_CROSSHAIR     int32_t(3)
+#define THALAMUS_SDL_SYSTEM_CURSOR_PROGRESS      int32_t(4)
+#define THALAMUS_SDL_SYSTEM_CURSOR_NWSE_RESIZE   int32_t(5)
+#define THALAMUS_SDL_SYSTEM_CURSOR_NESW_RESIZE   int32_t(6)
+#define THALAMUS_SDL_SYSTEM_CURSOR_EW_RESIZE     int32_t(7)
+#define THALAMUS_SDL_SYSTEM_CURSOR_NS_RESIZE     int32_t(8)
+#define THALAMUS_SDL_SYSTEM_CURSOR_MOVE          int32_t(9)
+#define THALAMUS_SDL_SYSTEM_CURSOR_NOT_ALLOWED   int32_t(10)
+#define THALAMUS_SDL_SYSTEM_CURSOR_POINTER       int32_t(11)
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+  typedef struct VkInstance_T* VkInstance;
+  typedef struct VkPhysicalDevice_T* VkPhysicalDevice;
+  typedef struct VkDevice_T* VkDevice;
+  typedef struct VkQueue_T* VkQueue;
+  typedef struct VkCommandPool_T* VkCommandPool;
+  typedef struct VkSurfaceKHR_T* VkSurfaceKHR;
+  struct VkAllocationCallbacks;
+
   enum ThalamusStateType {
     Dict,
     List,
@@ -183,6 +231,12 @@ extern "C" {
   typedef void (*ThalamusNodeGetCallback)(struct ThalamusNode*, void* data);
   typedef void (*ThalamusNodeReadyCallback)(struct ThalamusNode*, void* data);
 
+  struct THALAMUS_SDL_Window;
+  struct THALAMUS_SDL_EventSubscription;
+  struct THALAMUS_SDL_Cursor;
+
+  typedef void (*THALAMUS_SDL_EventCallback)(THALAMUS_SDL_Event* event, void* data);
+
   struct ThalamusAPI {
     int32_t version;
     char (*state_is_dict)(struct ThalamusState*); // 1
@@ -316,6 +370,30 @@ extern "C" {
     VkCommandPool (*create_vulkan_command_pool)(); // 89
     struct ThalamusVkQueueLock* (*lock_vulkan_queue)(); // 90
     void (*unlock_vulkan_queue)(struct ThalamusVkQueueLock*); // 91
+
+    struct THALAMUS_SDL_Window* (*sdl_create_window)(struct ThalamusCharSpan* name, int32_t width, int32_t height, uint64_t flags); // 92
+    void (*sdl_destroy_window)(struct THALAMUS_SDL_Window*); // 93
+    void (*sdl_set_window_position)(struct THALAMUS_SDL_Window*, int32_t x, int32_t y); // 94
+    void (*sdl_set_window_size)(struct THALAMUS_SDL_Window*, int32_t w, int32_t h); // 95
+    void (*sdl_set_window_title)(struct THALAMUS_SDL_Window*, struct ThalamusCharSpan* title); // 96
+    void (*sdl_get_error)(struct ThalamusCharSpan* error); // 97
+    uint8_t (*sdl_vulkan_create_surface)(struct THALAMUS_SDL_Window*, VkInstance, const struct VkAllocationCallbacks *, VkSurfaceKHR*); // 98
+    void (*sdl_get_window_size_in_pixels)(struct THALAMUS_SDL_Window*, int32_t*, int32_t*); // 99
+    uint32_t (*sdl_get_window_id)(struct THALAMUS_SDL_Window*); // 100
+
+    void (*sdl_get_window_position)(struct THALAMUS_SDL_Window*, int32_t* x, int32_t* y); // 101
+    void (*sdl_get_window_size)(struct THALAMUS_SDL_Window*, int32_t* w, int32_t* h); // 102
+
+    struct THALAMUS_SDL_EventSubscription* (*sdl_events_subscribe)(THALAMUS_SDL_EventCallback callback, void* data); // 103
+    void (*sdl_events_unsubscribe)(struct THALAMUS_SDL_EventSubscription* subscription); // 104
+
+    void (*sdl_get_clipboard_text)(struct ThalamusCharSpan* result); // 105
+    uint8_t (*sdl_set_clipboard_text)(const struct ThalamusCharSpan* text); // 106
+    struct THALAMUS_SDL_Cursor* (*sdl_create_system_cursor)(int32_t id); // 107
+    uint8_t (*sdl_set_cursor)(struct THALAMUS_SDL_Cursor* cursor); // 108
+    void (*sdl_destroy_cursor)(struct THALAMUS_SDL_Cursor* cursor); // 109
+    uint8_t (*sdl_show_cursor)(); // 110
+    uint8_t (*sdl_hide_cursor)(); // 111
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories_t)(struct ThalamusAPI*);

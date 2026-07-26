@@ -62,9 +62,12 @@
 #include "boost/signals2/connection.hpp"
 #include <grpcpp/create_channel.h>
 #include <thalamus.grpc.pb.h>
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_vulkan.h>
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
+#include <thalamus/image_viewer.hpp>
  
 struct ThalamusState {
   int count;
@@ -1372,6 +1375,94 @@ struct ThalamusAPIImpl {
   static void unlock_vulkan_queue(ThalamusVkQueueLock* lock) {
     delete lock;
   }
+
+  static struct THALAMUS_SDL_Window* sdl_create_window(struct ThalamusCharSpan* name, int32_t width, int32_t height, uint64_t flags) {
+    auto window = SDL_CreateWindow(std::string(name->data, name->size).c_str(), width, height, flags);
+    return reinterpret_cast<struct THALAMUS_SDL_Window*>(window);
+  }
+
+  static void sdl_destroy_window(struct THALAMUS_SDL_Window* window) {
+    SDL_DestroyWindow(reinterpret_cast<SDL_Window*>(window));
+  }
+
+  static void sdl_set_window_position(struct THALAMUS_SDL_Window* window, int32_t x, int32_t y) {
+    SDL_SetWindowPosition(reinterpret_cast<SDL_Window*>(window), x, y);
+  }
+
+  static void sdl_set_window_size(struct THALAMUS_SDL_Window* window, int32_t w, int32_t h) {
+    SDL_SetWindowSize(reinterpret_cast<SDL_Window*>(window), w, h);
+  }
+
+  static void sdl_set_window_title(struct THALAMUS_SDL_Window* window, struct ThalamusCharSpan* title) {
+    SDL_SetWindowTitle(reinterpret_cast<SDL_Window*>(window), std::string(title->data, title->size).c_str());
+  }
+
+  static void sdl_get_error(struct ThalamusCharSpan* error) {
+    const char* message = SDL_GetError();
+    error->data = message;
+    error->size = message ? strlen(message) : 0;
+    error->owns_data = 0;
+  }
+
+  static uint8_t sdl_vulkan_create_surface(struct THALAMUS_SDL_Window* window, VkInstance instance, const struct VkAllocationCallbacks* allocator, VkSurfaceKHR* surface) {
+    return SDL_Vulkan_CreateSurface(reinterpret_cast<SDL_Window*>(window), instance, allocator, surface) ? 1 : 0;
+  }
+
+  static void sdl_get_window_size_in_pixels(struct THALAMUS_SDL_Window* window, int32_t* w, int32_t* h) {
+    SDL_GetWindowSizeInPixels(reinterpret_cast<SDL_Window*>(window), w, h);
+  }
+
+  static uint32_t sdl_get_window_id(struct THALAMUS_SDL_Window* window) {
+    return SDL_GetWindowID(reinterpret_cast<SDL_Window*>(window));
+  }
+
+  static void sdl_get_window_position(struct THALAMUS_SDL_Window* window, int32_t* x, int32_t* y) {
+    SDL_GetWindowPosition(reinterpret_cast<SDL_Window*>(window), x, y);
+  }
+
+  static void sdl_get_window_size(struct THALAMUS_SDL_Window* window, int32_t* w, int32_t* h) {
+    SDL_GetWindowSize(reinterpret_cast<SDL_Window*>(window), w, h);
+  }
+
+  static struct THALAMUS_SDL_EventSubscription* sdl_events_subscribe(THALAMUS_SDL_EventCallback callback, void* data) {
+    return ImageViewer::subscribe([callback, data](THALAMUS_SDL_Event* event) {
+      callback(event, data);
+    });
+  }
+
+  static void sdl_events_unsubscribe(struct THALAMUS_SDL_EventSubscription* subscription) {
+    ImageViewer::unsubscribe(subscription);
+  }
+
+  static void sdl_get_clipboard_text(struct ThalamusCharSpan* result) {
+    char* text = SDL_GetClipboardText();
+    string_to_span(result, text ? std::string(text) : std::string());
+    SDL_free(text);
+  }
+
+  static uint8_t sdl_set_clipboard_text(const struct ThalamusCharSpan* text) {
+    return SDL_SetClipboardText(std::string(text->data, text->size).c_str()) ? 1 : 0;
+  }
+
+  static struct THALAMUS_SDL_Cursor* sdl_create_system_cursor(int32_t id) {
+    return reinterpret_cast<struct THALAMUS_SDL_Cursor*>(SDL_CreateSystemCursor(static_cast<SDL_SystemCursor>(id)));
+  }
+
+  static uint8_t sdl_set_cursor(struct THALAMUS_SDL_Cursor* cursor) {
+    return SDL_SetCursor(reinterpret_cast<SDL_Cursor*>(cursor)) ? 1 : 0;
+  }
+
+  static void sdl_destroy_cursor(struct THALAMUS_SDL_Cursor* cursor) {
+    SDL_DestroyCursor(reinterpret_cast<SDL_Cursor*>(cursor));
+  }
+
+  static uint8_t sdl_show_cursor() {
+    return SDL_ShowCursor() ? 1 : 0;
+  }
+
+  static uint8_t sdl_hide_cursor() {
+    return SDL_HideCursor() ? 1 : 0;
+  }
 };
 
 std::map<ObservableCollection::Value, ThalamusState*>* ThalamusAPIImpl::cpp_to_c = nullptr;
@@ -1590,7 +1681,30 @@ public:
     thalamus_api.create_vulkan_command_pool = ThalamusAPIImpl::create_vulkan_command_pool;
     thalamus_api.lock_vulkan_queue = ThalamusAPIImpl::lock_vulkan_queue;
     thalamus_api.unlock_vulkan_queue = ThalamusAPIImpl::unlock_vulkan_queue;
-    thalamus_api.version = 91;
+
+    thalamus_api.sdl_create_window = ThalamusAPIImpl::sdl_create_window;
+    thalamus_api.sdl_destroy_window = ThalamusAPIImpl::sdl_destroy_window;
+    thalamus_api.sdl_set_window_position = ThalamusAPIImpl::sdl_set_window_position;
+    thalamus_api.sdl_set_window_size = ThalamusAPIImpl::sdl_set_window_size;
+    thalamus_api.sdl_set_window_title = ThalamusAPIImpl::sdl_set_window_title;
+    thalamus_api.sdl_get_error = ThalamusAPIImpl::sdl_get_error;
+    thalamus_api.sdl_vulkan_create_surface = ThalamusAPIImpl::sdl_vulkan_create_surface;
+    thalamus_api.sdl_get_window_size_in_pixels = ThalamusAPIImpl::sdl_get_window_size_in_pixels;
+    thalamus_api.sdl_get_window_id = ThalamusAPIImpl::sdl_get_window_id;
+    thalamus_api.sdl_get_window_position = ThalamusAPIImpl::sdl_get_window_position;
+    thalamus_api.sdl_get_window_size = ThalamusAPIImpl::sdl_get_window_size;
+    thalamus_api.sdl_events_subscribe = ThalamusAPIImpl::sdl_events_subscribe;
+    thalamus_api.sdl_events_unsubscribe = ThalamusAPIImpl::sdl_events_unsubscribe;
+
+    thalamus_api.sdl_get_clipboard_text = ThalamusAPIImpl::sdl_get_clipboard_text;
+    thalamus_api.sdl_set_clipboard_text = ThalamusAPIImpl::sdl_set_clipboard_text;
+    thalamus_api.sdl_create_system_cursor = ThalamusAPIImpl::sdl_create_system_cursor;
+    thalamus_api.sdl_set_cursor = ThalamusAPIImpl::sdl_set_cursor;
+    thalamus_api.sdl_destroy_cursor = ThalamusAPIImpl::sdl_destroy_cursor;
+    thalamus_api.sdl_show_cursor = ThalamusAPIImpl::sdl_show_cursor;
+    thalamus_api.sdl_hide_cursor = ThalamusAPIImpl::sdl_hide_cursor;
+
+    thalamus_api.version = 111;
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},
