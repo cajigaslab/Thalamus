@@ -11,15 +11,15 @@ import asyncio
 import numpy
 import scipy.signal
 
-from ..qt import *
+from thalamus.qt import *
 
-from . import task_context
-from .widgets import Form, ListAsTabsWidget
-from .util import wait_for, wait_for_hold, TaskResult, TaskContextProtocol, CanvasPainterProtocol, RenderOutput, create_task_with_exc_handling
-from .. import task_controller_pb2
-from ..config import *
+from thalamus.task_controller import task_context
+from thalamus.task_controller.widgets import Form, ListAsTabsWidget
+from thalamus.task_controller.util import wait_for, wait_for_hold, TaskResult, TaskContextProtocol, CanvasPainterProtocol, RenderOutput, create_task_with_exc_handling
+from thalamus import task_controller_pb2
+from thalamus.config import *
 
-from ..thalamus_pb2 import StimRequest, StimDeclaration, AnalogResponse, Span
+from thalamus.thalamus_pb2 import StimRequest, StimDeclaration, AnalogResponse, Span
 
 LOGGER = logging.getLogger(__name__)
 
