@@ -548,6 +548,7 @@ boost::json::value OculomaticNode::process(const boost::json::value & request) {
 
   auto object = request.as_object();
   if((object.contains("type") && object["type"] == "recenter") || object.contains("keydown")) {
+    impl->graph->log("Oculomatic Recenter");
     impl->need_recenter = true;
     return boost::json::value();
   }
