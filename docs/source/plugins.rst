@@ -37,10 +37,86 @@ the pipeline's capabilities.  The main capability groups are:
   forwarding device queries to an OCULOMATIC camera) without blocking shutdown.
 * **Timing & I/O** -- a steady ``time_ns`` clock, timers, an async I/O context, and
   serial-port helpers for hardware plugins.
+* **Vulkan** -- access to the host's Vulkan objects for GPU compute/rendering inside
+  a plugin (see :ref:`plugin-vulkan`).
 
 This is the basis for cross-node processing in compiled code: a transformer plugin
 can subscribe to an upstream node, read its samples as they arrive, compute, and
 inject results back into the pipeline.
+
+Entry points and lifecycle
+--------------------------
+
+A plugin is a shared library exporting one required symbol and one optional one
+(both declared in ``plugin.h``):
+
+.. code-block:: c
+
+   /* Required.  Called once at load; returns a NULL-terminated array of
+      node factories and receives the ThalamusAPI function table. */
+   struct ThalamusNodeFactory** thalamus_get_node_factories(struct ThalamusAPI*);
+
+   /* Optional.  Called when Thalamus shuts down and unloads the plugin --
+      release threads, devices and any resources acquired at load time. */
+   void thalamus_teardown(void);
+
+Each ``ThalamusNodeFactory`` names a node type and provides ``create`` /
+``destroy`` callbacks (plus optional ``prepare`` / ``cleanup`` hooks run around
+pipeline start).  The node types a plugin registers appear in the node list next
+to the built-in ones.
+
+.. note::
+
+   The load symbol was previously named ``get_node_factories``; it is now
+   ``thalamus_get_node_factories``, and plugins exporting only the old name will
+   fail to load.  ``thalamus_teardown`` is looked up at shutdown and simply
+   skipped if absent, so existing plugins keep working without it.
+
+API versioning
+--------------
+
+``ThalamusAPI`` begins with an ``int32_t version`` field, and every function
+pointer in the table is annotated in ``plugin.h`` with the version at which it was
+added (the host currently passes ``91``).  The table is strictly append-only, so a
+plugin built against an older header keeps working; a plugin that wants to use a
+newer capability should guard it:
+
+.. code-block:: c
+
+   if (api->version >= 90) {
+     struct ThalamusVkQueueLock* lock = api->lock_vulkan_queue();
+     /* ... submit GPU work ... */
+     api->unlock_vulkan_queue(lock);
+   } else {
+     /* fall back to CPU path */
+   }
+
+.. _plugin-vulkan:
+
+Vulkan access
+-------------
+
+Plugins can do GPU work using Thalamus's own Vulkan instance rather than creating
+their own.  The API exposes:
+
+* ``get_vulkan_instance()`` / ``get_vulkan_device()`` /
+  ``get_vulkan_physical_device()`` -- the host's ``VkInstance``, ``VkDevice`` and
+  ``VkPhysicalDevice``.
+* ``get_vulkan_queue()`` -- the shared ``VkQueue``.
+* ``create_vulkan_command_pool()`` -- a command pool for the shared queue's family.
+* ``lock_vulkan_queue()`` / ``unlock_vulkan_queue()`` -- the queue is shared with
+  Thalamus's own rendering (e.g. the image viewer), so **all submissions must be
+  bracketed by the queue lock**:
+
+.. code-block:: c
+
+   struct ThalamusVkQueueLock* lock = api->lock_vulkan_queue();
+   vkQueueSubmit(api->get_vulkan_queue(), 1, &submit_info, fence);
+   api->unlock_vulkan_queue(lock);
+
+This lets an image-processing plugin (for example, a GPU pupil detector or video
+filter) run on the same device Thalamus renders with, without device-sharing
+hazards.
 
 .. note::
 

@@ -35,3 +35,13 @@ Properties
 The annotated image is also republished, so a downstream STORAGE2 node can save
 the original eye image, the annotated image, or just the gaze time series as
 needed (see the STORAGE2 per-modality toggles).
+
+Recentering
+-----------
+
+The node accepts a **recenter** request (sent from the eye-calibration UI or any
+keydown forwarded to the node) that re-zeroes the gaze output around the current
+pupil position.  Each recenter is written to the pipeline log as an
+``Oculomatic Recenter`` event, so recordings capture exactly when the operator
+recentered during a session -- important when interpreting absolute gaze
+coordinates offline.

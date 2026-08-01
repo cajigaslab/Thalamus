@@ -17,7 +17,8 @@ Properties
   a ``<output file>.YYYYMMDD.R.json`` file will be creating containing a snapshot of the config when the experiment
   started.
 * Compress Analog: Compress time series signals using zlib compression.
-* Compress Video: Compress image data using H264 compression.
+* Compress Video: Compress image data using H264 compression.  Enabled by default
+  for newly created nodes.
 * Simple Copy: Don't record data, just copy the files in the Files list.
 
 Usage

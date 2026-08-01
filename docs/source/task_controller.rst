@@ -32,6 +32,10 @@ Common options:
 * ``-l, --log-level LEVEL`` -- ``trace`` / ``debug`` / ``info`` / ``warning`` /
   ``error`` / ``fatal``.
 * ``--ext MODULE`` -- load an extension module that adds custom tasks/widgets.
+* ``--wait-for-pipeline`` -- don't start the data pipeline; wait for something else
+  to launch it.  Use this when another process (e.g. a separately managed Thalamus
+  pipeline, or a remote launcher) owns the pipeline and the task controller should
+  only attach to it.  The same flag exists on ``python -m thalamus.pipeline``.
 
 The controller opens a **control window** (where you assemble *task clusters* and a
 run queue) and a **subject window** (the stimulus display).  An optional
@@ -76,7 +80,9 @@ The ``context`` (a ``TaskContextProtocol``, in
 ``thalamus/task_controller/util.py``) is how a task interacts with the system:
 
 * **Timing** -- ``await context.sleep(timedelta(...))`` and
-  ``await context.until(lambda: condition)``.
+  ``await context.until(lambda: condition)``.  For fixation/hold logic, the helper
+  ``wait_for_hold`` (also in ``util.py``) waits for a predicate to stay true for a
+  hold duration while tolerating blinks (see below).
 * **Parameters** -- ``context.get_value(key, default)``,
   ``context.get_target_value(itarg, key, default)`` and
   ``context.get_color(key, default)`` read (and randomize within ranges) the values
@@ -89,6 +95,37 @@ The ``context`` (a ``TaskContextProtocol``, in
 
 For tasks that animate continuously, decorate ``run`` with ``@animate(frequency)``
 (from ``util.py``) to repaint the canvas at a fixed rate.
+
+Holds and blinks
+^^^^^^^^^^^^^^^^
+
+Fixation-style tasks usually require the subject to *hold* a state (gaze on a
+target, hand on a pad) for some duration, while briefly losing it -- a blink, a
+tracking dropout -- shouldn't necessarily fail the trial.  ``util.wait_for_hold``
+implements this:
+
+.. code-block:: python
+
+   from thalamus.task_controller.util import wait_for_hold
+
+   held = await wait_for_hold(
+       context,
+       is_held=lambda: gaze_on_target,          # predicate to hold
+       hold_duration=datetime.timedelta(seconds=1),
+       blink_duration=datetime.timedelta(milliseconds=200),
+       include_blink=False,
+       blink_resets=False)
+   # held is True if the hold completed, False if a blink lasted too long
+
+* ``hold_duration`` -- how long ``is_held`` must remain true.
+* ``blink_duration`` -- the longest interruption tolerated before the hold fails.
+  May be ``None`` to wait indefinitely for reacquisition.
+* ``include_blink`` -- when true, time spent blinking counts toward the hold; when
+  false (default), the hold is extended by the time spent blinking.
+* ``blink_resets`` -- when true, any blink resets the hold timer entirely: the
+  subject must produce a *continuous* ``hold_duration`` after reacquiring.  Use
+  this for paradigms where an uninterrupted fixation is required rather than a
+  cumulative one.
 
 A minimal task
 ^^^^^^^^^^^^^^

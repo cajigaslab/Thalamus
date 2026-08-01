@@ -13,3 +13,12 @@ Properties
 * **Random Saccade**: When enabled, the simulated pupil jumps to a new random
   position roughly once per second, imitating saccadic eye movements.  When
   disabled the pupil holds still.
+* **Frequency**: Frame rate of the generated image stream, in Hz.  Previously the
+  node always generated frames on a fixed ~31 Hz (32 ms) interval; this parameter
+  makes the rate configurable, e.g. to match the frame rate of the real eye camera
+  you are simulating.
+* **Jitter (Pixels)**: Adds an alternating horizontal offset of ± this many pixels
+  to the pupil position on successive frames.  Use it to simulate tracking noise
+  and verify that downstream processing (e.g. OCULOMATIC detection or your
+  eye-calibration filtering) is robust to frame-to-frame jitter.  ``0`` (the
+  default) disables jitter.

@@ -19,6 +19,11 @@ Properties
 * **Transform**: The current transform (3×3 matrix) applied to incoming points.  It
   is populated automatically by the calibration routine but can also be inspected
   directly.
+* **Null Threshold**: Raw coordinates below this value (default ``-4``) are treated
+  as a "no touch" sentinel: the point is passed through *untransformed* instead of
+  being mapped through the calibration matrix.  Touch devices commonly emit a large
+  negative value when nothing is touching the surface; this threshold keeps those
+  sentinels from being turned into bogus on-screen coordinates.
 
 Calibration
 -----------
