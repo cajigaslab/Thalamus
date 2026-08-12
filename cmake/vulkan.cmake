@@ -42,7 +42,7 @@ message(STATUS "Vulkan-ValidationLayers: ${VULKAN_VALLAYERS_URL} @ ${VULKAN_VALL
 if(WIN32)
   set(GLSLANG_ASSET "glslang-main-windows-x86_64-release.zip")
 elseif(APPLE)
-  set(GLSLANG_ASSET "glslang-main-macos-universal-release.zip ")
+  set(GLSLANG_ASSET "glslang-main-macos-universal-release.zip")
 else()
   set(GLSLANG_ASSET "glslang-main-linux-x86_64-release.zip")
 endif()
