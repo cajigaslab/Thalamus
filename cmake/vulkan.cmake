@@ -40,11 +40,11 @@ message(STATUS "Vulkan-ValidationLayers: ${VULKAN_VALLAYERS_URL} @ ${VULKAN_VALL
 
 # --- Download glslang main-tot release during configuration ---
 if(WIN32)
-  set(GLSLANG_ASSET "glslang-master-windows-Release.zip")
+  set(GLSLANG_ASSET "glslang-main-windows-x86_64-release.zip")
 elseif(APPLE)
-  set(GLSLANG_ASSET "glslang-main-osx-Release.zip")
+  set(GLSLANG_ASSET "glslang-main-macos-universal-release.zip ")
 else()
-  set(GLSLANG_ASSET "glslang-main-linux-Release.zip")
+  set(GLSLANG_ASSET "glslang-main-linux-x86_64-release.zip")
 endif()
 
 set(GLSLANG_DOWNLOAD_PATH "${CMAKE_BINARY_DIR}/${GLSLANG_ASSET}")
