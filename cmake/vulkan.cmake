@@ -52,7 +52,7 @@ set(GLSLANG_URL "https://github.com/KhronosGroup/glslang/releases/download/main-
 
 set(GLSLANG_EXTRACT_DIR "${CMAKE_BINARY_DIR}/glslang")
 if(WIN32)
-  set(Vulkan_GLSLANG_VALIDATOR_EXECUTABLE "${GLSLANG_EXTRACT_DIR}/bin/glslangValidator.exe")
+  set(Vulkan_GLSLANG_VALIDATOR_EXECUTABLE "${GLSLANG_EXTRACT_DIR}/bin/glslang.exe")
 else()
   set(Vulkan_GLSLANG_VALIDATOR_EXECUTABLE "${GLSLANG_EXTRACT_DIR}/bin/glslangValidator")
 endif()
