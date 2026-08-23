@@ -51,6 +51,7 @@ from ..resources import get_path
 from .tasks import add_tasks
 
 from .. import usersettings
+from .. import dotnet_runtime
 
 UNHANDLED_EXCEPTION: typing.List[Exception] = []
 
@@ -87,6 +88,7 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument('-c', '--config', help='Config file location')
   parser.add_argument('-p', '--port', type=int, default=50050, help='GRPC port')
   parser.add_argument('-u', '--ui-port', type=int, default=50051, help='UI GRPC port')
+  parser.add_argument('-d', '--dotnet-port', type=int, default=50052, help='dotnet GRPC port')
   parser.add_argument('-e', '--recorder-url', help='Recorder URL')
   parser.add_argument('-o', '--ophanim-url', help='Ophanim URL')
   parser.add_argument('-l', '--log-level', choices=['trace', 'debug', 'info', 'warning', 'error', 'fatal'], default='info', help='Log level')
@@ -97,6 +99,7 @@ def parse_args() -> argparse.Namespace:
                       help='Send task configs to remote ROS node to execute')
   parser.add_argument('--ext', help='Extension Module')
   parser.add_argument('--wait-for-pipeline', action='store_true', help='Don\'t start pipeline, wait for something else to launch it')
+  parser.add_argument('--open', action='store_true', help='Bind GRPC servers to 0.0.0.0 instead of localhost only')
   return parser.parse_args(self_args[1:])
 
 async def async_main() -> None:
@@ -173,7 +176,7 @@ async def async_main() -> None:
   task_controller_servicer = TaskControllerServicer()
   thalamus_pb2_grpc.add_ThalamusServicer_to_server(servicer, server)
   task_controller_pb2_grpc.add_TaskControllerServicer_to_server(task_controller_servicer, server)
-  listen_addr = f'[::]:{arguments.ui_port}'
+  listen_addr = f'[::]:{arguments.ui_port}' if arguments.open else f'localhost:{arguments.ui_port}'
 
   serivce_names = [
     thalamus_pb2.DESCRIPTOR.services_by_name["Thalamus"].full_name,
@@ -201,7 +204,7 @@ async def async_main() -> None:
     pypipeline_servicer = PipelineServicer()
     thalamus_pb2_grpc.add_ThalamusServicer_to_server(pypipeline_servicer, pypipeline_server)
 
-    pypipeline_addr = f'[::]:{arguments.port}'
+    pypipeline_addr = f'[::]:{arguments.port}' if arguments.open else f'localhost:{arguments.port}'
     pypipeline_server.add_insecure_port(pypipeline_addr)
     logging.info("Starting GRPC PyPipeline server on %s", pypipeline_addr)
     await pypipeline_server.start()
@@ -216,6 +219,8 @@ async def async_main() -> None:
       command = command + ('--trace',)
     if use_crashpad:
       command = command + ('--crashpad',)
+    if arguments.open:
+      command = command + ('--ip', '0.0.0.0')
     LOGGER.info('COMMAND %s', ' '.join(command))
     if not arguments.wait_for_pipeline:
       bmbi_native_proc = await asyncio.create_subprocess_exec(*command)
@@ -223,11 +228,14 @@ async def async_main() -> None:
       create_task_with_exc_handling(proc_watcher('native.exe', bmbi_native_proc))
 
   dotnet_proc = None
-  if False:
-  #if dotnet_filename.exists():
-    dotnet_command = str(dotnet_filename), '--port', str(arguments.dotnet_port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else [])
-    dotnet_proc = await asyncio.create_subprocess_exec(*dotnet_command)
-    create_task_with_exc_handling(proc_watcher('dotnet.exe', dotnet_proc))
+  if dotnet_filename.exists():
+    if dotnet_runtime.is_available():
+      dotnet_command = str(dotnet_filename), '--port', str(arguments.dotnet_port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else []), *(['--open'] if arguments.open else [])
+      dotnet_proc = await asyncio.create_subprocess_exec(*dotnet_command)
+      create_task_with_exc_handling(proc_watcher('dotnet.exe', dotnet_proc))
+    else:
+      LOGGER.warning('dotnet.exe found but the required .NET runtime is missing; skipping it')
+      usersettings.warn_dotnet_runtime_missing()
     
   channel = grpc.aio.insecure_channel(f'localhost:{arguments.port}')
   await channel.channel_ready()

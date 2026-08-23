@@ -15,6 +15,9 @@
 #pragma clang diagnostic pop
 #endif
 
+#include <thalamus/plugin.h>
+#include <functional>
+
 namespace thalamus {
 
 class ImageViewer : public std::enable_shared_from_this<ImageViewer> {
@@ -32,6 +35,13 @@ public:
   static void teardown();
   static void poll_events();
   void update(ImageNode* node);
+
+  // Lets plugins observe raw SDL events (e.g. for windows the plugin itself
+  // created via ThalamusAPI's sdl_create_window) without needing their own
+  // event pump -- poll_events() is the one place SDL_PollEvent is already
+  // called, so subscribers just get invoked from inside that existing loop.
+  static struct THALAMUS_SDL_EventSubscription* subscribe(std::function<void(THALAMUS_SDL_Event*)> callback);
+  static void unsubscribe(struct THALAMUS_SDL_EventSubscription* subscription);
 };
 
 } // namespace thalamus

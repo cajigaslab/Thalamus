@@ -23,6 +23,15 @@
 #include <texture.vert.spv.h>
 #include <texture.frag.spv.h>
 
+// Must live at global scope, not inside namespace thalamus -- plugin.h
+// forward-declares THALAMUS_SDL_EventSubscription at global scope (inside
+// extern "C"), and image_viewer.hpp's declarations resolve to that global
+// type. Defining the struct body inside namespace thalamus would silently
+// create a distinct thalamus::THALAMUS_SDL_EventSubscription instead.
+struct THALAMUS_SDL_EventSubscription {
+  std::function<void(THALAMUS_SDL_Event*)> callback;
+};
+
 namespace thalamus {
 
 static uint32_t findMemType(VkPhysicalDevice phys, uint32_t bits, VkMemoryPropertyFlags props) {
@@ -637,13 +646,35 @@ struct ImageViewer::Impl {
 
 static std::map<SDL_WindowID, std::weak_ptr<ImageViewer>>* instances = nullptr;
 
+static std::vector<std::unique_ptr<THALAMUS_SDL_EventSubscription>>* subscriptions = nullptr;
+
 void ImageViewer::setup() {
   instances = new std::map<SDL_WindowID, std::weak_ptr<ImageViewer>>();
+  subscriptions = new std::vector<std::unique_ptr<THALAMUS_SDL_EventSubscription>>();
 }
 
 void ImageViewer::teardown() {
   delete instances;
   instances = nullptr;
+  delete subscriptions;
+  subscriptions = nullptr;
+}
+
+struct THALAMUS_SDL_EventSubscription* ImageViewer::subscribe(std::function<void(THALAMUS_SDL_Event*)> callback) {
+  THALAMUS_ASSERT(subscriptions != nullptr, "ImageViewer::setup() was not called");
+  subscriptions->push_back(std::make_unique<THALAMUS_SDL_EventSubscription>(THALAMUS_SDL_EventSubscription{std::move(callback)}));
+  return subscriptions->back().get();
+}
+
+void ImageViewer::unsubscribe(struct THALAMUS_SDL_EventSubscription* subscription) {
+  if (!subscriptions) {
+    return;
+  }
+  auto i = std::find_if(subscriptions->begin(), subscriptions->end(),
+                        [&](const std::unique_ptr<THALAMUS_SDL_EventSubscription>& s) { return s.get() == subscription; });
+  if (i != subscriptions->end()) {
+    subscriptions->erase(i);
+  }
 }
 
 ImageViewer::ImageViewer(NodeGraph* graph, boost::asio::io_context&,
@@ -930,6 +961,9 @@ void ImageViewer::do_poll() {
   }
 }
 
+static_assert(sizeof(SDL_Event) == sizeof(THALAMUS_SDL_Event),
+              "THALAMUS_SDL_Event has drifted out of sync with SDL_Event -- update plugin_window_event.h");
+
 void ImageViewer::poll_events() {
   THALAMUS_ASSERT(instances != nullptr, "ImageViewer::setup() was not called");
 
@@ -942,6 +976,10 @@ void ImageViewer::poll_events() {
 
   SDL_Event event;
   while (SDL_PollEvent(&event)) {
+    for (auto& subscription : *subscriptions) {
+      subscription->callback(reinterpret_cast<THALAMUS_SDL_Event*>(&event));
+    }
+
     if (event.type == SDL_EVENT_QUIT) {
       for (auto& [id, w] : *instances)
         if (auto iv = w.lock())

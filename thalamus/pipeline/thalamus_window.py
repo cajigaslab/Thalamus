@@ -1258,7 +1258,7 @@ class Plot(QWidget):
       self.update()
 
 def thalamus_rendering(node):
-  if node['type'] in ('PUPIL', 'CHESSBOARD', 'OCULOMATIC'):
+  if node['type'] in ('PUPIL', 'CHESSBOARD', 'OCULOMATIC', 'THORCAM'):
     return True
   
   return False
