@@ -47,5 +47,6 @@ public:
               const thalamus::vector<std::string_view> &) override;
   bool has_analog_data() const override;
   size_t modalities() const override;
+  void predrop(std::function<void()> drop_ready) override;
 };
 } // namespace thalamus

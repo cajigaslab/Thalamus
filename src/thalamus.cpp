@@ -187,7 +187,7 @@ int main(int argc, char **argv) {
                    "Address of Thalamus instance that manages state")
                    ("ext,e", boost::program_options::value<std::vector<std::string>>()->multitoken(), "Shared libraries to extend thalamus");
   desc.add_options()("log-level,l", boost::program_options::value<std::string>()->default_value("info"), "Set log level");
-  desc.add_options()("ip", boost::program_options::value<std::string>()->default_value("0.0.0.0"), "IP to bind to");
+  desc.add_options()("ip", boost::program_options::value<std::string>()->default_value("127.0.0.1"), "IP to bind to");
   desc.add_options()("http-port", boost::program_options::value<uint16_t>()->default_value(50053), "Port to run Websocket server on");
   desc.add_options()("crashpad", "Enable crash data collection");
   desc.add_options()("no-gpu", "Disable GPU usage");
