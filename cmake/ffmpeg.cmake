@@ -76,6 +76,7 @@ else()
   if(SANITIZER)
     list(APPEND FFMPEG_EXTRA_FLAGS --disable-asm)
   endif()
+  list(APPEND FFMPEG_EXTRA_FLAGS --disable-vulkan)
 
   add_custom_command(
     OUTPUT "${ffmpeg_BINARY_DIR}/$<IF:$<CONFIG:Debug>,Debug,Release>/Makefile"
