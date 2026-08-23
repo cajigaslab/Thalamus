@@ -85,6 +85,7 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument('--ext', help='Extension Module')
   parser.add_argument('--wait-for-pipeline', action='store_true', help='Don\'t start pipeline, wait for something else to launch it')
   parser.add_argument('--no-gpu', action='store_true', help='Disable pipeline GPU usage')
+  parser.add_argument('--open', action='store_true', help='Bind GRPC servers to 0.0.0.0 instead of localhost only')
   return parser.parse_args(self_args[1:])
 
 async def async_main() -> None:
@@ -149,7 +150,7 @@ async def async_main() -> None:
   server = grpc.aio.server()
   servicer = ThalamusServicer(config)
   thalamus_pb2_grpc.add_ThalamusServicer_to_server(servicer, server)
-  listen_addr = f'[::]:{arguments.ui_port}'
+  listen_addr = f'[::]:{arguments.ui_port}' if arguments.open else f'localhost:{arguments.ui_port}'
 
   serivce_names = [
     thalamus_pb2.DESCRIPTOR.services_by_name["Thalamus"].full_name,
@@ -179,6 +180,8 @@ async def async_main() -> None:
     command = command + ('--crashpad',)
   if arguments.no_gpu:
     command = command + ('--no-gpu',)
+  if arguments.open:
+    command = command + ('--ip', '0.0.0.0')
   LOGGER.info('COMMAND %s', ' '.join(command))
   if not arguments.wait_for_pipeline:
     bmbi_native_proc = await asyncio.create_subprocess_exec(*command)
@@ -188,7 +191,7 @@ async def async_main() -> None:
   dotnet_proc = None
   if dotnet_filename.exists():
     if dotnet_runtime.is_available():
-      dotnet_command = str(dotnet_filename), '--port', str(arguments.dotnet_port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else [])
+      dotnet_command = str(dotnet_filename), '--port', str(arguments.dotnet_port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else []), *(['--open'] if arguments.open else [])
       dotnet_proc = await asyncio.create_subprocess_exec(*dotnet_command)
       create_task_with_exc_handling(proc_watcher('dotnet.exe', dotnet_proc))
     else:
