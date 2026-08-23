@@ -1,6 +1,9 @@
 #include <thalamus/tracing.hpp>
 #include <thalamus/oculomatic_node.hpp>
 #include <thalamus/thread_pool.hpp>
+#include <thalamus/image_viewer.hpp>
+#include <condition_variable>
+#include <mutex>
 
 #include <thalamus/modalities_util.hpp>
 
@@ -54,6 +57,11 @@ struct OculomaticNode::Impl {
   size_t next_input_frame = 0;
   size_t next_output_frame = 0;
   std::set<cv::Mat *> mat_pool;
+  std::shared_ptr<ImageViewer> viewer;
+  std::weak_ptr<ImageViewer> viewer_weak;
+  int outstanding_jobs = 0;
+  std::mutex predrop_mutex;
+  std::condition_variable predrop_condition;
 
   struct Result {
     double x;
@@ -186,6 +194,10 @@ struct OculomaticNode::Impl {
       cv::extractChannel(cv::Mat(height, width, CV_8UC3, data), in, 0);
     }
     TRACE_EVENT_END("thalamus");
+    {
+      std::lock_guard<std::mutex> lock(predrop_mutex);
+      ++outstanding_jobs;
+    }
     pool.push([width, event_id, height, frame_id = next_input_frame++,
                current_need_recenter, out, sample_time, frame_interval,
                current_render_thresholded = this->render_thresholded,
@@ -199,6 +211,10 @@ struct OculomaticNode::Impl {
                this_centering_offset = this->centering_offset,
                &this_ref_centering_pix = this->centering_pix,
                &this_ref_centering_offset = this->centering_offset,
+               &this_viewer_weak = this->viewer_weak,
+               &this_outstanding_jobs = this->outstanding_jobs,
+               &this_predrop_mutex = this->predrop_mutex,
+               &this_predrop_condition = this->predrop_condition,
                this_x_gain = this->x_gain, this_y_gain = this->y_gain,
                this_computing = this->computing, this_min_area = this->min_area,
                this_max_area = this->max_area, this_invert_x = this->invert_x,
@@ -234,7 +250,11 @@ struct OculomaticNode::Impl {
                                             &this_next_output_frame,
                                             &this_output_frames, &this_mat_pool,
                                             event_id, out, frame_id, this_outer,
-                                            frame_interval, sample_time] {
+                                            frame_interval, sample_time,
+                                            &this_viewer_weak,
+                                            &this_outstanding_jobs,
+                                            &this_predrop_mutex,
+                                            &this_predrop_condition] {
           TRACE_EVENT("thalamus", "OculomaticNode Post Main",
                       perfetto::TerminatingFlow::ProcessScoped(event_id));
           this_output_frames[frame_id] =
@@ -247,11 +267,19 @@ struct OculomaticNode::Impl {
               this_current_result = i->second;
               TRACE_EVENT("thalamus", "OculomaticNode::ready");
               this_outer->ready(this_outer.get());
+              if (auto local = this_viewer_weak.lock()) {
+                local->update(static_cast<OculomaticNode *>(this_outer.get()));
+              }
               i = this_output_frames.erase(i);
             } else {
               ++i;
             }
           }
+          {
+            std::lock_guard<std::mutex> lock(this_predrop_mutex);
+            --this_outstanding_jobs;
+          }
+          this_predrop_condition.notify_all();
         });
         return;
       }
@@ -344,7 +372,9 @@ struct OculomaticNode::Impl {
           this_io_context,
           [&this_current_result, &this_next_output_frame, &this_output_frames,
            &this_mat_pool, out, frame_id, diameter, gaze, this_outer,
-           frame_interval, event_id, sample_time] {
+           frame_interval, event_id, sample_time, &this_viewer_weak,
+           &this_outstanding_jobs, &this_predrop_mutex,
+           &this_predrop_condition] {
             TRACE_EVENT("thalamus", "OculomaticNode Post Main",
                         perfetto::TerminatingFlow::ProcessScoped(event_id));
             this_output_frames[frame_id] =
@@ -358,11 +388,19 @@ struct OculomaticNode::Impl {
                 this_current_result = i->second;
                 TRACE_EVENT("thalamus", "OculomaticNode::ready");
                 this_outer->ready(this_outer.get());
+                if (auto local = this_viewer_weak.lock()) {
+                  local->update(static_cast<OculomaticNode *>(this_outer.get()));
+                }
                 i = this_output_frames.erase(i);
               } else {
                 ++i;
               }
             }
+            {
+              std::lock_guard<std::mutex> lock(this_predrop_mutex);
+              --this_outstanding_jobs;
+            }
+            this_predrop_condition.notify_all();
           });
     });
   }
@@ -406,6 +444,15 @@ struct OculomaticNode::Impl {
       else {
         centering_pix.second = double(std::get<int64_t>(v));
       }
+    } else if (key_str == "View") {
+      if (std::get<bool>(v)) {
+        if (!viewer) {
+          viewer = ImageViewer::create(graph, io_context, state, outer);
+          viewer_weak = viewer;
+        }
+      } else {
+        viewer.reset();
+      }
     } else if (key_str == "Source") {
       std::string source_str = state->at("Source");
       auto token = std::string(absl::StripAsciiWhitespace(source_str));
@@ -424,6 +471,26 @@ struct OculomaticNode::Impl {
         }
       });
     }
+  }
+
+  void predrop(std::function<void()> outer_drop_ready) {
+    state_connection.disconnect();
+    source_connection.disconnect();
+    // Frames already handed to the thread pool may still be mid-flight and
+    // touch the ImageViewer/NodeGraph after this call returns, so wait for
+    // them to finish (off the io_context thread) before tearing down the
+    // viewer and signaling drop_ready.
+    pool.push([this, outer_drop_ready] {
+      std::unique_lock<std::mutex> lock(predrop_mutex);
+      predrop_condition.wait(lock, [this] { return outstanding_jobs == 0; });
+      lock.unlock();
+      boost::asio::post(io_context, [this, outer_drop_ready] {
+        viewer.reset();
+        if (outer_drop_ready) {
+          outer_drop_ready();
+        }
+      });
+    });
   }
 };
 
@@ -548,6 +615,7 @@ boost::json::value OculomaticNode::process(const boost::json::value & request) {
 
   auto object = request.as_object();
   if((object.contains("type") && object["type"] == "recenter") || object.contains("keydown")) {
+    impl->graph->log("Oculomatic Recenter");
     impl->need_recenter = true;
     return boost::json::value();
   }
@@ -561,6 +629,10 @@ boost::json::value OculomaticNode::process(const boost::json::value & request) {
 
 size_t OculomaticNode::modalities() const {
   return infer_modalities<OculomaticNode>();
+}
+
+void OculomaticNode::predrop(std::function<void()> drop_ready) {
+  impl->predrop(drop_ready);
 }
 
 } // namespace thalamus

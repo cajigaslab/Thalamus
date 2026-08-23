@@ -205,7 +205,11 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
   std::function<void()> drop_ready;
 
   ExtNode(ThalamusNode *_node, ThalamusNodeFactory *_factory, ThalamusAPI *_api)
-      : node(_node), factory(_factory), api(_api) {}
+      : node(_node), factory(_factory), api(_api) {
+    if(node->signals_offmain) {
+      ready_multithreaded.emplace();
+    }
+  }
   ~ExtNode() override;
 
   void predrop(std::function<void()> on_drop_ready) override {

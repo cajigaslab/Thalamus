@@ -148,6 +148,7 @@ extern "C" {
     void* plugin_impl;
     void (*process)(struct ThalamusNode*, struct ThalamusRequestHandle*, struct ThalamusJson*);
     void (*predrop)(struct ThalamusNode*);
+    uint8_t signals_offmain;
   };
 
   struct ThalamusAnalogNode {
