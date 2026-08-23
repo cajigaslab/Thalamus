@@ -23,6 +23,15 @@
 #include <texture.vert.spv.h>
 #include <texture.frag.spv.h>
 
+// Must live at global scope, not inside namespace thalamus -- plugin.h
+// forward-declares THALAMUS_SDL_EventSubscription at global scope (inside
+// extern "C"), and image_viewer.hpp's declarations resolve to that global
+// type. Defining the struct body inside namespace thalamus would silently
+// create a distinct thalamus::THALAMUS_SDL_EventSubscription instead.
+struct THALAMUS_SDL_EventSubscription {
+  std::function<void(THALAMUS_SDL_Event*)> callback;
+};
+
 namespace thalamus {
 
 static uint32_t findMemType(VkPhysicalDevice phys, uint32_t bits, VkMemoryPropertyFlags props) {
@@ -137,6 +146,21 @@ static void write_geometry(const ObservableDictPtr &state, int x, int y,
   }
   boost::json::array geometry{x, y, w, h};
   (*state)["view_geometry"].assign(ObservableCollection::from_json(geometry), [] {});
+}
+
+// Returns the number of tightly-packed bytes per pixel for the formats
+// ImageViewer knows how to display, or -1 for formats it doesn't (yet)
+// support (e.g. the YUV variants).
+static int channels_for_format(ImageNode::Format format) {
+  switch (format) {
+    case ImageNode::Format::Gray: return 1;
+    case ImageNode::Format::RGB: return 3;
+    case ImageNode::Format::YUYV422:
+    case ImageNode::Format::YUV420P:
+    case ImageNode::Format::YUVJ420P:
+      return -1;
+  }
+  return -1;
 }
 
 // --- Input event conversion (SDL -> JS-style input events) ---
@@ -394,6 +418,7 @@ struct ImageViewer::Impl {
   static constexpr int MAX_FRAMES = 2;
 
   uint32_t tex_w[MAX_FRAMES] = {}, tex_h[MAX_FRAMES] = {};
+  int tex_channels[MAX_FRAMES] = {};
   VkImage tex_image[MAX_FRAMES]{};
   VkDeviceMemory tex_mem[MAX_FRAMES]{};
   VkImageView tex_view[MAX_FRAMES]{};
@@ -516,10 +541,15 @@ struct ImageViewer::Impl {
     if (tex_mem[slot]    != VK_NULL_HANDLE) { vkFreeMemory(dev, tex_mem[slot], nullptr);         tex_mem[slot]    = VK_NULL_HANDLE; }
   }
 
-  void buildTexture(int slot, uint32_t w, uint32_t h) {
+  // channels is the number of bytes per pixel stored in the texture itself
+  // (not necessarily the source plane's channel count -- RGB source data is
+  // expanded to RGBA before upload since VK_FORMAT_R8G8B8_UNORM sampling
+  // support isn't guaranteed).
+  void buildTexture(int slot, uint32_t w, uint32_t h, int channels) {
     destroyTexture(slot);
-    tex_w[slot] = w; tex_h[slot] = h;
-    VkDeviceSize size = static_cast<VkDeviceSize>(w) * h;
+    tex_w[slot] = w; tex_h[slot] = h; tex_channels[slot] = channels;
+    VkDeviceSize size = static_cast<VkDeviceSize>(w) * h * static_cast<uint32_t>(channels);
+    VkFormat format = channels == 1 ? VK_FORMAT_R8_UNORM : VK_FORMAT_R8G8B8A8_UNORM;
 
     makeBuffer(dev, phys, size,
                VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
@@ -531,7 +561,7 @@ struct ImageViewer::Impl {
     VkImageCreateInfo ici{};
     ici.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     ici.imageType = VK_IMAGE_TYPE_2D;
-    ici.format = VK_FORMAT_R8_UNORM;
+    ici.format = format;
     ici.extent = {w, h, 1};
     ici.mipLevels = 1; ici.arrayLayers = 1;
     ici.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -558,9 +588,12 @@ struct ImageViewer::Impl {
     VkImageViewCreateInfo ivCI{};
     ivCI.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     ivCI.image = tex_image[slot]; ivCI.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    ivCI.format = VK_FORMAT_R8_UNORM;
-    ivCI.components = {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_R,
-                        VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_ONE};
+    ivCI.format = format;
+    ivCI.components = channels == 1
+        ? VkComponentMapping{VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_R,
+                              VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_ONE}
+        : VkComponentMapping{VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,
+                              VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY};
     ivCI.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
     vkCreateImageView(dev, &ivCI, nullptr, &tex_view[slot]);
 
@@ -573,10 +606,28 @@ struct ImageViewer::Impl {
     vkUpdateDescriptorSets(dev, 1, &dset, 0, nullptr);
   }
 
-  void uploadTexture(int slot, VkCommandBuffer cb, ImageNode::Plane plane, uint32_t w, uint32_t h) {
-    if (w != tex_w[slot] || h != tex_h[slot]) buildTexture(slot, w, h);
+  // src_channels is the pixel format of `plane`: 1 for grayscale, 3 for
+  // tightly-packed RGB.
+  void uploadTexture(int slot, VkCommandBuffer cb, ImageNode::Plane plane, uint32_t w, uint32_t h,
+                     int src_channels) {
+    int channels = src_channels == 1 ? 1 : 4;
+    if (w != tex_w[slot] || h != tex_h[slot] || channels != tex_channels[slot]) {
+      buildTexture(slot, w, h, channels);
+    }
 
-    std::memcpy(stage_mapped[slot], plane.data(), static_cast<size_t>(w) * h);
+    if (src_channels == 1) {
+      std::memcpy(stage_mapped[slot], plane.data(), static_cast<size_t>(w) * h);
+    } else {
+      auto* src = plane.data();
+      auto* dst = static_cast<unsigned char*>(stage_mapped[slot]);
+      size_t pixel_count = static_cast<size_t>(w) * h;
+      for (size_t i = 0; i < pixel_count; ++i) {
+        dst[4 * i + 0] = src[3 * i + 0];
+        dst[4 * i + 1] = src[3 * i + 1];
+        dst[4 * i + 2] = src[3 * i + 2];
+        dst[4 * i + 3] = 255;
+      }
+    }
 
     recordBarrier(cb, tex_image[slot], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                   VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
@@ -595,13 +646,35 @@ struct ImageViewer::Impl {
 
 static std::map<SDL_WindowID, std::weak_ptr<ImageViewer>>* instances = nullptr;
 
+static std::vector<std::unique_ptr<THALAMUS_SDL_EventSubscription>>* subscriptions = nullptr;
+
 void ImageViewer::setup() {
   instances = new std::map<SDL_WindowID, std::weak_ptr<ImageViewer>>();
+  subscriptions = new std::vector<std::unique_ptr<THALAMUS_SDL_EventSubscription>>();
 }
 
 void ImageViewer::teardown() {
   delete instances;
   instances = nullptr;
+  delete subscriptions;
+  subscriptions = nullptr;
+}
+
+struct THALAMUS_SDL_EventSubscription* ImageViewer::subscribe(std::function<void(THALAMUS_SDL_Event*)> callback) {
+  THALAMUS_ASSERT(subscriptions != nullptr, "ImageViewer::setup() was not called");
+  subscriptions->push_back(std::make_unique<THALAMUS_SDL_EventSubscription>(THALAMUS_SDL_EventSubscription{std::move(callback)}));
+  return subscriptions->back().get();
+}
+
+void ImageViewer::unsubscribe(struct THALAMUS_SDL_EventSubscription* subscription) {
+  if (!subscriptions) {
+    return;
+  }
+  auto i = std::find_if(subscriptions->begin(), subscriptions->end(),
+                        [&](const std::unique_ptr<THALAMUS_SDL_EventSubscription>& s) { return s.get() == subscription; });
+  if (i != subscriptions->end()) {
+    subscriptions->erase(i);
+  }
 }
 
 ImageViewer::ImageViewer(NodeGraph* graph, boost::asio::io_context&,
@@ -888,6 +961,9 @@ void ImageViewer::do_poll() {
   }
 }
 
+static_assert(sizeof(SDL_Event) == sizeof(THALAMUS_SDL_Event),
+              "THALAMUS_SDL_Event has drifted out of sync with SDL_Event -- update plugin_window_event.h");
+
 void ImageViewer::poll_events() {
   THALAMUS_ASSERT(instances != nullptr, "ImageViewer::setup() was not called");
 
@@ -900,6 +976,10 @@ void ImageViewer::poll_events() {
 
   SDL_Event event;
   while (SDL_PollEvent(&event)) {
+    for (auto& subscription : *subscriptions) {
+      subscription->callback(reinterpret_cast<THALAMUS_SDL_Event*>(&event));
+    }
+
     if (event.type == SDL_EVENT_QUIT) {
       for (auto& [id, w] : *instances)
         if (auto iv = w.lock())
@@ -933,6 +1013,9 @@ void ImageViewer::update(ImageNode* node) {
   bool have_new_data = node && node->has_image_data();
   if (!have_new_data) return;  // nothing to draw yet
 
+  int src_channels = channels_for_format(node->format());
+  if (src_channels < 0) return;  // unsupported pixel format
+
   std::unique_lock<std::mutex> lock(impl->swapchain_mutex);
 
   uint32_t imgIdx;
@@ -955,7 +1038,7 @@ void ImageViewer::update(ImageNode* node) {
 
   if (have_new_data) {
     impl->uploadTexture(f, cb, node->plane(0), static_cast<uint32_t>(node->width()),
-                         static_cast<uint32_t>(node->height()));
+                         static_cast<uint32_t>(node->height()), src_channels);
   }
 
   VkClearValue clear{};
