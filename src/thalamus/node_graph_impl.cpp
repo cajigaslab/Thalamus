@@ -602,6 +602,15 @@ struct NodeGuard {
   }
 };
 
+
+static std::function<void()> to_closure(ThalamusPostCallback callback, void* data) {
+  if(callback) {
+    return [callback, data] { callback(data); };
+  } else {
+    return []{};
+  }
+}
+
 struct ThalamusAPIImpl {
   static std::map<ObservableCollection::Value, ThalamusState*>* cpp_to_c;
   static std::map<ThalamusState*, ObservableCollection::Value>* c_to_cpp;
@@ -934,21 +943,30 @@ struct ThalamusAPIImpl {
     }
   }
 
-  template <typename T1, typename T2> static void assign_state(struct ThalamusState* state, T1 key, T2 value) {
+  template <typename T1, typename T2> static void assign_state(struct ThalamusState* state, T1 key, T2 value, std::function<void()> callback = nullptr) {
     if(std::holds_alternative<ObservableDictPtr>(state->value)) {
       auto coll = std::get<ObservableDictPtr>(state->value);
-      (*coll)[key].assign(value);
+      (*coll)[key].assign(value, callback);
     } else if(std::holds_alternative<ObservableListPtr>(state->value)) {
       if constexpr (std::is_integral<T1>::value) {
         auto coll = std::get<ObservableListPtr>(state->value);
         if(size_t(key) < coll->size()) {
-          (*coll)[size_t(key)].assign(value);
+          (*coll)[size_t(key)].assign(value, callback);
         } else {
           THALAMUS_ABORT("Index out of bounds");
         }
       } else {
         THALAMUS_ABORT("Can only index list with integer");
       }
+    } else {
+      THALAMUS_ABORT("Attempt to recap a value that is neither a dict or list");
+    }
+  }
+
+  template <typename T1> static void push_state(struct ThalamusState* state, T1 value, std::function<void()> callback) {
+    if(std::holds_alternative<ObservableListPtr>(state->value)) {
+      auto coll = std::get<ObservableListPtr>(state->value);
+      coll->push_back(value, callback);
     } else {
       THALAMUS_ABORT("Attempt to recap a value that is neither a dict or list");
     }
@@ -990,6 +1008,81 @@ struct ThalamusAPIImpl {
   }
   static void state_set_at_index_bool(struct ThalamusState* state, int64_t key, char value) {
     assign_state(state, key, value != 0);
+  }
+
+  static void state_set_at_name_state_with_callback(struct ThalamusState* state, const ThalamusCharSpan* key, struct ThalamusState* value, ThalamusPostCallback callback, void* data) {
+    auto closure = to_closure(callback, data);
+    assign_state(state, std::string(key->data, key->size), value->value, closure);
+  }
+  static void state_set_at_name_string_with_callback(struct ThalamusState* state, const ThalamusCharSpan* key, const ThalamusCharSpan* value, ThalamusPostCallback callback, void* data) {
+    auto closure = to_closure(callback, data);
+    assign_state(state, std::string(key->data, key->size), std::string(value->data, value->size), closure);
+  }
+  static void state_set_at_name_int_with_callback(struct ThalamusState* state, const ThalamusCharSpan* key, int64_t value, ThalamusPostCallback callback, void* data) {
+    auto closure = to_closure(callback, data);
+    assign_state(state, std::string(key->data, key->size), value, closure);
+  }
+  static void state_set_at_name_float_with_callback(struct ThalamusState* state, const ThalamusCharSpan* key, double value, ThalamusPostCallback callback, void* data) {
+    auto closure = to_closure(callback, data);
+    assign_state(state, std::string(key->data, key->size), value, closure);
+  }
+  static void state_set_at_name_null_with_callback(struct ThalamusState* state, const ThalamusCharSpan* key, ThalamusPostCallback callback, void* data) {
+    auto closure = to_closure(callback, data);
+    assign_state(state, std::string(key->data, key->size), std::monostate(), closure);
+  }
+  static void state_set_at_name_bool_with_callback(struct ThalamusState* state, const ThalamusCharSpan* key, char value, ThalamusPostCallback callback, void* data) {
+    auto closure = to_closure(callback, data);
+    assign_state(state, std::string(key->data, key->size), value != 0, closure);
+  }
+
+  static void state_set_at_index_state_with_callback(struct ThalamusState* state, int64_t key, struct ThalamusState* value, ThalamusPostCallback callback, void* data) {
+    auto closure = to_closure(callback, data);
+    assign_state(state, key, value->value, closure);
+  }
+  static void state_set_at_index_string_with_callback(struct ThalamusState* state, int64_t key, const ThalamusCharSpan* value, ThalamusPostCallback callback, void* data) {
+    auto closure = to_closure(callback, data);
+    assign_state(state, key, std::string(value->data, value->size), closure);
+  }
+  static void state_set_at_index_int_with_callback(struct ThalamusState* state, int64_t key, int64_t value, ThalamusPostCallback callback, void* data) {
+    auto closure = to_closure(callback, data);
+    assign_state(state, key, value, closure);
+  }
+  static void state_set_at_index_float_with_callback(struct ThalamusState* state, int64_t key, double value, ThalamusPostCallback callback, void* data) {
+    auto closure = to_closure(callback, data);
+    assign_state(state, key, value, closure);
+  }
+  static void state_set_at_index_null_with_callback(struct ThalamusState* state, int64_t key, ThalamusPostCallback callback, void* data) {
+    auto closure = to_closure(callback, data);
+    assign_state(state, key, std::monostate(), closure);
+  }
+  static void state_set_at_index_bool_with_callback(struct ThalamusState* state, int64_t key, char value, ThalamusPostCallback callback, void* data) {
+    auto closure = to_closure(callback, data);
+    assign_state(state, key, value != 0, closure);
+  }
+
+  static void state_push_state_with_callback(struct ThalamusState* state, struct ThalamusState* value, ThalamusPostCallback callback, void* data) {
+    auto closure = to_closure(callback, data);
+    push_state(state, value->value, closure);
+  }
+  static void state_push_string_with_callback(struct ThalamusState* state, const ThalamusCharSpan* value, ThalamusPostCallback callback, void* data) {
+    auto closure = to_closure(callback, data);
+    push_state(state, std::string(value->data, value->size), closure);
+  }
+  static void state_push_int_with_callback(struct ThalamusState* state, int64_t value, ThalamusPostCallback callback, void* data) {
+    auto closure = to_closure(callback, data);
+    push_state(state, value, closure);
+  }
+  static void state_push_float_with_callback(struct ThalamusState* state, double value, ThalamusPostCallback callback, void* data) {
+    auto closure = to_closure(callback, data);
+    push_state(state, value, closure);
+  }
+  static void state_push_null_with_callback(struct ThalamusState* state, ThalamusPostCallback callback, void* data) {
+    auto closure = to_closure(callback, data);
+    push_state(state, std::monostate(), closure);
+  }
+  static void state_push_bool_with_callback(struct ThalamusState* state, char value, ThalamusPostCallback callback, void* data) {
+    auto closure = to_closure(callback, data);
+    push_state(state, value != 0, closure);
   }
 
   static struct ThalamusState* state_parent(struct ThalamusState* state) {
@@ -1467,6 +1560,17 @@ struct ThalamusAPIImpl {
   static uint8_t sdl_hide_cursor() {
     return SDL_HideCursor() ? 1 : 0;
   }
+
+  static struct ThalamusState* state_make_dict() {
+    auto dict = ObservableCollection::Value(std::make_shared<ObservableDict>());
+    auto ref = get_state_ref(dict);
+    return ref;
+  }
+  static struct ThalamusState* state_make_list() {
+    auto dict = ObservableCollection::Value(std::make_shared<ObservableList>());
+    auto ref = get_state_ref(dict);
+    return ref;
+  }
 };
 
 std::map<ObservableCollection::Value, ThalamusState*>* ThalamusAPIImpl::cpp_to_c = nullptr;
@@ -1616,6 +1720,7 @@ public:
     thalamus_api.state_set_at_index_float = ThalamusAPIImpl::state_set_at_index_float;
     thalamus_api.state_set_at_index_null = ThalamusAPIImpl::state_set_at_index_null;
     thalamus_api.state_set_at_index_bool = ThalamusAPIImpl::state_set_at_index_bool;
+
     thalamus_api.io_context_post = ThalamusAPIImpl::io_context_post;
     thalamus_api.trace_event_begin = ThalamusAPIImpl::trace_event_begin;
     thalamus_api.trace_event_end = ThalamusAPIImpl::trace_event_end;
@@ -1708,7 +1813,31 @@ public:
     thalamus_api.sdl_show_cursor = ThalamusAPIImpl::sdl_show_cursor;
     thalamus_api.sdl_hide_cursor = ThalamusAPIImpl::sdl_hide_cursor;
 
-    thalamus_api.version = 111;
+    thalamus_api.state_make_dict = ThalamusAPIImpl::state_make_dict;
+    thalamus_api.state_make_list = ThalamusAPIImpl::state_make_list;
+
+    thalamus_api.state_set_at_name_state_with_callback = ThalamusAPIImpl::state_set_at_name_state_with_callback;
+    thalamus_api.state_set_at_name_string_with_callback = ThalamusAPIImpl::state_set_at_name_string_with_callback;
+    thalamus_api.state_set_at_name_int_with_callback = ThalamusAPIImpl::state_set_at_name_int_with_callback;
+    thalamus_api.state_set_at_name_float_with_callback = ThalamusAPIImpl::state_set_at_name_float_with_callback;
+    thalamus_api.state_set_at_name_null_with_callback = ThalamusAPIImpl::state_set_at_name_null_with_callback;
+    thalamus_api.state_set_at_name_bool_with_callback = ThalamusAPIImpl::state_set_at_name_bool_with_callback;
+
+    thalamus_api.state_set_at_index_state_with_callback = ThalamusAPIImpl::state_set_at_index_state_with_callback;
+    thalamus_api.state_set_at_index_string_with_callback = ThalamusAPIImpl::state_set_at_index_string_with_callback;
+    thalamus_api.state_set_at_index_int_with_callback = ThalamusAPIImpl::state_set_at_index_int_with_callback;
+    thalamus_api.state_set_at_index_float_with_callback = ThalamusAPIImpl::state_set_at_index_float_with_callback;
+    thalamus_api.state_set_at_index_null_with_callback = ThalamusAPIImpl::state_set_at_index_null_with_callback;
+    thalamus_api.state_set_at_index_bool_with_callback = ThalamusAPIImpl::state_set_at_index_bool_with_callback;
+
+    thalamus_api.state_push_state_with_callback = ThalamusAPIImpl::state_push_state_with_callback;
+    thalamus_api.state_push_string_with_callback = ThalamusAPIImpl::state_push_string_with_callback;
+    thalamus_api.state_push_int_with_callback = ThalamusAPIImpl::state_push_int_with_callback;
+    thalamus_api.state_push_float_with_callback = ThalamusAPIImpl::state_push_float_with_callback;
+    thalamus_api.state_push_null_with_callback = ThalamusAPIImpl::state_push_null_with_callback;
+    thalamus_api.state_push_bool_with_callback = ThalamusAPIImpl::state_push_bool_with_callback;
+
+    thalamus_api.version = 131;
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},

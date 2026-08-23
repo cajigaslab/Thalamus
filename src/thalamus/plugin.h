@@ -395,6 +395,30 @@ extern "C" {
     void (*sdl_destroy_cursor)(struct THALAMUS_SDL_Cursor* cursor); // 109
     uint8_t (*sdl_show_cursor)(); // 110
     uint8_t (*sdl_hide_cursor)(); // 111
+                                  
+    struct ThalamusState* (*state_make_dict)(); // 112
+    struct ThalamusState* (*state_make_list)(); // 113
+                                                                     
+    void (*state_set_at_name_state_with_callback)(struct ThalamusState*, const struct ThalamusCharSpan*, struct ThalamusState*, ThalamusPostCallback, void*); // 114
+    void (*state_set_at_name_string_with_callback)(struct ThalamusState*, const struct ThalamusCharSpan*, const struct ThalamusCharSpan*, ThalamusPostCallback, void*); // 115
+    void (*state_set_at_name_int_with_callback)(struct ThalamusState*, const struct ThalamusCharSpan*, int64_t, ThalamusPostCallback, void*); // 116
+    void (*state_set_at_name_float_with_callback)(struct ThalamusState*, const struct ThalamusCharSpan*, double, ThalamusPostCallback, void*); // 117
+    void (*state_set_at_name_null_with_callback)(struct ThalamusState*, const struct ThalamusCharSpan*, ThalamusPostCallback, void*); // 118
+    void (*state_set_at_name_bool_with_callback)(struct ThalamusState*, const struct ThalamusCharSpan*, char, ThalamusPostCallback, void*); // 119
+
+    void (*state_set_at_index_state_with_callback)(struct ThalamusState*, int64_t, struct ThalamusState*, ThalamusPostCallback, void*); // 120
+    void (*state_set_at_index_string_with_callback)(struct ThalamusState*, int64_t, const struct ThalamusCharSpan*, ThalamusPostCallback, void*); // 121
+    void (*state_set_at_index_int_with_callback)(struct ThalamusState*, int64_t, int64_t, ThalamusPostCallback, void*); // 122
+    void (*state_set_at_index_float_with_callback)(struct ThalamusState*, int64_t, double, ThalamusPostCallback, void*); // 123
+    void (*state_set_at_index_null_with_callback)(struct ThalamusState*, int64_t, ThalamusPostCallback, void*); // 124
+    void (*state_set_at_index_bool_with_callback)(struct ThalamusState*, int64_t, char, ThalamusPostCallback, void*); // 125
+
+    void (*state_push_state_with_callback)(struct ThalamusState*, struct ThalamusState*, ThalamusPostCallback, void*); // 126
+    void (*state_push_string_with_callback)(struct ThalamusState*, const struct ThalamusCharSpan*, ThalamusPostCallback, void*); // 127
+    void (*state_push_int_with_callback)(struct ThalamusState*, int64_t, ThalamusPostCallback, void*); // 128
+    void (*state_push_float_with_callback)(struct ThalamusState*, double, ThalamusPostCallback, void*); // 129
+    void (*state_push_null_with_callback)(struct ThalamusState*, ThalamusPostCallback, void*); // 130
+    void (*state_push_bool_with_callback)(struct ThalamusState*, char, ThalamusPostCallback, void*); // 131
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories_t)(struct ThalamusAPI*);
