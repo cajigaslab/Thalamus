@@ -51,6 +51,7 @@ from ..resources import get_path
 from .tasks import add_tasks
 
 from .. import usersettings
+from .. import dotnet_runtime
 
 UNHANDLED_EXCEPTION: typing.List[Exception] = []
 
@@ -87,6 +88,7 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument('-c', '--config', help='Config file location')
   parser.add_argument('-p', '--port', type=int, default=50050, help='GRPC port')
   parser.add_argument('-u', '--ui-port', type=int, default=50051, help='UI GRPC port')
+  parser.add_argument('-d', '--dotnet-port', type=int, default=50052, help='dotnet GRPC port')
   parser.add_argument('-e', '--recorder-url', help='Recorder URL')
   parser.add_argument('-o', '--ophanim-url', help='Ophanim URL')
   parser.add_argument('-l', '--log-level', choices=['trace', 'debug', 'info', 'warning', 'error', 'fatal'], default='info', help='Log level')
@@ -223,11 +225,14 @@ async def async_main() -> None:
       create_task_with_exc_handling(proc_watcher('native.exe', bmbi_native_proc))
 
   dotnet_proc = None
-  if False:
-  #if dotnet_filename.exists():
-    dotnet_command = str(dotnet_filename), '--port', str(arguments.dotnet_port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else [])
-    dotnet_proc = await asyncio.create_subprocess_exec(*dotnet_command)
-    create_task_with_exc_handling(proc_watcher('dotnet.exe', dotnet_proc))
+  if dotnet_filename.exists():
+    if dotnet_runtime.is_available():
+      dotnet_command = str(dotnet_filename), '--port', str(arguments.dotnet_port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else [])
+      dotnet_proc = await asyncio.create_subprocess_exec(*dotnet_command)
+      create_task_with_exc_handling(proc_watcher('dotnet.exe', dotnet_proc))
+    else:
+      LOGGER.warning('dotnet.exe found but the required .NET runtime is missing; skipping it')
+      usersettings.warn_dotnet_runtime_missing()
     
   channel = grpc.aio.insecure_channel(f'localhost:{arguments.port}')
   await channel.channel_ready()
