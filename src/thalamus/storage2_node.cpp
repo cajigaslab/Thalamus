@@ -228,7 +228,7 @@ struct Storage2Node::Impl {
             body->mutable_ulong_data()->Add(data.begin(), data.end());
             span->set_end(uint32_t(body->mutable_ulong_data()->size()));
             body->set_is_ulong_data(true);
-          }  else if constexpr (is_short || is_int) {
+          } else if constexpr (is_short || is_int) {
             span->set_begin(uint32_t(body->mutable_int_data()->size()));
             body->mutable_int_data()->Add(data.begin(), data.end());
             span->set_end(uint32_t(body->mutable_int_data()->size()));
@@ -1413,8 +1413,9 @@ struct Storage2Node::Impl {
           }
           if (record_time_series && node_cast<AnalogNode *>(locked_source.get()) != nullptr) {
             auto analog_source = node_cast<AnalogNode *>(locked_source.get());
-            auto analog_source_connection = locked_source->ready.connect(
-                std::bind(&Impl::on_data, this, _1, node, analog_source, matrics_index));
+
+            auto analog_source_connection = node::connect_ready_multithreaded(
+                locked_source.get(), std::bind(&Impl::on_data, this, _1, node, analog_source, matrics_index));
             source_connections.push_back(std::move(analog_source_connection));
           }
           if (record_image && node_cast<ImageNode *>(locked_source.get()) != nullptr) {
