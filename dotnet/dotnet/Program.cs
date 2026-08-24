@@ -52,10 +52,20 @@ Parser.Default.ParseArguments<Options>(args)
             //builder.WebHost.UseUrls($"http://{url}");
             builder.WebHost.ConfigureKestrel(options =>
             {
-                options.ListenAnyIP(o.Port, listenOptions =>
+                if (o.Open)
                 {
-                    listenOptions.Protocols = HttpProtocols.Http2;
-                });
+                    options.ListenAnyIP(o.Port, listenOptions =>
+                    {
+                        listenOptions.Protocols = HttpProtocols.Http2;
+                    });
+                }
+                else
+                {
+                    options.ListenLocalhost(o.Port, listenOptions =>
+                    {
+                        listenOptions.Protocols = HttpProtocols.Http2;
+                    });
+                }
             });
 
             var app = builder.Build();
@@ -85,4 +95,6 @@ public class Options
     public int Port { get; set; }
     [Option('t', "trace", Default = false, HelpText = "Enable Perfetto tracing")]
     public bool Trace { get; set; }
+    [Option("open", Default = false, HelpText = "Bind to 0.0.0.0 instead of localhost only")]
+    public bool Open { get; set; }
 }

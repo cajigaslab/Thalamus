@@ -130,11 +130,11 @@ namespace Thalamus
                                     throw new Exception("Couldn't apply change");
                                 }
                             }
-                            var text = JsonConvert.SerializeObject(root, Formatting.Indented, new JsonSerializerSettings
-                            {
-                                Converters = [new ObservableCollection.JsonConverter()]
-                            });
-                            Console.WriteLine(text);
+                            //var text = JsonConvert.SerializeObject(root, Formatting.Indented, new JsonSerializerSettings
+                            //{
+                            //    Converters = [new ObservableCollection.JsonConverter()]
+                            //});
+                            //Console.WriteLine(text);
                         }
                     }
                 }
