@@ -19,6 +19,10 @@ Properties
 * **Transform**: The current transform (3×3 matrix) applied to incoming points.  It
   is populated automatically by the calibration routine but can also be inspected
   directly.
+* **Null Threshold**: When the incoming raw ``X`` or ``Y`` value falls below this
+  threshold, the point is treated as a "no touch" reading and is passed through
+  unchanged instead of being run through the calibration transform.  Defaults to
+  ``-4``; lower it if your touch source's genuine range dips below that.
 
 Calibration
 -----------

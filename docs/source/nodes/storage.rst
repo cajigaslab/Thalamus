@@ -16,8 +16,10 @@ Properties
 * **Sources**: The nodes whose data is recorded.
 * **Output File**: The base name of the output file (the recording suffix is appended
   as with STORAGE2).
-* **Compress Analog**: Compress time-series data with zlib.
-* **Compress Video**: Compress image data with MPEG-4 video encoding.
+* **Compress Analog**: Compress time-series data with zlib.  Off by default.
+* **Compress Video**: Compress image data with MPEG-4 video encoding.  On by default
+  (as of 1.0.18) for new nodes -- uncheck it if you need raw, lossless frames instead
+  of smaller MPEG-4-compressed video.
 * **Running**: Begin recording.
 
 While running, the node reports its output queue depth (**Output Queue Bytes** /

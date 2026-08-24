@@ -53,6 +53,10 @@ Generators
      - Proxies a data stream from another Thalamus instance over gRPC.  See :doc:`remote`.
    * - ``SAMPLE_MONITOR``
      - Monitors node sample rates and alerts when they drift from expectation (diagnostic).  See :doc:`sample_monitor`.
+   * - ``JOYSTICK``
+     - Reads a 2-axis analog joystick over a serial connection and publishes normalized position channels.  See :doc:`joystick`.
+   * - ``SERIAL_TOUCH_SCREEN``
+     - Reads raw touch coordinates directly from a serial-attached touch controller.  See :doc:`serial_touch_screen`.
 
 Consumers
 ---------

@@ -41,7 +41,14 @@ You should now be able to run the pipeline program and see a window appear with 
 
 .. |empty| image:: Thalamus_EMPTY.png
    :width: 45%
- 
+
+.. note::
+
+   By default Thalamus's gRPC/HTTP servers only accept connections from the local
+   machine (``localhost``).  Pass ``--open`` to ``python -m thalamus.pipeline`` (or
+   ``thalamus.task_controller``) to bind to ``0.0.0.0`` instead, e.g. to control the
+   pipeline from another machine on the network -- see :doc:`tools`.
+
 Adding a Node
 -------------
 

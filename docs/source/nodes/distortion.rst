@@ -22,6 +22,9 @@ Properties
 * **Invert**: Invert the image before detection (for dark-on-light vs light-on-dark
   boards).
 * **Collecting**: When enabled, accumulate chessboard detections for calibration.
+* **Framerate**: Caps the rate (frames/sec) at which corrected frames are emitted,
+  dropping excess input frames; defaults to ``10``.  Set to ``0`` (or negative) to
+  disable throttling and pass every frame through.
 * **Camera Matrix**: The 3×3 intrinsic camera matrix (estimated during calibration,
   and reused once solved).
 * **Distortion Coefficients**: The lens distortion coefficients applied to rectify

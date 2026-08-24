@@ -34,4 +34,5 @@ Properties
 
 The annotated image is also republished, so a downstream STORAGE2 node can save
 the original eye image, the annotated image, or just the gaze time series as
-needed (see the STORAGE2 per-modality toggles).
+needed (see the STORAGE2 per-modality toggles).  The annotated live view now
+renders in full color (previously grayscale-only).
