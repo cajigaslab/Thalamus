@@ -16,9 +16,11 @@ Properties
   starting at 1 and incrementing until a full output file name that doesn't already exist is reached.  In addition,
   a ``<output file>.YYYYMMDD.R.json`` file will be creating containing a snapshot of the config when the experiment
   started.
-* Compress Analog: Compress time series signals using zlib compression.
-* Compress Video: Compress image data using H264 compression.  Enabled by default
-  for newly created nodes.
+* Compress Analog: Compress time series signals using zlib compression.  Off by
+  default.
+* Compress Video: Compress image data using H264 compression.  On by default (as of
+  1.0.18) for newly created nodes -- uncheck it if you need raw, lossless frames
+  instead of smaller H264-compressed video.
 * Simple Copy: Don't record data, just copy the files in the Files list.
 
 Usage

@@ -37,12 +37,16 @@ Common options:
 * ``--wait-for-pipeline`` -- don't start the data pipeline; wait for something else
   to launch it.  Use this when another process (e.g. a separately managed Thalamus
   pipeline, or a remote launcher) owns the pipeline and the task controller should
-  only attach to it.  The same flag exists on ``python -m thalamus.pipeline``.
+  only attach to it.  Has no effect with ``-y/--pypipeline``, which never launches
+  the native pipeline subprocess.  The same flag exists on
+  ``python -m thalamus.pipeline``.
 * ``--open`` -- bind the gRPC servers (and the native pipeline process) to
   ``0.0.0.0`` instead of localhost only.  As of this release the default is
   localhost-only, so pass ``--open`` on the machine you want to reach from a
   :doc:`REMOTE <nodes/remote>` / :doc:`RUNNER2 <nodes/runner2>` node on another
   machine.  The same flag exists on ``python -m thalamus.pipeline``.
+* ``-r, --remote-executor`` -- send task execution to a remote executor process
+  instead of running tasks locally.
 
 .. _dotnet-runtime:
 
@@ -145,6 +149,31 @@ implements this:
   subject must produce a *continuous* ``hold_duration`` after reacquiring.  Use
   this for paradigms where an uninterrupted fixation is required rather than a
   cumulative one.
+
+``wait_for(context, condition, timeout)`` is the simpler building block behind
+``wait_for_hold``: it waits until ``condition()`` is true or ``timeout`` elapses,
+returning whether the condition was met (pass ``timeout=None`` to wait
+indefinitely).  ``wait_for_dual_hold`` follows the ``wait_for_hold`` pattern for two
+simultaneous hold conditions (e.g. two touch points), with independent
+``blink1_duration`` / ``blink2_duration``.
+
+.. note::
+
+   The ``stimulator(...)`` context manager in ``util.py`` is currently disabled
+   (a no-op) -- it no longer starts background stimulation.  Tasks that deliver
+   stimulation should drive a local ``do_stimulation()`` coroutine directly (see
+   ``stim_task.py`` / ``gaze_anchoring_stim_task.py`` for the current pattern)
+   rather than relying on the ``stimulator`` context manager.
+
+Task errors
+^^^^^^^^^^^
+
+An unhandled exception raised inside a task's ``run`` is caught by the controller:
+the run queue is cleared (no further scheduled trials run), the full traceback is
+logged, and a **Task Error** dialog shows the traceback to the operator.  Loading a
+task cluster that references an unregistered task code (e.g. defined in an
+extension module that wasn't loaded with ``--ext``) similarly shows an **Unknown
+Task** dialog naming the missing code instead of crashing the control window.
 
 A minimal task
 ^^^^^^^^^^^^^^

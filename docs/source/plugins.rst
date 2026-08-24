@@ -2,10 +2,31 @@ Plugins (native extensions)
 ===========================
 
 Beyond the Python pipeline, Thalamus supports **native plugins** -- shared libraries
-(C/C++/Rust) that implement new node types and load into the pipeline at runtime.
-Plugins participate in the same data graph as the built-in nodes: they can produce
-data, consume it, and now **read data directly from other nodes** and **inject data
-back** through a stable C API.
+(C/C++, or any language that can export a C ABI) that implement new node types and
+load into the pipeline at runtime. Plugins participate in the same data graph as the
+built-in nodes: they can produce data, consume it, and **read data directly from
+other nodes** and **inject data back** through a stable C API.
+
+.. admonition:: Breaking changes if you're updating an existing plugin
+
+   Two changes since the previous docs revision affect the ABI of every existing
+   plugin -- both must be addressed to keep an out-of-tree plugin building and
+   loading:
+
+   * **Entry point renamed.** A plugin's node-factory entry point must now be
+     exported under the symbol name ``thalamus_get_node_factories`` (previously
+     ``get_node_factories``).  The signature is unchanged:
+     ``struct ThalamusNodeFactory** thalamus_get_node_factories(struct ThalamusAPI*)``.
+     A plugin still exporting the old symbol name will fail to load.
+   * **Strings are no longer raw C strings.** Every ``const char*`` /
+     ``char*`` parameter and return value across ``ThalamusAPI`` and the node
+     interfaces was replaced with ``struct ThalamusCharSpan`` (a
+     ``{const char* data; uint64_t size; char owns_data;}`` span).  This touches
+     most call sites a plugin makes -- for example ``state_get_string`` is now an
+     out-parameter (``void state_get_string(struct ThalamusCharSpan*, struct
+     ThalamusState*)``) rather than a return value, and ``ThalamusNodeFactory.type``
+     is a ``ThalamusCharSpan`` instead of a ``const char*``.  Port any code that
+     assumed a raw, nul-terminated ``char*``.
 
 The C API
 ---------
@@ -18,10 +39,15 @@ the pipeline's capabilities.  The main capability groups are:
   (``state_get_*`` / ``state_set_*``) and subscribe to changes
   (``state_recursive_change_connect``).  Config values mirror what you see in the
   node UI.
+* **Building state** -- construct new, detached state values and attach them to the
+  tree (see *Building and writing state* below).
 * **Other nodes** -- asynchronously obtain a handle to another node
   (``node_get_node`` with a selector), wait until it is ready
   (``node_ready_connect``), and track channel changes
-  (``node_channels_changed_connect``).
+  (``node_channels_changed_connect``).  ``node_get_node`` always invokes its
+  callback asynchronously (posted to the io_context), even if the requested node
+  already exists at call time -- it never calls back reentrantly from inside the
+  call itself.
 * **Reading analog data** -- given an analog node handle, read its channels in the
   type the source provides:
 
@@ -37,12 +63,23 @@ the pipeline's capabilities.  The main capability groups are:
   forwarding device queries to an OCULOMATIC camera) without blocking shutdown.
 * **Timing & I/O** -- a steady ``time_ns`` clock, timers, an async I/O context, and
   serial-port helpers for hardware plugins.
+* **SDL windowing** -- open and drive your own SDL window (see *SDL windowing*
+  below), for plugins that need a custom render surface or input handling instead
+  of piggybacking on the host UI.
 * **Vulkan** -- access to the host's Vulkan objects for GPU compute/rendering inside
-  a plugin (see :ref:`plugin-vulkan`).
+  a plugin (see *Vulkan access* below).
 
 This is the basis for cross-node processing in compiled code: a transformer plugin
 can subscribe to an upstream node, read its samples as they arrive, compute, and
 inject results back into the pipeline.
+
+.. note::
+
+   The plugin API is a developer/integration surface.  For most data processing
+   you can stay in Python with the :doc:`ALGEBRA <nodes/algebra>` / :doc:`LUA
+   <nodes/lua>` nodes or by reading capture files (see :doc:`examples/index`); reach
+   for a native plugin when you need new hardware support or performance-critical,
+   low-latency computation inside the pipeline.
 
 Entry points and lifecycle
 --------------------------
@@ -65,12 +102,14 @@ Each ``ThalamusNodeFactory`` names a node type and provides ``create`` /
 pipeline start).  The node types a plugin registers appear in the node list next
 to the built-in ones.
 
-.. note::
-
-   The load symbol was previously named ``get_node_factories``; it is now
-   ``thalamus_get_node_factories``, and plugins exporting only the old name will
-   fail to load.  ``thalamus_teardown`` is looked up at shutdown and simply
-   skipped if absent, so existing plugins keep working without it.
+Beyond that library-level teardown, an individual node struct (``ThalamusNode``)
+may set an optional ``predrop`` callback.  The host calls it when the node is about
+to be replaced (its ``type`` config field changed) or during full pipeline
+teardown, so the plugin can begin releasing resources (GPU handles, hardware,
+in-flight I/O) asynchronously; once that work is complete, it calls
+``node_predrop_ready(node)`` to signal the host it is safe to finish destroying the
+node.  A node that leaves ``predrop`` unset (``nullptr``) is torn down immediately,
+exactly as before this hook existed.
 
 API versioning
 --------------
@@ -122,6 +161,17 @@ values and write them (or list entries) with a completion callback:
    api->state_set_at_name_float(entry, &gain_key, 2.0);
    api->state_push_state_with_callback(list_state, entry, on_pushed, user_data);
 
+SDL windowing
+-------------
+
+A plugin can open and drive its own `SDL <https://www.libsdl.org/>`_ window rather
+than relying on the host UI, via ``sdl_create_window`` / ``sdl_destroy_window``,
+position/size/title accessors, ``sdl_vulkan_create_surface`` (for Vulkan
+rendering into the window), clipboard access, system cursors, and event delivery:
+``sdl_events_subscribe(callback, data)`` / ``sdl_events_unsubscribe`` delivers SDL3
+events (mirrored as ``THALAMUS_SDL_Event`` in ``src/thalamus/plugin_window_event.h``)
+to the plugin's callback.
+
 .. _plugin-vulkan:
 
 Vulkan access
@@ -147,12 +197,6 @@ their own.  The API exposes:
 
 This lets an image-processing plugin (for example, a GPU pupil detector or video
 filter) run on the same device Thalamus renders with, without device-sharing
-hazards.
-
-.. note::
-
-   The plugin API is a developer/integration surface.  For most data processing
-   you can stay in Python with the :doc:`ALGEBRA <nodes/algebra>` / :doc:`LUA
-   <nodes/lua>` nodes or by reading capture files (see :doc:`examples/index`); reach
-   for a native plugin when you need new hardware support or performance-critical,
-   low-latency computation inside the pipeline.
+hazards.  A plugin can also open its own SDL window (see *SDL windowing* above) and
+create a Vulkan surface for it with ``sdl_vulkan_create_surface`` to render into
+directly, instead of using the shared image-viewer surface.

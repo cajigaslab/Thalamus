@@ -15,6 +15,8 @@ detailed pages below for commonly used nodes.
    nidaq
    oculomatic
    touch_screen
+   serial_touch_screen
+   joystick
    runner2
    algebra
    normalize

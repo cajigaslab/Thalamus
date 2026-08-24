@@ -9,77 +9,126 @@ some patch versions contain only build/CI or internal changes and are omitted be
 
 ## 1.0.x
 
-### 1.0.38–1.0.40 — 2026-08
-- Build fixes only: renamed the bundled `glslangValidator` executable asset to
-  `glslang` and fixed `GLSLANG_ASSET` naming/formatting for macOS.
-
 ### 1.0.37 — 2026-07-31
 - OCULOMATIC recenter requests are now written to the pipeline log as
-  `Oculomatic Recenter` events, so recordings capture when the operator recentered.
+  `Oculomatic Recenter` events, so recordings capture exactly when the operator
+  recentered during a session.
 
-### 1.0.36 — 2026-07-24
-- Redesigned the Vulkan queue API and exposed Vulkan to native plugins through
-  `plugin.h`: `get_vulkan_instance/device/physical_device/queue`,
-  `create_vulkan_command_pool`, and `lock_vulkan_queue`/`unlock_vulkan_queue` for
-  safe submission on the shared queue.
-- ImageViewer: SDL polling refactored into a single static loop, `SDL_Quit`
-  deferred to program shutdown, and `VK_KHR_portability_enumeration` used when
-  available (macOS/MoltenVK).
+### 1.0.36 — 2026-07-27
+- Plugins can now use Vulkan directly: the C API exposes the host's Vulkan
+  instance/device/queue (with a lock around queue submission) so a plugin can
+  render into its own surface.
+- Misc Vulkan/SDL fixes in the image viewer (a `VK_KHR_portability_enumeration`
+  fallback, SDL event polling consolidated into a single loop, deferred
+  `SDL_Quit` until shutdown).
 
 ### 1.0.35 — 2026-07-24
-- Plugin API: the load symbol is now `thalamus_get_node_factories` (was
-  `get_node_factories`), and an optional `thalamus_teardown` export is called at
-  shutdown so plugins can release their resources.
-- Fixed a hang on shutdown when Thalamus was started with an empty pipeline.
+- **Breaking (plugins):** a plugin's node-factory entry point must now be
+  exported as `thalamus_get_node_factories` (previously `get_node_factories`);
+  a plugin still exporting the old name will fail to load.
+- Added an optional `thalamus_teardown` library-level hook plugins can export
+  for cleanup at pipeline shutdown.
+- Fixed a shutdown hang when the pipeline had zero live nodes.
 
-### 1.0.34 — 2026-07-22
-- Fixed the SpikeGLX node: streaming ran concurrently with heartbeats, causing
-  NOOP and FETCH responses to intermingle and be read incorrectly; shutdown no
-  longer hangs Thalamus.
-- macOS: Vulkan build fixes (QuartzCore framework dependency, loader target).
+### 1.0.34 — 2026-07-24
+- Fixed a SpikeGLX node bug where streaming ran concurrently with heartbeats,
+  causing NOOP/FETCH responses to become intermingled and misread; also fixed
+  a shutdown hang.
+- macOS: fixed a missing QuartzCore framework dependency for the Vulkan
+  loader.
 
-### 1.0.31–1.0.33 — 2026-07
-- `ThalamusAPI` is now versioned: the table begins with a `version` field and each
-  function is annotated with the version that introduced it, so plugins can guard
-  newer capabilities.
-- Added gRPC reflection to the Python service.
-- Thread-safety hardening: fixed data races found by ThreadSanitizer, an
-  `inject_analog` data race, and synchronized plugin node reference counting; new
-  build/run flags can disable Vulkan and Crashpad.
-- Platform-specific Vulkan loader library paths.
+### 1.0.32 — 2026-07-20
+- `python -m thalamus.pipeline` gained `--no-gpu` to disable GPU/Vulkan
+  rendering (falls back to software rendering).
+- The pipeline's gRPC server now has reflection enabled, so generic clients
+  (`grpcurl`, `grpcui`) can introspect it without the `.proto` files.
+- `ThalamusAPI` gained a `version` field plugins can check for capability
+  availability.
+- Plugin nodes can now register an optional `predrop` hook to run
+  asynchronous cleanup before being torn down or replaced (signaling
+  completion via `node_predrop_ready`).
+- Fixed `connect channels changed` to be a no-op on non-analog nodes.
 
-### 1.0.30 — 2026-07-09
-- Added `--wait-for-pipeline` to the task controller and pipeline entry points:
-  attach to an externally launched pipeline instead of starting one.
-- PUPIL node: new **Frequency** (frame rate) and **Jitter (Pixels)** parameters for
-  simulating camera rates and tracking noise.
-- Task controller: `wait_for_hold` gained `blink_resets` (a blink restarts the
-  hold timer, for paradigms requiring continuous fixation); fixed a buggy
-  `wait_for`.
-- `inject_analog` now buffers data that arrives before the target node is found
-  and delivers it once the node appears.
+### 1.0.31 — 2026-07-15
+- Added `--wait-for-pipeline` to `thalamus.task_controller`, to wait for
+  something else to launch the data pipeline instead of spawning it itself.
+- PUPIL node: added `Frequency` (frame rate) and `Jitter (Pixels)` parameters.
+- `wait_for_hold` gained a `blink_resets` option (restart the full hold
+  duration on any blink); fixed a race in `wait_for` where it could return a
+  stale re-evaluation of its condition instead of the value that actually
+  satisfied the wait.
+- Fixed analog data injected before its target node exists being dropped
+  instead of buffered and delivered once the node appears.
 
-### 1.0.26–1.0.28 — 2026-06/07
-- Merged new input nodes: joystick, serial touch screen, and an improved ArUco
-  tracking node.
-- Extension/plugin API: image-data subscriptions and mocap publishing for
-  extension nodes, plus an image extension-node demo (`BallNode`); removed C
-  strings from the plugin interface in favor of spans.
-- TOUCH_SCREEN: new **Null Threshold** parameter — raw coordinates below it are
-  treated as "no touch" and passed through untransformed.
-- Task controller: blink and `wait_for` timeouts may now be `None`; improved
-  remote-executor support and command-line interface.
+### 1.0.28 — 2026-07-02
+- ARUCO: added multi-camera fusion (`Sources`), a `layout` board type for
+  markers that aren't on a regular grid, per-board quality metrics, an
+  annotated debug image, and a wand-calibration mode.
+- `thalamus.record_reader2` gained real argument parsing (`-n/--node` filter,
+  `-s/--stats` for a live count summary instead of per-record printing);
+  added a `thalamus.video_writer` CLI entry point to extract a node's image
+  stream to video.
 
-### 1.0.17–1.0.25 — 2026-06
-- STORAGE and STORAGE2 now enable video compression by default.
-- Eye calibration: eye opacity slider, target grid and clearer target-selection
-  highlighting, target presets, a reset button, nudges/notches persisted across
-  refits, and a more compact UI.
-- Task controller: task error handling and an error message when a config
-  references an undefined task; *Save As* aborts cleanly if no file name is
-  chosen.
-- Python packaging now depends on pandas and pyarrow (for `thalamus.dataframe`).
+### 1.0.27 — 2026-06-30
+- Added the JOYSTICK and SERIAL_TOUCH_SCREEN nodes (a serial-connected
+  analog joystick, and a raw serial touch controller source).
+- `wait_for` / `wait_for_hold` / `wait_for_dual_hold` now accept `None` for
+  their timeout/blink-duration arguments to wait indefinitely; the
+  `stimulator` context manager is currently disabled (a no-op) -- tasks
+  delivering stimulation should drive `do_stimulation()` directly.
 
+### 1.0.26 — 2026-06-29
+- **Breaking (plugins):** the plugin C API no longer uses raw C strings --
+  every `char*` parameter/return value is now a `ThalamusCharSpan`. Existing
+  plugins need to be ported.
+- TOUCH_SCREEN gained a `Null Threshold` parameter to detect "no touch"
+  readings.
+- DISTORTION gained a `Framerate` parameter to throttle its output frame
+  rate.
+- Fixed a crash when cancelling chessboard-based calibration/board
+  generation.
+
+### 1.0.24 — 2026-06-24
+- Loading a task cluster that references an unregistered task type now shows
+  an "Unknown Task" dialog instead of crashing the control window.
+
+### 1.0.22 — 2026-06-16
+- Eye calibration: added target presets (8 Targets / 4 Targets On Axes / 4
+  Targets On Corners) and a Recenter button; the Projective model fit no
+  longer includes an offset/bias term (the raw origin now always maps
+  exactly to the screen origin).
+- An unhandled exception inside a task's `run` now clears the run queue and
+  shows a "Task Error" dialog with the traceback, instead of propagating
+  silently.
+
+### 1.0.20 — 2026-06-12
+- Eye calibration: added a grid overlay showing how the fitted model warps
+  eye coordinates across the field, a bolder highlight for the selected
+  saccade target, and a more compact operator-window layout with an
+  "Unfocused" reminder overlay.
+
+### 1.0.19 — 2026-06-11
+- Eye calibration: nudged/added Angular Scaling notches now survive a
+  re-Fit instead of being overwritten; Fixation Radius, Saccade Radius, and
+  Reward (ms) are now persisted with the configuration; added a
+  diagonal-lines/circle reticle to the operator view.  Fixed extrapolation
+  beyond a pin's outermost notch (both in the calibrator and at task
+  runtime).
+- Fixed "Save As" proceeding with an empty file name instead of aborting
+  when the user cancelled the file dialog.
+
+### 1.0.18 — 2026-06-10
+- STORAGE and STORAGE2 now default to compressing video (H264/MPEG-4) for
+  newly created nodes; uncheck "Compress Video" if you need raw, lossless
+  frames.
+- Eye calibration: added an Eye Opacity slider for the gaze-trace overlay.
+- Python packaging now depends on `pandas` and `pyarrow` (required by
+  `thalamus.dataframe`).
+
+### 1.0.17 — 2026-06-09
+- Eye calibration: implemented notches for the Angular Scaling model,
+  letting gaze scale vary with eccentricity along a direction, not just by
+  direction.
 ### 1.0.16 — 2026-06-08
 - Eye calibration: finished polar interpolation in Angular Scaling mode, added a
   default scaling parameter, tooltips, and a reward node with hold parameters;
