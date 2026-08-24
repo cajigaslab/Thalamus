@@ -9,6 +9,10 @@ some patch versions contain only build/CI or internal changes and are omitted be
 
 ## 1.0.x
 
+### 1.0.38–1.0.40 — 2026-08
+- Build fixes only: renamed the bundled `glslangValidator` executable asset to
+  `glslang` and fixed `GLSLANG_ASSET` naming/formatting for macOS.
+
 ### 1.0.37 — 2026-07-31
 - OCULOMATIC recenter requests are now written to the pipeline log as
   `Oculomatic Recenter` events, so recordings capture when the operator recentered.

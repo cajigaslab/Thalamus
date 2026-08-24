@@ -41,7 +41,10 @@ also provide a *node widget* that appears when the node is selected.  See the
 
 Because nodes are decoupled and communicate over gRPC, a pipeline can also span
 machines: a :doc:`REMOTE <nodes/remote>` node proxies another instance's stream, and
-a :doc:`RUNNER2 <nodes/runner2>` node can start/stop nodes on remote instances.
+a :doc:`RUNNER2 <nodes/runner2>` node can start/stop nodes on remote instances.  By
+default the pipeline and task controller only listen on localhost; launch the
+target instance with ``--open`` (see :doc:`task_controller`) to make it reachable
+from another machine.
 
 The data model
 --------------

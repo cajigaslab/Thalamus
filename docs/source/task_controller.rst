@@ -28,6 +28,8 @@ Common options:
 * ``-c, --config PATH`` -- load a saved configuration (nodes + task clusters).
 * ``-p, --port PORT`` -- data-pipeline gRPC port (default ``50050``).
 * ``-u, --ui-port PORT`` -- UI gRPC port (default ``50051``).
+* ``-d, --dotnet-port PORT`` -- gRPC port used to talk to the .NET sidecar process
+  (default ``50052``); see :ref:`dotnet-runtime` below.
 * ``-y, --pypipeline`` -- use the Python pipeline instead of the native one.
 * ``-l, --log-level LEVEL`` -- ``trace`` / ``debug`` / ``info`` / ``warning`` /
   ``error`` / ``fatal``.
@@ -36,6 +38,23 @@ Common options:
   to launch it.  Use this when another process (e.g. a separately managed Thalamus
   pipeline, or a remote launcher) owns the pipeline and the task controller should
   only attach to it.  The same flag exists on ``python -m thalamus.pipeline``.
+* ``--open`` -- bind the gRPC servers (and the native pipeline process) to
+  ``0.0.0.0`` instead of localhost only.  As of this release the default is
+  localhost-only, so pass ``--open`` on the machine you want to reach from a
+  :doc:`REMOTE <nodes/remote>` / :doc:`RUNNER2 <nodes/runner2>` node on another
+  machine.  The same flag exists on ``python -m thalamus.pipeline``.
+
+.. _dotnet-runtime:
+
+.NET sidecar (Windows)
+-----------------------
+
+On Windows, some nodes (e.g. :doc:`DELSYS <nodes/delsys>`) are implemented by a
+separate ``dotnet.exe`` process launched alongside the controller/pipeline.  Before
+starting it, Thalamus checks that the required .NET 8 ASP.NET Core runtime is
+installed; if it's missing, those nodes are unavailable and a one-time dialog
+prompts you to install it (with a "don't show this again" option), rather than
+crashing on launch.
 
 The controller opens a **control window** (where you assemble *task clusters* and a
 run queue) and a **subject window** (the stimulus display).  An optional

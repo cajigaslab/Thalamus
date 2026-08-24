@@ -23,3 +23,8 @@ exposes:
 
 Select the components and sample modes you want and start the node to begin
 streaming.
+
+.. note::
+
+   On Windows, DELSYS runs in the :ref:`.NET sidecar process <dotnet-runtime>`, so
+   the .NET 8 ASP.NET Core runtime must be installed for this node to be available.

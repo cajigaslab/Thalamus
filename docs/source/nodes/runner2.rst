@@ -30,3 +30,9 @@ Properties
 
 This makes RUNNER2 the standard way to begin and end a recording across all of the
 acquisition nodes in an experiment at once.
+
+.. note::
+
+   By default a Thalamus instance only listens on localhost.  Launch any remote
+   target instance with ``--open`` (see :doc:`../task_controller`) so it accepts
+   connections from other machines.

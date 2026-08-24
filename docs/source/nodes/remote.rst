@@ -18,3 +18,9 @@ Properties
 While connected the node reports a **Connected** status, the measured **Bytes Per
 Second**, and ping/latency information.  See :doc:`runner2` for starting and stopping
 remote nodes, and :doc:`remote_log` for the logging equivalent.
+
+.. note::
+
+   By default a Thalamus instance only listens on localhost.  Launch the instance
+   this node connects to with ``--open`` (see :doc:`../task_controller`) so it
+   accepts connections from other machines.

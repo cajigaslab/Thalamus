@@ -31,6 +31,10 @@ Properties
   convert pixel coordinates into the output (analog) coordinate space.
 * **Invert X** / **Invert Y**: Flip the sign of the X or Y output, used to match the
   camera orientation to the expected coordinate convention.
+* **View**: Opens a native preview window showing the annotated image (the same
+  window used by the PUPIL node).  Rendering is done in C++, so it stays live even
+  while the node's Python-side widget is closed.  The preview supports both
+  grayscale and RGB source images.
 
 The annotated image is also republished, so a downstream STORAGE2 node can save
 the original eye image, the annotated image, or just the gaze time series as

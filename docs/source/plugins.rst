@@ -77,7 +77,7 @@ API versioning
 
 ``ThalamusAPI`` begins with an ``int32_t version`` field, and every function
 pointer in the table is annotated in ``plugin.h`` with the version at which it was
-added (the host currently passes ``91``).  The table is strictly append-only, so a
+added (the host currently passes ``131``).  The table is strictly append-only, so a
 plugin built against an older header keeps working; a plugin that wants to use a
 newer capability should guard it:
 
@@ -90,6 +90,37 @@ newer capability should guard it:
    } else {
      /* fall back to CPU path */
    }
+
+Building and writing state
+---------------------------
+
+Beyond reading and setting individual values, a plugin can build detached state
+values and write them (or list entries) with a completion callback:
+
+* ``state_make_dict()`` / ``state_make_list()`` -- create a new ``ThalamusState``
+  dict/list that isn't attached to the graph yet.  Populate it with
+  ``state_set_at_name_*`` / ``state_set_at_index_*`` calls, then attach it to the
+  node's own state (e.g. with ``state_set_at_name_state`` or one of the
+  ``state_push_*`` functions below) to make it visible in the UI and recordings.
+* ``state_set_at_name_*_with_callback`` / ``state_set_at_index_*_with_callback`` --
+  the same writes as ``state_set_at_name_*`` / ``state_set_at_index_*``, but taking
+  a ``ThalamusPostCallback`` and a ``void*`` userdata pointer that is invoked once
+  the write has actually taken effect.  For local state this happens
+  synchronously, but state that is proxied to a remote/UI process can take a
+  round-trip, so the callback is how a plugin sequences a dependent change without
+  racing the update.
+* ``state_push_*_with_callback`` -- append a value (state/string/int/float/null/
+  bool) to a list state, with the same completion-callback semantics.  Use this to
+  grow a list of settings (e.g. a per-channel configuration list) from a plugin.
+
+.. code-block:: c
+
+   /* Build {"gain": 2.0} and append it to a list state, then read the count back
+      once the append has landed. */
+   struct ThalamusState* entry = api->state_make_dict();
+   struct ThalamusCharSpan gain_key = { "gain", 4 };
+   api->state_set_at_name_float(entry, &gain_key, 2.0);
+   api->state_push_state_with_callback(list_state, entry, on_pushed, user_data);
 
 .. _plugin-vulkan:
 
