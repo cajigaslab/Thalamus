@@ -168,6 +168,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
 
   if "control_mode" not in task_config:
     task_config["control_mode"] = "direct"
+  if "position_velocity_blend" not in task_config:
+    task_config["position_velocity_blend"] = 0.0
   if "cursor_only_mode" not in task_config:
     task_config["cursor_only_mode"] = False
   if "free_play_end_key" not in task_config:
@@ -267,8 +269,10 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Choice("Control Mode", "control_mode", [
       ("Cumulative", "cumulative"),
       ("Direct", "direct"),
+      ("Blend", "blend"),
     ]),
     Form.Constant("Cumulative Speed", "cumulative_speed", 0.70, precision=3),
+    Form.Constant("Position Velocity Blend", "position_velocity_blend", 0.0, precision=3),
     Form.Bool("Zero-Drift Mode", "zero_drift_mode", True),
     Form.Constant("Zero-Drift Buffer", "zero_drift_buffer", 0.05, precision=3),
     Form.Constant("Direct Range", "direct_range", 0.45, precision=3),
@@ -333,9 +337,10 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     spin.setRange(0, 255)
     spin.setSingleStep(1)
     spin.setValue(max(0, min(255, int(task_config.get(config_key, task_config.get("reward_channel", 0))))))
+    spin.setMaximumWidth(160)
     spin.valueChanged.connect(lambda v, k=config_key: task_config.update({k: int(v)}))
     free_play_layout.addWidget(QLabel(label_text), row, 0)
-    free_play_layout.addWidget(spin, row, 1, 1, 2)
+    free_play_layout.addWidget(spin, row, 1, 1, 2, Qt.AlignmentFlag.AlignLeft)
     return row + 1
 
   def add_free_play_seconds(row: int, label_text: str, config_key: str, default: float) -> int:
@@ -345,9 +350,10 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     spin.setSingleStep(0.05)
     spin.setSuffix(" s")
     spin.setValue(max(0.0, float(task_config.get(config_key, default))))
+    spin.setMaximumWidth(160)
     spin.valueChanged.connect(lambda v, k=config_key: task_config.update({k: float(v)}))
     free_play_layout.addWidget(QLabel(label_text), row, 0)
-    free_play_layout.addWidget(spin, row, 1, 1, 2)
+    free_play_layout.addWidget(spin, row, 1, 1, 2, Qt.AlignmentFlag.AlignLeft)
     return row + 1
 
   def add_free_play_choice(row: int, label_text: str, config_key: str, options: typing.List[typing.Tuple[str, str]]) -> int:
@@ -357,8 +363,9 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
       if value == str(task_config.get(config_key, options[0][1])):
         combo.setCurrentIndex(combo.count() - 1)
     combo.currentIndexChanged.connect(lambda i, c=combo, k=config_key: task_config.update({k: c.itemData(i)}))
+    combo.setMaximumWidth(200)
     free_play_layout.addWidget(QLabel(label_text), row, 0)
-    free_play_layout.addWidget(combo, row, 1, 1, 2)
+    free_play_layout.addWidget(combo, row, 1, 1, 2, Qt.AlignmentFlag.AlignLeft)
     return row + 1
 
   def add_free_play_threshold(row: int) -> int:
@@ -2746,7 +2753,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   target_table.itemChanged.connect(on_item_changed)
 
   controls = QWidget()
-  controls_layout = QHBoxLayout(controls)
+  controls_layout = QGridLayout(controls)
   controls_layout.setContentsMargins(0, 0, 0, 0)
   add_target_button = QPushButton("Add Target")
   remove_target_button = QPushButton("Remove Selected")
@@ -2778,16 +2785,18 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
   edit_layout_button.setToolTip("Open the visual layout editor for dragging, previewing, and bulk generation.")
   bulk_field_combo.setToolTip("Choose which field from the selected row should be copied to all targets.")
   apply_to_all_button.setToolTip("Copy the chosen field from the selected row to every target.")
-  controls_layout.addWidget(add_target_button)
-  controls_layout.addWidget(remove_target_button)
-  controls_layout.addWidget(clear_targets_button)
-  controls_layout.addWidget(enable_all_targets_button)
-  controls_layout.addWidget(disable_all_targets_button)
-  controls_layout.addWidget(edit_layout_button)
-  controls_layout.addWidget(QLabel("Field:"))
-  controls_layout.addWidget(bulk_field_combo)
-  controls_layout.addWidget(apply_to_all_button)
-  controls_layout.addStretch(1)
+  # Wrap the target-control buttons into a 3-column grid. Previously a single
+  # QHBoxLayout, its combined minimum width (~820px) forced the entire settings
+  # panel wider than the viewport, triggering horizontal scroll and making every
+  # other input stretch out. A wrapping grid keeps the row within the panel.
+  _control_widgets = [
+    add_target_button, remove_target_button, clear_targets_button,
+    enable_all_targets_button, disable_all_targets_button, edit_layout_button,
+    QLabel("Field:"), bulk_field_combo, apply_to_all_button,
+  ]
+  for _i, _w in enumerate(_control_widgets):
+    controls_layout.addWidget(_w, _i // 3, _i % 3)
+  controls_layout.setColumnStretch(3, 1)
 
   # Live group toggles (mid-session control surface): flipping a preset group
   # here edits the running task config, so the change reaches the executor on
@@ -2934,6 +2943,9 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
 
   animation_group = QGroupBox("Animation Settings")
   animation_layout = QGridLayout(animation_group)
+  # Trailing stretch column: keeps the value column (1) at natural width so
+  # spin boxes / combos don't balloon across the panel.
+  animation_layout.setColumnStretch(2, 1)
 
   def add_anim_checkbox(row: int, label: str, key: str) -> None:
     box = QCheckBox(label)

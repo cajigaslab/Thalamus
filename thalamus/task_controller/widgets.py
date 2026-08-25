@@ -591,6 +591,10 @@ class Form(QWidget):
     '''
     self.grid_layout.addWidget(QLabel(''))
     self.grid_layout.setRowStretch(self.row, 1)
+    # Value widgets are added spanning columns 1-2; give a trailing stretch
+    # column all the leftover horizontal space so inputs render at their
+    # natural (content) width instead of ballooning to fill the panel.
+    self.grid_layout.setColumnStretch(3, 1)
 
 class ListAsTabsWidget(QTabWidget):
   '''

@@ -77,8 +77,10 @@ mod lenient {
 }
 
 /// Cursor integration mode (`control_mode` in the Python config).
-/// Values: "direct" (default) or "cumulative". Kept as a String for 1:1 parity;
-/// interpret in state.rs, matching joystick_intro.py:2886-2919.
+/// Values: "direct" (default), "cumulative", or "blend". Kept as a String for
+/// 1:1 parity; interpret in state.rs, matching joystick_intro.py:2886-2919.
+/// "blend" is a Rust-only training extension: it morphs continuously between
+/// direct (position) and cumulative (velocity) via `position_velocity_blend`.
 pub type ControlMode = String;
 
 /// serde default for `hold_progress_style` when the key is absent (older
@@ -159,6 +161,11 @@ pub struct TaskConfig {
     pub direct_range: f64,
     #[serde(deserialize_with = "lenient::bool")]
     pub direct_recenter_when_idle: bool,
+    /// blend mode only: 0.0 = pure direct (position), 1.0 = pure cumulative
+    /// (velocity). Ramp 0->1 across sessions to transfer training. Ignored
+    /// unless control_mode == "blend".
+    #[serde(deserialize_with = "lenient::f64")]
+    pub position_velocity_blend: f64,
 
     // --- cursor appearance / reset ---
     #[serde(deserialize_with = "lenient::f64")]
@@ -295,6 +302,7 @@ impl Default for TaskConfig {
             zero_drift_buffer: 0.03,
             direct_range: 0.45,
             direct_recenter_when_idle: true,
+            position_velocity_blend: 0.0,
 
             cursor_diameter_ratio: 0.1,
             cursor_color: [255, 70, 70],

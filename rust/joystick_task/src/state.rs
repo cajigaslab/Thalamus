@@ -953,6 +953,50 @@ impl Trial {
             }
             self.operator_cursor_latched = false;
             (jx, jy) = (djx, djy);
+        } else if self.cfg.control_mode == "blend" {
+            // Smooth morph from direct (blend=0) to cumulative (blend=1),
+            // modeled as a leaky integrator: ALWAYS integrate velocity, then
+            // relax the cursor toward the direct (stick-proportional) target
+            // with a time constant tau = blend/(1-blend) seconds. Because blend
+            // is thus linear in log(tau) (a logit curve), it reads as a
+            // perceptually even knob. This replaces an earlier output-crossfade
+            // whose dt-scaled velocity term was swamped by the position term
+            // until blend ~= 0.99, making every lower value feel like direct.
+            //   blend=0 -> tau=0    -> relax=1 -> cursor snaps to target (direct)
+            //   blend=1 -> tau=inf  -> relax=0 -> pure velocity integrate (cumulative)
+            //   blend=0.5 -> tau=1s ; blend=0.75 -> tau=3s ; blend=0.25 -> tau=1/3s
+            let (bjx, bjy) = self.apply_direction_influence(inp.analog_x, inp.analog_y);
+            let blend = self.cfg.position_velocity_blend.clamp(0.0, 1.0);
+
+            // Velocity core: identical to cumulative mode (same deadband),
+            // always applied so blend=1 reproduces cumulative exactly.
+            let (mut vjx, mut vjy) = (bjx, bjy);
+            if self.cfg.zero_drift_mode && vjx.hypot(vjy) < self.cfg.zero_drift_buffer {
+                vjx = 0.0;
+                vjy = 0.0;
+            }
+            self.cursor_x += vjx * self.cfg.cumulative_speed * dt;
+            self.cursor_y += vjy * self.cfg.cumulative_speed * dt;
+
+            // Position spring toward the direct target. Guarded exactly like
+            // direct mode so blend=0 reproduces direct's idle/recenter behavior
+            // (at blend=0 relax=1, so the cursor is set to the target and the
+            // velocity add above is fully overwritten).
+            if analog_active || self.cfg.direct_recenter_when_idle {
+                let relax = if blend <= 0.0 {
+                    1.0
+                } else if blend >= 1.0 {
+                    0.0
+                } else {
+                    ((1.0 - blend) / blend * dt).clamp(0.0, 1.0)
+                };
+                let px = 0.5 + bjx * self.cfg.direct_range;
+                let py = 0.5 + bjy * self.cfg.direct_range;
+                self.cursor_x += (px - self.cursor_x) * relax;
+                self.cursor_y += (py - self.cursor_y) * relax;
+            }
+            self.operator_cursor_latched = false;
+            (jx, jy) = (bjx, bjy);
         } else {
             let (mut cjx, mut cjy) = self.apply_direction_influence(inp.analog_x, inp.analog_y);
             if self.cfg.zero_drift_mode && cjx.hypot(cjy) < self.cfg.zero_drift_buffer {

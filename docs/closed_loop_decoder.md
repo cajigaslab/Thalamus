@@ -43,13 +43,18 @@ Consequences:
 
 ## Control law: decode velocity, match the task's mode
 
+For the exact math of `direct`/`cumulative`/`blend` and the literature case
+for why velocity/integrative (`cumulative`) control is the principled choice
+for anything a neural decoder will eventually drive, see
+`docs/joystick_control_modes.md`.
+
 The decoder **always computes a velocity** `(vx, vy)`. A final stage matches the task's
 `control_mode` so one decode core serves both cursor paradigms (`--emit-mode`):
 
 | `--emit-mode` | Decoder does | Use with task `control_mode` |
 |---|---|---|
 | `position` (default) | leaky-integrates velocity → emits **position** | `direct` (the currently trained mode) |
-| `velocity` | emits **raw velocity**, task integrates | `cumulative` |
+| `velocity` | emits **raw velocity**, task integrates | `cumulative` **or** `blend` |
 
 Position integrator: `pos = clip(leak·pos + gain·v·dt, −1, 1)` per axis, real elapsed
 `dt` (clamped ≤50 ms). `leak < 1` gives natural recentering and prevents drift/runaway
@@ -58,6 +63,17 @@ Position integrator: `pos = clip(leak·pos + gain·v·dt, −1, 1)` per axis, re
 > Do **not** feed a position signal into a `cumulative` task (double integration) or a
 > velocity signal into a `direct` task (velocity treated as absolute position). Match
 > `--emit-mode` to `control_mode`.
+
+**`blend` task mode (graded direct→cumulative training).** The Rust task's
+`control_mode="blend"` morphs continuously between direct and cumulative via
+`position_velocity_blend ∈ [0,1]` (0 = pure direct, 1 = pure cumulative), letting a
+subject transfer training gradually. Because the **task** owns all integration/blending in
+this mode, drive the decoder with `--emit-mode velocity` — it emits the raw readout `v`
+(analogous to a physical stick deflection) and the task does the morph. Note the endpoint
+nuance: at `blend=0` the task treats the decoded velocity as a proportional position
+(`0.5 + v·direct_range`), which is *not* the same as the decoder's own leaky-integrated
+`position` mode. So for decoder-driven blend, always use `velocity` emit mode and let the
+task integrate; do not switch the decoder to `position` at the `blend=0` end.
 
 ## The decoder pipeline (`neural_decoder.py`, repo root)
 

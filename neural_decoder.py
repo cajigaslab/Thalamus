@@ -14,7 +14,9 @@ Control law: the decoder ALWAYS computes a velocity (vx, vy). A final stage matc
 cursor mode:
   * --emit-mode position  -> leaky-integrate velocity into a position, emit position
                              (for the task's `direct` mode; the trained default today)
-  * --emit-mode velocity  -> emit raw velocity, let the task's `cumulative` mode integrate
+  * --emit-mode velocity  -> emit raw velocity, let the task integrate
+                             (for the task's `cumulative` mode, and for its `blend` mode
+                              -- blend owns all integration task-side, so feed it velocity)
 
 Run standalone (the core must be up on --thalamus):
     python neural_decoder.py --loopback            # plumbing/latency test, ignores neural data
