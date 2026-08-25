@@ -174,6 +174,41 @@ target_link_libraries(vulkan-loader INTERFACE "${VULKAN_LOADER_LIB}" vulkan-head
 add_library(vulkan INTERFACE)
 target_link_libraries(vulkan INTERFACE vulkan-headers vulkan-loader)
 add_library(Vulkan::Vulkan ALIAS vulkan)
+
+# --- MoltenVK (macOS Vulkan-to-Metal ICD) ---
+# There is no system-provided Vulkan ICD on macOS, so the ICD has to be
+# bundled with the app too, alongside the loader. Grab LunarG's prebuilt
+# binary rather than building MoltenVK from source (it pulls in its own
+# large set of dependencies via a separate fetch script).
+if(APPLE)
+  set(MOLTENVK_VERSION "v1.4.1")
+  set(MOLTENVK_ARCHIVE "${CMAKE_BINARY_DIR}/MoltenVK-macos-${MOLTENVK_VERSION}.tar")
+  set(MOLTENVK_EXTRACT_DIR "${CMAKE_BINARY_DIR}/moltenvk-${MOLTENVK_VERSION}")
+  set(MOLTENVK_RUNTIME_DIR "${MOLTENVK_EXTRACT_DIR}/MoltenVK/MoltenVK/dynamic/dylib/macOS")
+  set(MOLTENVK_DYLIB "${MOLTENVK_RUNTIME_DIR}/libMoltenVK.dylib")
+  set(MOLTENVK_ICD_JSON "${MOLTENVK_RUNTIME_DIR}/MoltenVK_icd.json")
+
+  if(NOT EXISTS "${MOLTENVK_ARCHIVE}")
+    message(STATUS "Downloading MoltenVK ${MOLTENVK_VERSION}...")
+    file(DOWNLOAD
+      "https://github.com/KhronosGroup/MoltenVK/releases/download/${MOLTENVK_VERSION}/MoltenVK-macos.tar"
+      "${MOLTENVK_ARCHIVE}"
+      STATUS MOLTENVK_DL_STATUS SHOW_PROGRESS TLS_VERIFY ON)
+    list(GET MOLTENVK_DL_STATUS 0 MOLTENVK_DL_RESULT)
+    if(NOT MOLTENVK_DL_RESULT EQUAL 0)
+      file(REMOVE "${MOLTENVK_ARCHIVE}")
+      message(FATAL_ERROR "Failed to download MoltenVK: ${MOLTENVK_DL_STATUS}")
+    endif()
+  endif()
+
+  if(NOT EXISTS "${MOLTENVK_DYLIB}")
+    message(STATUS "Extracting MoltenVK runtime to ${MOLTENVK_RUNTIME_DIR}")
+    file(MAKE_DIRECTORY "${MOLTENVK_EXTRACT_DIR}")
+    file(ARCHIVE_EXTRACT INPUT "${MOLTENVK_ARCHIVE}" DESTINATION "${MOLTENVK_EXTRACT_DIR}"
+      PATTERNS "MoltenVK/MoltenVK/dynamic/dylib/macOS/*")
+  endif()
+endif()
+
 ## --- Vulkan-ValidationLayers ---
 #FetchContent_Declare(
 #  vulkan_validationlayers
