@@ -292,6 +292,18 @@ int main(int argc, char **argv) {
     }
   }
 
+#ifdef __APPLE__
+  // macOS has no system-provided Vulkan ICD. Point the bundled loader at the
+  // MoltenVK ICD shipped alongside `native` unless the environment already
+  // specifies one (e.g. a developer's own Vulkan SDK install).
+  {
+    std::filesystem::path exe_dir(boost::dll::program_location().parent_path().string());
+    std::filesystem::path icd_path = exe_dir / "MoltenVK_icd.json";
+    if(std::filesystem::exists(icd_path)) {
+      setenv("VK_ICD_FILENAMES", icd_path.string().c_str(), 0);
+    }
+  }
+#endif
   auto vulkan = gpu ? thalamus::get_vulkan(std::nullopt) : Vulkan{};
 
   {

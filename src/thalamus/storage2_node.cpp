@@ -687,7 +687,7 @@ struct Storage2Node::Impl {
           bps = {3, 3, 3};
           break;
         case thalamus_grpc::Image::Format::Image_Format_YUYV422:
-          bps = {1, 2, 1};
+          bps = {2, 2, 2};
           break;
         case thalamus_grpc::Image::Format::Image_Format_YUV420P:
           bps = {1, 1, 1};
@@ -721,6 +721,10 @@ struct Storage2Node::Impl {
           }
         }
 
+        //When converting grayscale images to YUV420 the luminance plane changes but the chroma planes are constant.
+        //After the first conversion (pts == 0) fills in the chroma planes we only need to update the luminance and
+        //instead of converting or copying the input data we just point the output pointer to the input data.
+        //Technically, we should scale the input range (0-255) to the yuv luminance range (16-235).
         if (pts > 0 && src_format == AV_PIX_FMT_GRAY8) {
           dst_data[0] = src_data[0];
         } else {
@@ -1190,9 +1194,17 @@ struct Storage2Node::Impl {
               format = AV_PIX_FMT_RGB24;
               break;
             case thalamus_grpc::Image::Format::Image_Format_YUYV422:
+              format = AV_PIX_FMT_YUYV422;
+              break;
             case thalamus_grpc::Image::Format::Image_Format_YUV420P:
+              format = AV_PIX_FMT_YUV420P;
+              break;
             case thalamus_grpc::Image::Format::Image_Format_YUVJ420P:
+              format = AV_PIX_FMT_YUVJ420P;
+              break;
             case thalamus_grpc::Image::Format::Image_Format_RGB16:
+              format = image.bigendian() ? AV_PIX_FMT_RGB48BE : AV_PIX_FMT_RGB48LE;
+              break;
             case thalamus_grpc::Image::Format::Image_Format_MPEG1:
             case thalamus_grpc::Image::Format::Image_Format_MPEG4:
             case thalamus_grpc::Image::Format::

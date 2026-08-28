@@ -41,6 +41,9 @@ class DataFrameBuilder:
       interpolated_times = numpy.interp(numpy.arange(0, self.counts[-1]+1), self.counts, self.times).astype(int)
 
       self.data['counter'] = interpolated_times
+      for k, v in list(self.data.items()):
+        if len(v) == 0:
+          del self.data[k]
       #print(self.counts)
       #print(self.times)
       #pprint({k: len(v) for k, v in self.data.items()})
@@ -108,10 +111,10 @@ class DataFrameBuilder:
         data = analog.data[span.begin:span.end]
       self.data[span.name].extend(data)
 
-      if self.ref_channel is None:
+      if self.ref_channel is None and data:
         self.ref_channel = span.name
 
-      if span.name == self.ref_channel:
+      if span.name == self.ref_channel and data:
         if not self.counts:
           self.counts.append(0)
           self.times.append(analog.time - (len(data)-1)*sample_interval)
