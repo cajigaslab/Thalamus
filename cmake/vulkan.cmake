@@ -44,7 +44,7 @@ if(WIN32)
 elseif(APPLE)
   set(GLSLANG_ASSET "glslang-main-macos-universal-release.zip")
 else()
-  set(GLSLANG_ASSET "glslang-main-linux-x86_64-release.zip")
+  set(GLSLANG_ASSET "glslang-main-linux-x86_64-release.tar.gz")
 endif()
 
 set(GLSLANG_DOWNLOAD_PATH "${CMAKE_BINARY_DIR}/${GLSLANG_ASSET}")
