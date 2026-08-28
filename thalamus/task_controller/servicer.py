@@ -79,21 +79,34 @@ class TaskControllerServicer(task_controller_pb2_grpc.TaskControllerServicer):
                       context: grpc.ServicerContext) -> typing.AsyncIterable[task_controller_pb2.TaskResult]:
     LOGGER.info('Executor connected')
     waiting_for_result = False
+    self.out_queue = asyncio.Queue()
     try:
       self.connection_event.set()
+      out_event = asyncio.create_task(self.out_queue.get())
+      in_event = asyncio.create_task(request_iterator.__anext__())
       while True:
-        config = await self.out_queue.get()
-        yield config
-        waiting_for_result = True
-        result = await request_iterator.__anext__()
-        waiting_for_result = False
-        await self.in_queue.put(result)
-    except StopAsyncIteration:
+        done, _ = await asyncio.wait([out_event, in_event], return_when=asyncio.FIRST_COMPLETED)
+        if out_event.done():
+          yield await out_event
+          out_event = asyncio.create_task(self.out_queue.get())
+          waiting_for_result = True
+        elif in_event.done():
+          await self.in_queue.put(await in_event)
+          in_event = asyncio.create_task(request_iterator.__anext__())
+          waiting_for_result = False
+    except (StopAsyncIteration, asyncio.CancelledError):
       LOGGER.info('Executor disconnected')
       if waiting_for_result:
         await self.in_queue.put(None)
         waiting_for_result = False
     finally:
+      out_event.cancel()
+      in_event.cancel()
+      try:
+        await out_event
+        await in_event
+      except asyncio.CancelledError:
+        pass
       self.connection_event.clear()
 
   async def wait_for_executor(self) -> None:

@@ -306,6 +306,7 @@ class TaskContext(TaskContextProtocol):
     self.task_config = ObservableDict({})
     self.channels: typing.Mapping[str, grpc.aio.Channel] = {}
     self.task: asyncio.tasks.Task[typing.Any] = create_task_with_exc_handling(asyncio.sleep(0))
+    self.remote_task_running = False
     config['queue'].add_observer(self.__on_queue_changed)
     self.__on_queue_changed(ObservableCollection.Action.SET, None, None)
 
@@ -615,16 +616,20 @@ class TaskContext(TaskContextProtocol):
     LOGGER.debug('waiting for executor')
     await self.servicer.wait_for_executor()
     config = task_controller_pb2.TaskConfig(body=json.dumps(task_config.unwrap()))
-    await self.servicer.send_config(config)
-
-    LOGGER.debug('waiting on task')
-
+    self.remote_task_running = True
     try:
-      grpc_result = await self.servicer.get_result()
-      result = TaskResult(grpc_result.success, cancelled=grpc_result.cancelled)
-    except ExecutorLostError:
-      LOGGER.error('Task executor disconnected')
-      result = TaskResult(False)
+      await self.servicer.send_config(config)
+
+      LOGGER.debug('waiting on task')
+
+      try:
+        grpc_result = await self.servicer.get_result()
+        result = TaskResult(grpc_result.success, cancelled=grpc_result.cancelled)
+      except ExecutorLostError:
+        LOGGER.error('Task executor disconnected')
+        result = TaskResult(False)
+    finally:
+      self.remote_task_running = False
 
     return result
 
@@ -819,6 +824,9 @@ class TaskContext(TaskContextProtocol):
     Aborts the current task
     """
     self.sleeper.cancel()
+    if self.widget is None and self.remote_task_running and self.servicer is not None:
+      config = task_controller_pb2.TaskConfig()
+      create_task_with_exc_handling(self.servicer.send_config(config))
 
   def stop(self) -> 'asyncio.tasks.Task[typing.Any]':
     """
