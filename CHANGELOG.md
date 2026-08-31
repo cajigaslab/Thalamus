@@ -10,23 +10,30 @@ some patch versions contain only build/CI or internal changes and are omitted be
 ## 1.0.x
 
 ### 1.0.42 — 2026-08-28
-- Task Controller: cancelling a running trial now also cancels it on a connected
-  remote executor (`-r/--remote-executor`), instead of only stopping locally.
-- STORAGE2: fixed video encoding for planar pixel formats (YUYV422, YUV420P,
-  YUVJ420P, RGB16); `DataframeBuilder` now ignores channels with zero samples.
+- Fixed a bug where cancelling a task running on a remote executor (`--remote-executor`)
+  didn't actually stop it: cancellation now notifies the remote executor so it stops
+  the in-flight task instead of continuing to run in the background.
+- Fixed STORAGE2 corruption when recording planar image formats (`YUYV422`,
+  `YUV420P`, `YUVJ420P`, `RGB16`) — the chroma/luma byte strides were wrong for
+  some formats.
+- `thalamus.dataframe` no longer emits empty columns for channels that received
+  no data during a recording.
+- macOS: fixed the packaged distribution failing to find a Vulkan driver by
+  bundling MoltenVK's ICD alongside the app and pointing the loader at it.
 
 ### 1.0.41 — 2026-08-24
-- **Default network binding changed:** the pipeline and task controller (and the
-  native/.NET helper processes they launch) now bind their gRPC/HTTP servers to
-  `127.0.0.1` instead of all interfaces.  Pass `--open` to restore the previous
-  behavior for multi-machine setups.
-- Added a startup check for the .NET 8 ASP.NET Core runtime, with a one-time
-  "Runtime Missing" dialog instead of a silent failure.
-- Plugin API: added functions to build detached state dicts/lists, append to list
-  states, and receive a callback once a state write has propagated.
-- OCULOMATIC's live preview now uses the native image viewer (like
-  PUPIL/CHESSBOARD/DISTORTION) and gained RGB image support.
-- STORAGE can now accept analog data signalled from multiple threads.
+- **Behavior change:** the task controller's gRPC servers (and the native
+  pipeline process) now bind to `127.0.0.1` only by default. Pass `--open` to
+  bind `0.0.0.0` as before — for example when a `REMOTE`/`RUNNER2` node on
+  another machine needs to reach this instance.
+- Windows: the task controller now checks that the .NET 8 ASP.NET Core runtime
+  is installed before launching the C# sidecar process, showing a one-time
+  install prompt instead of crashing when it's missing.
+- Plugin API: added functions to build detached state values
+  (`state_make_dict`/`state_make_list`), write state/list entries with a
+  completion callback, and open/drive an SDL window from a plugin.
+- OCULOMATIC's rendering was rewritten in C++ so it stays live through UI
+  stalls, and the image viewer gained RGB source support alongside grayscale.
 
 ### 1.0.37 — 2026-07-31
 - OCULOMATIC recenter requests are now written to the pipeline log as

@@ -79,10 +79,8 @@ Both ``thalamus.pipeline`` and ``thalamus.task_controller`` accept:
   connect (e.g. a remote :doc:`registry <tools>` client or a multi-machine rig).
   Only do this on a trusted network -- the gRPC interface has no authentication.
 * ``-r, --remote-executor`` (``thalamus.task_controller`` only) -- send task
-  execution to a remote executor process instead of running it locally.  Cancelling
-  a running trial (from the control window, or when a trial times out) now forwards
-  the cancellation to the remote executor as well, instead of only stopping the
-  local UI state.
+  execution to a remote executor process instead of running it locally; see
+  :ref:`remote-executor` for how trial cancellation is handled in this mode.
 
 ``thalamus.pipeline`` additionally accepts ``--no-gpu`` to disable GPU/Vulkan
 rendering (falls back to software rendering; useful on machines without a usable
