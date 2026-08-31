@@ -139,7 +139,7 @@ async def async_main() -> None:
     if hasattr(ext_module, 'library'):
       ext_library = ext_module.library()
       ext_library = [ext_library] if isinstance(ext_library, (str, pathlib.Path)) else ext_library
-      ext_library = tuple(ext_library)
+      ext_library = tuple(str(e) for e in ext_library)
     if hasattr(ext_module, 'tasks'):
       add_tasks(ext_module.tasks())
 
