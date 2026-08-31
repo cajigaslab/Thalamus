@@ -385,6 +385,20 @@ if(NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
   target_link_options(native PRIVATE -g)
 endif()
 
+# VULKAN_LOADER_LIB/MOLTENVK_DYLIB/MOLTENVK_ICD_JSON are only set when
+# cmake/vulkan.cmake had to build Vulkan from source (i.e. no Vulkan SDK was
+# found on this machine, the case on CI runners). When a local Vulkan SDK is
+# found instead (e.g. LunarG SDK during development), `native` links against
+# its absolute path and none of this bundling/rpath setup is needed.
+if(APPLE AND VULKAN_LOADER_LIB)
+  # libvulkan.1.dylib and libMoltenVK.dylib are bundled next to `native`
+  # (see below), not installed to a system location, so look for them
+  # relative to the executable itself.
+  set_target_properties(native PROPERTIES
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH "@executable_path")
+endif()
+
 if(STRIP)
   add_custom_command(TARGET native POST_BUILD COMMAND strip "$<TARGET_FILE:native>" -o "${CMAKE_SOURCE_DIR}/thalamus/native")
 else()
@@ -392,6 +406,11 @@ else()
 endif()
 if(BUILD_CRASHPAD)
   add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "${CRASHPAD_HANDLER_EXE}" "${CMAKE_SOURCE_DIR}/thalamus")
+endif()
+if(APPLE AND VULKAN_LOADER_LIB)
+  add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "${VULKAN_LOADER_LIB}" "${CMAKE_SOURCE_DIR}/thalamus")
+  add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "${MOLTENVK_DYLIB}" "${CMAKE_SOURCE_DIR}/thalamus")
+  add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "${MOLTENVK_ICD_JSON}" "${CMAKE_SOURCE_DIR}/thalamus")
 endif()
 
 add_executable(test src/test.cpp)

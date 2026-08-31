@@ -277,7 +277,8 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
       is_native_executable = path.stem == 'native'
       is_crashpad_handler = path.stem == 'crashpad_handler'
       is_dotnet_file = "dotnet" in parents
-      if is_dir or in_ignored_dir or has_ignored_suffix and not is_native_executable and not is_crashpad_handler and not is_dotnet_file:
+      is_vulkan_runtime = path.name in ('libvulkan.1.dylib', 'libvulkan.so.1', 'libMoltenVK.dylib', 'MoltenVK_icd.json')
+      if is_dir or in_ignored_dir or has_ignored_suffix and not (is_native_executable or is_crashpad_handler or is_dotnet_file or is_vulkan_runtime):
         #print(path, 'DROP')
         continue
       files.append(path)
