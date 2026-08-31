@@ -74,12 +74,15 @@ Applications
 Both ``thalamus.pipeline`` and ``thalamus.task_controller`` accept:
 
 * ``--open`` -- bind their gRPC/HTTP servers to ``0.0.0.0`` instead of the default
-  ``localhost`` only.  By default (since 1.0.17) Thalamus only accepts connections
+  ``localhost`` only.  By default (since 1.0.41) Thalamus only accepts connections
   from the local machine; pass ``--open`` to allow other machines on the network to
   connect (e.g. a remote :doc:`registry <tools>` client or a multi-machine rig).
   Only do this on a trusted network -- the gRPC interface has no authentication.
 * ``-r, --remote-executor`` (``thalamus.task_controller`` only) -- send task
-  execution to a remote executor process instead of running it locally.
+  execution to a remote executor process instead of running it locally.  Cancelling
+  a running trial (from the control window, or when a trial times out) now forwards
+  the cancellation to the remote executor as well, instead of only stopping the
+  local UI state.
 
 ``thalamus.pipeline`` additionally accepts ``--no-gpu`` to disable GPU/Vulkan
 rendering (falls back to software rendering; useful on machines without a usable

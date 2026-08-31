@@ -63,7 +63,9 @@ Workflow
    (up/down/left/right), or **4 Targets On Corners** (the four diagonals) -- each
    applied as a single undoable action.
 2. **Collect samples.** With the subject fixating a target, record the current gaze
-   as a training sample for that target.
+   as a training sample for that target.  **Pin Here** (context menu) drops a
+   training sample directly at the clicked screen point instead, without waiting
+   for the subject to fixate a target first.
 3. **Fit.** Press **Fit** to solve the selected model from the collected samples.
 4. **Refine.** For Angular Scaling you can **nudge** pins by dragging to locally
    adjust a notch's scale/rotation, and **Add Notch** (context menu) to add a new
