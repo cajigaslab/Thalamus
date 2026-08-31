@@ -48,6 +48,22 @@ Common options:
 * ``-r, --remote-executor`` -- send task execution to a remote executor process
   instead of running tasks locally.
 
+.. _remote-executor:
+
+Remote task execution
+----------------------
+
+With ``-r, --remote-executor`` (or ``Orchestration: {Remote Executor: true}`` in the
+config), the controller runs headless -- no subject window -- and instead streams
+each trial's ``TaskConfig`` over gRPC to an external executor process, which runs
+the task and streams back the result.  Use this to run the actual stimulus/input
+loop on different hardware than the one hosting the control window.
+
+Aborting a trial (e.g. an operator abort, or a task-cluster/queue change) while a
+remote executor is mid-trial sends it an empty ``TaskConfig``, which the executor
+treats as a cancellation request; the trial is reported back as cancelled rather
+than continuing to run on the executor after the controller has moved on.
+
 .. _dotnet-runtime:
 
 .NET sidecar (Windows)
