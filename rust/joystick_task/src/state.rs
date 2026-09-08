@@ -49,6 +49,13 @@ pub struct TrialOutcome {
     pub success: bool,
 }
 
+/// Phase 0 safety gate (new; no Python analog): how long analog input may stay
+/// non-finite/stale before an active trial fails rather than run on it. Kept
+/// well above ordinary INTAN/decoder packet jitter (single-digit ms) and well
+/// below anything a human would read as "the task is stuck" (trial_timeout is
+/// seconds).
+const INPUT_FAULT_TRIAL_ABORT_S: f64 = 0.5;
+
 /// One frame's inputs.
 #[derive(Debug, Clone, Copy)]
 pub struct StepInput {
@@ -60,6 +67,11 @@ pub struct StepInput {
     /// Subject surface size in pixels.
     pub width_px: i64,
     pub height_px: i64,
+    /// True when the analog source (hardware joystick or a BCI decoder feeding
+    /// the "Decoder" node) hasn't delivered a fresh sample recently -- see
+    /// `JoystickState::age()`. Treated exactly like a non-finite sample: `step()`
+    /// holds the last known-good value instead of trusting a frozen one.
+    pub input_stale: bool,
 }
 
 #[derive(Debug, Default)]
@@ -294,6 +306,14 @@ pub struct Trial {
     previous_cursor_inside_target: bool,
     current_attempt: Option<Attempt>,
 
+    // Phase 0 safety bookkeeping (new; no Python analog). last_good_analog is
+    // what step() falls back to whenever the current frame's analog input is
+    // non-finite or stale; bad_input_since is when that streak started, so an
+    // active trial can fail safely instead of running on frozen/garbage input
+    // indefinitely (see INPUT_FAULT_TRIAL_ABORT_S in step_target_trial).
+    last_good_analog: (f64, f64),
+    bad_input_since: Option<f64>,
+
     // Free-play bookkeeping.
     free_play_was_active: bool,
     free_play_active_bout_start: Option<f64>,
@@ -425,6 +445,8 @@ impl Trial {
             free_play_end_requested: false,
             operator_cursor_latched: false,
             joystick_active_this_trial: false,
+            last_good_analog: (0.0, 0.0),
+            bad_input_since: None,
             touch_detected_this_trial: false,
             last_touch_pos: (0, 0),
             last_touch_time: None,
@@ -925,6 +947,28 @@ impl Trial {
             return out;
         }
 
+        // Phase 0 safety gate: NaN/Inf/stale analog input must never reach
+        // cursor state (cursor_x/cursor_y persist frame-to-frame, so a single
+        // bad sample would corrupt every frame after it). Hold the last
+        // known-good sample instead, and track how long that's been going on
+        // so step_target_trial can fail an active trial safely rather than run
+        // it on frozen/garbage input indefinitely.
+        let analog_ok = inp.analog_x.is_finite() && inp.analog_y.is_finite() && !inp.input_stale;
+        let sanitized;
+        let inp: &StepInput = if analog_ok {
+            self.last_good_analog = (inp.analog_x.clamp(-1.5, 1.5), inp.analog_y.clamp(-1.5, 1.5));
+            self.bad_input_since = None;
+            inp
+        } else {
+            self.bad_input_since.get_or_insert(now);
+            sanitized = StepInput {
+                analog_x: self.last_good_analog.0,
+                analog_y: self.last_good_analog.1,
+                ..*inp
+            };
+            &sanitized
+        };
+
         let (operator_jx, operator_jy) = self.get_operator_joystick();
         let operator_override_active = operator_jx != 0.0 || operator_jy != 0.0;
         let analog_magnitude = inp.analog_x.hypot(inp.analog_y);
@@ -1242,6 +1286,23 @@ impl Trial {
         }
         self.previous_cursor_inside_target = self.cursor_inside_target;
 
+        // Phase 0 safety gate (new; no Python analog): analog input has been
+        // non-finite or stale for INPUT_FAULT_TRIAL_ABORT_S straight -- fail the
+        // trial rather than let it run on frozen/garbage input. Checked before
+        // the ordinary timeout below since a stalled decoder should be reported
+        // distinctly from "the subject didn't move."
+        if let Some(since) = self.bad_input_since {
+            if now - since >= INPUT_FAULT_TRIAL_ABORT_S {
+                self.streak_count = 0;
+                let e = self.event("fail", now).with("failure_reason", "invalid_input");
+                self.append_event(e);
+                self.finalize_attempt("fail", now, Some("invalid_input"));
+                out.log("fail");
+                out.done = Some(TrialOutcome { success: false });
+                return;
+            }
+        }
+
         // Timeout (@3205-3232).
         if now - self.trial_start >= self.cfg.trial_timeout {
             if self.cfg.ignore_idle_trial_failures && !self.joystick_active_this_trial {
@@ -1465,6 +1526,7 @@ mod tests {
             analog_y: y,
             width_px: 1920,
             height_px: 1080,
+            input_stale: false,
         })
     }
 
@@ -1604,6 +1666,57 @@ mod tests {
         let attempt = t.behav.final_attempt.as_ref().unwrap();
         assert_eq!(attempt.failure_reason.as_deref(), Some("timeout_without_movement"));
         assert_eq!(t.streak_count, 0);
+    }
+
+    #[test]
+    fn nan_analog_input_never_corrupts_cursor() {
+        let (c, raw) =
+            cfg(r#"{"intertrial_interval": 0.1, "trial_timeout": 5.0, "control_mode": "direct"}"#);
+        let mut t = Trial::new(c, &raw, 0.0, 7);
+        t.begin();
+        step_at(&mut t, 0.1, 0.3, 0.0); // -> start_on, cursor moves off-center
+        assert!(t.cursor_x.is_finite() && t.cursor_y.is_finite());
+        // A single NaN frame must not corrupt cursor state, nor immediately fail the trial.
+        let out = t.step(&StepInput {
+            now_s: 0.15,
+            analog_x: f64::NAN,
+            analog_y: f64::NAN,
+            width_px: 1920,
+            height_px: 1080,
+            input_stale: false,
+        });
+        assert!(t.cursor_x.is_finite() && t.cursor_y.is_finite());
+        assert!(out.done.is_none());
+    }
+
+    #[test]
+    fn sustained_invalid_input_fails_trial_distinctly() {
+        let (c, raw) =
+            cfg(r#"{"intertrial_interval": 0.1, "trial_timeout": 5.0, "control_mode": "direct"}"#);
+        let mut t = Trial::new(c, &raw, 0.0, 7);
+        t.begin();
+        step_at(&mut t, 0.1, 0.0, 0.0); // -> start_on
+        // Input goes stale and stays that way past INPUT_FAULT_TRIAL_ABORT_S (0.5s).
+        t.step(&StepInput {
+            now_s: 0.2,
+            analog_x: 0.0,
+            analog_y: 0.0,
+            width_px: 1920,
+            height_px: 1080,
+            input_stale: true,
+        });
+        let out = t.step(&StepInput {
+            now_s: 0.75,
+            analog_x: 0.0,
+            analog_y: 0.0,
+            width_px: 1920,
+            height_px: 1080,
+            input_stale: true,
+        });
+        assert_eq!(out.done.unwrap().success, false);
+        assert!(t.cursor_x.is_finite() && t.cursor_y.is_finite());
+        let attempt = t.behav.final_attempt.as_ref().unwrap();
+        assert_eq!(attempt.failure_reason.as_deref(), Some("invalid_input"));
     }
 
     #[test]

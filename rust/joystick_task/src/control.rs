@@ -86,25 +86,40 @@ async fn pump_input(
             let y_int = interval_of(1);
             let interval = if x_int > 0.0 { x_int } else { y_int };
             let start = received_s - interval * (n - 1) as f64;
-            let mut last = (0.0, 0.0);
+            let mut last: Option<(f64, f64)> = None;
             for i in 0..n {
                 let t = if interval > 0.0 {
                     start + interval * i as f64
                 } else {
                     received_s
                 };
-                last = (xs[i], ys[i]);
+                // Phase 0 safety: a NaN/Inf sample (bad hardware, a mid-fit BCI
+                // decoder, a dropped/garbled packet) must never reach the trial
+                // state machine or the lock-free cursor cell -- drop it and keep
+                // the last good value in view (JoystickState.age() lets the
+                // consumer notice the source has gone quiet).
+                if !xs[i].is_finite() || !ys[i].is_finite() {
+                    joystick.record_fault();
+                    continue;
+                }
+                last = Some((xs[i], ys[i]));
                 if sample_tx.send((t, xs[i], ys[i])).is_err() {
                     return; // trial ended
                 }
             }
-            joystick.set(last);
+            if let Some(last) = last {
+                joystick.set(last);
+            }
         } else if msg.data.len() >= 2 {
             let (x, y) = (msg.data[0], msg.data[1]);
-            if sample_tx.send((received_s, x, y)).is_err() {
-                return;
+            if !x.is_finite() || !y.is_finite() {
+                joystick.record_fault();
+            } else {
+                if sample_tx.send((received_s, x, y)).is_err() {
+                    return;
+                }
+                joystick.set((x, y));
             }
-            joystick.set((x, y));
         }
     }
 }

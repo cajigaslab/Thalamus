@@ -748,12 +748,18 @@ impl Executor {
         }
 
         let (ax, ay) = job.joystick.get();
+        // Phase 0 safety gate: no fresh analog sample in 250ms means the source
+        // (hardware joystick, or a BCI decoder feeding "Decoder") has stalled --
+        // well above normal INTAN/decoder packet jitter (single-digit ms) and
+        // far below anything perceptible as "the cursor froze."
+        let input_stale = job.joystick.age() > std::time::Duration::from_millis(250);
         let out = job.trial.step(&crate::state::StepInput {
             now_s: job.clock.now_python_ns() as f64 / 1e9,
             analog_x: ax,
             analog_y: ay,
             width_px: w,
             height_px: h,
+            input_stale,
         });
         let trial_started = out
             .effects

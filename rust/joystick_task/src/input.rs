@@ -9,7 +9,9 @@
 //!     take the LAST sample of each as the latest value.
 //!   - else if data has >= 2 elements: data[0]=X, data[1]=Y.
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use arc_swap::ArcSwap;
 use tokio_stream::StreamExt;
@@ -18,15 +20,24 @@ use crate::proto::thalamus::AnalogResponse;
 
 /// Latest joystick sample, lock-free. `(x, y)` in the device's native units
 /// (the Python code treats them as ~[-1, 1] analog; no scaling applied here).
+///
+/// Safety layer (Phase 0 of the closed-loop BCI roadmap): non-finite (NaN/Inf)
+/// samples are dropped before they ever reach `set()` (see `control::pump_input`),
+/// and every accepted sample stamps its arrival time so `age()` lets a consumer
+/// detect a stalled/hung analog source (hardware joystick OR a BCI decoder feeding
+/// the "Decoder" node) instead of silently rendering a frozen last-known value
+/// forever.
 #[derive(Clone)]
 pub struct JoystickState {
-    latest: Arc<ArcSwap<(f64, f64)>>,
+    latest: Arc<ArcSwap<(f64, f64, Instant)>>,
+    faults: Arc<AtomicU64>,
 }
 
 impl Default for JoystickState {
     fn default() -> Self {
         Self {
-            latest: Arc::new(ArcSwap::from_pointee((0.0, 0.0))),
+            latest: Arc::new(ArcSwap::from_pointee((0.0, 0.0, Instant::now()))),
+            faults: Arc::new(AtomicU64::new(0)),
         }
     }
 }
@@ -34,11 +45,31 @@ impl Default for JoystickState {
 impl JoystickState {
     /// Read the freshest (x, y). Call once per frame.
     pub fn get(&self) -> (f64, f64) {
-        *self.latest.load_full()
+        let (x, y, _) = *self.latest.load_full();
+        (x, y)
+    }
+
+    /// Time since the last accepted sample. Growing without bound means the
+    /// analog source has stopped delivering (hung decoder, dropped connection, etc).
+    pub fn age(&self) -> Duration {
+        let (_, _, t) = *self.latest.load_full();
+        t.elapsed()
     }
 
     pub(crate) fn set(&self, xy: (f64, f64)) {
-        self.latest.store(Arc::new(xy));
+        self.latest.store(Arc::new((xy.0, xy.1, Instant::now())));
+    }
+
+    /// Count of non-finite (NaN/Inf) samples dropped since start. Not yet wired
+    /// to any consumer (operator HUD/telemetry) -- part of the Phase 0 safety
+    /// API surface for that follow-up.
+    #[allow(dead_code)]
+    pub fn fault_count(&self) -> u64 {
+        self.faults.load(Ordering::Relaxed)
+    }
+
+    pub(crate) fn record_fault(&self) {
+        self.faults.fetch_add(1, Ordering::Relaxed);
     }
 }
 
@@ -92,7 +123,11 @@ pub fn spawn_reader(mut stream: tonic::Streaming<AnalogResponse>) -> JoystickSta
             match item {
                 Ok(msg) => {
                     if let Some(xy) = parse_xy(&msg) {
-                        state.set(xy);
+                        if xy.0.is_finite() && xy.1.is_finite() {
+                            state.set(xy);
+                        } else {
+                            state.record_fault();
+                        }
                     }
                 }
                 Err(status) => {

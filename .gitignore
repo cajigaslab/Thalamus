@@ -28,3 +28,7 @@ test.tha.*
 *.perfetto-trace
 /build-old
 .venv/
+
+# intan_soak_test.py run artifacts (per-run data, not source)
+intan_soak_*.csv
+intan_soak_*.log
