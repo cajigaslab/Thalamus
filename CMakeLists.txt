@@ -58,17 +58,6 @@ else()
   set(CMAKE_PARALLEL --parallel ${CPU_COUNT})
 endif()
 
-# Sanitizer reports only ever need file:line for their stack traces, not the
-# full type/variable DWARF that -g produces. On a codebase this size, full -g
-# makes the binary's .debug_info large enough that llvm-symbolizer can take
-# minutes to index it before a TSan report can print. -gline-tables-only
-# keeps symbolization fast while still resolving frames to source lines.
-if(NOT "${SANITIZER}" STREQUAL "")
-  set(DEBUG_INFO_FLAG -gline-tables-only)
-else()
-  set(DEBUG_INFO_FLAG -g)
-endif()
-
 if(WIN32)
   if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
     list(APPEND ALL_COMPILE_OPTIONS /MP)
@@ -76,11 +65,11 @@ if(WIN32)
     list(APPEND ALL_LINK_OPTIONS /DEBUG)
   else()
     message("Release debug symbols enabled")
-    list(APPEND ALL_COMPILE_OPTIONS ${DEBUG_INFO_FLAG})
+    list(APPEND ALL_COMPILE_OPTIONS -g)
   endif()
 else()
   message("Release debug symbols enabled")
-  list(APPEND ALL_COMPILE_OPTIONS ${DEBUG_INFO_FLAG})
+  list(APPEND ALL_COMPILE_OPTIONS -g)
 endif()
   
 if("${SANITIZER}" STREQUAL thread)
@@ -393,7 +382,7 @@ target_include_directories(native PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(native PRIVATE hydrate thalamus opencv thalamus_ffmpeg ffmpeg sdl protoc_generated lua cairo)
 
 if(NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
-  target_link_options(native PRIVATE ${DEBUG_INFO_FLAG})
+  target_link_options(native PRIVATE -g)
 endif()
 
 # VULKAN_LOADER_LIB/MOLTENVK_DYLIB/MOLTENVK_ICD_JSON are only set when
@@ -440,7 +429,7 @@ target_compile_options(test PRIVATE -fprofile-instr-generate -fcoverage-mapping)
 target_link_options(test PRIVATE -fprofile-instr-generate -fcoverage-mapping)
 
 if(NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
-  target_link_options(test PRIVATE ${DEBUG_INFO_FLAG})
+  target_link_options(test PRIVATE -g)
 endif()
 
 if(WIN32 AND BUILD_DOTNET)
