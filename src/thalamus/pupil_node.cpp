@@ -163,7 +163,12 @@ struct PupilNode::Impl {
     if(!signaler.signal()) {
       return;
     }
-    if (auto local = viewer_weak.lock()) {
+    std::shared_ptr<ImageViewer> local;
+    {
+      std::lock_guard<std::mutex> lock(mutex);
+      local = viewer_weak.lock();
+    }
+    if (local) {
       local->update(outer);
     }
 
@@ -200,6 +205,7 @@ struct PupilNode::Impl {
       if (std::get<bool>(v)) {
         if(!viewer) {
           viewer = ImageViewer::create(graph, io_context, state, outer);
+          std::lock_guard<std::mutex> lock(mutex);
           viewer_weak = viewer;
         }
       } else {
