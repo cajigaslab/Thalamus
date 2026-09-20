@@ -1,5 +1,6 @@
 from ..qt import *
 
+import asyncio
 import dataclasses
 import inspect
 import typing
@@ -98,9 +99,12 @@ class WaveWidget(QWidget):
         else:
           self.first_wave = None
           return
-        for p in WAVE_PROPERTIES:
-          if p in self.config:
-            self.first_wave[p] = self.config[p]
+        
+        async def apply_legacy_parameters():
+          for p in WAVE_PROPERTIES:
+            if p in self.config:
+              self.first_wave[p] = self.config[p]
+        asyncio.create_task(apply_legacy_parameters())
     else:
       if source is self.first_wave:
         self.config[key] = value

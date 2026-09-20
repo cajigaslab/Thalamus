@@ -63,10 +63,10 @@ struct PupilNode::Impl {
   ThreadPool &pool;
   boost::asio::io_context draw_context;
   boost::asio::steady_timer timer;
+  node::OffMainSignaler signaler;
   std::shared_ptr<ImageViewer> viewer;
   std::weak_ptr<ImageViewer> viewer_weak;
   std::thread draw_thread;
-  std::atomic_bool draw_thread_running = false;
   std::mutex mutex;
   std::condition_variable condition_variable;
 
@@ -101,7 +101,7 @@ struct PupilNode::Impl {
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
        PupilNode *_outer, NodeGraph *_graph)
       : io_context(_io_context), state(_state), outer(_outer), graph(_graph),
-        pool(graph->get_thread_pool()), timer(draw_context) {
+        pool(graph->get_thread_pool()), timer(draw_context), signaler(*_outer, _io_context) {
     outer->ready_multithreaded.emplace();
 
     using namespace std::placeholders;
@@ -126,12 +126,7 @@ struct PupilNode::Impl {
   }
 
   ~Impl() {
-    boost::asio::post(draw_context, [&] {
-      timer.cancel();
-    });
-    if(draw_thread.joinable()) {
-      draw_thread.join();
-    }
+    stop_draw_thread();
     (*state)["Running"].assign(false, [&] {});
   }
 
@@ -165,7 +160,9 @@ struct PupilNode::Impl {
     cairo_arc(cairo.get(), 0, 0, 128, 0, 2 * M_PI);
     cairo_fill(cairo.get());
 
-    node::signal_ready_offmain(outer, io_context);
+    if(!signaler.signal()) {
+      return;
+    }
     if (auto local = viewer_weak.lock()) {
       local->update(outer);
     }
@@ -187,19 +184,18 @@ struct PupilNode::Impl {
                  const ObservableCollection::Value &v) {
     auto key_str = std::get<std::string>(k);
     if (key_str == "Running") {
+      stop_draw_thread();
       is_running = std::get<bool>(v);
-      stop_draw_thread([this] {
-        if(is_running) {
-          draw_thread_running = true;
-          draw_context.restart();
-          draw_thread = std::thread([&] {
-            set_current_thread_name("PupilNode");
-            timer.expires_after(std::chrono::nanoseconds(frame_interval_ns));
-            timer.async_wait(std::bind(&Impl::on_timer, this, _1));
-            draw_context.run();
-          });
-        }
-      });
+      if(is_running) {
+        signaler.unblock();
+        draw_context.restart();
+        draw_thread = std::thread([&] {
+          set_current_thread_name("PupilNode");
+          timer.expires_after(std::chrono::nanoseconds(frame_interval_ns));
+          timer.async_wait(std::bind(&Impl::on_timer, this, _1));
+          draw_context.run();
+        });
+      }
     } else if (key_str == "View") {
       if (std::get<bool>(v)) {
         if(!viewer) {
@@ -224,35 +220,11 @@ struct PupilNode::Impl {
     }
   }
 
-  void stop_draw_thread(std::function<void()> callback) {
+  void stop_draw_thread() {
+    signaler.block();
     if(draw_thread.joinable()) {
-      auto old_thread = std::make_shared<std::thread>(std::move(draw_thread));
-      boost::asio::post(draw_context, [this] { timer.cancel(); });
-      pool.push([old_thread, callback, this] {
-        old_thread->join();
-        {
-          std::lock_guard<std::mutex> lock(mutex);
-          draw_thread_running = false;
-        }
-        condition_variable.notify_all();
-        if(callback) {
-          boost::asio::post(io_context, callback);
-        }
-      });
-    } else {
-      pool.push([this,callback] {
-        std::unique_lock<std::mutex> lock(mutex);
-        condition_variable.wait(lock, [&]{ return !draw_thread_running; });
-        if(callback) {
-          boost::asio::post(io_context, callback);
-        }
-      });
+      draw_thread.join();
     }
-  }
-
-  void predrop(std::function<void()> outer_drop_ready) {
-    state_connection.disconnect();
-    stop_draw_thread(outer_drop_ready);
   }
 };
 
@@ -319,9 +291,5 @@ boost::json::value PupilNode::process(const boost::json::value &request) {
 }
 
 size_t PupilNode::modalities() const { return infer_modalities<PupilNode>(); }
-
-void PupilNode::predrop(std::function<void()> drop_ready) {
-  impl->predrop(drop_ready);
-}
 
 } // namespace thalamus
