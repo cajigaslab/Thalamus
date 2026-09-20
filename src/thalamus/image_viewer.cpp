@@ -201,7 +201,7 @@ struct ImageViewer::Impl {
   int geom_x = 0, geom_y = 0, geom_w = 0, geom_h = 0;
   std::chrono::steady_clock::time_point last_geometry_check =
       std::chrono::steady_clock::now();
-  uint32_t image_w = 0, image_h = 0;
+  std::atomic_uint32_t image_w = 0, image_h = 0;
 
   const std::map<SDL_Scancode, std::string> scancode_table = {
     {SDL_SCANCODE_A, "KeyA"},
