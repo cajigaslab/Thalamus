@@ -40,7 +40,7 @@ namespace thalamus {
       impl->cv.notify_one();
     }
 
-    bool OffMainSignaler::signal() {
+    bool OffMainSignaler::ready() {
       std::unique_lock<std::mutex> lock(impl->mutex);
       if(impl->blocked) {
         return false;

@@ -160,7 +160,7 @@ struct PupilNode::Impl {
     cairo_arc(cairo.get(), 0, 0, 128, 0, 2 * M_PI);
     cairo_fill(cairo.get());
 
-    if(!signaler.signal()) {
+    if(!signaler.ready()) {
       return;
     }
     std::shared_ptr<ImageViewer> local;

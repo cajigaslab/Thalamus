@@ -94,6 +94,7 @@ extern "C" {
   struct ThalamusIoContext;
   struct ThalamusNodeGraph;
   struct ThalamusVkQueueLock;
+  struct ThalamusOffMainSignaler;
 
   struct ThalamusDoubleSpan {
     const double* data;
@@ -174,6 +175,9 @@ extern "C" {
     YUYV422 = 2,
     YUV420P = 3,
     YUVJ420P = 4,
+    NV12 = 5,
+    BGR = 6,
+    MJPEG = 7,
   };
 
   struct ThalamusImageNode {
@@ -216,6 +220,7 @@ extern "C" {
     char (*prepare)(struct ThalamusNodeFactory*);
     void (*cleanup)(struct ThalamusNodeFactory*);
     void* plugin_impl;
+    struct ThalamusNode* (*create2)(struct ThalamusNodeFactory*, struct ThalamusState*, struct ThalamusIoContext*, struct ThalamusNodeGraph*, void*);
   };
 
   struct ThalamusTimer;
@@ -419,9 +424,16 @@ extern "C" {
     void (*state_push_float_with_callback)(struct ThalamusState*, double, ThalamusPostCallback, void*); // 129
     void (*state_push_null_with_callback)(struct ThalamusState*, ThalamusPostCallback, void*); // 130
     void (*state_push_bool_with_callback)(struct ThalamusState*, char, ThalamusPostCallback, void*); // 131
+
+    struct ThalamusOffMainSignaler* (*node_offmain_signaler_create)(struct ThalamusNode*); // 132
+    void (*node_offmain_signaler_destroy)(struct ThalamusOffMainSignaler*); // 133
+    void (*node_offmain_signaler_block)(struct ThalamusOffMainSignaler*); // 134
+    void (*node_offmain_signaler_unblock)(struct ThalamusOffMainSignaler*); // 135
+    uint8_t (*node_offmain_signaler_ready)(struct ThalamusOffMainSignaler*); // 136
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories_t)(struct ThalamusAPI*);
+  typedef int32_t (*thalamus_get_node_factory_version_t)();
   typedef void (*thalamus_teardown_t)();
   
 #ifdef __cplusplus

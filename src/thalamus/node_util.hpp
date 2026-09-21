@@ -11,7 +11,7 @@ namespace thalamus {
       OffMainSignaler(Node&, boost::asio::io_context&);
       void block();
       void unblock();
-      bool signal();
+      bool ready();
     };
 
     boost::signals2::connection connect_ready_multithreaded(Node*, std::function<void(Node*)>);
