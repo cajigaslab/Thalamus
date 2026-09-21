@@ -354,6 +354,13 @@ class ImageWidget(QWidget):
             data = numpy.array(numpy.frombuffer(data, dtype=numpy.uint8).reshape(response.height,-1)[:,:3*response.width])
           else:
             data = data
+        elif response.format == thalamus_pb2.Image.Format.BGR:
+          format = QImage.Format.Format_BGR888 
+          data = response.data[0]
+          if response.width*3*response.height != len(data):
+            data = numpy.array(numpy.frombuffer(data, dtype=numpy.uint8).reshape(response.height,-1)[:,:3*response.width])
+          else:
+            data = data
         elif response.format == thalamus_pb2.Image.Format.YUYV422:
           format = QImage.Format.Format_RGB888
           data = response.data[0]
@@ -362,6 +369,17 @@ class ImageWidget(QWidget):
           else:
             data = numpy.frombuffer(data, dtype=numpy.uint8).reshape(response.height,response.width,-1)[:,:,:2]
           data = cv2.cvtColor(data, cv2.COLOR_YUV2RGB_YUYV)
+        elif response.format == thalamus_pb2.Image.Format.MJPEG:
+          format = QImage.Format.Format_BGR888
+          data = cv2.imdecode(data)
+        elif response.format == thalamus_pb2.Image.Format.NV12:
+          format = QImage.Format.Format_RGB888
+          data = response.data[0]
+          if response.width*response.height*3//2 != len(data):
+            data = numpy.array(numpy.frombuffer(data, dtype=numpy.uint8).reshape(response.height,-1)[:,:response.width])
+          else:
+            data = numpy.frombuffer(data, dtype=numpy.uint8).reshape(response.height*3//2,-1)
+          data = cv2.cvtColor(data, cv2.COLOR_YUV2RGB_NV12)
         elif response.format in (thalamus_pb2.Image.Format.YUVJ420P, thalamus_pb2.Image.Format.YUV420P):
           format = QImage.Format.Format_RGB888
           luminance = response.data[0]

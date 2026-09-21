@@ -1078,6 +1078,15 @@ struct ImageSession : public NodeSession<ImageNode, thalamus_grpc::Image> {
       case ImageNode::Format::YUVJ420P:
         format = thalamus_grpc::Image::Format::Image_Format_YUVJ420P;
         break;
+      case ImageNode::Format::NV12:
+        format = thalamus_grpc::Image::Format::Image_Format_NV12;
+        break;
+      case ImageNode::Format::BGR:
+        format = thalamus_grpc::Image::Format::Image_Format_BGR;
+        break;
+      case ImageNode::Format::MJPEG:
+        format = thalamus_grpc::Image::Format::Image_Format_MJPEG;
+        break;
       }
 
       while (position < data_count) {

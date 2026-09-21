@@ -325,6 +325,15 @@ struct Storage2Node::Impl {
       case ImageNode::Format::YUVJ420P:
         body->set_format(thalamus_grpc::Image::Format::Image_Format_YUVJ420P);
         break;
+      case ImageNode::Format::NV12:
+        body->set_format(thalamus_grpc::Image::Format::Image_Format_NV12);
+        break;
+      case ImageNode::Format::BGR:
+        body->set_format(thalamus_grpc::Image::Format::Image_Format_BGR);
+        break;
+      case ImageNode::Format::MJPEG:
+        body->set_format(thalamus_grpc::Image::Format::Image_Format_MJPEG);
+        break;
       }
 
       for (auto i = 0; i < int(locked_analog->num_planes()); ++i) {
@@ -686,6 +695,9 @@ struct Storage2Node::Impl {
         case thalamus_grpc::Image::Format::Image_Format_RGB:
           bps = {3, 3, 3};
           break;
+        case thalamus_grpc::Image::Format::Image_Format_BGR:
+          bps = {3, 3, 3};
+          break;
         case thalamus_grpc::Image::Format::Image_Format_YUYV422:
           bps = {2, 2, 2};
           break;
@@ -701,8 +713,12 @@ struct Storage2Node::Impl {
         case thalamus_grpc::Image::Format::Image_Format_RGB16:
           bps = {6, 6, 6};
           break;
+        case thalamus_grpc::Image::Format::Image_Format_NV12:
+          bps = {1, 1, 1};
+          break;
         case thalamus_grpc::Image::Format::Image_Format_MPEG1:
         case thalamus_grpc::Image::Format::Image_Format_MPEG4:
+        case thalamus_grpc::Image::Format::Image_Format_MJPEG:
         case thalamus_grpc::Image::Format::
             Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
         case thalamus_grpc::Image::Format::
@@ -1193,6 +1209,9 @@ struct Storage2Node::Impl {
             case thalamus_grpc::Image::Format::Image_Format_RGB:
               format = AV_PIX_FMT_RGB24;
               break;
+            case thalamus_grpc::Image::Format::Image_Format_BGR:
+              format = AV_PIX_FMT_BGR24;
+              break;
             case thalamus_grpc::Image::Format::Image_Format_YUYV422:
               format = AV_PIX_FMT_YUYV422;
               break;
@@ -1202,11 +1221,15 @@ struct Storage2Node::Impl {
             case thalamus_grpc::Image::Format::Image_Format_YUVJ420P:
               format = AV_PIX_FMT_YUVJ420P;
               break;
+            case thalamus_grpc::Image::Format::Image_Format_NV12:
+              format = AV_PIX_FMT_NV12;
+              break;
             case thalamus_grpc::Image::Format::Image_Format_RGB16:
               format = image.bigendian() ? AV_PIX_FMT_RGB48BE : AV_PIX_FMT_RGB48LE;
               break;
             case thalamus_grpc::Image::Format::Image_Format_MPEG1:
             case thalamus_grpc::Image::Format::Image_Format_MPEG4:
+            case thalamus_grpc::Image::Format::Image_Format_MJPEG:
             case thalamus_grpc::Image::Format::
                 Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
             case thalamus_grpc::Image::Format::

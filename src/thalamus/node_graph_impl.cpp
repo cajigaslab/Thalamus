@@ -142,6 +142,10 @@ struct ThalamusNodeReadyConnection {
   ThalamusNode* node;
 };
 
+struct ThalamusOffMainSignaler {
+  thalamus::node::OffMainSignaler signaler;
+};
+
 static std::string to_string(const ThalamusCharSpan& span) {
   return std::string(span.data, span.size);
 }
@@ -206,7 +210,7 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
 
   ExtNode(ThalamusNode *_node, ThalamusNodeFactory *_factory, ThalamusAPI *_api)
       : node(_node), factory(_factory), api(_api) {
-    if(node->signals_offmain) {
+    if(node && node->signals_offmain) {
       ready_multithreaded.emplace();
     }
   }
@@ -317,6 +321,12 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
       return ImageNode::Format::YUYV422;
     case ThalamusImageFormat::YUVJ420P:
       return ImageNode::Format::YUVJ420P;
+    case ThalamusImageFormat::NV12:
+      return ImageNode::Format::NV12;
+    case ThalamusImageFormat::BGR:
+      return ImageNode::Format::BGR;
+    case ThalamusImageFormat::MJPEG:
+      return ImageNode::Format::MJPEG;
     }
   }
   size_t width() const override {
@@ -542,6 +552,12 @@ static ThalamusImageFormat plugin_image_format(struct ThalamusNode* node) {
     return ThalamusImageFormat::YUV420P;
   case ImageNode::Format::YUVJ420P:
     return ThalamusImageFormat::YUVJ420P;
+  case ImageNode::Format::NV12:
+    return ThalamusImageFormat::NV12;
+  case ImageNode::Format::BGR:
+    return ThalamusImageFormat::BGR;
+  case ImageNode::Format::MJPEG:
+    return ThalamusImageFormat::MJPEG;
   }
 }
 
@@ -1566,10 +1582,28 @@ struct ThalamusAPIImpl {
     auto ref = get_state_ref(dict);
     return ref;
   }
+
   static struct ThalamusState* state_make_list() {
     auto dict = ObservableCollection::Value(std::make_shared<ObservableList>());
     auto ref = get_state_ref(dict);
     return ref;
+  }
+
+  static struct ThalamusOffMainSignaler* node_offmain_signaler_create(struct ThalamusNode* node) {
+    auto ext_node = reinterpret_cast<ExtNode*>(node->impl);
+    return new ThalamusOffMainSignaler{node::OffMainSignaler(*ext_node, *io_context)};
+  }
+  static void node_offmain_signaler_destroy(struct ThalamusOffMainSignaler* signaler) {
+    delete signaler;
+  }
+  static void node_offmain_signaler_block(struct ThalamusOffMainSignaler* signaler) {
+    signaler->signaler.block();
+  }
+  static void node_offmain_signaler_unblock(struct ThalamusOffMainSignaler* signaler) {
+    signaler->signaler.unblock();
+  }
+  static uint8_t node_offmain_signaler_ready(struct ThalamusOffMainSignaler* signaler) {
+    return signaler->signaler.ready() ? 1 : 0;
   }
 };
 
@@ -1584,23 +1618,33 @@ std::map<Node*, ThalamusNode*>* ThalamusAPIImpl::node_cpp_to_c = nullptr;
 std::map<ThalamusNode*, Node*>* ThalamusAPIImpl::node_c_to_cpp = nullptr;
 
 struct ExtNodeFactory : public INodeFactory {
+  int version;
   ThalamusNodeFactory* underlying;
   ThalamusIoContext io_context;
   ThalamusNodeGraph node_graph;
   ThalamusAPI* api;
 
-  ExtNodeFactory(ThalamusNodeFactory* _underlying, boost::asio::io_context &_io_context, NodeGraph *graph, ThalamusAPI* _api)
-  : underlying(_underlying), io_context(_io_context), node_graph(graph), api(_api) {}
+  ExtNodeFactory(int _version, ThalamusNodeFactory* _underlying, boost::asio::io_context &_io_context, NodeGraph *graph, ThalamusAPI* _api)
+  : version(_version), underlying(_underlying), io_context(_io_context), node_graph(graph), api(_api) {}
 
   Node *create(ObservableDictPtr state, boost::asio::io_context &,
                NodeGraph *) override {
     auto state_wrapper = ThalamusAPIImpl::get_state_ref(state);
 
-    auto node = underlying->create(underlying, state_wrapper, &io_context, &node_graph);
+    auto result = new ExtNode(nullptr, underlying, api);
+    ThalamusNode* node;
+    if (version < 1) {
+      node = underlying->create(underlying, state_wrapper, &io_context, &node_graph);
+    } else {
+      node = underlying->create2(underlying, state_wrapper, &io_context, &node_graph, result);
+    }
+    result->node = node;
+    if(node->signals_offmain) {
+      result->ready_multithreaded.emplace();
+    }
 
     ThalamusAPIImpl::state_dec_ref(state_wrapper);
-    auto result = new ExtNode(node, underlying, api);
-    node->impl = result;
+    
     return result;
   }
 
@@ -1836,8 +1880,14 @@ public:
     thalamus_api.state_push_float_with_callback = ThalamusAPIImpl::state_push_float_with_callback;
     thalamus_api.state_push_null_with_callback = ThalamusAPIImpl::state_push_null_with_callback;
     thalamus_api.state_push_bool_with_callback = ThalamusAPIImpl::state_push_bool_with_callback;
+    
+    thalamus_api.node_offmain_signaler_create = ThalamusAPIImpl::node_offmain_signaler_create;
+    thalamus_api.node_offmain_signaler_destroy = ThalamusAPIImpl::node_offmain_signaler_destroy;
+    thalamus_api.node_offmain_signaler_block = ThalamusAPIImpl::node_offmain_signaler_block;
+    thalamus_api.node_offmain_signaler_unblock = ThalamusAPIImpl::node_offmain_signaler_unblock;
+    thalamus_api.node_offmain_signaler_ready = ThalamusAPIImpl::node_offmain_signaler_ready;
 
-    thalamus_api.version = 131;
+    thalamus_api.version = 136;
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},
@@ -1900,6 +1950,14 @@ public:
       //auto get_node_factories = reinterpret_cast<get_node_factories_fun>(
       //    ::GetProcAddress(library_handle, "get_node_factories"));
 
+      auto get_node_factory_version = ext.load<thalamus_get_node_factory_version_t>("thalamus_get_node_factory_version");
+      int32_t version;
+      if(get_node_factory_version != nullptr) {
+        version = get_node_factory_version();
+      } else {
+        version = 0;
+      }
+
       auto get_node_factories = ext.load<thalamus_get_node_factories_t>("thalamus_get_node_factories");
       THALAMUS_ASSERT(get_node_factories, "thalamus_get_node_factories not found in extension");
 
@@ -1907,7 +1965,7 @@ public:
       while(*factory != nullptr) {
         THALAMUS_LOG(info) << "Found " << (*factory)->type;
         auto type_name = to_string((*factory)->type);
-        node_factories[type_name] = new ExtNodeFactory(*factory, io_context, outer, &thalamus_api);
+        node_factories[type_name] = new ExtNodeFactory(version, *factory, io_context, outer, &thalamus_api);
         ++factory;
       }
     }
