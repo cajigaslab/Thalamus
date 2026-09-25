@@ -10,51 +10,49 @@
 #define IMPORT
 #endif
 
-#define THALAMUS_OPERATION_ABORTED 995
-
-#define THALAMUS_SDL_WINDOW_FULLSCREEN           uint64_t(0x0000000000000001)
-#define THALAMUS_SDL_WINDOW_OPENGL               uint64_t(0x0000000000000002)
-#define THALAMUS_SDL_WINDOW_OCCLUDED             uint64_t(0x0000000000000004)
-#define THALAMUS_SDL_WINDOW_HIDDEN               uint64_t(0x0000000000000008)
-#define THALAMUS_SDL_WINDOW_BORDERLESS           uint64_t(0x0000000000000010)
-#define THALAMUS_SDL_WINDOW_RESIZABLE            uint64_t(0x0000000000000020)
-#define THALAMUS_SDL_WINDOW_MINIMIZED            uint64_t(0x0000000000000040)
-#define THALAMUS_SDL_WINDOW_MAXIMIZED            uint64_t(0x0000000000000080)
-#define THALAMUS_SDL_WINDOW_MOUSE_GRABBED        uint64_t(0x0000000000000100)
-#define THALAMUS_SDL_WINDOW_INPUT_FOCUS          uint64_t(0x0000000000000200)
-#define THALAMUS_SDL_WINDOW_MOUSE_FOCUS          uint64_t(0x0000000000000400)
-#define THALAMUS_SDL_WINDOW_EXTERNAL             uint64_t(0x0000000000000800)
-#define THALAMUS_SDL_WINDOW_MODAL                uint64_t(0x0000000000001000)
-#define THALAMUS_SDL_WINDOW_HIGH_PIXEL_DENSITY   uint64_t(0x0000000000002000)
-#define THALAMUS_SDL_WINDOW_MOUSE_CAPTURE        uint64_t(0x0000000000004000)
-#define THALAMUS_SDL_WINDOW_MOUSE_RELATIVE_MODE  uint64_t(0x0000000000008000)
-#define THALAMUS_SDL_WINDOW_ALWAYS_ON_TOP        uint64_t(0x0000000000010000)
-#define THALAMUS_SDL_WINDOW_UTILITY              uint64_t(0x0000000000020000)
-#define THALAMUS_SDL_WINDOW_TOOLTIP              uint64_t(0x0000000000040000)
-#define THALAMUS_SDL_WINDOW_POPUP_MENU           uint64_t(0x0000000000080000)
-#define THALAMUS_SDL_WINDOW_KEYBOARD_GRABBED     uint64_t(0x0000000000100000)
-#define THALAMUS_SDL_WINDOW_FILL_DOCUMENT        uint64_t(0x0000000000200000)
-#define THALAMUS_SDL_WINDOW_VULKAN               uint64_t(0x0000000010000000)
-#define THALAMUS_SDL_WINDOW_METAL                uint64_t(0x0000000020000000)
-#define THALAMUS_SDL_WINDOW_TRANSPARENT          uint64_t(0x0000000040000000)
-#define THALAMUS_SDL_WINDOW_NOT_FOCUSABLE        uint64_t(0x0000000080000000)
+#define THALAMUS_SDL_WINDOW_FULLSCREEN           UINT64_C(0x0000000000000001)
+#define THALAMUS_SDL_WINDOW_OPENGL               UINT64_C(0x0000000000000002)
+#define THALAMUS_SDL_WINDOW_OCCLUDED             UINT64_C(0x0000000000000004)
+#define THALAMUS_SDL_WINDOW_HIDDEN               UINT64_C(0x0000000000000008)
+#define THALAMUS_SDL_WINDOW_BORDERLESS           UINT64_C(0x0000000000000010)
+#define THALAMUS_SDL_WINDOW_RESIZABLE            UINT64_C(0x0000000000000020)
+#define THALAMUS_SDL_WINDOW_MINIMIZED            UINT64_C(0x0000000000000040)
+#define THALAMUS_SDL_WINDOW_MAXIMIZED            UINT64_C(0x0000000000000080)
+#define THALAMUS_SDL_WINDOW_MOUSE_GRABBED        UINT64_C(0x0000000000000100)
+#define THALAMUS_SDL_WINDOW_INPUT_FOCUS          UINT64_C(0x0000000000000200)
+#define THALAMUS_SDL_WINDOW_MOUSE_FOCUS          UINT64_C(0x0000000000000400)
+#define THALAMUS_SDL_WINDOW_EXTERNAL             UINT64_C(0x0000000000000800)
+#define THALAMUS_SDL_WINDOW_MODAL                UINT64_C(0x0000000000001000)
+#define THALAMUS_SDL_WINDOW_HIGH_PIXEL_DENSITY   UINT64_C(0x0000000000002000)
+#define THALAMUS_SDL_WINDOW_MOUSE_CAPTURE        UINT64_C(0x0000000000004000)
+#define THALAMUS_SDL_WINDOW_MOUSE_RELATIVE_MODE  UINT64_C(0x0000000000008000)
+#define THALAMUS_SDL_WINDOW_ALWAYS_ON_TOP        UINT64_C(0x0000000000010000)
+#define THALAMUS_SDL_WINDOW_UTILITY              UINT64_C(0x0000000000020000)
+#define THALAMUS_SDL_WINDOW_TOOLTIP              UINT64_C(0x0000000000040000)
+#define THALAMUS_SDL_WINDOW_POPUP_MENU           UINT64_C(0x0000000000080000)
+#define THALAMUS_SDL_WINDOW_KEYBOARD_GRABBED     UINT64_C(0x0000000000100000)
+#define THALAMUS_SDL_WINDOW_FILL_DOCUMENT        UINT64_C(0x0000000000200000)
+#define THALAMUS_SDL_WINDOW_VULKAN               UINT64_C(0x0000000010000000)
+#define THALAMUS_SDL_WINDOW_METAL                UINT64_C(0x0000000020000000)
+#define THALAMUS_SDL_WINDOW_TRANSPARENT          UINT64_C(0x0000000040000000)
+#define THALAMUS_SDL_WINDOW_NOT_FOCUSABLE        UINT64_C(0x0000000080000000)
 
 /* Mirrors SDL_SystemCursor's ordinal values -- only the entries imgui itself
    ever requests are listed, but the numeric values must stay in lockstep
    with the real enum in SDL3's SDL_mouse.h since they're passed as plain
    int32_t across the ThalamusAPI boundary. */
-#define THALAMUS_SDL_SYSTEM_CURSOR_DEFAULT       int32_t(0)
-#define THALAMUS_SDL_SYSTEM_CURSOR_TEXT          int32_t(1)
-#define THALAMUS_SDL_SYSTEM_CURSOR_WAIT          int32_t(2)
-#define THALAMUS_SDL_SYSTEM_CURSOR_CROSSHAIR     int32_t(3)
-#define THALAMUS_SDL_SYSTEM_CURSOR_PROGRESS      int32_t(4)
-#define THALAMUS_SDL_SYSTEM_CURSOR_NWSE_RESIZE   int32_t(5)
-#define THALAMUS_SDL_SYSTEM_CURSOR_NESW_RESIZE   int32_t(6)
-#define THALAMUS_SDL_SYSTEM_CURSOR_EW_RESIZE     int32_t(7)
-#define THALAMUS_SDL_SYSTEM_CURSOR_NS_RESIZE     int32_t(8)
-#define THALAMUS_SDL_SYSTEM_CURSOR_MOVE          int32_t(9)
-#define THALAMUS_SDL_SYSTEM_CURSOR_NOT_ALLOWED   int32_t(10)
-#define THALAMUS_SDL_SYSTEM_CURSOR_POINTER       int32_t(11)
+#define THALAMUS_SDL_SYSTEM_CURSOR_DEFAULT       INT32_C(0)
+#define THALAMUS_SDL_SYSTEM_CURSOR_TEXT          INT32_C(1)
+#define THALAMUS_SDL_SYSTEM_CURSOR_WAIT          INT32_C(2)
+#define THALAMUS_SDL_SYSTEM_CURSOR_CROSSHAIR     INT32_C(3)
+#define THALAMUS_SDL_SYSTEM_CURSOR_PROGRESS      INT32_C(4)
+#define THALAMUS_SDL_SYSTEM_CURSOR_NWSE_RESIZE   INT32_C(5)
+#define THALAMUS_SDL_SYSTEM_CURSOR_NESW_RESIZE   INT32_C(6)
+#define THALAMUS_SDL_SYSTEM_CURSOR_EW_RESIZE     INT32_C(7)
+#define THALAMUS_SDL_SYSTEM_CURSOR_NS_RESIZE     INT32_C(8)
+#define THALAMUS_SDL_SYSTEM_CURSOR_MOVE          INT32_C(9)
+#define THALAMUS_SDL_SYSTEM_CURSOR_NOT_ALLOWED   INT32_C(10)
+#define THALAMUS_SDL_SYSTEM_CURSOR_POINTER       INT32_C(11)
 
 #ifdef __cplusplus
 extern "C" {
@@ -80,6 +78,13 @@ extern "C" {
   enum ThalamusStateAction {
     Set,
     Delete
+  };
+
+  enum ThalamusDialogType {
+    Info,
+    Warn,
+    Error,
+    Fatal
   };
 
   struct ThalamusNode;
@@ -127,8 +132,8 @@ extern "C" {
   };
 
   struct ThalamusNodeSelector {
-    ThalamusCharSpan name;
-    ThalamusCharSpan type;
+    struct ThalamusCharSpan name;
+    struct ThalamusCharSpan type;
   };
 
   struct ThalamusRequestHandle;
@@ -266,7 +271,7 @@ extern "C" {
     struct ThalamusStateConnection* (*state_recursive_change_connect)(struct ThalamusState* state, ThalamusStateRecursiveCallback callback, void* data); // 16
     void (*state_recursive_change_disconnect)(struct ThalamusStateConnection* state); // 17
 
-    struct ThalamusTimer* (*timer_create)(); // 18
+    struct ThalamusTimer* (*timer_create)(void); // 18
     void (*timer_destroy)(struct ThalamusTimer*); // 19
     void (*timer_expire_after_ns)(struct ThalamusTimer*, uint64_t); // 20
     void (*timer_async_wait)(struct ThalamusTimer*, ThalamusTimerCallback, void*); // 21
@@ -275,8 +280,8 @@ extern "C" {
 
     void (*node_ready)(struct ThalamusNode*); // 23
 
-    uint64_t (*time_ns)(); // 24
-    int (*error_code_operation_aborted)(); // 25
+    uint64_t (*time_ns)(void); // 24
+    int (*error_code_operation_aborted)(void); // 25
     void (*state_recap)(struct ThalamusState*); // 26
 
     void (*state_set_at_name_state)(struct ThalamusState*, const struct ThalamusCharSpan*, struct ThalamusState*); // 27
@@ -297,9 +302,9 @@ extern "C" {
 
     void (*trace_event_begin)(const struct ThalamusCharSpan*); // 40
 
-    void (*trace_event_end)(); // 41
+    void (*trace_event_end)(void); // 41
 
-    struct ThalamusSerialPort* (*serial_port_create)(); // 42
+    struct ThalamusSerialPort* (*serial_port_create)(void); // 42
 
     void (*serial_port_destroy)(struct ThalamusSerialPort*); // 43
 
@@ -317,7 +322,7 @@ extern "C" {
 
     void (*serial_port_write)(struct ThalamusSerialPort* port, struct ThalamusByteSpan* span, ThalamusIOCallback callback, void* data); // 50
 
-    struct ThalamusStreamBuf* (*streambuf_create)(); // 51
+    struct ThalamusStreamBuf* (*streambuf_create)(void); // 51
     void (*streambuf_destroy)(struct ThalamusStreamBuf* port); // 52
     void (*streambuf_to_span)(struct ThalamusCharSpan*, struct ThalamusStreamBuf* buffer); // 53
     void (*streambuf_consume)(struct ThalamusStreamBuf* buffer, uint64_t count); // 54
@@ -334,7 +339,7 @@ extern "C" {
     void (*json_inc_ref)(struct ThalamusJson* input); // 61
     void (*json_dec_ref)(struct ThalamusJson* input); // 62
 
-    ThalamusNodeGetConnection* (*node_get_node)(struct ThalamusNodeSelector*, ThalamusNodeGetCallback callback, void* data); // 63
+    struct ThalamusNodeGetConnection* (*node_get_node)(struct ThalamusNodeSelector*, ThalamusNodeGetCallback callback, void* data); // 63
 
     struct ThalamusNodeReadyConnection* (*node_ready_connect)(struct ThalamusNode*, ThalamusNodeReadyCallback callback, void* data); // 64
 
@@ -343,7 +348,7 @@ extern "C" {
 
     void (*node_channels_changed)(struct ThalamusNode*); // 67
 
-    ThalamusNodeReadyConnection* (*node_channels_changed_connect)(struct ThalamusNode*, ThalamusNodeReadyCallback callback, void* data); // 68
+    struct ThalamusNodeReadyConnection* (*node_channels_changed_connect)(struct ThalamusNode*, ThalamusNodeReadyCallback callback, void* data); // 68
     void (*node_channels_changed_disconnect)(struct ThalamusNodeReadyConnection*); // 69
 
     void (*node_inc_ref)(struct ThalamusNode* node); // 70
@@ -369,12 +374,12 @@ extern "C" {
     void (*node_ready_offmain)(struct ThalamusNode*); // 83
     void (*node_predrop_ready)(struct ThalamusNode*); // 84
 
-    VkInstance (*get_vulkan_instance)(); // 85
-    VkDevice (*get_vulkan_device)(); // 86
-    VkPhysicalDevice (*get_vulkan_physical_device)(); // 87
-    VkQueue (*get_vulkan_queue)(); // 88
-    VkCommandPool (*create_vulkan_command_pool)(); // 89
-    struct ThalamusVkQueueLock* (*lock_vulkan_queue)(); // 90
+    VkInstance (*get_vulkan_instance)(void); // 85
+    VkDevice (*get_vulkan_device)(void); // 86
+    VkPhysicalDevice (*get_vulkan_physical_device)(void); // 87
+    VkQueue (*get_vulkan_queue)(void); // 88
+    VkCommandPool (*create_vulkan_command_pool)(void); // 89
+    struct ThalamusVkQueueLock* (*lock_vulkan_queue)(void); // 90
     void (*unlock_vulkan_queue)(struct ThalamusVkQueueLock*); // 91
 
     struct THALAMUS_SDL_Window* (*sdl_create_window)(struct ThalamusCharSpan* name, int32_t width, int32_t height, uint64_t flags); // 92
@@ -398,11 +403,11 @@ extern "C" {
     struct THALAMUS_SDL_Cursor* (*sdl_create_system_cursor)(int32_t id); // 107
     uint8_t (*sdl_set_cursor)(struct THALAMUS_SDL_Cursor* cursor); // 108
     void (*sdl_destroy_cursor)(struct THALAMUS_SDL_Cursor* cursor); // 109
-    uint8_t (*sdl_show_cursor)(); // 110
-    uint8_t (*sdl_hide_cursor)(); // 111
+    uint8_t (*sdl_show_cursor)(void); // 110
+    uint8_t (*sdl_hide_cursor)(void); // 111
                                   
-    struct ThalamusState* (*state_make_dict)(); // 112
-    struct ThalamusState* (*state_make_list)(); // 113
+    struct ThalamusState* (*state_make_dict)(void); // 112
+    struct ThalamusState* (*state_make_list)(void); // 113
                                                                      
     void (*state_set_at_name_state_with_callback)(struct ThalamusState*, const struct ThalamusCharSpan*, struct ThalamusState*, ThalamusPostCallback, void*); // 114
     void (*state_set_at_name_string_with_callback)(struct ThalamusState*, const struct ThalamusCharSpan*, const struct ThalamusCharSpan*, ThalamusPostCallback, void*); // 115
@@ -430,11 +435,16 @@ extern "C" {
     void (*node_offmain_signaler_block)(struct ThalamusOffMainSignaler*); // 134
     void (*node_offmain_signaler_unblock)(struct ThalamusOffMainSignaler*); // 135
     uint8_t (*node_offmain_signaler_ready)(struct ThalamusOffMainSignaler*); // 136
+
+    void (*dialog_show)(struct ThalamusCharSpan* title, struct ThalamusCharSpan* message, enum ThalamusDialogType type); // 137
+
+    void (*state_remove_at_name)(struct ThalamusState*, const struct ThalamusCharSpan*, ThalamusPostCallback, void*); // 138
+    void (*state_remove_at_index)(struct ThalamusState*, int64_t, ThalamusPostCallback, void*); // 139
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories_t)(struct ThalamusAPI*);
-  typedef int32_t (*thalamus_get_node_factory_version_t)();
-  typedef void (*thalamus_teardown_t)();
+  typedef int32_t (*thalamus_get_node_factory_version_t)(void);
+  typedef void (*thalamus_teardown_t)(void);
   
 #ifdef __cplusplus
 }

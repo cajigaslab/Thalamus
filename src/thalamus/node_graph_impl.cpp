@@ -979,6 +979,30 @@ struct ThalamusAPIImpl {
     }
   }
 
+  template <typename T1> static void erase_state(struct ThalamusState* state, T1 key, std::function<void()> callback = nullptr) {
+    if(std::holds_alternative<ObservableDictPtr>(state->value)) {
+      auto coll = std::get<ObservableDictPtr>(state->value);
+      coll->erase(key, [callback] (auto) {
+        callback();
+      });
+    } else if(std::holds_alternative<ObservableListPtr>(state->value)) {
+      if constexpr (std::is_integral<T1>::value) {
+        auto coll = std::get<ObservableListPtr>(state->value);
+        if(size_t(key) < coll->size()) {
+          coll->erase(size_t(key), [callback] (auto) {
+            callback();
+          });
+        } else {
+          THALAMUS_ABORT("Index out of bounds");
+        }
+      } else {
+        THALAMUS_ABORT("Can only index list with integer");
+      }
+    } else {
+      THALAMUS_ABORT("Attempt to recap a value that is neither a dict or list");
+    }
+  }
+
   template <typename T1> static void push_state(struct ThalamusState* state, T1 value, std::function<void()> callback) {
     if(std::holds_alternative<ObservableListPtr>(state->value)) {
       auto coll = std::get<ObservableListPtr>(state->value);
@@ -1139,7 +1163,9 @@ struct ThalamusAPIImpl {
   }
 
   static uint8_t state_iter_next(struct ThalamusStateIter* iter) {
-    THALAMUS_ASSERT(iter->pos != iter->end, "Attempted to advance finished iterator");
+    if (iter->pos == iter->end) {
+      return 0;
+    }
     if(std::holds_alternative<thalamus::ObservableCollection::VectorIteratorWrapper>(iter->begin)) {
       auto& pos = std::get<thalamus::ObservableCollection::VectorIteratorWrapper>(iter->pos);
       auto end = std::get<thalamus::ObservableCollection::VectorIteratorWrapper>(iter->pos);
@@ -1605,6 +1631,36 @@ struct ThalamusAPIImpl {
   static uint8_t node_offmain_signaler_ready(struct ThalamusOffMainSignaler* signaler) {
     return signaler->signaler.ready() ? 1 : 0;
   }
+  static void dialog_show(struct ThalamusCharSpan* title, struct ThalamusCharSpan* message, ThalamusDialogType type) {
+    thalamus_grpc::Dialog dialog;
+    dialog.set_title(to_string(*title));
+    dialog.set_message(to_string(*message));
+    switch(type) {
+    case ThalamusDialogType::Info:
+      dialog.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_INFO);
+      break;
+    case ThalamusDialogType::Warn:
+      dialog.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_WARN);
+      break;
+    case ThalamusDialogType::Error:
+      dialog.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_ERROR);
+      break;
+    case ThalamusDialogType::Fatal:
+      dialog.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_FATAL);
+      break;
+    }
+    node_graph->dialog(dialog);
+  }
+  
+  static void state_remove_at_name(struct ThalamusState* state, const struct ThalamusCharSpan* key, ThalamusPostCallback callback, void* data) {
+    auto closure = to_closure(callback, data);
+    erase_state(state, std::string(key->data, key->size), closure);
+  }
+
+  static void state_remove_at_index(struct ThalamusState* state, int64_t key, ThalamusPostCallback callback, void* data) {
+    auto closure = to_closure(callback, data);
+    erase_state(state, key, closure);
+  }
 };
 
 std::map<ObservableCollection::Value, ThalamusState*>* ThalamusAPIImpl::cpp_to_c = nullptr;
@@ -1887,7 +1943,10 @@ public:
     thalamus_api.node_offmain_signaler_unblock = ThalamusAPIImpl::node_offmain_signaler_unblock;
     thalamus_api.node_offmain_signaler_ready = ThalamusAPIImpl::node_offmain_signaler_ready;
 
-    thalamus_api.version = 136;
+    thalamus_api.dialog_show = ThalamusAPIImpl::dialog_show;
+    thalamus_api.state_remove_at_name = ThalamusAPIImpl::state_remove_at_name;
+    thalamus_api.state_remove_at_index = ThalamusAPIImpl::state_remove_at_index;
+    thalamus_api.version = 139;
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},
