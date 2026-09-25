@@ -80,6 +80,13 @@ extern "C" {
     Delete
   };
 
+  enum ThalamusDialogType {
+    Info,
+    Warn,
+    Error,
+    Fatal
+  };
+
   struct ThalamusNode;
   struct ThalamusStateConnection;
 
@@ -428,6 +435,11 @@ extern "C" {
     void (*node_offmain_signaler_block)(struct ThalamusOffMainSignaler*); // 134
     void (*node_offmain_signaler_unblock)(struct ThalamusOffMainSignaler*); // 135
     uint8_t (*node_offmain_signaler_ready)(struct ThalamusOffMainSignaler*); // 136
+
+    void (*dialog_show)(struct ThalamusCharSpan* title, struct ThalamusCharSpan* message, enum ThalamusDialogType type); // 137
+
+    void (*state_remove_at_name)(struct ThalamusState*, const struct ThalamusCharSpan*, ThalamusPostCallback, void*); // 138
+    void (*state_remove_at_index)(struct ThalamusState*, int64_t, ThalamusPostCallback, void*); // 139
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories_t)(struct ThalamusAPI*);
