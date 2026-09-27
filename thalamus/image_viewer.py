@@ -374,12 +374,20 @@ class ImageWidget(QWidget):
           data = cv2.imdecode(data)
         elif response.format == thalamus_pb2.Image.Format.NV12:
           format = QImage.Format.Format_RGB888
-          data = response.data[0]
-          if response.width*response.height*3//2 != len(data):
-            data = numpy.array(numpy.frombuffer(data, dtype=numpy.uint8).reshape(response.height,-1)[:,:response.width])
+          luminance = response.data[0]
+          if response.width*response.height != len(luminance):
+            luminance = numpy.array(numpy.frombuffer(luminance, dtype=numpy.uint8).reshape(response.height,-1)[:,:response.width])
           else:
-            data = numpy.frombuffer(data, dtype=numpy.uint8).reshape(response.height*3//2,-1)
-          data = cv2.cvtColor(data, cv2.COLOR_YUV2RGB_NV12)
+            luminance = numpy.frombuffer(luminance, dtype=numpy.uint8).reshape(response.height,response.width)
+
+          chroma_all = response.data[1]
+          if response.width*response.height//2 != len(chroma_all):
+            chroma_all = numpy.array(numpy.frombuffer(chroma_all, dtype=numpy.uint8).reshape(response.height//2,-1,2)[:,:response.width//2,:])
+          else:
+            chroma_all = numpy.frombuffer(chroma_all, dtype=numpy.uint8).reshape(response.height//2,response.width//2,2)
+
+          data = cv2.cvtColorTwoPlane(luminance, chroma_all, cv2.COLOR_YUV2RGB_NV12)
+          #data = luminance
         elif response.format in (thalamus_pb2.Image.Format.YUVJ420P, thalamus_pb2.Image.Format.YUV420P):
           format = QImage.Format.Format_RGB888
           luminance = response.data[0]

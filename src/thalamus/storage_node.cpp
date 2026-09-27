@@ -41,9 +41,10 @@ extern "C" {
 #include <libswscale/swscale.h>
 }
 
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
+//This node is deprecated and no longer developed, ignore all warnings.
+//#ifdef __clang__
+//#pragma clang diagnostic pop
+//#endif
 
 namespace thalamus {
 static std::string render_filename(const std::string &filename,

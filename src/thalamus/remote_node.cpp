@@ -529,10 +529,25 @@ struct RemoteNode::Impl {
             case thalamus_grpc::Image::YUVJ420P:
               format = ImageNode::Format::YUVJ420P;
               break;
+            case thalamus_grpc::Image::NV12:
+              format = ImageNode::Format::NV12;
+              break;
+            case thalamus_grpc::Image::BGR:
+              format = ImageNode::Format::BGR;
+              break;
+            case thalamus_grpc::Image::MJPEG:
+              format = ImageNode::Format::MJPEG;
+              break;
             case thalamus_grpc::Image_Format_Gray16:
+              format = ImageNode::Format::Gray16;
+              break;
             case thalamus_grpc::Image_Format_RGB16:
-            case thalamus_grpc::Image_Format_MPEG1:
+              format = ImageNode::Format::RGB16;
+              break;
             case thalamus_grpc::Image_Format_MPEG4:
+              format = ImageNode::Format::MPEG4;
+              break;
+            case thalamus_grpc::Image_Format_MPEG1:
             case thalamus_grpc::Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
             case thalamus_grpc::Image_Format_Image_Format_INT_MAX_SENTINEL_DO_NOT_USE_:
               THALAMUS_ASSERT(false, "Unsupported image format");

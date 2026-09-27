@@ -311,22 +311,30 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
   Format format() const override {
     auto format = node->image->format(node);
     switch(format) {
-    case ThalamusImageFormat::Gray:
+    case ThalamusImageFormat_Gray:
       return ImageNode::Format::Gray;
-    case ThalamusImageFormat::RGB:
+    case ThalamusImageFormat_RGB:
       return ImageNode::Format::RGB;
-    case ThalamusImageFormat::YUV420P:
+    case ThalamusImageFormat_YUV420P:
       return ImageNode::Format::YUV420P;
-    case ThalamusImageFormat::YUYV422:
+    case ThalamusImageFormat_YUYV422:
       return ImageNode::Format::YUYV422;
-    case ThalamusImageFormat::YUVJ420P:
+    case ThalamusImageFormat_YUVJ420P:
       return ImageNode::Format::YUVJ420P;
-    case ThalamusImageFormat::NV12:
+    case ThalamusImageFormat_NV12:
       return ImageNode::Format::NV12;
-    case ThalamusImageFormat::BGR:
+    case ThalamusImageFormat_BGR:
       return ImageNode::Format::BGR;
-    case ThalamusImageFormat::MJPEG:
+    case ThalamusImageFormat_MJPEG:
       return ImageNode::Format::MJPEG;
+    case ThalamusImageFormat_Gray16:
+      return ImageNode::Format::Gray16;
+    case ThalamusImageFormat_RGB16:
+      return ImageNode::Format::RGB16;
+    case ThalamusImageFormat_MPEG4:
+      return ImageNode::Format::MPEG4;
+    case ThalamusImageFormat_MPEG1:
+      THALAMUS_ABORT("MPEG1 is no longer supported");
     }
   }
   size_t width() const override {
@@ -543,21 +551,27 @@ static ThalamusImageFormat plugin_image_format(struct ThalamusNode* node) {
   ASSERT_SAFE();
   switch(interfaces->image->format()) {
   case ImageNode::Format::Gray:
-    return ThalamusImageFormat::Gray;
+    return ThalamusImageFormat_Gray;
   case ImageNode::Format::RGB:
-    return ThalamusImageFormat::RGB;
+    return ThalamusImageFormat_RGB;
   case ImageNode::Format::YUYV422:
-    return ThalamusImageFormat::YUYV422;
+    return ThalamusImageFormat_YUYV422;
   case ImageNode::Format::YUV420P:
-    return ThalamusImageFormat::YUV420P;
+    return ThalamusImageFormat_YUV420P;
   case ImageNode::Format::YUVJ420P:
-    return ThalamusImageFormat::YUVJ420P;
+    return ThalamusImageFormat_YUVJ420P;
   case ImageNode::Format::NV12:
-    return ThalamusImageFormat::NV12;
+    return ThalamusImageFormat_NV12;
   case ImageNode::Format::BGR:
-    return ThalamusImageFormat::BGR;
+    return ThalamusImageFormat_BGR;
   case ImageNode::Format::MJPEG:
-    return ThalamusImageFormat::MJPEG;
+    return ThalamusImageFormat_MJPEG;
+  case ImageNode::Format::Gray16:
+    return ThalamusImageFormat_Gray16;
+  case ImageNode::Format::RGB16:
+    return ThalamusImageFormat_RGB16;
+  case ImageNode::Format::MPEG4:
+    return ThalamusImageFormat_MPEG4;
   }
 }
 
@@ -859,7 +873,7 @@ struct ThalamusAPIImpl {
       } else {
         THALAMUS_ABORT("state is not a collection");
       }
-      auto action_wrapper = action == ObservableCollection::Action::Set ? ThalamusStateAction::Set : ThalamusStateAction::Delete;
+      auto action_wrapper = action == ObservableCollection::Action::Set ? ThalamusStateAction_Set : ThalamusStateAction_Delete;
       auto wrapped_key = get_state_ref(key);
       auto wrapped_value = get_state_ref(value);
       callback(source_wrapper, action_wrapper, wrapped_key, wrapped_value, data);
@@ -942,7 +956,7 @@ struct ThalamusAPIImpl {
     auto handler = [state,callback,data](ObservableCollection::Action action,
                                    ObservableCollection::Key key,
                                    ObservableCollection::Value value) {
-      auto action_wrapper = action == ObservableCollection::Action::Set ? ThalamusStateAction::Set : ThalamusStateAction::Delete;
+      auto action_wrapper = action == ObservableCollection::Action::Set ? ThalamusStateAction_Set : ThalamusStateAction_Delete;
       auto wrapped_key = get_state_ref(key);
       auto wrapped_value = get_state_ref(value);
       callback(state, action_wrapper, wrapped_key, wrapped_value, data);
@@ -1636,16 +1650,16 @@ struct ThalamusAPIImpl {
     dialog.set_title(to_string(*title));
     dialog.set_message(to_string(*message));
     switch(type) {
-    case ThalamusDialogType::Info:
+    case ThalamusDialogType_Info:
       dialog.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_INFO);
       break;
-    case ThalamusDialogType::Warn:
+    case ThalamusDialogType_Warn:
       dialog.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_WARN);
       break;
-    case ThalamusDialogType::Error:
+    case ThalamusDialogType_Error:
       dialog.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_ERROR);
       break;
-    case ThalamusDialogType::Fatal:
+    case ThalamusDialogType_Fatal:
       dialog.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_FATAL);
       break;
     }

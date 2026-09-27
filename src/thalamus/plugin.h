@@ -67,24 +67,24 @@ extern "C" {
   struct VkAllocationCallbacks;
 
   enum ThalamusStateType {
-    Dict,
-    List,
-    String,
-    Int,
-    Float,
-    Null
+    ThalamusStateType_Dict,
+    ThalamusStateType_List,
+    ThalamusStateType_String,
+    ThalamusStateType_Int,
+    ThalamusStateType_Float,
+    ThalamusStateType_Null
   };
 
   enum ThalamusStateAction {
-    Set,
-    Delete
+    ThalamusStateAction_Set,
+    ThalamusStateAction_Delete
   };
 
   enum ThalamusDialogType {
-    Info,
-    Warn,
-    Error,
-    Fatal
+    ThalamusDialogType_Info,
+    ThalamusDialogType_Warn,
+    ThalamusDialogType_Error,
+    ThalamusDialogType_Fatal
   };
 
   struct ThalamusNode;
@@ -175,16 +175,18 @@ extern "C" {
   };
 
   enum ThalamusImageFormat {
-    Gray = 0,
-    RGB = 1,
-    YUYV422 = 2,
-    YUV420P = 3,
-    YUVJ420P = 4,
-    NV12 = 5,
-    BGR = 6,
-    MJPEG = 7,
-    MPEG1 = 8,
-    MPEG4 = 9,
+    ThalamusImageFormat_Gray = 0,
+    ThalamusImageFormat_RGB = 1,
+    ThalamusImageFormat_YUYV422 = 2,
+    ThalamusImageFormat_YUV420P = 3,
+    ThalamusImageFormat_YUVJ420P = 4,
+    ThalamusImageFormat_NV12 = 5,
+    ThalamusImageFormat_BGR = 6,
+    ThalamusImageFormat_MJPEG = 7,
+    ThalamusImageFormat_MPEG1 = 8,
+    ThalamusImageFormat_MPEG4 = 9,
+    ThalamusImageFormat_Gray16 = 16,
+    ThalamusImageFormat_RGB16 = 17
   };
 
   struct ThalamusImageNode {

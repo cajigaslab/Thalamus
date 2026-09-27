@@ -334,6 +334,15 @@ struct Storage2Node::Impl {
       case ImageNode::Format::MJPEG:
         body->set_format(thalamus_grpc::Image::Format::Image_Format_MJPEG);
         break;
+      case ImageNode::Format::Gray16:
+        body->set_format(thalamus_grpc::Image::Format::Image_Format_Gray16);
+        break;
+      case ImageNode::Format::RGB16:
+        body->set_format(thalamus_grpc::Image::Format::Image_Format_RGB16);
+        break;
+      case ImageNode::Format::MPEG4:
+        body->set_format(thalamus_grpc::Image::Format::Image_Format_MPEG4);
+        break;
       }
 
       for (auto i = 0; i < int(locked_analog->num_planes()); ++i) {
@@ -714,7 +723,7 @@ struct Storage2Node::Impl {
           bps = {6, 6, 6};
           break;
         case thalamus_grpc::Image::Format::Image_Format_NV12:
-          bps = {1, 1, 1};
+          bps = {2, 1, 1};
           break;
         case thalamus_grpc::Image::Format::Image_Format_MPEG1:
         case thalamus_grpc::Image::Format::Image_Format_MPEG4:

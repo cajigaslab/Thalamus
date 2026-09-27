@@ -17,12 +17,14 @@ namespace thalamus {
       Node& node;
       boost::asio::io_context& io_context;
       bool blocked;
+      uint64_t generation;
       std::mutex mutex;
       std::condition_variable cv;
       Impl(Node& _node, boost::asio::io_context& _io_context)
       : node(_node)
       , io_context(_io_context)
-      , blocked(true) {}
+      , blocked(true)
+      , generation(0) {}
     };
 
     OffMainSignaler::OffMainSignaler(Node& _node, boost::asio::io_context& _io_context)
@@ -45,17 +47,17 @@ namespace thalamus {
       if(impl->blocked) {
         return false;
       }
+      auto current_generation = impl->generation;
 
-      auto done = std::make_shared<bool>(false);
       auto post_to_main = !impl->node.ready.empty();
       if(post_to_main) {
-        boost::asio::post(impl->io_context, [_impl=this->impl,done] {
+        boost::asio::post(impl->io_context, [_impl=this->impl,current_generation] {
           std::lock_guard<std::mutex> lock2(_impl->mutex);
-          if(*done) {
+          if(_impl->generation != current_generation) {
             return;
           }
           _impl->node.ready(&_impl->node);
-          *done = true;
+          ++_impl->generation;
           _impl->cv.notify_one();
         });
       }
@@ -67,10 +69,12 @@ namespace thalamus {
       }
 
       if(post_to_main) {
-        impl->cv.wait(lock, [_impl=this->impl,done] {
-          return _impl->blocked || *done;
+        impl->cv.wait(lock, [_impl=this->impl,current_generation] {
+          return _impl->blocked || (current_generation != _impl->generation);
         });
-        *done = true;
+        if(impl->generation == current_generation) {
+          ++impl->generation;
+        }
       }
       return !impl->blocked;
     }
