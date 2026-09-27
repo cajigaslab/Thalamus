@@ -183,6 +183,8 @@ extern "C" {
     NV12 = 5,
     BGR = 6,
     MJPEG = 7,
+    MPEG1 = 8,
+    MPEG4 = 9,
   };
 
   struct ThalamusImageNode {

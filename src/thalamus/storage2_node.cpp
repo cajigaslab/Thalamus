@@ -1063,7 +1063,7 @@ struct Storage2Node::Impl {
 
     IdentityEncoder identity_encoder;
     std::map<int, std::unique_ptr<ZlibEncoder>> zlib_encoders;
-    std::map<std::string, std::unique_ptr<VideoEncoder>> video_encoders;
+    std::map<std::string, std::unique_ptr<Encoder>> video_encoders;
     std::vector<Encoder *> encoders;
     encoders.push_back(&identity_encoder);
     std::string buffer;
@@ -1198,6 +1198,7 @@ struct Storage2Node::Impl {
             }
 
             AVPixelFormat format;
+            auto use_identity_encoder = false;
             switch (image.format()) {
             case thalamus_grpc::Image::Format::Image_Format_Gray:
               format = AV_PIX_FMT_GRAY8;
@@ -1229,6 +1230,8 @@ struct Storage2Node::Impl {
               break;
             case thalamus_grpc::Image::Format::Image_Format_MPEG1:
             case thalamus_grpc::Image::Format::Image_Format_MPEG4:
+              use_identity_encoder = true;
+              break;
             case thalamus_grpc::Image::Format::Image_Format_MJPEG:
             case thalamus_grpc::Image::Format::
                 Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
@@ -1237,9 +1240,14 @@ struct Storage2Node::Impl {
               THALAMUS_ASSERT(false, "Usupported image format");
             }
 
-            auto encoder = std::make_unique<VideoEncoder>(
+            std::unique_ptr<Encoder> encoder;
+            if(use_identity_encoder) {
+              encoder = std::make_unique<IdentityEncoder>();
+            } else {
+              encoder = std::make_unique<VideoEncoder>(
                 image.width(), image.height(), format, framerate,
                 record.node());
+            }
             encoders.push_back(encoder.get());
             video_encoders[record.node()] = std::move(encoder);
           }

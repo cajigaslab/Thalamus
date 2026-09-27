@@ -46,28 +46,31 @@ namespace thalamus {
         return false;
       }
 
-      auto done = false;
+      auto done = std::make_shared<bool>(false);
       auto post_to_main = !impl->node.ready.empty();
       if(post_to_main) {
-        boost::asio::post(impl->io_context, [_impl=this->impl,&done] {
+        boost::asio::post(impl->io_context, [_impl=this->impl,done] {
           std::lock_guard<std::mutex> lock2(_impl->mutex);
-          if(_impl->blocked) {
+          if(*done) {
             return;
           }
           _impl->node.ready(&_impl->node);
-          done = true;
+          *done = true;
           _impl->cv.notify_one();
         });
       }
 
       if(impl->node.ready_multithreaded) {
+        lock.unlock();
         (*impl->node.ready_multithreaded)(&impl->node);
+        lock.lock();
       }
 
       if(post_to_main) {
-        impl->cv.wait(lock, [_impl=this->impl,&done] {
-          return _impl->blocked || done;
+        impl->cv.wait(lock, [_impl=this->impl,done] {
+          return _impl->blocked || *done;
         });
+        *done = true;
       }
       return !impl->blocked;
     }
