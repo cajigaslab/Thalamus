@@ -54,7 +54,19 @@ Vulkan get_vulkan(std::optional<uint32_t> device_id) {
 
   VkApplicationInfo app_info{};
   app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-  app_info.apiVersion = VK_API_VERSION_1_0;
+  // 1.1 when the loader supports it: plugins' shaders (e.g. thalamus-contrib's
+  // compute shaders) use the StorageBuffer storage class, which is core in
+  // 1.1. vkEnumerateInstanceVersion only exists in 1.1+ loaders, so it's looked
+  // up rather than called directly.
+  uint32_t instance_version = VK_API_VERSION_1_0;
+  auto enumerate_instance_version = reinterpret_cast<PFN_vkEnumerateInstanceVersion>(
+      reinterpret_cast<void*>(vkGetInstanceProcAddr(nullptr, "vkEnumerateInstanceVersion")));
+  if(enumerate_instance_version != nullptr) {
+    enumerate_instance_version(&instance_version);
+  }
+  app_info.apiVersion = instance_version >= VK_API_VERSION_1_1 ? VK_API_VERSION_1_1 : VK_API_VERSION_1_0;
+  THALAMUS_LOG(info) << "Vulkan instance version " << VK_API_VERSION_MAJOR(app_info.apiVersion) << "."
+                     << VK_API_VERSION_MINOR(app_info.apiVersion);
 
   uint32_t ext_count = 0;
   auto sdl_exts = SDL_Vulkan_GetInstanceExtensions(&ext_count);
@@ -184,6 +196,7 @@ Vulkan get_vulkan(std::optional<uint32_t> device_id) {
 
   std::vector<VkQueueFamilyProperties> qf_props(num_qf);
   std::vector<int> qf_scores(num_qf, 0);
+  std::vector<bool> qf_present(num_qf, false);
   vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &num_qf, qf_props.data());
   for (uint32_t i = 0; i < num_qf; i++) {
     VkBool32 present = VK_FALSE;
@@ -191,16 +204,25 @@ Vulkan get_vulkan(std::optional<uint32_t> device_id) {
       THALAMUS_LOG(error) << "vkGetPhysicalDeviceSurfaceSupportKHR";
       continue;
     }
+    // Graphics is required; compute is for plugins that run compute shaders
+    // on the shared queue.
     if(qf_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+      qf_scores[i] += 100;
+    }
+    if(qf_props[i].queueFlags & VK_QUEUE_COMPUTE_BIT) {
       qf_scores[i] += 10;
     }
     if(present) {
       qf_scores[i] += 1;
+      qf_present[i] = true;
     }
   }
 
   auto max_qf_score_iter = std::max_element(qf_scores.begin(), qf_scores.end());
   auto qf_index = uint32_t(std::distance(qf_scores.begin(), max_qf_score_iter));
+  if(!(qf_props[qf_index].queueFlags & VK_QUEUE_COMPUTE_BIT)) {
+    THALAMUS_LOG(warning) << "Selected Vulkan queue family doesn't support compute";
+  }
 
   float pri = 1.0f;
   VkDeviceQueueCreateInfo q_ci{};
@@ -209,13 +231,27 @@ Vulkan get_vulkan(std::optional<uint32_t> device_id) {
   q_ci.queueCount = 1;
   q_ci.pQueuePriorities = &pri;
 
-  const char* dev_exts[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+  std::vector<const char*> dev_exts = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+  // On a 1.0 instance or device the StorageBuffer storage class needs this
+  // extension (core in 1.1).
+  if(app_info.apiVersion < VK_API_VERSION_1_1 || physical_device_props.apiVersion < VK_API_VERSION_1_1) {
+    uint32_t dev_ext_count = 0;
+    vkEnumerateDeviceExtensionProperties(physical_device, nullptr, &dev_ext_count, nullptr);
+    std::vector<VkExtensionProperties> avail_dev_exts(dev_ext_count);
+    vkEnumerateDeviceExtensionProperties(physical_device, nullptr, &dev_ext_count, avail_dev_exts.data());
+    for(auto& ext : avail_dev_exts) {
+      if(std::strcmp(ext.extensionName, VK_KHR_STORAGE_BUFFER_STORAGE_CLASS_EXTENSION_NAME) == 0) {
+        dev_exts.push_back(VK_KHR_STORAGE_BUFFER_STORAGE_CLASS_EXTENSION_NAME);
+        break;
+      }
+    }
+  }
   VkDeviceCreateInfo dev_ci{};
   dev_ci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
   dev_ci.queueCreateInfoCount = 1;
   dev_ci.pQueueCreateInfos = &q_ci;
-  dev_ci.enabledExtensionCount = 1;
-  dev_ci.ppEnabledExtensionNames = dev_exts;
+  dev_ci.enabledExtensionCount = static_cast<uint32_t>(dev_exts.size());
+  dev_ci.ppEnabledExtensionNames = dev_exts.data();
 
   if (vkCreateDevice(physical_device, &dev_ci, nullptr, &result.device) != VK_SUCCESS) {
     THALAMUS_LOG(error) << "vkCreateDevice";
@@ -226,7 +262,7 @@ Vulkan get_vulkan(std::optional<uint32_t> device_id) {
   vkGetDeviceQueue(result.device, qf_index, 0, &result.queue);
   THALAMUS_LOG(info) << "VkQueue Acquired";
   result.queue_family_index = qf_index;
-  result.supports_presentation = *max_qf_score_iter > 10;
+  result.supports_presentation = qf_present[qf_index];
   return result;
 }
 
