@@ -1,5 +1,6 @@
 #include <thalamus/tracing.hpp>
 #include <fstream>
+#include <string_view>
 #include <thalamus/image_node.hpp>
 #include <thalamus/modalities_util.hpp>
 #include <thalamus/storage2_node.hpp>
@@ -40,6 +41,7 @@ extern "C" {
 #include <libavutil/imgutils.h>
 #include <libavutil/mem.h>
 #include <libavutil/opt.h>
+#include <libavutil/pixdesc.h>
 #include <libswscale/swscale.h>
 }
 
@@ -624,9 +626,9 @@ struct Storage2Node::Impl {
     std::list<thalamus_grpc::StorageRecord> out_queue;
     int pts = 0;
     struct SwsContext *sws_context;
-    uint8_t *src_data[4], *dst_data[4];
-    int src_linesize[4], dst_linesize[4];
-    uint8_t *dst_data_0;
+    // Input image in its original pixel format; sws_scale_frame converts it
+    // into `frame`, which is what gets encoded.
+    AVFrame *src_frame;
     std::string node;
     AVPixelFormat src_format;
 
@@ -662,20 +664,70 @@ struct Storage2Node::Impl {
       sws_context =
           sws_getContext(width, height, format, width, height, context->pix_fmt,
                          SWS_BILINEAR, nullptr, nullptr, nullptr);
-      ret = av_image_alloc(src_data, src_linesize, width, height, format, 16);
-      THALAMUS_ASSERT(ret >= 0, "Could not allocate source image");
-      ret = av_image_alloc(dst_data, dst_linesize, width, height,
-                           context->pix_fmt, 16);
-      dst_data_0 = dst_data[0];
-      THALAMUS_ASSERT(ret >= 0, "Could not allocate destination image");
+      THALAMUS_ASSERT(sws_context, "sws_getContext failed");
+
+      src_frame = av_frame_alloc();
+      THALAMUS_ASSERT(src_frame, "av_frame_alloc failed");
+      src_frame->format = format;
+      src_frame->width = width;
+      src_frame->height = height;
+      ret = av_frame_get_buffer(src_frame, 0);
+      THALAMUS_ASSERT(ret >= 0, "Could not allocate source frame");
     }
     ~VideoEncoder() override {
+      sws_freeContext(sws_context);
       avcodec_free_context(&context);
       av_packet_free(&packet);
       av_frame_free(&frame);
-      av_freep(&src_data[0]);
-      dst_data[0] = dst_data_0;
-      av_freep(&dst_data[0]);
+      av_frame_free(&src_frame);
+    }
+
+    // Copies an image's planes into src_frame. Producers send tightly packed
+    // rows (or rows padded to a common stride), with planar formats either as
+    // one plane per image plane or as a single buffer holding them back to
+    // back (e.g. NV12 from some cameras). Chroma planes of subsampled formats
+    // have ceil(height / 2^log2_chroma_h) rows.
+    void copy_to_src_frame(const thalamus_grpc::Image &image) {
+      auto width = int(std::min(image.width(), uint32_t(src_frame->width)));
+      auto height = int(std::min(image.height(), uint32_t(src_frame->height)));
+
+      // Unpadded bytes per row of each input plane, and of the part copied.
+      int in_bytes[4];
+      auto ret = av_image_fill_linesizes(in_bytes, src_format, int(image.width()));
+      THALAMUS_ASSERT(ret >= 0, "av_image_fill_linesizes failed: %d", ret);
+      int copy_bytes[4];
+      ret = av_image_fill_linesizes(copy_bytes, src_format, width);
+      THALAMUS_ASSERT(ret >= 0, "av_image_fill_linesizes failed: %d", ret);
+
+      int shift_w, shift_h;
+      av_pix_fmt_get_chroma_sub_sample(src_format, &shift_w, &shift_h);
+      auto plane_rows = [&](int p, int rows) {
+        return (p == 1 || p == 2) ? AV_CEIL_RSHIFT(rows, shift_h) : rows;
+      };
+
+      auto num_planes = av_pix_fmt_count_planes(src_format);
+      THALAMUS_ASSERT(num_planes > 0 && num_planes <= 4, "Unexpected plane count %d", num_planes);
+      std::array<std::string_view, 4> planes;
+      if (image.data_size() == num_planes) {
+        for (auto p = 0; p < num_planes; ++p) {
+          planes[size_t(p)] = image.data(p);
+        }
+      } else {
+        THALAMUS_ASSERT(false, "Image has %d planes, expected %d or 1",
+                        image.data_size(), num_planes);
+      }
+
+      for (auto p = 0; p < num_planes; ++p) {
+        auto &plane = planes[size_t(p)];
+        auto in_rows = plane_rows(p, int(image.height()));
+        THALAMUS_ASSERT(in_rows > 0 && plane.size() >= size_t(in_bytes[p]) * size_t(in_rows),
+                        "Image plane %d has %d bytes, expected at least %d", p,
+                        int(plane.size()), in_bytes[p] * in_rows);
+        auto in_stride = int(plane.size() / size_t(in_rows));
+        av_image_copy_plane(src_frame->data[p], src_frame->linesize[p],
+                            reinterpret_cast<const uint8_t *>(plane.data()),
+                            in_stride, copy_bytes[p], plane_rows(p, height));
+      }
     }
     void work() override {
       for (auto &record : in_queue) {
@@ -693,72 +745,22 @@ struct Storage2Node::Impl {
         compressed_image->set_last(image.last());
         compressed_image->set_bigendian(image.bigendian());
 
-        auto ret = av_frame_make_writable(frame);
+        // sws_scale_frame only holds a reference to src_frame while it runs,
+        // so this normally doesn't copy; it just makes sure nothing else is
+        // still reading the buffers we're about to overwrite.
+        auto ret = av_frame_make_writable(src_frame);
         THALAMUS_ASSERT(ret >= 0, "av_frame_make_writable failed");
+        copy_to_src_frame(image);
 
-        std::array<unsigned int, 3> bps;
-        switch (image.format()) {
-        case thalamus_grpc::Image::Format::Image_Format_Gray:
-          bps = {1, 1, 1};
-          break;
-        case thalamus_grpc::Image::Format::Image_Format_RGB:
-          bps = {3, 3, 3};
-          break;
-        case thalamus_grpc::Image::Format::Image_Format_BGR:
-          bps = {3, 3, 3};
-          break;
-        case thalamus_grpc::Image::Format::Image_Format_YUYV422:
-          bps = {2, 2, 2};
-          break;
-        case thalamus_grpc::Image::Format::Image_Format_YUV420P:
-          bps = {1, 1, 1};
-          break;
-        case thalamus_grpc::Image::Format::Image_Format_YUVJ420P:
-          bps = {1, 1, 1};
-          break;
-        case thalamus_grpc::Image::Format::Image_Format_Gray16:
-          bps = {2, 2, 2};
-          break;
-        case thalamus_grpc::Image::Format::Image_Format_RGB16:
-          bps = {6, 6, 6};
-          break;
-        case thalamus_grpc::Image::Format::Image_Format_NV12:
-          bps = {2, 1, 1};
-          break;
-        case thalamus_grpc::Image::Format::Image_Format_MPEG1:
-        case thalamus_grpc::Image::Format::Image_Format_MPEG4:
-        case thalamus_grpc::Image::Format::Image_Format_MJPEG:
-        case thalamus_grpc::Image::Format::
-            Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
-        case thalamus_grpc::Image::Format::
-            Image_Format_Image_Format_INT_MAX_SENTINEL_DO_NOT_USE_:
-          THALAMUS_ASSERT(false, "Unsupported format");
+        // The encoder may still hold a reference to the previous frame's
+        // buffers. Rather than copying them (av_frame_make_writable) only to
+        // overwrite them, drop them and let sws_scale_frame allocate new ones.
+        if (!av_frame_is_writable(frame)) {
+          av_frame_unref(frame);
         }
 
-        auto height = std::min(image.height(), uint32_t(frame->height));
-        for (auto p = 0ull; p < size_t(image.data().size()); ++p) {
-          auto linesize = image.data(int(p)).size() / image.height();
-          auto width = std::min(image.width(), uint32_t(frame->width));
-          auto width_bits = width * bps[p];
-          for (auto y = 0u; y < height; ++y) {
-            std::copy_n(image.data(int(p)).data() + y * linesize, width_bits,
-                        src_data[p] + y * uint32_t(src_linesize[p]));
-          }
-        }
-
-        //When converting grayscale images to YUV420 the luminance plane changes but the chroma planes are constant.
-        //After the first conversion (pts == 0) fills in the chroma planes we only need to update the luminance and
-        //instead of converting or copying the input data we just point the output pointer to the input data.
-        //Technically, we should scale the input range (0-255) to the yuv luminance range (16-235).
-        if (pts > 0 && src_format == AV_PIX_FMT_GRAY8) {
-          dst_data[0] = src_data[0];
-        } else {
-          sws_scale(sws_context, src_data, src_linesize, 0, int(height),
-                    dst_data, dst_linesize);
-        }
-        std::copy(std::begin(dst_data), std::end(dst_data), frame->data);
-        std::copy(std::begin(dst_linesize), std::end(dst_linesize),
-                  frame->linesize);
+        ret = sws_scale_frame(sws_context, frame, src_frame);
+        THALAMUS_ASSERT(ret >= 0, "sws_scale_frame failed: %d", ret);
 
         frame->pts = pts++;
 

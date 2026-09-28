@@ -77,6 +77,8 @@ class UserDataType(enum.Enum):
   OPEN_FILE = enum.auto()
   SAVE_FILE = enum.auto()
 
+PY_VIEWER_ENABLED_KEY = 'THALAMUS_PY_VIEWER_ENABLED'
+
 class UserData(typing.NamedTuple):
   type: UserDataType
   key: str
@@ -86,6 +88,10 @@ class UserData(typing.NamedTuple):
 class Factory(typing.NamedTuple):
   create_widget: typing.Optional[typing.Callable[[ObservableDict, thalamus_pb2_grpc.ThalamusStub], QWidget]]
   fields: typing.List[UserData]
+  # When set, THALAMUS_PY_VIEWER_ENABLED = True is written into the node's dictionary, and setting
+  # View on an image node opens the Python image viewer. Image nodes without it are expected to
+  # render their own view.
+  py_viewer: bool = False
 
 def create_test_widget(node):
   label = node['type']
@@ -334,12 +340,12 @@ FACTORIES = {
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
     #UserData(UserDataType.DEFAULT, 'Time Source', '', []),
-  ]),
+  ], py_viewer=True),
   'VIDEO': Factory(None, [
     UserData(UserDataType.DEFAULT, 'File Name', '', []),
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
-  ]),
+  ], py_viewer=True),
   'ANALOG': Factory(AnalogWidget, [
     UserData(UserDataType.CHECK_BOX, 'Widget is Touchpad', False, [])
   ]),
@@ -366,7 +372,7 @@ FACTORIES = {
     UserData(UserDataType.DEFAULT, 'Source', '', []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
     UserData(UserDataType.DOUBLE_SPINBOX, 'Framerate', 10.0, []),
-  ]),
+  ], py_viewer=True),
   'THREAD_POOL': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
@@ -375,7 +381,7 @@ FACTORIES = {
     UserData(UserDataType.CHECK_BOX, 'Running', False, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
     UserData(UserDataType.COMBO_BOX, 'View Rotation', '0', ['0', '90', '180', '270']),
-  ]),
+  ], py_viewer=True),
   'CHANNEL_PICKER': Factory(ChannelPickerWidget, []),
   'SYNC': Factory(SyncWidget, []),
   'NORMALIZE': Factory(lambda c, s: NormalizeWidget(c, s), [
@@ -397,7 +403,7 @@ FACTORIES = {
     UserData(UserDataType.DOUBLE_SPINBOX, 'Probe Frequency', 10.0, []),
     UserData(UserDataType.SPINBOX, 'Probe Size', 128, []),
     UserData(UserDataType.CHECK_BOX, 'View', False, []),
-    UserData(UserDataType.CHECK_BOX, 'Running', False, [])]),
+    UserData(UserDataType.CHECK_BOX, 'Running', False, [])], py_viewer=True),
   'REMOTE_LOG': Factory(None, [
     UserData(UserDataType.DEFAULT, 'Address', '', []),
     UserData(UserDataType.DOUBLE_SPINBOX, 'Probe Frequency', 10.0, []),
@@ -457,7 +463,7 @@ FACTORIES = {
       "DICT_APRILTAG_36h10",
       "DICT_APRILTAG_36h11",
       "DICT_ARUCO_MIP_36h12"])
-  ]),
+  ], py_viewer=True),
   'HEXASCOPE': Factory(HexascopeWidget, []),
   'WALLCLOCK': Factory(None, [
     UserData(UserDataType.CHECK_BOX, 'Integer Values', False, []),
@@ -1257,12 +1263,6 @@ class Plot(QWidget):
 
       self.update()
 
-def thalamus_rendering(node):
-  if node['type'] in ('PUPIL', 'CHESSBOARD', 'OCULOMATIC', 'THORCAM'):
-    return True
-  
-  return False
-
 class ItemModel(QAbstractItemModel):
   def __init__(self, nodes: ObservableList, stub: thalamus_pb2_grpc.ThalamusStub, address: str):
     super().__init__()
@@ -1499,7 +1499,7 @@ class ItemModel(QAbstractItemModel):
             selector = thalamus_pb2.NodeSelector(name=node['name'])
             modalities = await self.stub.get_modalities(selector)
             if thalamus_pb2.Modalities.ImageModality in modalities.values:
-              if not thalamus_rendering(node): 
+              if node.get(PY_VIEWER_ENABLED_KEY, False):
                 request = thalamus_pb2.NodeSelector(
                   name = node["name"]
                 )
@@ -1553,6 +1553,13 @@ class ItemModel(QAbstractItemModel):
           if not field.key in node:
             node[field.key] = field.value
             self.dataChanged.emit(front_index, index)
+
+        if factory.py_viewer:
+          if node.get(PY_VIEWER_ENABLED_KEY) is not True:
+            node[PY_VIEWER_ENABLED_KEY] = True
+        elif PY_VIEWER_ENABLED_KEY in node:
+          # Left over from a previous type that used the Python viewer.
+          del node[PY_VIEWER_ENABLED_KEY]
       else:
         type = node['type']
         factory = FACTORIES[type]
