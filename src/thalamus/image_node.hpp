@@ -18,7 +18,10 @@ public:
     YUVJ420P,
     NV12,
     BGR,
-    MJPEG
+    MJPEG,
+    Gray16,
+    RGB16,
+    MPEG4
   };
   virtual ~ImageNode();
   virtual Plane plane(int) const = 0;

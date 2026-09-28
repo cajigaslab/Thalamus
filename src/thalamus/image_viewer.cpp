@@ -158,6 +158,12 @@ static int channels_for_format(ImageNode::Format format) {
     case ImageNode::Format::YUYV422:
     case ImageNode::Format::YUV420P:
     case ImageNode::Format::YUVJ420P:
+    case ImageNode::Format::NV12:
+    case ImageNode::Format::BGR:
+    case ImageNode::Format::MJPEG:
+    case ImageNode::Format::Gray16:
+    case ImageNode::Format::RGB16:
+    case ImageNode::Format::MPEG4:
       return -1;
   }
   return -1;
