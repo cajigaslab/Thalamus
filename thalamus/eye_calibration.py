@@ -1,5 +1,6 @@
 import re
 import sys
+import argparse
 import asyncio
 import typing
 import json
@@ -24,6 +25,7 @@ from thalamus.util import IterableQueue, MeteredUpdater
 from thalamus.config import ObservableDict
 
 from thalamus.thread import ThalamusThread
+from thalamus import grpc_tls
 print(thalamus_pb2.__file__)
 
 POINT_SIZE = 10
@@ -1353,6 +1355,11 @@ class OperatorWindow(QMainWindow):
     print(a0)
 
 async def main():
+  parser = argparse.ArgumentParser(description='Thalamus eye calibration')
+  grpc_tls.add_arguments(parser)
+  args = parser.parse_args()
+  grpc_tls.configure(args)
+
   _ = QApplication(sys.argv)
   
   thread = ThalamusThread('localhost:50050')

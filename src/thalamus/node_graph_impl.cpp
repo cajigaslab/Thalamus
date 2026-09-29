@@ -19,6 +19,7 @@
 #include <thalamus/log_node.hpp>
 #include <thalamus/lua_node.hpp>
 #include <thalamus/node_graph_impl.hpp>
+#include <thalamus/grpc_tls.hpp>
 #include <thalamus/normalize_node.hpp>
 #include <thalamus/oculomatic_node.hpp>
 #include <thalamus/ophanim_node.hpp>
@@ -2333,7 +2334,7 @@ NodeGraphImpl::get_channel(const std::string &url) {
   }
 
   if (!impl->channels.contains(url) || !impl->channels[url].lock()) {
-    auto channel = grpc::CreateChannel(url, grpc::InsecureChannelCredentials());
+    auto channel = create_grpc_channel(url);
     impl->channels[url] = channel;
     return channel;
   }
