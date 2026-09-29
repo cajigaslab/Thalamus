@@ -22,6 +22,7 @@ from .config import ObservableDict
 
 from . import  thalamus_pb2
 from . import thalamus_pb2_grpc
+from . import grpc_tls
 
 from .qt import *
 
@@ -463,10 +464,12 @@ async def main():
     parser.add_argument('-a', '--address', default='localhost:50050', help='Thalamus addres, [ip:port]')
     parser.add_argument('-n', '--node', help='Node name')
     parser.add_argument('-f', '--framerate', type=float, default=60.0, help='Max framerate')
+    grpc_tls.add_arguments(parser)
     try:
       args = parser.parse_args()
     except SystemExit:
       return
+    grpc_tls.configure(args)
 
     _ = QApplication(sys.argv)
 

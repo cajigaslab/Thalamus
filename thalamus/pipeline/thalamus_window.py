@@ -17,6 +17,7 @@ import functools
 import h5py
 import asyncio
 from ..task_controller.util import create_task_with_exc_handling
+from .. import grpc_tls
 from ..util import IterableQueue
 
 from ..util import MeteredUpdater
@@ -1505,7 +1506,8 @@ class ItemModel(QAbstractItemModel):
                 )
                 self.procs[id(node)] = await process.create_subprocess_exec(
                   sys.executable, 
-                  "-m", "thalamus.image_viewer", '--address', self.address, '--node', node['name'])
+                  "-m", "thalamus.image_viewer", '--address', self.address, '--node', node['name'],
+                  *grpc_tls.command_line_args())
             elif thalamus_pb2.Modalities.MocapModality in modalities.values:
               request = thalamus_pb2.NodeSelector(
                 name = node["name"]

@@ -9,6 +9,7 @@ import grpc
 
 from . import thalamus_pb2
 from . import thalamus_pb2_grpc
+from . import grpc_tls
 from .iterable_queue import IterableQueue
 from .config import ObservableCollection, ObservableDict, ObservableList
 import jsonpath_ng
@@ -60,7 +61,7 @@ class ThalamusThread:
   async def __async_main(self):
     try:
       self.loop = asyncio.get_event_loop()
-      async with grpc.aio.insecure_channel(self.address) as channel:
+      async with grpc_tls.aio_channel(self.address) as channel:
         await channel.channel_ready()
         self.main_channel = channel
         self.bridge_channel = channel
@@ -78,7 +79,7 @@ class ThalamusThread:
             if transaction.redirection:
               stream.cancel()
               redirection = transaction.redirection.replace('localhost', self.address.split(':')[0])
-              bridge_channel = grpc.aio.insecure_channel(redirection)
+              bridge_channel = grpc_tls.aio_channel(redirection)
               self.bridge_channel = bridge_channel
               await bridge_channel.channel_ready()
               bridge_stub = thalamus_pb2_grpc.ThalamusStub(bridge_channel)
