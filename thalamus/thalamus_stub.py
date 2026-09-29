@@ -2,6 +2,7 @@ import typing
 import asyncio
 from . import thalamus_pb2
 from . import thalamus_pb2_grpc
+from . import grpc_tls
 from .task_controller.util import create_task_with_exc_handling
 
 import grpc.aio
@@ -57,7 +58,7 @@ class ThalamusStub():
 
   async def get_redirect_stub(self, location) -> thalamus_pb2_grpc.ThalamusStub:
     if location not in self.redirects:
-      channel = grpc.aio.insecure_channel(location)
+      channel = grpc_tls.aio_channel(location)
       await channel.channel_ready()
       self.redirects[location] = thalamus_pb2_grpc.ThalamusStub(channel)
     return self.redirects[location]

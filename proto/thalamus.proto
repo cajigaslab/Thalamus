@@ -197,6 +197,9 @@ message Image {
     RGB16 = 6;
     MPEG1 = 7;
     MPEG4 = 8;
+    NV12 = 9;
+    BGR = 10;
+    MJPEG = 11;
   }
   repeated bytes data = 1;
   uint32 width = 2;

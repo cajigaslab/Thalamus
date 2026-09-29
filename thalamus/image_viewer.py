@@ -22,6 +22,7 @@ from .config import ObservableDict
 
 from . import  thalamus_pb2
 from . import thalamus_pb2_grpc
+from . import grpc_tls
 
 from .qt import *
 
@@ -354,6 +355,13 @@ class ImageWidget(QWidget):
             data = numpy.array(numpy.frombuffer(data, dtype=numpy.uint8).reshape(response.height,-1)[:,:3*response.width])
           else:
             data = data
+        elif response.format == thalamus_pb2.Image.Format.BGR:
+          format = QImage.Format.Format_BGR888 
+          data = response.data[0]
+          if response.width*3*response.height != len(data):
+            data = numpy.array(numpy.frombuffer(data, dtype=numpy.uint8).reshape(response.height,-1)[:,:3*response.width])
+          else:
+            data = data
         elif response.format == thalamus_pb2.Image.Format.YUYV422:
           format = QImage.Format.Format_RGB888
           data = response.data[0]
@@ -362,6 +370,25 @@ class ImageWidget(QWidget):
           else:
             data = numpy.frombuffer(data, dtype=numpy.uint8).reshape(response.height,response.width,-1)[:,:,:2]
           data = cv2.cvtColor(data, cv2.COLOR_YUV2RGB_YUYV)
+        elif response.format == thalamus_pb2.Image.Format.MJPEG:
+          format = QImage.Format.Format_BGR888
+          data = cv2.imdecode(data)
+        elif response.format == thalamus_pb2.Image.Format.NV12:
+          format = QImage.Format.Format_RGB888
+          luminance = response.data[0]
+          if response.width*response.height != len(luminance):
+            luminance = numpy.array(numpy.frombuffer(luminance, dtype=numpy.uint8).reshape(response.height,-1)[:,:response.width])
+          else:
+            luminance = numpy.frombuffer(luminance, dtype=numpy.uint8).reshape(response.height,response.width)
+
+          chroma_all = response.data[1]
+          if response.width*response.height//2 != len(chroma_all):
+            chroma_all = numpy.array(numpy.frombuffer(chroma_all, dtype=numpy.uint8).reshape(response.height//2,-1,2)[:,:response.width//2,:])
+          else:
+            chroma_all = numpy.frombuffer(chroma_all, dtype=numpy.uint8).reshape(response.height//2,response.width//2,2)
+
+          data = cv2.cvtColorTwoPlane(luminance, chroma_all, cv2.COLOR_YUV2RGB_NV12)
+          #data = luminance
         elif response.format in (thalamus_pb2.Image.Format.YUVJ420P, thalamus_pb2.Image.Format.YUV420P):
           format = QImage.Format.Format_RGB888
           luminance = response.data[0]
@@ -437,10 +464,12 @@ async def main():
     parser.add_argument('-a', '--address', default='localhost:50050', help='Thalamus addres, [ip:port]')
     parser.add_argument('-n', '--node', help='Node name')
     parser.add_argument('-f', '--framerate', type=float, default=60.0, help='Max framerate')
+    grpc_tls.add_arguments(parser)
     try:
       args = parser.parse_args()
     except SystemExit:
       return
+    grpc_tls.configure(args)
 
     _ = QApplication(sys.argv)
 

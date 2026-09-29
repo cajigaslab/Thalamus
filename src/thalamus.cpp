@@ -9,6 +9,7 @@
 #include <thalamus_config.h>
 
 #include "thalamus/grpc_impl.hpp"
+#include <thalamus/grpc_tls.hpp>
 #include <thalamus/state_manager.hpp>
 #include <thalamus/file.hpp>
 #include <thalamus/thread.hpp>
@@ -187,10 +188,15 @@ int main(int argc, char **argv) {
                    "Address of Thalamus instance that manages state")
                    ("ext,e", boost::program_options::value<std::vector<std::string>>()->multitoken(), "Shared libraries to extend thalamus");
   desc.add_options()("log-level,l", boost::program_options::value<std::string>()->default_value("info"), "Set log level");
-  desc.add_options()("ip", boost::program_options::value<std::string>()->default_value("127.0.0.1"), "IP to bind to");
+  desc.add_options()("ip", boost::program_options::value<std::string>()->default_value("127.0.0.1"), "IP the gRPC server binds to (the HTTP server always binds to 127.0.0.1)");
   desc.add_options()("http-port", boost::program_options::value<uint16_t>()->default_value(50053), "Port to run Websocket server on");
   desc.add_options()("crashpad", "Enable crash data collection");
   desc.add_options()("no-gpu", "Disable GPU usage");
+  desc.add_options()
+    ("cert", boost::program_options::value<std::string>(), "PEM certificate for gRPC TLS, used by the server and as the client certificate")
+    ("key", boost::program_options::value<std::string>(), "PEM private key for --cert")
+    ("ca", boost::program_options::value<std::string>(), "PEM certificate authority that servers verify clients against and clients verify servers against")
+    ("server-name", boost::program_options::value<std::string>()->default_value("thalamus.internal"), "Name clients expect in every gRPC server's TLS certificate, regardless of the address they connect to");
 
 #ifndef _WIN32
   desc.add_options()
@@ -235,6 +241,23 @@ int main(int argc, char **argv) {
   if (vm.count("help")) {
     std::cout << desc << std::endl;
     return 0;
+  }
+
+  {
+    GrpcTlsFiles tls_files;
+    if (vm.count("cert")) {
+      tls_files.cert = vm["cert"].as<std::string>();
+    }
+    if (vm.count("key")) {
+      tls_files.key = vm["key"].as<std::string>();
+    }
+    if (vm.count("ca")) {
+      tls_files.ca = vm["ca"].as<std::string>();
+    }
+    tls_files.server_name = vm["server-name"].as<std::string>();
+    if (!configure_grpc_tls(tls_files)) {
+      return 1;
+    }
   }
 
 #ifndef _WIN32
@@ -342,7 +365,7 @@ int main(int argc, char **argv) {
     std::unique_ptr<thalamus_grpc::Thalamus::Stub> stub;
     if (!state_url.empty()) {
       auto channel =
-          grpc::CreateChannel(state_url, grpc::InsecureChannelCredentials());
+          create_grpc_channel(state_url);
       while (channel->GetState(true) != GRPC_CHANNEL_READY) {
         THALAMUS_LOG(info) << "Waiting for state source";
         std::this_thread::sleep_for(1s);
@@ -356,7 +379,7 @@ int main(int argc, char **argv) {
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
     grpc::ServerBuilder builder;
-    builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+    builder.AddListeningPort(server_address, grpc_server_credentials());
     std::unique_ptr<NodeGraphImpl> node_graph(
         new NodeGraphImpl(nodes, io_context, system_start, steady_start,
                           stub.get(), extensions, vulkan
@@ -372,7 +395,9 @@ int main(int argc, char **argv) {
     auto websocket_channel = server->InProcessChannel(grpc::ChannelArguments());
     std::unique_ptr<thalamus_grpc::Thalamus::Stub> websocket_stub =
         thalamus_grpc::Thalamus::NewStub(websocket_channel);
-    HttpServer http_server(io_context, std::move(websocket_stub), ip,
+    // The HTTP/WebSocket server has no authentication, so it's never exposed
+    // to the network.
+    HttpServer http_server(io_context, std::move(websocket_stub), "127.0.0.1",
                            http_port);
 
     // std::cout << "Server listening on " << server_address << std::endl;

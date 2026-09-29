@@ -40,6 +40,7 @@ from .. import task_controller_pb2
 from .. import task_controller_pb2_grpc
 from .. import thalamus_pb2
 from .. import thalamus_pb2_grpc
+from .. import grpc_tls
 from .. import util_pb2
 
 from ..qt import *
@@ -860,7 +861,7 @@ class TaskContext(TaskContextProtocol):
     if name in self.channels:
       return self.channels[name]
     
-    channel = grpc.aio.insecure_channel(name)
+    channel = grpc_tls.aio_channel(name)
     self.channels[name] = channel
     return channel
 

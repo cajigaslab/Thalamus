@@ -19,6 +19,7 @@
 #include <thalamus/log_node.hpp>
 #include <thalamus/lua_node.hpp>
 #include <thalamus/node_graph_impl.hpp>
+#include <thalamus/grpc_tls.hpp>
 #include <thalamus/normalize_node.hpp>
 #include <thalamus/oculomatic_node.hpp>
 #include <thalamus/ophanim_node.hpp>
@@ -142,6 +143,10 @@ struct ThalamusNodeReadyConnection {
   ThalamusNode* node;
 };
 
+struct ThalamusOffMainSignaler {
+  thalamus::node::OffMainSignaler signaler;
+};
+
 static std::string to_string(const ThalamusCharSpan& span) {
   return std::string(span.data, span.size);
 }
@@ -206,7 +211,7 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
 
   ExtNode(ThalamusNode *_node, ThalamusNodeFactory *_factory, ThalamusAPI *_api)
       : node(_node), factory(_factory), api(_api) {
-    if(node->signals_offmain) {
+    if(node && node->signals_offmain) {
       ready_multithreaded.emplace();
     }
   }
@@ -307,16 +312,30 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
   Format format() const override {
     auto format = node->image->format(node);
     switch(format) {
-    case ThalamusImageFormat::Gray:
+    case ThalamusImageFormat_Gray:
       return ImageNode::Format::Gray;
-    case ThalamusImageFormat::RGB:
+    case ThalamusImageFormat_RGB:
       return ImageNode::Format::RGB;
-    case ThalamusImageFormat::YUV420P:
+    case ThalamusImageFormat_YUV420P:
       return ImageNode::Format::YUV420P;
-    case ThalamusImageFormat::YUYV422:
+    case ThalamusImageFormat_YUYV422:
       return ImageNode::Format::YUYV422;
-    case ThalamusImageFormat::YUVJ420P:
+    case ThalamusImageFormat_YUVJ420P:
       return ImageNode::Format::YUVJ420P;
+    case ThalamusImageFormat_NV12:
+      return ImageNode::Format::NV12;
+    case ThalamusImageFormat_BGR:
+      return ImageNode::Format::BGR;
+    case ThalamusImageFormat_MJPEG:
+      return ImageNode::Format::MJPEG;
+    case ThalamusImageFormat_Gray16:
+      return ImageNode::Format::Gray16;
+    case ThalamusImageFormat_RGB16:
+      return ImageNode::Format::RGB16;
+    case ThalamusImageFormat_MPEG4:
+      return ImageNode::Format::MPEG4;
+    case ThalamusImageFormat_MPEG1:
+      THALAMUS_ABORT("MPEG1 is no longer supported");
     }
   }
   size_t width() const override {
@@ -533,15 +552,27 @@ static ThalamusImageFormat plugin_image_format(struct ThalamusNode* node) {
   ASSERT_SAFE();
   switch(interfaces->image->format()) {
   case ImageNode::Format::Gray:
-    return ThalamusImageFormat::Gray;
+    return ThalamusImageFormat_Gray;
   case ImageNode::Format::RGB:
-    return ThalamusImageFormat::RGB;
+    return ThalamusImageFormat_RGB;
   case ImageNode::Format::YUYV422:
-    return ThalamusImageFormat::YUYV422;
+    return ThalamusImageFormat_YUYV422;
   case ImageNode::Format::YUV420P:
-    return ThalamusImageFormat::YUV420P;
+    return ThalamusImageFormat_YUV420P;
   case ImageNode::Format::YUVJ420P:
-    return ThalamusImageFormat::YUVJ420P;
+    return ThalamusImageFormat_YUVJ420P;
+  case ImageNode::Format::NV12:
+    return ThalamusImageFormat_NV12;
+  case ImageNode::Format::BGR:
+    return ThalamusImageFormat_BGR;
+  case ImageNode::Format::MJPEG:
+    return ThalamusImageFormat_MJPEG;
+  case ImageNode::Format::Gray16:
+    return ThalamusImageFormat_Gray16;
+  case ImageNode::Format::RGB16:
+    return ThalamusImageFormat_RGB16;
+  case ImageNode::Format::MPEG4:
+    return ThalamusImageFormat_MPEG4;
   }
 }
 
@@ -843,7 +874,7 @@ struct ThalamusAPIImpl {
       } else {
         THALAMUS_ABORT("state is not a collection");
       }
-      auto action_wrapper = action == ObservableCollection::Action::Set ? ThalamusStateAction::Set : ThalamusStateAction::Delete;
+      auto action_wrapper = action == ObservableCollection::Action::Set ? ThalamusStateAction_Set : ThalamusStateAction_Delete;
       auto wrapped_key = get_state_ref(key);
       auto wrapped_value = get_state_ref(value);
       callback(source_wrapper, action_wrapper, wrapped_key, wrapped_value, data);
@@ -926,7 +957,7 @@ struct ThalamusAPIImpl {
     auto handler = [state,callback,data](ObservableCollection::Action action,
                                    ObservableCollection::Key key,
                                    ObservableCollection::Value value) {
-      auto action_wrapper = action == ObservableCollection::Action::Set ? ThalamusStateAction::Set : ThalamusStateAction::Delete;
+      auto action_wrapper = action == ObservableCollection::Action::Set ? ThalamusStateAction_Set : ThalamusStateAction_Delete;
       auto wrapped_key = get_state_ref(key);
       auto wrapped_value = get_state_ref(value);
       callback(state, action_wrapper, wrapped_key, wrapped_value, data);
@@ -952,6 +983,30 @@ struct ThalamusAPIImpl {
         auto coll = std::get<ObservableListPtr>(state->value);
         if(size_t(key) < coll->size()) {
           (*coll)[size_t(key)].assign(value, callback);
+        } else {
+          THALAMUS_ABORT("Index out of bounds");
+        }
+      } else {
+        THALAMUS_ABORT("Can only index list with integer");
+      }
+    } else {
+      THALAMUS_ABORT("Attempt to recap a value that is neither a dict or list");
+    }
+  }
+
+  template <typename T1> static void erase_state(struct ThalamusState* state, T1 key, std::function<void()> callback = nullptr) {
+    if(std::holds_alternative<ObservableDictPtr>(state->value)) {
+      auto coll = std::get<ObservableDictPtr>(state->value);
+      coll->erase(key, [callback] (auto) {
+        callback();
+      });
+    } else if(std::holds_alternative<ObservableListPtr>(state->value)) {
+      if constexpr (std::is_integral<T1>::value) {
+        auto coll = std::get<ObservableListPtr>(state->value);
+        if(size_t(key) < coll->size()) {
+          coll->erase(size_t(key), [callback] (auto) {
+            callback();
+          });
         } else {
           THALAMUS_ABORT("Index out of bounds");
         }
@@ -1123,7 +1178,9 @@ struct ThalamusAPIImpl {
   }
 
   static uint8_t state_iter_next(struct ThalamusStateIter* iter) {
-    THALAMUS_ASSERT(iter->pos != iter->end, "Attempted to advance finished iterator");
+    if (iter->pos == iter->end) {
+      return 0;
+    }
     if(std::holds_alternative<thalamus::ObservableCollection::VectorIteratorWrapper>(iter->begin)) {
       auto& pos = std::get<thalamus::ObservableCollection::VectorIteratorWrapper>(iter->pos);
       auto end = std::get<thalamus::ObservableCollection::VectorIteratorWrapper>(iter->pos);
@@ -1566,10 +1623,58 @@ struct ThalamusAPIImpl {
     auto ref = get_state_ref(dict);
     return ref;
   }
+
   static struct ThalamusState* state_make_list() {
     auto dict = ObservableCollection::Value(std::make_shared<ObservableList>());
     auto ref = get_state_ref(dict);
     return ref;
+  }
+
+  static struct ThalamusOffMainSignaler* node_offmain_signaler_create(struct ThalamusNode* node) {
+    auto ext_node = reinterpret_cast<ExtNode*>(node->impl);
+    return new ThalamusOffMainSignaler{node::OffMainSignaler(*ext_node, *io_context)};
+  }
+  static void node_offmain_signaler_destroy(struct ThalamusOffMainSignaler* signaler) {
+    delete signaler;
+  }
+  static void node_offmain_signaler_block(struct ThalamusOffMainSignaler* signaler) {
+    signaler->signaler.block();
+  }
+  static void node_offmain_signaler_unblock(struct ThalamusOffMainSignaler* signaler) {
+    signaler->signaler.unblock();
+  }
+  static uint8_t node_offmain_signaler_ready(struct ThalamusOffMainSignaler* signaler) {
+    return signaler->signaler.ready() ? 1 : 0;
+  }
+  static void dialog_show(struct ThalamusCharSpan* title, struct ThalamusCharSpan* message, ThalamusDialogType type) {
+    thalamus_grpc::Dialog dialog;
+    dialog.set_title(to_string(*title));
+    dialog.set_message(to_string(*message));
+    switch(type) {
+    case ThalamusDialogType_Info:
+      dialog.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_INFO);
+      break;
+    case ThalamusDialogType_Warn:
+      dialog.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_WARN);
+      break;
+    case ThalamusDialogType_Error:
+      dialog.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_ERROR);
+      break;
+    case ThalamusDialogType_Fatal:
+      dialog.set_type(thalamus_grpc::Dialog::Type::Dialog_Type_FATAL);
+      break;
+    }
+    node_graph->dialog(dialog);
+  }
+  
+  static void state_remove_at_name(struct ThalamusState* state, const struct ThalamusCharSpan* key, ThalamusPostCallback callback, void* data) {
+    auto closure = to_closure(callback, data);
+    erase_state(state, std::string(key->data, key->size), closure);
+  }
+
+  static void state_remove_at_index(struct ThalamusState* state, int64_t key, ThalamusPostCallback callback, void* data) {
+    auto closure = to_closure(callback, data);
+    erase_state(state, key, closure);
   }
 };
 
@@ -1584,23 +1689,33 @@ std::map<Node*, ThalamusNode*>* ThalamusAPIImpl::node_cpp_to_c = nullptr;
 std::map<ThalamusNode*, Node*>* ThalamusAPIImpl::node_c_to_cpp = nullptr;
 
 struct ExtNodeFactory : public INodeFactory {
+  int version;
   ThalamusNodeFactory* underlying;
   ThalamusIoContext io_context;
   ThalamusNodeGraph node_graph;
   ThalamusAPI* api;
 
-  ExtNodeFactory(ThalamusNodeFactory* _underlying, boost::asio::io_context &_io_context, NodeGraph *graph, ThalamusAPI* _api)
-  : underlying(_underlying), io_context(_io_context), node_graph(graph), api(_api) {}
+  ExtNodeFactory(int _version, ThalamusNodeFactory* _underlying, boost::asio::io_context &_io_context, NodeGraph *graph, ThalamusAPI* _api)
+  : version(_version), underlying(_underlying), io_context(_io_context), node_graph(graph), api(_api) {}
 
   Node *create(ObservableDictPtr state, boost::asio::io_context &,
                NodeGraph *) override {
     auto state_wrapper = ThalamusAPIImpl::get_state_ref(state);
 
-    auto node = underlying->create(underlying, state_wrapper, &io_context, &node_graph);
+    auto result = new ExtNode(nullptr, underlying, api);
+    ThalamusNode* node;
+    if (version < 1) {
+      node = underlying->create(underlying, state_wrapper, &io_context, &node_graph);
+    } else {
+      node = underlying->create2(underlying, state_wrapper, &io_context, &node_graph, result);
+    }
+    result->node = node;
+    if(node->signals_offmain) {
+      result->ready_multithreaded.emplace();
+    }
 
     ThalamusAPIImpl::state_dec_ref(state_wrapper);
-    auto result = new ExtNode(node, underlying, api);
-    node->impl = result;
+    
     return result;
   }
 
@@ -1836,8 +1951,17 @@ public:
     thalamus_api.state_push_float_with_callback = ThalamusAPIImpl::state_push_float_with_callback;
     thalamus_api.state_push_null_with_callback = ThalamusAPIImpl::state_push_null_with_callback;
     thalamus_api.state_push_bool_with_callback = ThalamusAPIImpl::state_push_bool_with_callback;
+    
+    thalamus_api.node_offmain_signaler_create = ThalamusAPIImpl::node_offmain_signaler_create;
+    thalamus_api.node_offmain_signaler_destroy = ThalamusAPIImpl::node_offmain_signaler_destroy;
+    thalamus_api.node_offmain_signaler_block = ThalamusAPIImpl::node_offmain_signaler_block;
+    thalamus_api.node_offmain_signaler_unblock = ThalamusAPIImpl::node_offmain_signaler_unblock;
+    thalamus_api.node_offmain_signaler_ready = ThalamusAPIImpl::node_offmain_signaler_ready;
 
-    thalamus_api.version = 131;
+    thalamus_api.dialog_show = ThalamusAPIImpl::dialog_show;
+    thalamus_api.state_remove_at_name = ThalamusAPIImpl::state_remove_at_name;
+    thalamus_api.state_remove_at_index = ThalamusAPIImpl::state_remove_at_index;
+    thalamus_api.version = 139;
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},
@@ -1900,6 +2024,14 @@ public:
       //auto get_node_factories = reinterpret_cast<get_node_factories_fun>(
       //    ::GetProcAddress(library_handle, "get_node_factories"));
 
+      auto get_node_factory_version = ext.load<thalamus_get_node_factory_version_t>("thalamus_get_node_factory_version");
+      int32_t version;
+      if(get_node_factory_version != nullptr) {
+        version = get_node_factory_version();
+      } else {
+        version = 0;
+      }
+
       auto get_node_factories = ext.load<thalamus_get_node_factories_t>("thalamus_get_node_factories");
       THALAMUS_ASSERT(get_node_factories, "thalamus_get_node_factories not found in extension");
 
@@ -1907,7 +2039,7 @@ public:
       while(*factory != nullptr) {
         THALAMUS_LOG(info) << "Found " << (*factory)->type;
         auto type_name = to_string((*factory)->type);
-        node_factories[type_name] = new ExtNodeFactory(*factory, io_context, outer, &thalamus_api);
+        node_factories[type_name] = new ExtNodeFactory(version, *factory, io_context, outer, &thalamus_api);
         ++factory;
       }
     }
@@ -2202,7 +2334,7 @@ NodeGraphImpl::get_channel(const std::string &url) {
   }
 
   if (!impl->channels.contains(url) || !impl->channels[url].lock()) {
-    auto channel = grpc::CreateChannel(url, grpc::InsecureChannelCredentials());
+    auto channel = create_grpc_channel(url);
     impl->channels[url] = channel;
     return channel;
   }

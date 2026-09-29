@@ -36,6 +36,7 @@ from ..task_controller.observable_bridge import ObservableBridge
 from .thalamus_window import ThalamusWindow
 from ..servicer import ThalamusServicer
 from .. import thalamus_stub
+from .. import grpc_tls
 from ..task_controller.util import create_task_with_exc_handling
 
 from ..qt import *
@@ -86,6 +87,7 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument('--wait-for-pipeline', action='store_true', help='Don\'t start pipeline, wait for something else to launch it')
   parser.add_argument('--no-gpu', action='store_true', help='Disable pipeline GPU usage')
   parser.add_argument('--open', action='store_true', help='Bind GRPC servers to 0.0.0.0 instead of localhost only')
+  grpc_tls.add_arguments(parser)
   return parser.parse_args(self_args[1:])
 
 async def async_main() -> None:
@@ -101,6 +103,7 @@ async def async_main() -> None:
   asyncio.get_event_loop().set_exception_handler(exception_handler)
 
   arguments = parse_args()
+  grpc_tls.configure(arguments)
 
   log_level = logging.INFO
   if arguments.log_level in ('trace', 'debug'):
@@ -150,7 +153,10 @@ async def async_main() -> None:
   server = grpc.aio.server()
   servicer = ThalamusServicer(config)
   thalamus_pb2_grpc.add_ThalamusServicer_to_server(servicer, server)
-  listen_addr = f'[::]:{arguments.ui_port}' if arguments.open else f'localhost:{arguments.ui_port}'
+  # TLS authenticates every client, so with it the gRPC servers accept connections from the network; native.exe
+  # (via --ip) and dotnet.exe (via --open) are told to do the same.
+  open_grpc = arguments.open or grpc_tls.enabled()
+  listen_addr = f'[::]:{arguments.ui_port}' if open_grpc else f'localhost:{arguments.ui_port}'
 
   serivce_names = [
     thalamus_pb2.DESCRIPTOR.services_by_name["Thalamus"].full_name,
@@ -159,7 +165,7 @@ async def async_main() -> None:
   logging.info('service_names %s', serivce_names)
   reflection.enable_server_reflection(serivce_names, server)
 
-  server.add_insecure_port(listen_addr)
+  grpc_tls.add_port(server, listen_addr)
   logging.info("Starting GRPC server on %s", listen_addr)
   await server.start()
 
@@ -180,8 +186,9 @@ async def async_main() -> None:
     command = command + ('--crashpad',)
   if arguments.no_gpu:
     command = command + ('--no-gpu',)
-  if arguments.open:
+  if open_grpc:
     command = command + ('--ip', '0.0.0.0')
+  command = command + grpc_tls.command_line_args()
   LOGGER.info('COMMAND %s', ' '.join(command))
   if not arguments.wait_for_pipeline:
     bmbi_native_proc = await asyncio.create_subprocess_exec(*command)
@@ -191,14 +198,14 @@ async def async_main() -> None:
   dotnet_proc = None
   if dotnet_filename.exists():
     if dotnet_runtime.is_available():
-      dotnet_command = str(dotnet_filename), '--port', str(arguments.dotnet_port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else []), *(['--open'] if arguments.open else [])
+      dotnet_command = str(dotnet_filename), '--port', str(arguments.dotnet_port), '--state-url', f'localhost:{arguments.ui_port}', *(['--trace'] if arguments.trace else []), *(['--open'] if open_grpc else []), *grpc_tls.command_line_args()
       dotnet_proc = await asyncio.create_subprocess_exec(*dotnet_command)
       create_task_with_exc_handling(proc_watcher('dotnet.exe', dotnet_proc))
     else:
       LOGGER.warning('dotnet.exe found but the required .NET runtime is missing; skipping it')
       usersettings.warn_dotnet_runtime_missing()
 
-  channel = grpc.aio.insecure_channel(f'localhost:{arguments.port}')
+  channel = grpc_tls.aio_channel(f'localhost:{arguments.port}')
   await channel.channel_ready()
   stub = thalamus_pb2_grpc.ThalamusStub(channel)
 
