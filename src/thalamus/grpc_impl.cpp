@@ -13,6 +13,7 @@
 #pragma clang diagnostic pop
 #endif
 #include <thalamus/grpc_impl.hpp>
+#include <thalamus/analog_proto.hpp>
 #include <thalamus/h5handle.hpp>
 #include <thalamus/image_node.hpp>
 #include <thalamus/modalities_util.hpp>
@@ -298,12 +299,21 @@ struct Service::Impl {
           channels_changed = false;
         }
 
+        auto native = request.native_formats();
         auto is_transformed = typed_node->is_transformed();
         for (auto c = 0u; c < channels.size(); ++c) {
           auto channel = channels[c];
           if (channel >= num_channels) {
             continue;
           }
+          if (native) {
+            append_native_channel(response, *typed_node, int(channel));
+            continue;
+          }
+
+          // Every array-backed channel is converted to scaled doubles in
+          // data. Encoded channels can't be, so they're marked Encoded with
+          // an empty range and their samples stay in the buffer.
           auto span = response.add_spans();
           span->set_begin(uint32_t(response.data_size()));
           auto name = typed_node->name(int(channel));
@@ -312,8 +322,7 @@ struct Service::Impl {
           response.add_sample_intervals(
               uint64_t(typed_node->sample_interval(int(channel)).count()));
 
-          visit_node(typed_node, [&](auto wrapper) {
-            auto data = wrapper->data(int(channel));
+          auto has_samples = visit_channel(typed_node, int(channel), [&](auto data) {
             workspace.assign(data.begin(), data.end());
             if(is_transformed) {
               auto scale = typed_node->scale(int(channel));
@@ -322,9 +331,19 @@ struct Service::Impl {
             }
             response.mutable_data()->Add(workspace.begin(), workspace.end());
           });
+          if (!has_samples) {
+            span->set_format(thalamus_grpc::Span::Format::Span_Format_Encoded);
+          }
 
           span->set_end(uint32_t(response.data_size()));
         }
+
+        if (native) {
+          finish_native(response, *typed_node);
+        } else {
+          set_encoded(response, *typed_node);
+        }
+
 
         ServerWriteReactor<::thalamus_grpc::AnalogResponse>::send(std::move(response));
       });
@@ -1416,6 +1435,7 @@ Service::graph(::grpc::CallbackServerContext *context,
                 auto span = response.add_spans();
                 auto name = node->name(c);
                 span->set_name(name.data(), name.size());
+                span->set_format(to_proto(node->analog_format(c)));
                 response.add_sample_intervals(
                     uint64_t(node->sample_interval(c).count()));
               }

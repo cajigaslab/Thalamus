@@ -27,6 +27,10 @@ public:
               const thalamus::vector<std::chrono::nanoseconds> &,
               const thalamus::vector<std::string_view> &) override;
   bool has_analog_data() const override;
+  Encoding encoding() const override;
+  std::span<const uint8_t> buffer() const override;
+  AnalogNode::AnalogFormat analog_format(int channel) const override;
+  size_t encoded_count() const override;
 
   std::span<Segment const> segments() const override;
   const std::string_view pose_name() const override;

@@ -15,6 +15,20 @@ template <typename T> double interval_to_frequency(T interval) {
 
 class AnalogNode {
 public:
+  enum class Encoding {
+    None,
+    AAC
+  };
+  /// How a channel's samples are stored, i.e. which *data function reads
+  /// them. Encoded channels have no samples in any of those: their samples
+  /// are in buffer(), encoded_count() of them per channel.
+  enum class AnalogFormat {
+    Double,
+    Short,
+    Int,
+    ULong,
+    Encoded
+  };
   virtual ~AnalogNode();
   boost::signals2::signal<void(AnalogNode *)> channels_changed;
   virtual std::span<const double> data(int channel) const = 0;
@@ -49,7 +63,50 @@ public:
   virtual bool is_transformed() const { return false; }
   virtual double scale(int) const { return 1.0; }
   virtual double offset(int) const { return 0.0; }
+  virtual Encoding encoding() const { return Encoding::None; }
+  virtual std::span<const uint8_t> buffer() const { return std::span<const uint8_t>(); }
+
+  /// The format of `channel`. The default gives every channel the format the
+  /// is_* functions select, so only nodes with mixed formats or encoded
+  /// channels need to override it.
+  virtual AnalogFormat analog_format(int) const {
+    if (is_short_data()) {
+      return AnalogFormat::Short;
+    } else if (is_int_data()) {
+      return AnalogFormat::Int;
+    } else if (is_ulong_data()) {
+      return AnalogFormat::ULong;
+    }
+    return AnalogFormat::Double;
+  }
+  /// The number of samples per encoded channel in buffer(): what decoding
+  /// it will eventually produce for this message, even if the encoder hasn't
+  /// output them yet.
+  virtual size_t encoded_count() const { return 0; }
 };
+
+/// Calls `callable` with `channel`'s samples as a span of its format's type.
+/// Encoded channels have no samples to pass: `callable` isn't called and
+/// false is returned.
+template <typename T> bool visit_channel(const AnalogNode *node, int channel, T &&callable) {
+  switch (node->analog_format(channel)) {
+  case AnalogNode::AnalogFormat::Double:
+    callable(node->data(channel));
+    return true;
+  case AnalogNode::AnalogFormat::Short:
+    callable(node->short_data(channel));
+    return true;
+  case AnalogNode::AnalogFormat::Int:
+    callable(node->int_data(channel));
+    return true;
+  case AnalogNode::AnalogFormat::ULong:
+    callable(node->ulong_data(channel));
+    return true;
+  case AnalogNode::AnalogFormat::Encoded:
+    return false;
+  }
+  return false;
+}
 
 template <typename T> class AnalogNodeWrapper {
 private:

@@ -1,6 +1,7 @@
 #include <thalamus/tracing.hpp>
 #include <thalamus/modalities_util.hpp>
 #include <thalamus/remote_node.hpp>
+#include <thalamus/analog_proto.hpp>
 #include <thalamus/thread.hpp>
 #include <thalamus/grpc.hpp>
 #include <thalamus/util.hpp>
@@ -41,6 +42,12 @@ struct RemoteNode::Impl {
   std::vector<std::chrono::nanoseconds> sample_intervals;
   std::vector<std::span<const double>> spans;
   std::vector<std::string> names;
+  std::vector<uint8_t> buffer;
+  AnalogNode::Encoding encoding = AnalogNode::Encoding::None;
+  size_t encoded_count = 0;
+  // Per channel, including the two leading ones this node adds. The analog
+  // stream is requested as doubles, so channels are Double or Encoded.
+  std::vector<AnalogNode::AnalogFormat> formats;
   std::mutex mutex;
   std::condition_variable condition;
   bool ready = true;
@@ -419,16 +426,26 @@ struct RemoteNode::Impl {
           }
 
           time = std::chrono::steady_clock::now().time_since_epoch();
+
+          buffer.assign(analog_response.buffer().begin(), analog_response.buffer().end());
+          // Unknown encodings from a newer Thalamus are treated as None.
+          encoding = from_proto(analog_response.encoding()).value_or(Encoding::None);
+          encoded_count = analog_response.encoded_count();
+
           remote_time = std::chrono::nanoseconds(analog_response.time());
           data.assign(analog_response.data().begin(),
                       analog_response.data().end());
           spans.clear();
           spans.emplace_back();
           spans.emplace_back();
+          formats.assign(2, AnalogNode::AnalogFormat::Double);
           std::vector<std::string> new_names(names.begin(), names.begin() + 2);
           for (auto &span : analog_response.spans()) {
             spans.emplace_back(data.begin() + span.begin(),
                                data.begin() + span.end());
+            formats.push_back(span.format() == thalamus_grpc::Span::Format::Span_Format_Encoded
+                                ? AnalogNode::AnalogFormat::Encoded
+                                : AnalogNode::AnalogFormat::Double);
             new_names.emplace_back(span.name());
           }
           sample_intervals.resize(
@@ -793,3 +810,18 @@ void RemoteNode::process(const boost::json::value& request, std::function<void(c
 }
 
 size_t RemoteNode::modalities() const { return infer_modalities<RemoteNode>(); }
+
+AnalogNode::Encoding RemoteNode::encoding() const {
+  return impl->encoding;
+}
+std::span<const uint8_t> RemoteNode::buffer() const {
+  return impl->buffer;
+}
+AnalogNode::AnalogFormat RemoteNode::analog_format(int channel) const {
+  auto index = size_t(channel);
+  return index < impl->formats.size() ? impl->formats[index] : AnalogNode::AnalogFormat::Double;
+}
+size_t RemoteNode::encoded_count() const {
+  return impl->encoded_count;
+}
+

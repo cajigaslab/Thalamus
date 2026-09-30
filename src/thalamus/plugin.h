@@ -143,6 +143,7 @@ extern "C" {
   struct ThalamusImageNode;
   struct ThalamusMocapNode;
   struct ThalamusTextNode;
+  struct ThalamusBlobNode;
 
   struct ThalamusNode {
     void* impl;
@@ -155,6 +156,27 @@ extern "C" {
     void (*process)(struct ThalamusNode*, struct ThalamusRequestHandle*, struct ThalamusJson*);
     void (*predrop)(struct ThalamusNode*);
     uint8_t signals_offmain;
+    struct ThalamusBlobNode* blob;
+  };
+
+  struct ThalamusBlobNode {
+    void (*body)(struct ThalamusByteSpan*, struct ThalamusNode*);
+    void (*mime)(struct ThalamusCharSpan*, struct ThalamusNode*);
+    uint32_t (*stream)(struct ThalamusNode*);
+    char (*has_blob_data)(struct ThalamusNode* node);
+  };
+
+  enum ThalamusAnalogEncoding {
+    ThalamusAnalogEncoding_None = 0,
+    ThalamusAnalogEncoding_AAC = 1
+  };
+
+  enum ThalamusAnalogFormat {
+    ThalamusAnalogFormat_Double = 0,
+    ThalamusAnalogFormat_Short = 1,
+    ThalamusAnalogFormat_Int = 2,
+    ThalamusAnalogFormat_ULong = 3,
+    ThalamusAnalogFormat_Encoded = 4
   };
 
   struct ThalamusAnalogNode {
@@ -172,6 +194,10 @@ extern "C" {
     double (*scale)(struct ThalamusNode* node, int channel);
     double (*offset)(struct ThalamusNode* node, int channel);
     void (*name)(struct ThalamusCharSpan*, struct ThalamusNode* node, int channel);
+    void (*buffer)(struct ThalamusByteSpan*, struct ThalamusNode* node);
+    enum ThalamusAnalogEncoding (*encoding)(struct ThalamusNode* node);
+    enum ThalamusAnalogFormat (*format)(struct ThalamusNode* node, int channel);
+    uint64_t (*encoded_count)(struct ThalamusNode* node);
   };
 
   enum ThalamusImageFormat {
@@ -444,10 +470,22 @@ extern "C" {
 
     void (*state_remove_at_name)(struct ThalamusState*, const struct ThalamusCharSpan*, ThalamusPostCallback, void*); // 138
     void (*state_remove_at_index)(struct ThalamusState*, int64_t, ThalamusPostCallback, void*); // 139
+
+    //The number of pointers after the ThalamusAnalogNode::name field in the analog nodes Thalamus provides
+    //to plugins, the host side counterpart of thalamus_get_analog_node_version.
+    int32_t (*analog_node_version)(void); // 140
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories_t)(struct ThalamusAPI*);
+
+  //The number of pointers after the ThalamusNodeFactory::plugin_impl field.
   typedef int32_t (*thalamus_get_node_factory_version_t)(void);
+
+  //The number of pointers after the ThalamusNode::signals_offmain field.
+  typedef int32_t (*thalamus_get_node_version_t)(void);
+
+  //The number of pointers after the ThalamusAnalogNode::name field.
+  typedef int32_t (*thalamus_get_analog_node_version_t)(void);
   typedef void (*thalamus_teardown_t)(void);
   
 #ifdef __cplusplus
