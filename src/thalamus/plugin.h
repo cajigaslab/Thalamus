@@ -143,6 +143,7 @@ extern "C" {
   struct ThalamusImageNode;
   struct ThalamusMocapNode;
   struct ThalamusTextNode;
+  struct ThalamusBlobNode;
 
   struct ThalamusNode {
     void* impl;
@@ -155,6 +156,27 @@ extern "C" {
     void (*process)(struct ThalamusNode*, struct ThalamusRequestHandle*, struct ThalamusJson*);
     void (*predrop)(struct ThalamusNode*);
     uint8_t signals_offmain;
+    struct ThalamusBlobNode* blob;
+  };
+
+  struct ThalamusBlobNode {
+    void (*body)(struct ThalamusByteSpan*, struct ThalamusNode*);
+    void (*mime)(struct ThalamusCharSpan*, struct ThalamusNode*);
+    uint32_t (*stream)(struct ThalamusNode*);
+    char (*has_blob_data)(struct ThalamusNode* node);
+  };
+
+  enum ThalamusAnalogEncoding {
+    ThalamusAnalogEncoding_None = 0,
+    ThalamusAnalogEncoding_AAC = 1
+  };
+
+  enum ThalamusAnalogFormat {
+    ThalamusAnalogFormat_Double = 0,
+    ThalamusAnalogFormat_Short = 1,
+    ThalamusAnalogFormat_Int = 2,
+    ThalamusAnalogFormat_ULong = 3,
+    ThalamusAnalogFormat_Encoded = 4
   };
 
   struct ThalamusAnalogNode {
@@ -172,6 +194,14 @@ extern "C" {
     double (*scale)(struct ThalamusNode* node, int channel);
     double (*offset)(struct ThalamusNode* node, int channel);
     void (*name)(struct ThalamusCharSpan*, struct ThalamusNode* node, int channel);
+    void (*buffer)(struct ThalamusByteSpan*, struct ThalamusNode* node);
+    enum ThalamusAnalogEncoding (*encoding)(struct ThalamusNode* node);
+    enum ThalamusAnalogFormat (*format)(struct ThalamusNode* node, int channel);
+    uint64_t (*encoded_count)(struct ThalamusNode* node);
+    /* Whether this message's channels differ from the previous message's
+       (count, names, formats or sample intervals). Only the first message
+       with analog data after a change reports it. Analog node version 5. */
+    char (*channels_changed)(struct ThalamusNode* node);
   };
 
   enum ThalamusImageFormat {
@@ -350,6 +380,9 @@ extern "C" {
     void (*node_get_node_disconnect)(struct ThalamusNodeGetConnection*); // 65
     void (*node_ready_disconnect)(struct ThalamusNodeReadyConnection*); // 66
 
+    /* Deprecated: channel changes are reported per message by
+       ThalamusAnalogNode::channels_changed. These remain for ABI
+       compatibility and do nothing; the connect callback is never called. */
     void (*node_channels_changed)(struct ThalamusNode*); // 67
 
     struct ThalamusNodeReadyConnection* (*node_channels_changed_connect)(struct ThalamusNode*, ThalamusNodeReadyCallback callback, void* data); // 68
@@ -444,10 +477,27 @@ extern "C" {
 
     void (*state_remove_at_name)(struct ThalamusState*, const struct ThalamusCharSpan*, ThalamusPostCallback, void*); // 138
     void (*state_remove_at_index)(struct ThalamusState*, int64_t, ThalamusPostCallback, void*); // 139
+
+    //The number of pointers after the ThalamusAnalogNode::name field in the analog nodes Thalamus provides
+    //to plugins, the host side counterpart of thalamus_get_analog_node_version.
+    int32_t (*analog_node_version)(void); // 140
+
+    //Like trace_event_begin, but name is a NUL terminated string that must stay valid and unchanged while
+    //the plugin is loaded: Perfetto interns it by address, so it's written to the trace once and later
+    //events refer to it by id. End the event with trace_event_end.
+    void (*trace_event_begin_static)(const char* name); // 141
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories_t)(struct ThalamusAPI*);
+
+  //The number of pointers after the ThalamusNodeFactory::plugin_impl field.
   typedef int32_t (*thalamus_get_node_factory_version_t)(void);
+
+  //The number of pointers after the ThalamusNode::signals_offmain field.
+  typedef int32_t (*thalamus_get_node_version_t)(void);
+
+  //The number of pointers after the ThalamusAnalogNode::name field.
+  typedef int32_t (*thalamus_get_analog_node_version_t)(void);
   typedef void (*thalamus_teardown_t)(void);
   
 #ifdef __cplusplus

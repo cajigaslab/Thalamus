@@ -15,8 +15,26 @@ template <typename T> double interval_to_frequency(T interval) {
 
 class AnalogNode {
 public:
+  enum class Encoding {
+    None,
+    AAC
+  };
+  /// How a channel's samples are stored, i.e. which *data function reads
+  /// them. Encoded channels have no samples in any of those: their samples
+  /// are in buffer(), encoded_count() of them per channel.
+  enum class AnalogFormat {
+    Double,
+    Short,
+    Int,
+    ULong,
+    Encoded
+  };
   virtual ~AnalogNode();
-  boost::signals2::signal<void(AnalogNode *)> channels_changed;
+  /// Whether this message's channels differ from the previous message's:
+  /// their count, names, formats or sample intervals. Only the first message
+  /// with analog data after a change reports it, so a subscriber checks it
+  /// on every message and treats the first message it sees as changed too.
+  virtual bool channels_changed() const { return false; }
   virtual std::span<const double> data(int channel) const = 0;
   virtual std::span<const short> short_data(int) const {
     THALAMUS_ASSERT(false, "AnalogNode::short_data unimplemented");
@@ -38,9 +56,14 @@ public:
   virtual std::span<const std::string> get_recommended_channels() const {
     return std::span<const std::string>();
   }
-  virtual void inject(const thalamus::vector<std::span<double const>> &,
+  /// `channels_changed` says whether the injected channels differ from the
+  /// previous message's (count, names, formats or sample intervals); nodes
+  /// that send the injected data report it through channels_changed().
+  /// Does nothing by default.
+  virtual void inject_analog(const thalamus::vector<std::span<double const>> &,
                       const thalamus::vector<std::chrono::nanoseconds> &,
-                      const thalamus::vector<std::string_view> &) = 0;
+                      const thalamus::vector<std::string_view> &,
+                      bool /* channels_changed */ = false) {}
   virtual bool has_analog_data() const { return true; }
   virtual bool is_short_data() const { return false; }
   virtual bool is_int_data() const { return false; }
@@ -49,7 +72,50 @@ public:
   virtual bool is_transformed() const { return false; }
   virtual double scale(int) const { return 1.0; }
   virtual double offset(int) const { return 0.0; }
+  virtual Encoding encoding() const { return Encoding::None; }
+  virtual std::span<const uint8_t> buffer() const { return std::span<const uint8_t>(); }
+
+  /// The format of `channel`. The default gives every channel the format the
+  /// is_* functions select, so only nodes with mixed formats or encoded
+  /// channels need to override it.
+  virtual AnalogFormat analog_format(int) const {
+    if (is_short_data()) {
+      return AnalogFormat::Short;
+    } else if (is_int_data()) {
+      return AnalogFormat::Int;
+    } else if (is_ulong_data()) {
+      return AnalogFormat::ULong;
+    }
+    return AnalogFormat::Double;
+  }
+  /// The number of samples per encoded channel in buffer(): what decoding
+  /// it will eventually produce for this message, even if the encoder hasn't
+  /// output them yet.
+  virtual size_t encoded_count() const { return 0; }
 };
+
+/// Calls `callable` with `channel`'s samples as a span of its format's type.
+/// Encoded channels have no samples to pass: `callable` isn't called and
+/// false is returned.
+template <typename T> bool visit_channel(const AnalogNode *node, int channel, T &&callable) {
+  switch (node->analog_format(channel)) {
+  case AnalogNode::AnalogFormat::Double:
+    callable(node->data(channel));
+    return true;
+  case AnalogNode::AnalogFormat::Short:
+    callable(node->short_data(channel));
+    return true;
+  case AnalogNode::AnalogFormat::Int:
+    callable(node->int_data(channel));
+    return true;
+  case AnalogNode::AnalogFormat::ULong:
+    callable(node->ulong_data(channel));
+    return true;
+  case AnalogNode::AnalogFormat::Encoded:
+    return false;
+  }
+  return false;
+}
 
 template <typename T> class AnalogNodeWrapper {
 private:
@@ -112,13 +178,17 @@ public:
   virtual std::chrono::nanoseconds time() const override;
   std::string_view name(int channel) const override;
   std::span<const std::string> get_recommended_channels() const override;
-  virtual void inject(const thalamus::vector<std::span<double const>> &,
-                      const thalamus::vector<std::chrono::nanoseconds> &,
-                      const thalamus::vector<std::string_view> &) override;
-  virtual void inject(const thalamus::vector<std::span<double const>> &,
+  /// The channels_changed argument of the inject_analog() that sent this
+  /// message.
+  bool channels_changed() const override;
+  virtual void inject_analog(const thalamus::vector<std::span<double const>> &,
                       const thalamus::vector<std::chrono::nanoseconds> &,
                       const thalamus::vector<std::string_view> &,
-                      std::chrono::nanoseconds);
+                      bool channels_changed = false) override;
+  virtual void inject_analog(const thalamus::vector<std::span<double const>> &,
+                      const thalamus::vector<std::chrono::nanoseconds> &,
+                      const thalamus::vector<std::string_view> &,
+                      std::chrono::nanoseconds, bool channels_changed = false);
   static std::string type_name();
   size_t modalities() const override;
 };
@@ -140,9 +210,9 @@ public:
   int num_channels() const override;
 
   void
-  inject(const thalamus::vector<std::span<double const>> &data,
+  inject_analog(const thalamus::vector<std::span<double const>> &data,
          const thalamus::vector<std::chrono::nanoseconds> &sample_intervals,
-         const thalamus::vector<std::string_view> &) override;
+         const thalamus::vector<std::string_view> &, bool) override;
 
   std::chrono::nanoseconds sample_interval(int) const override;
   std::chrono::nanoseconds time() const override;
@@ -153,6 +223,7 @@ public:
   std::string_view text() const override;
   bool has_text_data() const override;
   bool has_analog_data() const override;
+  bool channels_changed() const override;
 };
 
 class ToggleNode : public AnalogNode, public Node {
@@ -170,14 +241,15 @@ public:
   int num_channels() const override;
 
   void
-  inject(const thalamus::vector<std::span<double const>> &data,
+  inject_analog(const thalamus::vector<std::span<double const>> &data,
          const thalamus::vector<std::chrono::nanoseconds> &sample_intervals,
-         const thalamus::vector<std::string_view> &) override;
+         const thalamus::vector<std::string_view> &, bool) override;
 
   std::chrono::nanoseconds sample_interval(int) const override;
   std::chrono::nanoseconds time() const override;
   std::string_view name(int channel) const override;
   std::span<const std::string> get_recommended_channels() const override;
   size_t modalities() const override;
+  bool channels_changed() const override;
 };
 }; // namespace thalamus

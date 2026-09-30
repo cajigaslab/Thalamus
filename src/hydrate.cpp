@@ -174,6 +174,30 @@ struct RecapState {
   std::vector<std::string> path;
 };
 
+/// Which array an analog span's samples are in. Spans written before
+/// Span.format existed say Double and rely on is_int_data/is_ulong_data.
+/// nullopt for Encoded spans (their samples are in the encoded buffer, which
+/// isn't exported) and for formats newer than this build.
+enum class SpanArray { Double, Int, ULong };
+static std::optional<SpanArray> span_array(const thalamus_grpc::AnalogResponse &analog,
+                                           const thalamus_grpc::Span &span) {
+  auto format = span.format();
+  if (format == thalamus_grpc::Span::Format::Span_Format_Double) {
+    if (analog.is_int_data()) {
+      return SpanArray::Int;
+    } else if (analog.is_ulong_data()) {
+      return SpanArray::ULong;
+    }
+    return SpanArray::Double;
+  } else if (format == thalamus_grpc::Span::Format::Span_Format_Short ||
+             format == thalamus_grpc::Span::Format::Span_Format_Int) {
+    return SpanArray::Int;
+  } else if (format == thalamus_grpc::Span::Format::Span_Format_ULong) {
+    return SpanArray::ULong;
+  }
+  return std::nullopt;
+}
+
 struct DataCount {
   std::map<std::string, size_t> counts;
   std::map<std::string, std::tuple<size_t, size_t, size_t>> dimensions;
@@ -205,6 +229,10 @@ static DataCount count_data(const std::string &filename,
       auto analog = record->analog();
       auto spans = analog.spans();
       for (auto &span : spans) {
+        auto array = span_array(analog, span);
+        if (!array) {
+          continue;
+        }
         hsize_t span_size = span.end() - span.begin();
         auto span_name = span.name().empty() ? "" : span.name();
         if (slash_replace) {
@@ -212,10 +240,10 @@ static DataCount count_data(const std::string &filename,
         }
         counts["analog/" + node_name + "/" + span_name + "/data"] += span_size;
         ++counts["analog/" + node_name + "/" + span_name + "/received"];
-        if (analog.is_int_data()) {
+        if (*array == SpanArray::Int) {
           result.datatypes["analog/" + node_name + "/" + span_name + "/data"] =
               H5T_NATIVE_SHORT;
-        } else if (analog.is_ulong_data()) {
+        } else if (*array == SpanArray::ULong) {
           result.datatypes["analog/" + node_name + "/" + span_name + "/data"] =
               H5T_NATIVE_UINT64;
         } else {
@@ -761,6 +789,10 @@ int generate_csv(boost::program_options::variables_map &vm) {
       auto spans = analog.spans();
 
       for (auto &span : spans) {
+        auto array = span_array(analog, span);
+        if (!array) {
+          continue;
+        }
         auto span_name = span.name().empty() ? "" : span.name();
         if (!channels.empty() && !channels.contains(span_name)) {
           continue;
@@ -772,11 +804,11 @@ int generate_csv(boost::program_options::variables_map &vm) {
         }
 
         uint64_t record_time = record->time();
-        if (analog.is_int_data()) {
+        if (*array == SpanArray::Int) {
           for (auto i = span.begin(); i < span.end(); ++i) {
             fprintf(column_files[span_name], "%" PRIu64 ",%d,\n", record_time, analog.int_data(int(i)));
           }
-        } else if (analog.is_ulong_data()) {
+        } else if (*array == SpanArray::ULong) {
           for (auto i = span.begin(); i < span.end(); ++i) {
             fprintf(column_files[span_name], "%" PRIu64 ",%" PRIu64 ",\n", record_time, analog.ulong_data(int(i)));
           }
@@ -1106,6 +1138,10 @@ int main(int argc, char **argv) {
         auto spans = analog.spans();
 
         for (auto &span : spans) {
+          auto array = span_array(analog, span);
+          if (!array) {
+            continue;
+          }
           hsize_t span_size = span.end() - span.begin();
           auto span_name = span.name().empty() ? "" : span.name();
           if (slash_replace) {
@@ -1126,13 +1162,13 @@ int main(int argc, char **argv) {
               gzip ? std::min(dataset_counts[received_path] - received_written,
                               chunk_size)
                    : 1;
-          if (analog.is_int_data()) {
+          if (*array == SpanArray::Int) {
             write_data(
                 record->time(), analog.remote_time(), span_size, data, received,
                 data_written, received_written, H5T_NATIVE_SHORT,
                 analog.int_data().data() + span.begin(), int_data_caches[data],
                 received_caches[received], data_chunk, received_chunk);
-          } else if (analog.is_ulong_data()) {
+          } else if (*array == SpanArray::ULong) {
             write_data(
                 record->time(), analog.remote_time(), span_size, data, received,
                 data_written, received_written, H5T_NATIVE_UINT64,

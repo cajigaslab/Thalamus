@@ -139,12 +139,17 @@ message NodeRequest {
   string node = 1;
   string json = 2;
   uint64 id = 3;
+  NodeSelector selector = 4;
 }
 message NodeResponse {
   enum Status {
     OK = 0;
     NOT_FOUND = 1;
     REDIRECT = 2;
+    PARSE_ERROR = 3;
+    // The request's selector can't match any node: it names neither a node
+    // nor a type, or no selector was given before the first request.
+    BAD_SELECTOR = 4;
   }
   string json = 1;
   uint64 id = 2;
@@ -169,10 +174,17 @@ message StorageRecord {
     Compressed compressed = 8;
     Metadata metadata = 9;
     File file = 10;
+    Blob blob = 12;
   }
   uint64 time = 4;
   string node = 5;
   uint64 seq = 11;
+}
+
+message Blob {
+  bytes body = 1;
+  string mime = 2;
+  uint32 stream = 3;
 }
 
 message File {
@@ -286,6 +298,9 @@ message AnalogRequest {
   NodeSelector node = 1;
   repeated int32 channels = 2;
   repeated string channel_names = 3;
+  // Send each channel in its own format (see Span.format) instead of
+  // converting every channel to scaled doubles in AnalogResponse.data.
+  bool native_formats = 4;
 }
 
 message InjectAnalogRequest {
@@ -314,6 +329,11 @@ message AnalogResponse {
     Voltage = 0;
     Current = 1;
   }
+
+  enum Encoding {
+    None = 0;
+    AAC = 1;
+  }
   
   repeated double data = 1;
   repeated Span spans = 2;
@@ -328,6 +348,10 @@ message AnalogResponse {
   bool is_ulong_data = 11;
   string redirect = 12;
   bool is_transformed = 13;
+  bytes buffer = 14;
+  Encoding encoding = 15;
+  // Samples per Encoded channel in buffer.
+  uint64 encoded_count = 16;
 }
  
 message GraphRequest {
@@ -338,11 +362,25 @@ message GraphRequest {
 }
  
 message Span {
+  // Which array begin and end index: Double -> data, Short and Int ->
+  // int_data, ULong -> ulong_data. Encoded channels have an empty range;
+  // their samples are in AnalogResponse.buffer. Messages written before this
+  // field existed say Double for every span and use is_int_data or
+  // is_ulong_data instead.
+  enum Format {
+    Double = 0;
+    Short = 1;
+    Int = 2;
+    ULong = 3;
+    Encoded = 4;
+  }
+
   uint32 begin = 1;
   uint32 end = 2;
   string name = 3;
   double scale = 4;
   double offset = 5;
+  Format format = 6;
 }
  
 message GraphResponse {

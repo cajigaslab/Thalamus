@@ -52,6 +52,7 @@
 #include <thalamus/ceci_node.hpp>
 #include <thalamus/frequency_node.hpp>
 #include <thalamus/samplemonitor_node.hpp>
+#include <thalamus/blob_node.hpp>
 #include <thalamus/plugin.h>
 #include <thalamus/modalities_util.hpp>
 #include <thalamus/node_util.hpp>
@@ -203,14 +204,16 @@ static void string_to_span(struct ThalamusCharSpan* output, const std::string& i
   output->owns_data = 1;
 }
 
-struct ExtNode : public Node, public AnalogNode, public ImageNode, public MotionCaptureNode, public TextNode {
+struct ExtNode : public Node, public AnalogNode, public ImageNode, public MotionCaptureNode, public TextNode, public BlobNode {
+  int version;
+  int analog_version;
   ThalamusNode* node;
   ThalamusNodeFactory *factory;
   ThalamusAPI *api;
   std::function<void()> drop_ready;
 
-  ExtNode(ThalamusNode *_node, ThalamusNodeFactory *_factory, ThalamusAPI *_api)
-      : node(_node), factory(_factory), api(_api) {
+  ExtNode(ThalamusNode *_node, ThalamusNodeFactory *_factory, ThalamusAPI *_api, int _version)
+      : version(_version), analog_version(0), node(_node), factory(_factory), api(_api) {
     if(node && node->signals_offmain) {
       ready_multithreaded.emplace();
     }
@@ -224,16 +227,93 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
   }
 
   size_t modalities() const override {
+    //The blob field was introduced in node version 1.  To read it
+    //on an older version is undefined behavior.
+    auto has_node_blob = (version >= 1) && (node->blob != nullptr);
+
     size_t result = 0;
     result |= node->analog != nullptr ? THALAMUS_MODALITY_ANALOG : 0;
     result |= node->mocap != nullptr ? THALAMUS_MODALITY_MOCAP : 0;
     result |= node->image != nullptr ? THALAMUS_MODALITY_IMAGE : 0;
     result |= node->text != nullptr ? THALAMUS_MODALITY_TEXT : 0;
+    result |= has_node_blob ? THALAMUS_MODALITY_BLOB : 0;
     return result;
   }
 
   static std::string type_name() {
     THALAMUS_ABORT("Unimplemented");
+  }
+  
+  std::span<const uint8_t> body() const override {
+    ThalamusByteSpan body;
+    node->blob->body(&body, node);
+    return std::span<const uint8_t>(body.data, body.size);
+  }
+  std::string_view mime() const override {
+    ThalamusCharSpan mime;
+    node->blob->mime(&mime, node);
+    return std::string_view(mime.data, mime.size);
+  }
+  uint32_t stream() const override {
+    return node->blob->stream(node);
+  }
+  bool has_blob_data() const override {
+    return node->blob->has_blob_data(node);
+  }
+
+  std::span<const uint8_t> buffer() const override {
+    if(analog_version < 2) {
+      return std::span<const uint8_t>();
+    }
+    ThalamusByteSpan temp{};
+    node->analog->buffer(&temp, node);
+    return std::span<const uint8_t>(temp.data, temp.data+temp.size);
+  }
+
+  AnalogNode::AnalogFormat analog_format(int channel) const override {
+    if(analog_version < 4) {
+      return AnalogNode::analog_format(channel);
+    }
+    switch(node->analog->format(node, channel)) {
+    case ThalamusAnalogFormat_Double:
+      return AnalogNode::AnalogFormat::Double;
+    case ThalamusAnalogFormat_Short:
+      return AnalogNode::AnalogFormat::Short;
+    case ThalamusAnalogFormat_Int:
+      return AnalogNode::AnalogFormat::Int;
+    case ThalamusAnalogFormat_ULong:
+      return AnalogNode::AnalogFormat::ULong;
+    case ThalamusAnalogFormat_Encoded:
+      return AnalogNode::AnalogFormat::Encoded;
+    }
+    THALAMUS_ABORT("Unknown analog format");
+  }
+
+  size_t encoded_count() const override {
+    if(analog_version < 4) {
+      return 0;
+    }
+    return size_t(node->analog->encoded_count(node));
+  }
+
+  bool channels_changed() const override {
+    if(analog_version < 5) {
+      return false;
+    }
+    return node->analog->channels_changed(node) != 0;
+  }
+
+  Encoding encoding() const override {
+    if(analog_version < 2) {
+      return Encoding::None;
+    }
+    switch(node->analog->encoding(node)) {
+    case ThalamusAnalogEncoding_None:
+      return Encoding::None;
+    case ThalamusAnalogEncoding_AAC:
+      return Encoding::AAC;
+    }
+    THALAMUS_ABORT("Unknown encoding");
   }
 
   std::span<const double> data(int channel) const override {
@@ -272,11 +352,6 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
     ThalamusCharSpan temp2;
     node->analog->name(&temp2, node, channel);
     return std::string_view(temp2.data, temp2.data + temp2.size);
-  }
-  void inject(const thalamus::vector<std::span<double const>> &,
-                      const thalamus::vector<std::chrono::nanoseconds> &,
-                      const thalamus::vector<std::string_view> &) override {
-    THALAMUS_ABORT("Unimplemented");
   }
   bool has_analog_data() const override {
     return node->analog->has_analog_data(node);
@@ -402,11 +477,71 @@ struct Interfaces {
   AnalogNode* analog = nullptr;
   ImageNode* image = nullptr;
   MotionCaptureNode* mocap = nullptr;
+  TextNode* text = nullptr;
+  BlobNode* blob = nullptr;
   std::atomic_int safe = 0;
   std::atomic_int count = 0;
 };
 
 #define ASSERT_SAFE() do { if(!interfaces->safe) [[unlikely]] { THALAMUS_ABORT("Node should only be accessed in get_node or ready callback"); } } while(0)
+
+static void plugin_blob_body(struct ThalamusByteSpan* out, struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+
+  auto body = interfaces->blob->body();
+  out->data = body.data();
+  out->size = body.size();
+}
+
+static void plugin_blob_mime(struct ThalamusCharSpan* out, struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+
+  auto mime = interfaces->blob->mime();
+  out->data = mime.data();
+  out->size = mime.size();
+}
+
+static uint32_t plugin_blob_stream(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  return interfaces->blob->stream();
+}
+
+static char plugin_blob_has_blob_data(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  return interfaces->blob->has_blob_data() ? 1 : 0;
+}
+
+static uint64_t plugin_blob_time_ns(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  std::chrono::nanoseconds t = interfaces->blob->time();
+  return uint64_t(t.count());
+}
+
+static uint64_t plugin_text_time_ns(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  std::chrono::nanoseconds t = interfaces->text->time();
+  return uint64_t(t.count());
+}
+
+static void plugin_text_text(struct ThalamusCharSpan* out, struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  auto text = interfaces->text->text();
+  out->data = text.data();
+  out->size = text.size();
+}
+
+static char plugin_text_has_text_data(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  return interfaces->text->has_text_data() ? 1 : 0;
+}
 
 static uint64_t plugin_analog_time_ns(struct ThalamusNode* node) {
   auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
@@ -436,6 +571,56 @@ static void plugin_node_process(struct ThalamusNode* node, struct ThalamusReques
     handle->callback(response);
     delete handle;
   });
+}
+
+static void plugin_analog_buffer(struct ThalamusByteSpan* output, struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  auto span = interfaces->analog->buffer();
+  output->data = span.data();
+  output->size = span.size();
+}
+
+static ThalamusAnalogFormat plugin_analog_format(struct ThalamusNode* node, int channel) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  switch(interfaces->analog->analog_format(channel)) {
+  case AnalogNode::AnalogFormat::Double:
+    return ThalamusAnalogFormat_Double;
+  case AnalogNode::AnalogFormat::Short:
+    return ThalamusAnalogFormat_Short;
+  case AnalogNode::AnalogFormat::Int:
+    return ThalamusAnalogFormat_Int;
+  case AnalogNode::AnalogFormat::ULong:
+    return ThalamusAnalogFormat_ULong;
+  case AnalogNode::AnalogFormat::Encoded:
+    return ThalamusAnalogFormat_Encoded;
+  }
+  THALAMUS_ABORT("Unknown analog format");
+}
+
+static uint64_t plugin_analog_encoded_count(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  return uint64_t(interfaces->analog->encoded_count());
+}
+
+static char plugin_analog_channels_changed(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  return interfaces->analog->channels_changed() ? 1 : 0;
+}
+
+static ThalamusAnalogEncoding plugin_analog_encoding(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  switch(interfaces->analog->encoding()) {
+  case AnalogNode::Encoding::None:
+    return ThalamusAnalogEncoding_None;
+  case AnalogNode::Encoding::AAC:
+    return ThalamusAnalogEncoding_AAC;
+  }
+  THALAMUS_ABORT("Unknown encoding");
 }
 
 static void plugin_analog_data(struct ThalamusDoubleSpan* output, struct ThalamusNode* node, int channel) {
@@ -666,9 +851,11 @@ struct ThalamusAPIImpl {
     auto analog = node_cast<AnalogNode *>(node);
     auto image = node_cast<ImageNode *>(node);
     auto mocap = node_cast<MotionCaptureNode *>(node);
+    auto text = node_cast<TextNode *>(node);
+    auto blob = node_cast<BlobNode *>(node);
     if(analog) {
       interfaces->analog = analog;
-      result->time_ns = result->time_ns ? result->time_ns : plugin_analog_time_ns;
+      result->time_ns = plugin_analog_time_ns;
       result->analog = new ThalamusAnalogNode();
       result->analog->data = plugin_analog_data;
       result->analog->short_data = plugin_analog_short_data;
@@ -684,10 +871,15 @@ struct ThalamusAPIImpl {
       result->analog->is_transformed = plugin_analog_is_transformed;
       result->analog->scale = plugin_analog_scale;
       result->analog->offset = plugin_analog_offset;
+      result->analog->buffer = plugin_analog_buffer;
+      result->analog->encoding = plugin_analog_encoding;
+      result->analog->format = plugin_analog_format;
+      result->analog->encoded_count = plugin_analog_encoded_count;
+      result->analog->channels_changed = plugin_analog_channels_changed;
     }
     if (image) {
       interfaces->image = image;
-      result->time_ns = result->time_ns ? result->time_ns : plugin_image_time_ns;
+      result->time_ns = plugin_image_time_ns;
       result->image = new ThalamusImageNode();
       result->image->plane = plugin_image_plane;
       result->image->num_planes = plugin_image_num_planes;
@@ -699,11 +891,27 @@ struct ThalamusAPIImpl {
     }
     if (mocap) {
       interfaces->mocap = mocap;
-      result->time_ns = result->time_ns ? result->time_ns : plugin_mocap_time_ns;
+      result->time_ns = plugin_mocap_time_ns;
       result->mocap = new ThalamusMocapNode();
       result->mocap->segments = plugin_mocap_segments;
       result->mocap->pose_name = plugin_mocap_pose_name;
       result->mocap->has_motion_data = plugin_mocap_has_motion_data;
+    }
+    if (text) {
+      interfaces->text = text;
+      result->time_ns = plugin_text_time_ns;
+      result->text = new ThalamusTextNode();
+      result->text->text = plugin_text_text;
+      result->text->has_text_data = plugin_text_has_text_data;
+    }
+    if (blob) {
+      interfaces->blob = blob;
+      result->time_ns = plugin_blob_time_ns;
+      result->blob = new ThalamusBlobNode();
+      result->blob->body = plugin_blob_body;
+      result->blob->mime = plugin_blob_mime;
+      result->blob->stream = plugin_blob_stream;
+      result->blob->has_blob_data = plugin_blob_has_blob_data;
     }
 
     return result;
@@ -1277,6 +1485,10 @@ struct ThalamusAPIImpl {
     TRACE_EVENT_END("plugin");
   }
 
+  static void trace_event_begin_static(const char* name) {
+    TRACE_EVENT_BEGIN("plugin", perfetto::StaticString(name));
+  }
+
   static ThalamusSerialPort* serial_port_create() {
     auto result = new ThalamusSerialPort{
       boost::asio::serial_port(*io_context),
@@ -1471,23 +1683,27 @@ struct ThalamusAPIImpl {
     delete conn;
   }
 
-  static void node_channels_changed(struct ThalamusNode* node) {
-    auto ext_node = reinterpret_cast<ExtNode*>(node->impl);
-    ext_node->channels_changed(ext_node);
+  // Deprecated: channel changes are reported per message through
+  // ThalamusAnalogNode::channels_changed. Kept for ABI compatibility; each
+  // logs an error the first time a plugin calls it.
+  static void node_channels_changed(struct ThalamusNode*) {
+    static std::atomic_bool logged = false;
+    if (!logged.exchange(true)) {
+      THALAMUS_LOG(error) << "A plugin called the deprecated node_channels_changed, which does nothing. "
+                             "Report channel changes per message with ThalamusAnalogNode::channels_changed.";
+    }
   }
 
-  static ThalamusNodeReadyConnection* node_channels_changed_connect(struct ThalamusNode* node, ThalamusNodeReadyCallback callback, void* data) {
-    auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
-    
+  static ThalamusNodeReadyConnection* node_channels_changed_connect(struct ThalamusNode* node, ThalamusNodeReadyCallback, void*) {
+    static std::atomic_bool logged = false;
+    if (!logged.exchange(true)) {
+      THALAMUS_LOG(error) << "A plugin called the deprecated node_channels_changed_connect, whose callback is never called. "
+                             "Check ThalamusAnalogNode::channels_changed on each message instead.";
+    }
+    // A connection that never fires, so disconnecting it works as before.
     auto result = new ThalamusNodeReadyConnection();
     result->node = node;
     node_inc_ref(node);
-    if(interfaces->analog) {
-      result->connection = interfaces->analog->channels_changed.connect([node, callback, data] (auto) {
-        NodeGuard lock(node);
-        callback(node, data);
-      });
-    }
     return result;
   }
 
@@ -1672,6 +1888,11 @@ struct ThalamusAPIImpl {
     erase_state(state, std::string(key->data, key->size), closure);
   }
 
+  static int32_t analog_node_version() {
+    // buffer, encoding, format, encoded_count and channels_changed.
+    return 5;
+  }
+
   static void state_remove_at_index(struct ThalamusState* state, int64_t key, ThalamusPostCallback callback, void* data) {
     auto closure = to_closure(callback, data);
     erase_state(state, key, closure);
@@ -1690,26 +1911,32 @@ std::map<ThalamusNode*, Node*>* ThalamusAPIImpl::node_c_to_cpp = nullptr;
 
 struct ExtNodeFactory : public INodeFactory {
   int version;
+  int node_version;
+  int analog_node_version;
   ThalamusNodeFactory* underlying;
   ThalamusIoContext io_context;
   ThalamusNodeGraph node_graph;
   ThalamusAPI* api;
 
-  ExtNodeFactory(int _version, ThalamusNodeFactory* _underlying, boost::asio::io_context &_io_context, NodeGraph *graph, ThalamusAPI* _api)
-  : version(_version), underlying(_underlying), io_context(_io_context), node_graph(graph), api(_api) {}
+  ExtNodeFactory(int _version, ThalamusNodeFactory* _underlying, boost::asio::io_context &_io_context, NodeGraph *graph, ThalamusAPI* _api, int _node_version, int _analog_node_version)
+  : version(_version), node_version(_node_version), analog_node_version(_analog_node_version), underlying(_underlying), io_context(_io_context), node_graph(graph), api(_api) {}
 
   Node *create(ObservableDictPtr state, boost::asio::io_context &,
                NodeGraph *) override {
     auto state_wrapper = ThalamusAPIImpl::get_state_ref(state);
 
-    auto result = new ExtNode(nullptr, underlying, api);
+    auto result = new ExtNode(nullptr, underlying, api, node_version);
     ThalamusNode* node;
+    
+    //create2 was introduced in node factory version 1.  To read it
+    //on an older version is undefined behavior.
     if (version < 1) {
       node = underlying->create(underlying, state_wrapper, &io_context, &node_graph);
     } else {
       node = underlying->create2(underlying, state_wrapper, &io_context, &node_graph, result);
     }
     result->node = node;
+    result->analog_version = analog_node_version;
     if(node->signals_offmain) {
       result->ready_multithreaded.emplace();
     }
@@ -1961,7 +2188,9 @@ public:
     thalamus_api.dialog_show = ThalamusAPIImpl::dialog_show;
     thalamus_api.state_remove_at_name = ThalamusAPIImpl::state_remove_at_name;
     thalamus_api.state_remove_at_index = ThalamusAPIImpl::state_remove_at_index;
-    thalamus_api.version = 139;
+    thalamus_api.analog_node_version = ThalamusAPIImpl::analog_node_version;
+    thalamus_api.trace_event_begin_static = ThalamusAPIImpl::trace_event_begin_static;
+    thalamus_api.version = 141;
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},
@@ -2032,6 +2261,22 @@ public:
         version = 0;
       }
 
+      auto get_node_version = ext.load<thalamus_get_node_version_t>("thalamus_get_node_version");
+      int32_t node_version;
+      if(get_node_version != nullptr) {
+        node_version = get_node_version();
+      } else {
+        node_version = 0;
+      }
+
+      auto get_analog_node_version = ext.load<thalamus_get_analog_node_version_t>("thalamus_get_analog_node_version");
+      int32_t analog_node_version;
+      if(get_analog_node_version != nullptr) {
+        analog_node_version = get_analog_node_version();
+      } else {
+        analog_node_version = 0;
+      }
+
       auto get_node_factories = ext.load<thalamus_get_node_factories_t>("thalamus_get_node_factories");
       THALAMUS_ASSERT(get_node_factories, "thalamus_get_node_factories not found in extension");
 
@@ -2039,7 +2284,7 @@ public:
       while(*factory != nullptr) {
         THALAMUS_LOG(info) << "Found " << (*factory)->type;
         auto type_name = to_string((*factory)->type);
-        node_factories[type_name] = new ExtNodeFactory(version, *factory, io_context, outer, &thalamus_api);
+        node_factories[type_name] = new ExtNodeFactory(version, *factory, io_context, outer, &thalamus_api, node_version, analog_node_version);
         ++factory;
       }
     }
@@ -2145,6 +2390,24 @@ public:
     }
   }
 
+  struct NodeSelectorOp {
+    ObservableDict* node;
+
+    bool operator()(const thalamus_grpc::NodeSelector& s) const {
+      auto query_name = s.name();
+      auto query_type = s.type();
+      std::string name = node->at("name");
+      std::string type = node->at("type");
+      if(!query_name.empty() && query_name != name) {
+        return false;
+      }
+      if(!query_type.empty() && query_type != type) {
+        return false;
+      }
+      return true;
+    }
+  };
+
   void on_node(ObservableDict *node, ObservableCollection::Action a,
                const ObservableCollection::Key &k,
                const ObservableCollection::Value &v) {
@@ -2197,23 +2460,20 @@ public:
                 node_next_type[new_node_index] = "";
 
                 auto node_impl = node_impls.at(new_node_index);
-                notify([&type_str](
-                          auto &selector) { return selector.type() == type_str; },
+                notify(NodeSelectorOp { node_config.get() },
                       node_impl);
               });
             });
           }
         } else {
           auto node_impl = node_impls.at(size_t(node_index));
-          notify([&value_str](
-                    auto &selector) { return selector.type() == value_str; },
+          notify(NodeSelectorOp { node },
                 node_impl);
         }
       } else if (key_str == "name") {
         auto node_impl = node_impls.at(size_t(node_index));
         auto value_str = std::get<std::string>(v);
-        notify([&value_str](
-                   auto &selector) { return selector.name() == value_str; },
+        notify(NodeSelectorOp { node },
                node_impl);
       }
     }
@@ -2256,23 +2516,31 @@ std::weak_ptr<Node> NodeGraphImpl::get_node(const std::string &query_name) {
   return get_node(selector);
 }
 
+static bool valid_node_selector(const thalamus_grpc::NodeSelector &query) {
+  return !query.name().empty() || !query.type().empty();
+}
+
 std::weak_ptr<Node>
-NodeGraphImpl::get_node(const thalamus_grpc::NodeSelector &query_name) {
-  std::string key;
-  std::string query;
-  if (!query_name.name().empty()) {
-    key = "name";
-    query = query_name.name();
-  } else {
-    key = "type";
-    query = query_name.type();
+NodeGraphImpl::get_node(const thalamus_grpc::NodeSelector &query) {
+  if(!valid_node_selector(query)) {
+    return std::weak_ptr<Node>();
   }
+
+  auto& query_name = query.name();
+  auto& query_type = query.type();
   for (auto i = 0u; i < impl->nodes->size(); ++i) {
     ObservableDictPtr node = impl->nodes->at(i);
-    std::string value = node->at(key);
-    if (query == value) {
-      return std::weak_ptr<Node>(impl->node_impls.at(i));
+
+    std::string name = node->at("name");
+    std::string type = node->at("type");
+    if(!query_name.empty() && query_name != name) {
+      continue;
     }
+    if(!query_type.empty() && query_type != type) {
+      continue;
+    }
+
+    return std::weak_ptr<Node>(impl->node_impls.at(i));
   }
   return std::weak_ptr<Node>();
 }
@@ -2288,6 +2556,11 @@ void NodeGraphImpl::get_node(
 void NodeGraphImpl::get_node(
     const thalamus_grpc::NodeSelector &query_name,
     std::function<void(std::weak_ptr<Node>)> callback) {
+  // A selector that can't match never resolves, so callback is never called.
+  if(!valid_node_selector(query_name)) {
+    return;
+  }
+
   auto value = get_node(query_name);
   if (!value.lock()) {
     impl->callbacks.emplace_back(query_name, callback);
@@ -2309,6 +2582,11 @@ NodeGraph::NodeConnection NodeGraphImpl::get_node_scoped(
 NodeGraph::NodeConnection NodeGraphImpl::get_node_scoped(
     const thalamus_grpc::NodeSelector &selector,
     std::function<void(std::weak_ptr<Node>)> callback) {
+  // A selector that can't match never resolves, so callback is never called.
+  if(!valid_node_selector(selector)) {
+    return NodeConnection();
+  }
+
   auto value = get_node(selector);
   if (!value.lock()) {
     impl->signals.emplace_back(

@@ -4,6 +4,7 @@
 #include <thalamus/image_node.hpp>
 #include <thalamus/modalities_util.hpp>
 #include <thalamus/storage2_node.hpp>
+#include <thalamus/analog_proto.hpp>
 #include <thalamus/text_node.hpp>
 #include <thalamus/async.hpp>
 #include <thalamus/thread.hpp>
@@ -79,6 +80,9 @@ static int get_rec_number(const std::filesystem::path &name,
 }
 
 struct Storage2Node::Impl {
+  // Reported by channels_changed() on the next message with analog data,
+  // then cleared.
+  bool analog_channels_changed = true;
   struct AnalogStorage {
     std::string name;
     int num_channels;
@@ -191,14 +195,25 @@ struct Storage2Node::Impl {
       record.set_node(name);
       body->set_time(uint64_t(locked_analog->time().count()));
       body->set_remote_time(uint64_t(locked_analog->remote_time().count()));
-      auto is_transformed = locked_analog->is_transformed();
-      body->set_is_transformed(is_transformed);
-      visit_node(locked_analog, [&]<typename T>(T *wrapper) {
-        for (auto i = 0; i < wrapper->num_channels(); ++i) {
-          auto data = wrapper->data(i);
-          if (compress_analog) {
+      if (!compress_analog) {
+        // One record with every channel in its own format, plus the encoded
+        // buffer.
+        for (auto i = 0; i < locked_analog->num_channels(); ++i) {
+          auto span = append_native_channel(*body, *locked_analog, i);
+          if(node != outer) {
+            update_metrics(metrics_index, i, span->end() - span->begin(),
+                           [&] { return name + "(" + span->name() + ")"; });
+          }
+        }
+        finish_native(*body, *locked_analog);
+      } else {
+        // One record per channel. Encoded channels (and the buffer) aren't
+        // recorded in this mode, which is being phased out.
+        auto is_transformed = locked_analog->is_transformed();
+        for (auto i = 0; i < locked_analog->num_channels(); ++i) {
+          visit_channel(locked_analog, i, [&](auto data) {
             if (data.empty()) {
-              continue;
+              return;
             }
             record = thalamus_grpc::StorageRecord();
             body = record.mutable_analog();
@@ -207,45 +222,18 @@ struct Storage2Node::Impl {
             body->set_time(uint64_t(locked_analog->time().count()));
             body->set_remote_time(
                 uint64_t(locked_analog->remote_time().count()));
-          }
-          auto channel_name_view = wrapper->name(i);
-          std::string channel_name(channel_name_view.begin(),
-                                   channel_name_view.end());
+            body->set_is_transformed(is_transformed);
 
-          if(node != outer) {
-            update_metrics(metrics_index, i, data.size(),
-                           [&] { return name + "(" + channel_name + ")"; });
-          }
-          auto span = body->add_spans();
-          if(is_transformed) {
-            span->set_offset(wrapper->offset(i));
-            span->set_scale(wrapper->scale(i));
-          }
+            auto span = append_native_channel(*body, *locked_analog, i);
+            finish_native(*body, *locked_analog);
+            // The buffer belongs to no single channel.
+            body->clear_buffer();
+            body->clear_encoded_count();
+            if(node != outer) {
+              update_metrics(metrics_index, i, data.size(),
+                             [&] { return name + "(" + span->name() + ")"; });
+            }
 
-          constexpr auto is_ulong = std::is_same<typename decltype(data)::value_type, uint64_t>::value;
-          constexpr auto is_short = std::is_same<typename decltype(data)::value_type, short>::value;
-          constexpr auto is_int = std::is_same<typename decltype(data)::value_type, int>::value;
-          if constexpr (is_ulong) {
-            span->set_begin(uint32_t(body->mutable_ulong_data()->size()));
-            body->mutable_ulong_data()->Add(data.begin(), data.end());
-            span->set_end(uint32_t(body->mutable_ulong_data()->size()));
-            body->set_is_ulong_data(true);
-          } else if constexpr (is_short || is_int) {
-            span->set_begin(uint32_t(body->mutable_int_data()->size()));
-            body->mutable_int_data()->Add(data.begin(), data.end());
-            span->set_end(uint32_t(body->mutable_int_data()->size()));
-            body->set_is_int_data(true);
-          } else {
-            span->set_begin(uint32_t(body->mutable_data()->size()));
-            body->mutable_data()->Add(data.begin(), data.end());
-            span->set_end(uint32_t(body->mutable_data()->size()));
-          }
-          span->set_name(channel_name);
-
-          body->add_sample_intervals(
-              uint64_t(wrapper->sample_interval(i).count()));
-
-          if (compress_analog) {
             auto j = stream_mappings.find(std::make_pair(node, i));
             if (j == stream_mappings.end()) {
               stream_mappings[std::make_pair(node, i)] = int(get_unique_id());
@@ -256,9 +244,9 @@ struct Storage2Node::Impl {
             queued_bytes += record_bytes;
             currently_queued_bytes += record_bytes;
             records.emplace_back(std::move(record), j->second);
-          }
+          });
         }
-      });
+      }
     }
     if (!compress_analog) {
       queue_record(std::move(record));
@@ -286,7 +274,7 @@ struct Storage2Node::Impl {
               .first;
       metrics.emplace_back(0.0, is_rate);
       names.push_back(name());
-      outer->channels_changed(outer);
+      analog_channels_changed = true;
     }
 
     metrics.at(offset->second).first += double(count);
@@ -379,6 +367,36 @@ struct Storage2Node::Impl {
       body->set_text(body_text.data(), body_text.size());
 
       record.set_time(size_t(locked_text->time().count()));
+      record.set_node(name);
+    }
+
+    queue_record(std::move(record));
+  }
+
+  void on_blob_data(Node * node, const std::string &name, BlobNode *locked_blob,
+                    size_t metrics_index) {
+    if (!is_running || !locked_blob->has_blob_data()) {
+      return;
+    }
+
+    TRACE_EVENT("thalamus", "Storage2Node::on_blob_data");
+
+    if(node != outer) {
+      update_metrics(int(metrics_index), 0, 1, [&] { return name; });
+    }
+
+    thalamus_grpc::StorageRecord record;
+    {
+      TRACE_EVENT("thalamus", "Storage2Node::on_blob_data(build record)");
+      auto body = record.mutable_blob();
+      auto body_body = locked_blob->body();
+      auto time = size_t(locked_blob->time().count());
+
+      body->set_body(body_body.data(), body_body.size());
+      body->set_mime(locked_blob->mime());
+      body->set_stream(locked_blob->stream());
+
+      record.set_time(time);
       record.set_node(name);
     }
 
@@ -1322,6 +1340,7 @@ struct Storage2Node::Impl {
     }
     metrics_time = now.time_since_epoch();
     outer->ready(outer);
+    analog_channels_changed = false;
     last_publish = now;
     for (auto i = metrics.begin(); i < metrics.end(); ++i) {
       i->first = 0;
@@ -1450,8 +1469,10 @@ struct Storage2Node::Impl {
         bool record_image = source_dict->at("Image");
         bool record_motion = source_dict->at("Motion");
         bool record_text = source_dict->at("Text");
+        //Just always record blobs for now.
+        bool record_blob = true;//source_dict->at("Blob");
 
-        graph->get_node(node, [this, node, matrics_index=i+2, record_time_series, record_image, record_motion, record_text](auto source) {
+        graph->get_node(node, [this, node, matrics_index=i+2, record_time_series, record_image, record_motion, record_text, record_blob](auto source) {
           auto locked_source = source.lock();
           if (!locked_source) {
             return;
@@ -1484,6 +1505,13 @@ struct Storage2Node::Impl {
                 locked_source->ready.connect(std::bind(
                     &Impl::on_text_data, this, _1, node, text_source, matrics_index));
             source_connections.push_back(std::move(text_source_connection));
+          }
+          if (record_blob && node_cast<BlobNode *>(locked_source.get()) != nullptr) {
+            auto blob_source = node_cast<BlobNode *>(locked_source.get());
+            auto blob_source_connection =
+                locked_source->ready.connect(std::bind(
+                    &Impl::on_blob_data, this, _1, node, blob_source, matrics_index));
+            source_connections.push_back(std::move(blob_source_connection));
           }
         });
       }
@@ -1545,6 +1573,10 @@ std::span<const double> Storage2Node::data(int channel) const {
                                  &(impl->metrics.begin() + channel)->first + 1);
 }
 
+bool Storage2Node::channels_changed() const {
+  return impl->analog_channels_changed;
+}
+
 int Storage2Node::num_channels() const { return int(impl->metrics.size()); }
 
 std::chrono::nanoseconds Storage2Node::sample_interval(int) const { return 1s; }
@@ -1559,10 +1591,6 @@ std::string_view Storage2Node::name(int channel) const {
 std::span<const std::string> Storage2Node::get_recommended_channels() const {
   return std::span<const std::string>(impl->names.begin(), impl->names.end());
 }
-
-void Storage2Node::inject(const thalamus::vector<std::span<double const>> &,
-                         const thalamus::vector<std::chrono::nanoseconds> &,
-                         const thalamus::vector<std::string_view> &) {}
 
 void Storage2Node::process(const boost::json::value & request_value, std::function<void(const boost::json::value &)> callback) {
   auto request = request_value.as_object();

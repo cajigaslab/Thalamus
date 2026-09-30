@@ -57,9 +57,9 @@ public:
   std::string_view name(int channel) const override;
   std::chrono::nanoseconds sample_interval(int i) const override;
   void
-  inject(const thalamus::vector<std::span<double const>> &spans,
+  inject_analog(const thalamus::vector<std::span<double const>> &spans,
          const thalamus::vector<std::chrono::nanoseconds> &sample_intervals,
-         const thalamus::vector<std::string_view> &) override;
+         const thalamus::vector<std::string_view> &, bool) override;
   bool has_analog_data() const override;
   bool has_motion_data() const override;
 
@@ -88,9 +88,9 @@ public:
   std::string_view name(int channel) const override;
   std::chrono::nanoseconds sample_interval(int i) const override;
   void
-  inject(const thalamus::vector<std::span<double const>> &spans,
+  inject_analog(const thalamus::vector<std::span<double const>> &spans,
          const thalamus::vector<std::chrono::nanoseconds> &sample_intervals,
-         const thalamus::vector<std::string_view> &) override;
+         const thalamus::vector<std::string_view> &, bool) override;
   bool has_analog_data() const override;
   bool has_motion_data() const override;
   size_t modalities() const override;
