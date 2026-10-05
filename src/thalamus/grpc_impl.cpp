@@ -350,7 +350,7 @@ struct Service::Impl {
       raw_node.reset();
 
       timer.expires_after(1s);
-      timer.async_wait(std::bind(&AnalogSession::on_timer_check_expired, this, _1));
+      timer.async_wait(std::bind(&AnalogSession::on_timer_check_expired, this, _1, state));
     }
   };
 
@@ -551,69 +551,229 @@ Service::get_type_name(::grpc::ServerContext *,
   return ::grpc::Status::OK;
 }
 
-::grpc::Status
-Service::node_request(::grpc::ServerContext *,
-                      const ::thalamus_grpc::NodeRequest *request,
-                      ::thalamus_grpc::NodeResponse *response) {
-  auto weak = impl->node_graph.get_node(request->node());
-  auto node = weak.lock();
-  if (!node) {
-    return ::grpc::Status::OK;
+class NodeRequestReactor : public ::grpc::ServerUnaryReactor {
+public:
+  struct State {
+    boost::asio::steady_timer timer;
+    std::mutex mutex;
+    bool joining = false;
+    bool found = false;
+    boost::signals2::scoped_connection connection;
+    State(boost::asio::io_context& ioc) : timer(ioc) {}
+  };
+  std::shared_ptr<State> state;
+
+  NodeRequestReactor(boost::asio::io_context& ioc) : state(new State(ioc)) {}
+
+  ~NodeRequestReactor() override {
+    std::lock_guard<std::mutex> lock(state->mutex);
+    state->joining = true;
   }
 
-  auto parsed = boost::json::parse(request->json());
-  std::promise<boost::json::value> promise;
-  boost::asio::post(impl->io_context, [&] {
-    node->process(parsed, [&] (auto& result) {
-      promise.set_value(result);
+  void OnDone() override {
+    delete this;
+  }
+
+  void OnCancel() override {
+    ::grpc::ServerUnaryReactor::Finish(::grpc::Status::OK);
+  }
+};
+
+::grpc::ServerUnaryReactor*
+Service::node_request(::grpc::CallbackServerContext *,
+                      const ::thalamus_grpc::NodeRequest *request,
+                      ::thalamus_grpc::NodeResponse *response) {
+  auto reactor = new NodeRequestReactor(impl->io_context);
+  auto state = reactor->state;
+  boost::asio::post(impl->io_context, [this,c_state=state,reactor, request, response] {
+    std::lock_guard<std::mutex> lock(c_state->mutex);
+    if(c_state->joining) {
+      THALAMUS_LOG(trace) << "node_request joined";
+      return;
+    }
+
+    thalamus_grpc::NodeSelector selector;
+    if (request->has_selector()) {
+      selector = request->selector();
+    } else {
+      selector.set_name(request->node());
+    }
+
+    boost::system::error_code ec;
+    auto parsed = boost::json::parse(request->json(), ec);
+    if(ec) {
+      response->set_status(
+          thalamus_grpc::NodeResponse::Status::NodeResponse_Status_PARSE_ERROR);
+      reactor->Finish(::grpc::Status::OK);
+      return;
+    }
+
+    c_state->connection = impl->node_graph.get_node_scoped(selector, [c2_state=c_state,reactor,parsed,response](auto weak) mutable {
+      std::lock_guard<std::mutex> lock2(c2_state->mutex);
+      if(c2_state->joining) {
+        THALAMUS_LOG(trace) << "get_node_scoped joined";
+        return;
+      }
+      c2_state->found = true;
+      auto node = weak.lock();
+      if(node) {
+        node->process(parsed, [c3_state=c2_state,response,reactor] (auto& json_response) mutable {
+          std::lock_guard<std::mutex> lock3(c3_state->mutex);
+          if(c3_state->joining) {
+            THALAMUS_LOG(trace) << "process joined";
+            return;
+          }
+          auto serialized_response = boost::json::serialize(json_response);
+          response->set_json(serialized_response);
+          reactor->Finish(::grpc::Status::OK);
+        });
+      } else {
+        response->set_status(
+          thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
+        reactor->Finish(::grpc::Status::OK);
+      }
+    });
+
+    c_state->timer.expires_after(5s);
+    c_state->timer.async_wait([c2_state=c_state,response,reactor](const boost::system::error_code &error) {
+      if(error) {
+        return;
+      }
+      std::lock_guard<std::mutex> lock2(c2_state->mutex);
+      if(c2_state->joining) {
+        THALAMUS_LOG(trace) << "get_node_scoped joined";
+        return;
+      }
+      if(!c2_state->found) {
+        c2_state->connection.disconnect();
+        response->set_status(
+          thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
+        reactor->Finish(::grpc::Status::OK);
+      }
     });
   });
-  auto json_response = promise.get_future().get();
-  auto serialized_response = boost::json::serialize(json_response);
-  response->set_json(serialized_response);
 
-  return ::grpc::Status::OK;
+  return reactor;
 }
 
-::grpc::ServerBidiReactor< ::thalamus_grpc::NodeRequest, ::thalamus_grpc::NodeResponse>* Service::node_request_stream(
-    ::grpc::CallbackServerContext* context) {
-  auto stream
-    = new ServerBidiReactor<::thalamus_grpc::NodeRequest, ::thalamus_grpc::NodeResponse>(*context, impl->io_context);
-  stream->callback = [
-   this,
-   weak=std::weak_ptr<Node>(),
-   stream
-  ](auto&& request) mutable {
-    if (!request.node().empty()) {
-      weak = impl->node_graph.get_node(request.node());
+struct NodeRequestSession : public NodeBidiSession<Node, thalamus_grpc::NodeRequest, thalamus_grpc::NodeResponse> {
+  ::grpc::CallbackServerContext& server_context;
+  std::vector<thalamus_grpc::NodeRequest> pending;
+  bool selected = false;
+  bool draining = false;
+  thalamus_grpc::NodeSelector node_selector;
+
+  NodeRequestSession(NodeGraph& graph, boost::asio::io_context& _io_context, ::grpc::CallbackServerContext& _context, ContextGuard&& guard)
+  : NodeBidiSession<Node, thalamus_grpc::NodeRequest, thalamus_grpc::NodeResponse>(graph, _io_context, _context, std::move(guard))
+  , server_context(context)
+  {}
+
+  ~NodeRequestSession() override;
+
+  void on_node(std::unique_lock<std::mutex>& lock) override {
+    auto local = std::exchange(pending, {});
+    lock.unlock();
+
+    for(auto&& p : local) {
+      std::unique_lock<std::mutex> lock2(state->mutex);
+      if(state->joining) {
+        return;
+      }
+      draining = true;
+      on_read(std::move(p), lock2);
+      draining = false;
     }
-    auto node = weak.lock();
-    if (!node) {
+  }
+
+  void on_read(thalamus_grpc::NodeRequest&& req, std::unique_lock<std::mutex>& lock) override {
+    if (req.has_selector() || !req.node().empty()) {
+      if(selected) {
+        thalamus_grpc::NodeSelector new_selector;
+        if (req.has_selector()) {
+          new_selector = req.selector();
+        } else {
+          new_selector.set_name(req.node());
+        }
+        if(new_selector.name() != node_selector.name() || new_selector.type() != node_selector.type()) {
+          THALAMUS_LOG(warning) << "Can't reselect during node session";
+        }
+      } else {
+        selected = true;
+        if (req.has_selector()) {
+          node_selector = req.selector();
+        } else {
+          node_selector.set_name(req.node());
+        }
+        NodeBidiSession<Node, thalamus_grpc::NodeRequest, thalamus_grpc::NodeResponse>::set_selector(node_selector);
+      }
+    }
+
+    if(req.json().empty()) {
+      return;
+    }
+
+    auto node = this->lock();
+    if(!node) {
+      if(draining) {
+        ::thalamus_grpc::NodeResponse response;
+        response.set_id(req.id());
+        response.set_status(
+            thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
+        ServerBidiReactor2<thalamus_grpc::NodeRequest, thalamus_grpc::NodeResponse>::send(std::move(response));
+      } else {
+        while(pending.size() >= 10) {
+          ::thalamus_grpc::NodeResponse response;
+          response.set_id(pending.front().id());
+          response.set_status(
+              thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
+          ServerBidiReactor2<thalamus_grpc::NodeRequest, thalamus_grpc::NodeResponse>::send(std::move(response));
+          pending.erase(pending.begin());
+        }
+        pending.push_back(std::move(req));
+      }
+      return;
+    }
+
+    boost::system::error_code ec;
+    auto parsed = boost::json::parse(req.json(), ec);
+    if(ec) {
       ::thalamus_grpc::NodeResponse response;
-      response.set_id(request.id());
-      response.clear_json();
+      response.set_id(req.id());
       response.set_status(
-          thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
+          thalamus_grpc::NodeResponse::Status::NodeResponse_Status_PARSE_ERROR);
+      ServerBidiReactor2<thalamus_grpc::NodeRequest, thalamus_grpc::NodeResponse>::send(std::move(response));
       return;
     }
 
-    if(request.json().empty()) {
-      return;
-    }
+    lock.unlock();
+    node->process(parsed, [&,request_id=req.id(),c_state=state](const boost::json::value& json_response) {
+      std::lock_guard<std::mutex> lock2(c_state->mutex);
+      if(c_state->joining) {
+        THALAMUS_LOG(trace) << "get_node_connection joined";
+        return;
+      }
 
-    auto parsed = boost::json::parse(request.json());
-    node->process(parsed, [request_id=request.id(),stream](const boost::json::value& json_response) {
       auto serialized_response = boost::json::serialize(json_response);
       ::thalamus_grpc::NodeResponse response;
       response.set_id(request_id);
       response.set_json(serialized_response);
       response.set_status(
           thalamus_grpc::NodeResponse::Status::NodeResponse_Status_OK);
-      stream->send(std::move(response));
+      ServerBidiReactor2<thalamus_grpc::NodeRequest, thalamus_grpc::NodeResponse>::send(std::move(response));
     });
-  };
-  stream->start();
-  return stream;
+  }
+};
+
+NodeRequestSession::~NodeRequestSession() {
+  start_join();
+}
+
+::grpc::ServerBidiReactor< ::thalamus_grpc::NodeRequest, ::thalamus_grpc::NodeResponse>* Service::node_request_stream(
+    ::grpc::CallbackServerContext* context) {
+
+  auto reactor = new NodeRequestSession(impl->node_graph, impl->io_context, *context, ContextGuard(this, context));
+  reactor->start();
+  return reactor;
 }
 
 ::grpc::Status

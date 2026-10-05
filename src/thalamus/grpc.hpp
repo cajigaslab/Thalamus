@@ -260,6 +260,120 @@ namespace thalamus {
     }
   };
 
+    template<typename REQUEST, typename RESPONSE>
+  class ServerBidiReactor2 : public grpc::ServerBidiReactor<REQUEST, RESPONSE> {
+  public:
+    struct State {
+      std::mutex mutex;
+      bool joining = false;
+      ~State() {
+        THALAMUS_LOG(trace) << "Delete State";
+      }
+    };
+    std::shared_ptr<State> state = std::make_shared<State>();
+
+    std::condition_variable condition;
+    bool sending = false;
+    REQUEST request;
+    grpc::CallbackServerContext& context;
+    bool done = false;
+    bool finished = false;
+    RESPONSE current_response;
+    std::queue<RESPONSE> responses;
+    boost::asio::io_context& io_context;
+    std::mutex send_mutex;
+
+    ServerBidiReactor2(grpc::CallbackServerContext& _context, boost::asio::io_context& _io_context)
+     : context(_context), io_context(_io_context) {}
+
+    virtual void on_read(REQUEST&&, std::unique_lock<std::mutex>&) = 0;
+
+    ~ServerBidiReactor2() override {
+      //grpc::ClientBidiReactor<task_controller_grpc::TaskResult, task_controller_grpc::TaskConfig>::StartWritesDone();
+      start_join();
+    }
+    void start() {
+      grpc::ServerBidiReactor<REQUEST, RESPONSE>::StartRead(&request);
+    }
+    
+    void signal_done() {
+      {
+        std::lock_guard<std::mutex> lock(state->mutex);
+        done = true;
+      }
+      condition.notify_all();
+    }
+
+    virtual void start_join(std::function<void()> cleanup = nullptr) {
+      context.TryCancel();
+      std::unique_lock<std::mutex> lock(state->mutex);
+      cleanup();
+      state->joining = true;
+      condition.wait(lock, [&] { return done; });
+    }
+
+    void OnReadDone(bool ok) override {
+      if(!ok) {
+        signal_done();
+        return;
+      }
+      boost::asio::post(io_context, [&,c_state=state,c_in=std::move(request)]() mutable {
+        std::unique_lock<std::mutex> lock(c_state->mutex);
+        if(c_state->joining) {
+          THALAMUS_LOG(trace) << "get_node_connection joined";
+          return;
+        }
+        on_read(std::move(c_in), lock);
+      });
+      grpc::ServerBidiReactor<REQUEST, RESPONSE>::StartRead(&request);
+    }
+
+    void OnWriteDone(bool ok) override {
+      if(!ok) {
+        signal_done();
+        return;
+      }
+      std::lock_guard<std::mutex> lock(send_mutex);
+      if(finished) {
+        return;
+      }
+      sending = false;
+      do_send();
+    }
+
+    void OnDone() override {
+      THALAMUS_LOG(trace) << "OnDone";
+      signal_done();
+      delete this;
+    }
+
+    void OnCancel() override {
+      THALAMUS_LOG(trace) << "OnCancel";
+      std::lock_guard<std::mutex> lock(send_mutex);
+      finished = true;
+      grpc::ServerBidiReactor<REQUEST, RESPONSE>::Finish(grpc::Status::OK);
+      // delete this;
+    }
+
+    void do_send() {
+      if(sending || responses.empty()) {
+        return;
+      }
+      sending = true;
+      current_response = std::move(responses.front());
+      responses.pop();
+      grpc::ServerBidiReactor<REQUEST, RESPONSE>::StartWrite(&current_response);
+    }
+
+    void send(RESPONSE&& result) {
+      std::lock_guard<std::mutex> lock(send_mutex);
+      if(finished) {
+        return;
+      }
+      responses.push(std::move(result));
+      do_send();
+    }
+  };
 
   template<typename RESPONSE>
   class ServerWriteReactor : public grpc::ServerWriteReactor<RESPONSE> {
@@ -271,6 +385,7 @@ namespace thalamus {
     grpc::CallbackServerContext& context;
     bool done = false;
     bool sending = false;
+    bool finished = false;
 
     ServerWriteReactor(grpc::CallbackServerContext& _context)
      : context(_context) {}
@@ -296,6 +411,9 @@ namespace thalamus {
         return;
       }
       std::lock_guard<std::mutex> lock(mutex);
+      if(finished) {
+        return;
+      }
       sending = false;
       do_send();
     }
@@ -308,6 +426,8 @@ namespace thalamus {
 
     void OnCancel() override {
       THALAMUS_LOG(trace) << "OnCancel";
+      std::lock_guard<std::mutex> lock(mutex);
+      finished = true;
       grpc::ServerWriteReactor<RESPONSE>::Finish(grpc::Status::OK);
     }
 
@@ -323,6 +443,9 @@ namespace thalamus {
 
     void send(RESPONSE&& result) {
       std::lock_guard<std::mutex> lock(mutex);
+      if(finished) {
+        return;
+      }
       responses.push(std::move(result));
       do_send();
     }
@@ -331,11 +454,19 @@ namespace thalamus {
   template<ProtobufMessage T>
   class ServerReadReactor : public grpc::ServerReadReactor<T> {
   public:
-    std::mutex mutex;
+    struct State {
+      std::mutex mutex;
+      bool joining = false;
+      ~State() {
+        THALAMUS_LOG(trace) << "Delete State";
+      }
+    };
+    std::shared_ptr<State> state = std::make_shared<State>();
+
     std::condition_variable condition;
     T in;
+    bool done = false;
     grpc::CallbackServerContext& context;
-    std::shared_ptr<bool> done = std::make_shared<bool>(false);
     boost::asio::io_context& io_context;
 
     ServerReadReactor(grpc::CallbackServerContext& _context, boost::asio::io_context& _io_context)
@@ -345,30 +476,41 @@ namespace thalamus {
 
     ~ServerReadReactor() override {
       //grpc::ClientBidiReactor<task_controller_grpc::TaskResult, task_controller_grpc::TaskConfig>::StartWritesDone();
-      context.TryCancel();
-      std::unique_lock<std::mutex> lock(mutex);
-      condition.wait(lock, [&] { return *done; });
+      start_join();
     }
+
+    virtual void start_join(std::function<void()> cleanup = nullptr) {
+      context.TryCancel();
+      std::unique_lock<std::mutex> lock(state->mutex);
+      cleanup();
+      state->joining = true;
+      condition.wait(lock, [&] { return done; });
+    }
+
     void start() {
       grpc::ServerReadReactor<T>::StartRead(&in);
     }
 
     void signal_done() {
       {
-        std::lock_guard<std::mutex> lock(mutex);
-        *done = true;
+        std::lock_guard<std::mutex> lock(state->mutex);
+        done = true;
       }
       condition.notify_all();
     }
+
     void OnReadDone(bool ok) override {
       if(!ok) {
         signal_done();
         return;
       }
-      boost::asio::post(io_context, [&,c_done=done,c_in=std::move(in)]() mutable {
-	if(!*done) {
-          on_read(std::move(c_in));
-	}
+      boost::asio::post(io_context, [&,c_state=state,c_in=std::move(in)]() mutable {
+        std::lock_guard<std::mutex> lock(c_state->mutex);
+        if(c_state->joining) {
+          THALAMUS_LOG(trace) << "get_node_connection joined";
+          return;
+        }
+        on_read(std::move(c_in));
       });
       grpc::ServerReadReactor<T>::StartRead(&in);
     }

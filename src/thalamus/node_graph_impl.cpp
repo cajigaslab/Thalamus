@@ -2372,6 +2372,24 @@ public:
     }
   }
 
+  struct NodeSelectorOp {
+    ObservableDict* node;
+
+    bool operator()(const thalamus_grpc::NodeSelector& s) const {
+      auto query_name = s.name();
+      auto query_type = s.type();
+      std::string name = node->at("name");
+      std::string type = node->at("type");
+      if(!query_name.empty() && query_name != name) {
+        return false;
+      }
+      if(!query_type.empty() && query_type != type) {
+        return false;
+      }
+      return true;
+    }
+  };
+
   void on_node(ObservableDict *node, ObservableCollection::Action a,
                const ObservableCollection::Key &k,
                const ObservableCollection::Value &v) {
@@ -2424,23 +2442,20 @@ public:
                 node_next_type[new_node_index] = "";
 
                 auto node_impl = node_impls.at(new_node_index);
-                notify([&type_str](
-                          auto &selector) { return selector.type() == type_str; },
+                notify(NodeSelectorOp { node_config.get() },
                       node_impl);
               });
             });
           }
         } else {
           auto node_impl = node_impls.at(size_t(node_index));
-          notify([&value_str](
-                    auto &selector) { return selector.type() == value_str; },
+          notify(NodeSelectorOp { node },
                 node_impl);
         }
       } else if (key_str == "name") {
         auto node_impl = node_impls.at(size_t(node_index));
         auto value_str = std::get<std::string>(v);
-        notify([&value_str](
-                   auto &selector) { return selector.name() == value_str; },
+        notify(NodeSelectorOp { node },
                node_impl);
       }
     }
@@ -2483,23 +2498,31 @@ std::weak_ptr<Node> NodeGraphImpl::get_node(const std::string &query_name) {
   return get_node(selector);
 }
 
+static bool valid_node_selector(const thalamus_grpc::NodeSelector &query) {
+  return !query.name().empty() || !query.type().empty();
+}
+
 std::weak_ptr<Node>
-NodeGraphImpl::get_node(const thalamus_grpc::NodeSelector &query_name) {
-  std::string key;
-  std::string query;
-  if (!query_name.name().empty()) {
-    key = "name";
-    query = query_name.name();
-  } else {
-    key = "type";
-    query = query_name.type();
+NodeGraphImpl::get_node(const thalamus_grpc::NodeSelector &query) {
+  if(!valid_node_selector(query)) {
+    return std::weak_ptr<Node>();
   }
+
+  auto& query_name = query.name();
+  auto& query_type = query.type();
   for (auto i = 0u; i < impl->nodes->size(); ++i) {
     ObservableDictPtr node = impl->nodes->at(i);
-    std::string value = node->at(key);
-    if (query == value) {
-      return std::weak_ptr<Node>(impl->node_impls.at(i));
+
+    std::string name = node->at("name");
+    std::string type = node->at("type");
+    if(!query_name.empty() && query_name != name) {
+      continue;
     }
+    if(!query_type.empty() && query_type != type) {
+      continue;
+    }
+
+    return std::weak_ptr<Node>(impl->node_impls.at(i));
   }
   return std::weak_ptr<Node>();
 }
@@ -2515,6 +2538,13 @@ void NodeGraphImpl::get_node(
 void NodeGraphImpl::get_node(
     const thalamus_grpc::NodeSelector &query_name,
     std::function<void(std::weak_ptr<Node>)> callback) {
+  if(!valid_node_selector(query_name)) {
+    impl->io_context.post([callback] {
+      callback(std::weak_ptr<Node>());
+    });
+    return;
+  }
+
   auto value = get_node(query_name);
   if (!value.lock()) {
     impl->callbacks.emplace_back(query_name, callback);
@@ -2536,6 +2566,13 @@ NodeGraph::NodeConnection NodeGraphImpl::get_node_scoped(
 NodeGraph::NodeConnection NodeGraphImpl::get_node_scoped(
     const thalamus_grpc::NodeSelector &selector,
     std::function<void(std::weak_ptr<Node>)> callback) {
+  if(!valid_node_selector(selector)) {
+    impl->io_context.post([callback] {
+      callback(std::weak_ptr<Node>());
+    });
+    return NodeConnection();
+  }
+
   auto value = get_node(selector);
   if (!value.lock()) {
     impl->signals.emplace_back(
