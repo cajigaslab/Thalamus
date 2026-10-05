@@ -36,7 +36,10 @@ RAW_FORMATS = {
   Image.Format.RGB16: None,
   Image.Format.YUV420P: None,
   Image.Format.YUVJ420P: None,
-  Image.Format.YUYV422: None
+  Image.Format.YUYV422: None,
+  Image.Format.NV12: None,
+  Image.Format.BGR: 'bgr24',
+  Image.Format.MJPEG: None,
 }
 
 class VideoWriter:

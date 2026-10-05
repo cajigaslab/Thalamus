@@ -3,6 +3,7 @@ using dotnet;
 using dotnet.Services;
 using Grpc.Net.Client;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Nito.AsyncEx;
 using Thalamus;
 
@@ -18,7 +19,16 @@ Parser.Default.ParseArguments<Options>(args)
 
             var stateUrl = o.StateUrl;
             Console.WriteLine("Two " + stateUrl);
-            using var channel = Util.FindStateChannel(stateUrl);
+            TlsFiles? tls = null;
+            if (o.Cert != null || o.Key != null || o.Ca != null)
+            {
+                if (o.Cert == null || o.Key == null)
+                {
+                    throw new ArgumentException("gRPC TLS requires both --cert and --key");
+                }
+                tls = new TlsFiles { Cert = o.Cert, Key = o.Key, Ca = o.Ca, ServerName = o.ServerName };
+            }
+            using var channel = Util.FindStateChannel(stateUrl, tls);
             //using var channel = GrpcChannel.ForAddress(string.Format("http://{0}", stateUrl));
             var client = new Thalamus.Thalamus.ThalamusClient(channel);
             var builder = WebApplication.CreateBuilder(args);
@@ -50,21 +60,34 @@ Parser.Default.ParseArguments<Options>(args)
                 return taskFactory;
             });
             //builder.WebHost.UseUrls($"http://{url}");
+            var serverCert = tls?.LoadCertificate();
+            var caCerts = tls?.LoadCa();
+            Action<ListenOptions> configureListen = listenOptions =>
+            {
+                listenOptions.Protocols = HttpProtocols.Http2;
+                if (serverCert != null)
+                {
+                    listenOptions.UseHttps(httpsOptions =>
+                    {
+                        httpsOptions.ServerCertificate = serverCert;
+                        if (caCerts != null)
+                        {
+                            httpsOptions.ClientCertificateMode = ClientCertificateMode.RequireCertificate;
+                            httpsOptions.ClientCertificateValidation = (certificate, chain, errors) =>
+                                TlsFiles.IsSignedBy(certificate, caCerts);
+                        }
+                    });
+                }
+            };
             builder.WebHost.ConfigureKestrel(options =>
             {
                 if (o.Open)
                 {
-                    options.ListenAnyIP(o.Port, listenOptions =>
-                    {
-                        listenOptions.Protocols = HttpProtocols.Http2;
-                    });
+                    options.ListenAnyIP(o.Port, configureListen);
                 }
                 else
                 {
-                    options.ListenLocalhost(o.Port, listenOptions =>
-                    {
-                        listenOptions.Protocols = HttpProtocols.Http2;
-                    });
+                    options.ListenLocalhost(o.Port, configureListen);
                 }
             });
 
@@ -97,4 +120,12 @@ public class Options
     public bool Trace { get; set; }
     [Option("open", Default = false, HelpText = "Bind to 0.0.0.0 instead of localhost only")]
     public bool Open { get; set; }
+    [Option("cert", HelpText = "PEM certificate for gRPC TLS, used by the server and as the client certificate")]
+    public string? Cert { get; set; }
+    [Option("key", HelpText = "PEM private key for --cert")]
+    public string? Key { get; set; }
+    [Option("ca", HelpText = "PEM certificate authority that the server verifies clients against and the client verifies servers against")]
+    public string? Ca { get; set; }
+    [Option("server-name", Default = "thalamus.internal", HelpText = "Name the client expects in every gRPC server's TLS certificate, regardless of the address it connects to")]
+    public string ServerName { get; set; } = "thalamus.internal";
 }

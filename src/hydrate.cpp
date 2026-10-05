@@ -258,6 +258,7 @@ static DataCount count_data(const std::string &filename,
         result.datatypes["image/" + key.first + "/data"] = H5T_NATIVE_UCHAR;
         break;
       }
+      case thalamus_grpc::Image::Format::Image_Format_BGR:
       case thalamus_grpc::Image::Format::Image_Format_RGB: {
         ++counts["image/" + key.first + "/data"];
         ++counts["image/" + key.first + "/received"];
@@ -304,6 +305,24 @@ static DataCount count_data(const std::string &filename,
         result.datatypes["image/" + key.first + "/v"] = H5T_NATIVE_UCHAR;
         break;
       }
+      case thalamus_grpc::Image::Format::Image_Format_NV12: {
+        ++counts["image/" + key.first + "/y"];
+        ++counts["image/" + key.first + "/uv"];
+        ++counts["image/" + key.first + "/received"];
+        {
+          auto& existing = result.dimensions["image/" + key.first + "/y"];
+          existing = std::make_tuple(std::max(size_t(image.width()), std::get<0>(existing)),
+                                     std::max(size_t(image.height()), std::get<1>(existing)), 0);
+        }
+        result.datatypes["image/" + key.first + "/y"] = H5T_NATIVE_UCHAR;
+        {
+          auto& existing = result.dimensions["image/" + key.first + "/uv"];
+          existing = std::make_tuple(std::max(size_t(image.width()/2), std::get<0>(existing)),
+                                     std::max(size_t(image.height()/2), std::get<1>(existing)), 2);
+        }
+        result.datatypes["image/" + key.first + "/uv"] = H5T_NATIVE_UCHAR;
+        break;
+      }
       case thalamus_grpc::Image::Format::Image_Format_Gray16: {
         ++counts["image/" + key.first + "/data"];
         ++counts["image/" + key.first + "/received"];
@@ -324,6 +343,7 @@ static DataCount count_data(const std::string &filename,
         result.datatypes["image/" + key.first + "/data"] = H5T_NATIVE_USHORT;
         break;
       }
+      case thalamus_grpc::Image::Format::Image_Format_MJPEG:
       case thalamus_grpc::Image::Format::Image_Format_MPEG1:
       case thalamus_grpc::Image::Format::Image_Format_MPEG4:
       case thalamus_grpc::Image::Format::
@@ -468,6 +488,9 @@ int generate_video(boost::program_options::variables_map &vm) {
         case thalamus_grpc::Image::Format::Image_Format_RGB:
           pixel_format = "rgb24";
           break;
+        case thalamus_grpc::Image::Format::Image_Format_BGR:
+          pixel_format = "bgr24";
+          break;
         case thalamus_grpc::Image::Format::Image_Format_YUYV422:
           pixel_format = "yuyv422";
           break;
@@ -476,6 +499,9 @@ int generate_video(boost::program_options::variables_map &vm) {
           break;
         case thalamus_grpc::Image::Format::Image_Format_YUVJ420P:
           pixel_format = "yuvj420p";
+          break;
+        case thalamus_grpc::Image::Format::Image_Format_NV12:
+          pixel_format = "nv12";
           break;
         case thalamus_grpc::Image::Format::Image_Format_Gray16:
           pixel_format = image.bigendian() ? "gray16be" : "gray16le";
@@ -488,6 +514,9 @@ int generate_video(boost::program_options::variables_map &vm) {
           break;
         case thalamus_grpc::Image::Format::Image_Format_MPEG4:
           video_format = "mpeg4video";
+          break;
+        case thalamus_grpc::Image::Format::Image_Format_MJPEG:
+          video_format = "mjpeg";
           break;
         case thalamus_grpc::Image::Format::
             Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
