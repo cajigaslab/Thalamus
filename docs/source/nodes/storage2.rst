@@ -21,6 +21,8 @@ Properties
 * Compress Video: Compress image data using H264 compression.  On by default (as of
   1.0.18) for newly created nodes -- uncheck it if you need raw, lossless frames
   instead of smaller H264-compressed video.
+  Image streams that arrive already compressed (``MPEG1`` / ``MPEG4``, for example
+  from a plugin camera node) are stored as-is regardless of this setting.
 * Simple Copy: Don't record data, just copy the files in the Files list.
 
 Usage

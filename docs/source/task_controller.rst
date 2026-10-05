@@ -45,6 +45,9 @@ Common options:
   localhost-only, so pass ``--open`` on the machine you want to reach from a
   :doc:`REMOTE <nodes/remote>` / :doc:`RUNNER2 <nodes/runner2>` node on another
   machine.  The same flag exists on ``python -m thalamus.pipeline``.
+* ``--cert``, ``--key``, ``--ca``, ``--server-name`` -- enable TLS / mutual TLS for
+  gRPC; see :ref:`grpc-tls`.  Enabling TLS also opens the gRPC servers to the
+  network, so ``--open`` is not needed.
 * ``-r, --remote-executor`` -- send task execution to a remote executor process
   instead of running tasks locally.
 

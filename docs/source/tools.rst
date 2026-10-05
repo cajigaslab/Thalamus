@@ -77,10 +77,44 @@ Both ``thalamus.pipeline`` and ``thalamus.task_controller`` accept:
   ``localhost`` only.  By default (since 1.0.41) Thalamus only accepts connections
   from the local machine; pass ``--open`` to allow other machines on the network to
   connect (e.g. a remote :doc:`registry <tools>` client or a multi-machine rig).
-  Only do this on a trusted network -- the gRPC interface has no authentication.
+  Only do this on a trusted network unless you also enable TLS (below) -- the gRPC
+  interface has no authentication of its own.  The HTTP/WebSocket server is never
+  exposed: it always binds to ``127.0.0.1``, with or without ``--open``.
 * ``-r, --remote-executor`` (``thalamus.task_controller`` only) -- send task
   execution to a remote executor process instead of running it locally; see
   :ref:`remote-executor` for how trial cancellation is handled in this mode.
+
+.. _grpc-tls:
+
+gRPC TLS
+^^^^^^^^
+
+``thalamus.pipeline``, ``thalamus.task_controller``, ``thalamus.image_viewer``
+and ``thalamus.eye_calibration`` (and the native pipeline and .NET sidecar they
+launch, which are passed the same options automatically) accept these flags to
+encrypt and authenticate gRPC traffic:
+
+* ``--cert FILE`` -- PEM certificate presented by this process's gRPC servers and
+  used as its client certificate.
+* ``--key FILE`` -- PEM private key for ``--cert``.  ``--cert`` and ``--key`` must be
+  given together.
+* ``--ca FILE`` -- PEM certificate authority.  Servers then **require** clients to
+  present a certificate signed by it (mutual TLS), and clients verify servers
+  against it.  Without ``--ca`` clients verify servers against the system roots and
+  servers do not require client certificates.
+* ``--server-name NAME`` -- the name clients expect in every server's certificate
+  (default ``thalamus.internal``), whatever address they connect to, so
+  certificates don't need to list hostnames or IP addresses.
+
+With none of these flags gRPC runs unencrypted, as before.  Because TLS
+authenticates clients, enabling it makes the gRPC servers listen on all interfaces
+without ``--open``.  Give every machine in a rig (including
+:doc:`REMOTE <nodes/remote>` / :doc:`RUNNER2 <nodes/runner2>` targets) the same
+``--ca`` and a certificate issued to the same ``--server-name``:
+
+.. code-block:: bash
+
+   python -m thalamus.task_controller --cert rig.pem --key rig.key --ca ca.pem
 
 ``thalamus.pipeline`` additionally accepts ``--no-gpu`` to disable GPU/Vulkan
 rendering (falls back to software rendering; useful on machines without a usable

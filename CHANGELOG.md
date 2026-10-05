@@ -9,6 +9,42 @@ some patch versions contain only build/CI or internal changes and are omitted be
 
 ## 1.0.x
 
+### 1.0.47 — 2026-09-29
+- **gRPC TLS / mutual TLS.** `python -m thalamus.pipeline`,
+  `python -m thalamus.task_controller`, `thalamus.image_viewer`,
+  `thalamus.eye_calibration`, the native pipeline and the .NET sidecar all accept
+  `--cert`, `--key`, `--ca` and `--server-name`, so multi-machine rigs
+  (`REMOTE`, `RUNNER2`) can use authenticated, encrypted gRPC.  With TLS enabled the
+  gRPC servers bind to all interfaces automatically (no `--open` needed).  The
+  HTTP/WebSocket server, which has no authentication, now **always** binds to
+  `127.0.0.1`, even with `--open`.
+- **Plugin API (now version 139):**
+  - **Breaking (C source):** `plugin.h` no longer needs C++ -- the
+    `ThalamusStateType`, `ThalamusStateAction` and `ThalamusImageFormat` enumerators
+    are now prefixed (e.g. `ThalamusImageFormat_Gray`, `ThalamusStateType_Dict`), and
+    `plugin.h` can be included from plain C.  Rename enumerators in plugin code.
+  - New `ThalamusNodeFactory.create2` (selected by an exported
+    `thalamus_get_node_factory_version()`), which passes the plugin the host's node
+    handle.
+  - New off-main-thread signaling: `node_offmain_signaler_create` /
+    `_destroy` / `_block` / `_unblock` / `_ready`, replacing hand-rolled
+    synchronization when a plugin node signals `ready` from its own thread.
+  - New `dialog_show` (info/warn/error/fatal message boxes in the UI) and
+    `state_remove_at_name` / `state_remove_at_index`.
+  - `ThalamusImageFormat` gained `NV12`, `BGR`, `MJPEG`, `MPEG1`, `MPEG4`, `Gray16` and
+    `RGB16`; the `Image` proto message gained `NV12`, `BGR` and `MJPEG`.
+- STORAGE2 can now record image streams that are already compressed (`MPEG1`,
+  `MPEG4`) without re-encoding them, and several bugs with the newer image formats
+  were fixed.
+- Setting *View* on an image node now opens the Python image viewer only for node
+  types that opt in (`FFMPEG`, `VIDEO`, `DISTORTION`, `GENICAM`, `REMOTE`, `ARUCO`).
+  Other image nodes -- including plugin-provided ones -- are expected to render their
+  own view instead of getting a second, Python-side viewer.
+- Fixed a crash when switching a node from `PUPIL` to `WAVE`: `WAVE` read its
+  `Frequency` from the node root, which a previous `PUPIL` config could define.
+- Fixed thread-safety issues in the image viewer and the pupil node.
+- `--ext` modules may now return `pathlib.Path` objects from `library()`.
+
 ### 1.0.42 — 2026-08-28
 - Fixed a bug where cancelling a task running on a remote executor (`--remote-executor`)
   didn't actually stop it: cancellation now notifies the remote executor so it stops

@@ -28,6 +28,16 @@ other nodes** and **inject data back** through a stable C API.
      is a ``ThalamusCharSpan`` instead of a ``const char*``.  Port any code that
      assumed a raw, nul-terminated ``char*``.
 
+.. admonition:: Source-level change in 1.0.47
+
+   ``plugin.h`` no longer requires C++ and can be included from plain C.  To make
+   that possible the enumerators of ``ThalamusStateType``, ``ThalamusStateAction``
+   and ``ThalamusImageFormat`` were prefixed with their enum name -- for example
+   ``Dict`` is now ``ThalamusStateType_Dict``, ``Set`` is
+   ``ThalamusStateAction_Set`` and ``Gray`` is ``ThalamusImageFormat_Gray``.  The
+   numeric values are unchanged, so already-built plugins keep working; only source
+   that names the old enumerators needs updating.
+
 The C API
 ---------
 
@@ -66,6 +76,10 @@ the pipeline's capabilities.  The main capability groups are:
 * **SDL windowing** -- open and drive your own SDL window (see *SDL windowing*
   below), for plugins that need a custom render surface or input handling instead
   of piggybacking on the host UI.
+* **Multithreaded signaling** -- an *off-main signaler* for nodes that announce new
+  data from their own threads (see *Signaling from your own thread* below).
+* **Dialogs** -- show an info/warning/error/fatal message box in the UI with
+  ``dialog_show`` (see *Dialogs and removing state* below).
 * **Vulkan** -- access to the host's Vulkan objects for GPU compute/rendering inside
   a plugin (see *Vulkan access* below).
 
@@ -102,6 +116,13 @@ Each ``ThalamusNodeFactory`` names a node type and provides ``create`` /
 pipeline start).  The node types a plugin registers appear in the node list next
 to the built-in ones.
 
+A plugin may also export an optional ``thalamus_get_node_factory_version`` function
+(``int32_t thalamus_get_node_factory_version(void)``).  A plugin that does not
+export it is treated as version 0 and its factories are constructed with
+``ThalamusNodeFactory.create``.  A plugin that returns ``1`` or higher has its
+factories constructed with ``ThalamusNodeFactory.create2`` instead, which takes an
+extra ``void*`` argument identifying the host-side node being created.
+
 Beyond that library-level teardown, an individual node struct (``ThalamusNode``)
 may set an optional ``predrop`` callback.  The host calls it when the node is about
 to be replaced (its ``type`` config field changed) or during full pipeline
@@ -116,7 +137,7 @@ API versioning
 
 ``ThalamusAPI`` begins with an ``int32_t version`` field, and every function
 pointer in the table is annotated in ``plugin.h`` with the version at which it was
-added (the host currently passes ``131``).  The table is strictly append-only, so a
+added (the host currently passes ``139``).  The table is strictly append-only, so a
 plugin built against an older header keeps working; a plugin that wants to use a
 newer capability should guard it:
 
@@ -160,6 +181,57 @@ values and write them (or list entries) with a completion callback:
    struct ThalamusCharSpan gain_key = { "gain", 4 };
    api->state_set_at_name_float(entry, &gain_key, 2.0);
    api->state_push_state_with_callback(list_state, entry, on_pushed, user_data);
+
+Signaling from your own thread
+------------------------------
+
+A node that produces data on its own thread sets ``signals_offmain`` to ``1`` in its
+``ThalamusNode`` struct.  To announce new data from that thread, create an *off-main
+signaler* for the node and call ``ready`` on it instead of ``node_ready_offmain``:
+
+* ``node_offmain_signaler_create(node)`` / ``node_offmain_signaler_destroy(signaler)``
+  -- create and free a signaler.  A new signaler starts **blocked**.
+* ``node_offmain_signaler_unblock(signaler)`` / ``node_offmain_signaler_block(signaler)``
+  -- allow or suppress signaling.  Block the signaler before destroying or tearing
+  down the node so a late ``ready`` call cannot reach a node that is going away.
+* ``node_offmain_signaler_ready(signaler)`` -- notify downstream consumers that new
+  data is available.  Returns ``0`` if the signaler is blocked (before or while the
+  call waits) and ``1`` otherwise.  Consumers that run on the main thread are
+  notified on the main thread, and the call waits until that has happened (or the
+  signaler is blocked), so the producer thread never races ahead of the consumers.
+  Use the return value to stop your thread's loop when the node is shutting down.
+
+This API requires ``api->version >= 136``.
+
+Dialogs and removing state
+--------------------------
+
+* ``dialog_show(title, message, type)`` (version 137) -- show a message box in the
+  UI.  ``type`` is one of ``ThalamusDialogType_Info``, ``_Warn``, ``_Error`` or
+  ``_Fatal``; ``title`` and ``message`` are ``ThalamusCharSpan`` pointers.
+* ``state_remove_at_name(state, key, callback, data)`` and
+  ``state_remove_at_index(state, index, callback, data)`` (version 138/139) --
+  delete a dictionary entry or list element, with the same completion-callback
+  semantics as the ``*_with_callback`` writes above.
+
+.. code-block:: c
+
+   struct ThalamusCharSpan title = { "Calibration", 11 };
+   struct ThalamusCharSpan message = { "Camera disconnected", 19 };
+   api->dialog_show(&title, &message, ThalamusDialogType_Warn);
+
+   struct ThalamusCharSpan key = { "gain", 4 };
+   api->state_remove_at_name(entry, &key, on_removed, user_data);
+
+Image formats
+-------------
+
+``ThalamusImageNode`` formats are given by ``ThalamusImageFormat``:
+``Gray``, ``RGB``, ``YUYV422``, ``YUV420P``, ``YUVJ420P``, ``NV12``, ``BGR``,
+``MJPEG``, ``MPEG1``, ``MPEG4``, ``Gray16`` and ``RGB16`` (each prefixed with
+``ThalamusImageFormat_``).  ``MJPEG``, ``MPEG1`` and ``MPEG4`` carry
+already-compressed frames; :doc:`STORAGE2 <nodes/storage2>` writes ``MPEG1`` and
+``MPEG4`` streams as-is instead of re-encoding them.
 
 SDL windowing
 -------------
