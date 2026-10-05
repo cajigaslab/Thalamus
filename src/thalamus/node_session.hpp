@@ -197,7 +197,9 @@ namespace thalamus {
 
     void start_join(std::function<void()> cleanup = nullptr) override {
       ServerReadReactor<REQUEST>::start_join([&] {
-        cleanup();
+        if(cleanup) {
+          cleanup();
+        }
         timer.cancel();
       });
     }
@@ -323,7 +325,9 @@ namespace thalamus {
 
     void start_join(std::function<void()> cleanup = nullptr) override {
       ServerBidiReactor2<REQUEST, RESPONSE>::start_join([&] {
-        cleanup();
+        if(cleanup) {
+          cleanup();
+        }
         timer.cancel();
       });
     }

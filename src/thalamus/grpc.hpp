@@ -307,7 +307,9 @@ namespace thalamus {
     virtual void start_join(std::function<void()> cleanup = nullptr) {
       context.TryCancel();
       std::unique_lock<std::mutex> lock(state->mutex);
-      cleanup();
+      if(cleanup) {
+        cleanup();
+      }
       state->joining = true;
       condition.wait(lock, [&] { return done; });
     }
@@ -482,7 +484,9 @@ namespace thalamus {
     virtual void start_join(std::function<void()> cleanup = nullptr) {
       context.TryCancel();
       std::unique_lock<std::mutex> lock(state->mutex);
-      cleanup();
+      if(cleanup) {
+        cleanup();
+      }
       state->joining = true;
       condition.wait(lock, [&] { return done; });
     }

@@ -556,26 +556,40 @@ public:
   struct State {
     boost::asio::steady_timer timer;
     std::mutex mutex;
-    bool joining = false;
+    // Set, under mutex, by whichever path finishes the call. Finish is then
+    // called once that path releases the mutex; after that nothing may touch
+    // the reactor (OnDone deletes it) or the request and response (gRPC
+    // releases them). Every path checks it before using any of them.
+    bool finished = false;
     bool found = false;
     boost::signals2::scoped_connection connection;
     State(boost::asio::io_context& ioc) : timer(ioc) {}
   };
   std::shared_ptr<State> state;
+  boost::asio::io_context& io_context;
 
-  NodeRequestReactor(boost::asio::io_context& ioc) : state(new State(ioc)) {}
-
-  ~NodeRequestReactor() override {
-    std::lock_guard<std::mutex> lock(state->mutex);
-    state->joining = true;
-  }
+  NodeRequestReactor(boost::asio::io_context& ioc) : state(std::make_shared<State>(ioc)), io_context(ioc) {}
 
   void OnDone() override {
     delete this;
   }
 
   void OnCancel() override {
-    ::grpc::ServerUnaryReactor::Finish(::grpc::Status::OK);
+    {
+      std::lock_guard<std::mutex> lock(state->mutex);
+      if(state->finished) {
+        return;
+      }
+      state->finished = true;
+    }
+    // The node lookup and the timer belong to io_context. Release them there
+    // so a node that never appears doesn't keep the state alive.
+    boost::asio::post(io_context, [c_state=state] {
+      std::lock_guard<std::mutex> lock(c_state->mutex);
+      c_state->connection.disconnect();
+      c_state->timer.cancel();
+    });
+    Finish(::grpc::Status::CANCELLED);
   }
 };
 
@@ -586,9 +600,9 @@ Service::node_request(::grpc::CallbackServerContext *,
   auto reactor = new NodeRequestReactor(impl->io_context);
   auto state = reactor->state;
   boost::asio::post(impl->io_context, [this,c_state=state,reactor, request, response] {
-    std::lock_guard<std::mutex> lock(c_state->mutex);
-    if(c_state->joining) {
-      THALAMUS_LOG(trace) << "node_request joined";
+    std::unique_lock<std::mutex> lock(c_state->mutex);
+    if(c_state->finished) {
+      THALAMUS_LOG(trace) << "node_request finished";
       return;
     }
 
@@ -604,34 +618,50 @@ Service::node_request(::grpc::CallbackServerContext *,
     if(ec) {
       response->set_status(
           thalamus_grpc::NodeResponse::Status::NodeResponse_Status_PARSE_ERROR);
+      c_state->finished = true;
+      lock.unlock();
       reactor->Finish(::grpc::Status::OK);
       return;
     }
 
-    c_state->connection = impl->node_graph.get_node_scoped(selector, [c2_state=c_state,reactor,parsed,response](auto weak) mutable {
-      std::lock_guard<std::mutex> lock2(c2_state->mutex);
-      if(c2_state->joining) {
-        THALAMUS_LOG(trace) << "get_node_scoped joined";
+    // The slot is owned by c_state->connection, so it holds the state weakly
+    // to avoid a cycle that would keep both alive if the node never appears.
+    std::weak_ptr<NodeRequestReactor::State> weak_state = c_state;
+    c_state->connection = impl->node_graph.get_node_scoped(selector, [weak_state,reactor,parsed,response](auto weak) mutable {
+      auto c2_state = weak_state.lock();
+      if(!c2_state) {
+        return;
+      }
+      std::unique_lock<std::mutex> lock2(c2_state->mutex);
+      if(c2_state->finished) {
+        THALAMUS_LOG(trace) << "get_node_scoped finished";
         return;
       }
       c2_state->found = true;
+      c2_state->timer.cancel();
       auto node = weak.lock();
-      if(node) {
-        node->process(parsed, [c3_state=c2_state,response,reactor] (auto& json_response) mutable {
-          std::lock_guard<std::mutex> lock3(c3_state->mutex);
-          if(c3_state->joining) {
-            THALAMUS_LOG(trace) << "process joined";
-            return;
-          }
-          auto serialized_response = boost::json::serialize(json_response);
-          response->set_json(serialized_response);
-          reactor->Finish(::grpc::Status::OK);
-        });
-      } else {
+      if(!node) {
         response->set_status(
           thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
+        c2_state->finished = true;
+        lock2.unlock();
         reactor->Finish(::grpc::Status::OK);
+        return;
       }
+
+      // process may answer synchronously, and its callback takes the mutex.
+      lock2.unlock();
+      node->process(parsed, [c3_state=c2_state,response,reactor] (auto& json_response) mutable {
+        std::unique_lock<std::mutex> lock3(c3_state->mutex);
+        if(c3_state->finished) {
+          THALAMUS_LOG(trace) << "process finished";
+          return;
+        }
+        c3_state->finished = true;
+        response->set_json(boost::json::serialize(json_response));
+        lock3.unlock();
+        reactor->Finish(::grpc::Status::OK);
+      });
     });
 
     c_state->timer.expires_after(5s);
@@ -639,17 +669,16 @@ Service::node_request(::grpc::CallbackServerContext *,
       if(error) {
         return;
       }
-      std::lock_guard<std::mutex> lock2(c2_state->mutex);
-      if(c2_state->joining) {
-        THALAMUS_LOG(trace) << "get_node_scoped joined";
+      std::unique_lock<std::mutex> lock2(c2_state->mutex);
+      if(c2_state->finished || c2_state->found) {
         return;
       }
-      if(!c2_state->found) {
-        c2_state->connection.disconnect();
-        response->set_status(
-          thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
-        reactor->Finish(::grpc::Status::OK);
-      }
+      c2_state->connection.disconnect();
+      c2_state->finished = true;
+      response->set_status(
+        thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
+      lock2.unlock();
+      reactor->Finish(::grpc::Status::OK);
     });
   });
 
@@ -657,54 +686,105 @@ Service::node_request(::grpc::CallbackServerContext *,
 }
 
 struct NodeRequestSession : public NodeBidiSession<Node, thalamus_grpc::NodeRequest, thalamus_grpc::NodeResponse> {
+  using Base = NodeBidiSession<Node, thalamus_grpc::NodeRequest, thalamus_grpc::NodeResponse>;
+  using Reactor = ServerBidiReactor2<thalamus_grpc::NodeRequest, thalamus_grpc::NodeResponse>;
+
+  // Requests that arrive before the node is found are queued, up to
+  // MAX_PENDING, and answered NOT_FOUND if it isn't found within
+  // PENDING_TIMEOUT.
+  static constexpr size_t MAX_PENDING = 10;
+  static constexpr std::chrono::seconds PENDING_TIMEOUT{5};
+
   ::grpc::CallbackServerContext& server_context;
   std::vector<thalamus_grpc::NodeRequest> pending;
+  boost::asio::steady_timer pending_timer;
   bool selected = false;
-  bool draining = false;
   thalamus_grpc::NodeSelector node_selector;
 
   NodeRequestSession(NodeGraph& graph, boost::asio::io_context& _io_context, ::grpc::CallbackServerContext& _context, ContextGuard&& guard)
-  : NodeBidiSession<Node, thalamus_grpc::NodeRequest, thalamus_grpc::NodeResponse>(graph, _io_context, _context, std::move(guard))
+  : Base(graph, _io_context, _context, std::move(guard))
   , server_context(context)
+  , pending_timer(_io_context)
   {}
 
   ~NodeRequestSession() override;
 
+  void start_join(std::function<void()> cleanup = nullptr) override {
+    Base::start_join([&] {
+      if(cleanup) {
+        cleanup();
+      }
+      pending_timer.cancel();
+    });
+  }
+
+  void reply(uint64_t id, thalamus_grpc::NodeResponse::Status status) {
+    ::thalamus_grpc::NodeResponse response;
+    response.set_id(id);
+    response.set_status(status);
+    Reactor::send(std::move(response));
+  }
+
   void on_node(std::unique_lock<std::mutex>& lock) override {
+    pending_timer.cancel();
     auto local = std::exchange(pending, {});
+    // Copied while locked: once the mutex is free the session may be
+    // destroyed, so nothing below may touch it before relocking and
+    // checking joining.
+    auto c_state = state;
     lock.unlock();
 
     for(auto&& p : local) {
-      std::unique_lock<std::mutex> lock2(state->mutex);
-      if(state->joining) {
+      std::unique_lock<std::mutex> lock2(c_state->mutex);
+      if(c_state->joining) {
         return;
       }
-      draining = true;
-      on_read(std::move(p), lock2);
-      draining = false;
+      handle(std::move(p), lock2, true);
+    }
+  }
+
+  void on_pending_timeout(const boost::system::error_code& error, std::shared_ptr<Reactor::State> c_state) {
+    if(error) {
+      return;
+    }
+    std::lock_guard<std::mutex> lock(c_state->mutex);
+    if(c_state->joining) {
+      return;
+    }
+    for(auto& p : std::exchange(pending, {})) {
+      reply(p.id(), thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
     }
   }
 
   void on_read(thalamus_grpc::NodeRequest&& req, std::unique_lock<std::mutex>& lock) override {
+    handle(std::move(req), lock, false);
+  }
+
+  // `lock` holds state->mutex and may be released, after which nothing may
+  // touch the session. `draining` is true for requests replayed by on_node,
+  // which are answered NOT_FOUND rather than queued again.
+  void handle(thalamus_grpc::NodeRequest&& req, std::unique_lock<std::mutex>& lock, bool draining) {
     if (req.has_selector() || !req.node().empty()) {
+      thalamus_grpc::NodeSelector new_selector;
+      if (req.has_selector()) {
+        new_selector = req.selector();
+      } else {
+        new_selector.set_name(req.node());
+      }
       if(selected) {
-        thalamus_grpc::NodeSelector new_selector;
-        if (req.has_selector()) {
-          new_selector = req.selector();
-        } else {
-          new_selector.set_name(req.node());
-        }
         if(new_selector.name() != node_selector.name() || new_selector.type() != node_selector.type()) {
+          // A stream stays bound to the first node it selects, so a request
+          // for another node is answered rather than run on that one.
           THALAMUS_LOG(warning) << "Can't reselect during node session";
+          if(!req.json().empty()) {
+            reply(req.id(), thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
+          }
+          return;
         }
       } else {
         selected = true;
-        if (req.has_selector()) {
-          node_selector = req.selector();
-        } else {
-          node_selector.set_name(req.node());
-        }
-        NodeBidiSession<Node, thalamus_grpc::NodeRequest, thalamus_grpc::NodeResponse>::set_selector(node_selector);
+        node_selector = new_selector;
+        Base::set_selector(node_selector);
       }
     }
 
@@ -715,51 +795,47 @@ struct NodeRequestSession : public NodeBidiSession<Node, thalamus_grpc::NodeRequ
     auto node = this->lock();
     if(!node) {
       if(draining) {
-        ::thalamus_grpc::NodeResponse response;
-        response.set_id(req.id());
-        response.set_status(
-            thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
-        ServerBidiReactor2<thalamus_grpc::NodeRequest, thalamus_grpc::NodeResponse>::send(std::move(response));
-      } else {
-        while(pending.size() >= 10) {
-          ::thalamus_grpc::NodeResponse response;
-          response.set_id(pending.front().id());
-          response.set_status(
-              thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
-          ServerBidiReactor2<thalamus_grpc::NodeRequest, thalamus_grpc::NodeResponse>::send(std::move(response));
-          pending.erase(pending.begin());
-        }
-        pending.push_back(std::move(req));
+        reply(req.id(), thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
+        return;
       }
+      while(pending.size() >= MAX_PENDING) {
+        reply(pending.front().id(), thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
+        pending.erase(pending.begin());
+      }
+      if(pending.empty()) {
+        pending_timer.expires_after(PENDING_TIMEOUT);
+        pending_timer.async_wait([this, c_state=state](const boost::system::error_code& error) {
+          on_pending_timeout(error, c_state);
+        });
+      }
+      pending.push_back(std::move(req));
       return;
     }
 
     boost::system::error_code ec;
     auto parsed = boost::json::parse(req.json(), ec);
     if(ec) {
-      ::thalamus_grpc::NodeResponse response;
-      response.set_id(req.id());
-      response.set_status(
-          thalamus_grpc::NodeResponse::Status::NodeResponse_Status_PARSE_ERROR);
-      ServerBidiReactor2<thalamus_grpc::NodeRequest, thalamus_grpc::NodeResponse>::send(std::move(response));
+      reply(req.id(), thalamus_grpc::NodeResponse::Status::NodeResponse_Status_PARSE_ERROR);
       return;
     }
 
+    // process may answer synchronously, and its callback takes the mutex.
+    auto c_state = state;
+    auto request_id = req.id();
     lock.unlock();
-    node->process(parsed, [&,request_id=req.id(),c_state=state](const boost::json::value& json_response) {
+    node->process(parsed, [this, request_id, c_state](const boost::json::value& json_response) {
       std::lock_guard<std::mutex> lock2(c_state->mutex);
       if(c_state->joining) {
         THALAMUS_LOG(trace) << "get_node_connection joined";
         return;
       }
 
-      auto serialized_response = boost::json::serialize(json_response);
       ::thalamus_grpc::NodeResponse response;
       response.set_id(request_id);
-      response.set_json(serialized_response);
+      response.set_json(boost::json::serialize(json_response));
       response.set_status(
           thalamus_grpc::NodeResponse::Status::NodeResponse_Status_OK);
-      ServerBidiReactor2<thalamus_grpc::NodeRequest, thalamus_grpc::NodeResponse>::send(std::move(response));
+      Reactor::send(std::move(response));
     });
   }
 };
