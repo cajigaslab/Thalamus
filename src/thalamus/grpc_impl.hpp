@@ -26,10 +26,11 @@ namespace thalamus {
 class Service : public thalamus_grpc::Thalamus::WithCallbackMethod_node_request<
                        thalamus_grpc::Thalamus::WithCallbackMethod_node_request_stream<
                        thalamus_grpc::Thalamus::WithCallbackMethod_analog<
+                       thalamus_grpc::Thalamus::WithCallbackMethod_channel_info<
                        thalamus_grpc::Thalamus::WithCallbackMethod_graph<
                        thalamus_grpc::Thalamus::WithCallbackMethod_inject_analog<
                        thalamus_grpc::Thalamus::WithCallbackMethod_image<
-                         thalamus_grpc::Thalamus::Service>>>>>> {
+                         thalamus_grpc::Thalamus::Service>>>>>>> {
   struct Impl;
   std::unique_ptr<Impl> impl;
   friend class ContextGuard;
@@ -106,10 +107,9 @@ public:
               const ::thalamus_grpc::SpectrogramRequest *request,
               ::grpc::ServerWriter<::thalamus_grpc::SpectrogramResponse>
                   *writer) override;
-  ::grpc::Status channel_info(
-      ::grpc::ServerContext *context,
-      const ::thalamus_grpc::AnalogRequest *request,
-      ::grpc::ServerWriter<::thalamus_grpc::AnalogResponse> *writer) override;
+  ::grpc::ServerWriteReactor<::thalamus_grpc::AnalogResponse>* channel_info(
+      ::grpc::CallbackServerContext *context,
+      const ::thalamus_grpc::AnalogRequest *request) override;
   ::grpc::Status
   xsens(::grpc::ServerContext *context,
         const ::thalamus_grpc::NodeSelector *request,
