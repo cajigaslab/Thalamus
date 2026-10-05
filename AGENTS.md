@@ -34,7 +34,15 @@ human-oriented setup guide.
   Debug|x64 is invalid" if `Platform=x64` is in the environment; build
   `dotnet/dotnet/dotnet.csproj` with `-p:Platform=AnyCPU` instead.
 - Python protobuf bindings (`thalamus/thalamus_pb2.py`) are regenerated
-  automatically by the entry points when `proto/thalamus.proto` is newer.
+  automatically by the entry points when `proto/thalamus.proto` is newer;
+  `python thalamus/build.py` regenerates them by hand. They aren't tracked.
+- Changing `proto/thalamus.proto` rebuilds nearly every C++ file. With the
+  default parallelism clang can run the machine out of memory
+  (`LLVM ERROR: out of memory`, not a compile error); use
+  `cmake --build build/clang-debug --target native -j 4`.
+- Non-CI Windows builds copy `native.pdb` next to `native.exe` in `thalamus/`
+  (skipped when `THALAMUS_CI` is set). Crash dumps can only be symbolized with
+  the PDB from the same build.
 
 ## C++ conventions
 
@@ -85,6 +93,11 @@ ABI. Rules:
     (`ThalamusAPI::analog_node_version`), so plugins can check it.
 - Spans returned through the API are borrowed and only valid during the
   `ready`/`get_node` callback.
+- A node with a modality doesn't have that data in every message (an image
+  node can emit audio-only messages and vice versa). Check
+  `has_image_data`/`has_analog_data` before reading; e.g. `channel_info`
+  calls `num_channels()` without checking, which is only safe because
+  plugins keep analog data on every message.
 - thalamus-contrib vendors `plugin.h` and `modalities.h` in
   `rust/include/thalamus/`; copy them over after changing them here.
 
@@ -96,6 +109,23 @@ ABI. Rules:
 - `ThalamusState*` wrappers are interned per collection (`get_state_ref`), so
   two wrappers of the same live collection compare equal by pointer.
 - Setting state inside a state callback re-enters callbacks synchronously.
+- `thalamus.pipeline` sets every node's `Running` to false when it loads a
+  config; nodes are started explicitly (UI or `thalamus.registry`).
+
+## Node lookup
+
+- A `NodeSelector` matches on `name`, `type`, or both (both must match when
+  both are set). One with neither is invalid (`valid_node_selector`).
+- `NodeGraph::get_node(selector, callback)` and `get_node_scoped` call back
+  once a matching node exists: posted to the io_context if it exists now,
+  otherwise when one is created or renamed/retyped to match. They never call
+  back for an invalid selector, so an unset `Source` just waits.
+- `get_node_scoped`'s callback only fires while the returned
+  `NodeConnection` is alive; keep it.
+- The callback can still receive an expired `weak_ptr` if the node is
+  removed before the posted delivery runs, so check `lock()`. The plugin C
+  API (`node_get_node`) wraps whatever it receives, so a null there reaches
+  the plugin as a wrapper around a null node.
 
 ## Analog data
 
@@ -104,7 +134,11 @@ ABI. Rules:
   channels whose samples are in `buffer()` (encoding given by `encoding()`,
   `encoded_count()` samples per channel). The default derives every channel's
   format from the `is_*` functions. Use `visit_channel` to read a channel in
-  its own type; `visit_node` assumes one type for every channel.
+  its own type; `visit_node` assumes one type for every channel and reads
+  nothing from channels of another type in mixed-format messages (e.g.
+  thalamus-contrib's MEDIA_CONVERTER: f64 stats channels plus i16 audio). The
+  `graph` and spectrogram RPCs use `visit_channel`; storage, lua and
+  samplemonitor still use `visit_node`.
 - On the wire, `Span.format` gives each channel's format. `Double` is 0, so
   records written before the field existed still read correctly: use
   `span_format()` in `analog_proto.hpp`, which falls back to
@@ -137,6 +171,37 @@ ABI. Rules:
   HTTP/WebSocket server always binds to 127.0.0.1.
 - Child processes get the TLS flags from `grpc_tls.command_line_args()`.
 
+## gRPC handlers
+
+- Node graph and node objects live on the io_context (main) thread; handlers
+  `post` work there. A lambda posted (or passed to `get_node`) from a handler
+  must not capture the handler's stack by reference (`[&]`): when the client
+  cancels, a sync handler returns and its thread may exit before the callback
+  runs, which writes into freed stack memory. `get_modalities` and
+  `get_recommended_channels` still do this. Put shared state behind a
+  `shared_ptr` instead.
+- Callback-API reactors (`ServerUnaryReactor`, `ServerBidiReactor2`, the
+  `NodeSession` family in `node_session.hpp`):
+  - Call `Finish` exactly once on every path, including `OnCancel`; guard it
+    with a flag checked and set under the state mutex, and call `Finish` after
+    releasing the mutex. After `Finish`, don't touch the request, the
+    response or the reactor (`OnDone` deletes it).
+  - Don't hold a lock while calling `node->process`: the default
+    `Node::process` answers synchronously, and the reply callback takes the
+    same lock.
+  - Once a lock is released the session may be destroyed; copy `state` and
+    anything else needed into locals first, and recheck `joining` after
+    relocking.
+  - Call `start_join()` first in every most-derived session destructor, so
+    callbacks see `joining` before derived members are destroyed.
+    `start_join`'s `cleanup` argument may be empty.
+- `node_request` (unary) and `node_request_stream` statuses: `OK`,
+  `PARSE_ERROR` (bad json), `BAD_SELECTOR` (no name or type, or a stream
+  request before any selector), `NOT_FOUND` (no matching node within 5 s, or a
+  stream request naming a node other than the one the stream selected). A
+  stream binds to the first node it selects; requests sent before that node
+  exists are queued (up to 10) and answered `NOT_FOUND` after 5 s.
+
 ## Vulkan
 
 - Thalamus requests a Vulkan 1.1 instance when the loader supports it, prefers
@@ -155,3 +220,19 @@ ABI. Rules:
 - For TLS, a throwaway CA and certificates from `openssl` plus a small
   `grpc.aio` client calling `get_redirect` (or reflection) against each port
   exercise every server.
+- Drive a running pipeline with `python -m thalamus.registry -p <jsonpath>
+  [-s <json>]` (e.g. `-p '$.nodes[0].Running' -s true`, or `-p '$.nodes[1]'
+  -s '{"name": "Node 2", "type": "NONE"}'` to add a node). `-p` alone prints
+  the value. `--contrib` on `thalamus.pipeline` loads thalamus-contrib (put
+  its `src` first on `PYTHONPATH` to use a development build).
+- Native crashes leave Crashpad minidumps in
+  `~/thalamus_crashes/reports/`. lldb crashes loading `native.pdb`; instead
+  read the exception address from the dump (parse its exception and module
+  list streams) and symbolize `native.exe` offsets with `llvm-symbolizer
+  --obj=native.exe <ImageBase + offset>` (ImageBase is `0x140000000`).
+  Scanning the crashing thread's stack for addresses inside `native.exe` and
+  plugins gives an approximate backtrace (stale frames included).
+- `python -m thalamus.av_muxer -i <recording> -o out.mp4` muxes a recorded
+  MPEG4 video node and AAC audio node without re-encoding (constant frame
+  rate at the recording's average, AAC priming compensated). Recordings can
+  start mid-GOP; frames before the first MPEG4 VOL header are skipped.
