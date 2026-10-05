@@ -2538,10 +2538,8 @@ void NodeGraphImpl::get_node(
 void NodeGraphImpl::get_node(
     const thalamus_grpc::NodeSelector &query_name,
     std::function<void(std::weak_ptr<Node>)> callback) {
+  // A selector that can't match never resolves, so callback is never called.
   if(!valid_node_selector(query_name)) {
-    impl->io_context.post([callback] {
-      callback(std::weak_ptr<Node>());
-    });
     return;
   }
 
@@ -2566,10 +2564,8 @@ NodeGraph::NodeConnection NodeGraphImpl::get_node_scoped(
 NodeGraph::NodeConnection NodeGraphImpl::get_node_scoped(
     const thalamus_grpc::NodeSelector &selector,
     std::function<void(std::weak_ptr<Node>)> callback) {
+  // A selector that can't match never resolves, so callback is never called.
   if(!valid_node_selector(selector)) {
-    impl->io_context.post([callback] {
-      callback(std::weak_ptr<Node>());
-    });
     return NodeConnection();
   }
 

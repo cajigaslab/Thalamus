@@ -147,6 +147,9 @@ message NodeResponse {
     NOT_FOUND = 1;
     REDIRECT = 2;
     PARSE_ERROR = 3;
+    // The request's selector can't match any node: it names neither a node
+    // nor a type, or no selector was given before the first request.
+    BAD_SELECTOR = 4;
   }
   string json = 1;
   uint64 id = 2;

@@ -551,6 +551,13 @@ Service::get_type_name(::grpc::ServerContext *,
   return ::grpc::Status::OK;
 }
 
+// Whether `selector` can match a node: it names a node, a type, or both.
+// NodeGraph never resolves one that can't, so requests with such a selector
+// are answered BAD_SELECTOR instead of waiting.
+static bool valid_node_selector(const thalamus_grpc::NodeSelector &selector) {
+  return !selector.name().empty() || !selector.type().empty();
+}
+
 class NodeRequestReactor : public ::grpc::ServerUnaryReactor {
 public:
   struct State {
@@ -611,6 +618,15 @@ Service::node_request(::grpc::CallbackServerContext *,
       selector = request->selector();
     } else {
       selector.set_name(request->node());
+    }
+
+    if(!valid_node_selector(selector)) {
+      response->set_status(
+          thalamus_grpc::NodeResponse::Status::NodeResponse_Status_BAD_SELECTOR);
+      c_state->finished = true;
+      lock.unlock();
+      reactor->Finish(::grpc::Status::OK);
+      return;
     }
 
     boost::system::error_code ec;
@@ -771,6 +787,13 @@ struct NodeRequestSession : public NodeBidiSession<Node, thalamus_grpc::NodeRequ
       } else {
         new_selector.set_name(req.node());
       }
+      if(!valid_node_selector(new_selector)) {
+        THALAMUS_LOG(warning) << "Node request stream got a selector with no name or type";
+        if(!req.json().empty()) {
+          reply(req.id(), thalamus_grpc::NodeResponse::Status::NodeResponse_Status_BAD_SELECTOR);
+        }
+        return;
+      }
       if(selected) {
         if(new_selector.name() != node_selector.name() || new_selector.type() != node_selector.type()) {
           // A stream stays bound to the first node it selects, so a request
@@ -789,6 +812,13 @@ struct NodeRequestSession : public NodeBidiSession<Node, thalamus_grpc::NodeRequ
     }
 
     if(req.json().empty()) {
+      return;
+    }
+
+    // Requests go to the node selected by the first message that has a
+    // selector, so one sent before any has nowhere to go.
+    if(!selected) {
+      reply(req.id(), thalamus_grpc::NodeResponse::Status::NodeResponse_Status_BAD_SELECTOR);
       return;
     }
 
@@ -1522,8 +1552,9 @@ struct GraphSession : public NodeSession<AnalogNode, thalamus_grpc::GraphRespons
           }
           auto scale = is_transformed ? typed_node->scale(int(channel)) : 1.0;
           auto offset = is_transformed ? typed_node->offset(int(channel)) : 0.0;
-          visit_node(typed_node, [&](auto wrapper) {
-            auto data = wrapper->data(int(channel));
+          // Per channel: a message can mix formats (e.g. double stats
+          // channels beside short audio), which visit_node can't express.
+          visit_channel(typed_node, int(channel), [&](auto data) {
             for (auto sample_raw : data) {
               double sample = double(sample_raw) * scale + offset;
               auto wrote = current_time >= bin_end;
@@ -1802,9 +1833,9 @@ Service::graph(::grpc::CallbackServerContext *context,
 
           for (auto c = 0u; c < channel_ids.size(); ++c) {
             auto channel = channel_ids[c];
-            visit_node(node, [&](auto wrapper) {
-              auto data = wrapper->data(channel);
-              auto interval = wrapper->sample_interval(channel);
+            // Per channel: a message can mix formats.
+            visit_channel(node, int(channel), [&](auto data) {
+              auto interval = node->sample_interval(int(channel));
               if (interval.count() == 0) {
                 return;
               }
