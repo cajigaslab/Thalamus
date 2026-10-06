@@ -296,6 +296,13 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
     return size_t(node->analog->encoded_count(node));
   }
 
+  bool channels_changed() const override {
+    if(analog_version < 5) {
+      return false;
+    }
+    return node->analog->channels_changed(node) != 0;
+  }
+
   Encoding encoding() const override {
     if(analog_version < 2) {
       return Encoding::None;
@@ -345,11 +352,6 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
     ThalamusCharSpan temp2;
     node->analog->name(&temp2, node, channel);
     return std::string_view(temp2.data, temp2.data + temp2.size);
-  }
-  void inject(const thalamus::vector<std::span<double const>> &,
-                      const thalamus::vector<std::chrono::nanoseconds> &,
-                      const thalamus::vector<std::string_view> &) override {
-    THALAMUS_ABORT("Unimplemented");
   }
   bool has_analog_data() const override {
     return node->analog->has_analog_data(node);
@@ -601,6 +603,12 @@ static uint64_t plugin_analog_encoded_count(struct ThalamusNode* node) {
   auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
   ASSERT_SAFE();
   return uint64_t(interfaces->analog->encoded_count());
+}
+
+static char plugin_analog_channels_changed(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  return interfaces->analog->channels_changed() ? 1 : 0;
 }
 
 static ThalamusAnalogEncoding plugin_analog_encoding(struct ThalamusNode* node) {
@@ -867,6 +875,7 @@ struct ThalamusAPIImpl {
       result->analog->encoding = plugin_analog_encoding;
       result->analog->format = plugin_analog_format;
       result->analog->encoded_count = plugin_analog_encoded_count;
+      result->analog->channels_changed = plugin_analog_channels_changed;
     }
     if (image) {
       interfaces->image = image;
@@ -1670,23 +1679,27 @@ struct ThalamusAPIImpl {
     delete conn;
   }
 
-  static void node_channels_changed(struct ThalamusNode* node) {
-    auto ext_node = reinterpret_cast<ExtNode*>(node->impl);
-    ext_node->channels_changed(ext_node);
+  // Deprecated: channel changes are reported per message through
+  // ThalamusAnalogNode::channels_changed. Kept for ABI compatibility; each
+  // logs an error the first time a plugin calls it.
+  static void node_channels_changed(struct ThalamusNode*) {
+    static std::atomic_bool logged = false;
+    if (!logged.exchange(true)) {
+      THALAMUS_LOG(error) << "A plugin called the deprecated node_channels_changed, which does nothing. "
+                             "Report channel changes per message with ThalamusAnalogNode::channels_changed.";
+    }
   }
 
-  static ThalamusNodeReadyConnection* node_channels_changed_connect(struct ThalamusNode* node, ThalamusNodeReadyCallback callback, void* data) {
-    auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
-    
+  static ThalamusNodeReadyConnection* node_channels_changed_connect(struct ThalamusNode* node, ThalamusNodeReadyCallback, void*) {
+    static std::atomic_bool logged = false;
+    if (!logged.exchange(true)) {
+      THALAMUS_LOG(error) << "A plugin called the deprecated node_channels_changed_connect, whose callback is never called. "
+                             "Check ThalamusAnalogNode::channels_changed on each message instead.";
+    }
+    // A connection that never fires, so disconnecting it works as before.
     auto result = new ThalamusNodeReadyConnection();
     result->node = node;
     node_inc_ref(node);
-    if(interfaces->analog) {
-      result->connection = interfaces->analog->channels_changed.connect([node, callback, data] (auto) {
-        NodeGuard lock(node);
-        callback(node, data);
-      });
-    }
     return result;
   }
 
@@ -1872,8 +1885,8 @@ struct ThalamusAPIImpl {
   }
 
   static int32_t analog_node_version() {
-    // buffer, encoding, format and encoded_count.
-    return 4;
+    // buffer, encoding, format, encoded_count and channels_changed.
+    return 5;
   }
 
   static void state_remove_at_index(struct ThalamusState* state, int64_t key, ThalamusPostCallback callback, void* data) {

@@ -229,7 +229,6 @@ struct Service::Impl {
 
   struct AnalogSession : public NodeSession<AnalogNode, thalamus_grpc::AnalogResponse> {
 
-    boost::signals2::scoped_connection channels_changed_connection;
     boost::signals2::scoped_connection ready_connection;
     const ::thalamus_grpc::AnalogRequest request;
     std::vector<size_t> channels;
@@ -257,17 +256,6 @@ struct Service::Impl {
 
     void subscribe() override {
       THALAMUS_LOG(trace) << "got node";
-      using channels_changed_signal_type = decltype(typed_node->channels_changed);
-      channels_changed_connection = typed_node->channels_changed.connect(channels_changed_signal_type::slot_type([&,c_state=state](const AnalogNode *) {
-        std::lock_guard<std::mutex> lock(c_state->mutex);
-        if(c_state->joining) {
-          THALAMUS_LOG(trace) << "channels_changed_connection joined";
-          return;
-        }
-        
-        channels_changed = true;
-      }));
-
       ready_connection = node::connect_ready_multithreaded(this->raw_node.get(), [&,c_state=state](const Node *) {
         std::lock_guard<std::mutex> lock(c_state->mutex);
         if(c_state->joining) {
@@ -277,6 +265,10 @@ struct Service::Impl {
 
         if (!typed_node->has_analog_data()) {
           return;
+        }
+        // Starts true, since the first message seen may not be flagged.
+        if (typed_node->channels_changed()) {
+          channels_changed = true;
         }
         
         TRACE_EVENT("thalamus", "Service::analog(on ready)");
@@ -1301,11 +1293,9 @@ struct InjectAnalogSession : public NodeReadSession<AnalogNode, thalamus_grpc::I
       sample_intervals.emplace_back(interval);
     }
 
-    if (first || request.signal().channels_changed()) {
-      typed_node->channels_changed(typed_node);
-      first = false;
-    }
-    typed_node->inject(spans, sample_intervals, names);
+    auto channels_changed = first || request.signal().channels_changed();
+    first = false;
+    typed_node->inject_analog(spans, sample_intervals, names, channels_changed);
   }
 };
 
@@ -1444,7 +1434,6 @@ ImageSession::~ImageSession() {
 
 struct GraphSession : public NodeSession<AnalogNode, thalamus_grpc::GraphResponse> {
   const thalamus_grpc::GraphRequest request;
-  boost::signals2::scoped_connection channels_changed_connection;
   boost::signals2::scoped_connection ready_connection;
   
   std::vector<size_t> channels;
@@ -1488,17 +1477,6 @@ struct GraphSession : public NodeSession<AnalogNode, thalamus_grpc::GraphRespons
 
     has_channels = !channels.empty() || !channel_names.empty();
 
-    using channels_changed_signal_type = decltype(typed_node->channels_changed);
-    channels_changed_connection =
-      typed_node->channels_changed.connect(
-        channels_changed_signal_type::slot_type([this,c_state=this->state](const AnalogNode *) {
-          std::lock_guard<std::mutex> lock(c_state->mutex);
-          if(c_state->joining) {
-            return;
-          }
-          channels_changed = true;
-        }));
-
     using signal_type = decltype(raw_node->ready);
     ready_connection =
       raw_node->ready.connect(signal_type::slot_type([this,c_state=this->state](const Node *) {
@@ -1508,6 +1486,10 @@ struct GraphSession : public NodeSession<AnalogNode, thalamus_grpc::GraphRespons
         }
         if (!typed_node->has_analog_data()) {
           return;
+        }
+        // Starts true, since the first message seen may not be flagged.
+        if (typed_node->channels_changed()) {
+          channels_changed = true;
         }
         
         ::thalamus_grpc::GraphResponse response;

@@ -21,6 +21,9 @@
 using namespace thalamus;
 
 struct RemoteNode::Impl {
+  // Reported by channels_changed() on the next message with analog data,
+  // then cleared.
+  bool analog_channels_changed = true;
   ObservableDictPtr state;
   boost::asio::io_context &io_context;
   boost::asio::steady_timer timer;
@@ -412,7 +415,7 @@ struct RemoteNode::Impl {
           }
           ready = false;
 
-          auto channels_changed = false;
+          auto channels_changed = analog_response.channels_changed();
           if (names.size() !=
               static_cast<size_t>(analog_response.spans_size()) + 2) {
             channels_changed = true;
@@ -459,12 +462,13 @@ struct RemoteNode::Impl {
                                          moved_names = std::move(new_names)] {
             TRACE_EVENT("thalamus", "RemoteNode::analog broadcast");
             if (channels_changed) {
-              outer->channels_changed(outer);
+              analog_channels_changed = true;
             }
             std::lock_guard<std::mutex> lock2(mutex);
             names = std::move(moved_names);
             has_analog_data = true;
             outer->ready(outer);
+            analog_channels_changed = false;
             has_analog_data = false;
             ready = true;
             condition.notify_all();
@@ -721,6 +725,10 @@ RemoteNode::~RemoteNode() {}
 std::span<const double> RemoteNode::data(int channel) const {
   return impl->spans.at(size_t(channel));
 }
+bool RemoteNode::channels_changed() const {
+  return impl->analog_channels_changed;
+}
+
 int RemoteNode::num_channels() const { return int(impl->spans.size()); }
 std::chrono::nanoseconds RemoteNode::sample_interval(int channel) const {
   return impl->sample_intervals.at(size_t(channel));
@@ -732,12 +740,6 @@ std::chrono::nanoseconds RemoteNode::time() const { return impl->time; }
 std::chrono::nanoseconds RemoteNode::remote_time() const {
   return impl->remote_time;
 }
-void RemoteNode::inject(const thalamus::vector<std::span<double const>> &,
-                        const thalamus::vector<std::chrono::nanoseconds> &,
-                        const thalamus::vector<std::string_view> &) {
-  THALAMUS_ASSERT(false, "RemoteNode::inject unimplemented.");
-}
-
 std::string RemoteNode::type_name() { return "REMOTE"; }
 
 std::span<MotionCaptureNode::Segment const> RemoteNode::segments() const {

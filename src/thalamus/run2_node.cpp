@@ -164,13 +164,6 @@ std::chrono::nanoseconds Run2Node::sample_interval(int) const {
   return 0ns;
 }
 
-void
-Run2Node::inject(const thalamus::vector<std::span<double const>> &,
-       const thalamus::vector<std::chrono::nanoseconds> &,
-       const thalamus::vector<std::string_view> &) {
-  THALAMUS_ASSERT(false, "Unimplemented");
-}
-
 bool Run2Node::has_analog_data() const {
   return true;
 }

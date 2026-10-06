@@ -504,10 +504,10 @@ std::chrono::nanoseconds DistortionNode::sample_interval(int) const {
   return impl->current_result.interval;
 }
 std::string_view DistortionNode::name(int) const { return "Latency"; }
-void DistortionNode::inject(
+void DistortionNode::inject_analog(
     const thalamus::vector<std::span<double const>> &data,
     const thalamus::vector<std::chrono::nanoseconds> &interval,
-    const thalamus::vector<std::string_view> &) {
+    const thalamus::vector<std::string_view> &, bool) {
   THALAMUS_ASSERT(data.size() >= 1, "Error");
   THALAMUS_ASSERT(data[0].size() >= 1, "Error");
   THALAMUS_ASSERT(interval.size() >= 1, "Error");

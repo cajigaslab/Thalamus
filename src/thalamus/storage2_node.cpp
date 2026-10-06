@@ -80,6 +80,9 @@ static int get_rec_number(const std::filesystem::path &name,
 }
 
 struct Storage2Node::Impl {
+  // Reported by channels_changed() on the next message with analog data,
+  // then cleared.
+  bool analog_channels_changed = true;
   struct AnalogStorage {
     std::string name;
     int num_channels;
@@ -271,7 +274,7 @@ struct Storage2Node::Impl {
               .first;
       metrics.emplace_back(0.0, is_rate);
       names.push_back(name());
-      outer->channels_changed(outer);
+      analog_channels_changed = true;
     }
 
     metrics.at(offset->second).first += double(count);
@@ -1337,6 +1340,7 @@ struct Storage2Node::Impl {
     }
     metrics_time = now.time_since_epoch();
     outer->ready(outer);
+    analog_channels_changed = false;
     last_publish = now;
     for (auto i = metrics.begin(); i < metrics.end(); ++i) {
       i->first = 0;
@@ -1569,6 +1573,10 @@ std::span<const double> Storage2Node::data(int channel) const {
                                  &(impl->metrics.begin() + channel)->first + 1);
 }
 
+bool Storage2Node::channels_changed() const {
+  return impl->analog_channels_changed;
+}
+
 int Storage2Node::num_channels() const { return int(impl->metrics.size()); }
 
 std::chrono::nanoseconds Storage2Node::sample_interval(int) const { return 1s; }
@@ -1583,10 +1591,6 @@ std::string_view Storage2Node::name(int channel) const {
 std::span<const std::string> Storage2Node::get_recommended_channels() const {
   return std::span<const std::string>(impl->names.begin(), impl->names.end());
 }
-
-void Storage2Node::inject(const thalamus::vector<std::span<double const>> &,
-                         const thalamus::vector<std::chrono::nanoseconds> &,
-                         const thalamus::vector<std::string_view> &) {}
 
 void Storage2Node::process(const boost::json::value & request_value, std::function<void(const boost::json::value &)> callback) {
   auto request = request_value.as_object();

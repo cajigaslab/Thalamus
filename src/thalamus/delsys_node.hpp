@@ -18,11 +18,9 @@ public:
   size_t modalities() const override;
   std::string_view redirect() const override;
 
-  void inject(const thalamus::vector<std::span<double const>> &,
-              const thalamus::vector<std::chrono::nanoseconds> &,
-              const thalamus::vector<std::string_view> &) override;
   std::string_view name(int channel) const override;
   int num_channels() const override;
+  bool channels_changed() const override;
   std::string_view text() const override;
   bool has_text_data() const override;
   bool has_analog_data() const override;

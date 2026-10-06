@@ -18,14 +18,12 @@ public:
   ~RemoteNode() override;
   std::span<const double> data(int channel) const override;
   int num_channels() const override;
+  bool channels_changed() const override;
   std::chrono::nanoseconds sample_interval(int channel) const override;
   std::chrono::nanoseconds time() const override;
   std::chrono::nanoseconds remote_time() const override;
   std::string_view name(int channel) const override;
   std::span<const std::string> get_recommended_channels() const override;
-  void inject(const thalamus::vector<std::span<double const>> &,
-              const thalamus::vector<std::chrono::nanoseconds> &,
-              const thalamus::vector<std::string_view> &) override;
   bool has_analog_data() const override;
   Encoding encoding() const override;
   std::span<const uint8_t> buffer() const override;

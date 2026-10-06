@@ -198,6 +198,10 @@ extern "C" {
     enum ThalamusAnalogEncoding (*encoding)(struct ThalamusNode* node);
     enum ThalamusAnalogFormat (*format)(struct ThalamusNode* node, int channel);
     uint64_t (*encoded_count)(struct ThalamusNode* node);
+    /* Whether this message's channels differ from the previous message's
+       (count, names, formats or sample intervals). Only the first message
+       with analog data after a change reports it. Analog node version 5. */
+    char (*channels_changed)(struct ThalamusNode* node);
   };
 
   enum ThalamusImageFormat {
@@ -376,6 +380,9 @@ extern "C" {
     void (*node_get_node_disconnect)(struct ThalamusNodeGetConnection*); // 65
     void (*node_ready_disconnect)(struct ThalamusNodeReadyConnection*); // 66
 
+    /* Deprecated: channel changes are reported per message by
+       ThalamusAnalogNode::channels_changed. These remain for ABI
+       compatibility and do nothing; the connect callback is never called. */
     void (*node_channels_changed)(struct ThalamusNode*); // 67
 
     struct ThalamusNodeReadyConnection* (*node_channels_changed_connect)(struct ThalamusNode*, ThalamusNodeReadyCallback callback, void* data); // 68

@@ -584,13 +584,6 @@ int BrainProductsNode::num_channels() const {
   return int(impl->channel_names.size());
 }
 
-void BrainProductsNode::inject(
-    const thalamus::vector<std::span<double const>> &,
-    const thalamus::vector<std::chrono::nanoseconds> &,
-    const thalamus::vector<std::string_view> &) {
-  THALAMUS_ABORT("BrainProductsNode::inject not implemented");
-}
-
 std::chrono::nanoseconds BrainProductsNode::sample_interval(int channel) const {
   return impl->sample_intervals[size_t(channel)];
 }
