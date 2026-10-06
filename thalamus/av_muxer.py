@@ -1,20 +1,20 @@
 """Muxes a recorded MPEG4 video node and AAC audio node into one mp4 without
 re-encoding either.
 
-The video frames and the ADTS framed AAC are extracted to temporary files and
-stream copied by ffmpeg. Raw MPEG4 has no timestamps, so the video gets a
-constant frame rate: the average over the recording, which keeps both ends
-aligned with the record times. The audio is offset from the video by the
-difference between their first record times.
+Raw MPEG4 and ADTS framed AAC carry no usable timestamps, so they're set from
+the recording: each video frame is placed at its record time, and the audio,
+whose record times follow its sample count closely, is placed by sample count
+from its first record time. Both are relative to whichever stream starts
+first. Requires PyAV (pip install av).
 """
 from __future__ import annotations
 
 import sys
+import heapq
 import pathlib
 import argparse
-import fractions
 import tempfile
-import subprocess
+from fractions import Fraction
 
 from thalamus.thalamus_pb2 import AnalogResponse, Image
 from thalamus.record_reader2 import RecordReader
@@ -23,9 +23,15 @@ from thalamus.record_reader2 import RecordReader
 ADTS_SAMPLE_RATES = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350]
 
 # Samples of silence FFmpeg's AAC encoder puts before the first input sample.
-# ADTS has no field for it, so ffmpeg can't trim it and the audio is shifted
+# ADTS has no field for it, so it isn't trimmed and the audio is shifted
 # earlier by this much instead.
 AAC_PRIMING_SAMPLES = 1024
+
+# Samples per channel in an AAC frame.
+AAC_FRAME_SAMPLES = 1024
+
+# Timestamps are written in nanoseconds, as recorded; the muxer rescales them.
+NANOSECONDS = Fraction(1, 1_000_000_000)
 
 def adts_sample_rate(frame: bytes) -> int:
   return ADTS_SAMPLE_RATES[(frame[2] >> 2) & 0xF]
@@ -47,8 +53,12 @@ def main():
   parser.add_argument('-o', '--output', default='output.mp4', help='Output mp4')
   parser.add_argument('-v', '--video-node', help='Video node (default: the first node with images)')
   parser.add_argument('-a', '--audio-node', help='Audio node (default: the first node with AAC data)')
-  parser.add_argument('--ffmpeg', default='ffmpeg', help='ffmpeg executable')
   args = parser.parse_args()
+
+  try:
+    import av
+  except ImportError:
+    sys.exit('av_muxer needs PyAV: pip install av')
 
   with tempfile.TemporaryDirectory() as tmp:
     video_path = pathlib.Path(tmp) / 'video.m4v'
@@ -56,7 +66,6 @@ def main():
     video_node, audio_node = args.video_node, args.audio_node
     video_times: list[int] = []
     skipped_frames = 0
-    frame_interval = 0
     audio_first_time = None
     audio_rate = None
     audio_samples = 0
@@ -73,16 +82,14 @@ def main():
           image = record.image
           if image.format != Image.Format.MPEG4:
             sys.exit(f'{video_node} has {Image.Format.Name(image.format)} images, not MPEG4')
-          # A recording can start mid stream. ffmpeg drops frames before the
-          # first stream header, which would shift every later frame's
-          # timestamp, so the video starts at that header instead.
+          # A recording can start mid stream, and nothing before the first
+          # stream header can be decoded.
           data = b''.join(image.data)
           if not video_times and not has_vol_header(data):
             skipped_frames += 1
             continue
           video.write(data)
           video_times.append(record.time)
-          frame_interval = frame_interval or image.frame_interval
         elif body == 'analog':
           analog = record.analog
           if analog.encoding != AnalogResponse.Encoding.AAC:
@@ -106,35 +113,63 @@ def main():
     if audio_first_time is None or audio_rate is None:
       sys.exit(f'No AAC audio found{f" for {audio_node}" if audio_node else ""}')
 
-    if len(video_times) > 1:
-      duration = fractions.Fraction(video_times[-1] - video_times[0], 1_000_000_000)
-      fps = (fractions.Fraction(len(video_times) - 1) / duration).limit_denominator(1_000_000)
-    else:
-      fps = fractions.Fraction(1_000_000_000, frame_interval or 66_666_667).limit_denominator(1_000_000)
-
-    # Where the decoded audio's first sample (priming included) falls
-    # relative to the first video frame.
+    # Where the decoded audio's first sample (priming included) falls.
     audio_start = audio_first_time - AAC_PRIMING_SAMPLES * 1_000_000_000 // audio_rate
-    offset = (audio_start - video_times[0]) / 1e9
+    origin = min(video_times[0], audio_start)
 
-    video_input = ['-f', 'm4v', '-r', f'{fps.numerator}/{fps.denominator}', '-i', str(video_path)]
-    audio_input = ['-f', 'aac', '-i', str(audio_path)]
-    # Only delay the stream that starts later; a negative offset would make
-    # the other one start before zero.
-    if offset >= 0:
-      audio_input = ['-itsoffset', f'{offset:.6f}'] + audio_input
-    else:
-      video_input = ['-itsoffset', f'{-offset:.6f}'] + video_input
+    with av.open(str(video_path), format='m4v') as video_in, \
+         av.open(str(audio_path), format='aac') as audio_in, \
+         av.open(args.output, 'w', format='mp4', options={'movflags': '+faststart'}) as out:
+      video_out = out.add_stream_from_template(video_in.streams.video[0])
+      audio_out = out.add_stream_from_template(audio_in.streams.audio[0])
 
-    command = [args.ffmpeg, '-y', '-hide_banner', '-loglevel', 'warning'] \
-      + video_input + audio_input \
-      + ['-map', '0:v:0', '-map', '1:a:0', '-c', 'copy', '-movflags', '+faststart', args.output]
+      def video_packets():
+        # Each record holds one frame, so the parser's packets line up with
+        # video_times. There are no B-frames, so dts equals pts.
+        frames = 0
+        previous = None
+        for packet in video_in.demux(video_in.streams.video[0]):
+          if packet.size == 0:
+            continue
+          if frames >= len(video_times):
+            sys.exit(f'{video_node}: the stream has more frames than the recording has records')
+          ts = video_times[frames] - origin
+          # Timestamps must increase even if two records share a time.
+          if previous is not None and ts <= previous:
+            ts = previous + 1
+          previous = ts
+          packet.time_base = NANOSECONDS
+          packet.pts = packet.dts = ts
+          packet.stream = video_out
+          yield ts, 0, packet
+          frames += 1
+        if frames != len(video_times):
+          sys.exit(f'{video_node}: found {frames} frames in the stream but {len(video_times)} records')
 
-    print(f'video: {video_node}, {len(video_times)} frames at {float(fps):.4f} fps'
+      def audio_packets():
+        audio_offset = audio_start - origin
+        samples = 0
+        for packet in audio_in.demux(audio_in.streams.audio[0]):
+          if packet.size == 0:
+            continue
+          ts = audio_offset + samples * 1_000_000_000 // audio_rate
+          packet.time_base = NANOSECONDS
+          packet.pts = packet.dts = ts
+          packet.duration = AAC_FRAME_SAMPLES * 1_000_000_000 // audio_rate
+          packet.stream = audio_out
+          yield ts, 1, packet
+          samples += AAC_FRAME_SAMPLES
+
+      # Interleaved by time, so the muxer doesn't buffer one stream while
+      # waiting for the other.
+      for _, _, packet in heapq.merge(video_packets(), audio_packets(), key=lambda p: (p[0], p[1])):
+        out.mux(packet)
+
+    duration = (video_times[-1] - video_times[0]) / 1e9
+    print(f'video: {video_node}, {len(video_times)} frames over {duration:.2f}s'
           + (f', skipped {skipped_frames} before the first keyframe' if skipped_frames else ''))
     print(f'audio: {audio_node}, {audio_samples} samples at {audio_rate} Hz ({audio_samples / audio_rate:.2f}s)')
-    print(f'audio starts {offset * 1000:+.1f} ms from video')
-    subprocess.run(command, check=True)
+    print(f'audio starts {(audio_start - video_times[0]) / 1e6:+.1f} ms from video')
     print(f'wrote {args.output}')
 
 if __name__ == '__main__':

@@ -139,6 +139,11 @@ ABI. Rules:
   thalamus-contrib's MEDIA_CONVERTER: f64 stats channels plus i16 audio). The
   `graph` and spectrogram RPCs use `visit_channel`; storage, lua and
   samplemonitor still use `visit_node`.
+- `AnalogNode::channels_changed()` is true on the first message whose
+  channels (count, names, formats or sample intervals) differ from the
+  previous one's; nodes pass it through `inject_analog(..., channels_changed)`.
+  Subscribers check it on every message and treat the first message they see
+  as changed.
 - On the wire, `Span.format` gives each channel's format. `Double` is 0, so
   records written before the field existed still read correctly: use
   `span_format()` in `analog_proto.hpp`, which falls back to
@@ -233,6 +238,11 @@ ABI. Rules:
   Scanning the crashing thread's stack for addresses inside `native.exe` and
   plugins gives an approximate backtrace (stale frames included).
 - `python -m thalamus.av_muxer -i <recording> -o out.mp4` muxes a recorded
-  MPEG4 video node and AAC audio node without re-encoding (constant frame
-  rate at the recording's average, AAC priming compensated). Recordings can
+  MPEG4 video node and AAC audio node without re-encoding. It needs PyAV
+  (`pip install av`, not a package dependency). Each video frame is placed
+  at its record time (webcam frame rates wander, so a constant rate drifts
+  by up to a second mid-recording even when both ends line up), and the
+  audio by sample count from its first record time, AAC priming
+  compensated. The ffmpeg CLI can't do this: with stream copy it times raw
+  MPEG4 by the time base in the stream and ignores `-r`. Recordings can
   start mid-GOP; frames before the first MPEG4 VOL header are skipped.
