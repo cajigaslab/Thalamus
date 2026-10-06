@@ -1485,6 +1485,10 @@ struct ThalamusAPIImpl {
     TRACE_EVENT_END("plugin");
   }
 
+  static void trace_event_begin_static(const char* name) {
+    TRACE_EVENT_BEGIN("plugin", perfetto::StaticString(name));
+  }
+
   static ThalamusSerialPort* serial_port_create() {
     auto result = new ThalamusSerialPort{
       boost::asio::serial_port(*io_context),
@@ -2185,7 +2189,8 @@ public:
     thalamus_api.state_remove_at_name = ThalamusAPIImpl::state_remove_at_name;
     thalamus_api.state_remove_at_index = ThalamusAPIImpl::state_remove_at_index;
     thalamus_api.analog_node_version = ThalamusAPIImpl::analog_node_version;
-    thalamus_api.version = 140;
+    thalamus_api.trace_event_begin_static = ThalamusAPIImpl::trace_event_begin_static;
+    thalamus_api.version = 141;
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},

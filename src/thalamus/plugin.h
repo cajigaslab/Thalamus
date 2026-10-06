@@ -481,6 +481,11 @@ extern "C" {
     //The number of pointers after the ThalamusAnalogNode::name field in the analog nodes Thalamus provides
     //to plugins, the host side counterpart of thalamus_get_analog_node_version.
     int32_t (*analog_node_version)(void); // 140
+
+    //Like trace_event_begin, but name is a NUL terminated string that must stay valid and unchanged while
+    //the plugin is loaded: Perfetto interns it by address, so it's written to the trace once and later
+    //events refer to it by id. End the event with trace_event_end.
+    void (*trace_event_begin_static)(const char* name); // 141
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories_t)(struct ThalamusAPI*);

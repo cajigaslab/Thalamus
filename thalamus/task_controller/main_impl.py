@@ -98,6 +98,7 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument('-y', '--pypipeline', action='store_true', help='Use Python data pipeline implementation')
   parser.add_argument('-r', '--remote-executor', action='store_true',
                       help='Send task configs to remote ROS node to execute')
+  parser.add_argument('-C', '--contrib', action='store_true', help='Equivalent to --ext thalamus.contrib')
   parser.add_argument('--ext', help='Extension Module')
   parser.add_argument('--wait-for-pipeline', action='store_true', help='Don\'t start pipeline, wait for something else to launch it')
   parser.add_argument('--open', action='store_true', help='Bind GRPC servers to 0.0.0.0 instead of localhost only')
@@ -135,8 +136,12 @@ async def async_main() -> None:
 
   ext_widgets = {}
   ext_library = None
-  if arguments.ext is not None:
-    ext_module = importlib.import_module(arguments.ext)
+  if arguments.contrib:
+    extension_module = 'thalamus.contrib'
+  else:
+    extension_module = arguments.ext
+  if extension_module is not None:
+    ext_module = importlib.import_module(extension_module)
     if hasattr(ext_module, 'widgets'):
       ext_widgets.update(ext_module.widgets())
     if hasattr(ext_module, 'library'):
