@@ -53,6 +53,7 @@ from .tasks import add_tasks
 from .. import usersettings
 from .. import dotnet_runtime
 from .. import grpc_tls
+from .. import openh264
 
 UNHANDLED_EXCEPTION: typing.List[Exception] = []
 
@@ -176,6 +177,9 @@ async def async_main() -> None:
   for node in config['nodes']:
     if 'Running' in node:
       node['Running'] = False
+  # Cisco's OpenH264 binary, for thalamus-contrib's H.264 encoding, unless the
+  # user opted out. Doesn't wait for the download.
+  openh264.download_in_background()
 
   cache_manager = CacheManager(config)
 

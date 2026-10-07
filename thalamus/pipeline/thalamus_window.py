@@ -29,6 +29,7 @@ from .channel_picker_widget import ChannelPickerWidget
 from .ros2_widget import Ros2Widget
 from .algebra_widget import AlgebraWidget
 from .channel_viewer import ChannelViewerWidget
+from .openh264_dialog import OpenH264Dialog
 from .xsens_widget import XsensEditorWidget
 from .lua_widget import LuaWidget
 from .log_widget import LogWidget
@@ -1745,6 +1746,9 @@ class ThalamusWindow(QMainWindow):
     settingsmenu = menubar.addMenu('Settings')
     settingsmenu.addAction('Persistence').triggered.connect(self.on_persistence)
 
+    preferencesmenu = menubar.addMenu('Preferences')
+    preferencesmenu.addAction('H264').triggered.connect(self.on_h264_preferences)
+
     about_response = await self.stub.about(thalamus_pb2.Empty())
     self.about = about_response.text
 
@@ -1763,6 +1767,12 @@ class ThalamusWindow(QMainWindow):
 
   def on_about(self):
     QMessageBox.about(self, "About Thalamus", self.about)
+
+  def on_h264_preferences(self):
+    dialog = OpenH264Dialog(self)
+    dialog.resize(self.width()//2, self.height()//2)
+    dialog.show()
+    self.h264_dialog = dialog
 
   def on_persistence(self):
     if 'Persistence' not in self.state:

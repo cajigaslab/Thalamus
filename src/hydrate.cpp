@@ -374,6 +374,7 @@ static DataCount count_data(const std::string &filename,
       case thalamus_grpc::Image::Format::Image_Format_MJPEG:
       case thalamus_grpc::Image::Format::Image_Format_MPEG1:
       case thalamus_grpc::Image::Format::Image_Format_MPEG4:
+      case thalamus_grpc::Image::Format::Image_Format_H264:
       case thalamus_grpc::Image::Format::
           Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
       case thalamus_grpc::Image::Format::
@@ -546,6 +547,7 @@ int generate_video(boost::program_options::variables_map &vm) {
         case thalamus_grpc::Image::Format::Image_Format_MJPEG:
           video_format = "mjpeg";
           break;
+        case thalamus_grpc::Image::Format::Image_Format_H264:
         case thalamus_grpc::Image::Format::
             Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
         case thalamus_grpc::Image::Format::
@@ -729,6 +731,7 @@ int generate_video(boost::program_options::variables_map &vm) {
         case thalamus_grpc::Image::Format::Image_Format_MPEG4:
           in.write(image.data(0).data(), int64_t(image.data(0).size()));
           break;
+        case thalamus_grpc::Image::Format::Image_Format_H264:
         case thalamus_grpc::Image::Format::
             Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
         case thalamus_grpc::Image::Format::
@@ -1504,6 +1507,7 @@ int main(int argc, char **argv) {
         }
         case thalamus_grpc::Image::Format::Image_Format_MPEG1:
         case thalamus_grpc::Image::Format::Image_Format_MPEG4:
+        case thalamus_grpc::Image::Format::Image_Format_H264:
         case thalamus_grpc::Image::Format::
             Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
         case thalamus_grpc::Image::Format::

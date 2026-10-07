@@ -592,6 +592,7 @@ struct StorageNode::Impl {
           break;
         case thalamus_grpc::Image::Format::Image_Format_MPEG1:
         case thalamus_grpc::Image::Format::Image_Format_MPEG4:
+        case thalamus_grpc::Image::Format::Image_Format_H264:
         case thalamus_grpc::Image::Format::
             Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
         case thalamus_grpc::Image::Format::
@@ -951,6 +952,7 @@ struct StorageNode::Impl {
             case thalamus_grpc::Image::Format::Image_Format_RGB16:
             case thalamus_grpc::Image::Format::Image_Format_MPEG1:
             case thalamus_grpc::Image::Format::Image_Format_MPEG4:
+            case thalamus_grpc::Image::Format::Image_Format_H264:
             case thalamus_grpc::Image::Format::
                 Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
             case thalamus_grpc::Image::Format::

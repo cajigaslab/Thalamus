@@ -333,6 +333,9 @@ struct Storage2Node::Impl {
       case ImageNode::Format::MPEG4:
         body->set_format(thalamus_grpc::Image::Format::Image_Format_MPEG4);
         break;
+      case ImageNode::Format::H264:
+        body->set_format(thalamus_grpc::Image::Format::Image_Format_H264);
+        break;
       }
 
       for (auto i = 0; i < int(locked_analog->num_planes()); ++i) {
@@ -1257,8 +1260,10 @@ struct Storage2Node::Impl {
             case thalamus_grpc::Image::Format::Image_Format_RGB16:
               format = image.bigendian() ? AV_PIX_FMT_RGB48BE : AV_PIX_FMT_RGB48LE;
               break;
+            // Already compressed: stored as is.
             case thalamus_grpc::Image::Format::Image_Format_MPEG1:
             case thalamus_grpc::Image::Format::Image_Format_MPEG4:
+            case thalamus_grpc::Image::Format::Image_Format_H264:
               use_identity_encoder = true;
               break;
             case thalamus_grpc::Image::Format::Image_Format_MJPEG:

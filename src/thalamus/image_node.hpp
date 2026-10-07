@@ -21,7 +21,9 @@ public:
     MJPEG,
     Gray16,
     RGB16,
-    MPEG4
+    MPEG4,
+    // Encoded H.264 (Annex B); Thalamus passes it along but has no codec for it.
+    H264
   };
   virtual ~ImageNode();
   virtual Plane plane(int) const = 0;

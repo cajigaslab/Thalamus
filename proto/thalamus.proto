@@ -212,6 +212,8 @@ message Image {
     NV12 = 9;
     BGR = 10;
     MJPEG = 11;
+    // Enum only: Thalamus itself has no H.264 codec.
+    H264 = 12;
   }
   repeated bytes data = 1;
   uint32 width = 2;

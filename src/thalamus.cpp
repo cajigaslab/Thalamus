@@ -345,6 +345,13 @@ int main(int argc, char **argv) {
     cfg.add_buffers()->set_size_kb(1024 * 1024); // Record up to 1 MiB.
     cfg.set_output_path("thalamus_" + start_time_str + ".perfetto-trace");
     cfg.set_write_into_file(true);
+    // Threads' events only reach the trace buffer once their chunk of the
+    // shared memory buffer fills, or on a flush. Without periodic flushes a
+    // thread that traces rarely (e.g. the main thread) loses everything when
+    // Thalamus exits without stopping the session (a crash or a kill), so
+    // flush every second and write the buffer to the file as often.
+    cfg.set_flush_period_ms(1000);
+    cfg.set_file_write_period_ms(1000);
     auto *ds_cfg = cfg.add_data_sources()->mutable_config();
     ds_cfg->set_name("track_event");
 
