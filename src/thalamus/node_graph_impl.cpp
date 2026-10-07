@@ -409,6 +409,8 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
       return ImageNode::Format::RGB16;
     case ThalamusImageFormat_MPEG4:
       return ImageNode::Format::MPEG4;
+    case ThalamusImageFormat_H264:
+      return ImageNode::Format::H264;
     case ThalamusImageFormat_MPEG1:
       THALAMUS_ABORT("MPEG1 is no longer supported");
     }
@@ -758,6 +760,8 @@ static ThalamusImageFormat plugin_image_format(struct ThalamusNode* node) {
     return ThalamusImageFormat_RGB16;
   case ImageNode::Format::MPEG4:
     return ThalamusImageFormat_MPEG4;
+  case ImageNode::Format::H264:
+    return ThalamusImageFormat_H264;
   }
 }
 
@@ -833,6 +837,9 @@ struct ThalamusAPIImpl {
 
   static std::mutex* mutex;
   static std::map<Node*, ThalamusNode*>* node_cpp_to_c;
+  // The root of the state tree, which the node list belongs to. Held while
+  // the node graph exists; returned by state_root.
+  static ObservableCollection::Value* root;
   static std::map<ThalamusNode*, Node*>* node_c_to_cpp;
 
   static boost::asio::io_context* io_context;
@@ -1374,6 +1381,10 @@ struct ThalamusAPIImpl {
     return get_state_ref(parent_value);
   }
 
+  static struct ThalamusState* state_root() {
+    return root ? get_state_ref(*root) : nullptr;
+  }
+
   static struct ThalamusStateIter* state_iter_create(struct ThalamusState* state) {
     if(std::holds_alternative<ObservableDictPtr>(state->value)) {
       auto value = std::get<ObservableDictPtr>(state->value);
@@ -1908,6 +1919,7 @@ NodeGraphImpl* ThalamusAPIImpl::node_graph = nullptr;
 std::mutex* ThalamusAPIImpl::mutex = nullptr;
 std::map<Node*, ThalamusNode*>* ThalamusAPIImpl::node_cpp_to_c = nullptr;
 std::map<ThalamusNode*, Node*>* ThalamusAPIImpl::node_c_to_cpp = nullptr;
+ObservableCollection::Value* ThalamusAPIImpl::root = nullptr;
 
 struct ExtNodeFactory : public INodeFactory {
   int version;
@@ -2014,6 +2026,19 @@ public:
     ThalamusAPIImpl::mutex = new std::mutex();
     ThalamusAPIImpl::node_cpp_to_c = new std::map<Node*, ThalamusNode*>();
     ThalamusAPIImpl::node_c_to_cpp = new std::map<ThalamusNode*, Node*>();
+    {
+      ObservableCollection* top = nodes.get();
+      while (top->parent != nullptr) {
+        top = top->parent;
+      }
+      ObservableList* list;
+      ObservableDict* dict;
+      if ((dict = top->as_dict())) {
+        ThalamusAPIImpl::root = new ObservableCollection::Value(dict->shared_from_this());
+      } else if ((list = top->as_list())) {
+        ThalamusAPIImpl::root = new ObservableCollection::Value(list->shared_from_this());
+      }
+    }
     ThalamusAPIImpl::io_context = &io_context;
     ThalamusAPIImpl::node_graph = _outer;
 
@@ -2190,7 +2215,8 @@ public:
     thalamus_api.state_remove_at_index = ThalamusAPIImpl::state_remove_at_index;
     thalamus_api.analog_node_version = ThalamusAPIImpl::analog_node_version;
     thalamus_api.trace_event_begin_static = ThalamusAPIImpl::trace_event_begin_static;
-    thalamus_api.version = 141;
+    thalamus_api.state_root = ThalamusAPIImpl::state_root;
+    thalamus_api.version = 142;
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},
@@ -2322,6 +2348,8 @@ public:
 
     delete ThalamusAPIImpl::cpp_to_c;
     delete ThalamusAPIImpl::c_to_cpp;
+    delete ThalamusAPIImpl::root;
+    ThalamusAPIImpl::root = nullptr;
   }
 
   void clean_signals() {

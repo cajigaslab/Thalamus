@@ -91,6 +91,10 @@ ABI. Rules:
   - For structs Thalamus provides to plugins (e.g. `ThalamusAnalogNode` for
     C++ nodes), the host reports its version through an API function
     (`ThalamusAPI::analog_node_version`), so plugins can check it.
+- `state_root()` (slot 142) returns a new reference to the root of the state
+  tree (the whole config), which `ThalamusAPIImpl` holds while the node graph
+  exists. Plugins on an older Thalamus walk `state_parent` from any state
+  until it returns null.
 - Spans returned through the API are borrowed and only valid during the
   `ready`/`get_node` callback.
 - A node with a modality doesn't have that data in every message (an image
@@ -132,6 +136,29 @@ ABI. Rules:
   removed before the posted delivery runs, so check `lock()`. The plugin C
   API (`node_get_node`) wraps whatever it receives, so a null there reaches
   the plugin as a wrapper around a null node.
+
+## Image formats
+
+- `H264` (protobuf `Image.Format`, `ThalamusImageFormat_H264` in `plugin.h`,
+  `ImageNode::Format::H264`) is Annex B H.264, one frame per message. It's an
+  enum only: Thalamus passes it through nodes, gRPC and remote nodes, but has
+  no H.264 codec, so hydrate, the record reader, STORAGE's encoder and the
+  image viewer treat it as unsupported (STORAGE2 records it as is).
+  thalamus-contrib's
+  MEDIA_CONVERTER encodes and decodes it.
+- thalamus-contrib encodes H.264 with Cisco's OpenH264 binary, which isn't
+  shipped: Cisco's H.264 patent license only covers it when it's downloaded
+  separately and users can turn it off. `thalamus/openh264.py` downloads it
+  into `~/.thalamus` at pipeline and task controller startup (HTTP only,
+  retried, checked against pinned SHA-256s). Preferences > H264
+  (`pipeline/openh264_dialog.py`) is the required control, with Cisco's
+  attribution next to it and the full `BINARY_LICENSE.txt` text. Opting out
+  only creates `~/.thalamus/.no_openh264`; while it exists, startup deletes
+  the binary (before native.exe loads it) instead of downloading it, so a
+  running Thalamus keeps encoding until it's restarted. Opting in deletes the
+  marker and downloads. thalamus-contrib uses the binary whenever it's
+  present.
+- STORAGE2 records H264, like MPEG4, as is (identity encoder).
 
 ## Analog data
 
@@ -236,6 +263,11 @@ ABI. Rules:
   -s '{"name": "Node 2", "type": "NONE"}'` to add a node). `-p` alone prints
   the value. `--contrib` on `thalamus.pipeline` loads thalamus-contrib (put
   its `src` first on `PYTHONPATH` to use a development build).
+- `--trace` (`-t` on `thalamus.pipeline`) records a Perfetto trace to
+  `thalamus_<time>.perfetto-trace` in the working directory. The session
+  flushes every second, so a crashed or killed Thalamus keeps all but the
+  last second of every thread's events (without flushes, threads that trace
+  rarely, like main, lost everything).
 - Native crashes leave Crashpad minidumps in
   `~/thalamus_crashes/reports/`. lldb crashes loading `native.pdb`; instead
   read the exception address from the dump (parse its exception and module
