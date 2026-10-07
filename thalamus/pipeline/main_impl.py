@@ -82,7 +82,7 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument('-p', '--port', type=int, default=50050, help='GRPC port')
   parser.add_argument('-u', '--ui-port', type=int, default=50051, help='UI GRPC port')
   parser.add_argument('-d', '--dotnet-port', type=int, default=50052, help='dotnet GRPC port')
-  parser.add_argument('--contrib', action='store_true', help='Equivalent to --ext thalamus.contrib')
+  parser.add_argument('-C', '--contrib', action='store_true', help='Equivalent to --ext thalamus.contrib')
   parser.add_argument('--ext', help='Extension Module')
   parser.add_argument('--wait-for-pipeline', action='store_true', help='Don\'t start pipeline, wait for something else to launch it')
   parser.add_argument('--no-gpu', action='store_true', help='Disable pipeline GPU usage')

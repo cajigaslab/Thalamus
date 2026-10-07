@@ -36,10 +36,12 @@ extern "C" {
 
 namespace thalamus {
 struct LuaNode::Impl {
+  // Reported by channels_changed() on the next message with analog data,
+  // then cleared.
+  bool analog_channels_changed = true;
   ObservableDictPtr state;
   boost::signals2::scoped_connection state_connection;
   std::map<std::string, boost::signals2::scoped_connection> sources_connections;
-  boost::signals2::scoped_connection channels_connection;
   size_t buffer_size;
   // double sample_rate;
   size_t counter = 0;
@@ -228,17 +230,17 @@ public:
         if (!source) {
           return;
         }
-        channels_connection = source->channels_changed.connect([&](auto) {
-          channels_changed = true;
-          outer->channels_changed(outer);
-        });
         channels_changed = true;
-        outer->channels_changed(outer);
+        analog_channels_changed = true;
         source_connection = locked->ready.connect([&](auto) {
           //TRACE_EVENT("thalamus", "LuaNode::on_data");
           TraceOnData trace_on_data;
           if (!source->has_analog_data()) {
             return;
+          }
+          if (source->channels_changed()) {
+            channels_changed = true;
+            analog_channels_changed = true;
           }
           auto num_channels = source->num_channels();
 
@@ -334,6 +336,7 @@ public:
           time = source->time();
           TraceReady trace_ready;
           outer->ready(outer);
+          analog_channels_changed = false;
         });
       });
     } else if (key_str == "Equations") {
@@ -367,6 +370,10 @@ std::span<const double> LuaNode::data(int channel) const {
   }
 }
 
+bool LuaNode::channels_changed() const {
+  return impl->analog_channels_changed;
+}
+
 int LuaNode::num_channels() const { return int(impl->data.size()); }
 
 std::string_view LuaNode::name(int channel) const {
@@ -383,12 +390,6 @@ std::span<const std::string> LuaNode::get_recommended_channels() const {
 
 std::chrono::nanoseconds LuaNode::sample_interval(int channel) const {
   return impl->sample_intervals.at(size_t(channel));
-}
-
-void LuaNode::inject(const thalamus::vector<std::span<double const>> &,
-                     const thalamus::vector<std::chrono::nanoseconds> &,
-                     const thalamus::vector<std::string_view> &) {
-  THALAMUS_ASSERT(false, "Unimplemented");
 }
 
 bool LuaNode::has_analog_data() const { return true; }

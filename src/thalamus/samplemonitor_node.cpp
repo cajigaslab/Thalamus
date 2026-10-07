@@ -9,6 +9,9 @@
 
 namespace thalamus {
 struct SampleMonitorNode::Impl {
+  // Reported by channels_changed() on the next message with analog data,
+  // then cleared.
+  bool analog_channels_changed = true;
   ObservableDictPtr state;
   ObservableListPtr nodes;
   boost::signals2::scoped_connection state_connection;
@@ -23,7 +26,6 @@ struct SampleMonitorNode::Impl {
     NodeGraph *graph;
     boost::signals2::scoped_connection get_node_connection;
     boost::signals2::scoped_connection data_connection;
-    boost::signals2::scoped_connection changed_connection;
     bool changed = true;
 
     std::vector<std::string> names;
@@ -38,7 +40,6 @@ struct SampleMonitorNode::Impl {
     void set_name(const std::string& name) {
       node_name = name;
       data_connection.release();
-      changed_connection.release();
       get_node_connection = graph->get_node_scoped(name, [&](auto weak) {
         auto node = weak.lock();
         auto analog_node = node_cast<AnalogNode*>(node.get());
@@ -46,13 +47,12 @@ struct SampleMonitorNode::Impl {
           return;
         }
 
-        changed_connection = analog_node->channels_changed.connect([&](auto) {
-          changed = true;
-        });
-
         data_connection = node->ready.connect([&,analog_node](Node*) {
           if(!analog_node->has_analog_data()) {
             return;
+          }
+          if(analog_node->channels_changed()) {
+            changed = true;
           }
 
           auto num_channels = size_t(analog_node->num_channels());
@@ -122,7 +122,7 @@ public:
       num_channels += connection.counts.size();
     }
     if(changed) {
-      outer->channels_changed(outer);
+      analog_channels_changed = true;
       changed = false;
     }
 
@@ -172,6 +172,7 @@ public:
     }
 
     outer->ready(outer);
+    analog_channels_changed = false;
 
     last_publish = time;
     timer.expires_after(interval);
@@ -254,6 +255,10 @@ std::span<const double> SampleMonitorNode::data(int channel) const {
   return std::span<const double>(); 
 }
 
+bool SampleMonitorNode::channels_changed() const {
+  return impl->analog_channels_changed;
+}
+
 int SampleMonitorNode::num_channels() const { return int(impl->measured.size() + impl->expected.size() + impl->difference.size()); }
 
 std::string_view SampleMonitorNode::name(int channel) const {
@@ -266,12 +271,6 @@ std::span<const std::string> SampleMonitorNode::get_recommended_channels() const
 
 std::chrono::nanoseconds SampleMonitorNode::sample_interval(int) const {
   return 0s;
-}
-
-void SampleMonitorNode::inject(const thalamus::vector<std::span<double const>> &,
-                     const thalamus::vector<std::chrono::nanoseconds> &,
-                     const thalamus::vector<std::string_view> &) {
-  THALAMUS_ASSERT(false, "Unimplemented");
 }
 
 bool SampleMonitorNode::has_analog_data() const { return true; }

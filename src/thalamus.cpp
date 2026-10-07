@@ -435,15 +435,17 @@ int main(int argc, char **argv) {
       server->Shutdown();
       grpc_thread.join();
       node_graph->predrop([&] {
-        boost::asio::post(io_context, [&] {
-          node_graph.reset();
-          io_context.stop();
-        });
+        boost::asio::post(io_context, [&] { io_context.stop(); });
       });
     };
 
     ImageViewer::setup();
     io_context.run();
+    // Nodes are destroyed with the io_context stopped, so nothing they post
+    // while being destroyed (e.g. a plugin thread's last post_to_main) runs
+    // after the node graph and the state it refers to are gone. Before
+    // ImageViewer::teardown, which node viewers need while they close.
+    node_graph.reset();
     ImageViewer::teardown();
     THALAMUS_LOG(info) << "Shutting down";
 

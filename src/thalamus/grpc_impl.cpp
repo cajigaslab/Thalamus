@@ -13,6 +13,7 @@
 #pragma clang diagnostic pop
 #endif
 #include <thalamus/grpc_impl.hpp>
+#include <thalamus/analog_proto.hpp>
 #include <thalamus/h5handle.hpp>
 #include <thalamus/image_node.hpp>
 #include <thalamus/modalities_util.hpp>
@@ -228,7 +229,6 @@ struct Service::Impl {
 
   struct AnalogSession : public NodeSession<AnalogNode, thalamus_grpc::AnalogResponse> {
 
-    boost::signals2::scoped_connection channels_changed_connection;
     boost::signals2::scoped_connection ready_connection;
     const ::thalamus_grpc::AnalogRequest request;
     std::vector<size_t> channels;
@@ -236,14 +236,19 @@ struct Service::Impl {
     std::set<std::string> specified_channel_names;
     bool channels_specified;
     bool channels_changed = true;
+    // False for channel_info: a message is sent only when the channels
+    // change, describing them (names, formats, sample intervals) without
+    // samples.
+    bool send_samples;
     std::vector<double> workspace;
 
-  AnalogSession(NodeGraph& graph, boost::asio::io_context& _io_context, ::grpc::CallbackServerContext& _context, const ::thalamus_grpc::AnalogRequest *_request, ContextGuard&& guard)
+  AnalogSession(NodeGraph& graph, boost::asio::io_context& _io_context, ::grpc::CallbackServerContext& _context, const ::thalamus_grpc::AnalogRequest *_request, ContextGuard&& guard, bool _send_samples = true)
   : NodeSession<AnalogNode, thalamus_grpc::AnalogResponse>(graph, _io_context, _context, _request->node(), std::move(guard))
     , request(*_request)
     , specified_channel_ids(_request->channels().begin(), _request->channels().end())
     , specified_channel_names(_request->channel_names().begin(), _request->channel_names().end())
-    , channels_specified(!_request->channels().empty() || !_request->channel_names().empty()) {
+    , channels_specified(!_request->channels().empty() || !_request->channel_names().empty())
+    , send_samples(_send_samples) {
       THALAMUS_LOG(trace) << "Create AnalogSession";
     }
 
@@ -251,17 +256,6 @@ struct Service::Impl {
 
     void subscribe() override {
       THALAMUS_LOG(trace) << "got node";
-      using channels_changed_signal_type = decltype(typed_node->channels_changed);
-      channels_changed_connection = typed_node->channels_changed.connect(channels_changed_signal_type::slot_type([&,c_state=state](const AnalogNode *) {
-        std::lock_guard<std::mutex> lock(c_state->mutex);
-        if(c_state->joining) {
-          THALAMUS_LOG(trace) << "channels_changed_connection joined";
-          return;
-        }
-        
-        channels_changed = true;
-      }));
-
       ready_connection = node::connect_ready_multithreaded(this->raw_node.get(), [&,c_state=state](const Node *) {
         std::lock_guard<std::mutex> lock(c_state->mutex);
         if(c_state->joining) {
@@ -272,10 +266,17 @@ struct Service::Impl {
         if (!typed_node->has_analog_data()) {
           return;
         }
+        // Starts true, since the first message seen may not be flagged.
+        if (typed_node->channels_changed()) {
+          channels_changed = true;
+        }
         
         TRACE_EVENT("thalamus", "Service::analog(on ready)");
         ::thalamus_grpc::AnalogResponse response;
 
+        if (!send_samples && !channels_changed) {
+          return;
+        }
         response.set_channels_changed(channels_changed);
         response.set_time(size_t(typed_node->time().count()));
         response.set_remote_time(size_t(typed_node->remote_time().count()));
@@ -298,12 +299,37 @@ struct Service::Impl {
           channels_changed = false;
         }
 
+        if (!send_samples) {
+          for (auto channel : channels) {
+            if (channel >= num_channels) {
+              continue;
+            }
+            auto span = response.add_spans();
+            auto name = typed_node->name(int(channel));
+            span->set_name(name.data(), name.size());
+            span->set_format(to_proto(typed_node->analog_format(int(channel))));
+            response.add_sample_intervals(
+                uint64_t(typed_node->sample_interval(int(channel)).count()));
+          }
+          ServerWriteReactor<::thalamus_grpc::AnalogResponse>::send(std::move(response));
+          return;
+        }
+
+        auto native = request.native_formats();
         auto is_transformed = typed_node->is_transformed();
         for (auto c = 0u; c < channels.size(); ++c) {
           auto channel = channels[c];
           if (channel >= num_channels) {
             continue;
           }
+          if (native) {
+            append_native_channel(response, *typed_node, int(channel));
+            continue;
+          }
+
+          // Every array-backed channel is converted to scaled doubles in
+          // data. Encoded channels can't be, so they're marked Encoded with
+          // an empty range and their samples stay in the buffer.
           auto span = response.add_spans();
           span->set_begin(uint32_t(response.data_size()));
           auto name = typed_node->name(int(channel));
@@ -312,8 +338,7 @@ struct Service::Impl {
           response.add_sample_intervals(
               uint64_t(typed_node->sample_interval(int(channel)).count()));
 
-          visit_node(typed_node, [&](auto wrapper) {
-            auto data = wrapper->data(int(channel));
+          auto has_samples = visit_channel(typed_node, int(channel), [&](auto data) {
             workspace.assign(data.begin(), data.end());
             if(is_transformed) {
               auto scale = typed_node->scale(int(channel));
@@ -322,22 +347,33 @@ struct Service::Impl {
             }
             response.mutable_data()->Add(workspace.begin(), workspace.end());
           });
+          if (!has_samples) {
+            span->set_format(thalamus_grpc::Span::Format::Span_Format_Encoded);
+          }
 
           span->set_end(uint32_t(response.data_size()));
         }
+
+        if (native) {
+          finish_native(response, *typed_node);
+        } else {
+          set_encoded(response, *typed_node);
+        }
+
 
         ServerWriteReactor<::thalamus_grpc::AnalogResponse>::send(std::move(response));
       });
       raw_node.reset();
 
       timer.expires_after(1s);
-      timer.async_wait(std::bind(&AnalogSession::on_timer_check_expired, this, _1));
+      timer.async_wait(std::bind(&AnalogSession::on_timer_check_expired, this, _1, state));
     }
   };
 
   ::grpc::ServerWriteReactor<::thalamus_grpc::AnalogResponse>* analog(::grpc::CallbackServerContext* context,
-                        const ::thalamus_grpc::AnalogRequest *request) {
-    auto result = new AnalogSession(node_graph, io_context, *context, request, ContextGuard(this->outer, context));
+                        const ::thalamus_grpc::AnalogRequest *request,
+                        bool send_samples = true) {
+    auto result = new AnalogSession(node_graph, io_context, *context, request, ContextGuard(this->outer, context), send_samples);
     result->start();
     return result;
   }
@@ -532,69 +568,335 @@ Service::get_type_name(::grpc::ServerContext *,
   return ::grpc::Status::OK;
 }
 
-::grpc::Status
-Service::node_request(::grpc::ServerContext *,
-                      const ::thalamus_grpc::NodeRequest *request,
-                      ::thalamus_grpc::NodeResponse *response) {
-  auto weak = impl->node_graph.get_node(request->node());
-  auto node = weak.lock();
-  if (!node) {
-    return ::grpc::Status::OK;
+// Whether `selector` can match a node: it names a node, a type, or both.
+// NodeGraph never resolves one that can't, so requests with such a selector
+// are answered BAD_SELECTOR instead of waiting.
+static bool valid_node_selector(const thalamus_grpc::NodeSelector &selector) {
+  return !selector.name().empty() || !selector.type().empty();
+}
+
+class NodeRequestReactor : public ::grpc::ServerUnaryReactor {
+public:
+  struct State {
+    boost::asio::steady_timer timer;
+    std::mutex mutex;
+    // Set, under mutex, by whichever path finishes the call. Finish is then
+    // called once that path releases the mutex; after that nothing may touch
+    // the reactor (OnDone deletes it) or the request and response (gRPC
+    // releases them). Every path checks it before using any of them.
+    bool finished = false;
+    bool found = false;
+    boost::signals2::scoped_connection connection;
+    State(boost::asio::io_context& ioc) : timer(ioc) {}
+  };
+  std::shared_ptr<State> state;
+  boost::asio::io_context& io_context;
+
+  NodeRequestReactor(boost::asio::io_context& ioc) : state(std::make_shared<State>(ioc)), io_context(ioc) {}
+
+  void OnDone() override {
+    delete this;
   }
 
-  auto parsed = boost::json::parse(request->json());
-  std::promise<boost::json::value> promise;
-  boost::asio::post(impl->io_context, [&] {
-    node->process(parsed, [&] (auto& result) {
-      promise.set_value(result);
+  void OnCancel() override {
+    {
+      std::lock_guard<std::mutex> lock(state->mutex);
+      if(state->finished) {
+        return;
+      }
+      state->finished = true;
+    }
+    // The node lookup and the timer belong to io_context. Release them there
+    // so a node that never appears doesn't keep the state alive.
+    boost::asio::post(io_context, [c_state=state] {
+      std::lock_guard<std::mutex> lock(c_state->mutex);
+      c_state->connection.disconnect();
+      c_state->timer.cancel();
+    });
+    Finish(::grpc::Status::CANCELLED);
+  }
+};
+
+::grpc::ServerUnaryReactor*
+Service::node_request(::grpc::CallbackServerContext *,
+                      const ::thalamus_grpc::NodeRequest *request,
+                      ::thalamus_grpc::NodeResponse *response) {
+  auto reactor = new NodeRequestReactor(impl->io_context);
+  auto state = reactor->state;
+  boost::asio::post(impl->io_context, [this,c_state=state,reactor, request, response] {
+    std::unique_lock<std::mutex> lock(c_state->mutex);
+    if(c_state->finished) {
+      THALAMUS_LOG(trace) << "node_request finished";
+      return;
+    }
+
+    thalamus_grpc::NodeSelector selector;
+    if (request->has_selector()) {
+      selector = request->selector();
+    } else {
+      selector.set_name(request->node());
+    }
+
+    if(!valid_node_selector(selector)) {
+      response->set_status(
+          thalamus_grpc::NodeResponse::Status::NodeResponse_Status_BAD_SELECTOR);
+      c_state->finished = true;
+      lock.unlock();
+      reactor->Finish(::grpc::Status::OK);
+      return;
+    }
+
+    boost::system::error_code ec;
+    auto parsed = boost::json::parse(request->json(), ec);
+    if(ec) {
+      response->set_status(
+          thalamus_grpc::NodeResponse::Status::NodeResponse_Status_PARSE_ERROR);
+      c_state->finished = true;
+      lock.unlock();
+      reactor->Finish(::grpc::Status::OK);
+      return;
+    }
+
+    // The slot is owned by c_state->connection, so it holds the state weakly
+    // to avoid a cycle that would keep both alive if the node never appears.
+    std::weak_ptr<NodeRequestReactor::State> weak_state = c_state;
+    c_state->connection = impl->node_graph.get_node_scoped(selector, [weak_state,reactor,parsed,response](auto weak) mutable {
+      auto c2_state = weak_state.lock();
+      if(!c2_state) {
+        return;
+      }
+      std::unique_lock<std::mutex> lock2(c2_state->mutex);
+      if(c2_state->finished) {
+        THALAMUS_LOG(trace) << "get_node_scoped finished";
+        return;
+      }
+      c2_state->found = true;
+      c2_state->timer.cancel();
+      auto node = weak.lock();
+      if(!node) {
+        response->set_status(
+          thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
+        c2_state->finished = true;
+        lock2.unlock();
+        reactor->Finish(::grpc::Status::OK);
+        return;
+      }
+
+      // process may answer synchronously, and its callback takes the mutex.
+      lock2.unlock();
+      node->process(parsed, [c3_state=c2_state,response,reactor] (auto& json_response) mutable {
+        std::unique_lock<std::mutex> lock3(c3_state->mutex);
+        if(c3_state->finished) {
+          THALAMUS_LOG(trace) << "process finished";
+          return;
+        }
+        c3_state->finished = true;
+        response->set_json(boost::json::serialize(json_response));
+        lock3.unlock();
+        reactor->Finish(::grpc::Status::OK);
+      });
+    });
+
+    c_state->timer.expires_after(5s);
+    c_state->timer.async_wait([c2_state=c_state,response,reactor](const boost::system::error_code &error) {
+      if(error) {
+        return;
+      }
+      std::unique_lock<std::mutex> lock2(c2_state->mutex);
+      if(c2_state->finished || c2_state->found) {
+        return;
+      }
+      c2_state->connection.disconnect();
+      c2_state->finished = true;
+      response->set_status(
+        thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
+      lock2.unlock();
+      reactor->Finish(::grpc::Status::OK);
     });
   });
-  auto json_response = promise.get_future().get();
-  auto serialized_response = boost::json::serialize(json_response);
-  response->set_json(serialized_response);
 
-  return ::grpc::Status::OK;
+  return reactor;
+}
+
+struct NodeRequestSession : public NodeBidiSession<Node, thalamus_grpc::NodeRequest, thalamus_grpc::NodeResponse> {
+  using Base = NodeBidiSession<Node, thalamus_grpc::NodeRequest, thalamus_grpc::NodeResponse>;
+  using Reactor = ServerBidiReactor2<thalamus_grpc::NodeRequest, thalamus_grpc::NodeResponse>;
+
+  // Requests that arrive before the node is found are queued, up to
+  // MAX_PENDING, and answered NOT_FOUND if it isn't found within
+  // PENDING_TIMEOUT.
+  static constexpr size_t MAX_PENDING = 10;
+  static constexpr std::chrono::seconds PENDING_TIMEOUT{5};
+
+  ::grpc::CallbackServerContext& server_context;
+  std::vector<thalamus_grpc::NodeRequest> pending;
+  boost::asio::steady_timer pending_timer;
+  bool selected = false;
+  thalamus_grpc::NodeSelector node_selector;
+
+  NodeRequestSession(NodeGraph& graph, boost::asio::io_context& _io_context, ::grpc::CallbackServerContext& _context, ContextGuard&& guard)
+  : Base(graph, _io_context, _context, std::move(guard))
+  , server_context(context)
+  , pending_timer(_io_context)
+  {}
+
+  ~NodeRequestSession() override;
+
+  void start_join(std::function<void()> cleanup = nullptr) override {
+    Base::start_join([&] {
+      if(cleanup) {
+        cleanup();
+      }
+      pending_timer.cancel();
+    });
+  }
+
+  void reply(uint64_t id, thalamus_grpc::NodeResponse::Status status) {
+    ::thalamus_grpc::NodeResponse response;
+    response.set_id(id);
+    response.set_status(status);
+    Reactor::send(std::move(response));
+  }
+
+  void on_node(std::unique_lock<std::mutex>& lock) override {
+    pending_timer.cancel();
+    auto local = std::exchange(pending, {});
+    // Copied while locked: once the mutex is free the session may be
+    // destroyed, so nothing below may touch it before relocking and
+    // checking joining.
+    auto c_state = state;
+    lock.unlock();
+
+    for(auto&& p : local) {
+      std::unique_lock<std::mutex> lock2(c_state->mutex);
+      if(c_state->joining) {
+        return;
+      }
+      handle(std::move(p), lock2, true);
+    }
+  }
+
+  void on_pending_timeout(const boost::system::error_code& error, std::shared_ptr<Reactor::State> c_state) {
+    if(error) {
+      return;
+    }
+    std::lock_guard<std::mutex> lock(c_state->mutex);
+    if(c_state->joining) {
+      return;
+    }
+    for(auto& p : std::exchange(pending, {})) {
+      reply(p.id(), thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
+    }
+  }
+
+  void on_read(thalamus_grpc::NodeRequest&& req, std::unique_lock<std::mutex>& lock) override {
+    handle(std::move(req), lock, false);
+  }
+
+  // `lock` holds state->mutex and may be released, after which nothing may
+  // touch the session. `draining` is true for requests replayed by on_node,
+  // which are answered NOT_FOUND rather than queued again.
+  void handle(thalamus_grpc::NodeRequest&& req, std::unique_lock<std::mutex>& lock, bool draining) {
+    if (req.has_selector() || !req.node().empty()) {
+      thalamus_grpc::NodeSelector new_selector;
+      if (req.has_selector()) {
+        new_selector = req.selector();
+      } else {
+        new_selector.set_name(req.node());
+      }
+      if(!valid_node_selector(new_selector)) {
+        THALAMUS_LOG(warning) << "Node request stream got a selector with no name or type";
+        if(!req.json().empty()) {
+          reply(req.id(), thalamus_grpc::NodeResponse::Status::NodeResponse_Status_BAD_SELECTOR);
+        }
+        return;
+      }
+      if(selected) {
+        if(new_selector.name() != node_selector.name() || new_selector.type() != node_selector.type()) {
+          // A stream stays bound to the first node it selects, so a request
+          // for another node is answered rather than run on that one.
+          THALAMUS_LOG(warning) << "Can't reselect during node session";
+          if(!req.json().empty()) {
+            reply(req.id(), thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
+          }
+          return;
+        }
+      } else {
+        selected = true;
+        node_selector = new_selector;
+        Base::set_selector(node_selector);
+      }
+    }
+
+    if(req.json().empty()) {
+      return;
+    }
+
+    // Requests go to the node selected by the first message that has a
+    // selector, so one sent before any has nowhere to go.
+    if(!selected) {
+      reply(req.id(), thalamus_grpc::NodeResponse::Status::NodeResponse_Status_BAD_SELECTOR);
+      return;
+    }
+
+    auto node = this->lock();
+    if(!node) {
+      if(draining) {
+        reply(req.id(), thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
+        return;
+      }
+      while(pending.size() >= MAX_PENDING) {
+        reply(pending.front().id(), thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
+        pending.erase(pending.begin());
+      }
+      if(pending.empty()) {
+        pending_timer.expires_after(PENDING_TIMEOUT);
+        pending_timer.async_wait([this, c_state=state](const boost::system::error_code& error) {
+          on_pending_timeout(error, c_state);
+        });
+      }
+      pending.push_back(std::move(req));
+      return;
+    }
+
+    boost::system::error_code ec;
+    auto parsed = boost::json::parse(req.json(), ec);
+    if(ec) {
+      reply(req.id(), thalamus_grpc::NodeResponse::Status::NodeResponse_Status_PARSE_ERROR);
+      return;
+    }
+
+    // process may answer synchronously, and its callback takes the mutex.
+    auto c_state = state;
+    auto request_id = req.id();
+    lock.unlock();
+    node->process(parsed, [this, request_id, c_state](const boost::json::value& json_response) {
+      std::lock_guard<std::mutex> lock2(c_state->mutex);
+      if(c_state->joining) {
+        THALAMUS_LOG(trace) << "get_node_connection joined";
+        return;
+      }
+
+      ::thalamus_grpc::NodeResponse response;
+      response.set_id(request_id);
+      response.set_json(boost::json::serialize(json_response));
+      response.set_status(
+          thalamus_grpc::NodeResponse::Status::NodeResponse_Status_OK);
+      Reactor::send(std::move(response));
+    });
+  }
+};
+
+NodeRequestSession::~NodeRequestSession() {
+  start_join();
 }
 
 ::grpc::ServerBidiReactor< ::thalamus_grpc::NodeRequest, ::thalamus_grpc::NodeResponse>* Service::node_request_stream(
     ::grpc::CallbackServerContext* context) {
-  auto stream
-    = new ServerBidiReactor<::thalamus_grpc::NodeRequest, ::thalamus_grpc::NodeResponse>(*context, impl->io_context);
-  stream->callback = [
-   this,
-   weak=std::weak_ptr<Node>(),
-   stream
-  ](auto&& request) mutable {
-    if (!request.node().empty()) {
-      weak = impl->node_graph.get_node(request.node());
-    }
-    auto node = weak.lock();
-    if (!node) {
-      ::thalamus_grpc::NodeResponse response;
-      response.set_id(request.id());
-      response.clear_json();
-      response.set_status(
-          thalamus_grpc::NodeResponse::Status::NodeResponse_Status_NOT_FOUND);
-      return;
-    }
 
-    if(request.json().empty()) {
-      return;
-    }
-
-    auto parsed = boost::json::parse(request.json());
-    node->process(parsed, [request_id=request.id(),stream](const boost::json::value& json_response) {
-      auto serialized_response = boost::json::serialize(json_response);
-      ::thalamus_grpc::NodeResponse response;
-      response.set_id(request_id);
-      response.set_json(serialized_response);
-      response.set_status(
-          thalamus_grpc::NodeResponse::Status::NodeResponse_Status_OK);
-      stream->send(std::move(response));
-    });
-  };
-  stream->start();
-  return stream;
+  auto reactor = new NodeRequestSession(impl->node_graph, impl->io_context, *context, ContextGuard(this, context));
+  reactor->start();
+  return reactor;
 }
 
 ::grpc::Status
@@ -991,11 +1293,9 @@ struct InjectAnalogSession : public NodeReadSession<AnalogNode, thalamus_grpc::I
       sample_intervals.emplace_back(interval);
     }
 
-    if (first || request.signal().channels_changed()) {
-      typed_node->channels_changed(typed_node);
-      first = false;
-    }
-    typed_node->inject(spans, sample_intervals, names);
+    auto channels_changed = first || request.signal().channels_changed();
+    first = false;
+    typed_node->inject_analog(spans, sample_intervals, names, channels_changed);
   }
 };
 
@@ -1134,7 +1434,6 @@ ImageSession::~ImageSession() {
 
 struct GraphSession : public NodeSession<AnalogNode, thalamus_grpc::GraphResponse> {
   const thalamus_grpc::GraphRequest request;
-  boost::signals2::scoped_connection channels_changed_connection;
   boost::signals2::scoped_connection ready_connection;
   
   std::vector<size_t> channels;
@@ -1178,17 +1477,6 @@ struct GraphSession : public NodeSession<AnalogNode, thalamus_grpc::GraphRespons
 
     has_channels = !channels.empty() || !channel_names.empty();
 
-    using channels_changed_signal_type = decltype(typed_node->channels_changed);
-    channels_changed_connection =
-      typed_node->channels_changed.connect(
-        channels_changed_signal_type::slot_type([this,c_state=this->state](const AnalogNode *) {
-          std::lock_guard<std::mutex> lock(c_state->mutex);
-          if(c_state->joining) {
-            return;
-          }
-          channels_changed = true;
-        }));
-
     using signal_type = decltype(raw_node->ready);
     ready_connection =
       raw_node->ready.connect(signal_type::slot_type([this,c_state=this->state](const Node *) {
@@ -1198,6 +1486,10 @@ struct GraphSession : public NodeSession<AnalogNode, thalamus_grpc::GraphRespons
         }
         if (!typed_node->has_analog_data()) {
           return;
+        }
+        // Starts true, since the first message seen may not be flagged.
+        if (typed_node->channels_changed()) {
+          channels_changed = true;
         }
         
         ::thalamus_grpc::GraphResponse response;
@@ -1267,8 +1559,9 @@ struct GraphSession : public NodeSession<AnalogNode, thalamus_grpc::GraphRespons
           }
           auto scale = is_transformed ? typed_node->scale(int(channel)) : 1.0;
           auto offset = is_transformed ? typed_node->offset(int(channel)) : 0.0;
-          visit_node(typed_node, [&](auto wrapper) {
-            auto data = wrapper->data(int(channel));
+          // Per channel: a message can mix formats (e.g. double stats
+          // channels beside short audio), which visit_node can't express.
+          visit_channel(typed_node, int(channel), [&](auto data) {
             for (auto sample_raw : data) {
               double sample = double(sample_raw) * scale + offset;
               auto wrote = current_time >= bin_end;
@@ -1307,152 +1600,11 @@ Service::graph(::grpc::CallbackServerContext *context,
   return result;
 }
 
-::grpc::Status Service::channel_info(
-    ::grpc::ServerContext *context,
-    const ::thalamus_grpc::AnalogRequest *request,
-    ::grpc::ServerWriter<::thalamus_grpc::AnalogResponse> *writer) {
-  ContextGuard guard(this, context);
-  while (!context->IsCancelled()) {
-    std::promise<void> promise;
-    auto future = promise.get_future();
-    std::weak_ptr<Node> weak_raw_node;
-    boost::asio::post(impl->io_context, [&] {
-      impl->node_graph.get_node(request->node(), [&](auto ptr) {
-        weak_raw_node = ptr;
-        promise.set_value();
-      });
-    });
-    while (future.wait_for(1s) == std::future_status::timeout &&
-           !context->IsCancelled()) {
-      if (impl->io_context.stopped()) {
-        ::thalamus_grpc::AnalogResponse response;
-        ::grpc::WriteOptions options;
-        options.set_last_message();
-        writer->Write(response, options);
-        return ::grpc::Status::OK;
-      }
-    }
-    auto raw_node = weak_raw_node.lock();
-    if (!node_cast<AnalogNode *>(raw_node.get())) {
-      std::this_thread::sleep_for(1s);
-      continue;
-    }
-
-    AnalogNode *node = node_cast<AnalogNode *>(raw_node.get());
-    std::vector<size_t> channels(request->channels().begin(),
-                                 request->channels().end());
-    thalamus::vector<std::string> channel_names(
-        request->channel_names().begin(), request->channel_names().begin());
-
-    std::mutex connection_mutex;
-    std::mutex cond_mutex;
-    std::condition_variable cond;
-    bool channels_changed = true;
-
-    using channels_changed_signal_type = decltype(node->channels_changed);
-    using signal_type = decltype(raw_node->ready);
-
-    std::promise<std::string> redirect_promise;
-    auto redirect_future = redirect_promise.get_future();
-    boost::asio::post(impl->io_context, [&] {
-      redirect_promise.set_value(std::string(raw_node->redirect()));
-    });
-    auto redirect = redirect_future.get();
-
-    if(!redirect.empty()) {
-      ::thalamus_grpc::AnalogResponse response;
-      response.set_redirect(redirect);
-      writer->Write(response, ::grpc::WriteOptions());
-      return ::grpc::Status::OK;
-    }
-
-    boost::signals2::scoped_connection channels_connection =
-        node->channels_changed.connect(
-            channels_changed_signal_type::slot_type([&](const AnalogNode *) {
-              if (!connection_mutex.try_lock()) {
-                return;
-              }
-              std::lock_guard<std::mutex> lock(connection_mutex,
-                                               std::adopt_lock_t());
-              std::unique_lock<std::mutex> lock2(cond_mutex);
-              channels_changed = true;
-              cond.notify_one();
-            }));
-    raw_node.reset();
-
-    while (!context->IsCancelled() && channels_connection.connected()) {
-      if (impl->io_context.stopped()) {
-        return ::grpc::Status::OK;
-      }
-      {
-        std::unique_lock<std::mutex> lock(cond_mutex);
-        cond.wait_for(lock, 1s);
-        if (!channels_changed) {
-          continue;
-        }
-        channels_changed = false;
-      }
-
-      std::mutex info_mutex;
-      std::condition_variable info_cond;
-      bool got_info = false;
-      raw_node = weak_raw_node.lock();
-      if (!raw_node) {
-        break;
-      }
-
-      boost::signals2::scoped_connection connection =
-          raw_node->ready.connect(signal_type::slot_type([&](const Node * base_node) {
-            if (!connection_mutex.try_lock()) {
-              return;
-            }
-            std::lock_guard<std::mutex> lock(connection_mutex,
-                                             std::adopt_lock_t());
-            ::thalamus_grpc::AnalogResponse response;
-
-            auto new_redirect = base_node->redirect();
-            if(new_redirect.empty()) {
-              for (auto c = 0; c < node->num_channels(); ++c) {
-                auto span = response.add_spans();
-                auto name = node->name(c);
-                span->set_name(name.data(), name.size());
-                response.add_sample_intervals(
-                    uint64_t(node->sample_interval(c).count()));
-              }
-            } else {
-              response.set_redirect(new_redirect);
-            }
-            writer->Write(response, ::grpc::WriteOptions());
-
-            {
-              std::lock_guard<std::mutex> lock2(info_mutex);
-              got_info = true;
-            }
-            info_cond.notify_one();
-            connection.disconnect();
-          }));
-      raw_node.reset();
-
-      {
-        std::unique_lock<std::mutex> lock2(info_mutex);
-        auto predicate = [&] {
-          return context->IsCancelled() || !connection.connected() ||
-                 impl->io_context.stopped() || got_info;
-        };
-        while (!predicate()) {
-          info_cond.wait_for(lock2, 1s, predicate);
-        }
-      }
-      connection.disconnect();
-      std::lock_guard<std::mutex> lock2(connection_mutex);
-    }
-
-    channels_connection.disconnect();
-    std::lock_guard<std::mutex> lock(connection_mutex);
-    std::this_thread::sleep_for(1s);
-  }
-
-  return ::grpc::Status::OK;
+::grpc::ServerWriteReactor<::thalamus_grpc::AnalogResponse>*
+Service::channel_info(::grpc::CallbackServerContext *context,
+                      const ::thalamus_grpc::AnalogRequest *request) {
+  // An analog stream without samples: one message per channel change.
+  return impl->analog(context, request, false);
 }
 
 ::grpc::Status Service::spectrogram(
@@ -1546,9 +1698,9 @@ Service::graph(::grpc::CallbackServerContext *context,
 
           for (auto c = 0u; c < channel_ids.size(); ++c) {
             auto channel = channel_ids[c];
-            visit_node(node, [&](auto wrapper) {
-              auto data = wrapper->data(channel);
-              auto interval = wrapper->sample_interval(channel);
+            // Per channel: a message can mix formats.
+            visit_channel(node, int(channel), [&](auto data) {
+              auto interval = node->sample_interval(int(channel));
               if (interval.count() == 0) {
                 return;
               }

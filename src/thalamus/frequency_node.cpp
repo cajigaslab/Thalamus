@@ -212,12 +212,6 @@ std::chrono::nanoseconds FrequencyNode::sample_interval(int) const {
   return 0ns;
 }
 
-void FrequencyNode::inject(const thalamus::vector<std::span<double const>> &,
-                     const thalamus::vector<std::chrono::nanoseconds> &,
-                     const thalamus::vector<std::string_view> &) {
-  THALAMUS_ASSERT(false, "Unimplemented");
-}
-
 bool FrequencyNode::has_analog_data() const { return true; }
 
 boost::json::value FrequencyNode::process(const boost::json::value &) {

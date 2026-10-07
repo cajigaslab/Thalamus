@@ -67,13 +67,15 @@ struct ThreadPoolNode::Impl {
   ThreadPool &pool;
   boost::asio::steady_timer timer;
   AnalogNodeImpl analog_impl;
+  // The one channel never changes after the first message.
+  bool first_message = true;
 
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
        ThreadPoolNode *_outer, NodeGraph *_graph)
       : io_context(_io_context), state(_state), outer(_outer), graph(_graph),
         pool(_graph->get_thread_pool()), timer(_io_context) {
     using namespace std::placeholders;
-    analog_impl.inject({{std::span<double const>()}}, {0ns}, {});
+    analog_impl.inject_analog({{std::span<double const>()}}, {0ns}, {});
 
     analog_impl.ready.connect([_outer](Node *) { _outer->ready(_outer); });
 
@@ -108,8 +110,9 @@ struct ThreadPoolNode::Impl {
       buffer.push_back(pool.idle());
       new_time += 32ms;
     }
-    analog_impl.inject({{buffer.begin(), buffer.end()}}, {32ms},
-                       {"Idle Threads"}, now.time_since_epoch());
+    analog_impl.inject_analog({{buffer.begin(), buffer.end()}}, {32ms},
+                       {"Idle Threads"}, now.time_since_epoch(), first_message);
+    first_message = false;
     _time = new_time;
     // auto after = std::chrono::steady_clock::now();
     // std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(after
@@ -162,14 +165,17 @@ std::string_view ThreadPoolNode::name(int channel) const {
   }
 }
 
-void ThreadPoolNode::inject(
+void ThreadPoolNode::inject_analog(
     const thalamus::vector<std::span<double const>> &data,
     const thalamus::vector<std::chrono::nanoseconds> &interval,
-    const thalamus::vector<std::string_view> &names) {
-  impl->analog_impl.inject(data, interval, names);
+    const thalamus::vector<std::string_view> &names, bool channels_changed) {
+  impl->analog_impl.inject_analog(data, interval, names, channels_changed);
 }
 
 bool ThreadPoolNode::has_analog_data() const { return true; }
+bool ThreadPoolNode::channels_changed() const {
+  return impl->analog_impl.channels_changed();
+}
 
 boost::json::value ThreadPoolNode::process(const boost::json::value &) {
   return boost::json::value();

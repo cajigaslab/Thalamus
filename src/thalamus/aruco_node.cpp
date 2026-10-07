@@ -1233,9 +1233,9 @@ std::chrono::nanoseconds ArucoNode::sample_interval(int) const {
   return impl->current_frame.interval;
 }
 
-void ArucoNode::inject(const thalamus::vector<std::span<double const>> &spans,
+void ArucoNode::inject_analog(const thalamus::vector<std::span<double const>> &spans,
                        const thalamus::vector<std::chrono::nanoseconds> &,
-                       const thalamus::vector<std::string_view> &) {
+                       const thalamus::vector<std::string_view> &, bool) {
   THALAMUS_ASSERT(spans.size() == 1, "Error");
   THALAMUS_ASSERT(spans.front().size() == 1, "Error");
 }

@@ -73,6 +73,9 @@ static thalamus::vector<std::string> get_channels(const std::string &channel) {
 }
 
 struct NidaqNode::Impl {
+  // Reported by channels_changed() on the next message with analog data,
+  // then cleared.
+  bool analog_channels_changed = true;
   ObservableDictPtr state;
   boost::signals2::scoped_connection state_connection;
   TaskHandle task_handle;
@@ -177,6 +180,7 @@ struct NidaqNode::Impl {
 
       node_impl->_time = now.time_since_epoch();
       node->ready(node);
+      node_impl->analog_channels_changed = false;
       node_impl->busy = false;
     });
 
@@ -310,7 +314,7 @@ struct NidaqNode::Impl {
           return;
         }
         _time = 0ns;
-        outer->channels_changed(outer);
+        analog_channels_changed = true;
 
         // if (reader) {
         //   on_timer(reader, polling_interval, boost::system::error_code());
@@ -343,6 +347,10 @@ std::span<const double> NidaqNode::data(int channel) const {
   return impl->spans.at(size_t(channel));
 }
 
+bool NidaqNode::channels_changed() const {
+  return impl->analog_channels_changed;
+}
+
 int NidaqNode::num_channels() const { return int(impl->_num_channels); }
 
 std::chrono::nanoseconds NidaqNode::sample_interval(int) const {
@@ -355,16 +363,23 @@ std::string_view NidaqNode::name(int channel) const {
   return impl->recommended_names.at(size_t(channel));
 }
 
-void NidaqNode::inject(
+void NidaqNode::inject_analog(
     const thalamus::vector<std::span<double const>> &spans,
     const thalamus::vector<std::chrono::nanoseconds> &sample_intervals,
-    const thalamus::vector<std::string_view> &) {
+    const thalamus::vector<std::string_view> &, bool channels_changed) {
   auto temp = impl->_num_channels;
   auto previous_sample_interval = impl->_sample_interval;
   impl->_num_channels = spans.size();
   impl->spans = spans;
   impl->_sample_interval = sample_intervals.at(0);
+  // The injected message's channels differ from the acquired ones, and so
+  // do the next acquired message's from the injected ones.
+  auto differs = impl->_num_channels != temp ||
+                 impl->_sample_interval != previous_sample_interval;
+  impl->analog_channels_changed =
+      impl->analog_channels_changed || channels_changed || differs;
   ready(this);
+  impl->analog_channels_changed = differs;
   impl->_sample_interval = previous_sample_interval;
   impl->_num_channels = temp;
 }

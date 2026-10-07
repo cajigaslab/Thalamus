@@ -14,6 +14,7 @@ import datetime
 import threading
 import functools
 import contextlib
+import inspect
 
 from ..qt import *
 
@@ -308,13 +309,18 @@ def create_task_with_exc_handling(awaitable: 'typing.Awaitable[RETURN]', label: 
   '''
   Wraps the specified awaitable in a task that will call the exception handler on an unhandled exception.
   '''
+  if label is None:
+    frame = inspect.currentframe().f_back
+    code = frame.f_code
+    name = getattr(code, 'co_qualname', code.co_name)
+    label =  f'{code.co_filename}:{frame.f_lineno}:{name}'
   async def inner() -> RETURN:
     try:
       return await awaitable
     except Exception as exc: #pylint: disable=broad-except
       if not isinstance(exc, IgnorableError):
         asyncio.get_event_loop().call_exception_handler({
-          'message': str(exc),
+          'message': f'create_task_with_exc_handling: {label} {exc}',
           'exception': exc
         })
       raise

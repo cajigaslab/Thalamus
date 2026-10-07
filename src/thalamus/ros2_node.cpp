@@ -382,12 +382,6 @@ std::string_view Ros2Node::name(int) const {
   return std::string_view();
 }
 
-void Ros2Node::inject(const thalamus::vector<std::span<double const>> &,
-                      const thalamus::vector<std::chrono::nanoseconds> &,
-                      const thalamus::vector<std::string_view> &) {
-  THALAMUS_ASSERT(false, "Unimplemented");
-}
-
 template <typename T>
 T load_function(void *library_handle, const std::string &name) {
   auto result = reinterpret_cast<T>(dlsym(library_handle, name.c_str()));

@@ -9,6 +9,9 @@
 using namespace thalamus;
 
 struct WallClockNode::Impl {
+  // Reported by channels_changed() on the next message with analog data,
+  // then cleared.
+  bool analog_channels_changed = true;
   ObservableDictPtr state;
   MovableSteadyTimer timer;
   NodeGraph* graph;
@@ -51,7 +54,7 @@ struct WallClockNode::Impl {
                  const ObservableCollection::Key &k,
                  const ObservableCollection::Value &v) {
     auto key_str = std::get<std::string>(k);
-    outer->channels_changed(outer);
+    analog_channels_changed = true;
     if (key_str == "Type") {
       auto val_str = std::get<std::string>(v);
 #ifndef _WIN32
@@ -123,6 +126,7 @@ struct WallClockNode::Impl {
     system_time_ulong = uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(system_time).count());
     system_time_double = double(system_time_ulong);
     outer->ready(outer);
+    analog_channels_changed = false;
     timer.expires_after(1s);
     timer.async_wait(std::bind(&Impl::on_timer, this, _1));
   }
@@ -151,14 +155,18 @@ bool WallClockNode::is_ulong_data() const {
   return impl->integer_values;
 }
 
+bool WallClockNode::channels_changed() const {
+  return impl->analog_channels_changed;
+}
+
 int WallClockNode::num_channels() const {
   return 1;
 }
 
-void WallClockNode::inject(
+void WallClockNode::inject_analog(
     const thalamus::vector<std::span<double const>> &data,
     const thalamus::vector<std::chrono::nanoseconds> &,
-    const thalamus::vector<std::string_view> &) {
+    const thalamus::vector<std::string_view> &, bool) {
   impl->system_time_double = data[0][0];
   ready(this);
 }

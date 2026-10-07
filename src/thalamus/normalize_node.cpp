@@ -161,12 +161,6 @@ std::chrono::nanoseconds NormalizeNode::sample_interval(int channel) const {
   return impl->source->sample_interval(channel);
 }
 
-void NormalizeNode::inject(const thalamus::vector<std::span<double const>> &,
-                           const thalamus::vector<std::chrono::nanoseconds> &,
-                           const thalamus::vector<std::string_view> &) {
-  THALAMUS_ASSERT(false, "Unimplemented");
-}
-
 bool NormalizeNode::has_analog_data() const { return true; }
 
 boost::json::value NormalizeNode::process(const boost::json::value &value) {

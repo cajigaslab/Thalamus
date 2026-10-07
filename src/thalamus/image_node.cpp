@@ -44,6 +44,8 @@ struct FfmpegNode::Impl {
   size_t width;
   size_t height;
   AnalogNodeImpl analog_impl;
+  // The stats channels' interval follows the frame interval.
+  std::optional<std::chrono::nanoseconds> last_stats_interval;
   bool has_analog = false;
   bool has_image = false;
   NodeGraph *graph;
@@ -54,7 +56,7 @@ struct FfmpegNode::Impl {
       : state(_state), io_context(_io_context), outer(_outer), graph(_graph),
         stream_time(-1) {
     using namespace std::placeholders;
-    analog_impl.inject({{std::span<double const>()}}, {0ns}, {""});
+    analog_impl.inject_analog({{std::span<double const>()}}, {0ns}, {""});
 
     analog_impl.ready.connect([_outer](Node *) { _outer->ready(_outer); });
 
@@ -295,7 +297,7 @@ struct FfmpegNode::Impl {
           this->has_image = true;
           this->has_analog = true;
           double target_framerate = 1e9 / double(this->frame_interval.count());
-          analog_impl.inject(
+          analog_impl.inject_analog(
               {
                   std::span<double const>(&target_framerate,
                                           &target_framerate + 1),
@@ -303,7 +305,8 @@ struct FfmpegNode::Impl {
                   std::span<double const>(&sleep_time_sec, &sleep_time_sec + 1),
               },
               {new_frame_interval, new_frame_interval, new_frame_interval},
-              {""});
+              {""}, last_stats_interval != new_frame_interval);
+          last_stats_interval = new_frame_interval;
 
           frame_pending = false;
         });
@@ -441,16 +444,19 @@ std::string_view FfmpegNode::name(int channel) const {
   }
 }
 
-void FfmpegNode::inject(
+void FfmpegNode::inject_analog(
     const thalamus::vector<std::span<double const>> &data,
     const thalamus::vector<std::chrono::nanoseconds> &interval,
-    const thalamus::vector<std::string_view> &) {
+    const thalamus::vector<std::string_view> &, bool channels_changed) {
   impl->has_analog = true;
   impl->has_image = false;
-  impl->analog_impl.inject(data, interval, {""});
+  impl->analog_impl.inject_analog(data, interval, {""}, channels_changed);
 }
 
 bool FfmpegNode::has_analog_data() const { return impl->has_analog; }
+bool FfmpegNode::channels_changed() const {
+  return impl->analog_impl.channels_changed();
+}
 
 bool FfmpegNode::has_image_data() const { return impl->has_image; }
 
