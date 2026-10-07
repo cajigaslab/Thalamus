@@ -328,6 +328,7 @@ struct RecordReader::Impl {
       case thalamus_grpc::Image::Format::Image_Format_YUV420P:
       case thalamus_grpc::Image::Format::Image_Format_YUVJ420P:
       case thalamus_grpc::Image::Format::Image_Format_RGB16:
+      case thalamus_grpc::Image::Format::Image_Format_H264:
       case thalamus_grpc::Image::Format::
           Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
       case thalamus_grpc::Image::Format::

@@ -37,6 +37,7 @@ from .thalamus_window import ThalamusWindow
 from ..servicer import ThalamusServicer
 from .. import thalamus_stub
 from .. import grpc_tls
+from .. import openh264
 from ..task_controller.util import create_task_with_exc_handling
 
 from ..qt import *
@@ -147,6 +148,9 @@ async def async_main() -> None:
   for node in config['nodes']:
     if 'Running' in node:
       node['Running'] = False
+  # Cisco's OpenH264 binary, for thalamus-contrib's H.264 encoding, unless the
+  # user opted out. Doesn't wait for the download.
+  openh264.download_in_background()
 
   cache_manager = CacheManager(config)
 

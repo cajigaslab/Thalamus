@@ -164,6 +164,7 @@ static int channels_for_format(ImageNode::Format format) {
     case ImageNode::Format::Gray16:
     case ImageNode::Format::RGB16:
     case ImageNode::Format::MPEG4:
+    case ImageNode::Format::H264:
       return -1;
   }
   return -1;

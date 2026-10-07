@@ -216,7 +216,8 @@ extern "C" {
     ThalamusImageFormat_MPEG1 = 8,
     ThalamusImageFormat_MPEG4 = 9,
     ThalamusImageFormat_Gray16 = 16,
-    ThalamusImageFormat_RGB16 = 17
+    ThalamusImageFormat_RGB16 = 17,
+    ThalamusImageFormat_H264 = 18
   };
 
   struct ThalamusImageNode {
@@ -486,6 +487,9 @@ extern "C" {
     //the plugin is loaded: Perfetto interns it by address, so it's written to the trace once and later
     //events refer to it by id. End the event with trace_event_end.
     void (*trace_event_begin_static)(const char* name); // 141
+
+    //The root of the state tree, i.e. the whole config. Returns a new reference, like state_parent.
+    struct ThalamusState* (*state_root)(void); // 142
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories_t)(struct ThalamusAPI*);
