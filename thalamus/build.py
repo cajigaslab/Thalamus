@@ -104,6 +104,7 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
   do_config = 'config' in config_settings
   clang = 'clang' in config_settings
   force_cl = 'cl' in config_settings
+  is_ci = 'ci' in config_settings
   generator = config_settings.get('generator', 'Ninja')
   sanitizer = config_settings.get('sanitizer', None)
   target = config_settings.get('target', None)
@@ -218,6 +219,8 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     cmake_command += [f'-DCODE_COVERAGE=ON']
   if strip:
     cmake_command += [f'-DSTRIP=ON']
+  if is_ci:
+    cmake_command += ['-DTHALAMUS_CI=ON']
 
   if is_android:
     sdk = pathlib.Path.home() / 'AppData' / 'Local' / 'Android' / 'Sdk'

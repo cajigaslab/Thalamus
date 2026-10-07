@@ -37,6 +37,9 @@ concept Streamable = requires(std::ostream os, T value) {
 };
 
 struct SpikeGlxNode::Impl {
+  // Reported by channels_changed() on the next message with analog data,
+  // then cleared.
+  bool analog_channels_changed = true;
   ObservableDictPtr state;
   ObservableDictPtr metadata_node;
   ObservableListPtr metadata_list = std::make_shared<ObservableList>();
@@ -903,7 +906,7 @@ struct SpikeGlxNode::Impl {
             if (num_channels != last_num_channels) {
               // std::cout << "channels_changed" << std::endl;
               TRACE_EVENT("thalamus", "SpikeGlxNode::channels_changed");
-              outer->channels_changed(outer);
+              analog_channels_changed = true;
             }
             if (complete_samples > 0) {
               current_js = js;
@@ -911,6 +914,7 @@ struct SpikeGlxNode::Impl {
               // std::cout << "ready" << std::endl;
               TRACE_EVENT("thalamus", "SpikeGlxNode::ready");
               outer->ready(outer);
+              analog_channels_changed = false;
             }
             // std::cout << "fetch done" << std::endl;
             // THALAMUS_LOG(info) << "fetch done";
@@ -1136,6 +1140,10 @@ std::string_view SpikeGlxNode::name(int channel) const {
   return "";
 }
 
+bool SpikeGlxNode::channels_changed() const {
+  return impl->analog_channels_changed;
+}
+
 int SpikeGlxNode::num_channels() const { return int(impl->num_channels + 1); }
 
 std::chrono::nanoseconds SpikeGlxNode::sample_interval(int i) const {
@@ -1162,10 +1170,6 @@ std::chrono::nanoseconds SpikeGlxNode::sample_interval(int i) const {
 std::chrono::nanoseconds SpikeGlxNode::time() const { return impl->time; }
 
 std::string SpikeGlxNode::type_name() { return "SPIKEGLX"; }
-
-void SpikeGlxNode::inject(const thalamus::vector<std::span<double const>> &,
-                          const thalamus::vector<std::chrono::nanoseconds> &,
-                          const thalamus::vector<std::string_view> &) {}
 
 size_t SpikeGlxNode::modalities() const { return THALAMUS_MODALITY_ANALOG; }
 

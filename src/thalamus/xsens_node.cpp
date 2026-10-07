@@ -513,9 +513,9 @@ std::chrono::nanoseconds XsensNode::sample_interval(int) const {
   return impl->frame_interval;
 }
 
-void XsensNode::inject(const thalamus::vector<std::span<double const>> &spans,
+void XsensNode::inject_analog(const thalamus::vector<std::span<double const>> &spans,
                        const thalamus::vector<std::chrono::nanoseconds> &,
-                       const thalamus::vector<std::string_view> &) {
+                       const thalamus::vector<std::string_view> &, bool) {
   THALAMUS_ASSERT(spans.size() == 1, "Bad dims");
   THALAMUS_ASSERT(spans.front().size() == 1, "Bad dims");
 }
@@ -956,10 +956,10 @@ std::chrono::nanoseconds HandEngineNode::sample_interval(int) const {
   return impl->frame_interval;
 }
 
-void HandEngineNode::inject(
+void HandEngineNode::inject_analog(
     const thalamus::vector<std::span<double const>> &spans,
     const thalamus::vector<std::chrono::nanoseconds> &,
-    const thalamus::vector<std::string_view> &) {
+    const thalamus::vector<std::string_view> &, bool) {
   THALAMUS_ASSERT(spans.size() == 1, "Bad dims");
   THALAMUS_ASSERT(spans.front().size() == 1, "Bad dims");
 }

@@ -110,6 +110,9 @@ struct WaveGeneratorNode::Impl {
   std::optional<Wave> default_wave;
   std::vector<Wave> waves;
   ObservableListPtr waves_state;
+  // Passed to analog_impl.inject: set when the wave count or sample rate
+  // changes, cleared once a message reports it.
+  bool channels_changed = true;
   size_t last_wave_count = 0;
 
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
@@ -118,7 +121,7 @@ struct WaveGeneratorNode::Impl {
         graph(_graph), io_context(_io_context), timer(io_context),
         recommended_names(1, "0"), random_range(random_device()),
         random_distribution(0, 1), outer(_outer) {
-    analog_impl.inject({std::span<double const>()}, {0ns}, {""});
+    analog_impl.inject_analog({std::span<double const>()}, {0ns}, {""});
     state_connection = state->recursive_changed.connect(
         std::bind(&Impl::on_change, this, _1, _2, _3, _4));
 
@@ -143,10 +146,9 @@ struct WaveGeneratorNode::Impl {
 
     auto wave_count = waves.size();
     if (wave_count != last_wave_count) {
-      outer->channels_changed(outer);
+      channels_changed = true;
     }
     last_wave_count = wave_count;
-
     auto now = std::chrono::steady_clock::now();
     auto elapsed =
         std::chrono::duration_cast<std::chrono::nanoseconds>(now - _start_time);
@@ -175,8 +177,9 @@ struct WaveGeneratorNode::Impl {
 
     has_analog = true;
     has_text = false;
-    analog_impl.inject(spans, sample_intervals, name_views,
-                       now.time_since_epoch());
+    analog_impl.inject_analog(spans, sample_intervals, name_views,
+                       now.time_since_epoch(), channels_changed);
+    channels_changed = false;
     _time = new_time;
     // auto after = std::chrono::steady_clock::now();
     // std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(after
@@ -264,7 +267,7 @@ struct WaveGeneratorNode::Impl {
       auto sample_rate = std::get<double>(v);
       _sample_interval = std::chrono::nanoseconds(
           static_cast<std::chrono::nanoseconds::rep>(1e9 / sample_rate));
-      outer->channels_changed(outer);
+      channels_changed = true;
     } else if (key_str == "Running") {
       is_running = std::get<bool>(v);
       for (auto &w : waves) {
@@ -317,11 +320,11 @@ int WaveGeneratorNode::num_channels() const {
   return impl->analog_impl.num_channels();
 }
 
-void WaveGeneratorNode::inject(
+void WaveGeneratorNode::inject_analog(
     const thalamus::vector<std::span<double const>> &data,
     const thalamus::vector<std::chrono::nanoseconds> &sample_intervals,
-    const thalamus::vector<std::string_view> &names) {
-  impl->analog_impl.inject(data, sample_intervals, names);
+    const thalamus::vector<std::string_view> &names, bool channels_changed) {
+  impl->analog_impl.inject_analog(data, sample_intervals, names, channels_changed);
 }
 
 std::chrono::nanoseconds WaveGeneratorNode::sample_interval(int channel) const {
@@ -336,6 +339,7 @@ struct AnalogNodeImpl::Impl {
   thalamus::vector<std::span<double const>> spans;
   thalamus::vector<std::chrono::nanoseconds> sample_intervals;
   std::chrono::nanoseconds time;
+  bool channels_changed = false;
 };
 
 AnalogNodeImpl::AnalogNodeImpl(ObservableDictPtr, boost::asio::io_context &,
@@ -359,24 +363,28 @@ std::span<const std::string> AnalogNodeImpl::get_recommended_channels() const {
   return std::span<const std::string>();
 }
 
-void AnalogNodeImpl::inject(
+void AnalogNodeImpl::inject_analog(
     const thalamus::vector<std::span<double const>> &spans,
     const thalamus::vector<std::chrono::nanoseconds> &sample_intervals,
-    const thalamus::vector<std::string_view> &names) {
-  inject(spans, sample_intervals, names,
-         std::chrono::steady_clock::now().time_since_epoch());
+    const thalamus::vector<std::string_view> &names, bool channels_changed) {
+  inject_analog(spans, sample_intervals, names,
+         std::chrono::steady_clock::now().time_since_epoch(), channels_changed);
 }
-void AnalogNodeImpl::inject(
+void AnalogNodeImpl::inject_analog(
     const thalamus::vector<std::span<double const>> &spans,
     const thalamus::vector<std::chrono::nanoseconds> &sample_intervals,
     const thalamus::vector<std::string_view> &names,
-    std::chrono::nanoseconds now) {
+    std::chrono::nanoseconds now, bool channels_changed) {
   impl->spans.assign(spans.begin(), spans.end());
   impl->sample_intervals.assign(sample_intervals.begin(),
                                 sample_intervals.end());
   impl->names = names;
   impl->time = now;
+  impl->channels_changed = channels_changed;
   ready(this);
+}
+bool AnalogNodeImpl::channels_changed() const {
+  return impl->channels_changed;
 }
 std::string AnalogNodeImpl::type_name() { return "ANALOG"; }
 
@@ -398,6 +406,8 @@ struct ToggleNode::Impl {
   size_t channel = 0;
   ToggleNode *outer;
   std::chrono::nanoseconds last_toggle;
+  // The output's one channel follows the source channel's sample interval.
+  std::optional<std::chrono::nanoseconds> last_sample_interval;
   std::chrono::nanoseconds current_time;
   AnalogNodeImpl analog_impl;
   thalamus::vector<std::string> recommended_names;
@@ -407,7 +417,7 @@ struct ToggleNode::Impl {
         graph(_graph), io_context(_io_context), outer(_outer),
         recommended_names(1, "0") {
     using namespace std::placeholders;
-    analog_impl.inject({{std::span<double const>()}}, {0ns}, {""});
+    analog_impl.inject_analog({{std::span<double const>()}}, {0ns}, {""});
 
     analog_impl.ready.connect([_outer](Node *) { _outer->ready(_outer); });
 
@@ -467,9 +477,11 @@ struct ToggleNode::Impl {
     });
     previous_buffers.emplace_back(source_data.begin(), source_data.end());
 
-    analog_impl.inject(
+    auto channels_changed = last_sample_interval != sample_interval;
+    last_sample_interval = sample_interval;
+    analog_impl.inject_analog(
         {{std::span<double const>(buffer.begin(), buffer.end())}},
-        {sample_interval}, {""});
+        {sample_interval}, {""}, channels_changed);
   }
 
   void on_change(ObservableCollection::Action,
@@ -525,11 +537,11 @@ std::span<const std::string> ToggleNode::get_recommended_channels() const {
                                       impl->recommended_names.end());
 }
 
-void ToggleNode::inject(
+void ToggleNode::inject_analog(
     const thalamus::vector<std::span<double const>> &data,
     const thalamus::vector<std::chrono::nanoseconds> &sample_intervals,
-    const thalamus::vector<std::string_view> &names) {
-  impl->analog_impl.inject(data, sample_intervals, names);
+    const thalamus::vector<std::string_view> &names, bool channels_changed) {
+  impl->analog_impl.inject_analog(data, sample_intervals, names, channels_changed);
 }
 
 std::chrono::nanoseconds ToggleNode::sample_interval(int i) const {
@@ -539,6 +551,9 @@ std::chrono::nanoseconds ToggleNode::sample_interval(int i) const {
 std::chrono::nanoseconds ToggleNode::time() const { return impl->_time; }
 
 size_t ToggleNode::modalities() const { return infer_modalities<ToggleNode>(); }
+bool ToggleNode::channels_changed() const {
+  return impl->analog_impl.channels_changed();
+}
 size_t WaveGeneratorNode::modalities() const {
   return infer_modalities<WaveGeneratorNode>();
 }
@@ -554,4 +569,7 @@ bool WaveGeneratorNode::has_text_data() const {
 }
 bool WaveGeneratorNode::has_analog_data() const {
   return impl->has_analog;
+}
+bool WaveGeneratorNode::channels_changed() const {
+  return impl->analog_impl.channels_changed();
 }

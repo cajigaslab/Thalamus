@@ -327,6 +327,8 @@ add_library(thalamus "${CMAKE_SOURCE_DIR}/src/thalamus.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/serialtouchscreen_node.cpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/node_util.hpp"
                      "${CMAKE_SOURCE_DIR}/src/thalamus/node_util.cpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/blob_node.hpp"
+                     "${CMAKE_SOURCE_DIR}/src/thalamus/blob_node.cpp"
                      "${CMAKE_SOURCE_DIR}/proto/thalamus.proto"
                      "${VERT_SPV}"
                      "${FRAG_SPV}")
@@ -406,6 +408,10 @@ if(STRIP)
 else()
   add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "$<TARGET_FILE:native>" "${CMAKE_SOURCE_DIR}/thalamus")
 endif()
+if(WIN32 AND NOT THALAMUS_CI)
+  add_custom_command(TARGET native POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_PDB_FILE:native>" "${CMAKE_SOURCE_DIR}/thalamus")
+endif()
+
 if(BUILD_CRASHPAD)
   add_custom_command(TARGET native POST_BUILD COMMAND cmake -E copy "${CRASHPAD_HANDLER_EXE}" "${CMAKE_SOURCE_DIR}/thalamus")
 endif()

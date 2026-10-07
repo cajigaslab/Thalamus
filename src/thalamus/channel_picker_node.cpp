@@ -4,6 +4,9 @@
 
 namespace thalamus {
 struct ChannelPickerNode::Impl {
+  // Reported by channels_changed() on the next message with analog data,
+  // then cleared.
+  bool analog_channels_changed = true;
   ObservableDictPtr state;
   boost::signals2::scoped_connection state_connection;
   std::map<std::string, std::pair<boost::signals2::scoped_connection,
@@ -82,7 +85,7 @@ public:
       std::string temp = mapping_dict->at("Out Name");
       std::get<std::string>(mapping) = temp;
     }
-    outer->channels_changed(outer);
+    analog_channels_changed = true;
   }
 
   void on_source_mappings_change(std::weak_ptr<AnalogNode> node,
@@ -121,17 +124,15 @@ public:
         v_list->recap(std::bind(&Impl::on_source_mappings_change, this,
                                 weak_analog, _1, _2, _3));
 
-        sources_connections[node_name].first =
-            analog_node->channels_changed.connect([&, weak_analog](auto) {
-              auto locked = weak_analog.lock().get();
-              names_collected.erase(locked);
-              outer->channels_changed(outer);
-            });
         sources_connections[node_name].second = locked_source->ready.connect(
             [&, node_name, v_list, weak_analog](auto) {
               current_node = weak_analog.lock().get();
               if (!current_node->has_analog_data()) {
                 return;
+              }
+              if (current_node->channels_changed()) {
+                names_collected.erase(current_node);
+                analog_channels_changed = true;
               }
               if (!names_collected.contains(current_node)) {
                 if (current_node) {
@@ -164,6 +165,7 @@ public:
                 }
               }
               outer->ready(outer);
+              analog_channels_changed = false;
             });
       });
     } else if (a == ObservableCollection::Action::Delete) {
@@ -221,6 +223,10 @@ std::span<const double> ChannelPickerNode::data(int channel) const {
              : std::span<const double>();
 }
 
+bool ChannelPickerNode::channels_changed() const {
+  return impl->analog_channels_changed;
+}
+
 int ChannelPickerNode::num_channels() const {
   return int(std::min(impl->mappings.size(), impl->_max_channels));
 }
@@ -239,13 +245,6 @@ std::chrono::nanoseconds ChannelPickerNode::sample_interval(int channel) const {
   }
   auto &pair = impl->mappings.at(size_t(channel));
   return std::get<std::chrono::nanoseconds>(pair);
-}
-
-void ChannelPickerNode::inject(
-    const thalamus::vector<std::span<double const>> &,
-    const thalamus::vector<std::chrono::nanoseconds> &,
-    const thalamus::vector<std::string_view> &) {
-  THALAMUS_ASSERT(false, "Unimplemented");
 }
 
 bool ChannelPickerNode::has_analog_data() const { return true; }

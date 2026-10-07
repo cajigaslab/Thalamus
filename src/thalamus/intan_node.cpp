@@ -35,6 +35,9 @@ concept Streamable = requires(std::ostream os, T value) {
 };
 
 struct IntanNode::Impl {
+  // Reported by channels_changed() on the next message with analog data,
+  // then cleared.
+  bool analog_channels_changed = true;
   template <typename T> struct VarGuard {
     T &var;
     T end;
@@ -284,6 +287,7 @@ public:
         num_samples = 128;
         time = std::chrono::steady_clock::now().time_since_epoch();
         outer->ready(outer);
+        analog_channels_changed = false;
         for (auto &d : data) {
           d.clear();
         }
@@ -434,7 +438,7 @@ public:
         co_return;
       }
       sample_interval = std::chrono::nanoseconds(std::nano::den / samplerate);
-      outer->channels_changed(outer);
+      analog_channels_changed = true;
 
       THALAMUS_LOG(info) << "Starting " << sample_interval.count();
       command = "set runmode record;\n";
@@ -586,6 +590,10 @@ std::string_view IntanNode::name(int channel) const {
   return impl->names[size_t(channel)];
 }
 
+bool IntanNode::channels_changed() const {
+  return impl->analog_channels_changed;
+}
+
 int IntanNode::num_channels() const { return int(impl->data.size()); }
 
 std::chrono::nanoseconds IntanNode::sample_interval(int) const {
@@ -595,9 +603,5 @@ std::chrono::nanoseconds IntanNode::sample_interval(int) const {
 std::chrono::nanoseconds IntanNode::time() const { return impl->time; }
 
 std::string IntanNode::type_name() { return "INTAN"; }
-
-void IntanNode::inject(const thalamus::vector<std::span<double const>> &,
-                       const thalamus::vector<std::chrono::nanoseconds> &,
-                       const thalamus::vector<std::string_view> &) {}
 
 size_t IntanNode::modalities() const { return THALAMUS_MODALITY_ANALOG; }
