@@ -158,7 +158,12 @@ ABI. Rules:
   running Thalamus keeps encoding until it's restarted. Opting in deletes the
   marker and downloads. thalamus-contrib uses the binary whenever it's
   present.
-- STORAGE2 records H264, like MPEG4, as is (identity encoder).
+- STORAGE2 records H264 and VP9, like MPEG4, as is (identity encoder).
+- `VP9` (`Image.Format`, `ThalamusImageFormat_VP9`, `ImageNode::Format::VP9`)
+  and the `Opus` analog encoding (`AnalogResponse.Encoding`,
+  `ThalamusAnalogEncoding_Opus`, `AnalogNode::Encoding::Opus`) are likewise
+  enums only; thalamus-contrib's MEDIA_CONVERTER encodes and decodes them.
+  Opus buffers are packets framed with MPEG-TS Opus control headers.
 
 ## Analog data
 

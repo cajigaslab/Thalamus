@@ -168,7 +168,8 @@ extern "C" {
 
   enum ThalamusAnalogEncoding {
     ThalamusAnalogEncoding_None = 0,
-    ThalamusAnalogEncoding_AAC = 1
+    ThalamusAnalogEncoding_AAC = 1,
+    ThalamusAnalogEncoding_Opus = 2
   };
 
   enum ThalamusAnalogFormat {
@@ -217,7 +218,8 @@ extern "C" {
     ThalamusImageFormat_MPEG4 = 9,
     ThalamusImageFormat_Gray16 = 16,
     ThalamusImageFormat_RGB16 = 17,
-    ThalamusImageFormat_H264 = 18
+    ThalamusImageFormat_H264 = 18,
+    ThalamusImageFormat_VP9 = 19
   };
 
   struct ThalamusImageNode {

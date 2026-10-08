@@ -23,7 +23,9 @@ public:
     RGB16,
     MPEG4,
     // Encoded H.264 (Annex B); Thalamus passes it along but has no codec for it.
-    H264
+    H264,
+    // Encoded VP9, one frame per message; likewise no codec.
+    VP9
   };
   virtual ~ImageNode();
   virtual Plane plane(int) const = 0;

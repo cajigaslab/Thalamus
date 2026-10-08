@@ -571,6 +571,9 @@ struct RemoteNode::Impl {
             case thalamus_grpc::Image_Format_H264:
               format = ImageNode::Format::H264;
               break;
+            case thalamus_grpc::Image_Format_VP9:
+              format = ImageNode::Format::VP9;
+              break;
             case thalamus_grpc::Image_Format_MPEG1:
             case thalamus_grpc::Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
             case thalamus_grpc::Image_Format_Image_Format_INT_MAX_SENTINEL_DO_NOT_USE_:
