@@ -17,7 +17,8 @@ class AnalogNode {
 public:
   enum class Encoding {
     None,
-    AAC
+    AAC,
+    Opus
   };
   /// How a channel's samples are stored, i.e. which *data function reads
   /// them. Encoded channels have no samples in any of those: their samples

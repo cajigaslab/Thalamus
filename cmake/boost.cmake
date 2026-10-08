@@ -15,9 +15,15 @@ endif()
 FetchContent_MakeAvailable(boost_content)
 
 if(WIN32)
+  # Boost's bootstrap scripts call their helpers (e.g. config_toolset.bat) by
+  # bare name, and the build runs b2 from the source dir, both of which need
+  # cmd to search the current directory. NoDefaultCurrentDirectoryInExePath,
+  # set in some environments (e.g. GitHub's Windows runners), turns that off,
+  # so it's unset for these commands.
+  set(BOOST_WINDOWS_ENV "${CMAKE_COMMAND}" -E env --unset=NoDefaultCurrentDirectoryInExePath)
   execute_process(COMMAND dir "${boost_content_SOURCE_DIR}")
   add_custom_command(OUTPUT "${boost_content_SOURCE_DIR}/b2.exe"
-    COMMAND cmd /c call "${boost_content_SOURCE_DIR}/bootstrap.bat" clang-win
+    COMMAND ${BOOST_WINDOWS_ENV} cmd /c call bootstrap.bat clang-win
     WORKING_DIRECTORY ${boost_content_SOURCE_DIR})
 else()
   add_custom_command(OUTPUT "${boost_content_SOURCE_DIR}/b2"
@@ -59,7 +65,7 @@ if(WIN32)
  
   add_custom_command(OUTPUT ${BOOST_LIBS}
     DEPENDS "${boost_content_SOURCE_DIR}/b2.exe"
-    COMMAND b2 
+    COMMAND ${BOOST_WINDOWS_ENV} "${boost_content_SOURCE_DIR}/b2.exe"
     ${BOOST_TOOLSET}
     "${BOOST_CFLAGS}" 
     "cxxflags=${BOOST_ALL_COMPILE_OPTIONS_SPACED} -DBOOST_ASIO_HAS_STD_INVOKE_RESULT -D_WIN32_WINNT=0x0A00"

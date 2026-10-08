@@ -336,6 +336,9 @@ struct Storage2Node::Impl {
       case ImageNode::Format::H264:
         body->set_format(thalamus_grpc::Image::Format::Image_Format_H264);
         break;
+      case ImageNode::Format::VP9:
+        body->set_format(thalamus_grpc::Image::Format::Image_Format_VP9);
+        break;
       }
 
       for (auto i = 0; i < int(locked_analog->num_planes()); ++i) {
@@ -1264,6 +1267,7 @@ struct Storage2Node::Impl {
             case thalamus_grpc::Image::Format::Image_Format_MPEG1:
             case thalamus_grpc::Image::Format::Image_Format_MPEG4:
             case thalamus_grpc::Image::Format::Image_Format_H264:
+            case thalamus_grpc::Image::Format::Image_Format_VP9:
               use_identity_encoder = true;
               break;
             case thalamus_grpc::Image::Format::Image_Format_MJPEG:

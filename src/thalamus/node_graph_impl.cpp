@@ -312,6 +312,8 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
       return Encoding::None;
     case ThalamusAnalogEncoding_AAC:
       return Encoding::AAC;
+    case ThalamusAnalogEncoding_Opus:
+      return Encoding::Opus;
     }
     THALAMUS_ABORT("Unknown encoding");
   }
@@ -411,6 +413,8 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
       return ImageNode::Format::MPEG4;
     case ThalamusImageFormat_H264:
       return ImageNode::Format::H264;
+    case ThalamusImageFormat_VP9:
+      return ImageNode::Format::VP9;
     case ThalamusImageFormat_MPEG1:
       THALAMUS_ABORT("MPEG1 is no longer supported");
     }
@@ -621,6 +625,8 @@ static ThalamusAnalogEncoding plugin_analog_encoding(struct ThalamusNode* node) 
     return ThalamusAnalogEncoding_None;
   case AnalogNode::Encoding::AAC:
     return ThalamusAnalogEncoding_AAC;
+  case AnalogNode::Encoding::Opus:
+    return ThalamusAnalogEncoding_Opus;
   }
   THALAMUS_ABORT("Unknown encoding");
 }
@@ -762,6 +768,8 @@ static ThalamusImageFormat plugin_image_format(struct ThalamusNode* node) {
     return ThalamusImageFormat_MPEG4;
   case ImageNode::Format::H264:
     return ThalamusImageFormat_H264;
+  case ImageNode::Format::VP9:
+    return ThalamusImageFormat_VP9;
   }
 }
 

@@ -1399,6 +1399,9 @@ struct ImageSession : public NodeSession<ImageNode, thalamus_grpc::Image> {
       case ImageNode::Format::H264:
         format = thalamus_grpc::Image::Format::Image_Format_H264;
         break;
+      case ImageNode::Format::VP9:
+        format = thalamus_grpc::Image::Format::Image_Format_VP9;
+        break;
       }
 
       while (position < data_count) {

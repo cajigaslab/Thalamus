@@ -214,6 +214,8 @@ message Image {
     MJPEG = 11;
     // Enum only: Thalamus itself has no H.264 codec.
     H264 = 12;
+    // Enum only: Thalamus itself has no VP9 codec.
+    VP9 = 13;
   }
   repeated bytes data = 1;
   uint32 width = 2;
@@ -335,6 +337,8 @@ message AnalogResponse {
   enum Encoding {
     None = 0;
     AAC = 1;
+    // Opus packets, each preceded by an MPEG-TS Opus control header.
+    Opus = 2;
   }
   
   repeated double data = 1;
