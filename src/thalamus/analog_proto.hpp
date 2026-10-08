@@ -57,6 +57,8 @@ inline thalamus_grpc::AnalogResponse::Encoding to_proto(AnalogNode::Encoding enc
     return thalamus_grpc::AnalogResponse::Encoding::AnalogResponse_Encoding_None;
   case AnalogNode::Encoding::AAC:
     return thalamus_grpc::AnalogResponse::Encoding::AnalogResponse_Encoding_AAC;
+  case AnalogNode::Encoding::Opus:
+    return thalamus_grpc::AnalogResponse::Encoding::AnalogResponse_Encoding_Opus;
   }
   return thalamus_grpc::AnalogResponse::Encoding::AnalogResponse_Encoding_None;
 }
@@ -67,6 +69,8 @@ inline std::optional<AnalogNode::Encoding> from_proto(thalamus_grpc::AnalogRespo
     return AnalogNode::Encoding::None;
   } else if (encoding == thalamus_grpc::AnalogResponse::Encoding::AnalogResponse_Encoding_AAC) {
     return AnalogNode::Encoding::AAC;
+  } else if (encoding == thalamus_grpc::AnalogResponse::Encoding::AnalogResponse_Encoding_Opus) {
+    return AnalogNode::Encoding::Opus;
   }
   return std::nullopt;
 }
