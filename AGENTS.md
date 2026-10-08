@@ -95,6 +95,17 @@ ABI. Rules:
   tree (the whole config), which `ThalamusAPIImpl` holds while the node graph
   exists. Plugins on an older Thalamus walk `state_parent` from any state
   until it returns null.
+- `node_request(node, request, callback, data)` (slot 143) sends a JSON
+  request to a node's `process`, like the `node_request` gRPC call. The node
+  is one the plugin got from `node_get_node` (held with `node_inc_ref` to use
+  it later). Call it on the main thread. Node wrappers hold a `weak_ptr` to
+  their node, so a request to a destroyed node reports `Destroyed`, and
+  `get_node_ref` doesn't reuse an expired wrapper for a new node at the same
+  address. A `NodeRequestCall` owned by the closure passed to `process`
+  guarantees the callback runs exactly once: with the response (`Ok`),
+  `Destroyed`, or `Dropped` if the node destroys the closure without
+  responding. The callback is always posted to the io_context, so it runs on
+  the main thread and never before `node_request` returns.
 - Spans returned through the API are borrowed and only valid during the
   `ready`/`get_node` callback.
 - A node with a modality doesn't have that data in every message (an image
