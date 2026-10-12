@@ -29,12 +29,13 @@ public:
   static std::string type_name();
   std::span<const double> data(int channel) const override;
   int num_channels() const override;
+  bool channels_changed() const override;
   std::chrono::nanoseconds sample_interval(int i) const override;
   std::chrono::nanoseconds time() const override;
   void
-  inject(const thalamus::vector<std::span<double const>> &spans,
+  inject_analog(const thalamus::vector<std::span<double const>> &spans,
          const thalamus::vector<std::chrono::nanoseconds> &sample_intervals,
-         const thalamus::vector<std::string_view> &names) override;
+         const thalamus::vector<std::string_view> &names, bool) override;
   static int get_num_channels(const std::string &channel);
   std::string_view name(int channel) const override;
 

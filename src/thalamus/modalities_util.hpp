@@ -6,6 +6,7 @@
 #include <thalamus/stim_node.hpp>
 #include <thalamus/text_node.hpp>
 #include <thalamus/xsens_node.hpp>
+#include <thalamus/blob_node.hpp>
 
 namespace thalamus {
 template <typename T> constexpr size_t infer_modalities() {
@@ -18,6 +19,7 @@ template <typename T> constexpr size_t infer_modalities() {
   result |= std::is_base_of<ImageNode, T>::value ? THALAMUS_MODALITY_IMAGE : 0;
   result |= std::is_base_of<TextNode, T>::value ? THALAMUS_MODALITY_TEXT : 0;
   result |= std::is_base_of<StimNode, T>::value ? THALAMUS_MODALITY_STIM : 0;
+  result |= std::is_base_of<BlobNode, T>::value ? THALAMUS_MODALITY_BLOB : 0;
   return result;
 }
 
@@ -40,6 +42,9 @@ template <typename T> T node_cast(Node *node) {
                                                  : nullptr;
   } else if constexpr (std::is_same<T, StimNode *>::value) {
     return (modalities & THALAMUS_MODALITY_STIM) ? dynamic_cast<T>(node)
+                                                 : nullptr;
+  } else if constexpr (std::is_same<T, BlobNode *>::value) {
+    return (modalities & THALAMUS_MODALITY_BLOB) ? dynamic_cast<T>(node)
                                                  : nullptr;
   } else {
     return dynamic_cast<T>(node);

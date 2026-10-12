@@ -75,7 +75,7 @@ TEST(WallClockNodeTest, Test) {
   ASSERT_EQ(node->modalities(), THALAMUS_MODALITY_ANALOG);
 
   std::vector<double> a = {15};
-  node->inject({a}, {2s}, {"Gibberish"});
+  node->inject_analog({a}, {2s}, {"Gibberish"});
   ASSERT_EQ(system_times.size(), 3);
   ASSERT_NEAR(system_times.back(), 15, 1e-6);
 }

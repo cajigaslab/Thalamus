@@ -788,10 +788,10 @@ std::span<const std::string> AlphaOmegaNode::get_recommended_channels() const {
 
 int AlphaOmegaNode::num_channels() const { return 2 * impl->_num_channels; }
 
-void AlphaOmegaNode::inject(
+void AlphaOmegaNode::inject_analog(
     const thalamus::vector<std::span<double const>> &data,
     const thalamus::vector<std::chrono::nanoseconds> &sample_intervals,
-    const thalamus::vector<std::string_view> &) {
+    const thalamus::vector<std::string_view> &, bool) {
   impl->spans.assign(data.begin(), data.end());
   impl->sample_interval_overrides = sample_intervals;
   impl->time = std::chrono::steady_clock::now().time_since_epoch();

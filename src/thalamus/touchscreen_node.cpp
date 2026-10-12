@@ -140,12 +140,6 @@ std::chrono::nanoseconds TouchScreenNode::sample_interval(int) const {
   return 0ns;
 }
 
-void TouchScreenNode::inject(const thalamus::vector<std::span<double const>> &,
-                             const thalamus::vector<std::chrono::nanoseconds> &,
-                             const thalamus::vector<std::string_view> &) {
-  THALAMUS_ASSERT(false, "Unimplemented");
-}
-
 bool TouchScreenNode::has_analog_data() const { return true; }
 
 size_t TouchScreenNode::modalities() const {

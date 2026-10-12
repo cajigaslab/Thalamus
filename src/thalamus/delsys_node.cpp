@@ -5,6 +5,9 @@
 
 namespace thalamus {
 struct DelsysNode::Impl {
+  // Reported by channels_changed() on the next message with analog data,
+  // then cleared.
+  bool analog_channels_changed = true;
   std::string location;
   boost::asio::io_context& io_context;
   ObservableDictPtr state;
@@ -61,9 +64,10 @@ struct DelsysNode::Impl {
     has_analog_data = true;
     has_text_data = false;
     if(response.channels_changed()) {
-      outer->channels_changed(outer);
+      analog_channels_changed = true;
     }
     outer->ready(outer);
+    analog_channels_changed = false;
   }
 
   void on_text(const thalamus_grpc::Text& response) {
@@ -160,14 +164,12 @@ DelsysNode::DelsysNode(ObservableDictPtr state, boost::asio::io_context & io_con
 
 DelsysNode::~DelsysNode() {}
 
-void DelsysNode::inject(const thalamus::vector<std::span<double const>> &,
-            const thalamus::vector<std::chrono::nanoseconds> &,
-            const thalamus::vector<std::string_view> &) {
-  THALAMUS_ASSERT(false, "Unimplemented");
-}
-
 std::string_view DelsysNode::name(int i) const {
   return impl->names[size_t(i)];
+}
+
+bool DelsysNode::channels_changed() const {
+  return impl->analog_channels_changed;
 }
 
 int DelsysNode::num_channels() const {

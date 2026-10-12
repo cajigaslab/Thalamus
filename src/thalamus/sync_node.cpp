@@ -5,6 +5,9 @@
 
 namespace thalamus {
 struct SyncNode::Impl {
+  // Reported by channels_changed() on the next message with analog data,
+  // then cleared.
+  bool analog_channels_changed = true;
   ObservableDictPtr state;
   boost::signals2::scoped_connection state_connection;
   std::map<std::string, std::pair<boost::signals2::scoped_connection,
@@ -62,8 +65,6 @@ struct SyncNode::Impl {
   };
   std::vector<Pair> pairs;
   std::map<std::string, boost::signals2::scoped_connection> data_connections;
-  std::map<std::string, boost::signals2::scoped_connection>
-      channels_connections;
   std::map<std::string, boost::signals2::scoped_connection> node_connections;
   ObservableCollection *pairs_state;
 
@@ -131,6 +132,9 @@ public:
   void on_data(AnalogNode *analog, Node *node) {
     if (!analog->has_analog_data()) {
       return;
+    }
+    if (analog->channels_changed()) {
+      on_channels_changed(analog);
     }
     auto publish = true;
     for (auto &p : pairs) {
@@ -229,6 +233,7 @@ public:
     if (publish) {
       current_time = analog->time();
       outer->ready(outer);
+      analog_channels_changed = false;
     }
   }
 
@@ -237,7 +242,7 @@ public:
       p.channel1_index = -1;
       p.channel2_index = -1;
     }
-    outer->channels_changed(outer);
+    analog_channels_changed = true;
   }
 
   Pair &get_pair(ObservableCollection *source) {
@@ -294,10 +299,7 @@ public:
               auto analog_node = node_cast<AnalogNode *>(locked.get());
               data_connections[value_str] = locked->ready.connect(
                   std::bind(&Impl::on_data, this, analog_node, _1));
-              channels_connections[value_str] =
-                  analog_node->channels_changed.connect(
-                      std::bind(&Impl::on_channels_changed, this, _1));
-              outer->channels_changed(outer);
+              analog_channels_changed = true;
             });
       } else if (key_str == "Channel 1") {
         auto &pair = get_pair(source);
@@ -306,7 +308,7 @@ public:
         pair.out_channel_name = absl::StrFormat(
             "%s[%s]-%s[%s]", pair.node1_name, pair.channel1_name,
             pair.node2_name, pair.channel2_name);
-        outer->channels_changed(outer);
+        analog_channels_changed = true;
       } else if (key_str == "Channel 2") {
         auto &pair = get_pair(source);
         auto value_str = std::get<std::string>(v);
@@ -314,7 +316,7 @@ public:
         pair.out_channel_name = absl::StrFormat(
             "%s[%s]-%s[%s]", pair.node1_name, pair.channel1_name,
             pair.node2_name, pair.channel2_name);
-        outer->channels_changed(outer);
+        analog_channels_changed = true;
       } else if (key_str == "Threshold") {
         auto &pair = get_pair(source);
         pair.threshold = std::get<double>(v);
@@ -342,6 +344,10 @@ std::span<const double> SyncNode::data(int channel) const {
   return std::span<const double>(&pair.lag, &pair.lag + 1);
 }
 
+bool SyncNode::channels_changed() const {
+  return impl->analog_channels_changed;
+}
+
 int SyncNode::num_channels() const { return int(impl->pairs.size()); }
 
 std::string_view SyncNode::name(int channel) const {
@@ -349,12 +355,6 @@ std::string_view SyncNode::name(int channel) const {
 }
 
 std::chrono::nanoseconds SyncNode::sample_interval(int) const { return 0ns; }
-
-void SyncNode::inject(const thalamus::vector<std::span<double const>> &,
-                      const thalamus::vector<std::chrono::nanoseconds> &,
-                      const thalamus::vector<std::string_view> &) {
-  THALAMUS_ASSERT(false, "Unimplemented");
-}
 
 bool SyncNode::has_analog_data() const { return true; }
 

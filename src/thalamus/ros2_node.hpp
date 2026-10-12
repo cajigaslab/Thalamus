@@ -25,9 +25,6 @@ public:
   std::chrono::nanoseconds sample_interval(int channel) const override;
   std::chrono::nanoseconds time() const override;
   std::string_view name(int channel) const override;
-  void inject(const thalamus::vector<std::span<double const>> &,
-              const thalamus::vector<std::chrono::nanoseconds> &,
-              const thalamus::vector<std::string_view> &) override;
 
   static bool prepare();
   static void cleanup();

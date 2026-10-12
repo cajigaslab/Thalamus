@@ -42,9 +42,9 @@ public:
   int num_channels() const override;
   std::chrono::nanoseconds sample_interval(int channel) const override;
   std::string_view name(int channel) const override;
-  void inject(const thalamus::vector<std::span<double const>> &,
+  void inject_analog(const thalamus::vector<std::span<double const>> &,
               const thalamus::vector<std::chrono::nanoseconds> &,
-              const thalamus::vector<std::string_view> &) override;
+              const thalamus::vector<std::string_view> &, bool) override;
   bool has_analog_data() const override;
   size_t modalities() const override;
   void predrop(std::function<void()> drop_ready) override;

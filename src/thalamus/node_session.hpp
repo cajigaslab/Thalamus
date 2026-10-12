@@ -90,24 +90,19 @@ namespace thalamus {
       timer.cancel();
       state->joining = true;
     }
-        
-    void OnDone() override {
-      THALAMUS_LOG(trace) << "OnDone" << std::endl;
-      ServerWriteReactor<RESPONSE>::OnDone();
-    }
-
-    void OnCancel() override {
-      THALAMUS_LOG(trace) << "OnCancel" << std::endl;
-      grpc::ServerWriteReactor<RESPONSE>::Finish(grpc::Status::OK);
-      //delete this;
-    }
 
     void get_node() {
       //THALAMUS_LOG(trace) << "getting node";
-      boost::asio::post(io_context, [&] {
-        get_node_connection = node_graph.get_node_scoped(selector, [&,c_state=state](auto ptr) {
-          std::lock_guard<std::mutex> lock(c_state->mutex);
-          if(c_state->joining) {
+      boost::asio::post(io_context, [&,c_state=state] {
+        std::lock_guard<std::mutex> lock(c_state->mutex);
+        if(c_state->joining) {
+          THALAMUS_LOG(trace) << "post joined";
+          return;
+        }
+
+        get_node_connection = node_graph.get_node_scoped(selector, [&,c2_state=c_state](auto ptr) {
+          std::lock_guard<std::mutex> lock2(c2_state->mutex);
+          if(c2_state->joining) {
             THALAMUS_LOG(trace) << "get_node_connection joined";
             return;
           }
@@ -117,7 +112,7 @@ namespace thalamus {
           typed_node = node_cast<NODE *>(raw_node.get());
           if (!typed_node) {
             timer.expires_after(1s);
-            timer.async_wait(std::bind(&NodeSession<NODE, RESPONSE>::on_timer_get_node, this, _1));
+            timer.async_wait(std::bind(&NodeSession<NODE, RESPONSE>::on_timer_get_node, this, _1, c2_state));
             return;
           }
           on_node();
@@ -133,47 +128,47 @@ namespace thalamus {
       raw_node.reset();
 
       timer.expires_after(1s);
-      timer.async_wait(std::bind(&NodeSession<NODE, RESPONSE>::on_timer_check_expired, this, _1));
+      timer.async_wait(std::bind(&NodeSession<NODE, RESPONSE>::on_timer_check_expired, this, _1, state));
     }
 
-    void on_timer_get_node(const boost::system::error_code &error) {
+    void on_timer_get_node(const boost::system::error_code &error, std::shared_ptr<State> c_state) {
       if (error.value() == boost::asio::error::operation_aborted) {
         return;
       }
       THALAMUS_ASSERT(!error, "Unexpected error");
+
+      std::lock_guard<std::mutex> lock(c_state->mutex);
+      if(c_state->joining) {
+        return;
+      }
 
       get_node();
     }
 
-    void on_timer_check_expired(const boost::system::error_code &error) {
+    void on_timer_check_expired(const boost::system::error_code &error, std::shared_ptr<State> c_state) {
       if (error.value() == boost::asio::error::operation_aborted) {
         return;
       }
       THALAMUS_ASSERT(!error, "Unexpected error");
 
-      std::lock_guard<std::mutex> lock(state->mutex);
+      std::lock_guard<std::mutex> lock(c_state->mutex);
+      if(c_state->joining) {
+        return;
+      }
+
       if(weak_raw_node.lock() == nullptr) {
         THALAMUS_LOG(trace) << "node expired";
         timer.expires_after(1s);
-        timer.async_wait(std::bind(&NodeSession<NODE, RESPONSE>::on_timer_get_node, this, _1));
+        timer.async_wait(std::bind(&NodeSession<NODE, RESPONSE>::on_timer_get_node, this, _1, c_state));
       } else {
         timer.expires_after(1s);
-        timer.async_wait(std::bind(&NodeSession<NODE, RESPONSE>::on_timer_check_expired, this, _1));
+        timer.async_wait(std::bind(&NodeSession<NODE, RESPONSE>::on_timer_check_expired, this, _1, c_state));
       }
     }
   };
 
   template <typename NODE, typename REQUEST>
   struct NodeReadSession : public ServerReadReactor<REQUEST> {
-    struct State {
-      std::mutex mutex;
-      bool joining = false;
-      ~State() {
-        THALAMUS_LOG(trace) << "Delete State";
-      }
-    };
-    std::shared_ptr<State> state = std::make_shared<State>();
-
     NodeGraph& node_graph;
     boost::asio::io_context& io_context;
     boost::asio::steady_timer timer;
@@ -200,25 +195,17 @@ namespace thalamus {
       start_join();
     }
 
-    void start_join() {
-      THALAMUS_LOG(trace) << "start_join";
-      std::lock_guard<std::mutex> lock(state->mutex);
-      timer.cancel();
-      state->joining = true;
-    }
-        
-    void OnDone() override {
-      THALAMUS_LOG(trace) << "OnDone" << std::endl;
-      ServerReadReactor<REQUEST>::OnDone();
-    }
-
-    void OnCancel() override {
-      THALAMUS_LOG(trace) << "OnCancel" << std::endl;
-      grpc::ServerReadReactor<REQUEST>::Finish(grpc::Status::OK);
-      //delete this;
+    void start_join(std::function<void()> cleanup = nullptr) override {
+      ServerReadReactor<REQUEST>::start_join([&] {
+        if(cleanup) {
+          cleanup();
+        }
+        timer.cancel();
+      });
     }
 
     void set_selector(const thalamus_grpc::NodeSelector& new_selector) {
+      auto state = ServerReadReactor<REQUEST>::state;
       boost::asio::post(io_context, [&,c_state=state,new_selector] {
         std::lock_guard<std::mutex> lock(c_state->mutex);
         if(c_state->joining) {
@@ -232,10 +219,17 @@ namespace thalamus {
 
     void get_node() {
       //THALAMUS_LOG(trace) << "getting node";
-      boost::asio::post(io_context, [&] {
-        get_node_connection = node_graph.get_node_scoped(selector, [&,c_state=state](auto ptr) {
-          std::lock_guard<std::mutex> lock(c_state->mutex);
-          if(c_state->joining) {
+      auto state = ServerReadReactor<REQUEST>::state;
+      boost::asio::post(io_context, [&,c_state=state] {
+        std::lock_guard<std::mutex> lock(c_state->mutex);
+        if(c_state->joining) {
+          THALAMUS_LOG(trace) << "get_node_connection joined";
+          return;
+        }
+
+        get_node_connection = node_graph.get_node_scoped(selector, [&,c2_state=c_state](auto ptr) {
+          std::lock_guard<std::mutex> lock2(c2_state->mutex);
+          if(c2_state->joining) {
             THALAMUS_LOG(trace) << "get_node_connection joined";
             return;
           }
@@ -245,7 +239,7 @@ namespace thalamus {
           typed_node = node_cast<NODE *>(raw_node.get());
           if (!typed_node) {
             timer.expires_after(1s);
-            timer.async_wait(std::bind(&NodeReadSession<NODE, REQUEST>::on_timer_get_node, this, _1));
+            timer.async_wait(std::bind(&NodeReadSession<NODE, REQUEST>::on_timer_get_node, this, _1, c2_state));
             return;
           }
           
@@ -253,7 +247,7 @@ namespace thalamus {
           raw_node.reset();
 
           timer.expires_after(1s);
-          timer.async_wait(std::bind(&NodeReadSession<NODE, REQUEST>::on_timer_check_expired, this, _1));
+          timer.async_wait(std::bind(&NodeReadSession<NODE, REQUEST>::on_timer_check_expired, this, _1, c2_state));
           on_node();
         });
       });
@@ -265,29 +259,166 @@ namespace thalamus {
 
     virtual void on_node() {}
 
-    void on_timer_get_node(const boost::system::error_code &error) {
+    void on_timer_get_node(const boost::system::error_code &error, std::shared_ptr<typename ServerReadReactor<REQUEST>::State> c_state) {
       if (error.value() == boost::asio::error::operation_aborted) {
         return;
       }
       THALAMUS_ASSERT(!error, "Unexpected error");
+
+      std::lock_guard<std::mutex> lock(c_state->mutex);
+      if(c_state->joining) {
+        return;
+      }
 
       get_node();
     }
 
-    void on_timer_check_expired(const boost::system::error_code &error) {
+    void on_timer_check_expired(const boost::system::error_code &error, std::shared_ptr<typename ServerReadReactor<REQUEST>::State> c_state) {
       if (error.value() == boost::asio::error::operation_aborted) {
         return;
       }
       THALAMUS_ASSERT(!error, "Unexpected error");
 
-      std::lock_guard<std::mutex> lock(state->mutex);
+      std::lock_guard<std::mutex> lock(c_state->mutex);
+      if(c_state->joining) {
+        return;
+      }
+
       if(weak_raw_node.lock() == nullptr) {
         THALAMUS_LOG(trace) << "node expired";
         timer.expires_after(1s);
-        timer.async_wait(std::bind(&NodeReadSession<NODE, REQUEST>::on_timer_get_node, this, _1));
+        timer.async_wait(std::bind(&NodeReadSession<NODE, REQUEST>::on_timer_get_node, this, _1, c_state));
       } else {
         timer.expires_after(1s);
-        timer.async_wait(std::bind(&NodeReadSession<NODE, REQUEST>::on_timer_check_expired, this, _1));
+        timer.async_wait(std::bind(&NodeReadSession<NODE, REQUEST>::on_timer_check_expired, this, _1, c_state));
+      }
+    }
+  };
+
+  template <typename NODE, typename REQUEST, typename RESPONSE>
+  struct NodeBidiSession : public ServerBidiReactor2<REQUEST, RESPONSE> {
+    NodeGraph& node_graph;
+    boost::asio::io_context& io_context;
+    boost::asio::steady_timer timer;
+    boost::signals2::scoped_connection get_node_connection;
+    thalamus_grpc::NodeSelector selector;
+    std::weak_ptr<Node> weak_raw_node;
+    std::shared_ptr<Node> raw_node;
+    NODE* typed_node;
+    ContextGuard context_guard;
+
+    NodeBidiSession(NodeGraph& _node_graph, boost::asio::io_context& _io_context,
+                  ::grpc::CallbackServerContext& server_context,
+                  ContextGuard&& _context_guard)
+    : ServerBidiReactor2<REQUEST, RESPONSE>(server_context, _io_context)
+    , node_graph(_node_graph)
+    , io_context(_io_context)
+    , timer(_io_context)
+    , context_guard(std::move(_context_guard)) {
+      THALAMUS_LOG(trace) << "Create NodeBidiSession";
+    }
+
+    ~NodeBidiSession() override {
+      THALAMUS_LOG(trace) << "Delete NodeBidiSession";
+      start_join();
+    }
+
+    void start_join(std::function<void()> cleanup = nullptr) override {
+      ServerBidiReactor2<REQUEST, RESPONSE>::start_join([&] {
+        if(cleanup) {
+          cleanup();
+        }
+        timer.cancel();
+      });
+    }
+
+    void set_selector(const thalamus_grpc::NodeSelector& new_selector) {
+      auto state = ServerBidiReactor2<REQUEST, RESPONSE>::state;
+      boost::asio::post(io_context, [&,c_state=state,new_selector] {
+        std::lock_guard<std::mutex> lock(c_state->mutex);
+        if(c_state->joining) {
+          THALAMUS_LOG(trace) << "get_node_connection joined";
+          return;
+        }
+        this->selector = new_selector;
+        get_node();
+      });
+    }
+
+    void get_node() {
+      //THALAMUS_LOG(trace) << "getting node";
+      auto state = ServerBidiReactor2<REQUEST, RESPONSE>::state;
+      boost::asio::post(io_context, [&,c_state=state] {
+        std::lock_guard<std::mutex> lock(c_state->mutex);
+        if(c_state->joining) {
+          THALAMUS_LOG(trace) << "get_node_connection joined";
+          return;
+        }
+
+        get_node_connection = node_graph.get_node_scoped(selector, [&,c2_state=c_state](auto ptr) {
+          std::unique_lock<std::mutex> lock2(c2_state->mutex);
+          if(c2_state->joining) {
+            THALAMUS_LOG(trace) << "get_node_connection joined";
+            return;
+          }
+
+          weak_raw_node = ptr;
+          raw_node = ptr.lock();
+          typed_node = node_cast<NODE *>(raw_node.get());
+          if (!typed_node) {
+            timer.expires_after(1s);
+            timer.async_wait(std::bind(&NodeBidiSession<NODE, REQUEST, RESPONSE>::on_timer_get_node, this, _1, c2_state));
+            return;
+          }
+          
+          THALAMUS_LOG(trace) << "got node";
+          raw_node.reset();
+
+          timer.expires_after(1s);
+          timer.async_wait(std::bind(&NodeBidiSession<NODE, REQUEST, RESPONSE>::on_timer_check_expired, this, _1, c2_state));
+          on_node(lock2);
+        });
+      });
+    }
+
+    std::shared_ptr<Node> lock() {
+      return typed_node ? weak_raw_node.lock() : std::shared_ptr<Node>();
+    }
+
+    virtual void on_node(std::unique_lock<std::mutex>&) {}
+
+    void on_timer_get_node(const boost::system::error_code &error, std::shared_ptr<typename ServerBidiReactor2<REQUEST, RESPONSE>::State> c_state) {
+      if (error.value() == boost::asio::error::operation_aborted) {
+        return;
+      }
+      THALAMUS_ASSERT(!error, "Unexpected error");
+
+      std::lock_guard<std::mutex> lock(c_state->mutex);
+      if(c_state->joining) {
+        return;
+      }
+
+      get_node();
+    }
+
+    void on_timer_check_expired(const boost::system::error_code &error, std::shared_ptr<typename ServerBidiReactor2<REQUEST, RESPONSE>::State> c_state) {
+      if (error.value() == boost::asio::error::operation_aborted) {
+        return;
+      }
+      THALAMUS_ASSERT(!error, "Unexpected error");
+
+      std::lock_guard<std::mutex> lock(c_state->mutex);
+      if(c_state->joining) {
+        return;
+      }
+
+      if(weak_raw_node.lock() == nullptr) {
+        THALAMUS_LOG(trace) << "node expired";
+        timer.expires_after(1s);
+        timer.async_wait(std::bind(&NodeBidiSession<NODE, REQUEST, RESPONSE>::on_timer_get_node, this, _1, c_state));
+      } else {
+        timer.expires_after(1s);
+        timer.async_wait(std::bind(&NodeBidiSession<NODE, REQUEST, RESPONSE>::on_timer_check_expired, this, _1, c_state));
       }
     }
   };

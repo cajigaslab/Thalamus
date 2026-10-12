@@ -242,12 +242,6 @@ std::chrono::nanoseconds SerialTouchScreenNode::sample_interval(int) const {
   return impl->sample_interval;
 }
 
-void SerialTouchScreenNode::inject(const thalamus::vector<std::span<double const>> &,
-                             const thalamus::vector<std::chrono::nanoseconds> &,
-                             const thalamus::vector<std::string_view> &) {
-  THALAMUS_ASSERT(false, "Unimplemented");
-}
-
 bool SerialTouchScreenNode::has_analog_data() const { return true; }
 
 size_t SerialTouchScreenNode::modalities() const {

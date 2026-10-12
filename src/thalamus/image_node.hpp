@@ -21,7 +21,11 @@ public:
     MJPEG,
     Gray16,
     RGB16,
-    MPEG4
+    MPEG4,
+    // Encoded H.264 (Annex B); Thalamus passes it along but has no codec for it.
+    H264,
+    // Encoded VP9, one frame per message; likewise no codec.
+    VP9
   };
   virtual ~ImageNode();
   virtual Plane plane(int) const = 0;
@@ -59,10 +63,11 @@ public:
   int num_channels() const override;
   std::chrono::nanoseconds sample_interval(int channel) const override;
   std::string_view name(int channel) const override;
-  void inject(const thalamus::vector<std::span<double const>> &,
+  void inject_analog(const thalamus::vector<std::span<double const>> &,
               const thalamus::vector<std::chrono::nanoseconds> &,
-              const thalamus::vector<std::string_view> &) override;
+              const thalamus::vector<std::string_view> &, bool) override;
   bool has_analog_data() const override;
+  bool channels_changed() const override;
   size_t modalities() const override;
 };
 } // namespace thalamus

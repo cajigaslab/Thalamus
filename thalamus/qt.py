@@ -9,7 +9,8 @@ if HAS_QT6:
                            QContextMenuEvent, QAction, QPixmap, QPainterPath, QBrush, QKeyEvent, QStandardItemModel,
                            QSurfaceFormat, QOffscreenSurface, QOpenGLContext, QPen, QFontMetrics, QCloseEvent,
                            QMoveEvent, QResizeEvent, QMatrix4x4, QVector3D, QPaintEvent, QQuaternion, QWheelEvent,
-                           QIcon, QFontDatabase, QRadialGradient, QWheelEvent, QGuiApplication, QLinearGradient, QMovie)
+                           QIcon, QFontDatabase, QRadialGradient, QWheelEvent, QGuiApplication, QLinearGradient, QMovie,
+                           QPalette)
   from PyQt6.QtWidgets import (QWidget, QProgressDialog, QSizePolicy, QAbstractScrollArea, QGridLayout, QSlider, 
                                QSpinBox, QLabel, QVBoxLayout, QHBoxLayout, QComboBox, QSpinBox, QCheckBox,
                                QPushButton, QDialog, QRadioButton, QTextEdit, QMainWindow, QFileDialog, QMenu,
@@ -28,11 +29,11 @@ if HAS_QT6:
   from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 
   def qt_is_dark_mode():
-    hints = QGuiApplication.styleHints()
-    if hasattr(hints, 'colorScheme'):
-      return hints.colorScheme() == Qt.ColorScheme.Dark
-    else:
-      return False
+    # Judged from the palette widgets are drawn with, not the OS color scheme:
+    # Qt's default Windows style before 6.7 ignores system dark mode and
+    # draws light windows even when styleHints().colorScheme() says Dark.
+    window = QGuiApplication.palette().color(QPalette.ColorRole.Window)
+    return window.lightness() < 128
 
   def qt_to_polygonf(polygon):
     return polygon.toPolygonF()
@@ -74,7 +75,7 @@ else:
                            QOpenGLFramebufferObject, QPen, QStandardItem, QTextCursor, QFontMetrics, QCloseEvent,
                            QMoveEvent, QResizeEvent, QMatrix4x4, QVector3D, QPaintEvent, QQuaternion, QWheelEvent,
                            QOpenGLBuffer, QOpenGLShaderProgram, QOpenGLShader, QIcon, QFontDatabase, QRadialGradient,
-                           QWheelEvent, QGuiApplication, QLinearGradient, QMovie)
+                           QWheelEvent, QGuiApplication, QLinearGradient, QMovie, QPalette)
   from PyQt5.QtWidgets import (QWidget, QProgressDialog, QSizePolicy, QAbstractScrollArea, QGridLayout, QSlider, 
                                QSpinBox, QLabel, QVBoxLayout, QHBoxLayout, QComboBox, QSpinBox, QCheckBox, QPushButton,
                                QDialog, QRadioButton, QTextEdit, QMainWindow, QFileDialog, QMenu, QInputDialog, 
@@ -90,7 +91,9 @@ else:
   from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 
   def qt_is_dark_mode():
-    return False
+    # Judged from the palette widgets are drawn with; see the PyQt6 version.
+    window = QGuiApplication.palette().color(QPalette.Window)
+    return window.lightness() < 128
 
   def qt_to_polygonf(polygon) -> QPolygonF:
     return QPolygonF(polygon)

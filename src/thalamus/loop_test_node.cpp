@@ -84,11 +84,12 @@ struct LoopTestNode::Impl {
               return;
             }
             source = analog;
-            channels_changed_connection = source->channels_changed.connect(
-                [&](auto arg) { source_channel_index = -1; });
             channels_changed_connection = locked->ready.connect([&](auto arg) {
               if (!source->has_analog_data()) {
                 return;
+              }
+              if (source->channels_changed()) {
+                source_channel_index = -1;
               }
               if (source_channel_index == -1) {
                 for (auto i = 0; i < source->num_channels(); ++i) {
@@ -138,11 +139,6 @@ std::chrono::nanoseconds LoopTestNode::sample_interval(int channel) const {
 }
 
 std::string_view LoopTestNode::name(int channel) const { return "Sin"; }
-
-void LoopTestNode::inject(
-    const thalamus::vector<std::span<double const>> &data,
-    const thalamus::vector<std::chrono::nanoseconds> &interval,
-    const thalamus::vector<std::string_view> &names) {}
 
 bool LoopTestNode::has_analog_data() const { return true; }
 

@@ -25,10 +25,6 @@ public:
 
   int num_channels() const override;
 
-  void
-  inject(const thalamus::vector<std::span<double const>> &data,
-         const thalamus::vector<std::chrono::nanoseconds> &sample_intervals,
-         const thalamus::vector<std::string_view> &) override;
 
   std::chrono::nanoseconds sample_interval(int) const override;
   std::chrono::nanoseconds time() const override;

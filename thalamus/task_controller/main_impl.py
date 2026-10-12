@@ -53,6 +53,7 @@ from .tasks import add_tasks
 from .. import usersettings
 from .. import dotnet_runtime
 from .. import grpc_tls
+from .. import openh264
 
 UNHANDLED_EXCEPTION: typing.List[Exception] = []
 
@@ -98,6 +99,7 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument('-y', '--pypipeline', action='store_true', help='Use Python data pipeline implementation')
   parser.add_argument('-r', '--remote-executor', action='store_true',
                       help='Send task configs to remote ROS node to execute')
+  parser.add_argument('-C', '--contrib', action='store_true', help='Equivalent to --ext thalamus.contrib')
   parser.add_argument('--ext', help='Extension Module')
   parser.add_argument('--wait-for-pipeline', action='store_true', help='Don\'t start pipeline, wait for something else to launch it')
   parser.add_argument('--open', action='store_true', help='Bind GRPC servers to 0.0.0.0 instead of localhost only')
@@ -135,8 +137,12 @@ async def async_main() -> None:
 
   ext_widgets = {}
   ext_library = None
-  if arguments.ext is not None:
-    ext_module = importlib.import_module(arguments.ext)
+  if arguments.contrib:
+    extension_module = 'thalamus.contrib'
+  else:
+    extension_module = arguments.ext
+  if extension_module is not None:
+    ext_module = importlib.import_module(extension_module)
     if hasattr(ext_module, 'widgets'):
       ext_widgets.update(ext_module.widgets())
     if hasattr(ext_module, 'library'):
@@ -171,6 +177,9 @@ async def async_main() -> None:
   for node in config['nodes']:
     if 'Running' in node:
       node['Running'] = False
+  # Cisco's OpenH264 binary, for thalamus-contrib's H.264 encoding, unless the
+  # user opted out. Doesn't wait for the download.
+  openh264.download_in_background()
 
   cache_manager = CacheManager(config)
 

@@ -240,7 +240,7 @@ EXPORT int thalamus_push(size_t num_channels, const double *samples,
   std::promise<void> promise;
   auto future = promise.get_future();
   boost::asio::post(io_context, [&] {
-    analog_node->inject(spans, sample_intervals, names);
+    analog_node->inject_analog(spans, sample_intervals, names);
     promise.set_value();
   });
   future.get();

@@ -345,6 +345,13 @@ int main(int argc, char **argv) {
     cfg.add_buffers()->set_size_kb(1024 * 1024); // Record up to 1 MiB.
     cfg.set_output_path("thalamus_" + start_time_str + ".perfetto-trace");
     cfg.set_write_into_file(true);
+    // Threads' events only reach the trace buffer once their chunk of the
+    // shared memory buffer fills, or on a flush. Without periodic flushes a
+    // thread that traces rarely (e.g. the main thread) loses everything when
+    // Thalamus exits without stopping the session (a crash or a kill), so
+    // flush every second and write the buffer to the file as often.
+    cfg.set_flush_period_ms(1000);
+    cfg.set_file_write_period_ms(1000);
     auto *ds_cfg = cfg.add_data_sources()->mutable_config();
     ds_cfg->set_name("track_event");
 
@@ -435,15 +442,17 @@ int main(int argc, char **argv) {
       server->Shutdown();
       grpc_thread.join();
       node_graph->predrop([&] {
-        boost::asio::post(io_context, [&] {
-          node_graph.reset();
-          io_context.stop();
-        });
+        boost::asio::post(io_context, [&] { io_context.stop(); });
       });
     };
 
     ImageViewer::setup();
     io_context.run();
+    // Nodes are destroyed with the io_context stopped, so nothing they post
+    // while being destroyed (e.g. a plugin thread's last post_to_main) runs
+    // after the node graph and the state it refers to are gone. Before
+    // ImageViewer::teardown, which node viewers need while they close.
+    node_graph.reset();
     ImageViewer::teardown();
     THALAMUS_LOG(info) << "Shutting down";
 

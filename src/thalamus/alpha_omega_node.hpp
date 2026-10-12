@@ -43,9 +43,9 @@ public:
   std::string_view name(int channel) const override;
   std::span<const std::string> get_recommended_channels() const override;
   virtual boost::json::value process(const boost::json::value &) override;
-  void inject(const thalamus::vector<std::span<double const>> &,
+  void inject_analog(const thalamus::vector<std::span<double const>> &,
               const thalamus::vector<std::chrono::nanoseconds> &,
-              const thalamus::vector<std::string_view> &) override;
+              const thalamus::vector<std::string_view> &, bool) override;
 
   void on_change(ObservableCollection::Action a,
                  const ObservableCollection::Key &k,

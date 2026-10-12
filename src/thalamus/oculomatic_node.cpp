@@ -580,10 +580,10 @@ std::string_view OculomaticNode::name(int channel) const {
   }
 }
 
-void OculomaticNode::inject(
+void OculomaticNode::inject_analog(
     const thalamus::vector<std::span<double const>> &data,
     const thalamus::vector<std::chrono::nanoseconds> &interval,
-    const thalamus::vector<std::string_view> &) {
+    const thalamus::vector<std::string_view> &, bool) {
   THALAMUS_ASSERT(data.size() >= 3, "Too few channels");
   THALAMUS_ASSERT(data[0].size() >= 1, "No X specified");
   THALAMUS_ASSERT(data[1].size() >= 1, "No Y Specified");

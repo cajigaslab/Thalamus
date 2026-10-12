@@ -39,7 +39,7 @@ jobs:
         source $HOME/.thalamusrc && source pyenv/bin/activate && python3 bump.py patch
         echo version=`git describe --exact-match --tags` >> "$GITHUB_OUTPUT"
     - name: Build
-      run: source $HOME/.thalamusrc && source pyenv/bin/activate && python3 -m build -n -w -Crelease -Cstrip
+      run: source $HOME/.thalamusrc && source pyenv/bin/activate && python3 -m build -n -w -Crelease -Cstrip -Cci
 
     - name: Archive and strip debug symbols
       run: |
@@ -103,7 +103,7 @@ jobs:
         echo 111111111111111111111111111111111
         where clang
         echo 222222222222222222222222222222222
-        python -m build -n -w -Crelease -Cdotnet
+        python -m build -n -w -Crelease -Cdotnet -Cci
 
     - name: Prepare Archive .pdb
       shell: bash
@@ -148,7 +148,7 @@ jobs:
     - name: Version Bump
       run: source $HOME/.thalamusrc && source pyenv/bin/activate && python3 bump.py patch
     - name: Build
-      run: source $HOME/.thalamusrc && source pyenv/bin/activate && python3 -m build -n -w -Crelease -Cstrip
+      run: source $HOME/.thalamusrc && source pyenv/bin/activate && python3 -m build -n -w -Crelease -Cstrip -Cci
 
     - name: Archive and strip debug symbols
       run: |

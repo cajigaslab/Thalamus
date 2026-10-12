@@ -18,11 +18,12 @@ public:
   bool is_ulong_data() const override;
 
   int num_channels() const override;
+  bool channels_changed() const override;
 
   void
-  inject(const thalamus::vector<std::span<double const>> &data,
+  inject_analog(const thalamus::vector<std::span<double const>> &data,
          const thalamus::vector<std::chrono::nanoseconds> &sample_intervals,
-         const thalamus::vector<std::string_view> &) override;
+         const thalamus::vector<std::string_view> &, bool) override;
 
   std::chrono::nanoseconds sample_interval(int) const override;
   std::chrono::nanoseconds time() const override;

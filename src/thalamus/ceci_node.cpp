@@ -80,6 +80,9 @@ static uInt32      do_mux2 = (1 << 19); // Set DO line 19 high to enable MUX cha
 static uInt32      do_mux3 = (1 << 26); // Set DO line 26 high to enable MUX channel 3
 
 struct CeciNode::Impl {
+  // Reported by channels_changed() on the next message with analog data,
+  // then cleared.
+  bool analog_channels_changed = true;
   ObservableDictPtr state;
   boost::asio::io_context& ioc;
   boost::signals2::scoped_connection state_connection;
@@ -192,6 +195,7 @@ public:
             }
         }
         outer->ready(outer);
+        analog_channels_changed = false;
     });
 
     //printf("\r");
@@ -390,7 +394,7 @@ Error:
             DAQmxErrChk (api->DAQmxStartTask(devices[i].aiHandle));
         }
     }
-    outer->channels_changed(outer);
+    analog_channels_changed = true;
     // Start primary device AI task
     DAQmxErrChk (api->DAQmxStartTask(devices[0].aiHandle));
 Error:
@@ -524,6 +528,10 @@ std::span<const double> CeciNode::data(int channel) const {
   return impl->spans.at(size_t(channel));
 }
 
+bool CeciNode::channels_changed() const {
+  return impl->analog_channels_changed;
+}
+
 int CeciNode::num_channels() const { return int(impl->spans.size()); }
 
 std::string_view CeciNode::name(int channel) const {
@@ -532,12 +540,6 @@ std::string_view CeciNode::name(int channel) const {
 
 std::chrono::nanoseconds CeciNode::sample_interval(int) const {
   return 8us;
-}
-
-void CeciNode::inject(const thalamus::vector<std::span<double const>> &,
-                         const thalamus::vector<std::chrono::nanoseconds> &,
-                         const thalamus::vector<std::string_view> &) {
-  THALAMUS_ASSERT(false, "Unimplemented");
 }
 
 bool CeciNode::has_analog_data() const { return true; }

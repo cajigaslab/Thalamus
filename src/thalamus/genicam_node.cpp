@@ -103,6 +103,8 @@ struct GenicamNode::Impl {
   size_t width;
   size_t height;
   AnalogNodeImpl analog_impl;
+  // The stats channels' interval follows the target frame rate.
+  std::optional<std::chrono::nanoseconds> last_stats_interval;
   bool has_analog = false;
   bool has_image = false;
 
@@ -2432,7 +2434,7 @@ struct GenicamNode::Impl {
       (*state)["Camera Values"].assign(std::make_shared<ObservableDict>());
     }
 
-    analog_impl.inject({{std::span<double const>()}}, {0ns}, {""});
+    analog_impl.inject_analog({{std::span<double const>()}}, {0ns}, {""});
 
     analog_impl.ready.connect([_outer](Node *) { _outer->ready(_outer); });
 
@@ -2482,11 +2484,14 @@ struct GenicamNode::Impl {
     this->has_image = true;
     this->has_analog = true;
     TRACE_EVENT("thalamus", "GenicamNode::on_frame_ready");
-    analog_impl.inject(
+    auto stats_interval = std::chrono::nanoseconds(size_t(1e9 / target_framerate));
+    auto channels_changed = last_stats_interval != stats_interval;
+    last_stats_interval = stats_interval;
+    analog_impl.inject_analog(
         {std::span<const double>(&framerate, &framerate + 1),
          temperature ? std::span<const double>(&*temperature, &*temperature + 1) : std::span<const double>()},
-        {std::chrono::nanoseconds(size_t(1e9 / target_framerate)), 0ns},
-        {"Framerate", "Temperature (C)"});
+        {stats_interval, 0ns},
+        {"Framerate", "Temperature (C)"}, channels_changed);
   }
 
   void sanitize_camera(std::shared_ptr<Cti::DeviceImpl> d) {
@@ -2784,16 +2789,19 @@ std::string_view GenicamNode::name(int channel) const {
   return impl->analog_impl.name(channel);
 }
 
-void GenicamNode::inject(
+void GenicamNode::inject_analog(
     const thalamus::vector<std::span<double const>> &data,
     const thalamus::vector<std::chrono::nanoseconds> &interval,
-    const thalamus::vector<std::string_view> &_names) {
+    const thalamus::vector<std::string_view> &_names, bool channels_changed) {
   impl->has_analog = true;
   impl->has_image = false;
-  impl->analog_impl.inject(data, interval, _names);
+  impl->analog_impl.inject_analog(data, interval, _names, channels_changed);
 }
 
 bool GenicamNode::has_analog_data() const { return impl->has_analog; }
+bool GenicamNode::channels_changed() const {
+  return impl->analog_impl.channels_changed();
+}
 
 bool GenicamNode::has_image_data() const { return impl->has_image; }
 

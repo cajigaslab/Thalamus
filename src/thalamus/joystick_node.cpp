@@ -236,12 +236,6 @@ std::chrono::nanoseconds JoystickNode::sample_interval(int) const {
   return impl->sample_interval;
 }
 
-void JoystickNode::inject(const thalamus::vector<std::span<double const>> &,
-                          const thalamus::vector<std::chrono::nanoseconds> &,
-                          const thalamus::vector<std::string_view> &) {
-  THALAMUS_ASSERT(false, "Unimplemented");
-}
-
 bool JoystickNode::has_analog_data() const { return true; }
 
 size_t JoystickNode::modalities() const {

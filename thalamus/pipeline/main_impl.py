@@ -37,6 +37,7 @@ from .thalamus_window import ThalamusWindow
 from ..servicer import ThalamusServicer
 from .. import thalamus_stub
 from .. import grpc_tls
+from .. import openh264
 from ..task_controller.util import create_task_with_exc_handling
 
 from ..qt import *
@@ -82,7 +83,7 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument('-p', '--port', type=int, default=50050, help='GRPC port')
   parser.add_argument('-u', '--ui-port', type=int, default=50051, help='UI GRPC port')
   parser.add_argument('-d', '--dotnet-port', type=int, default=50052, help='dotnet GRPC port')
-  parser.add_argument('--contrib', action='store_true', help='Equivalent to --ext thalamus.contrib')
+  parser.add_argument('-C', '--contrib', action='store_true', help='Equivalent to --ext thalamus.contrib')
   parser.add_argument('--ext', help='Extension Module')
   parser.add_argument('--wait-for-pipeline', action='store_true', help='Don\'t start pipeline, wait for something else to launch it')
   parser.add_argument('--no-gpu', action='store_true', help='Disable pipeline GPU usage')
@@ -147,6 +148,9 @@ async def async_main() -> None:
   for node in config['nodes']:
     if 'Running' in node:
       node['Running'] = False
+  # Cisco's OpenH264 binary, for thalamus-contrib's H.264 encoding, unless the
+  # user opted out. Doesn't wait for the download.
+  openh264.download_in_background()
 
   cache_manager = CacheManager(config)
 

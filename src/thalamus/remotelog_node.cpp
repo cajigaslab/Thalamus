@@ -366,12 +366,6 @@ std::chrono::nanoseconds RemoteLogNode::time() const { return impl->time; }
 std::chrono::nanoseconds RemoteLogNode::remote_time() const {
   return impl->remote_time;
 }
-void RemoteLogNode::inject(const thalamus::vector<std::span<double const>> &,
-                        const thalamus::vector<std::chrono::nanoseconds> &,
-                        const thalamus::vector<std::string_view> &) {
-  THALAMUS_ASSERT(false, "RemoteLogNode::inject unimplemented.");
-}
-
 bool RemoteLogNode::has_analog_data() const { return impl->has_analog_data; }
 
 std::string RemoteLogNode::type_name() { return "REMOTE_LOG"; }

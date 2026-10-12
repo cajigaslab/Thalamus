@@ -410,9 +410,9 @@ std::string_view VideoNode::name(int channel) const {
   return "";
 }
 
-void VideoNode::inject(const thalamus::vector<std::span<double const>> &,
+void VideoNode::inject_analog(const thalamus::vector<std::span<double const>> &,
                        const thalamus::vector<std::chrono::nanoseconds> &,
-                       const thalamus::vector<std::string_view> &) {
+                       const thalamus::vector<std::string_view> &, bool) {
   impl->has_analog = true;
   impl->has_image = false;
 }
