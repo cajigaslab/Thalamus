@@ -226,11 +226,9 @@ def main():
             elif image.format != video_format_id:
               sys.exit(f'{video_node} changed from {Image.Format.Name(video_format_id)} to {Image.Format.Name(image.format)}')
             # A recording can start mid stream, and nothing before the first
-            # keyframe can be decoded. Recordings from before images said
-            # whether they're keyframes are checked by parsing the frame.
+            # keyframe can be decoded.
             data = b''.join(image.data)
-            keyframe = image.is_keyframe if image.HasField('is_keyframe') else video_format.starts_stream(data)
-            if not video_times and not keyframe:
+            if not video_times and not video_format.starts_stream(data):
               skipped_frames += 1
               continue
             assert video is not None
