@@ -61,8 +61,15 @@ that determines the kind of data:
   period in nanoseconds.  Integer-valued streams use ``int_data`` (32-bit signed) or
   ``ulong_data`` (64-bit unsigned, for counters/timestamps and other large integer
   values); ``thalamus.record_reader2`` and ``thalamus.dataframe`` read all three.
+  Each span's ``format`` (``Double``, ``Short``, ``Int``, ``ULong`` or ``Encoded``)
+  says which array holds its samples, so one message can mix sample types, and
+  ``Encoded`` channels (``AAC`` or ``Opus`` audio) keep their samples in ``buffer``.
+  The live ``analog`` gRPC stream converts every channel to scaled doubles unless the
+  request sets ``native_formats``.
 * **image** -- a video/camera frame, with raw bytes, ``width``, ``height``,
   pixel ``format`` (e.g. ``Gray``, ``RGB``, ``MPEG4``), and ``frame_interval``.
+* **blob** -- arbitrary bytes with a ``mime`` type and a ``stream`` number, produced
+  by plugin nodes.
 * **text** -- a string message (log lines, event markers).
 * **xsens** -- motion-capture pose data: body segments with position and quaternion
   rotation.

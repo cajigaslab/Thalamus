@@ -56,6 +56,11 @@ These convert and inspect ``.tha`` capture files (see :doc:`concepts` and
   files).
 * ``python -m thalamus.dataframe -n NODE -i FILE`` -- export a node's analog or text
   channels to CSV, Parquet, and other tabular formats.
+* ``python -m thalamus.av_muxer -i FILE [-o OUTPUT] [-v VIDEO_NODE] [-a AUDIO_NODE]``
+  -- mux a recorded ``MPEG4`` video node and ``AAC`` audio node into an mp4 without
+  re-encoding (``-o`` defaults to ``output.mp4``; the nodes default to the first with
+  images / AAC data).  Each video frame is placed at its recorded time and the audio
+  by sample count.  Requires PyAV (``pip install av``).
 * ``python -m thalamus.hydrate FILE`` -- convert an entire capture into a single
   HDF5 file (per-channel ``data`` plus ``received`` timing).
 * ``python -m thalamus.video_writer -i FILE -n NODE [-o OUTPUT]`` -- extract a
@@ -80,9 +85,21 @@ Both ``thalamus.pipeline`` and ``thalamus.task_controller`` accept:
   Only do this on a trusted network unless you also enable TLS (below) -- the gRPC
   interface has no authentication of its own.  The HTTP/WebSocket server is never
   exposed: it always binds to ``127.0.0.1``, with or without ``--open``.
+* ``-C, --contrib`` -- equivalent to ``--ext thalamus.contrib`` (load the
+  thalamus-contrib plugin pack).
+* ``-t, --trace`` (``thalamus.pipeline``) -- record a Perfetto trace to
+  ``thalamus_<time>.perfetto-trace`` in the working directory.  It is flushed every
+  second, so a crash loses at most the last second.
 * ``-r, --remote-executor`` (``thalamus.task_controller`` only) -- send task
   execution to a remote executor process instead of running it locally; see
   :ref:`remote-executor` for how trial cancellation is handled in this mode.
+
+At startup both applications also download Cisco's OpenH264 library into
+``~/.thalamus`` in the background, which thalamus-contrib uses for H.264 encoding.
+Cisco's license requires that you can turn this off: untick *Use OpenH264 to encode
+H.264* in *Preferences > H264* (the dialog shows Cisco's attribution and license
+text).  Opting out deletes the binary and keeps it from being downloaded; a running
+Thalamus keeps encoding until it is restarted.
 
 .. _grpc-tls:
 

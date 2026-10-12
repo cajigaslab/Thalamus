@@ -9,6 +9,50 @@ some patch versions contain only build/CI or internal changes and are omitted be
 
 ## 1.0.x
 
+### 1.0.53 — 2026-10-08
+- New `H264` and `VP9` image formats and an `Opus` analog encoding exist as enum
+  values only (in the `Image` and `AnalogResponse` protos and in `plugin.h`):
+  Thalamus passes such streams through nodes, gRPC and `REMOTE`, and STORAGE2 records
+  them as-is, but it has no H.264/VP9/Opus codec of its own, so `hydrate`, the record
+  reader, STORAGE and the image viewer treat them as unsupported.  Plugins such as
+  thalamus-contrib's `MEDIA_CONVERTER` encode and decode them.
+- Windows: fixed plugin DLL loading being affected by the
+  `NoDefaultCurrentDirectoryInExePath` environment variable.
+
+### 1.0.50 — 2026-10-07
+- **H.264 encoding binary (opt-out).**  At startup `thalamus.pipeline` and
+  `thalamus.task_controller` download Cisco's OpenH264 library into `~/.thalamus` in
+  the background, for thalamus-contrib's H.264 encoding.  Opt out in
+  *Preferences > H264* (the dialog also shows Cisco's attribution and license).
+  Opting out deletes the binary and stops the download from then on; a running
+  Thalamus keeps encoding until it is restarted.
+- Perfetto traces (`--trace`) are now flushed every second, so a crashed or killed
+  Thalamus keeps nearly all of its trace.
+- `thalamus.task_controller` now accepts `-C` / `--contrib` (as `thalamus.pipeline`
+  already did, which also gained the `-C` short form).
+- New `python -m thalamus.av_muxer` tool, which muxes a recorded MPEG4 video node and
+  AAC audio node into an mp4 without re-encoding.
+
+### 1.0.49 — 2026-10-07
+- **Mixed-format analog data.**  An analog message can now carry channels of
+  different sample types (double, 16-bit, 32-bit, unsigned 64-bit) and
+  encoded audio (`AAC`) together.  The gRPC `analog` stream still sends scaled
+  doubles by default; set `native_formats` on the `AnalogRequest` to get each channel
+  in its own format (`Span.format`).  STORAGE2 records channels natively when analog
+  compression is off, and `hydrate` reads the new format field.
+- **Blob modality.**  New `blob` data (arbitrary bytes plus a MIME type and stream
+  number) that plugins can produce and STORAGE2 records.
+- Node requests can address a node by `NodeSelector` (name, type, or both) instead of
+  only by name, and `node_request` responses gained `PARSE_ERROR` and `BAD_SELECTOR`
+  statuses.
+- **Plugin API (now version 142)**: new `ThalamusBlobNode`, analog `buffer`,
+  `encoding`, `format`, `encoded_count` and `channels_changed` accessors, plus
+  `thalamus_get_node_version` / `thalamus_get_analog_node_version` exports,
+  `analog_node_version`, `trace_event_begin_static` and `state_root`.  The old
+  `node_channels_changed*` functions are deprecated no-ops.
+- Windows source builds copy `native.pdb` next to `native.exe` unless the build
+  backend's `ci` option is given.
+
 ### 1.0.47 — 2026-09-29
 - **gRPC TLS / mutual TLS.** `python -m thalamus.pipeline`,
   `python -m thalamus.task_controller`, `thalamus.image_viewer`,

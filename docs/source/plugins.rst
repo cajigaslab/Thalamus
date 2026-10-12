@@ -123,6 +123,18 @@ export it is treated as version 0 and its factories are constructed with
 factories constructed with ``ThalamusNodeFactory.create2`` instead, which takes an
 extra ``void*`` argument identifying the host-side node being created.
 
+Two more optional exports declare how much of the node structs a plugin was built
+with.  Each returns the number of pointers after a given field, and a missing
+export means ``0``; the host never reads past what the plugin declares:
+
+* ``int32_t thalamus_get_node_version(void)`` -- pointers after
+  ``ThalamusNode.signals_offmain`` (version ``1`` adds ``blob``).
+* ``int32_t thalamus_get_analog_node_version(void)`` -- pointers after
+  ``ThalamusAnalogNode.name`` (adds ``buffer``, ``encoding``, ``format``,
+  ``encoded_count`` and ``channels_changed``).  A plugin that consumes analog data
+  from host nodes can check ``api->analog_node_version()`` (API version 140) to see
+  how many of those the host provides.
+
 Beyond that library-level teardown, an individual node struct (``ThalamusNode``)
 may set an optional ``predrop`` callback.  The host calls it when the node is about
 to be replaced (its ``type`` config field changed) or during full pipeline
@@ -137,7 +149,7 @@ API versioning
 
 ``ThalamusAPI`` begins with an ``int32_t version`` field, and every function
 pointer in the table is annotated in ``plugin.h`` with the version at which it was
-added (the host currently passes ``139``).  The table is strictly append-only, so a
+added (the host currently passes ``142``).  The table is strictly append-only, so a
 plugin built against an older header keeps working; a plugin that wants to use a
 newer capability should guard it:
 
@@ -223,15 +235,48 @@ Dialogs and removing state
    struct ThalamusCharSpan key = { "gain", 4 };
    api->state_remove_at_name(entry, &key, on_removed, user_data);
 
+Analog formats, encoded audio and blobs
+---------------------------------------
+
+An analog message can mix channels of different types.  ``ThalamusAnalogNode.format(node, channel)``
+returns a ``ThalamusAnalogFormat`` (``Double``, ``Short``, ``Int``, ``ULong`` or
+``Encoded``) saying which of the ``*_data`` accessors holds that channel's samples;
+``Encoded`` channels have no samples there and live in ``buffer(node)``, whose
+``encoding(node)`` is ``ThalamusAnalogEncoding_AAC`` or ``_Opus`` (``encoded_count``
+samples per channel).  ``channels_changed(node)`` is true on the first message whose
+channels (count, names, formats or sample intervals) differ from the previous one;
+it replaces the ``node_channels_changed*`` API functions, which are now deprecated
+no-ops.
+
+A node with the ``THALAMUS_MODALITY_BLOB`` modality (set ``ThalamusNode.blob``,
+node version 1) emits arbitrary binary payloads: ``body``, ``mime``, ``stream`` and
+``has_blob_data`` (check it before reading; not every message carries a blob).
+:doc:`STORAGE2 <nodes/storage2>` records blobs.
+
+.. code-block:: c
+
+   if (api->analog_node_version() >= 5 && node->analog->channels_changed(node)) {
+     /* re-read channel names and formats */
+   }
+
+Other API additions: ``state_root()`` (version 142) returns a new reference to the
+root of the whole state tree, ``trace_event_begin_static(name)`` (version 141) is a
+cheaper ``trace_event_begin`` for names that stay valid while the plugin is loaded,
+and ``analog_node_version()`` (version 140).
+
 Image formats
 -------------
 
 ``ThalamusImageNode`` formats are given by ``ThalamusImageFormat``:
 ``Gray``, ``RGB``, ``YUYV422``, ``YUV420P``, ``YUVJ420P``, ``NV12``, ``BGR``,
-``MJPEG``, ``MPEG1``, ``MPEG4``, ``Gray16`` and ``RGB16`` (each prefixed with
-``ThalamusImageFormat_``).  ``MJPEG``, ``MPEG1`` and ``MPEG4`` carry
-already-compressed frames; :doc:`STORAGE2 <nodes/storage2>` writes ``MPEG1`` and
-``MPEG4`` streams as-is instead of re-encoding them.
+``MJPEG``, ``MPEG1``, ``MPEG4``, ``Gray16``, ``RGB16``, ``H264`` and ``VP9`` (each
+prefixed with ``ThalamusImageFormat_``).  ``MJPEG``, ``MPEG1``, ``MPEG4``, ``H264``
+(Annex B, one frame per message) and ``VP9`` carry already-compressed frames;
+:doc:`STORAGE2 <nodes/storage2>` writes ``MPEG1``, ``MPEG4``, ``H264`` and ``VP9``
+streams as-is instead of re-encoding them.  ``H264`` and ``VP9`` (and the ``Opus``
+analog encoding) are enum values only: Thalamus has no codec for them, so
+``hydrate``, the record reader and the image viewer cannot decode them.  A plugin
+such as thalamus-contrib's ``MEDIA_CONVERTER`` does the encoding and decoding.
 
 SDL windowing
 -------------
