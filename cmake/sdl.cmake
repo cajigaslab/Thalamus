@@ -7,6 +7,14 @@ FetchContent_MakeAvailable(sdl)
 file(MAKE_DIRECTORY ${sdl_BINARY_DIR}/Debug)
 file(MAKE_DIRECTORY ${sdl_BINARY_DIR}/Release)
 
+# The system libdecor and the plugins it loads (GTK, cairo, glycin) aren't
+# built with TSan, so their internal synchronization shows up as false races.
+# Without libdecor SDL also skips its GTK probe. Windows get server side
+# decorations where the compositor offers them (none on GNOME).
+if("${SANITIZER}" STREQUAL thread)
+  set(SDL_LIBDECOR -DSDL_WAYLAND_LIBDECOR=OFF)
+endif()
+
 if(WIN32)
   set(SDL_LIB_FILES "${sdl_BINARY_DIR}/$<CONFIG>/install/lib/SDL3-static.lib")
 else()
@@ -18,6 +26,7 @@ add_custom_command(OUTPUT "${sdl_BINARY_DIR}/$<CONFIG>/CMakeCache.txt"
                    cmake "${sdl_SOURCE_DIR}" -Wno-dev 
 		      -DSDL_LIBSAMPLERATE=OFF
 		      -DSDL_SNDIO=OFF
+		      ${SDL_LIBDECOR}
                       -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
                       -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
                       "-DCMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"

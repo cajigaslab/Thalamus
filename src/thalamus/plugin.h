@@ -279,6 +279,19 @@ extern "C" {
   typedef void (*ThalamusNodeGetCallback)(struct ThalamusNode*, void* data);
   typedef void (*ThalamusNodeReadyCallback)(struct ThalamusNode*, void* data);
 
+  enum ThalamusNodeRequestStatus {
+    /* The node responded; the response is passed to the callback. */
+    ThalamusNodeRequestStatus_Ok = 0,
+    /* The node was destroyed before the request was sent. */
+    ThalamusNodeRequestStatus_Destroyed = 1,
+    /* The node discarded the request without responding, e.g. because it was destroyed. */
+    ThalamusNodeRequestStatus_Dropped = 2
+  };
+
+  /* response is only valid during the call (json_inc_ref it to keep it) and is null unless status is
+     ThalamusNodeRequestStatus_Ok. */
+  typedef void (*ThalamusNodeRequestCallback)(enum ThalamusNodeRequestStatus status, const struct ThalamusJson* response, void* data);
+
   struct THALAMUS_SDL_Window;
   struct THALAMUS_SDL_EventSubscription;
   struct THALAMUS_SDL_Cursor;
@@ -492,6 +505,13 @@ extern "C" {
 
     //The root of the state tree, i.e. the whole config. Returns a new reference, like state_parent.
     struct ThalamusState* (*state_root)(void); // 142
+
+    //Sends request to node, like the node_request gRPC call. node is one from node_get_node, held with node_inc_ref
+    //if it's used outside that callback. Call it on the main thread. callback is called exactly once, on the main
+    //thread and never before node_request returns, with the response or the reason there isn't one. The request
+    //isn't retained.
+    void (*node_request)(struct ThalamusNode* node, const struct ThalamusJson* request,
+                         ThalamusNodeRequestCallback callback, void* data); // 143
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories_t)(struct ThalamusAPI*);

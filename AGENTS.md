@@ -95,6 +95,17 @@ ABI. Rules:
   tree (the whole config), which `ThalamusAPIImpl` holds while the node graph
   exists. Plugins on an older Thalamus walk `state_parent` from any state
   until it returns null.
+- `node_request(node, request, callback, data)` (slot 143) sends a JSON
+  request to a node's `process`, like the `node_request` gRPC call. The node
+  is one the plugin got from `node_get_node` (held with `node_inc_ref` to use
+  it later). Call it on the main thread. Node wrappers hold a `weak_ptr` to
+  their node, so a request to a destroyed node reports `Destroyed`, and
+  `get_node_ref` doesn't reuse an expired wrapper for a new node at the same
+  address. A `NodeRequestCall` owned by the closure passed to `process`
+  guarantees the callback runs exactly once: with the response (`Ok`),
+  `Destroyed`, or `Dropped` if the node destroys the closure without
+  responding. The callback is always posted to the io_context, so it runs on
+  the main thread and never before `node_request` returns.
 - Spans returned through the API are borrowed and only valid during the
   `ready`/`get_node` callback.
 - A node with a modality doesn't have that data in every message (an image
@@ -139,6 +150,14 @@ ABI. Rules:
 
 ## Image formats
 
+- An encoded image message (MPEG4, H264, VP9) holds exactly one coded
+  picture: one packet as FFmpeg's encoders and decoders define it (a VP9
+  superframe, a hidden frame plus a shown one, counts as one). Messages are in
+  decode order, and each one's time is when its picture was acquired (see
+  Analog data), so with B-frames times aren't increasing. Encoders emit no
+  message until they have a packet, and one message per packet when they
+  output several at once; thalamus-contrib's image converter times each
+  packet from the frame it encodes, and decodes into presentation order.
 - `H264` (protobuf `Image.Format`, `ThalamusImageFormat_H264` in `plugin.h`,
   `ImageNode::Format::H264`) is Annex B H.264, one frame per message. It's an
   enum only: Thalamus passes it through nodes, gRPC and remote nodes, but has
@@ -177,6 +196,14 @@ ABI. Rules:
   thalamus-contrib's MEDIA_CONVERTER: f64 stats channels plus i16 audio). The
   `graph` and spectrogram RPCs use `visit_channel`; storage, lua and
   samplemonitor still use `visit_node`.
+- A message's time is when its data was acquired (for analog data, its last
+  sample), not when a node encoded, decoded or otherwise processed it. An
+  encoded analog message's packets hold audio from before the input that
+  completed them, so its time is that of the last sample in its packets and
+  `encoded_count()` the number of samples they hold; encoders emit no message
+  until they have packets. Readers can place encoded audio from those alone.
+  thalamus-contrib's converters keep the time of their input for latency
+  stats internally, never on the wire.
 - `AnalogNode::channels_changed()` is true on the first message whose
   channels (count, names, formats or sample intervals) differ from the
   previous one's; nodes pass it through `inject_analog(..., channels_changed)`.
@@ -281,11 +308,21 @@ ABI. Rules:
   Scanning the crashing thread's stack for addresses inside `native.exe` and
   plugins gives an approximate backtrace (stale frames included).
 - `python -m thalamus.av_muxer -i <recording> -o out.mp4` muxes a recorded
-  MPEG4 video node and AAC audio node without re-encoding. It needs PyAV
-  (`pip install av`, not a package dependency). Each video frame is placed
-  at its record time (webcam frame rates wander, so a constant rate drifts
-  by up to a second mid-recording even when both ends line up), and the
-  audio by sample count from its first record time, AAC priming
-  compensated. The ffmpeg CLI can't do this: with stream copy it times raw
-  MPEG4 by the time base in the stream and ignores `-r`. Recordings can
-  start mid-GOP; frames before the first MPEG4 VOL header are skipped.
+  video node (MPEG4, H264 or VP9) and audio node (AAC or Opus) without
+  re-encoding. It needs PyAV (`pip install av`, not a package dependency).
+  Each video frame is placed at its record time (webcam frame rates wander,
+  so a constant rate drifts by up to a second mid-recording even when both
+  ends line up), and the audio by sample count. The ffmpeg CLI can't do
+  this: with stream copy it times raw MPEG4 by the time base in the stream
+  and ignores `-r`. Recordings can start mid-GOP; frames before the first
+  keyframe are skipped.
+  - The audio is placed from each record's time and `encoded_count` (see
+    Analog data), whatever encoder produced it. Recordings from before
+    thalamus-contrib timed encoded records that way (records without packets,
+    `encoded_count` counting pushed samples) are rejected. The audio encoder
+    usually started before the recording, so the first recorded packet isn't
+    the stream's first.
+  - Both tracks start at the first video frame, with earlier audio cut at
+    the nearest packet boundary. Delaying a track with an edit list instead
+    plays out of sync in players that ignore edit lists (Windows' Movies &
+    TV), while ffplay and VLC honor them.

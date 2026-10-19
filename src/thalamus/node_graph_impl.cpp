@@ -480,6 +480,9 @@ ExtNode::~ExtNode() {
 
 struct Interfaces {
   Node* node = nullptr;
+  // Whether node still exists: plugins may hold a node (node_inc_ref) after
+  // Thalamus destroys it, and node_request checks this before using it.
+  std::weak_ptr<Node> weak;
   AnalogNode* analog = nullptr;
   ImageNode* image = nullptr;
   MotionCaptureNode* mocap = nullptr;
@@ -859,6 +862,9 @@ struct ThalamusAPIImpl {
 
     auto interfaces = new Interfaces();
     interfaces->node = node;
+    if(node) {
+      interfaces->weak = node->weak_from_this();
+    }
     interfaces->count = 1;
     result->impl = interfaces;
     result->process = plugin_node_process;
@@ -936,7 +942,11 @@ struct ThalamusAPIImpl {
     std::lock_guard<std::mutex> lock(*mutex);
 
     auto i = node_cpp_to_c->find(val);
-    if(i == node_cpp_to_c->end()) {
+    // A plugin may still hold the wrapper of a destroyed node; a new node at
+    // the same address gets a wrapper of its own.
+    auto stale = i != node_cpp_to_c->end() && val
+                 && reinterpret_cast<Interfaces*>(i->second->impl)->weak.expired();
+    if(i == node_cpp_to_c->end() || stale) {
       auto new_ptr = wrap_node(val);
       //THALAMUS_LOG(info) << "new_state " << get_path(new_ptr->value) << " " << new_ptr->count;
       (*node_cpp_to_c)[val] = new_ptr;
@@ -1632,7 +1642,7 @@ struct ThalamusAPIImpl {
     delete handle;
   }
 
-  static ThalamusNodeGetConnection* node_get_node(struct ThalamusNodeSelector* c_selector, ThalamusNodeGetCallback callback, void* data) {
+  static thalamus_grpc::NodeSelector to_selector(const struct ThalamusNodeSelector* c_selector) {
     thalamus_grpc::NodeSelector selector;
     if(c_selector->name.data) {
       selector.set_name(std::string(c_selector->name.data, c_selector->name.size));
@@ -1640,6 +1650,56 @@ struct ThalamusAPIImpl {
     if(c_selector->type.data) {
       selector.set_type(std::string(c_selector->type.data, c_selector->type.size));
     }
+    return selector;
+  }
+
+  // A plugin's node_request callback. Its owner is the closure handed to the
+  // node's process, so if the node destroys that closure without responding
+  // the request still finishes, as Dropped. Nodes may respond from any thread,
+  // so the plugin's callback is always posted to the main thread.
+  struct NodeRequestCall {
+    ThalamusNodeRequestCallback callback;
+    void* data;
+    std::atomic_bool finished = false;
+
+    NodeRequestCall(ThalamusNodeRequestCallback c, void* d) : callback(c), data(d) {}
+    NodeRequestCall(const NodeRequestCall&) = delete;
+    NodeRequestCall& operator=(const NodeRequestCall&) = delete;
+
+    void finish(ThalamusNodeRequestStatus status, const boost::json::value& response = boost::json::value()) {
+      if(finished.exchange(true)) {
+        return;
+      }
+      boost::asio::post(*io_context, [c=callback, d=data, status, response] {
+        auto json = status == ThalamusNodeRequestStatus_Ok ? new ThalamusJson{1, response} : nullptr;
+        c(status, json, d);
+        if(json) {
+          json_dec_ref(json);
+        }
+      });
+    }
+
+    ~NodeRequestCall() {
+      finish(ThalamusNodeRequestStatus_Dropped);
+    }
+  };
+
+  static void node_request(struct ThalamusNode* c_node, const struct ThalamusJson* request,
+                           ThalamusNodeRequestCallback callback, void* data) {
+    auto call = std::make_shared<NodeRequestCall>(callback, data);
+    auto interfaces = reinterpret_cast<Interfaces*>(c_node->impl);
+    auto node = interfaces->weak.lock();
+    if(!node) {
+      call->finish(ThalamusNodeRequestStatus_Destroyed);
+      return;
+    }
+    node->process(request->value, [call](const boost::json::value & response) {
+      call->finish(ThalamusNodeRequestStatus_Ok, response);
+    });
+  }
+
+  static ThalamusNodeGetConnection* node_get_node(struct ThalamusNodeSelector* c_selector, ThalamusNodeGetCallback callback, void* data) {
+    auto selector = to_selector(c_selector);
 
     auto result = new ThalamusNodeGetConnection();
     result->connection = node_graph->get_node_scoped(selector, [callback, data] (auto node) {
@@ -1663,7 +1723,10 @@ struct ThalamusAPIImpl {
     if(--interfaces->count == 0) {
       std::lock_guard<std::mutex> lock(*mutex);
       node_c_to_cpp->erase(node);
-      node_cpp_to_c->erase(interfaces->node);
+      auto i = node_cpp_to_c->find(interfaces->node);
+      if(i != node_cpp_to_c->end() && i->second == node) {
+        node_cpp_to_c->erase(i);
+      }
       delete node;
     }
   }
@@ -2224,7 +2287,8 @@ public:
     thalamus_api.analog_node_version = ThalamusAPIImpl::analog_node_version;
     thalamus_api.trace_event_begin_static = ThalamusAPIImpl::trace_event_begin_static;
     thalamus_api.state_root = ThalamusAPIImpl::state_root;
-    thalamus_api.version = 142;
+    thalamus_api.node_request = ThalamusAPIImpl::node_request;
+    thalamus_api.version = 143;
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},
