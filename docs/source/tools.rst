@@ -57,10 +57,14 @@ These convert and inspect ``.tha`` capture files (see :doc:`concepts` and
 * ``python -m thalamus.dataframe -n NODE -i FILE`` -- export a node's analog or text
   channels to CSV, Parquet, and other tabular formats.
 * ``python -m thalamus.av_muxer -i FILE [-o OUTPUT] [-v VIDEO_NODE] [-a AUDIO_NODE]``
-  -- mux a recorded ``MPEG4`` video node and ``AAC`` audio node into an mp4 without
-  re-encoding (``-o`` defaults to ``output.mp4``; the nodes default to the first with
-  images / AAC data).  Each video frame is placed at its recorded time and the audio
-  by sample count.  Requires PyAV (``pip install av``).
+  -- mux a recorded video node (``MPEG4``, ``H264`` or ``VP9``) and audio node
+  (``AAC`` or ``Opus``) into an mp4 without re-encoding (``-o`` defaults to
+  ``output.mp4``; the nodes default to the first with images / encoded audio).  Each
+  video frame is placed at its recorded time and the audio by sample count, using each
+  record's time and ``encoded_count``.  Both tracks start at the first video frame
+  (earlier audio is cut at the nearest packet boundary), and frames before the first
+  keyframe are skipped.  Recordings made before encoded audio records carried packets
+  timed this way are rejected.  Requires PyAV (``pip install av``).
 * ``python -m thalamus.hydrate FILE`` -- convert an entire capture into a single
   HDF5 file (per-channel ``data`` plus ``received`` timing).
 * ``python -m thalamus.video_writer -i FILE -n NODE [-o OUTPUT]`` -- extract a

@@ -264,6 +264,37 @@ root of the whole state tree, ``trace_event_begin_static(name)`` (version 141) i
 cheaper ``trace_event_begin`` for names that stay valid while the plugin is loaded,
 and ``analog_node_version()`` (version 140).
 
+Node requests
+-------------
+
+``node_request(node, request, callback, data)`` (version 143) sends a JSON request to
+another node's ``process``, like the ``node_request`` gRPC call.  ``node`` is one the
+plugin received from ``node_get_node`` (take a reference with ``node_inc_ref`` to use
+it after that callback returns), and the call must be made on the main thread.  The
+``request`` isn't retained.  ``callback`` is called exactly once, on the main thread
+and never before ``node_request`` returns, with a ``ThalamusNodeRequestStatus``:
+
+* ``ThalamusNodeRequestStatus_Ok`` -- the node responded; ``response`` holds the JSON
+  (valid only during the call, ``json_inc_ref`` it to keep it).
+* ``ThalamusNodeRequestStatus_Destroyed`` -- the node was destroyed before the request
+  was sent.
+* ``ThalamusNodeRequestStatus_Dropped`` -- the node discarded the request without
+  responding, e.g. because it was destroyed first.
+
+``response`` is null unless the status is ``Ok``.
+
+.. code-block:: c
+
+   static void on_response(enum ThalamusNodeRequestStatus status,
+                           const struct ThalamusJson* response, void* data) {
+     if (status != ThalamusNodeRequestStatus_Ok) {
+       return; /* node went away */
+     }
+     /* read response */
+   }
+
+   api->node_request(node, request, on_response, NULL);
+
 Image formats
 -------------
 

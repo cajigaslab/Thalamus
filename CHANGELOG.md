@@ -9,6 +9,18 @@ some patch versions contain only build/CI or internal changes and are omitted be
 
 ## 1.0.x
 
+### 1.0.55 — 2026-10-12
+- Plugin API version 143: `node_request` lets a plugin send a JSON request to another
+  node and receive the response (or a `Destroyed` / `Dropped` status) on the main
+  thread, exactly once.
+- `python -m thalamus.av_muxer` now muxes `H264` and `VP9` video and `Opus` audio as
+  well as `MPEG4` and `AAC`, places audio from each record's time and `encoded_count`,
+  starts both tracks at the first video frame, and skips frames before the first
+  keyframe.  Recordings whose encoded audio records have no packets are rejected.
+- Encoded analog and image messages are now timed by when their data was acquired
+  (an encoded audio message's time is that of the last sample in its packets), and an
+  encoded image message holds exactly one coded packet.
+
 ### 1.0.53 — 2026-10-08
 - New `H264` and `VP9` image formats and an `Opus` analog encoding exist as enum
   values only (in the `Image` and `AnalogResponse` protos and in `plugin.h`):
