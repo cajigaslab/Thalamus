@@ -36,8 +36,8 @@ async def grab_exception(routine):
   except Exception as exc:
     UNHANDLED_EXCEPTION = exc
 
-DOWNLOAD_SSL_CONTEXT = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
-ssl._create_default_https_context = lambda: DOWNLOAD_SSL_CONTEXT 
+DOWNLOAD_SSL_CONTEXT = ssl.create_default_context()
+ssl._create_default_https_context = lambda: DOWNLOAD_SSL_CONTEXT
 
 log_handler=urllib.request.HTTPSHandler(debuglevel=1)
 

@@ -339,6 +339,9 @@ message AnalogResponse {
     AAC = 1;
     // Opus packets, each preceded by an MPEG-TS Opus control header.
     Opus = 2;
+    // FLAC frames with no STREAMINFO; each frame header gives the sample
+    // rate and bits per sample.
+    FLAC = 3;
   }
   
   repeated double data = 1;

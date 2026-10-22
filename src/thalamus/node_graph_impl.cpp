@@ -314,6 +314,8 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
       return Encoding::AAC;
     case ThalamusAnalogEncoding_Opus:
       return Encoding::Opus;
+    case ThalamusAnalogEncoding_FLAC:
+      return Encoding::FLAC;
     }
     THALAMUS_ABORT("Unknown encoding");
   }
@@ -630,6 +632,8 @@ static ThalamusAnalogEncoding plugin_analog_encoding(struct ThalamusNode* node) 
     return ThalamusAnalogEncoding_AAC;
   case AnalogNode::Encoding::Opus:
     return ThalamusAnalogEncoding_Opus;
+  case AnalogNode::Encoding::FLAC:
+    return ThalamusAnalogEncoding_FLAC;
   }
   THALAMUS_ABORT("Unknown encoding");
 }
