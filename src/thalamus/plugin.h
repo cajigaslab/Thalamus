@@ -169,7 +169,8 @@ extern "C" {
   enum ThalamusAnalogEncoding {
     ThalamusAnalogEncoding_None = 0,
     ThalamusAnalogEncoding_AAC = 1,
-    ThalamusAnalogEncoding_Opus = 2
+    ThalamusAnalogEncoding_Opus = 2,
+    ThalamusAnalogEncoding_FLAC = 3
   };
 
   enum ThalamusAnalogFormat {

@@ -18,7 +18,8 @@ public:
   enum class Encoding {
     None,
     AAC,
-    Opus
+    Opus,
+    FLAC
   };
   /// How a channel's samples are stored, i.e. which *data function reads
   /// them. Encoded channels have no samples in any of those: their samples
