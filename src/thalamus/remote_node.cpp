@@ -59,7 +59,10 @@ struct RemoteNode::Impl {
   bool has_xsens_data = false;
   std::vector<Segment> segments;
   std::chrono::nanoseconds time;
-  std::chrono::nanoseconds remote_time;
+  // Of the message being broadcast: one remote_time() serves the analog,
+  // image and mocap interfaces, so it's set on the main thread right before
+  // each broadcast.
+  std::chrono::nanoseconds remote_time = 0ns;
   std::chrono::milliseconds configured_ping_interval = 200ms;
   double ping_ms = 0;
   int64_t configured_probe_size;
@@ -74,6 +77,19 @@ struct RemoteNode::Impl {
   size_t height;
   std::chrono::nanoseconds frame_interval;
   bool has_image_data = false;
+
+  // Before broadcasting Ping or Bytes Per Second, which are measured here:
+  // empties every channel and drops the last remote message's encoded
+  // packets and remote_time, so they aren't sent again with the metric. The
+  // channel formats and encoding are kept, so channels don't change.
+  void clear_for_metric() {
+    for (auto &span : spans) {
+      span = std::span<const double>();
+    }
+    buffer.clear();
+    encoded_count = 0;
+    remote_time = 0ns;
+  }
 
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
        NodeGraph *_node_graph, RemoteNode *_outer)
@@ -305,9 +321,7 @@ struct RemoteNode::Impl {
               std::lock_guard<std::mutex> lock2(mutex);
 
               this->time = now.time_since_epoch();
-              for (auto &span : spans) {
-                span = std::span<const double>();
-              }
+              clear_for_metric();
               spans[1] = std::span<const double>(&bps, &bps + 1);
 
               has_analog_data = true;
@@ -391,9 +405,7 @@ struct RemoteNode::Impl {
             ping_ms = double(
                 std::chrono::duration_cast<std::chrono::milliseconds>(ping_time)
                     .count());
-            for (auto &span : spans) {
-              span = std::span<const double>();
-            }
+            clear_for_metric();
             spans.front() = std::span<const double>(&ping_ms, &ping_ms + 1);
 
             has_analog_data = true;
@@ -435,7 +447,10 @@ struct RemoteNode::Impl {
           encoding = from_proto(analog_response.encoding()).value_or(Encoding::None);
           encoded_count = analog_response.encoded_count();
 
-          remote_time = std::chrono::nanoseconds(analog_response.time());
+          // The time on the Thalamus that first produced the message: its
+          // remote_time if it came through a REMOTE node there too.
+          auto analog_remote_time = std::chrono::nanoseconds(
+              analog_response.remote_time() ? analog_response.remote_time() : analog_response.time());
           data.assign(analog_response.data().begin(),
                       analog_response.data().end());
           spans.clear();
@@ -458,13 +473,14 @@ struct RemoteNode::Impl {
                          sample_intervals.begin() + 2, [](const auto &s) {
                            return std::chrono::nanoseconds(s);
                          });
-          boost::asio::post(io_context, [&, channels_changed,
+          boost::asio::post(io_context, [&, channels_changed, analog_remote_time,
                                          moved_names = std::move(new_names)] {
             TRACE_EVENT("thalamus", "RemoteNode::analog broadcast");
             if (channels_changed) {
               analog_channels_changed = true;
             }
             std::lock_guard<std::mutex> lock2(mutex);
+            remote_time = analog_remote_time;
             names = std::move(moved_names);
             has_analog_data = true;
             outer->ready(outer);
@@ -503,8 +519,12 @@ struct RemoteNode::Impl {
             segment.rotation[3] = s.q3();
           }
           pose_name = xsens_response.pose_name();
-          boost::asio::post(io_context, [&] {
+          // Like analog_remote_time.
+          auto xsens_remote_time = std::chrono::nanoseconds(
+              xsens_response.remote_time() ? xsens_response.remote_time() : xsens_response.time());
+          boost::asio::post(io_context, [&, xsens_remote_time] {
             std::lock_guard<std::mutex> lock2(mutex);
+            remote_time = xsens_remote_time;
             has_xsens_data = true;
             outer->ready(outer);
             has_xsens_data = false;
@@ -575,6 +595,8 @@ struct RemoteNode::Impl {
               format = ImageNode::Format::VP9;
               break;
             case thalamus_grpc::Image_Format_MPEG1:
+              format = ImageNode::Format::MPEG1;
+              break;
             case thalamus_grpc::Image_Format_Image_Format_INT_MIN_SENTINEL_DO_NOT_USE_:
             case thalamus_grpc::Image_Format_Image_Format_INT_MAX_SENTINEL_DO_NOT_USE_:
               THALAMUS_ASSERT(false, "Unsupported image format");
@@ -585,9 +607,14 @@ struct RemoteNode::Impl {
 
           if(image_response.last()) {
             image_ready = false;
-            boost::asio::post(io_context, [&] {
+            // Like analog_remote_time. Images from a Thalamus without these
+            // fields have neither, leaving 0.
+            auto image_remote_time = std::chrono::nanoseconds(
+                image_response.remote_time() ? image_response.remote_time() : image_response.time());
+            boost::asio::post(io_context, [&, image_remote_time] {
               TRACE_EVENT("thalamus", "RemoteNode::image broadcast");
               std::lock_guard<std::mutex> lock2(mutex);
+              remote_time = image_remote_time;
               has_image_data = true;
               outer->ready(outer);
               has_image_data = false;
