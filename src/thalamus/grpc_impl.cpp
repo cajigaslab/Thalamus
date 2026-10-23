@@ -2030,7 +2030,7 @@ Service::image(::grpc::CallbackServerContext *context,
         promise.set_value();
       });
     });
-    THALAMUS_LOG(info) << "Waiting for node";
+    THALAMUS_LOG(trace) << "Waiting for node";
     while (future.wait_for(1s) == std::future_status::timeout &&
            !context->IsCancelled()) {
       if (impl->io_context.stopped()) {
@@ -2040,10 +2040,10 @@ Service::image(::grpc::CallbackServerContext *context,
     if (context->IsCancelled()) {
       continue;
     }
-    THALAMUS_LOG(info) << "Got node";
+    THALAMUS_LOG(trace) << "Got node";
 
     auto node = node_cast<StimNode *>(raw_node.get());
-    THALAMUS_LOG(info) << "stimnode " << node;
+    THALAMUS_LOG(trace) << "stimnode " << node;
     if (!node) {
       std::this_thread::sleep_for(1s);
       continue;

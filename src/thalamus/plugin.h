@@ -565,6 +565,9 @@ extern "C" {
     void (*build_type)(struct ThalamusCharSpan*); // 150
     void (*thalamus_version)(struct ThalamusCharSpan*); // 151
     void (*commit)(struct ThalamusCharSpan*); // 152
+    //Sends text to Thalamus's log, as the log gRPC call does: log_connect callbacks, the log view and recordings get
+    //it, timed now (time_ns) with no remote_time. Callable from any thread; the text is copied before it returns.
+    void (*log)(const struct ThalamusCharSpan* text); // 153
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories_t)(struct ThalamusAPI*);

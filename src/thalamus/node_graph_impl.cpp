@@ -2129,6 +2129,16 @@ struct ThalamusAPIImpl {
     static_span(out, THALAMUS_GIT_COMMIT_HASH);
   }
 
+  static void log(const ThalamusCharSpan* text) {
+    thalamus_grpc::Text message;
+    message.set_text(std::string(to_string_view(*text)));
+    message.set_time(time_ns());
+    // log_signal is emitted on the main thread, as the log gRPC call does.
+    boost::asio::post(*io_context, [message = std::move(message)] {
+      node_graph->log(message);
+    });
+  }
+
   static void state_remove_at_index(struct ThalamusState* state, int64_t key, ThalamusPostCallback callback, void* data) {
     auto closure = to_closure(callback, data);
     erase_state(state, key, closure);
@@ -2457,7 +2467,8 @@ public:
     thalamus_api.build_type = ThalamusAPIImpl::build_type;
     thalamus_api.thalamus_version = ThalamusAPIImpl::thalamus_version;
     thalamus_api.commit = ThalamusAPIImpl::commit;
-    thalamus_api.version = 152;
+    thalamus_api.log = ThalamusAPIImpl::log;
+    thalamus_api.version = 153;
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},

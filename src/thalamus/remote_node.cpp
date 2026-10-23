@@ -78,6 +78,19 @@ struct RemoteNode::Impl {
   std::chrono::nanoseconds frame_interval;
   bool has_image_data = false;
 
+  // Before broadcasting Ping or Bytes Per Second, which are measured here:
+  // empties every channel and drops the last remote message's encoded
+  // packets and remote_time, so they aren't sent again with the metric. The
+  // channel formats and encoding are kept, so channels don't change.
+  void clear_for_metric() {
+    for (auto &span : spans) {
+      span = std::span<const double>();
+    }
+    buffer.clear();
+    encoded_count = 0;
+    remote_time = 0ns;
+  }
+
   Impl(ObservableDictPtr _state, boost::asio::io_context &_io_context,
        NodeGraph *_node_graph, RemoteNode *_outer)
       : state(_state), io_context(_io_context), timer(_io_context),
@@ -308,9 +321,7 @@ struct RemoteNode::Impl {
               std::lock_guard<std::mutex> lock2(mutex);
 
               this->time = now.time_since_epoch();
-              for (auto &span : spans) {
-                span = std::span<const double>();
-              }
+              clear_for_metric();
               spans[1] = std::span<const double>(&bps, &bps + 1);
 
               has_analog_data = true;
@@ -391,14 +402,10 @@ struct RemoteNode::Impl {
             std::lock_guard<std::mutex> lock2(mutex);
 
             this->time = now.time_since_epoch();
-            // Measured here.
-            remote_time = 0ns;
             ping_ms = double(
                 std::chrono::duration_cast<std::chrono::milliseconds>(ping_time)
                     .count());
-            for (auto &span : spans) {
-              span = std::span<const double>();
-            }
+            clear_for_metric();
             spans.front() = std::span<const double>(&ping_ms, &ping_ms + 1);
 
             has_analog_data = true;
