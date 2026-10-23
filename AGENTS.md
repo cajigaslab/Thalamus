@@ -96,6 +96,10 @@ ABI. Rules:
     (`ThalamusAPI::analog_node_version`, `image_node_version` (slot 147),
     `text_node_version` (slot 148), `mocap_node_version` (slot 149)), so
     plugins can check it.
+  - `build_type`/`thalamus_version`/`commit` (slots 150-152) set a
+    `ThalamusCharSpan` to the static
+    `THALAMUS_BUILD_TYPE`/`THALAMUS_VERSION`/`THALAMUS_GIT_COMMIT_HASH`
+    STORAGE2 records, so plugins can record them too.
 - `remote_time_ns` (analog node version 6, image, text and mocap node
   version 1) is the message's time on the Thalamus that first produced it,
   if it came from another one, else 0

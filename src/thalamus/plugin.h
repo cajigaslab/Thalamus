@@ -560,6 +560,11 @@ extern "C" {
     int32_t (*text_node_version)(void); // 148
     //The number of pointers after has_motion_data in the ThalamusMocapNodes Thalamus provides to plugins.
     int32_t (*mocap_node_version)(void); // 149
+    //Set the span to Thalamus's build type (e.g. "Debug" or "Release"), version and git commit, as STORAGE2 records
+    //them. The text is static (owns_data is 0) and they can be called from any thread.
+    void (*build_type)(struct ThalamusCharSpan*); // 150
+    void (*thalamus_version)(struct ThalamusCharSpan*); // 151
+    void (*commit)(struct ThalamusCharSpan*); // 152
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories_t)(struct ThalamusAPI*);

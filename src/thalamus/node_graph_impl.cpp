@@ -2111,6 +2111,24 @@ struct ThalamusAPIImpl {
     return 1;
   }
 
+  static void static_span(ThalamusCharSpan* out, std::string_view text) {
+    out->data = text.data();
+    out->size = text.size();
+    out->owns_data = 0;
+  }
+
+  static void build_type(ThalamusCharSpan* out) {
+    static_span(out, THALAMUS_BUILD_TYPE);
+  }
+
+  static void thalamus_version(ThalamusCharSpan* out) {
+    static_span(out, THALAMUS_VERSION);
+  }
+
+  static void commit(ThalamusCharSpan* out) {
+    static_span(out, THALAMUS_GIT_COMMIT_HASH);
+  }
+
   static void state_remove_at_index(struct ThalamusState* state, int64_t key, ThalamusPostCallback callback, void* data) {
     auto closure = to_closure(callback, data);
     erase_state(state, key, closure);
@@ -2436,7 +2454,10 @@ public:
     thalamus_api.image_node_version = ThalamusAPIImpl::image_node_version;
     thalamus_api.text_node_version = ThalamusAPIImpl::text_node_version;
     thalamus_api.mocap_node_version = ThalamusAPIImpl::mocap_node_version;
-    thalamus_api.version = 149;
+    thalamus_api.build_type = ThalamusAPIImpl::build_type;
+    thalamus_api.thalamus_version = ThalamusAPIImpl::thalamus_version;
+    thalamus_api.commit = ThalamusAPIImpl::commit;
+    thalamus_api.version = 152;
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},
