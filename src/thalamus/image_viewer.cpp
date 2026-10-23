@@ -166,6 +166,7 @@ static int channels_for_format(ImageNode::Format format) {
     case ImageNode::Format::MPEG4:
     case ImageNode::Format::H264:
     case ImageNode::Format::VP9:
+    case ImageNode::Format::MPEG1:
       return -1;
   }
   return -1;
