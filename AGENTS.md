@@ -84,13 +84,33 @@ ABI. Rules:
     provides; new functions are appended with a `// N` index comment and
     `thalamus_api.version` is bumped in `node_graph_impl.cpp`.
   - Plugins export `thalamus_get_node_factory_version`,
-    `thalamus_get_node_version` and `thalamus_get_analog_node_version`: the
-    number of pointers after `ThalamusNodeFactory::plugin_impl`,
-    `ThalamusNode::signals_offmain` and `ThalamusAnalogNode::name`
+    `thalamus_get_node_version`, `thalamus_get_analog_node_version`,
+    `thalamus_get_image_node_version`, `thalamus_get_text_node_version` and
+    `thalamus_get_mocap_node_version`: the number of pointers after
+    `ThalamusNodeFactory::plugin_impl`, `ThalamusNode::signals_offmain`,
+    `ThalamusAnalogNode::name`, `ThalamusImageNode::has_image_data`,
+    `ThalamusTextNode::has_text_data` and `ThalamusMocapNode::has_motion_data`
     respectively. Missing exports mean 0.
   - For structs Thalamus provides to plugins (e.g. `ThalamusAnalogNode` for
     C++ nodes), the host reports its version through an API function
-    (`ThalamusAPI::analog_node_version`), so plugins can check it.
+    (`ThalamusAPI::analog_node_version`, `image_node_version` (slot 147),
+    `text_node_version` (slot 148), `mocap_node_version` (slot 149)), so
+    plugins can check it.
+  - `build_type`/`thalamus_version`/`commit` (slots 150-152) set a
+    `ThalamusCharSpan` to the static
+    `THALAMUS_BUILD_TYPE`/`THALAMUS_VERSION`/`THALAMUS_GIT_COMMIT_HASH`
+    STORAGE2 records, so plugins can record them too.
+- `remote_time_ns` (analog node version 6, image, text and mocap node
+  version 1) is the message's time on the Thalamus that first produced it,
+  if it came from another one, else 0
+  (`AnalogNode`/`ImageNode`/`TextNode`/`MotionCaptureNode::remote_time`).
+  `ExtNode` has one `remote_time()` for all four interfaces, so it reads the
+  one whose `has_*_data` is set.
+- `events_connect`/`log_connect`/`message_disconnect` (slots 144-146) call a
+  plugin with a `ThalamusEvent` (payload, time) or `ThalamusLog` (text,
+  time, remote time) for every event or log message, on any thread. `MessageListener` calls under a mutex that
+  `message_disconnect` takes, so the plugin can free its data once that
+  returns.
 - `state_root()` (slot 142) returns a new reference to the root of the state
   tree (the whole config), which `ThalamusAPIImpl` holds while the node graph
   exists. Plugins on an older Thalamus walk `state_parent` from any state
@@ -115,6 +135,17 @@ ABI. Rules:
   plugins keep analog data on every message.
 - thalamus-contrib vendors `plugin.h` and `modalities.h` in
   `rust/include/thalamus/`; copy them over after changing them here.
+
+## Remote times
+
+- `AnalogResponse`, `Image`, `XsensResponse` and `Text` carry the serving
+  node's `time` and `remote_time`. A REMOTE node's `remote_time()` is the message's
+  `remote_time` if set (the message already came through a REMOTE node
+  upstream), else its `time`, so it stays the time on the Thalamus that
+  first produced the data across chains of REMOTE nodes. RemoteNode has one
+  `remote_time()` for its analog, image and mocap interfaces, so it's set on
+  the main thread right before each broadcast (0 for its own Ping data).
+  STORAGE2 records it for analog, image, mocap and text.
 
 ## State
 

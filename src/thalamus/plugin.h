@@ -204,6 +204,10 @@ extern "C" {
        (count, names, formats or sample intervals). Only the first message
        with analog data after a change reports it. Analog node version 5. */
     char (*channels_changed)(struct ThalamusNode* node);
+    /* The message's time on the Thalamus that first produced it, if it came
+       from another one (e.g. through a REMOTE node), else 0. Analog node
+       version 6. */
+    uint64_t (*remote_time_ns)(struct ThalamusNode* node);
   };
 
   enum ThalamusImageFormat {
@@ -231,6 +235,10 @@ extern "C" {
     uint64_t (*height)(struct ThalamusNode*);
     uint64_t (*frame_interval_ns)(struct ThalamusNode*);
     char (*has_image_data)(struct ThalamusNode*);
+    /* Fields after has_image_data are counted by the image node version
+       (thalamus_get_image_node_version, ThalamusAPI::image_node_version). */
+    /* Like ThalamusAnalogNode::remote_time_ns. Image node version 1. */
+    uint64_t (*remote_time_ns)(struct ThalamusNode*);
   };
   
   struct ThalamusMocapSegment {
@@ -250,10 +258,18 @@ extern "C" {
     void (*segments)(struct ThalamusMocapSegmentSpan*, struct ThalamusNode*);
     void (*pose_name)(struct ThalamusCharSpan*, struct ThalamusNode*);
     char (*has_motion_data)(struct ThalamusNode*);
+    /* Fields after has_motion_data are counted by the mocap node version
+       (thalamus_get_mocap_node_version, ThalamusAPI::mocap_node_version). */
+    /* Like ThalamusAnalogNode::remote_time_ns. Mocap node version 1. */
+    uint64_t (*remote_time_ns)(struct ThalamusNode*);
   };
   struct ThalamusTextNode {
     void (*text)(struct ThalamusCharSpan*, struct ThalamusNode*);
     char (*has_text_data)(struct ThalamusNode*);
+    /* Fields after has_text_data are counted by the text node version
+       (thalamus_get_text_node_version, ThalamusAPI::text_node_version). */
+    /* Like ThalamusAnalogNode::remote_time_ns. Text node version 1. */
+    uint64_t (*remote_time_ns)(struct ThalamusNode*);
   };
 
   struct ThalamusNodeFactory {
@@ -292,6 +308,23 @@ extern "C" {
   /* response is only valid during the call (json_inc_ref it to keep it) and is null unless status is
      ThalamusNodeRequestStatus_Ok. */
   typedef void (*ThalamusNodeRequestCallback)(enum ThalamusNodeRequestStatus status, const struct ThalamusJson* response, void* data);
+
+  struct ThalamusMessageConnection;
+  /* An event sent to Thalamus (thalamus_grpc::Event). */
+  struct ThalamusEvent {
+    struct ThalamusByteSpan payload;
+    uint64_t time_ns;
+  };
+  /* A log message (thalamus_grpc::Text). remote_time_ns is its time on the Thalamus that first logged it, if it came
+     from another one (e.g. through a REMOTELOG node), else 0. */
+  struct ThalamusLog {
+    struct ThalamusCharSpan text;
+    uint64_t time_ns;
+    uint64_t remote_time_ns;
+  };
+  /* The event or log message and the spans in it are only valid during the call. May be called on any thread. */
+  typedef void (*ThalamusEventCallback)(const struct ThalamusEvent* event, void* data);
+  typedef void (*ThalamusLogCallback)(const struct ThalamusLog* log, void* data);
 
   struct THALAMUS_SDL_Window;
   struct THALAMUS_SDL_EventSubscription;
@@ -513,6 +546,25 @@ extern "C" {
     //isn't retained.
     void (*node_request)(struct ThalamusNode* node, const struct ThalamusJson* request,
                          ThalamusNodeRequestCallback callback, void* data); // 143
+    //Calls callback with every event sent to Thalamus's events gRPC call, until message_disconnect.
+    struct ThalamusMessageConnection* (*events_connect)(ThalamusEventCallback callback, void* data); // 144
+    //Calls callback with every log message (the log gRPC call and node logs), until message_disconnect.
+    struct ThalamusMessageConnection* (*log_connect)(ThalamusLogCallback callback, void* data); // 145
+    //Disconnects a connection from events_connect or log_connect. Once it returns the callback isn't running and won't
+    //be called again, so its data can be freed. Don't call it from the callback.
+    void (*message_disconnect)(struct ThalamusMessageConnection* connection); // 146
+    //The number of pointers after has_image_data in the ThalamusImageNodes Thalamus provides to plugins, like
+    //analog_node_version.
+    int32_t (*image_node_version)(void); // 147
+    //The number of pointers after has_text_data in the ThalamusTextNodes Thalamus provides to plugins.
+    int32_t (*text_node_version)(void); // 148
+    //The number of pointers after has_motion_data in the ThalamusMocapNodes Thalamus provides to plugins.
+    int32_t (*mocap_node_version)(void); // 149
+    //Set the span to Thalamus's build type (e.g. "Debug" or "Release"), version and git commit, as STORAGE2 records
+    //them. The text is static (owns_data is 0) and they can be called from any thread.
+    void (*build_type)(struct ThalamusCharSpan*); // 150
+    void (*thalamus_version)(struct ThalamusCharSpan*); // 151
+    void (*commit)(struct ThalamusCharSpan*); // 152
   };
 
   typedef struct ThalamusNodeFactory** (*thalamus_get_node_factories_t)(struct ThalamusAPI*);
@@ -525,6 +577,12 @@ extern "C" {
 
   //The number of pointers after the ThalamusAnalogNode::name field.
   typedef int32_t (*thalamus_get_analog_node_version_t)(void);
+  //The number of pointers after the ThalamusImageNode::has_image_data field.
+  typedef int32_t (*thalamus_get_image_node_version_t)(void);
+  //The number of pointers after the ThalamusTextNode::has_text_data field.
+  typedef int32_t (*thalamus_get_text_node_version_t)(void);
+  //The number of pointers after the ThalamusMocapNode::has_motion_data field.
+  typedef int32_t (*thalamus_get_mocap_node_version_t)(void);
   typedef void (*thalamus_teardown_t)(void);
   
 #ifdef __cplusplus

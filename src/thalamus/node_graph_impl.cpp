@@ -139,6 +139,42 @@ struct ThalamusNodeGetConnection {
   boost::signals2::scoped_connection connection;
 };
 
+// The callback of events_connect/log_connect. The signals may be emitted on
+// any thread, so it's called under mutex, which message_disconnect takes to
+// clear it: once that returns the plugin can free the callback's data.
+struct MessageListener {
+  std::mutex mutex;
+  // Only the one for this listener's signal is set.
+  ThalamusEventCallback event_callback = nullptr;
+  ThalamusLogCallback log_callback = nullptr;
+  void* data = nullptr;
+
+  void operator()(const thalamus_grpc::Event& event) {
+    std::lock_guard<std::mutex> lock(mutex);
+    if(!event_callback) {
+      return;
+    }
+    const auto& payload = event.payload();
+    ThalamusEvent c_event{{reinterpret_cast<const uint8_t*>(payload.data()), payload.size()}, event.time()};
+    event_callback(&c_event, data);
+  }
+
+  void operator()(const thalamus_grpc::Text& text) {
+    std::lock_guard<std::mutex> lock(mutex);
+    if(!log_callback) {
+      return;
+    }
+    const auto& message = text.text();
+    ThalamusLog c_log{{message.data(), message.size(), 0}, text.time(), text.remote_time()};
+    log_callback(&c_log, data);
+  }
+};
+
+struct ThalamusMessageConnection {
+  boost::signals2::scoped_connection connection;
+  std::shared_ptr<MessageListener> listener;
+};
+
 struct ThalamusNodeReadyConnection {
   boost::signals2::scoped_connection connection;
   ThalamusNode* node;
@@ -207,13 +243,16 @@ static void string_to_span(struct ThalamusCharSpan* output, const std::string& i
 struct ExtNode : public Node, public AnalogNode, public ImageNode, public MotionCaptureNode, public TextNode, public BlobNode {
   int version;
   int analog_version;
+  int image_version;
+  int text_version;
+  int mocap_version;
   ThalamusNode* node;
   ThalamusNodeFactory *factory;
   ThalamusAPI *api;
   std::function<void()> drop_ready;
 
   ExtNode(ThalamusNode *_node, ThalamusNodeFactory *_factory, ThalamusAPI *_api, int _version)
-      : version(_version), analog_version(0), node(_node), factory(_factory), api(_api) {
+      : version(_version), analog_version(0), image_version(0), text_version(0), mocap_version(0), node(_node), factory(_factory), api(_api) {
     if(node && node->signals_offmain) {
       ready_multithreaded.emplace();
     }
@@ -349,7 +388,21 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
   std::chrono::nanoseconds time() const override {
     return std::chrono::nanoseconds(node->time_ns(node));
   }
+  // One override serves the analog, image, text and mocap interfaces, so it reads
+  // the remote time of the modality the current message has.
   std::chrono::nanoseconds remote_time() const override {
+    if(node->analog && analog_version >= 6 && node->analog->has_analog_data(node)) {
+      return std::chrono::nanoseconds(node->analog->remote_time_ns(node));
+    }
+    if(node->image && image_version >= 1 && node->image->has_image_data(node)) {
+      return std::chrono::nanoseconds(node->image->remote_time_ns(node));
+    }
+    if(node->text && text_version >= 1 && node->text->has_text_data(node)) {
+      return std::chrono::nanoseconds(node->text->remote_time_ns(node));
+    }
+    if(node->mocap && mocap_version >= 1 && node->mocap->has_motion_data(node)) {
+      return std::chrono::nanoseconds(node->mocap->remote_time_ns(node));
+    }
     return 0ns;
   }
   std::string_view name(int channel) const override {
@@ -418,7 +471,7 @@ struct ExtNode : public Node, public AnalogNode, public ImageNode, public Motion
     case ThalamusImageFormat_VP9:
       return ImageNode::Format::VP9;
     case ThalamusImageFormat_MPEG1:
-      THALAMUS_ABORT("MPEG1 is no longer supported");
+      return ImageNode::Format::MPEG1;
     }
   }
   size_t width() const override {
@@ -554,6 +607,24 @@ static char plugin_text_has_text_data(struct ThalamusNode* node) {
   return interfaces->text->has_text_data() ? 1 : 0;
 }
 
+static uint64_t plugin_text_remote_time_ns(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  return uint64_t(interfaces->text->remote_time().count());
+}
+
+static uint64_t plugin_analog_remote_time_ns(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  return uint64_t(interfaces->analog->remote_time().count());
+}
+
+static uint64_t plugin_image_remote_time_ns(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  return uint64_t(interfaces->image->remote_time().count());
+}
+
 static uint64_t plugin_analog_time_ns(struct ThalamusNode* node) {
   auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
   ASSERT_SAFE();
@@ -566,6 +637,12 @@ static uint64_t plugin_image_time_ns(struct ThalamusNode* node) {
   ASSERT_SAFE();
   std::chrono::nanoseconds t = interfaces->image->time();
   return uint64_t(t.count());
+}
+
+static uint64_t plugin_mocap_remote_time_ns(struct ThalamusNode* node) {
+  auto interfaces = reinterpret_cast<Interfaces*>(node->impl);
+  ASSERT_SAFE();
+  return uint64_t(interfaces->mocap->remote_time().count());
 }
 
 static uint64_t plugin_mocap_time_ns(struct ThalamusNode* node) {
@@ -777,6 +854,8 @@ static ThalamusImageFormat plugin_image_format(struct ThalamusNode* node) {
     return ThalamusImageFormat_H264;
   case ImageNode::Format::VP9:
     return ThalamusImageFormat_VP9;
+  case ImageNode::Format::MPEG1:
+    return ThalamusImageFormat_MPEG1;
   }
 }
 
@@ -901,6 +980,7 @@ struct ThalamusAPIImpl {
       result->analog->format = plugin_analog_format;
       result->analog->encoded_count = plugin_analog_encoded_count;
       result->analog->channels_changed = plugin_analog_channels_changed;
+      result->analog->remote_time_ns = plugin_analog_remote_time_ns;
     }
     if (image) {
       interfaces->image = image;
@@ -913,6 +993,7 @@ struct ThalamusAPIImpl {
       result->image->height = plugin_image_height;
       result->image->frame_interval_ns = plugin_image_frame_interval_ns;
       result->image->has_image_data = plugin_image_has_image_data;
+      result->image->remote_time_ns = plugin_image_remote_time_ns;
     }
     if (mocap) {
       interfaces->mocap = mocap;
@@ -921,6 +1002,7 @@ struct ThalamusAPIImpl {
       result->mocap->segments = plugin_mocap_segments;
       result->mocap->pose_name = plugin_mocap_pose_name;
       result->mocap->has_motion_data = plugin_mocap_has_motion_data;
+      result->mocap->remote_time_ns = plugin_mocap_remote_time_ns;
     }
     if (text) {
       interfaces->text = text;
@@ -928,6 +1010,7 @@ struct ThalamusAPIImpl {
       result->text = new ThalamusTextNode();
       result->text->text = plugin_text_text;
       result->text->has_text_data = plugin_text_has_text_data;
+      result->text->remote_time_ns = plugin_text_remote_time_ns;
     }
     if (blob) {
       interfaces->blob = blob;
@@ -1702,6 +1785,39 @@ struct ThalamusAPIImpl {
     });
   }
 
+  template <typename T>
+  static ThalamusMessageConnection* message_connect(boost::signals2::signal<void(T &)>& signal,
+                                                     std::shared_ptr<MessageListener> listener) {
+    auto result = new ThalamusMessageConnection();
+    result->listener = listener;
+    result->connection = signal.connect([listener](const auto& message) { (*listener)(message); });
+    return result;
+  }
+
+  static ThalamusMessageConnection* events_connect(ThalamusEventCallback callback, void* data) {
+    auto listener = std::make_shared<MessageListener>();
+    listener->event_callback = callback;
+    listener->data = data;
+    return message_connect(node_graph->get_service().events_signal, listener);
+  }
+
+  static ThalamusMessageConnection* log_connect(ThalamusLogCallback callback, void* data) {
+    auto listener = std::make_shared<MessageListener>();
+    listener->log_callback = callback;
+    listener->data = data;
+    return message_connect(node_graph->get_service().log_signal, listener);
+  }
+
+  static void message_disconnect(ThalamusMessageConnection* connection) {
+    connection->connection.disconnect();
+    {
+      std::lock_guard<std::mutex> lock(connection->listener->mutex);
+      connection->listener->event_callback = nullptr;
+      connection->listener->log_callback = nullptr;
+    }
+    delete connection;
+  }
+
   static ThalamusNodeGetConnection* node_get_node(struct ThalamusNodeSelector* c_selector, ThalamusNodeGetCallback callback, void* data) {
     auto selector = to_selector(c_selector);
 
@@ -1975,8 +2091,42 @@ struct ThalamusAPIImpl {
   }
 
   static int32_t analog_node_version() {
-    // buffer, encoding, format, encoded_count and channels_changed.
-    return 5;
+    // buffer, encoding, format, encoded_count, channels_changed and
+    // remote_time_ns.
+    return 6;
+  }
+
+  static int32_t image_node_version() {
+    // remote_time_ns.
+    return 1;
+  }
+
+  static int32_t text_node_version() {
+    // remote_time_ns.
+    return 1;
+  }
+
+  static int32_t mocap_node_version() {
+    // remote_time_ns.
+    return 1;
+  }
+
+  static void static_span(ThalamusCharSpan* out, std::string_view text) {
+    out->data = text.data();
+    out->size = text.size();
+    out->owns_data = 0;
+  }
+
+  static void build_type(ThalamusCharSpan* out) {
+    static_span(out, THALAMUS_BUILD_TYPE);
+  }
+
+  static void thalamus_version(ThalamusCharSpan* out) {
+    static_span(out, THALAMUS_VERSION);
+  }
+
+  static void commit(ThalamusCharSpan* out) {
+    static_span(out, THALAMUS_GIT_COMMIT_HASH);
   }
 
   static void state_remove_at_index(struct ThalamusState* state, int64_t key, ThalamusPostCallback callback, void* data) {
@@ -2000,13 +2150,16 @@ struct ExtNodeFactory : public INodeFactory {
   int version;
   int node_version;
   int analog_node_version;
+  int image_node_version;
+  int text_node_version;
+  int mocap_node_version;
   ThalamusNodeFactory* underlying;
   ThalamusIoContext io_context;
   ThalamusNodeGraph node_graph;
   ThalamusAPI* api;
 
-  ExtNodeFactory(int _version, ThalamusNodeFactory* _underlying, boost::asio::io_context &_io_context, NodeGraph *graph, ThalamusAPI* _api, int _node_version, int _analog_node_version)
-  : version(_version), node_version(_node_version), analog_node_version(_analog_node_version), underlying(_underlying), io_context(_io_context), node_graph(graph), api(_api) {}
+  ExtNodeFactory(int _version, ThalamusNodeFactory* _underlying, boost::asio::io_context &_io_context, NodeGraph *graph, ThalamusAPI* _api, int _node_version, int _analog_node_version, int _image_node_version, int _text_node_version, int _mocap_node_version)
+  : version(_version), node_version(_node_version), analog_node_version(_analog_node_version), image_node_version(_image_node_version), text_node_version(_text_node_version), mocap_node_version(_mocap_node_version), underlying(_underlying), io_context(_io_context), node_graph(graph), api(_api) {}
 
   Node *create(ObservableDictPtr state, boost::asio::io_context &,
                NodeGraph *) override {
@@ -2024,6 +2177,9 @@ struct ExtNodeFactory : public INodeFactory {
     }
     result->node = node;
     result->analog_version = analog_node_version;
+    result->image_version = image_node_version;
+    result->text_version = text_node_version;
+    result->mocap_version = mocap_node_version;
     if(node->signals_offmain) {
       result->ready_multithreaded.emplace();
     }
@@ -2292,7 +2448,16 @@ public:
     thalamus_api.trace_event_begin_static = ThalamusAPIImpl::trace_event_begin_static;
     thalamus_api.state_root = ThalamusAPIImpl::state_root;
     thalamus_api.node_request = ThalamusAPIImpl::node_request;
-    thalamus_api.version = 143;
+    thalamus_api.events_connect = ThalamusAPIImpl::events_connect;
+    thalamus_api.log_connect = ThalamusAPIImpl::log_connect;
+    thalamus_api.message_disconnect = ThalamusAPIImpl::message_disconnect;
+    thalamus_api.image_node_version = ThalamusAPIImpl::image_node_version;
+    thalamus_api.text_node_version = ThalamusAPIImpl::text_node_version;
+    thalamus_api.mocap_node_version = ThalamusAPIImpl::mocap_node_version;
+    thalamus_api.build_type = ThalamusAPIImpl::build_type;
+    thalamus_api.thalamus_version = ThalamusAPIImpl::thalamus_version;
+    thalamus_api.commit = ThalamusAPIImpl::commit;
+    thalamus_api.version = 152;
 
     node_factories = {
         {"NONE", new NodeFactory<NoneNode>()},
@@ -2379,6 +2544,15 @@ public:
         analog_node_version = 0;
       }
 
+      auto get_image_node_version = ext.load<thalamus_get_image_node_version_t>("thalamus_get_image_node_version");
+      int32_t image_node_version = get_image_node_version ? get_image_node_version() : 0;
+
+      auto get_text_node_version = ext.load<thalamus_get_text_node_version_t>("thalamus_get_text_node_version");
+      int32_t text_node_version = get_text_node_version ? get_text_node_version() : 0;
+
+      auto get_mocap_node_version = ext.load<thalamus_get_mocap_node_version_t>("thalamus_get_mocap_node_version");
+      int32_t mocap_node_version = get_mocap_node_version ? get_mocap_node_version() : 0;
+
       auto get_node_factories = ext.load<thalamus_get_node_factories_t>("thalamus_get_node_factories");
       THALAMUS_ASSERT(get_node_factories, "thalamus_get_node_factories not found in extension");
 
@@ -2386,7 +2560,7 @@ public:
       while(*factory != nullptr) {
         THALAMUS_LOG(info) << "Found " << (*factory)->type;
         auto type_name = to_string((*factory)->type);
-        node_factories[type_name] = new ExtNodeFactory(version, *factory, io_context, outer, &thalamus_api, node_version, analog_node_version);
+        node_factories[type_name] = new ExtNodeFactory(version, *factory, io_context, outer, &thalamus_api, node_version, analog_node_version, image_node_version, text_node_version, mocap_node_version);
         ++factory;
       }
     }

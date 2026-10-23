@@ -299,6 +299,8 @@ struct Storage2Node::Impl {
       body->set_height(uint32_t(locked_analog->height()));
       body->set_frame_interval(
           uint32_t(locked_analog->frame_interval().count()));
+      body->set_time(uint64_t(locked_analog->time().count()));
+      body->set_remote_time(uint64_t(locked_analog->remote_time().count()));
       switch (locked_analog->format()) {
       case ImageNode::Format::Gray:
         body->set_format(thalamus_grpc::Image::Format::Image_Format_Gray);
@@ -339,6 +341,9 @@ struct Storage2Node::Impl {
       case ImageNode::Format::VP9:
         body->set_format(thalamus_grpc::Image::Format::Image_Format_VP9);
         break;
+      case ImageNode::Format::MPEG1:
+        body->set_format(thalamus_grpc::Image::Format::Image_Format_MPEG1);
+        break;
       }
 
       for (auto i = 0; i < int(locked_analog->num_planes()); ++i) {
@@ -371,6 +376,8 @@ struct Storage2Node::Impl {
       auto body_text = locked_text->text();
 
       body->set_text(body_text.data(), body_text.size());
+      body->set_time(uint64_t(locked_text->time().count()));
+      body->set_remote_time(uint64_t(locked_text->remote_time().count()));
 
       record.set_time(size_t(locked_text->time().count()));
       record.set_node(name);
@@ -425,6 +432,8 @@ struct Storage2Node::Impl {
       TRACE_EVENT("thalamus", "Storage2Node::on_motion_data(build record)");
       auto body = record.mutable_xsens();
       body->set_pose_name(locked_xsens->pose_name());
+      body->set_time(uint64_t(locked_xsens->time().count()));
+      body->set_remote_time(uint64_t(locked_xsens->remote_time().count()));
       auto segments = locked_xsens->segments();
       for (auto &segment : segments) {
         auto protobuf_segment = body->add_segments();

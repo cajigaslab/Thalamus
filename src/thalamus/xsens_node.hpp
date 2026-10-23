@@ -18,6 +18,9 @@ public:
   virtual std::span<Segment const> segments() const = 0;
   virtual const std::string_view pose_name() const = 0;
   virtual std::chrono::nanoseconds time() const = 0;
+  // The data's time on the Thalamus that first produced it, if it came from
+  // another one (e.g. through a REMOTE node), else 0.
+  virtual std::chrono::nanoseconds remote_time() const { return std::chrono::nanoseconds(0); }
   virtual void inject(const std::span<Segment const> &segments) = 0;
   virtual bool has_motion_data() const;
 };
