@@ -224,6 +224,10 @@ message Image {
   uint64 frame_interval = 5;
   bool last = 6;
   bool bigendian = 7;
+  // The image node's time, and its remote_time: the frame's time on the
+  // Thalamus that first produced it, if it came from another one, else 0.
+  uint64 time = 8;
+  uint64 remote_time = 9;
 }
 
 message Ping {
@@ -267,6 +271,9 @@ message XsensSegment {
 message XsensResponse {
   repeated XsensSegment segments = 1;
   string pose_name = 2;
+  // Like Image.time and Image.remote_time.
+  uint64 time = 3;
+  uint64 remote_time = 4;
 }
 
 message StringMessage {
@@ -339,6 +346,9 @@ message AnalogResponse {
     AAC = 1;
     // Opus packets, each preceded by an MPEG-TS Opus control header.
     Opus = 2;
+    // FLAC frames with no STREAMINFO; each frame header gives the sample
+    // rate and bits per sample.
+    FLAC = 3;
   }
   
   repeated double data = 1;

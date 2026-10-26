@@ -25,7 +25,10 @@ public:
     // Encoded H.264 (Annex B); Thalamus passes it along but has no codec for it.
     H264,
     // Encoded VP9, one frame per message; likewise no codec.
-    VP9
+    VP9,
+    // Encoded MPEG-1 video, one frame per message (e.g. from
+    // thalamus-contrib's MEDIA_CONVERTER).
+    MPEG1
   };
   virtual ~ImageNode();
   virtual Plane plane(int) const = 0;
@@ -35,6 +38,9 @@ public:
   virtual size_t height() const = 0;
   virtual std::chrono::nanoseconds frame_interval() const = 0;
   virtual std::chrono::nanoseconds time() const = 0;
+  // The frame's time on the Thalamus that first produced it, if it came from
+  // another one (e.g. through a REMOTE node), else 0.
+  virtual std::chrono::nanoseconds remote_time() const { return std::chrono::nanoseconds(0); }
   virtual void inject(const thalamus_grpc::Image &) = 0;
   virtual bool has_image_data() const { return true; }
 };

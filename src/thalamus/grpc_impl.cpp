@@ -450,6 +450,7 @@ struct Service::Impl {
 
             response.set_text(node->text());
             response.set_time(size_t(node->time().count()));
+            response.set_remote_time(uint64_t(node->remote_time().count()));
             writer(response, ::grpc::WriteOptions());
           }));
       raw_node.reset();
@@ -1402,6 +1403,9 @@ struct ImageSession : public NodeSession<ImageNode, thalamus_grpc::Image> {
       case ImageNode::Format::VP9:
         format = thalamus_grpc::Image::Format::Image_Format_VP9;
         break;
+      case ImageNode::Format::MPEG1:
+        format = thalamus_grpc::Image::Format::Image_Format_MPEG1;
+        break;
       }
 
       while (position < data_count) {
@@ -1410,6 +1414,8 @@ struct ImageSession : public NodeSession<ImageNode, thalamus_grpc::Image> {
         piece.set_height(uint32_t(height));
         piece.set_format(format);
         piece.set_frame_interval(size_t(typed_node->frame_interval().count()));
+        piece.set_time(uint64_t(typed_node->time().count()));
+        piece.set_remote_time(uint64_t(typed_node->remote_time().count()));
 
         size_t plane_offset = 0;
         size_t remaining_chunk = IMAGE_CHUNK_SIZE;
@@ -1895,6 +1901,8 @@ Service::xsens(::grpc::ServerContext *context,
           std::lock_guard<std::mutex> lock(connection_mutex);
           ::thalamus_grpc::XsensResponse response;
           response.set_pose_name(node->pose_name());
+          response.set_time(uint64_t(node->time().count()));
+          response.set_remote_time(uint64_t(node->remote_time().count()));
           auto data = node->segments();
           for (auto &segment : data) {
             auto response_segment = response.add_segments();
@@ -2022,7 +2030,7 @@ Service::image(::grpc::CallbackServerContext *context,
         promise.set_value();
       });
     });
-    THALAMUS_LOG(info) << "Waiting for node";
+    THALAMUS_LOG(trace) << "Waiting for node";
     while (future.wait_for(1s) == std::future_status::timeout &&
            !context->IsCancelled()) {
       if (impl->io_context.stopped()) {
@@ -2032,10 +2040,10 @@ Service::image(::grpc::CallbackServerContext *context,
     if (context->IsCancelled()) {
       continue;
     }
-    THALAMUS_LOG(info) << "Got node";
+    THALAMUS_LOG(trace) << "Got node";
 
     auto node = node_cast<StimNode *>(raw_node.get());
-    THALAMUS_LOG(info) << "stimnode " << node;
+    THALAMUS_LOG(trace) << "stimnode " << node;
     if (!node) {
       std::this_thread::sleep_for(1s);
       continue;
