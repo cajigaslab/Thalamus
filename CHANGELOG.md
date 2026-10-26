@@ -9,6 +9,21 @@ some patch versions contain only build/CI or internal changes and are omitted be
 
 ## 1.0.x
 
+### 1.0.60 — 2026-10-26
+- Plugin API version 153: `events_connect` / `log_connect` / `message_disconnect`
+  deliver every event and log message to a plugin, `log` sends plugin text to the
+  Thalamus log, `build_type` / `thalamus_version` / `commit` report the build, and
+  `image_node_version` / `text_node_version` / `mocap_node_version` report the host's
+  node struct versions.
+- Analog, image, text and motion-capture messages carry `time` and `remote_time` (the
+  message's time on the Thalamus that first produced it, through `REMOTE` nodes); plugins
+  read it with `remote_time_ns`, and STORAGE2 records it.
+- New `FLAC` analog encoding (enum only, like `Opus`).  `MPEG1` image data passes
+  through nodes.
+- `REMOTE` publishes its Ping and Bytes Per Second measurements without stale channel
+  data, encoded packets or remote time from the previous message.
+
+
 ### 1.0.55 — 2026-10-12
 - Plugin API version 143: `node_request` lets a plugin send a JSON request to another
   node and receive the response (or a `Destroyed` / `Dropped` status) on the main

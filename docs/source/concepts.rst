@@ -63,9 +63,13 @@ that determines the kind of data:
   values); ``thalamus.record_reader2`` and ``thalamus.dataframe`` read all three.
   Each span's ``format`` (``Double``, ``Short``, ``Int``, ``ULong`` or ``Encoded``)
   says which array holds its samples, so one message can mix sample types, and
-  ``Encoded`` channels (``AAC`` or ``Opus`` audio) keep their samples in ``buffer``.
+  ``Encoded`` channels (``AAC``, ``Opus`` or ``FLAC`` audio) keep their samples in ``buffer``.
   The live ``analog`` gRPC stream converts every channel to scaled doubles unless the
   request sets ``native_formats``.
+* **time and remote_time** -- ``AnalogResponse``, ``Image``, ``XsensResponse`` and
+  ``Text`` messages carry the serving node's ``time`` and a ``remote_time``: the
+  message's time on the Thalamus that first produced it if it came through a
+  :doc:`REMOTE <nodes/remote>` node, else ``0``.  STORAGE2 records both.
 * **image** -- a video/camera frame, with raw bytes, ``width``, ``height``,
   pixel ``format`` (e.g. ``Gray``, ``RGB``, ``MPEG4``), and ``frame_interval``.
 * **blob** -- arbitrary bytes with a ``mime`` type and a ``stream`` number, produced

@@ -63,3 +63,7 @@ of each task that runs is copied into the recording's output directory -- so a
 recording carries both the build it was produced with and the exact task code that
 ran.
 
+
+For data that came through a :doc:`REMOTE <remote>` node, analog, image, motion and text
+records also store the message's ``remote_time``: its time on the Thalamus that first
+produced it (``0`` for data produced locally).

@@ -149,7 +149,7 @@ API versioning
 
 ``ThalamusAPI`` begins with an ``int32_t version`` field, and every function
 pointer in the table is annotated in ``plugin.h`` with the version at which it was
-added (the host currently passes ``142``).  The table is strictly append-only, so a
+added (the host currently passes ``153``).  The table is strictly append-only, so a
 plugin built against an older header keeps working; a plugin that wants to use a
 newer capability should guard it:
 
@@ -242,7 +242,8 @@ An analog message can mix channels of different types.  ``ThalamusAnalogNode.for
 returns a ``ThalamusAnalogFormat`` (``Double``, ``Short``, ``Int``, ``ULong`` or
 ``Encoded``) saying which of the ``*_data`` accessors holds that channel's samples;
 ``Encoded`` channels have no samples there and live in ``buffer(node)``, whose
-``encoding(node)`` is ``ThalamusAnalogEncoding_AAC`` or ``_Opus`` (``encoded_count``
+``encoding(node)`` is ``ThalamusAnalogEncoding_AAC``, ``_Opus`` or ``_FLAC`` (FLAC frames
+with no STREAMINFO; each frame header gives the sample rate and bits per sample) (``encoded_count``
 samples per channel).  ``channels_changed(node)`` is true on the first message whose
 channels (count, names, formats or sample intervals) differ from the previous one;
 it replaces the ``node_channels_changed*`` API functions, which are now deprecated
@@ -263,6 +264,54 @@ Other API additions: ``state_root()`` (version 142) returns a new reference to t
 root of the whole state tree, ``trace_event_begin_static(name)`` (version 141) is a
 cheaper ``trace_event_begin`` for names that stay valid while the plugin is loaded,
 and ``analog_node_version()`` (version 140).
+
+Remote times
+------------
+
+Messages that came from another Thalamus through a :doc:`REMOTE <nodes/remote>` or
+:doc:`REMOTE_LOG <nodes/remote_log>` node carry the time they had on the Thalamus that
+first produced them.  ``remote_time_ns(node)`` returns it, or ``0`` if the message was
+produced locally.  It is available on ``ThalamusAnalogNode`` (analog node version 6)
+and on ``ThalamusImageNode``, ``ThalamusTextNode`` and ``ThalamusMocapNode`` (version 1
+of each).  Those three versions count the pointers after ``has_image_data``,
+``has_text_data`` and ``has_motion_data``; a plugin exports
+``thalamus_get_image_node_version``, ``thalamus_get_text_node_version`` and
+``thalamus_get_mocap_node_version`` for its own nodes (missing exports mean ``0``), and
+checks the host's with ``api->image_node_version()`` (147), ``text_node_version()``
+(148) and ``mocap_node_version()`` (149).  As with analog data, check ``has_image_data``,
+``has_text_data`` or ``has_motion_data`` before reading a message.
+
+Events, logs and build information
+----------------------------------
+
+``events_connect(callback, data)`` (144) calls ``callback`` with a ``ThalamusEvent``
+(``payload`` and ``time_ns``) for every event sent to Thalamus, and
+``log_connect(callback, data)`` (145) with a ``ThalamusLog`` (``text``, ``time_ns`` and
+``remote_time_ns``) for every log message, whether it came from the ``log`` gRPC call
+or a node.  Callbacks may run on any thread and the spans are valid only during the
+call.  Both return a connection that ``message_disconnect(connection)`` (146) ends;
+once it returns the callback isn't running and won't be called again, so its ``data``
+can be freed.  Don't call it from the callback.
+
+``log(text)`` (153) sends text to Thalamus's log like the ``log`` gRPC call: it reaches
+``log_connect`` listeners, the log view and recordings, timed now with no remote time.
+It can be called from any thread and copies the text.
+
+``build_type(span)`` (150), ``thalamus_version(span)`` (151) and ``commit(span)`` (152)
+set a ``ThalamusCharSpan`` to the same build type, version and git commit that
+:doc:`STORAGE2 <nodes/storage2>` records; the text is static (``owns_data`` is ``0``).
+
+.. code-block:: c
+
+   static void on_log(const struct ThalamusLog* log, void* data) {
+     /* log->text is only valid during this call */
+   }
+
+   struct ThalamusMessageConnection* conn = api->log_connect(on_log, NULL);
+   struct ThalamusCharSpan text = { "plugin started", 14 };
+   api->log(&text);
+   /* ... later ... */
+   api->message_disconnect(conn);
 
 Node requests
 -------------

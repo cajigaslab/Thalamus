@@ -19,6 +19,11 @@ While connected the node reports a **Connected** status, the measured **Bytes Pe
 Second**, and ping/latency information.  See :doc:`runner2` for starting and stopping
 remote nodes, and :doc:`remote_log` for the logging equivalent.
 
+Every message carries its ``remote_time``: its time on the Thalamus that first produced
+it, which stays the same across chains of REMOTE nodes.  The node's own Ping and Bytes
+Per Second channels are measured locally, so they are published on their own, with no
+channel data, encoded packets or remote time from the last remote message.
+
 .. note::
 
    By default a Thalamus instance only listens on localhost.  Launch the instance
