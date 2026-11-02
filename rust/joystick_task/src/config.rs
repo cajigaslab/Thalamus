@@ -234,6 +234,10 @@ pub struct TaskConfig {
     pub max_logged_joystick_samples: i64,
     #[serde(deserialize_with = "lenient::bool")]
     pub fail_on_touch_input: bool,
+    /// Seconds a touch-input fail holds the trial open (target hidden) before
+    /// it finishes, so a sustained touch can't produce rapid-fire fails.
+    #[serde(deserialize_with = "lenient::f64")]
+    pub touch_fail_timeout_s: f64,
 
     // --- streak / HUD / animations (display-only; still parsed for parity) ---
     #[serde(deserialize_with = "lenient::bool")]
@@ -337,6 +341,7 @@ impl Default for TaskConfig {
             ignored_idle_sample_clear_threshold: 50,
             max_logged_joystick_samples: 2000, // DEFAULT_MAX_LOGGED_JOYSTICK_SAMPLES (joystick_intro.py:49)
             fail_on_touch_input: false,
+            touch_fail_timeout_s: 0.0,
 
             animations_enabled: false,
             task_animation_enabled: true,

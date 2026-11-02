@@ -209,6 +209,8 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     task_config["max_logged_joystick_samples"] = DEFAULT_MAX_LOGGED_JOYSTICK_SAMPLES
   if "fail_on_touch_input" not in task_config:
     task_config["fail_on_touch_input"] = False
+  if "touch_fail_timeout_s" not in task_config:
+    task_config["touch_fail_timeout_s"] = 0.0
   if "animations_enabled" not in task_config:
     task_config["animations_enabled"] = False
   if "task_animation_enabled" not in task_config:
@@ -295,6 +297,7 @@ def create_widget(task_config: ObservableCollection) -> QWidget:
     Form.Constant("Idle Sample Clear Threshold", "ignored_idle_sample_clear_threshold", 50, precision=0),
     Form.Constant("Max Logged Joystick Samples", "max_logged_joystick_samples", DEFAULT_MAX_LOGGED_JOYSTICK_SAMPLES, precision=0),
     Form.Bool("Fail On Touch Input", "fail_on_touch_input", False),
+    Form.Constant("Touch Fail Timeout (s)", "touch_fail_timeout_s", 0.0, "s", precision=3),
     Form.Constant("Intertrial Interval (s)", "intertrial_interval", 1.0, "s", precision=3),
   )
   layout.addWidget(form)
@@ -3112,6 +3115,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
   ignored_idle_sample_clear_threshold = max(0, int(task_config.get("ignored_idle_sample_clear_threshold", 50)))
   max_logged_joystick_samples = max(0, int(task_config.get("max_logged_joystick_samples", DEFAULT_MAX_LOGGED_JOYSTICK_SAMPLES)))
   fail_on_touch_input = bool(task_config.get("fail_on_touch_input", False))
+  touch_fail_timeout_s = max(0.0, float(task_config.get("touch_fail_timeout_s", 0.0)))
   intertrial_interval = float(task_config.get("intertrial_interval", 1.0))
   configured_targets = task_config.get("targets", [])
   animations_enabled = bool(task_config.get("animations_enabled", False))
@@ -3481,6 +3485,7 @@ async def run(context: TaskContextProtocol) -> TaskResult:
 
   async def fail_for_touch_input(now: float) -> TaskResult:
     nonlocal streak_count
+    nonlocal state
     touch_time = now if last_touch_time is None else last_touch_time
     append_event(
       "touch_input_fail",
@@ -3489,12 +3494,21 @@ async def run(context: TaskContextProtocol) -> TaskResult:
       touch_y=last_touch_pos.y(),
       touch_time_perf_counter=touch_time,
       touch_time_since_session_start_s=max(0.0, touch_time - session_start),
+      touch_fail_timeout_s=touch_fail_timeout_s,
     )
     streak_count = 0
     task_config["_streak_count"] = 0
     finalize_attempt("fail", now, failure_reason="touch_input")
     fail_sound.play()
     await context.log("BehavState=fail")
+    # Timeout: hide the target and hold the trial open so a sustained touch
+    # can't rack up back-to-back touch fails.
+    if touch_fail_timeout_s > 0.0:
+      state = "intertrial"
+      timeout_end = time.perf_counter() + touch_fail_timeout_s
+      while time.perf_counter() < timeout_end:
+        context.widget.update()
+        await context.sleep(datetime.timedelta(seconds=0.01))
     return TaskResult(success=False)
 
   def reset_intertrial_gate(now: float) -> None:

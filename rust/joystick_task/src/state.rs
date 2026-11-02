@@ -283,6 +283,9 @@ pub struct Trial {
     pub success_pop_ratio: f64,
     pub success_pop_x: f64,
     pub success_pop_y: f64,
+    // Touch-fail timeout: set when a touch-input fail starts its timeout; the
+    // trial finishes once touch_fail_timeout_s elapses.
+    touch_fail_timeout_start: Option<f64>,
 
     hold_start: Option<f64>,
     trial_start: f64,
@@ -430,6 +433,7 @@ impl Trial {
             success_pop_ratio: 0.0,
             success_pop_x: 0.5,
             success_pop_y: 0.5,
+            touch_fail_timeout_start: None,
             hold_start: None,
             trial_start: now_s,
             last_tick: now_s,
@@ -843,12 +847,19 @@ impl Trial {
             .with(
                 "touch_time_since_session_start_s",
                 (touch_time - self.session_start).max(0.0),
-            );
+            )
+            .with("touch_fail_timeout_s", self.cfg.touch_fail_timeout_s.max(0.0));
         self.append_event(e);
         self.streak_count = 0;
         self.finalize_attempt("fail", now_s, Some("touch_input"));
         out.log("fail");
-        out.done = Some(TrialOutcome { success: false });
+        if self.cfg.touch_fail_timeout_s > 0.0 {
+            // Hide the target and hold the trial open; step() finishes it.
+            self.state = State::Intertrial;
+            self.touch_fail_timeout_start = Some(now_s);
+        } else {
+            out.done = Some(TrialOutcome { success: false });
+        }
     }
 
     /// trigger_free_play_reward (@2575-2612).
@@ -943,6 +954,13 @@ impl Trial {
             self.success_pop_ratio = (elapsed / dur).clamp(0.0, 1.0);
             if elapsed >= dur {
                 out.done = Some(TrialOutcome { success: true });
+            }
+            return out;
+        }
+
+        if let Some(timeout_start) = self.touch_fail_timeout_start {
+            if now - timeout_start >= self.cfg.touch_fail_timeout_s {
+                out.done = Some(TrialOutcome { success: false });
             }
             return out;
         }
@@ -1843,6 +1861,28 @@ mod tests {
         assert_eq!(attempt.failure_reason.as_deref(), Some("touch_input"));
         let touch_event = attempt.events.iter().find(|e| e.name == "touch_input_fail").unwrap();
         assert_eq!(touch_event.extra["touch_x"], 300);
+    }
+
+    #[test]
+    fn touch_fail_timeout_holds_trial_open() {
+        let (c, raw) = cfg(
+            r#"{"fail_on_touch_input": true, "touch_fail_timeout_s": 2.0,
+                "intertrial_interval": 0.1, "trial_timeout": 10.0}"#,
+        );
+        let mut t = Trial::new(c, &raw, 0.0, 7);
+        t.begin();
+        step_at(&mut t, 0.1, 0.0, 0.0); // -> start_on
+        t.on_touch(300, 400, 0.15);
+        let out = step_at(&mut t, 0.2, 0.0, 0.0);
+        assert!(out.effects.contains(&Effect::LogState("fail")));
+        assert!(out.done.is_none());
+        assert_eq!(t.state, State::Intertrial); // target hidden
+        t.on_touch(300, 400, 1.0);
+        let out = step_at(&mut t, 2.1, 0.0, 0.0);
+        assert!(out.done.is_none());
+        assert!(out.effects.is_empty());
+        let out = step_at(&mut t, 2.2, 0.0, 0.0);
+        assert_eq!(out.done.unwrap().success, false);
     }
 
     #[test]
