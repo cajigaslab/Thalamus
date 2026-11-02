@@ -1,7 +1,9 @@
 #include <thalamus/tracing.hpp>
+#include <algorithm>
 #include <base_node.hpp>
 #include <functional>
 #include <intan_node.hpp>
+#include <limits>
 #include <map>
 #include <modalities.h>
 #include <numeric>
@@ -188,7 +190,23 @@ public:
     try {
       size_t offset = 0;
       size_t filled = 0;
-      unsigned char buffer[16384];
+      // One packet is 128 frames of (4B timestamp + 2B/channel), plus a
+      // leading 4B magic number. A fixed 16KB buffer (big enough for the
+      // original 5-channel demo, ~1.8KB/packet) is only ~half a packet at 128
+      // channels (~33KB/packet) and would need many more async_receive round
+      // trips per packet as channel count grows -- extra work in this same
+      // single-threaded parse loop that can make the client fall behind the
+      // RHX software's own send buffer (which is what actually overruns).
+      // Scale the buffer with channel count so it always holds several full
+      // packets. Sized lazily (once streaming, where num_channels is
+      // authoritative -- the frame-parsing loop below relies on the same
+      // assumption) and re-sized if the channel count changes across a
+      // stop_stream()/start_stream() cycle without a full reconnect (this
+      // coroutine outlives that, per stop_stream() only clearing `streaming`).
+      std::vector<unsigned char> buffer_storage;
+      unsigned char *buffer = nullptr;
+      size_t buffer_size_bytes = 0;
+      size_t buffer_sized_for_channels = std::numeric_limits<size_t>::max();
       boost::asio::steady_timer timer(io_context);
       boost::system::error_code ec;
       auto check_error = [&] {
@@ -203,14 +221,14 @@ public:
       };
 
       auto receive = [&]() -> boost::asio::awaitable<void> {
-        if (filled == sizeof(buffer)) {
+        if (filled == buffer_size_bytes) {
           std::copy(buffer + offset, buffer + filled, buffer);
           filled -= offset;
           offset = 0;
         }
         size_t count;
         std::tie(ec, count) = co_await waveform_socket.async_receive(
-          boost::asio::buffer(buffer + filled, sizeof(buffer) - filled),
+          boost::asio::buffer(buffer + filled, buffer_size_bytes - filled),
           boost::asio::as_tuple(boost::asio::use_awaitable));
         filled += count;
       };
@@ -220,6 +238,16 @@ public:
           timer.expires_after(1s);
           co_await timer.async_wait();
           continue;
+        }
+
+        if (buffer_sized_for_channels != num_channels) {
+          const size_t packet_bytes = 4 + 128 * (4 + 2 * num_channels);
+          buffer_size_bytes = std::max<size_t>(16384, 4 * packet_bytes);
+          buffer_storage.assign(buffer_size_bytes, 0);
+          buffer = buffer_storage.data();
+          buffer_sized_for_channels = num_channels;
+          offset = 0;
+          filled = 0;
         }
 
         auto got_magic_number = false;

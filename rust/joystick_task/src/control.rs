@@ -1,7 +1,8 @@
 //! RustTask gRPC service — the delegate <-> Rust control channel.
 //!
-//! The Python delegate (joystick_intro_rust.py) is the client; we host this
-//! service. Per trial it opens run_trial as a bidirectional stream: the first
+//! The Python delegates (joystick_intro_rust.py, simple_touch_rust.py) are
+//! the clients; we host this service. config_json's task_type picks the state
+//! machine (see machine.rs). Per trial it opens run_trial as a bidirectional stream: the first
 //! request carries TrialConfig, later requests forward operator inputs (arrow
 //! keys, free-play end, touch). We stream back BehavState markers, the final
 //! behav_result JSON, config updates, and the terminal success flag.
@@ -24,13 +25,19 @@ use crate::clock::ClockMap;
 use crate::config::TaskConfig;
 use crate::grpc::ThalamusConn;
 use crate::input::JoystickState;
+use crate::machine::{InputSample, TrialMachine};
 use crate::proto::rust_task::{
     operator_event, rust_task_server::RustTask, trial_request, FrameRequest, MirrorFrame,
     TrialEvent, TrialRequest,
 };
 use crate::proto::thalamus::AnalogResponse;
-use crate::render::{ship_effect, EffectMsg, Job, OpEvent, Wake};
+use crate::render::{ship_effect, EffectMsg, Job, OpEvent, Wake, WindowOrigin};
 use crate::state::Trial;
+use crate::touch::{ResolvedTouchConfig, TouchTrial};
+
+/// The core node simple_touch reads touch from; Canvas hard-codes the same
+/// name (canvas.py:486). Overridable per task with a "touch_node" config key.
+const DEFAULT_TOUCH_NODE: &str = "Node 3";
 
 pub struct RustTaskService {
     /// One long-lived connection to the core, shared by EVERY trial. Its log and
@@ -46,6 +53,8 @@ pub struct RustTaskService {
     pub wake: Mutex<EventLoopProxy<Wake>>,
     /// Latest frame's shape list, published by the render thread.
     pub mirror_rx: tokio::sync::watch::Receiver<crate::mirror::MirrorScene>,
+    /// Subject window position, for mapping global touch coordinates.
+    pub origin: Arc<WindowOrigin>,
 }
 
 type TrialEventStream = Pin<Box<dyn Stream<Item = Result<TrialEvent, Status>> + Send>>;
@@ -58,7 +67,7 @@ async fn pump_input(
     mut stream: Streaming<AnalogResponse>,
     clock: ClockMap,
     joystick: JoystickState,
-    sample_tx: std::sync::mpsc::Sender<(f64, f64, f64)>,
+    sample_tx: std::sync::mpsc::Sender<InputSample>,
 ) {
     while let Some(item) = stream.next().await {
         let msg = match item {
@@ -103,7 +112,7 @@ async fn pump_input(
                     continue;
                 }
                 last = Some((xs[i], ys[i]));
-                if sample_tx.send((t, xs[i], ys[i])).is_err() {
+                if sample_tx.send(InputSample::Joystick { t_s: t, x: xs[i], y: ys[i] }).is_err() {
                     return; // trial ended
                 }
             }
@@ -115,11 +124,55 @@ async fn pump_input(
             if !x.is_finite() || !y.is_finite() {
                 joystick.record_fault();
             } else {
-                if sample_tx.send((received_s, x, y)).is_err() {
+                if sample_tx.send(InputSample::Joystick { t_s: received_s, x, y }).is_err() {
                     return;
                 }
                 joystick.set((x, y));
             }
+        }
+    }
+}
+
+/// Port of Canvas.on_ros_touch (canvas.py:831-854) for simple_touch. The
+/// TOUCH_SCREEN node already outputs global desktop pixels; we keep the last
+/// sample of each named span (x/y persist across messages, as in Python),
+/// report (-1, -1) for "no touch" (either value < -4), and otherwise map into
+/// the subject window like Qt's mapFromGlobal. Every event is forwarded —
+/// releases included — because the touch handler is event-driven.
+async fn pump_touch(
+    mut stream: Streaming<AnalogResponse>,
+    origin: Arc<WindowOrigin>,
+    sample_tx: std::sync::mpsc::Sender<InputSample>,
+) {
+    let (mut x, mut y) = (0.0_f64, 0.0_f64);
+    while let Some(item) = stream.next().await {
+        let msg = match item {
+            Ok(m) => m,
+            Err(status) => {
+                tracing::warn!(%status, "touch analog stream error");
+                break;
+            }
+        };
+        for span in &msg.spans {
+            if span.begin < span.end {
+                let last = msg.data.get(span.end as usize - 1).copied();
+                match (span.name.as_str(), last) {
+                    ("X", Some(v)) => x = v,
+                    ("Y", Some(v)) => y = v,
+                    _ => {}
+                }
+            }
+        }
+        let (px, py) = if x < -4.0 || y < -4.0 || !x.is_finite() || !y.is_finite() {
+            (-1, -1)
+        } else {
+            let (ox, oy) = origin.get();
+            // QPoint(int(x), int(y)) truncates, then mapFromGlobal.
+            (x as i64 - ox, y as i64 - oy)
+        };
+        tracing::trace!(global_x = x, global_y = y, local_x = px, local_y = py, "touch");
+        if sample_tx.send(InputSample::Touch { x: px, y: py }).is_err() {
+            return; // trial ended
         }
     }
 }
@@ -191,41 +244,89 @@ impl RustTask for RustTaskService {
 
         // Seed the Python perf_counter mapping as early as possible.
         let clock = ClockMap::seed(cfg.python_perf_ns);
-        let task_config = TaskConfig::from_json(&cfg.config_json).map_err(|e| {
-            // Surface this loudly: a client-side send race can mask the
-            // status as INTERNAL, making the executor log the only witness.
+        let raw: Value = serde_json::from_str(&cfg.config_json).map_err(|e| {
             tracing::error!("rejected config_json: {e}");
             Status::invalid_argument(format!("bad config_json: {e}"))
         })?;
-        let raw: Value = serde_json::from_str(&cfg.config_json)
-            .map_err(|e| Status::invalid_argument(format!("bad config_json: {e}")))?;
+        let task_type = raw
+            .get("task_type")
+            .and_then(Value::as_str)
+            .unwrap_or("joystick_intro")
+            .to_string();
 
-        tracing::info!(
-            joystick_node = %task_config.joystick_node,
-            cursor_only = task_config.cursor_only_mode,
-            reward_scale = cfg.reward_scale,
-            "run_trial received"
-        );
-
-        // Input pump: analog stream -> latest cell + per-sample log channel.
-        // `input_conn` is a fresh STREAM handle over the process-wide shared
-        // channel (no new TCP connection). The analog SUBSCRIBE takes ~1 s on
-        // the C++ core to send headers, so it must NOT block trial start — hence
-        // the spawn; Python never awaits it either. When the trial ends the pump
-        // returns and this handle drops, tearing down only the analog stream —
-        // the shared channel (and the log/inject streams) stays up.
-        let joystick = JoystickState::default();
+        // Input pump: analog stream -> per-sample channel (+ the latest-value
+        // cell for the joystick). `input_conn` is a fresh STREAM handle over
+        // the process-wide shared channel (no new TCP connection). The analog
+        // SUBSCRIBE takes ~1 s on the C++ core to send headers, so it must NOT
+        // block trial start — hence the spawn; Python never awaits it either.
+        // When the trial ends the pump returns and this handle drops, tearing
+        // down only the analog stream — the shared channel (and the log/inject
+        // streams) stays up.
         let (sample_tx, sample_rx) = std::sync::mpsc::channel();
         let mut input_conn = self.conn.lock().await.clone_conn();
-        let node = task_config.joystick_node.clone();
-        let input_clock = clock;
-        let input_joystick = joystick.clone();
-        tokio::spawn(async move {
-            match input_conn.analog_xy(&node).await {
-                Ok(stream) => pump_input(stream, input_clock, input_joystick, sample_tx).await,
-                Err(e) => tracing::warn!("joystick stream open failed: {e:#}"),
-            }
-        });
+        let now_s = clock.now_python_ns() as f64 / 1e9;
+
+        let (mut trial, joystick): (Box<dyn TrialMachine>, Option<JoystickState>) =
+            match task_type.as_str() {
+                "simple_touch_rust" | "simple_touch_task" => {
+                    let resolved = ResolvedTouchConfig::from_json(&cfg.resolved_json).map_err(|e| {
+                        // Surface this loudly: a client-side send race can mask
+                        // the status as INTERNAL, making this log the only witness.
+                        tracing::error!("rejected simple_touch resolved_json: {e}");
+                        Status::invalid_argument(format!("bad resolved_json: {e}"))
+                    })?;
+                    let node = raw
+                        .get("touch_node")
+                        .and_then(Value::as_str)
+                        .unwrap_or(DEFAULT_TOUCH_NODE)
+                        .to_string();
+                    tracing::info!(
+                        %task_type,
+                        touch_node = %node,
+                        targets = resolved.targets.len(),
+                        presented = resolved.presented_index,
+                        is_choice = resolved.is_choice,
+                        "run_trial received"
+                    );
+                    let origin = self.origin.clone();
+                    tokio::spawn(async move {
+                        match input_conn.analog_xy(&node).await {
+                            Ok(stream) => pump_touch(stream, origin, sample_tx).await,
+                            Err(e) => tracing::error!(touch_node = %node, "touch stream open failed: {e:#}"),
+                        }
+                    });
+                    (Box::new(TouchTrial::new(resolved, now_s)), None)
+                }
+                t if t.starts_with("joystick_intro") => {
+                    let task_config = TaskConfig::from_json(&cfg.config_json).map_err(|e| {
+                        tracing::error!("rejected config_json: {e}");
+                        Status::invalid_argument(format!("bad config_json: {e}"))
+                    })?;
+                    tracing::info!(
+                        joystick_node = %task_config.joystick_node,
+                        cursor_only = task_config.cursor_only_mode,
+                        reward_scale = cfg.reward_scale,
+                        "run_trial received"
+                    );
+                    let joystick = JoystickState::default();
+                    let node = task_config.joystick_node.clone();
+                    let input_joystick = joystick.clone();
+                    tokio::spawn(async move {
+                        match input_conn.analog_xy(&node).await {
+                            Ok(stream) => pump_input(stream, clock, input_joystick, sample_tx).await,
+                            Err(e) => tracing::warn!("joystick stream open failed: {e:#}"),
+                        }
+                    });
+                    let trial = Trial::new(task_config, &raw, now_s, cfg.python_perf_ns | 1);
+                    (Box::new(trial), Some(joystick))
+                }
+                other => {
+                    tracing::error!(task_type = other, "no Rust state machine for this task_type");
+                    return Err(Status::invalid_argument(format!(
+                        "task_type {other:?} is not supported by the Rust executor"
+                    )));
+                }
+            };
 
         // Effects task: BehavState logs + reward pulses go through the SHARED
         // conn, so their streams are opened once and reused every trial.
@@ -263,9 +364,7 @@ impl RustTask for RustTaskService {
             }
         });
 
-        // Build the trial and emit its initial BehavState=intertrial.
-        let now_s = clock.now_python_ns() as f64 / 1e9;
-        let mut trial = Trial::new(task_config, &raw, now_s, cfg.python_perf_ns | 1);
+        // Emit the trial's initial BehavState=intertrial.
         let (event_tx, event_rx) = mpsc::unbounded_channel();
         for effect in trial.begin() {
             ship_effect(&clock, &effect_tx, &event_tx, effect);

@@ -44,6 +44,7 @@ use crate::clock::ClockMap;
 use crate::constants::STATE_INDICATOR_EDGE_PX;
 use crate::input::JoystickState;
 use crate::proto::rust_task::{trial_event::Body, BehavMarker, TrialEvent};
+use crate::machine::{InputSample, TrialMachine};
 use crate::state::{State, Trial};
 
 /// Operator-side inputs forwarded by the delegate mid-trial.
@@ -66,12 +67,15 @@ pub enum EffectMsg {
 /// One trial's worth of plumbing, built by control.rs and handed to the
 /// render thread.
 pub struct Job {
-    pub trial: Trial,
+    /// The task's state machine (joystick_intro or simple_touch, see machine.rs).
+    pub trial: Box<dyn TrialMachine>,
     pub clock: ClockMap,
-    /// Lock-free freshest joystick sample (updated by the input pump).
-    pub joystick: JoystickState,
-    /// Every joystick sample (python-domain seconds, x, y) for behav_result.
-    pub sample_rx: std::sync::mpsc::Receiver<(f64, f64, f64)>,
+    /// Lock-free freshest joystick sample (updated by the input pump). None for
+    /// tasks without a joystick (simple_touch), which skip the staleness gate.
+    pub joystick: Option<JoystickState>,
+    /// Every input sample, in arrival order (joystick samples for
+    /// behav_result, or touch events for the touch handler).
+    pub sample_rx: std::sync::mpsc::Receiver<InputSample>,
     /// Operator events from the delegate's request stream.
     pub op_rx: std::sync::mpsc::Receiver<OpEvent>,
     /// Trial event stream back to the delegate.
@@ -104,6 +108,35 @@ pub fn ship_effect(
         crate::state::Effect::Reward { channel, repeats } => {
             let _ = effect_tx.send(EffectMsg::Reward { channel, repeats });
         }
+    }
+}
+
+/// Where the idle-scene photodiode square goes once a trial ends: offsets
+/// from the bottom-right corner (every task uses this anchoring today).
+#[derive(Debug, Clone, Copy)]
+pub enum IdleIndicator {
+    FromBottomRight(i64, i64),
+}
+
+/// Subject window's top-left in global desktop pixels, published by the render
+/// thread once the window exists. The touch-screen node reports global
+/// coordinates, so the touch pump subtracts this (Qt's mapFromGlobal).
+#[derive(Debug, Default)]
+pub struct WindowOrigin {
+    x: std::sync::atomic::AtomicI64,
+    y: std::sync::atomic::AtomicI64,
+}
+
+impl WindowOrigin {
+    pub fn set(&self, x: i64, y: i64) {
+        use std::sync::atomic::Ordering::Relaxed;
+        self.x.store(x, Relaxed);
+        self.y.store(y, Relaxed);
+    }
+
+    pub fn get(&self) -> (i64, i64) {
+        use std::sync::atomic::Ordering::Relaxed;
+        (self.x.load(Relaxed), self.y.load(Relaxed))
     }
 }
 
@@ -210,7 +243,7 @@ impl SceneUniforms {
 
 /// Qt paints in sRGB bytes; the surface is *-Srgb so the shader must output
 /// linear values.
-fn srgb_u8(c: [i64; 3], alpha: f64) -> [f32; 4] {
+pub(crate) fn srgb_u8(c: [i64; 3], alpha: f64) -> [f32; 4] {
     let lin = |v: i64| {
         let s = (v.clamp(0, 255) as f32) / 255.0;
         if s <= 0.04045 {
@@ -222,12 +255,12 @@ fn srgb_u8(c: [i64; 3], alpha: f64) -> [f32; 4] {
     [lin(c[0]), lin(c[1]), lin(c[2]), alpha as f32]
 }
 
-struct SceneBuilder {
-    uniforms: SceneUniforms,
+pub(crate) struct SceneBuilder {
+    pub(crate) uniforms: SceneUniforms,
 }
 
 impl SceneBuilder {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             uniforms: SceneUniforms {
                 header: [0.0; 4],
@@ -236,7 +269,7 @@ impl SceneBuilder {
         }
     }
 
-    fn push(&mut self, shape: Shape) {
+    pub(crate) fn push(&mut self, shape: Shape) {
         let n = self.uniforms.header[0] as usize;
         if n < MAX_SHAPES {
             self.uniforms.shapes[n] = shape;
@@ -244,7 +277,7 @@ impl SceneBuilder {
         }
     }
 
-    fn rect_outline(&mut self, x0: f32, y0: f32, x1: f32, y1: f32, color: [f32; 4], thickness: f32) {
+    pub(crate) fn rect_outline(&mut self, x0: f32, y0: f32, x1: f32, y1: f32, color: [f32; 4], thickness: f32) {
         self.push(Shape {
             color,
             geo: [x0, y0, x1, y1],
@@ -252,7 +285,7 @@ impl SceneBuilder {
         });
     }
 
-    fn filled_rect(&mut self, x0: f32, y0: f32, x1: f32, y1: f32, color: [f32; 4]) {
+    pub(crate) fn filled_rect(&mut self, x0: f32, y0: f32, x1: f32, y1: f32, color: [f32; 4]) {
         self.push(Shape {
             color,
             geo: [x0, y0, x1, y1],
@@ -260,7 +293,7 @@ impl SceneBuilder {
         });
     }
 
-    fn ellipse(&mut self, cx: f32, cy: f32, rx: f32, ry: f32, color: [f32; 4]) {
+    pub(crate) fn ellipse(&mut self, cx: f32, cy: f32, rx: f32, ry: f32, color: [f32; 4]) {
         self.push(Shape {
             color,
             geo: [cx, cy, rx, ry],
@@ -268,7 +301,7 @@ impl SceneBuilder {
         });
     }
 
-    fn ring_arc(&mut self, cx: f32, cy: f32, radius: f32, thickness: f32, sweep: f32, color: [f32; 4]) {
+    pub(crate) fn ring_arc(&mut self, cx: f32, cy: f32, radius: f32, thickness: f32, sweep: f32, color: [f32; 4]) {
         self.push(Shape {
             color,
             geo: [cx, cy, radius, radius],
@@ -279,7 +312,7 @@ impl SceneBuilder {
 
 /// Build this frame's scene from the trial state — the Rust analogue of the
 /// Python renderer() (joystick_intro.py:2694-2836).
-fn build_scene(trial: &Trial, w: i64, h: i64) -> SceneUniforms {
+pub(crate) fn build_scene(trial: &Trial, w: i64, h: i64) -> SceneUniforms {
     let mut s = SceneBuilder::new();
 
     let (region_left, region_top, region_w, region_h) = trial.region_bounds_ratios();
@@ -431,11 +464,14 @@ fn build_scene(trial: &Trial, w: i64, h: i64) -> SceneUniforms {
 
 /// Idle scene between trials: black field + dark photodiode square. The next
 /// run_trial repaints within a frame, mirroring Python's back-to-back runs.
-fn idle_scene(w: i64, h: i64, state_indicator_x: i64, state_indicator_y: i64) -> SceneUniforms {
+fn idle_scene(w: i64, h: i64, indicator: IdleIndicator) -> SceneUniforms {
     let mut s = SceneBuilder::new();
     let edge = STATE_INDICATOR_EDGE_PX as f32;
-    let sx = w as f32 - edge - state_indicator_x as f32;
-    let sy = h as f32 - edge - state_indicator_y as f32;
+    let (sx, sy) = match indicator {
+        IdleIndicator::FromBottomRight(x, y) => {
+            (w as f32 - edge - x as f32, h as f32 - edge - y as f32)
+        }
+    };
     s.filled_rect(sx, sy, sx + edge, sy + edge, srgb_u8([0, 0, 0], 1.0));
     s.uniforms
 }
@@ -665,8 +701,10 @@ pub struct Executor {
     gpu: Option<Gpu>,
     pacer: Option<FramePacer>,
     active: Option<Job>,
-    /// Last idle square offsets (from the most recent trial's config).
-    idle_indicator: (i64, i64),
+    /// Idle photodiode square placement (from the most recent trial).
+    idle_indicator: IdleIndicator,
+    /// Shared with the touch pump (control.rs).
+    origin: Arc<WindowOrigin>,
     /// Publishes each frame's shape list for the operator mirror (mirror.rs).
     mirror_tx: tokio::sync::watch::Sender<crate::mirror::MirrorScene>,
 }
@@ -676,6 +714,7 @@ impl Executor {
         args: ExecutorArgs,
         job_rx: std::sync::mpsc::Receiver<Job>,
         mirror_tx: tokio::sync::watch::Sender<crate::mirror::MirrorScene>,
+        origin: Arc<WindowOrigin>,
     ) -> Self {
         Self {
             args,
@@ -684,7 +723,8 @@ impl Executor {
             gpu: None,
             pacer: None,
             active: None,
-            idle_indicator: (30, 70),
+            idle_indicator: IdleIndicator::FromBottomRight(30, 70),
+            origin,
             mirror_tx,
         }
     }
@@ -714,6 +754,25 @@ impl Executor {
                 .with_inner_size(monitor.size())
         };
         let window = Arc::new(event_loop.create_window(attrs)?);
+        // Touch mapping origin. Fullscreen: the window is explicitly placed at
+        // the monitor's position, so use that directly — inner_position() on
+        // a just-created, not-yet-mapped override-redirect window is not
+        // trustworthy and a 0,0 answer would put every touch ~1 screen off.
+        // Windowed (debugging): wherever the WM put it.
+        let monitor_origin = monitor.position();
+        let origin = if self.args.windowed {
+            window.inner_position().unwrap_or(monitor_origin)
+        } else {
+            monitor_origin
+        };
+        self.origin.set(i64::from(origin.x), i64::from(origin.y));
+        tracing::info!(
+            monitor = monitor.name().unwrap_or_default(),
+            x = origin.x,
+            y = origin.y,
+            reported_inner = ?window.inner_position().ok(),
+            "subject window origin (touch mapping: local = global - origin)"
+        );
         window.set_cursor_visible(false);
         self.gpu = Some(Gpu::new(window.clone())?);
         self.pacer = Some(FramePacer::new(period_ns, self.args.pace_margin_ms));
@@ -736,23 +795,24 @@ impl Executor {
         // Operator events.
         while let Ok(op) = job.op_rx.try_recv() {
             let now_s = job.clock.now_python_ns() as f64 / 1e9;
-            match op {
-                OpEvent::Arrow { key, pressed } => job.trial.on_arrow_key(&key, pressed),
-                OpEvent::EndRequested(v) => job.trial.on_end_requested(v),
-                OpEvent::Touch { x, y } => job.trial.on_touch(x as i64, y as i64, now_s),
-            }
+            job.trial.on_op(op, now_s);
         }
-        // Joystick samples (bookkeeping; the live value rides JoystickState).
-        while let Ok((t_s, x, y)) = job.sample_rx.try_recv() {
-            job.trial.on_joystick_sample(t_s, x, y);
+        // Input samples, in arrival order (joystick bookkeeping / touch events).
+        while let Ok(sample) = job.sample_rx.try_recv() {
+            job.trial.on_sample(sample);
         }
 
-        let (ax, ay) = job.joystick.get();
         // Phase 0 safety gate: no fresh analog sample in 250ms means the source
         // (hardware joystick, or a BCI decoder feeding "Decoder") has stalled --
         // well above normal INTAN/decoder packet jitter (single-digit ms) and
         // far below anything perceptible as "the cursor froze."
-        let input_stale = job.joystick.age() > std::time::Duration::from_millis(250);
+        let ((ax, ay), input_stale) = match &job.joystick {
+            Some(joystick) => (
+                joystick.get(),
+                joystick.age() > std::time::Duration::from_millis(250),
+            ),
+            None => ((0.0, 0.0), false),
+        };
         let out = job.trial.step(&crate::state::StepInput {
             now_s: job.clock.now_python_ns() as f64 / 1e9,
             analog_x: ax,
@@ -773,16 +833,18 @@ impl Executor {
             // Sent directly on event_tx — NOT through ship_effect — so it
             // reaches the delegate's HUD but never the Thalamus log, and it
             // can't appear on the subject display (that has no text path).
-            let _ = job.event_tx.send(Ok(TrialEvent {
-                body: Some(Body::Marker(BehavMarker {
-                    text: format!("TrialInfo={}", job.trial.trial_info_json()),
-                    time_ns: job.clock.now_python_ns(),
-                })),
-            }));
+            if let Some(info) = job.trial.trial_info_json() {
+                let _ = job.event_tx.send(Ok(TrialEvent {
+                    body: Some(Body::Marker(BehavMarker {
+                        text: format!("TrialInfo={info}"),
+                        time_ns: job.clock.now_python_ns(),
+                    })),
+                }));
+            }
         }
 
         if let Some(outcome) = out.done {
-            match job.trial.behav.to_json() {
+            match job.trial.behav_result_json() {
                 Ok(json) => {
                     let _ = job.event_tx.send(Ok(TrialEvent {
                         body: Some(Body::BehavResultJson(json)),
@@ -795,15 +857,12 @@ impl Executor {
                 }
             }
             let _ = job.event_tx.send(Ok(TrialEvent {
-                body: Some(Body::ConfigUpdatesJson(job.trial.config_updates())),
+                body: Some(Body::ConfigUpdatesJson(job.trial.config_updates_json())),
             }));
             let _ = job.event_tx.send(Ok(TrialEvent {
                 body: Some(Body::Success(outcome.success)),
             }));
-            self.idle_indicator = (
-                job.trial.cfg.state_indicator_x.max(0),
-                job.trial.cfg.state_indicator_y.max(0),
-            );
+            self.idle_indicator = job.trial.idle_indicator();
             return true;
         }
         false
@@ -846,8 +905,8 @@ impl Executor {
         }
 
         let uniforms = match self.active.as_ref() {
-            Some(job) => build_scene(&job.trial, w, h),
-            None => idle_scene(w, h, self.idle_indicator.0, self.idle_indicator.1),
+            Some(job) => job.trial.scene(w, h),
+            None => idle_scene(w, h, self.idle_indicator),
         };
         // Publish for the operator mirror — a memcpy into a watch cell; the
         // rasterize/encode work happens on tokio threads (mirror.rs).

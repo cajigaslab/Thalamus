@@ -78,6 +78,12 @@ message TrialConfig {
   // the run_trial call. Rust maps its steady_clock into this domain so BehavState
   // Text.time values fall between Python's TRIAL START / TRIAL FINISHED. See clock.rs.
   uint64 python_perf_ns = 4;
+
+  // Per-trial values the delegate already sampled in Python (simple_touch_rust:
+  // timeouts, target geometry, presented target, dpi). Sampling stays in Python
+  // so context.get_value() records the same trial_summ used_values as the
+  // Python task. Empty for joystick_intro, which samples in Rust.
+  string resolved_json = 5;
 }
 
 message TrialEvent {

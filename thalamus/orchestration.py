@@ -31,6 +31,7 @@ class OrchestrationDialog(QWidget):
       if self.processes is None:
         return
       self.processes.append({
+        'Enabled': True,
         'Command': '',
         'Critial (Crash on Failure)': False,
         'Wait For Exit': False
@@ -63,7 +64,7 @@ class OrchestrationDialog(QWidget):
 
   def on_change(self, action, key, value):
     if key == 'Processes':
-      model = TreeObservableCollectionModel(value, key_column="#", columns=['Command', 'Critial (Crash on Failure)', 'Wait For Exit'], show_extra_values=False, is_editable=lambda c, k: True)
+      model = TreeObservableCollectionModel(value, key_column="#", columns=['Enabled', 'Command', 'Critial (Crash on Failure)', 'Wait For Exit'], show_extra_values=False, is_editable=lambda c, k: True)
       self.tree.setModel(model)
     elif key == 'Remote Executor':
       if self.remote_executor_checkbox.isChecked() != value:
@@ -79,6 +80,12 @@ class Orchestrator:
   async def start(self, processes):
     self.running = True
     for process in processes:
+      # Disabled entries stay in the config so they can be re-enabled without
+      # retyping the command (e.g. the Rust executor, whose fullscreen window
+      # covers the subject display and blocks the Python task window).
+      if not process.get('Enabled', True):
+        LOGGER.info('skipping disabled process ' + process['Command'])
+        continue
       required = process['Critial (Crash on Failure)']
       # One-shot setup command (e.g. reset-cameras): block here until it
       # finishes so later processes (and the session) start from a clean

@@ -2,7 +2,7 @@
 name = "thalamus-joystick-task"
 version = "0.1.0"
 edition = "2021"
-description = "Low-latency Rust executor for the Thalamus joystick_intro behavioral task (real-time BCI patch)."
+description = "Low-latency Rust executor for Thalamus behavioral tasks (joystick_intro, simple_touch; real-time BCI patch)."
 license = "MIT"
 
 # Binary entrypoint. See src/main.rs.

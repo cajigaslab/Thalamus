@@ -21,11 +21,13 @@ mod control;
 mod events;
 mod grpc;
 mod input;
+mod machine;
 mod mirror;
 mod proto;
 mod render;
 mod reward;
 mod state;
+mod touch;
 
 use clap::Parser;
 use tonic::transport::Server;
@@ -100,6 +102,11 @@ fn main() -> anyhow::Result<()> {
     // JPEG to the operator (mirror.rs).
     let (mirror_tx, mirror_rx) = tokio::sync::watch::channel(mirror::MirrorScene::default());
 
+    // Subject window position: written by the render thread once the window
+    // exists, read by the simple_touch touch pump (control.rs).
+    let origin = std::sync::Arc::new(crate::render::WindowOrigin::default());
+    let service_origin = origin.clone();
+
     let endpoint = args.thalamus.clone();
     tracing::info!(thalamus = %endpoint, listen = %args.listen, "starting RustTask executor");
     let signal_proxy = proxy.clone();
@@ -150,6 +157,7 @@ fn main() -> anyhow::Result<()> {
                 job_tx: std::sync::Mutex::new(job_tx),
                 wake: std::sync::Mutex::new(proxy),
                 mirror_rx,
+                origin: service_origin,
             };
             let result = rt.block_on(
                 Server::builder()
@@ -170,6 +178,7 @@ fn main() -> anyhow::Result<()> {
         },
         job_rx,
         mirror_tx,
+        origin,
     );
     event_loop.run_app(&mut app)?;
     Ok(())

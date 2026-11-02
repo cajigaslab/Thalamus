@@ -195,6 +195,59 @@ call bias. Independently, use `Thalamus.ping` + `Pong.remote_time` and `SyncNode
 - **Maintaining two implementations**: keep `state.rs` a strict structural mirror of
   the Python `run`; golden-config regression suite in CI.
 
+## Multiple task machines (simple_touch, 2026-11-02)
+
+The executor is no longer joystick-only. One process, one `RustTask` service,
+one render loop; `control.rs::run_trial` picks the state machine from
+`config_json`'s `task_type`:
+
+| task_type | Machine | Input source | Delegate |
+|---|---|---|---|
+| `joystick_intro*` | `state.rs::Trial` | joystick analog (`pump_input`) | `joystick_intro_rust.py` |
+| `simple_touch_rust` | `touch.rs::TouchTrial` | TOUCH_SCREEN node (`pump_touch`) | `simple_touch_rust.py` |
+
+Anything else is rejected with `INVALID_ARGUMENT`.
+
+- **Seam**: `render::Job` holds a `Box<dyn TrialMachine>` (`machine.rs`). The
+  render loop only calls the trait (`on_op`, `on_sample`, `step`, `scene`,
+  `behav_result_json`, ...). `Trial` implements it with a thin wrapper, so
+  joystick behavior is unchanged.
+- **Sampling stays in Python**: `context.get_value` / `get_target_value` /
+  `get_target_color` record into `trial_summ.used_values`. So the touch delegate
+  makes every draw in `simple_touch_task.run`'s exact call order, then ships the
+  realized values as `TrialConfig.resolved_json` (proto field 5).
+  `used_values['reward']` is recorded by calling `get_reward` on the selected
+  channel after a success, as Python does.
+- **Touch**: `pump_touch` ports `Canvas.on_ros_touch`. It subscribes to
+  `touch_node` (default `"Node 3"`). Values < -4 map to (-1, -1) = release.
+  Otherwise it subtracts the subject window's global origin (`WindowOrigin`, the
+  equivalent of `mapFromGlobal`). Every event is applied in order. A `wait_for`
+  condition that fires between frames is latched and re-evaluated on the next
+  step, matching `wait_for`'s "fire, then return `condition()`".
+- **Photodiode**: bottom-right anchored like joystick_intro
+  (`state_indicator_x/_y` = right/bottom margins, default 30/70). This
+  intentionally differs from simple_touch_task's absolute top-left placement.
+  The layout widget converts old configs once, via `state_indicator_anchor`.
+- **Task center**: `center_x`/`center_y` (screen fractions from the top-left,
+  default 0.5/0.5 = Python's screen center). Every eccentricity is measured
+  from it, so lowering `center_y` raises the whole layout.
+- **Intentional divergence**: Python's `fail_trial` assigns
+  `show_presented_target` / `state_brightness` without `nonlocal`, so a fail
+  leaves the target up and the photodiode unchanged. The Rust port hides the
+  target and sets the photodiode square to 0 at fail onset. So fail trials differ
+  visibly and photodiode-wise from Python-run sessions.
+- **Not ported**: STL targets (the delegate fails the trial if any target sets
+  an Stl File), the debug touch-position overlay (hard-coded off in Python).
+- **Operator UI** (`thalamus/task_controller/simple_touch_layout.py`): a target
+  table and a Target Layout Editor adapted from joystick_intro's, working in
+  simple_touch's own polar-degree coordinates. Features: drag on a scaled
+  subject-screen preview, ring/grid/hex generators, presets, groups, Apply
+  Field to All. Targets keep every legacy key, so the Python Simple Touch task
+  still runs the same config. Per-target `enabled` (new) is honored only by
+  the Rust path: the delegate draws `presented_index` from the enabled targets
+  (indices stay full-list), and `touch.rs` neither draws disabled targets nor
+  counts their windows (touching one is blank space).
+
 ## Key files
 
 - Task spec of record: `thalamus/task_controller/joystick_intro.py` — `run` @2034,

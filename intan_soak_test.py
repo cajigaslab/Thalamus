@@ -97,12 +97,29 @@ async def run_soak(args, stub):
           % (packet_i, rate, p50 * 1000, p90 * 1000, p99 * 1000, mx * 1000,
              drift_ms, total_anomalies, total_nan_packets, total_bad_shape), flush=True)
 
+  stream_iter = stream.__aiter__()
   try:
-    async for message in stream:
-      t_recv = time.perf_counter()
-      if stop_at and t_recv >= stop_at:
-        print('[soak] duration elapsed, stopping', flush=True)
+    while True:
+      try:
+        if stop_at:
+          remaining = stop_at - time.perf_counter()
+          if remaining <= 0:
+            print('[soak] duration elapsed, stopping', flush=True)
+            break
+          message = await asyncio.wait_for(stream_iter.__anext__(), timeout=remaining)
+        else:
+          message = await stream_iter.__anext__()
+      except asyncio.TimeoutError:
+        # No packet arrived at all within the remaining window (e.g. the
+        # source was stopped) -- without this, a zero-packet run would hang
+        # forever instead of honoring --duration.
+        print('[soak] duration elapsed with no packets received, stopping', flush=True)
         break
+      except StopAsyncIteration:
+        print('[soak] stream ended', flush=True)
+        break
+
+      t_recv = time.perf_counter()
 
       by_name = {s.name: np.array(message.data[s.begin:s.end]) for s in message.spans}
       packet = [by_name.get(name, np.zeros(0)) for name in channels]

@@ -143,6 +143,7 @@ before rebooting.
 | M3 | State machine + logging + reward: port joystick_intro.py:2881-3235 | DONE 2026-07-01 — full port, 29 unit tests, e2e smoke green |
 | M4 | Control handoff + operator mirror | DONE 2026-07-02 — mirror streams shape-list re-rasterized JPEGs @30 Hz; delegate paints them on the operator Canvas |
 | M5 | Parity validation vs Python (capture diff) | waived 2026-07-02 — full live training session ran clean; formal capture diff skipped by choice |
+| T1 | simple_touch on the same executor (`simple_touch_rust` task) | CODE DONE 2026-11-02 — `machine.rs` trait + `touch.rs` port, touch pump reads the TOUCH_SCREEN node directly; unit tests green; rig bring-up + photodiode measurement pending |
 
 **Live production result (2026-07-02):** a full training session through the
 Rust path measured a **median command-to-photon photodiode response of
