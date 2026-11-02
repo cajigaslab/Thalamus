@@ -121,11 +121,66 @@ abort.
   was left unchanged (scoping choice -- BCI sessions run the target/center-out
   trial path).
 
+## Part 3 -- Scaling to 128 channels (2026-09-08 → 2026-09-22)
+
+*Added 2026-11-02 from the soak logs and CSVs in the repo root. Those files
+are gitignored run data, so these numbers are the durable record.*
+
+### Changes
+- eevee.json INTAN node scaled from 5 to 128 channels (`A-000`..`A-127`).
+- `src/intan_node.cpp` waveform loop: the fixed `unsigned char buffer[16384]`
+  is now sized from the channel count, at `max(16 KB, 4 × packet)` where
+  packet = `4 + 128·(4 + 2·nch)` bytes. At 128 ch one packet is ~33 KB, so the
+  old buffer held only about half a packet. The parse loop is single-threaded,
+  so each extra `async_receive` round trip risks falling behind RHX's send
+  buffer. The buffer is sized lazily once streaming starts, and resized if the
+  channel count changes across stop/start.
+- `intan_soak_test.py`: `--duration` is now enforced with `asyncio.wait_for`,
+  so a run that receives zero packets stops instead of hanging forever.
+
+### Results
+
+| File | Date | Ch | fs | Duration | Shortfall |
+|---|---|---|---|---|---|
+| `intan_soak_20260908_125540.csv` | 09-08 | 5 | 20 kHz | 30 min | 0.39 % |
+| `intan_soak_128ch_90s.csv` | 09-08 | 128 | 20 kHz | 90 s | 0.93 % |
+| `intan_soak_128ch_30min.csv` | 09-08 | 128 | 20 kHz | 30 min | **1.33 %** |
+| `intan_soak_128ch_neurobuild_90s{,_run2}.csv` | 09-18 | 128 | 20 kHz | 90 s / 17 s | **~75 %** |
+| `intan_soak_128ch_neurobuild_run3.csv` | 09-22 | 128 | 30 kHz | 90 s | ≈0 % |
+| `intan_soak_128ch_30khz_30min.csv` | 09-22 | 128 | 30 kHz | 30 min | **≈0 %** (−4.5 ms total) |
+
+Shortfall = −(final cumulative drift) / duration. All runs had zero NaN and
+zero malformed packets. Every run shows ~10 % "anomalous packets"; that is the
+64 ms / 10-packet RHX burst cadence tripping the `gap > 3×` heuristic, not loss.
+The 128 ch @ 30 kHz run sustained ~234 packets/s (expected 234.4) at ~30.5 MB/s.
+
+### How to read this
+- At 20 kHz on the 09-08 build, the shortfall **grew with channel count**
+  (0.39 % → 1.33 %). That is the channel-count-dependent case flagged in Part 1
+  as needing attention.
+- The clean 30 kHz run came after the buffer change, so **two variables changed
+  together**: the build and the sample rate. Nothing on record shows the buffer
+  fix alone eliminating loss at 20 kHz. Rerun 128 ch @ 20 kHz on the current
+  build to confirm.
+- The 09-18 "neurobuild" runs (~75 % loss) are unexplained. The CSV names don't
+  say which build or RHX configuration they used. Treat them as an open
+  question, not as data about the current build.
+- Also worth checking: RHX reported `fs=30000.3` at 30 kHz but exactly
+  `20000.0` at 20 kHz. If the true 20 kHz clock is slightly off nominal, part of
+  the small 5 ch shortfall could be a rate-label mismatch rather than dropped
+  samples.
+- Latency consequence: at 30 kHz the INTAN block is 128/30000 = **4.27 ms**
+  instead of 6.4 ms. That lowers the input floor and tightens the per-packet
+  decode budget by the same amount.
+
 ## Status against the roadmap
 
 - **Phase 0** (safety): input sanitization + staleness detection + trial-abort
   landed and smoke-tested; kill-switch and the full bench suite are still
   outstanding before this phase can be marked complete.
-- **Phase 2** (scale INTAN): 5-channel baseline established and characterized
-  precisely (above); next step is repeating the same soak test at higher
-  channel counts once that hardware is wired up.
+- **Phase 2** (scale INTAN): the 5-channel baseline is established. 128 channels
+  is wired and soaked (Part 3): it was clean at 30 kHz for 30 minutes on the
+  current build. Still outstanding: a 128 ch @ 20 kHz confirmation on the current
+  build, an explanation for the "neurobuild" runs, then ~244 ch.
+- As of 2026-11-02, the kill-switch and the bench suite are still not done. The
+  overall status and index live in `closed_loop_bci_status.md`.

@@ -5,11 +5,17 @@ toward a cursor-decoding brain-machine interface. Companion to `rust_bci_patch.m
 (the low-latency Rust task that renders the cursor) and the code under
 `rust/joystick_task/`.
 
+> Overall BCI status, measurements, and open items: `closed_loop_bci_status.md`.
+> Note (2026-11-02): INTAN is now configured for **128 channels (`A-000`..`A-127`)** and the
+> latest soaks ran at **30 kHz** (4.27 ms block). The numbers below come from the original
+> 5 ch / 20 kHz setup. Pass `--channels` explicitly. The decoder's default is still the
+> 5-channel demo set.
+
 ## Context / goal
 
-INTAN streams live neural channels (currently `A-001`..`A-005`, fake demonstration
-voltages; eventually intracortical / surface cortical electrodes) into the Thalamus
-core. The goal is a real closed loop: **streamed neural data → features → an inferred
+INTAN streams live neural channels (originally `A-001`..`A-005` with fake demonstration
+voltages, now 128 channels; eventually intracortical or surface cortical electrodes) into
+the Thalamus core. The goal is a real closed loop: **streamed neural data → features → an inferred
 joystick command → cursor motion** in the existing Rust `joystick_intro` task, with
 latency as a first-class concern.
 
