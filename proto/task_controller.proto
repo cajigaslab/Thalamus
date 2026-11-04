@@ -15,6 +15,12 @@ service TaskController {
   rpc state (Empty) returns (stream BehavState) {}
   rpc start_execution (Empty) returns (Empty) {}
   rpc stop_execution (Empty) returns (Empty) {}
+  // Merges values into the running trial's used_values, which go into its
+  // trial summary (Python tasks' `context.trial_summary_data.used_values`).
+  rpc set_used_values (UsedValues) returns (Empty) {}
+  // Replaces the running trial's behav_result, which goes into its trial
+  // summary (Python tasks' `context.behav_result = ...`).
+  rpc set_behav_result (BehavResult) returns (Empty) {}
 }
 
 message TaskConfig {
@@ -24,6 +30,9 @@ message TaskConfig {
 message TaskResult {
   bool success = 1;
   bool cancelled = 2;
+  // Set if the task failed with an error rather than running to an outcome:
+  // a description of it, which the task controller shows in an error dialog.
+  string error = 3;
 }
 
 message TrialSummary {
@@ -32,6 +41,16 @@ message TrialSummary {
   string task_config = 3;
   string task_result = 4;
   string behav_result = 5;
+}
+
+message UsedValues {
+  // A JSON object mapping each used value's name to its value.
+  string body = 1;
+}
+
+message BehavResult {
+  // A JSON object.
+  string body = 1;
 }
 
 message BehavState {
