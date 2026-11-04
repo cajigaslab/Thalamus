@@ -357,6 +357,12 @@ class ControlWindow(QMainWindow):
         self.operator_window.set_control_widget(widget)
     task_context.on_operator_widget = on_operator_widget
 
+    self.running_label = QLabel()
+    self.running_label.setObjectName('running_label')
+    self.statusBar().addPermanentWidget(self.running_label)
+    task_context.on_running_changed = self.__update_running_indicator
+    self.__update_running_indicator()
+
     file_menu = self.menuBar().addMenu("&File")
     add_action(file_menu, 'Start/Stop', self.on_start_stop)
     add_action(file_menu, 'Cancel Current Task', self.task_context.cancel)
@@ -451,6 +457,22 @@ class ControlWindow(QMainWindow):
   def resizeEvent(self, a0: QResizeEvent) -> None:
     self.view_geometry_updater[2:] = a0.size().width(), a0.size().height()
     return super().resizeEvent(a0)
+
+  def __update_running_indicator(self) -> None:
+    if self.task_context.stopping:
+      color, text = '#e69500', 'Stopping\u2026'
+    elif self.task_context.running:
+      color, text = '#2e9d3a', 'Running'
+    else:
+      color, text = '#d32f2f', 'Stopped'
+    # Twice the label's text size. Qt's rich text takes pt or px, not %.
+    font = self.running_label.font()
+    if font.pointSizeF() > 0:
+      dot_size = f'{font.pointSizeF() * 2}pt'
+    else:
+      dot_size = f'{font.pixelSize() * 2}px'
+    self.running_label.setText(
+      f'<span style="color:{color}; font-size:{dot_size}">\u25cf</span> {text}')
 
   def __prepare_status(self) -> None:
     if 'status' not in self.task_context.config:
@@ -556,8 +578,9 @@ class ControlWindow(QMainWindow):
     '''
     file_name = QFileDialog.getOpenFileName(self, "Load Reward Schedule", "", "*.csv")
     if file_name and file_name[0]:
-      numpy.loadtxt(file_name[0], delimiter=',')
-      schedules = numpy.loadtxt(file_name[0], delimiter=',', unpack=True).tolist()
+      # utf-8-sig: Excel and other Windows editors start CSVs with a byte order mark, which plain UTF-8 would leave
+      # glued to the first number. ndmin=2 keeps a one-column file as one schedule rather than a flat list.
+      schedules = numpy.loadtxt(file_name[0], delimiter=',', unpack=True, encoding='utf-8-sig', ndmin=2).tolist()
       self.task_context.config['reward_schedule']['schedules'] = schedules
       self.task_context.config['reward_schedule']['index'] = 0
 

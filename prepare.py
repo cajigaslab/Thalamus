@@ -163,8 +163,11 @@ def main():
 
     print('make exists before:', (msys2_root / 'usr/bin/make.exe').exists())
     if not (msys2_root / 'usr/bin/make.exe').exists():
-      subprocess.check_call([str(msys2_root / 'msys2_shell.cmd'), '-here', '-use-full-path', '-no-start', '-defterm', '-c', 'pacman --noconfirm -Syu'])
-      subprocess.check_call([str(msys2_root / 'msys2_shell.cmd'), '-here', '-use-full-path', '-no-start', '-defterm', '-c', 'pacman --noconfirm -S make diffutils binutils gcc'])
+      bash = msys2_root / 'usr/bin/bash.exe'
+      env = {**os.environ, 'MSYSTEM': 'MSYS', 'CHERE_INVOKING': '1', 'MSYS2_PATH_TYPE': 'inherit'}
+      for _ in range(2):
+        subprocess.check_call([str(bash), '-lc', 'pacman --noconfirm -Syuu'], env=env)
+      subprocess.check_call([str(bash), '-lc', 'pacman --noconfirm -S --needed make diffutils binutils gcc'], env=env)
     print('make exists:', (msys2_root / 'usr/bin/make.exe').exists())
 
     vs_where = pathlib.Path('C:/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe')
