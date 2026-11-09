@@ -9,6 +9,18 @@ some patch versions contain only build/CI or internal changes and are omitted be
 
 ## 1.0.x
 
+### 1.0.64 — 2026-11-09
+- Task controller: the control window's status bar shows a Running / Stopping /
+  Stopped indicator.
+- Task controller: a task error now stops the controller after the trial instead of
+  clearing the run queue, so execution can resume once the problem is fixed.
+- Remote task executors can call `set_used_values` and `set_behav_result` to record
+  trial data, and report failures with `TaskResult.error` (shown in the Task Error
+  dialog).
+- A node whose type has no factory (e.g. a plugin that failed to load) is switched to
+  `NONE` instead of crashing Thalamus.
+- *Load Reward Schedule* accepts CSVs with a byte order mark and single-column files.
+
 ### 1.0.60 — 2026-10-26
 - Plugin API version 153: `events_connect` / `log_connect` / `message_disconnect`
   deliver every event and log message to a plugin, `log` sends plugin text to the

@@ -67,6 +67,21 @@ remote executor is mid-trial sends it an empty ``TaskConfig``, which the executo
 treats as a cancellation request; the trial is reported back as cancelled rather
 than continuing to run on the executor after the controller has moved on.
 
+The executor can also record trial data from its side with two unary calls on the
+``TaskController`` service (``proto/task_controller.proto``), the equivalents of a
+local task's assignments:
+
+* ``set_used_values`` (``UsedValues``) merges a JSON object into the running trial's
+  ``used_values``, like updating ``context.trial_summary_data.used_values``.
+* ``set_behav_result`` (``BehavResult``) replaces the running trial's ``behav_result``
+  with a JSON object, like ``context.behav_result = {...}``.
+
+Both bodies must be JSON objects (anything else is rejected with
+``INVALID_ARGUMENT``), and calls made before the executor sends its ``TaskResult``
+end up in that trial's summary.  If the executor fails with an error rather than an
+outcome, it sets ``TaskResult.error`` to a description; the controller then treats it
+like a local task exception (see :ref:`task-errors`).
+
 .. _dotnet-runtime:
 
 .NET sidecar (Windows)
@@ -78,6 +93,10 @@ starting it, Thalamus checks that the required .NET 8 ASP.NET Core runtime is
 installed; if it's missing, those nodes are unavailable and a one-time dialog
 prompts you to install it (with a "don't show this again" option), rather than
 crashing on launch.
+
+The status bar of the control window shows a coloured **Running** / **Stopping...** /
+**Stopped** indicator: *Stopping...* means a stop was requested but the current trial
+hasn't finished yet.
 
 The controller opens a **control window** (where you assemble *task clusters* and a
 run queue) and a **subject window** (the stimulus display).  An optional
@@ -184,12 +203,16 @@ simultaneous hold conditions (e.g. two touch points), with independent
    ``stim_task.py`` / ``gaze_anchoring_stim_task.py`` for the current pattern)
    rather than relying on the ``stimulator`` context manager.
 
+.. _task-errors:
+
 Task errors
 ^^^^^^^^^^^
 
 An unhandled exception raised inside a task's ``run`` is caught by the controller:
-the run queue is cleared (no further scheduled trials run), the full traceback is
-logged, and a **Task Error** dialog shows the traceback to the operator.  Loading a
+the current trial is cancelled, the controller stops after wrapping it up (the run
+queue is kept, so you can fix the problem and press *Start* again), the full
+traceback is logged, and a **Task Error** dialog shows the traceback to the
+operator.  Loading a
 task cluster that references an unregistered task code (e.g. defined in an
 extension module that wasn't loaded with ``--ext``) similarly shows an **Unknown
 Task** dialog naming the missing code instead of crashing the control window.
