@@ -1,4 +1,5 @@
 
+import json
 import typing
 import asyncio
 import logging
@@ -30,6 +31,12 @@ class TaskControllerServicer(task_controller_pb2_grpc.TaskControllerServicer):
     self.task_context: typing.Optional[TaskContextProtocol] = None
     self.event_loop = asyncio.get_event_loop()
 
+  def start(self):
+    '''
+    Undoes `stop`, for when the task context starts running again.
+    '''
+    self.stopped_event.clear()
+
   def stop(self):
     self.stopped_event.set()
 
@@ -49,6 +56,41 @@ class TaskControllerServicer(task_controller_pb2_grpc.TaskControllerServicer):
     task_context = self.task_context
     self.event_loop.call_soon_threadsafe(lambda: task_context.stop())
     return util_pb2.Empty()
+
+  async def set_used_values(self,
+                            request: task_controller_pb2.UsedValues,
+                            context: grpc.aio.ServicerContext) -> task_controller_pb2.Empty:
+    '''
+    Lets a remote executor record values in the running trial's used_values, as a local task does by assigning to
+    `context.trial_summary_data.used_values`. Calls made before the executor sends its TaskResult are in that trial's
+    summary.
+    '''
+    assert self.task_context is not None, "task_context is undefined"
+    try:
+      values = json.loads(request.body)
+    except json.JSONDecodeError as e:
+      await context.abort(grpc.StatusCode.INVALID_ARGUMENT, f'used_values body is not JSON: {e}')
+    if not isinstance(values, dict):
+      await context.abort(grpc.StatusCode.INVALID_ARGUMENT, f'used_values body must be a JSON object, got {request.body}')
+    self.task_context.trial_summary_data.used_values.update(values)
+    return task_controller_pb2.Empty()
+
+  async def set_behav_result(self,
+                             request: task_controller_pb2.BehavResult,
+                             context: grpc.aio.ServicerContext) -> task_controller_pb2.Empty:
+    '''
+    Lets a remote executor set the running trial's behav_result, as a local task does by assigning to
+    `context.behav_result`. A call made before the executor sends its TaskResult is in that trial's summary.
+    '''
+    assert self.task_context is not None, "task_context is undefined"
+    try:
+      value = json.loads(request.body)
+    except json.JSONDecodeError as e:
+      await context.abort(grpc.StatusCode.INVALID_ARGUMENT, f'behav_result body is not JSON: {e}')
+    if not isinstance(value, dict):
+      await context.abort(grpc.StatusCode.INVALID_ARGUMENT, f'behav_result body must be a JSON object, got {request.body}')
+    self.task_context.behav_result = value
+    return task_controller_pb2.Empty()
 
   async def state(self, 
                   request_iterator: util_pb2.Empty,

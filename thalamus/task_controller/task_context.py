@@ -62,6 +62,12 @@ class TaskDescription(typing.NamedTuple):
   create_widget: typing.Callable[[ObservableCollection], QWidget]
   run: typing.Callable[['TaskContextProtocol'], typing.Awaitable[TaskResult]]
 
+class RemoteTaskError(RuntimeError):
+  '''
+  A remote executor's task failed with an error, which this describes.
+  '''
+
+
 async def to_thread(func):
   loop = asyncio.get_event_loop()
   ctx = contextvars.copy_context()
@@ -294,7 +300,9 @@ class TaskContext(TaskContextProtocol):
     super().__init__(widget, config)
     self.sleeper = Sleeper()
     self.task_descriptions_map = task_descriptions_map
-    self.running = False
+    # Called whenever `running` or `stopping` changes.
+    self.on_running_changed: typing.Callable[[], None] = lambda: None
+    self.__running = False
     self.servicer = servicer
     self.stub = stub
     self.control_widget = None
@@ -332,6 +340,25 @@ class TaskContext(TaskContextProtocol):
           c.COMEDI_OUTPUT)
     else:
       self.use_comedi = False
+
+  @property
+  def running(self) -> bool:
+    '''
+    Whether the task loop is running, from `start` until it has finished stopping.
+    '''
+    return self.__running
+
+  @running.setter
+  def running(self, value: bool) -> None:
+    self.__running = value
+    self.on_running_changed()
+
+  @property
+  def stopping(self) -> bool:
+    '''
+    Whether `stop` has been called but the task loop hasn't finished yet, e.g. while waiting on the current trial.
+    '''
+    return self.__running and not self.sleeper.running
 
   async def get_inject_stream(self, name: str):
     queue = self.inject_analog_streams.get(name, None)
@@ -625,6 +652,8 @@ class TaskContext(TaskContextProtocol):
 
       try:
         grpc_result = await self.servicer.get_result()
+        if grpc_result.error:
+          raise RemoteTaskError(grpc_result.error)
         result = TaskResult(grpc_result.success, cancelled=grpc_result.cancelled)
       except ExecutorLostError:
         LOGGER.error('Task executor disconnected')
@@ -723,7 +752,8 @@ class TaskContext(TaskContextProtocol):
     """
     Implements the TaskContext loop.  Will repeatedly select and run a task until stop is called.
     """
-    self.running, self.sleeper.running = True, True
+    self.sleeper.running = True
+    self.running = True
     sleeper_task = create_task_with_exc_handling(self.sleeper.run())
     while True:
       self.task_config = self.__sample_task()
@@ -759,7 +789,9 @@ class TaskContext(TaskContextProtocol):
           was_cancelled = True
         except:
           LOGGER.exception('Task error')
-          self.config['queue'].clear()
+          # Stops this loop once the trial is wrapped up, below. The queue is
+          # kept, so execution can resume once the problem is fixed.
+          self.stop()
           was_cancelled = True
           QMessageBox.critical(None, 'Task Error', traceback.format_exc())
         self.set_operator_widget(QWidget())
@@ -777,6 +809,12 @@ class TaskContext(TaskContextProtocol):
         except asyncio.CancelledError:
           LOGGER.debug('CANCELLED')
           was_cancelled = True
+        except RemoteTaskError as e:
+          # As for a local task's exception, above.
+          LOGGER.error('Remote task error: %s', e)
+          self.stop()
+          was_cancelled = True
+          QMessageBox.critical(None, 'Task Error', str(e))
       
       if not was_cancelled and result.success:
         self.task_config['goal'] -= 1
@@ -818,6 +856,8 @@ class TaskContext(TaskContextProtocol):
     if self.running:
       return
 
+    if self.servicer is not None:
+      self.servicer.start()
     self.task = create_task_with_exc_handling(self.run())
 
   def cancel(self) -> None:
@@ -839,6 +879,7 @@ class TaskContext(TaskContextProtocol):
     if self.servicer is not None:
       self.servicer.stop()
     self.sleeper.stop()
+    self.on_running_changed()
     return self.task
 
   def get_reward(self, channel: int) -> float:

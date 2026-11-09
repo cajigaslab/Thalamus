@@ -2623,6 +2623,30 @@ public:
     }
   }
 
+  /// The factory for `type`. If there's none, NONE's, and `node`'s config
+  /// type is switched to NONE so it shows what the node actually is; `type`
+  /// is updated to NONE to match. The switch is posted, because it notifies
+  /// `on_node`, which needs the node's bookkeeping in place first.
+  INodeFactory *factory_or_none(ObservableDictPtr node, std::string &type) {
+    auto i = node_factories.find(type);
+    if (i != node_factories.end()) {
+      return i->second;
+    }
+    THALAMUS_LOG(warning) << "No node factory for type \"" << type
+                          << "\", switching the node to NONE";
+    auto missing = type;
+    type = "NONE";
+    boost::asio::post(io_context, [node, missing] {
+      // Unless the type was changed again in the meantime.
+      // std::strings, so the variants don't take the literals as bools.
+      if (node->contains(std::string("type")) &&
+          std::string((*node)["type"]) == missing) {
+        (*node)["type"].assign(std::string("NONE"));
+      }
+    });
+    return node_factories.at(type);
+  }
+
   void on_nodes(ObservableCollection::Action a,
                 const ObservableCollection::Key &k,
                 const ObservableCollection::Value &v) {
@@ -2634,8 +2658,8 @@ public:
           std::bind(&Impl::on_node, this, node.get(), _1, _2, _3));
 
       std::string type_str = node->at("type");
-      auto factory = node_factories.at(type_str);
-      
+      auto factory = factory_or_none(node, type_str);
+
       creating_index = int32_t(index);
       auto node_impl =
           std::shared_ptr<Node>(factory->create(node, io_context, outer));
@@ -2738,7 +2762,7 @@ public:
                 auto node_config = node_configs[new_node_index];
 
                 auto type_str = node_next_type[new_node_index];
-                auto factory = node_factories.at(type_str);
+                auto factory = factory_or_none(node_config, type_str);
                 
                 node_types.at(new_node_index) = type_str;
                 creating_index = int(new_node_index);
