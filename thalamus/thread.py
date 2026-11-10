@@ -167,11 +167,26 @@ class ThalamusThread:
     with self.condition:
       self.condition.wait_for(lambda: self.stub is not None)
 
-  async def async_start(self):
+  async def async_start(self, timeout: typing.Optional[float] = None):
+    """
+    Connects to Thalamus and waits for the initial config. Raises TimeoutError
+    if that doesn't happen within timeout seconds (None waits forever).
+    """
     self.running = True
     task = asyncio.get_event_loop().create_task(self.__async_main())
-    async with self.async_condition:
-      await self.async_condition.wait_for(lambda: self.stub is not None)
+    async def wait_connected():
+      async with self.async_condition:
+        await self.async_condition.wait_for(lambda: self.stub is not None)
+    try:
+      await asyncio.wait_for(wait_connected(), timeout)
+    except asyncio.TimeoutError:
+      self.running = False
+      task.cancel()
+      try:
+        await task
+      except asyncio.CancelledError:
+        pass
+      raise TimeoutError(f'Failed to connect to Thalamus at {self.address} within {timeout} s') from None
     return task
 
 
