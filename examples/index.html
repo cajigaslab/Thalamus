@@ -6,9 +6,9 @@
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Nodes" href="../nodes/index.html"><link rel="prev" title="Concepts and Architecture" href="../concepts.html">
         <link rel="prefetch" href="../_static/logo.svg" as="image">
 
-    <link rel="shortcut icon" href="../_static/favicon.svg"><!-- Generated with Sphinx 9.1.1 and Furo 2025.12.19 -->
+    <link rel="shortcut icon" href="../_static/favicon.svg"><!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
         <title>Examples - Thalamus</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=acfd86a5" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
     <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=4742621b" />
@@ -329,9 +329,9 @@ and a 1 Hz square pulse – and then reads, exports, hydrates, and plots it.</p>
 <p>The following script writes a file that is indistinguishable from one produced by
 a STORAGE2 node.  Each analog record carries 16 ms of data; channels are
 concatenated in <code class="docutils literal notranslate"><span class="pre">data</span></code> and a <code class="docutils literal notranslate"><span class="pre">Span</span></code> maps each slice to a named channel.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">math</span><span class="o">,</span> <span class="nn">datetime</span><span class="o">,</span> <span class="nn">pathlib</span>
-<span class="kn">from</span> <span class="nn">thalamus.thalamus_pb2</span> <span class="kn">import</span> <span class="n">StorageRecord</span><span class="p">,</span> <span class="n">AnalogResponse</span><span class="p">,</span> <span class="n">Span</span><span class="p">,</span> <span class="n">Metadata</span><span class="p">,</span> <span class="n">Pair</span>
-<span class="kn">from</span> <span class="nn">thalamus.record_writer</span> <span class="kn">import</span> <span class="n">write_record</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">math</span><span class="o">,</span><span class="w"> </span><span class="nn">datetime</span><span class="o">,</span><span class="w"> </span><span class="nn">pathlib</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">thalamus.thalamus_pb2</span><span class="w"> </span><span class="kn">import</span> <span class="n">StorageRecord</span><span class="p">,</span> <span class="n">AnalogResponse</span><span class="p">,</span> <span class="n">Span</span><span class="p">,</span> <span class="n">Metadata</span><span class="p">,</span> <span class="n">Pair</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">thalamus.record_writer</span><span class="w"> </span><span class="kn">import</span> <span class="n">write_record</span>
 
 <span class="n">SAMPLE_RATE</span><span class="p">,</span> <span class="n">POLL_MS</span><span class="p">,</span> <span class="n">DURATION_S</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="mi">5</span>
 <span class="n">INTERVAL_NS</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="mf">1e9</span> <span class="o">/</span> <span class="n">SAMPLE_RATE</span><span class="p">)</span>
@@ -475,8 +475,8 @@ you can see how to decode image records:</p>
 </pre></div>
 </div>
 <p>The key decode step is reshaping the raw bytes into a 2-D array:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">numpy</span>
-<span class="kn">from</span> <span class="nn">thalamus.record_reader2</span> <span class="kn">import</span> <span class="n">SimpleRecordReader</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">thalamus.record_reader2</span><span class="w"> </span><span class="kn">import</span> <span class="n">SimpleRecordReader</span>
 
 <span class="k">with</span> <span class="n">SimpleRecordReader</span><span class="p">(</span><span class="s2">&quot;video.tha&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">reader</span><span class="p">:</span>
     <span class="n">frames</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">reader</span> <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">WhichOneof</span><span class="p">(</span><span class="s2">&quot;body&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;image&quot;</span><span class="p">]</span>
