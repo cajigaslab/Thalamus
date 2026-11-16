@@ -3,6 +3,7 @@ from .observable_item_models import TreeObservableCollectionModel
 from .config import ObservableDict
 
 import os
+import sys
 import oslex
 import shutil
 import typing
@@ -83,7 +84,12 @@ class Orchestrator:
       tokens = oslex.split(command)
       if not tokens:
         continue
-      tokens[0] = shutil.which(tokens[0])
+      # Run Python commands with this interpreter (and so this venv), not
+      # whichever python is first on the PATH.
+      if tokens[0] in ('python', 'python3'):
+        tokens[0] = sys.executable
+      else:
+        tokens[0] = shutil.which(tokens[0])
       LOGGER.info('starting ' + str(tokens))
 
       env = dict(os.environ)

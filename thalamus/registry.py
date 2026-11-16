@@ -40,12 +40,13 @@ async def main():
   parser.add_argument('-p', '--path', help='JSONPath expression')
   parser.add_argument('-s', '--set', help='Value to assign')
   parser.add_argument('-d', '--delete', action='store_true', help='Value to assign')
+  parser.add_argument('-t', '--timeout', type=float, default=1.0, help='Seconds to wait for a connection')
   args = parser.parse_args()
 
   _ = QApplication(sys.argv)
 
   thread = ThalamusThread(args.address)
-  task = await thread.async_start()
+  task = await thread.async_start(args.timeout)
   
   print('Path:', args.path)
 
@@ -116,4 +117,5 @@ async def main():
   except asyncio.CancelledError:
     pass
 
-asyncio.run(main())
+if __name__ == '__main__':
+  asyncio.run(main())
