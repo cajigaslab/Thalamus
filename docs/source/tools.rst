@@ -14,12 +14,17 @@ to tune a parameter mid-experiment, or to script changes to a running pipeline.
 
 .. code-block::
 
-   python -m thalamus.registry -a ADDRESS -p JSONPATH [-s VALUE] [-d]
+   python -m thalamus.registry -a ADDRESS -p JSONPATH [-s VALUE] [-d] [-t SECONDS]
 
 * ``-a, --address`` -- the pipeline address (default ``localhost:50050``).
 * ``-p, --path`` -- a JSONPath expression selecting the element(s) to act on.
 * ``-s, --set`` -- a JSON value to assign to the selected element(s).
 * ``-d, --delete`` -- delete the selected element(s).
+* ``-t, --timeout`` -- seconds to wait for the pipeline to accept the connection
+  and send its config (default ``1``).  If it doesn't, the tool exits with a
+  ``TimeoutError`` naming the address instead of waiting forever, so scripts fail
+  fast when the pipeline isn't running.  Raise it for a slow or remote pipeline,
+  e.g. ``-t 10``.
 
 With neither ``--set`` nor ``--delete``, the tool prints the current value.
 

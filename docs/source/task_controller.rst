@@ -50,6 +50,8 @@ Common options:
   network, so ``--open`` is not needed.
 * ``-r, --remote-executor`` -- send task execution to a remote executor process
   instead of running tasks locally.
+* ``-n, --no-orchestration`` -- don't launch the companion processes listed under
+  *Settings > Orchestration* (see :ref:`orchestration`).
 
 .. _remote-executor:
 
@@ -81,6 +83,30 @@ Both bodies must be JSON objects (anything else is rejected with
 end up in that trial's summary.  If the executor fails with an error rather than an
 outcome, it sets ``TaskResult.error`` to a description; the controller then treats it
 like a local task exception (see :ref:`task-errors`).
+
+.. _orchestration:
+
+Companion processes (Orchestration)
+------------------------------------
+
+*Settings > Orchestration* lists programs the controller launches alongside itself,
+e.g. a remote executor, an acquisition script or a second tool.  Each row has a
+**Command** (a command line, split shell-style) and a **Critial (Crash on Failure)**
+checkbox.  The list is stored in the config under ``Orchestration: {Processes: [...]}``
+and takes effect the next time the controller starts; the same dialog has the
+**Remote Executor** checkbox (see :ref:`remote-executor`).
+
+At startup the controller spawns every command, logs its combined stdout/stderr
+through the Thalamus Python log, and kills the processes when it exits.  If a
+process marked *Critial* exits while the controller is running, the controller
+logs the error and shuts down; other processes may exit without affecting it.  Pass ``-n, --no-orchestration`` to skip launching them.
+
+A command whose program is ``python`` or ``python3`` runs with the interpreter that
+is running the controller (so the same virtual environment, with Thalamus
+installed), not whichever Python is first on the ``PATH``.  Other programs are
+looked up on the ``PATH``.  For example::
+
+   python -m my_lab.reward_logger --port 50050
 
 .. _dotnet-runtime:
 

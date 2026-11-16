@@ -66,4 +66,6 @@ Connecting tools to a pipeline
 ``registry`` and other clients connect to a **running** pipeline over gRPC (default
 ``localhost:50050``).  Start ``python -m thalamus.pipeline`` (or
 ``thalamus.task_controller``) first; if a client cannot connect, confirm the pipeline
-is running and that the ``--address`` / ``--port`` match.
+is running and that the ``--address`` / ``--port`` match.  ``registry`` gives up after
+``-t, --timeout`` seconds (default 1) with ``TimeoutError: Failed to connect to
+Thalamus at ...``; pass a larger value for a slow or remote pipeline.

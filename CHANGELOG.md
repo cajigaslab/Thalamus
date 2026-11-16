@@ -9,6 +9,13 @@ some patch versions contain only build/CI or internal changes and are omitted be
 
 ## 1.0.x
 
+### 1.0.65 — 2026-11-10
+- `thalamus.registry` gives up with a `TimeoutError` if it can't connect within
+  `-t/--timeout` seconds (default 1) instead of waiting forever.
+- Task controller orchestration runs `python` / `python3` commands with the
+  controller's own interpreter (and virtual environment) rather than the first
+  Python on the `PATH`.
+
 ### 1.0.64 — 2026-11-09
 - Task controller: the control window's status bar shows a Running / Stopping /
   Stopped indicator.
